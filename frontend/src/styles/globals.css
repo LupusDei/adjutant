@@ -1,0 +1,421 @@
+/*
+ * Pip-Boy CRT/Scanline Effects
+ * Global styles for the Gastown Boy interface
+ */
+
+/* ============================================
+   CSS Custom Properties (Design Tokens)
+   ============================================ */
+:root {
+  /* Pip-Boy Green Palette */
+  --pipboy-green: #14fe17;
+  --pipboy-green-dim: #0b8c0d;
+  --pipboy-green-bright: #7fff00;
+  --pipboy-green-glow: rgba(20, 254, 23, 0.4);
+
+  /* Background Colors */
+  --pipboy-bg: #0a0a0a;
+  --pipboy-bg-panel: #0d1a0d;
+  --pipboy-bg-input: #050805;
+
+  /* Text Colors */
+  --pipboy-text: #14fe17;
+  --pipboy-text-dim: #0b8c0d;
+  --pipboy-text-bright: #7fff00;
+
+  /* Accent Colors */
+  --pipboy-amber: #fe9614;
+  --pipboy-red: #fe1414;
+
+  /* Effects */
+  --scanline-opacity: 0.08;
+  --flicker-intensity: 0.02;
+  --glow-radius: 20px;
+
+  /* Typography */
+  --font-mono: 'Share Tech Mono', 'Courier New', monospace;
+  --font-display: 'Orbitron', 'Share Tech Mono', monospace;
+}
+
+/* ============================================
+   Base Reset & Defaults
+   ============================================ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-mono);
+  background-color: var(--pipboy-bg);
+  color: var(--pipboy-text);
+  min-height: 100vh;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+/* ============================================
+   CRT Screen Container
+   ============================================ */
+.crt-screen {
+  position: relative;
+  background: var(--pipboy-bg);
+  border-radius: 20px;
+  overflow: hidden;
+
+  /* Phosphor glow effect */
+  box-shadow:
+    inset 0 0 60px rgba(20, 254, 23, 0.1),
+    0 0 var(--glow-radius) var(--pipboy-green-glow);
+}
+
+/* CRT curved glass effect */
+.crt-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 0%,
+    transparent 60%,
+    rgba(0, 0, 0, 0.3) 100%
+  );
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ============================================
+   Scanline Effect
+   ============================================ */
+.scanlines {
+  position: relative;
+}
+
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 1px,
+    rgba(0, 0, 0, var(--scanline-opacity)) 1px,
+    rgba(0, 0, 0, var(--scanline-opacity)) 2px
+  );
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* Thicker scanlines variant */
+.scanlines-thick::after {
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.15) 2px,
+    rgba(0, 0, 0, 0.15) 4px
+  );
+}
+
+/* ============================================
+   Flicker Animation
+   ============================================ */
+@keyframes flicker {
+  0% { opacity: 1; }
+  5% { opacity: 0.98; }
+  10% { opacity: 1; }
+  15% { opacity: 0.97; }
+  20% { opacity: 1; }
+  50% { opacity: 0.99; }
+  55% { opacity: 1; }
+  80% { opacity: 0.98; }
+  85% { opacity: 1; }
+  90% { opacity: 0.99; }
+  100% { opacity: 1; }
+}
+
+.crt-flicker {
+  animation: flicker 4s infinite;
+}
+
+/* ============================================
+   Text Glow Effects
+   ============================================ */
+.text-glow {
+  text-shadow:
+    0 0 5px var(--pipboy-green),
+    0 0 10px var(--pipboy-green-glow);
+}
+
+.text-glow-bright {
+  text-shadow:
+    0 0 5px var(--pipboy-green),
+    0 0 10px var(--pipboy-green),
+    0 0 20px var(--pipboy-green-glow),
+    0 0 40px var(--pipboy-green-glow);
+}
+
+.text-glow-dim {
+  text-shadow: 0 0 3px var(--pipboy-green-glow);
+}
+
+/* ============================================
+   Phosphor Burn / Trailing Effect
+   ============================================ */
+@keyframes phosphor-pulse {
+  0%, 100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.1);
+  }
+}
+
+.phosphor-pulse {
+  animation: phosphor-pulse 2s ease-in-out infinite;
+}
+
+/* ============================================
+   Vignette Overlay
+   ============================================ */
+.vignette {
+  position: relative;
+}
+
+.vignette::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 40%,
+    rgba(0, 0, 0, 0.6) 100%
+  );
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ============================================
+   Screen Noise Effect (optional)
+   ============================================ */
+@keyframes noise {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-2%, -2%); }
+  20% { transform: translate(2%, 2%); }
+  30% { transform: translate(-1%, 1%); }
+  40% { transform: translate(1%, -1%); }
+  50% { transform: translate(-2%, 2%); }
+  60% { transform: translate(2%, -2%); }
+  70% { transform: translate(-1%, -1%); }
+  80% { transform: translate(1%, 1%); }
+  90% { transform: translate(-2%, -2%); }
+}
+
+.screen-noise {
+  position: relative;
+}
+
+.screen-noise::after {
+  content: '';
+  position: absolute;
+  inset: -50%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 50;
+  animation: noise 0.5s steps(3) infinite;
+}
+
+/* ============================================
+   Button Styles
+   ============================================ */
+.pipboy-button {
+  font-family: var(--font-mono);
+  background: transparent;
+  border: 2px solid var(--pipboy-green);
+  color: var(--pipboy-text);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.pipboy-button:hover {
+  background: var(--pipboy-green);
+  color: var(--pipboy-bg);
+  box-shadow: 0 0 15px var(--pipboy-green-glow);
+}
+
+.pipboy-button:active {
+  transform: scale(0.98);
+}
+
+.pipboy-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pipboy-button:disabled:hover {
+  background: transparent;
+  color: var(--pipboy-text);
+  box-shadow: none;
+}
+
+/* ============================================
+   Input Styles
+   ============================================ */
+.pipboy-input {
+  font-family: var(--font-mono);
+  background: var(--pipboy-bg-input);
+  border: 1px solid var(--pipboy-green-dim);
+  color: var(--pipboy-text);
+  padding: 0.5rem;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.pipboy-input:focus {
+  border-color: var(--pipboy-green);
+  box-shadow: 0 0 10px var(--pipboy-green-glow);
+}
+
+.pipboy-input::placeholder {
+  color: var(--pipboy-text-dim);
+}
+
+/* ============================================
+   Panel / Card Styles
+   ============================================ */
+.pipboy-panel {
+  background: var(--pipboy-bg-panel);
+  border: 1px solid var(--pipboy-green-dim);
+  padding: 1rem;
+}
+
+.pipboy-panel-header {
+  border-bottom: 1px solid var(--pipboy-green-dim);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* ============================================
+   Utility Classes
+   ============================================ */
+.text-dim { color: var(--pipboy-text-dim); }
+.text-bright { color: var(--pipboy-text-bright); }
+.text-amber { color: var(--pipboy-amber); }
+.text-red { color: var(--pipboy-red); }
+
+.bg-panel { background: var(--pipboy-bg-panel); }
+.bg-input { background: var(--pipboy-bg-input); }
+
+.border-green { border-color: var(--pipboy-green); }
+.border-dim { border-color: var(--pipboy-green-dim); }
+
+/* ============================================
+   Typography
+   ============================================ */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  color: var(--pipboy-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.25rem; }
+h4 { font-size: 1rem; }
+
+a {
+  color: var(--pipboy-green);
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+a:hover {
+  color: var(--pipboy-text-bright);
+  text-shadow: 0 0 5px var(--pipboy-green-glow);
+}
+
+/* ============================================
+   Scrollbar Styling
+   ============================================ */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--pipboy-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--pipboy-green-dim);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--pipboy-green);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--pipboy-green-dim) var(--pipboy-bg);
+}
+
+/* ============================================
+   Selection Styling
+   ============================================ */
+::selection {
+  background: var(--pipboy-green);
+  color: var(--pipboy-bg);
+}
+
+/* ============================================
+   Loading / Status Indicators
+   ============================================ */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.blink {
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px var(--pipboy-green-glow);
+  }
+  50% {
+    box-shadow: 0 0 20px var(--pipboy-green-glow), 0 0 30px var(--pipboy-green-glow);
+  }
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ============================================
+   App Root
+   ============================================ */
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
