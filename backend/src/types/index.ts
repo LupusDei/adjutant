@@ -67,17 +67,17 @@ export interface Message {
 /** Request payload for sending a new message. */
 export interface SendMessageRequest {
   /** Recipient address (default: "mayor/") */
-  to?: string;
+  to?: string | undefined;
   /** Message subject (required) */
   subject: string;
   /** Message body (required) */
   body: string;
   /** Priority level (default: 2) */
-  priority?: MessagePriority;
+  priority?: MessagePriority | undefined;
   /** Message type (default: 'task') */
-  type?: MessageType;
+  type?: MessageType | undefined;
   /** ID of message being replied to */
-  replyTo?: string;
+  replyTo?: string | undefined;
 }
 
 // ============================================================================
