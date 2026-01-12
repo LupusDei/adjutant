@@ -38,13 +38,7 @@ function App() {
 
       <main className="app-content">
         {activeTab === "mail" && <MailView />}
-        {activeTab === "power" && (
-          <div className="tab-panel">
-            <h2>Power</h2>
-            <p>System power and resources</p>
-            <PowerButton />
-          </div>
-        )}
+        {activeTab === "power" && <PowerButton />}
         {activeTab === "crew" && (
           <div className="tab-panel">
             <h2>Crew</h2>

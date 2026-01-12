@@ -192,3 +192,87 @@
     background-position: 0 100%;
   }
 }
+
+/* App Layout */
+@layer components {
+  .app-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem;
+  }
+
+  .app-header {
+    text-align: center;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--color-pipboy-panel-border);
+    margin-bottom: 1rem;
+  }
+
+  .app-header h1 {
+    font-size: 2rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--color-pipboy-green-bright);
+    text-shadow: 0 0 10px var(--color-pipboy-green-glow),
+      0 0 20px var(--color-pipboy-green-glow);
+    margin: 0;
+  }
+
+  .app-nav {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--color-pipboy-panel-border);
+    padding-bottom: 0.5rem;
+  }
+
+  .nav-tab {
+    background: transparent;
+    border: 1px solid var(--color-pipboy-panel-border);
+    color: var(--color-pipboy-green-dim);
+    padding: 0.5rem 1.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .nav-tab:hover {
+    border-color: var(--color-pipboy-green);
+    color: var(--color-pipboy-green);
+  }
+
+  .nav-tab.active {
+    background: var(--color-pipboy-bg-lighter);
+    border-color: var(--color-pipboy-green);
+    color: var(--color-pipboy-green-bright);
+    box-shadow: var(--shadow-pipboy);
+  }
+
+  .app-content {
+    flex: 1;
+  }
+
+  .tab-panel {
+    padding: 1rem 0;
+  }
+
+  .tab-panel h2 {
+    font-size: 1.25rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--color-pipboy-green);
+    margin: 0 0 0.5rem 0;
+  }
+
+  .tab-panel p {
+    color: var(--color-pipboy-green-dim);
+    font-size: 0.875rem;
+    margin: 0 0 1rem 0;
+  }
+}
