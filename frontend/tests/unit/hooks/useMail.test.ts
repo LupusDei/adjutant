@@ -469,15 +469,22 @@ describe("useMail", () => {
         await Promise.resolve();
       });
 
-      await expect(
-        act(async () => {
+      // Handle error inside act to ensure state updates are flushed
+      let caughtError: Error | undefined;
+      await act(async () => {
+        try {
           await result.current.sendMessage({
             subject: "Test",
             body: "Body",
           });
-        })
-      ).rejects.toThrow("Failed to send");
+        } catch (e) {
+          caughtError = e as Error;
+        }
+        // Allow React to flush state updates
+        await Promise.resolve();
+      });
 
+      expect(caughtError?.message).toBe("Failed to send");
       expect(result.current.sendError).toEqual(sendError);
       expect(result.current.sending).toBe(false);
     });
@@ -495,12 +502,16 @@ describe("useMail", () => {
         await Promise.resolve();
       });
 
-      // First send fails
-      await expect(
-        act(async () => {
+      // First send fails - handle error inside act to ensure state updates are flushed
+      await act(async () => {
+        try {
           await result.current.sendMessage({ subject: "Test", body: "Body" });
-        })
-      ).rejects.toThrow();
+        } catch {
+          // Expected to throw
+        }
+        await Promise.resolve();
+      });
+
       expect(result.current.sendError).toEqual(sendError);
 
       // Second send succeeds
@@ -727,12 +738,18 @@ describe("useMail", () => {
         await Promise.resolve();
       });
 
-      await expect(
-        act(async () => {
+      // Handle error inside act to ensure state updates are flushed
+      let caughtError: Error | undefined;
+      await act(async () => {
+        try {
           await result.current.selectMessage("msg-1");
-        })
-      ).rejects.toThrow("Message not found");
+        } catch (e) {
+          caughtError = e as Error;
+        }
+        await Promise.resolve();
+      });
 
+      expect(caughtError?.message).toBe("Message not found");
       expect(result.current.selectedMessage).toBeNull();
       expect(result.current.selectedError).toEqual(selectError);
     });
