@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { MailList } from './MailList';
 import { MailDetail } from './MailDetail';
+import { ComposeMessage } from './ComposeMessage';
 import { useMail } from '../../hooks/useMail';
+import type { SendMessageRequest } from '../../types';
 
 /**
  * Props for the MailView container component.
@@ -28,10 +31,50 @@ export function MailView({ className = '' }: MailViewProps) {
     clearSelection,
     unreadCount,
     refresh,
+    sendMessage,
+    sending,
+    sendError,
+    clearSendError,
   } = useMail();
+
+  // Compose mode state
+  const [composing, setComposing] = useState(false);
+  const [replyToId, setReplyToId] = useState<string | undefined>(undefined);
+  const [replySubject, setReplySubject] = useState<string>('');
 
   const handleMessageSelect = (messageId: string) => {
     void selectMessage(messageId);
+  };
+
+  const handleStartCompose = () => {
+    setReplyToId(undefined);
+    setReplySubject('');
+    setComposing(true);
+    clearSendError();
+  };
+
+  const handleStartReply = () => {
+    if (selectedMessage) {
+      setReplyToId(selectedMessage.id);
+      setReplySubject(`RE: ${selectedMessage.subject}`);
+      setComposing(true);
+      clearSendError();
+    }
+  };
+
+  const handleCancelCompose = () => {
+    setComposing(false);
+    setReplyToId(undefined);
+    setReplySubject('');
+    clearSendError();
+  };
+
+  const handleSend = async (request: SendMessageRequest) => {
+    await sendMessage(request);
+    // Only close compose on success (error will be shown with draft preserved)
+    setComposing(false);
+    setReplyToId(undefined);
+    setReplySubject('');
   };
 
   return (
@@ -45,6 +88,15 @@ export function MailView({ className = '' }: MailViewProps) {
           )}
         </div>
         <div style={styles.headerRight}>
+          <button
+            type="button"
+            style={styles.composeButton}
+            onClick={handleStartCompose}
+            disabled={composing}
+            aria-label="Compose new message"
+          >
+            ✉ NEW
+          </button>
           <button
             type="button"
             style={styles.refreshButton}
@@ -85,13 +137,26 @@ export function MailView({ className = '' }: MailViewProps) {
         {/* Divider */}
         <div style={styles.divider} />
 
-        {/* Right panel: Message detail */}
+        {/* Right panel: Message detail or compose */}
         <main style={styles.detailPanel}>
-          <MailDetail
-            message={selectedMessage}
-            loading={selectedLoading}
-            onClose={clearSelection}
-          />
+          {composing ? (
+            <ComposeMessage
+              onSend={handleSend}
+              onCancel={handleCancelCompose}
+              sending={sending}
+              sendError={sendError}
+              onClearError={clearSendError}
+              {...(replyToId && { replyTo: replyToId })}
+              initialSubject={replySubject}
+            />
+          ) : (
+            <MailDetail
+              message={selectedMessage}
+              loading={selectedLoading}
+              onClose={clearSelection}
+              onReply={handleStartReply}
+            />
+          )}
         </main>
       </div>
     </div>
@@ -154,6 +219,21 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
+  },
+
+  composeButton: {
+    padding: '6px 12px',
+    border: `1px solid ${colors.primary}`,
+    borderRadius: '2px',
+    background: colors.primaryGlow,
+    color: colors.primary,
+    fontFamily: 'inherit',
+    fontSize: '0.8rem',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    letterSpacing: '0.05em',
+    transition: 'background-color 0.1s, box-shadow 0.1s',
+    boxShadow: `0 0 6px ${colors.primaryGlow}`,
   },
 
   refreshButton: {

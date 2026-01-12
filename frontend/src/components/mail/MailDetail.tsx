@@ -11,6 +11,8 @@ export interface MailDetailProps {
   loading?: boolean;
   /** Callback when close/back button is clicked */
   onClose?: () => void;
+  /** Callback when reply button is clicked */
+  onReply?: () => void;
   /** Optional CSS class name */
   className?: string;
 }
@@ -23,6 +25,7 @@ export function MailDetail({
   message,
   loading = false,
   onClose,
+  onReply,
   className = '',
 }: MailDetailProps) {
   if (loading) {
@@ -106,13 +109,27 @@ export function MailDetail({
         ))}
       </div>
 
-      {/* Footer with status indicators */}
+      {/* Footer with status indicators and actions */}
       <footer style={styles.footer}>
-        {message.pinned && <span style={styles.statusBadge}>📌 PINNED</span>}
-        {message.replyTo && <span style={styles.statusBadge}>↩ REPLY</span>}
-        <span style={styles.readStatus}>
-          {message.read ? '● READ' : '○ UNREAD'}
-        </span>
+        <div style={styles.footerLeft}>
+          {message.pinned && <span style={styles.statusBadge}>📌 PINNED</span>}
+          {message.replyTo && <span style={styles.statusBadge}>↩ REPLY</span>}
+        </div>
+        <div style={styles.footerRight}>
+          {onReply && (
+            <button
+              type="button"
+              style={styles.replyButton}
+              onClick={onReply}
+              aria-label="Reply to message"
+            >
+              ↩ REPLY
+            </button>
+          )}
+          <span style={styles.readStatus}>
+            {message.read ? '● READ' : '○ UNREAD'}
+          </span>
+        </div>
       </footer>
     </article>
   );
@@ -293,11 +310,23 @@ const styles = {
   footer: {
     display: 'flex',
     alignItems: 'center',
-    gap: '16px',
+    justifyContent: 'space-between',
     marginTop: '16px',
     paddingTop: '12px',
     borderTop: `1px solid ${colors.primaryDim}`,
     fontSize: '0.75rem',
+  },
+
+  footerLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+
+  footerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
   },
 
   statusBadge: {
@@ -307,8 +336,22 @@ const styles = {
     color: colors.primaryDim,
   },
 
+  replyButton: {
+    padding: '6px 12px',
+    border: `1px solid ${colors.primary}`,
+    borderRadius: '2px',
+    background: colors.primaryGlow,
+    color: colors.primary,
+    fontFamily: 'inherit',
+    fontSize: '0.8rem',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    transition: 'background-color 0.1s, box-shadow 0.1s',
+    letterSpacing: '0.05em',
+    boxShadow: `0 0 6px ${colors.primaryGlow}`,
+  },
+
   readStatus: {
-    marginLeft: 'auto',
     color: colors.primaryDim,
     letterSpacing: '0.1em',
   },

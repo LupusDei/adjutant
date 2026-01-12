@@ -37,6 +37,8 @@ export interface UseMailResult {
   sending: boolean;
   /** Error from last send attempt */
   sendError: Error | null;
+  /** Clear the send error state */
+  clearSendError: () => void;
   /** Mark a message as read */
   markAsRead: (messageId: string) => Promise<void>;
   /** Currently selected message (full details) */
@@ -142,6 +144,11 @@ export function useMail(options: UseMailOptions = {}): UseMailResult {
     await fetchMessages();
   }, [fetchMessages]);
 
+  // Clear send error
+  const clearSendError = useCallback(() => {
+    setSendError(null);
+  }, []);
+
   // Send message
   const sendMessage = useCallback(
     async (request: SendMessageRequest) => {
@@ -239,6 +246,7 @@ export function useMail(options: UseMailOptions = {}): UseMailResult {
     sendMessage,
     sending,
     sendError,
+    clearSendError,
     markAsRead,
     selectedMessage,
     selectedLoading,

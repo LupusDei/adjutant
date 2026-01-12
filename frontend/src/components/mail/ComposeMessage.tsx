@@ -13,6 +13,8 @@ export interface ComposeMessageProps {
   sending?: boolean;
   /** Error from last send attempt */
   sendError?: Error | null;
+  /** Callback to clear the send error */
+  onClearError?: () => void;
   /** ID of message being replied to */
   replyTo?: string;
   /** Pre-filled subject for replies */
@@ -30,6 +32,7 @@ export function ComposeMessage({
   onCancel,
   sending = false,
   sendError,
+  onClearError,
   replyTo,
   initialSubject = '',
   className = '',
@@ -50,7 +53,7 @@ export function ComposeMessage({
       body: body.trim(),
       priority,
       type: replyTo ? 'reply' : 'task',
-      replyTo,
+      ...(replyTo && { replyTo }),
     };
 
     await onSend(request);
@@ -73,10 +76,35 @@ export function ComposeMessage({
         <span style={styles.recipientBadge}>TO: MAYOR</span>
       </header>
 
-      {/* Error display */}
+      {/* Error display with retry option */}
       {sendError && (
         <div style={styles.errorBanner} role="alert">
-          ⚠ SEND FAILED: {sendError.message}
+          <div style={styles.errorContent}>
+            <div style={styles.errorMessage}>
+              ⚠ SEND FAILED: {sendError.message}
+            </div>
+            <div style={styles.draftPreserved}>
+              ✓ DRAFT PRESERVED
+            </div>
+          </div>
+          <div style={styles.errorActions}>
+            {onClearError && (
+              <button
+                type="button"
+                style={styles.dismissButton}
+                onClick={onClearError}
+              >
+                ✕
+              </button>
+            )}
+            <button
+              type="submit"
+              style={styles.retryButton}
+              disabled={sending || !isValid}
+            >
+              ↻ RETRY
+            </button>
+          </div>
         </div>
       )}
 
@@ -212,6 +240,9 @@ const styles = {
   },
 
   errorBanner: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: '8px 12px',
     background: colors.errorGlow,
     border: `1px solid ${colors.error}`,
@@ -219,6 +250,56 @@ const styles = {
     color: colors.error,
     fontSize: '0.8rem',
     letterSpacing: '0.05em',
+    gap: '12px',
+  },
+
+  errorContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    flex: 1,
+  },
+
+  errorMessage: {
+    fontWeight: 'bold',
+  },
+
+  draftPreserved: {
+    fontSize: '0.7rem',
+    color: colors.primary,
+    opacity: 0.8,
+  },
+
+  errorActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+
+  dismissButton: {
+    padding: '4px 8px',
+    background: 'transparent',
+    border: `1px solid ${colors.error}`,
+    borderRadius: '2px',
+    color: colors.error,
+    fontFamily: 'inherit',
+    fontSize: '0.8rem',
+    cursor: 'pointer',
+    opacity: 0.7,
+    transition: 'opacity 0.1s',
+  },
+
+  retryButton: {
+    padding: '4px 12px',
+    background: 'transparent',
+    border: `1px solid ${colors.error}`,
+    borderRadius: '2px',
+    color: colors.error,
+    fontFamily: 'inherit',
+    fontSize: '0.8rem',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    transition: 'background-color 0.1s',
   },
 
   fieldGroup: {
