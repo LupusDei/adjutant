@@ -96,7 +96,6 @@ export function MailView({ className = '' }: MailViewProps) {
       {/* Header bar */}
       <header style={styles.header}>
         <div style={styles.headerLeft}>
-          <h2 style={styles.headerTitle}>MAIL TERMINAL</h2>
           {unreadCount > 0 && (
             <span style={styles.unreadBadge}>{unreadCount} UNREAD</span>
           )}
@@ -210,14 +209,6 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '16px',
-  },
-
-  headerTitle: {
-    margin: 0,
-    fontSize: '1rem',
-    fontWeight: 'normal',
-    letterSpacing: '0.15em',
-    textShadow: `0 0 8px ${colors.primaryGlow}`,
   },
 
   unreadBadge: {
