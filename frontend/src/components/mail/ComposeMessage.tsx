@@ -1,5 +1,6 @@
 import { useState, type CSSProperties, type FormEvent } from 'react';
 import type { SendMessageRequest, MessagePriority } from '../../types';
+import { RecipientSelector } from './RecipientSelector';
 
 /**
  * Props for the ComposeMessage component.
@@ -37,6 +38,7 @@ export function ComposeMessage({
   initialSubject = '',
   className = '',
 }: ComposeMessageProps) {
+  const [recipient, setRecipient] = useState('mayor/');
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState('');
   const [priority, setPriority] = useState<MessagePriority>(2);
@@ -44,11 +46,12 @@ export function ComposeMessage({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (!subject.trim() || !body.trim()) {
+    if (!recipient || !subject.trim() || !body.trim()) {
       return;
     }
 
     const request: SendMessageRequest = {
+      to: recipient,
       subject: subject.trim(),
       body: body.trim(),
       priority,
@@ -59,7 +62,7 @@ export function ComposeMessage({
     await onSend(request);
   };
 
-  const isValid = subject.trim().length > 0 && body.trim().length > 0;
+  const isValid = recipient.length > 0 && subject.trim().length > 0 && body.trim().length > 0;
 
   return (
     <form
@@ -75,8 +78,14 @@ export function ComposeMessage({
         <h2 style={styles.title}>
           {replyTo ? '↩ COMPOSE REPLY' : '✉ NEW MESSAGE'}
         </h2>
-        <span style={styles.recipientBadge}>TO: MAYOR</span>
       </header>
+
+      {/* Recipient selector */}
+      <RecipientSelector
+        value={recipient}
+        onChange={setRecipient}
+        disabled={sending}
+      />
 
       {/* Error display with retry option */}
       {sendError && (
@@ -237,14 +246,6 @@ const styles = {
     margin: 0,
     letterSpacing: '0.1em',
     textShadow: `0 0 8px ${colors.primaryGlow}`,
-  },
-
-  recipientBadge: {
-    fontSize: '0.75rem',
-    color: colors.primaryDim,
-    padding: '2px 8px',
-    border: `1px solid ${colors.primaryDim}`,
-    borderRadius: '2px',
   },
 
   errorBanner: {
