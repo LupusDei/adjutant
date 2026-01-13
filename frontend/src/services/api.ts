@@ -23,6 +23,10 @@ const DEFAULT_TIMEOUT = 30000;
 // Error Types
 // =============================================================================
 
+/**
+ * Custom error class for API-related errors.
+ * Includes error code, optional details, and HTTP status.
+ */
 export class ApiError extends Error {
   constructor(
     public code: string,
@@ -108,6 +112,10 @@ async function apiFetch<T>(
 // API Client
 // =============================================================================
 
+/**
+ * API client for communicating with the gastown-boy backend.
+ * Provides methods for status, power, mail, and agent operations.
+ */
 export const api = {
   /**
    * Get gastown system status.

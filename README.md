@@ -10,6 +10,29 @@ Gastown-Boy provides a retro-futuristic interface for interacting with your Gast
 - **Power** - Start/stop Gastown with visual state indication
 - **Crew Stats** - Monitor agent activity and workload
 
+## Screenshot
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  ╔═══════════════════════════════════════════════════════╗   │
+│  ║  G A S T O W N - B O Y     [■ ONLINE]                 ║   │
+│  ╠═══════════════════════════════════════════════════════╣   │
+│  ║  [ MAIL ]    [ POWER ]    [ CREW ]                    ║   │
+│  ╠═══════════════════════════════════════════════════════╣   │
+│  ║  ┌─────────────┐  ┌─────────────────────────────────┐ ║   │
+│  ║  │ ▸ Inbox (3) │  │ From: mayor/                    │ ║   │
+│  ║  │   Sent      │  │ Subject: DISPATCH: New work     │ ║   │
+│  ║  │             │  │ ──────────────────────────────  │ ║   │
+│  ║  │             │  │ Work has been assigned to your  │ ║   │
+│  ║  │             │  │ rig. Check your hook.           │ ║   │
+│  ║  └─────────────┘  └─────────────────────────────────┘ ║   │
+│  ╚═══════════════════════════════════════════════════════╝   │
+│                    ░░░ PIP-BOY 3000 ░░░                       │
+└──────────────────────────────────────────────────────────────┘
+```
+
+*Retro-futuristic Pip-Boy interface with glowing green terminal aesthetic.*
+
 ## Architecture
 
 ```
@@ -47,6 +70,10 @@ Gastown-Boy provides a retro-futuristic interface for interacting with your Gast
 ## Quick Start
 
 ```bash
+# Clone and install
+git clone https://github.com/wsaults/gastown-boy.git
+cd gastown-boy
+
 # Install dependencies
 cd backend && npm install
 cd ../frontend && npm install
@@ -59,6 +86,29 @@ cd frontend && npm run dev
 
 # Open http://localhost:5173
 ```
+
+## Configuration
+
+### Backend Environment Variables
+
+Create `backend/.env` to customize (all optional):
+
+```env
+PORT=3001              # API server port (default: 3001)
+GT_PATH=gt             # Path to gt binary (default: uses PATH)
+CORS_ORIGIN=http://localhost:5173  # Allowed CORS origin
+NODE_ENV=development   # Environment mode
+```
+
+### Frontend Environment Variables
+
+Create `frontend/.env` to customize (all optional):
+
+```env
+VITE_API_URL=http://localhost:3001  # Backend API URL (default: localhost:3001)
+```
+
+See `backend/.env.example` and `frontend/.env.example` for full documentation.
 
 ## Project Structure
 
