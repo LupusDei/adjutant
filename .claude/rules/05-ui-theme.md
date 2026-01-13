@@ -1,5 +1,26 @@
 # UI Theme Rules
 
+## Required: Use frontend-design Skill
+
+**Always invoke the `frontend-design` skill for UI/frontend work.**
+
+When working on any task involving:
+- React components (`frontend/src/components/**/*.tsx`)
+- Styles and CSS (`frontend/src/styles/`, component CSS)
+- Visual design, layout, or aesthetics
+- Animations, effects, or micro-interactions
+- Typography, colors, or theme changes
+
+Use: `/frontend-design <description of the UI task>`
+
+This skill provides design thinking, aesthetic guidelines, and ensures
+production-grade implementations that avoid generic "AI slop" styling.
+
+**Example:**
+```
+/frontend-design Create a status indicator component with Pip-Boy styling
+```
+
 ## Pip-Boy Aesthetic
 
 The UI should evoke the Fallout Pip-Boy terminal:
