@@ -6,8 +6,7 @@
  */
 
 import { gt } from "./gt-executor.js";
-import type { Message, SendMessageRequest } from "../types/mail.js";
-import { MessageSchema } from "../types/mail.js";
+import type { Message, SendMessageRequest, MessagePriority } from "../types/mail.js";
 
 // ============================================================================
 // Types
@@ -25,6 +24,69 @@ export interface MailServiceResult<T> {
   };
 }
 
+/**
+ * Raw message format from gt mail commands.
+ */
+interface RawMessage {
+  id: string;
+  from: string;
+  to: string;
+  subject: string;
+  body: string;
+  timestamp: string;
+  read: boolean;
+  priority: string;
+  type: string;
+  thread_id: string;
+  reply_to?: string;
+  pinned?: boolean;
+  cc?: string[];
+}
+
+// ============================================================================
+// Transformation Helpers
+// ============================================================================
+
+/**
+ * Map priority string to numeric value.
+ */
+function mapPriority(priority: string): MessagePriority {
+  const priorityMap: Record<string, MessagePriority> = {
+    urgent: 0,
+    high: 1,
+    normal: 2,
+    low: 3,
+    lowest: 4,
+  };
+  return priorityMap[priority.toLowerCase()] ?? 2;
+}
+
+/**
+ * Transform raw gt message to Message format.
+ */
+function transformMessage(raw: RawMessage): Message {
+  const result: Message = {
+    id: raw.id,
+    from: raw.from,
+    to: raw.to,
+    subject: raw.subject,
+    body: raw.body,
+    timestamp: raw.timestamp,
+    read: raw.read,
+    priority: mapPriority(raw.priority),
+    type: raw.type as Message["type"],
+    threadId: raw.thread_id,
+    pinned: raw.pinned ?? false,
+  };
+  if (raw.reply_to) {
+    result.replyTo = raw.reply_to;
+  }
+  if (raw.cc) {
+    result.cc = raw.cc;
+  }
+  return result;
+}
+
 // ============================================================================
 // Mail Service
 // ============================================================================
@@ -33,7 +95,7 @@ export interface MailServiceResult<T> {
  * Lists all mail messages, sorted by newest first.
  */
 export async function listMail(): Promise<MailServiceResult<Message[]>> {
-  const result = await gt.mail.inbox<Message[]>();
+  const result = await gt.mail.inbox<RawMessage[]>();
 
   if (!result.success) {
     return {
@@ -56,8 +118,9 @@ export async function listMail(): Promise<MailServiceResult<Message[]>> {
     };
   }
 
-  // Sort messages by timestamp, newest first
-  const sorted = [...result.data].sort((a, b) => {
+  // Transform and sort messages by timestamp, newest first
+  const transformed = result.data.map(transformMessage);
+  const sorted = transformed.sort((a, b) => {
     return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
   });
 
@@ -80,7 +143,7 @@ export async function getMessage(
     };
   }
 
-  const result = await gt.mail.read<Message>(messageId);
+  const result = await gt.mail.read<RawMessage>(messageId);
 
   if (!result.success) {
     return {
@@ -92,19 +155,19 @@ export async function getMessage(
     };
   }
 
-  // Validate response is a complete message
-  const parseResult = MessageSchema.safeParse(result.data);
-  if (!parseResult.success) {
+  if (!result.data) {
     return {
       success: false,
       error: {
         code: "INVALID_RESPONSE",
-        message: "Invalid message format in response",
+        message: "Empty message response",
       },
     };
   }
 
-  return { success: true, data: result.data as Message };
+  // Transform raw message to expected format
+  const transformed = transformMessage(result.data);
+  return { success: true, data: transformed };
 }
 
 /**
