@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CrewStats } from "./components/crew/CrewStats";
 import { MailView } from "./components/mail/MailView";
 import { PowerButton } from "./components/power/PowerButton";
 
@@ -39,12 +40,7 @@ function App() {
       <main className="app-content">
         {activeTab === "mail" && <MailView />}
         {activeTab === "power" && <PowerButton />}
-        {activeTab === "crew" && (
-          <div className="tab-panel">
-            <h2>Crew</h2>
-            <p>Team management</p>
-          </div>
-        )}
+        {activeTab === "crew" && <CrewStats />}
       </main>
     </div>
   );
