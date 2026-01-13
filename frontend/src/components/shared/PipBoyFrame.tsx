@@ -10,6 +10,10 @@ export interface PipBoyFrameProps {
   title?: string;
   /** Optional additional CSS class name */
   className?: string;
+  /** Whether there is a connection error to display */
+  connectionError?: boolean;
+  /** Optional error message for tooltip */
+  errorMessage?: string;
 }
 
 /**
@@ -17,14 +21,28 @@ export interface PipBoyFrameProps {
  * Fallout terminal aesthetic - green phosphor glow, CRT-style borders,
  * and dark background.
  */
-export function PipBoyFrame({ children, title, className = '' }: PipBoyFrameProps) {
+export function PipBoyFrame({
+  children,
+  title,
+  className = '',
+  connectionError = false,
+  errorMessage = 'CONNECTION LOST'
+}: PipBoyFrameProps) {
   return (
     <div style={styles.container} className={className}>
       <div style={styles.outerFrame}>
         <div style={styles.innerFrame}>
-          {title && (
+          {(title || connectionError) && (
             <header style={styles.header}>
-              <h1 style={styles.title}>{title}</h1>
+              <div style={styles.headerRow}>
+                {title && <h1 style={styles.title}>{title}</h1>}
+                {connectionError && (
+                  <div style={styles.errorIndicator} className="pulse-error" title={errorMessage}>
+                    <span style={styles.errorIcon}>⚠</span>
+                    <span style={styles.errorText}>{errorMessage}</span>
+                  </div>
+                )}
+              </div>
               <div style={styles.headerLine} />
             </header>
           )}
@@ -44,6 +62,8 @@ const colors = {
   primaryGlow: '#14F07D40', // Green with transparency for glow
   background: '#0A0A0A',   // Near-black background
   backgroundDark: '#050505', // Darker background for depth
+  error: '#FF6B35',        // Amber-orange for errors (CRT warning color)
+  errorGlow: '#FF6B3560',  // Error glow with transparency
 } as const;
 
 const styles = {
@@ -82,6 +102,13 @@ const styles = {
     borderBottom: `1px solid ${colors.primaryDim}`,
   },
 
+  headerRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '16px',
+  },
+
   title: {
     margin: 0,
     fontSize: '1.5rem',
@@ -90,6 +117,32 @@ const styles = {
     textTransform: 'uppercase',
     letterSpacing: '0.15em',
     textShadow: `0 0 8px ${colors.primaryGlow}`,
+  },
+
+  errorIndicator: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '4px 10px',
+    borderRadius: '4px',
+    border: `1px solid ${colors.error}`,
+    backgroundColor: 'rgba(255, 107, 53, 0.1)',
+    cursor: 'help',
+  },
+
+  errorIcon: {
+    fontSize: '1rem',
+    color: colors.error,
+    textShadow: `0 0 6px ${colors.errorGlow}`,
+  },
+
+  errorText: {
+    fontSize: '0.75rem',
+    fontWeight: 500,
+    color: colors.error,
+    textTransform: 'uppercase',
+    letterSpacing: '0.1em',
+    textShadow: `0 0 4px ${colors.errorGlow}`,
   },
 
   headerLine: {
