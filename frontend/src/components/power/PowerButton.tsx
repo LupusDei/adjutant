@@ -137,6 +137,7 @@ export function PowerButton({ className = '' }: PowerButtonProps) {
       <div style={styles.body}>
         <div style={styles.stateDisplay}>
           <div
+            className={isTransitioning ? 'power-ring-pulse' : ''}
             style={{
               ...styles.stateRing,
               borderColor: statusColors.accent,
@@ -145,6 +146,7 @@ export function PowerButton({ className = '' }: PowerButtonProps) {
             aria-hidden="true"
           >
             <div
+              className={isTransitioning ? 'power-core-breathe' : ''}
               style={{
                 ...styles.stateCore,
                 backgroundColor: statusColors.accent,
@@ -154,11 +156,13 @@ export function PowerButton({ className = '' }: PowerButtonProps) {
           </div>
           <div style={styles.stateText}>
             <div
+              className={isTransitioning ? 'power-text-flicker' : ''}
               style={{ ...styles.stateLabel, color: statusColors.accent }}
             >
               {POWER_LABELS[displayState]}
             </div>
             <div
+              className={isTransitioning ? 'power-text-flicker' : ''}
               style={{ ...styles.stateSubLabel, color: statusColors.accent }}
             >
               {POWER_SUBLABELS[displayState]}
@@ -168,6 +172,7 @@ export function PowerButton({ className = '' }: PowerButtonProps) {
 
         <button
           type="button"
+          className={actionLoading ? 'power-button-loading' : ''}
           style={{
             ...styles.powerButton,
             borderColor: statusColors.accent,
