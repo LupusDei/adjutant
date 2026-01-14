@@ -4,8 +4,12 @@ import { MailList } from './MailList';
 import { MailDetail } from './MailDetail';
 import { ComposeMessage } from './ComposeMessage';
 import { useMail } from '../../hooks/useMail';
+import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useRigFilteredItems } from '../../contexts/RigContext';
 import type { Message, SendMessageRequest } from '../../types';
+
+/** Mobile navigation view mode */
+type MobileView = 'list' | 'detail';
 
 /**
  * Props for the MailView container component.
@@ -38,6 +42,12 @@ export function MailView({ className = '' }: MailViewProps) {
     clearSendError,
   } = useMail();
 
+  // Responsive: detect mobile viewport
+  const isMobile = useIsMobile();
+
+  // Mobile navigation state: which panel to show
+  const [mobileView, setMobileView] = useState<MobileView>('list');
+
   // Filter messages by selected rig (based on 'to' address)
   const filteredMessages = useRigFilteredItems<Message>(
     messages,
@@ -50,15 +60,34 @@ export function MailView({ className = '' }: MailViewProps) {
   const [replySubject, setReplySubject] = useState<string>('');
   const [replyRecipient, setReplyRecipient] = useState<string | undefined>(undefined);
 
-  // Auto-select first message when inbox loads
+  // Auto-select first message when inbox loads (desktop only)
   useEffect(() => {
-    if (messages.length > 0 && !selectedMessage && !loading && !composing) {
-      void selectMessage(messages[0].id);
+    const firstMessage = messages[0];
+    if (!isMobile && firstMessage && !selectedMessage && !loading && !composing) {
+      void selectMessage(firstMessage.id);
     }
-  }, [messages, selectedMessage, loading, composing, selectMessage]);
+  }, [messages, selectedMessage, loading, composing, selectMessage, isMobile]);
+
+  // When switching from mobile to desktop, ensure we have a selection
+  useEffect(() => {
+    const firstMessage = messages[0];
+    if (!isMobile && mobileView === 'list' && firstMessage && !selectedMessage) {
+      void selectMessage(firstMessage.id);
+    }
+  }, [isMobile, mobileView, messages, selectedMessage, selectMessage]);
 
   const handleMessageSelect = (messageId: string) => {
     void selectMessage(messageId);
+    // On mobile, navigate to detail view when selecting a message
+    if (isMobile) {
+      setMobileView('detail');
+    }
+  };
+
+  // Handle back navigation on mobile (return to list)
+  const handleMobileBack = () => {
+    setMobileView('list');
+    clearSelection();
   };
 
   const handleStartCompose = () => {
@@ -67,6 +96,10 @@ export function MailView({ className = '' }: MailViewProps) {
     setReplyRecipient(undefined);
     setComposing(true);
     clearSendError();
+    // On mobile, show compose in detail panel
+    if (isMobile) {
+      setMobileView('detail');
+    }
   };
 
   const handleStartReply = () => {
@@ -85,6 +118,10 @@ export function MailView({ className = '' }: MailViewProps) {
     setReplySubject('');
     setReplyRecipient(undefined);
     clearSendError();
+    // On mobile, return to list after canceling compose
+    if (isMobile) {
+      setMobileView('list');
+    }
   };
 
   const handleSend = async (request: SendMessageRequest) => {
@@ -94,6 +131,10 @@ export function MailView({ className = '' }: MailViewProps) {
     setReplyToId(undefined);
     setReplySubject('');
     setReplyRecipient(undefined);
+    // On mobile, return to list after sending
+    if (isMobile) {
+      setMobileView('list');
+    }
   };
 
   return (
@@ -134,49 +175,53 @@ export function MailView({ className = '' }: MailViewProps) {
         </div>
       )}
 
-      {/* Split view panels */}
+      {/* Split view panels - responsive layout */}
       <div style={styles.splitView}>
-        {/* Left panel: Message list */}
-        <aside style={styles.listPanel}>
-          <div style={styles.panelHeader}>
-            <span style={styles.panelTitle}>INBOX</span>
-            <span style={styles.messageCount}>{filteredMessages.length} MSG</span>
-          </div>
-          <div style={styles.listContent}>
-            <MailList
-              messages={filteredMessages}
-              selectedId={selectedMessage?.id ?? null}
-              onSelect={handleMessageSelect}
-              loading={loading && messages.length === 0}
-            />
-          </div>
-        </aside>
+        {/* Left panel: Message list (hidden on mobile when viewing detail) */}
+        {(!isMobile || mobileView === 'list') && (
+          <aside style={isMobile ? styles.listPanelMobile : styles.listPanel}>
+            <div style={styles.panelHeader}>
+              <span style={styles.panelTitle}>INBOX</span>
+              <span style={styles.messageCount}>{filteredMessages.length} MSG</span>
+            </div>
+            <div style={styles.listContent}>
+              <MailList
+                messages={filteredMessages}
+                selectedId={selectedMessage?.id ?? null}
+                onSelect={handleMessageSelect}
+                loading={loading && messages.length === 0}
+              />
+            </div>
+          </aside>
+        )}
 
-        {/* Divider */}
-        <div style={styles.divider} />
+        {/* Divider (desktop only) */}
+        {!isMobile && <div style={styles.divider} />}
 
-        {/* Right panel: Message detail or compose */}
-        <main style={styles.detailPanel}>
-          {composing ? (
-            <ComposeMessage
-              onSend={handleSend}
-              onCancel={handleCancelCompose}
-              sending={sending}
-              sendError={sendError}
-              onClearError={clearSendError}
-              {...(replyToId && { replyTo: replyToId })}
-              {...(replyRecipient && { initialRecipient: replyRecipient })}
-              initialSubject={replySubject}
-            />
-          ) : (
-            <MailDetail
-              message={selectedMessage}
-              loading={selectedLoading}
-              onClose={clearSelection}
-              onReply={handleStartReply}
-            />
-          )}
-        </main>
+        {/* Right panel: Message detail or compose (hidden on mobile when viewing list) */}
+        {(!isMobile || mobileView === 'detail') && (
+          <main style={isMobile ? styles.detailPanelMobile : styles.detailPanel}>
+            {composing ? (
+              <ComposeMessage
+                onSend={handleSend}
+                onCancel={handleCancelCompose}
+                sending={sending}
+                sendError={sendError}
+                onClearError={clearSendError}
+                {...(replyToId && { replyTo: replyToId })}
+                {...(replyRecipient && { initialRecipient: replyRecipient })}
+                initialSubject={replySubject}
+              />
+            ) : (
+              <MailDetail
+                message={selectedMessage}
+                loading={selectedLoading}
+                onClose={isMobile ? handleMobileBack : clearSelection}
+                onReply={handleStartReply}
+              />
+            )}
+          </main>
+        )}
       </div>
     </div>
   );
@@ -290,6 +335,14 @@ const styles = {
     minHeight: 0,
   },
 
+  // Mobile: list takes full width
+  listPanelMobile: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
+  },
+
   panelHeader: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -331,6 +384,16 @@ const styles = {
     flexDirection: 'column',
     overflow: 'auto',
     padding: '12px',
+    minHeight: 0,
+  },
+
+  // Mobile: detail takes full width with smaller padding
+  detailPanelMobile: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'auto',
+    padding: '8px',
     minHeight: 0,
   },
 } satisfies Record<string, CSSProperties>;

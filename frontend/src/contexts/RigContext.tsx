@@ -96,8 +96,17 @@ export function useRigFilter(): RigContextValue {
 
 /**
  * Hook to get filtered items based on rig selection.
+ * @overload When getRig is provided, items can be any type
+ * @overload When getRig is omitted, items must have a rig property
  */
+export function useRigFilteredItems<T>(
+  items: T[],
+  getRig: (item: T) => string | null
+): T[];
 export function useRigFilteredItems<T extends { rig?: string | null }>(
+  items: T[]
+): T[];
+export function useRigFilteredItems<T>(
   items: T[],
   getRig?: (item: T) => string | null
 ): T[] {
@@ -105,7 +114,7 @@ export function useRigFilteredItems<T extends { rig?: string | null }>(
 
   return useMemo(() => {
     return items.filter(item => {
-      const rig = getRig ? getRig(item) : item.rig ?? null;
+      const rig = getRig ? getRig(item) : (item as { rig?: string | null }).rig ?? null;
       return matchesFilter(rig);
     });
   }, [items, matchesFilter, getRig]);
