@@ -29,7 +29,14 @@ export function ngrokPlugin(options: NgrokPluginOptions = {}): Plugin {
       server.httpServer?.once('listening', async () => {
         try {
           // Dynamic import to avoid issues in production builds
-          const ngrok = await import('@ngrok/ngrok');
+          let ngrok;
+          try {
+            ngrok = await import('@ngrok/ngrok');
+          } catch (importErr) {
+            console.log('\n⚠️  ngrok package not installed. Run: npm install');
+            console.log('   Skipping ngrok tunnel - app will work locally only.\n');
+            return;
+          }
 
           const port = options.port ?? server.config.server.port ?? 3000;
 
@@ -46,8 +53,14 @@ export function ngrokPlugin(options: NgrokPluginOptions = {}): Plugin {
           console.log(`✅ ngrok tunnel active: ${ngrokUrl}`);
           console.log(`📋 View in Settings tab or copy from: http://localhost:4040\n`);
         } catch (err) {
-          console.error('❌ Failed to start ngrok tunnel:', err);
-          console.log('💡 Make sure ngrok is configured: ngrok config add-authtoken <token>\n');
+          const errMsg = err instanceof Error ? err.message : String(err);
+          if (errMsg.includes('authtoken')) {
+            console.error('\n❌ ngrok authtoken not configured');
+            console.log('💡 Run: ngrok config add-authtoken <your-token>');
+            console.log('   Get token at: https://dashboard.ngrok.com/get-started/your-authtoken\n');
+          } else {
+            console.error('❌ Failed to start ngrok tunnel:', errMsg);
+          }
         }
       });
     },
