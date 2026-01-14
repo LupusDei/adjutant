@@ -72,15 +72,16 @@ export function MailList({
               </span>
             </div>
             <div style={styles.messageMeta}>
-              <span style={styles.metaLeft}>
-                <span style={styles.fromTo}>
+              <div style={styles.fromToStack}>
+                <div style={styles.metaRow}>
                   <span style={styles.metaLabel}>FROM:</span>
                   <span style={styles.metaValue}>{formatSender(message.from)}</span>
-                  <span style={styles.arrow}>→</span>
+                </div>
+                <div style={styles.metaRow}>
                   <span style={styles.metaLabel}>TO:</span>
                   <span style={styles.metaValue}>{formatSender(message.to)}</span>
-                </span>
-              </span>
+                </div>
+              </div>
               <span style={styles.timestamp}>{formatTimestamp(message.timestamp)}</span>
             </div>
           </button>
@@ -225,7 +226,7 @@ const styles = {
   messageMeta: {
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     fontSize: '0.75rem',
     color: colors.primaryDim,
     marginLeft: '32px',
@@ -237,26 +238,28 @@ const styles = {
     gap: '6px',
   },
 
-  fromTo: {
+  fromToStack: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
+
+  metaRow: {
     display: 'flex',
     alignItems: 'center',
-    gap: '4px',
+    gap: '6px',
   },
 
   metaLabel: {
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
     opacity: 0.7,
+    minWidth: '40px',
   },
 
   metaValue: {
     textTransform: 'uppercase',
     letterSpacing: '0.1em',
-  },
-
-  arrow: {
-    margin: '0 2px',
-    opacity: 0.5,
   },
 
   from: {
