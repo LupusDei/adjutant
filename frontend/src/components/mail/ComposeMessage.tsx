@@ -20,6 +20,8 @@ export interface ComposeMessageProps {
   replyTo?: string;
   /** Pre-filled subject for replies */
   initialSubject?: string;
+  /** Pre-filled recipient for replies */
+  initialRecipient?: string;
   /** Optional CSS class name */
   className?: string;
 }
@@ -36,9 +38,10 @@ export function ComposeMessage({
   onClearError,
   replyTo,
   initialSubject = '',
+  initialRecipient,
   className = '',
 }: ComposeMessageProps) {
-  const [recipient, setRecipient] = useState('mayor/');
+  const [recipient, setRecipient] = useState(initialRecipient ?? 'mayor/');
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState('');
   const [priority, setPriority] = useState<MessagePriority>(2);

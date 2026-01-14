@@ -48,6 +48,7 @@ export function MailView({ className = '' }: MailViewProps) {
   const [composing, setComposing] = useState(false);
   const [replyToId, setReplyToId] = useState<string | undefined>(undefined);
   const [replySubject, setReplySubject] = useState<string>('');
+  const [replyRecipient, setReplyRecipient] = useState<string | undefined>(undefined);
 
   // Auto-select first message when inbox loads
   useEffect(() => {
@@ -63,6 +64,7 @@ export function MailView({ className = '' }: MailViewProps) {
   const handleStartCompose = () => {
     setReplyToId(undefined);
     setReplySubject('');
+    setReplyRecipient(undefined);
     setComposing(true);
     clearSendError();
   };
@@ -71,6 +73,7 @@ export function MailView({ className = '' }: MailViewProps) {
     if (selectedMessage) {
       setReplyToId(selectedMessage.id);
       setReplySubject(`RE: ${selectedMessage.subject}`);
+      setReplyRecipient(selectedMessage.from);
       setComposing(true);
       clearSendError();
     }
@@ -80,6 +83,7 @@ export function MailView({ className = '' }: MailViewProps) {
     setComposing(false);
     setReplyToId(undefined);
     setReplySubject('');
+    setReplyRecipient(undefined);
     clearSendError();
   };
 
@@ -89,6 +93,7 @@ export function MailView({ className = '' }: MailViewProps) {
     setComposing(false);
     setReplyToId(undefined);
     setReplySubject('');
+    setReplyRecipient(undefined);
   };
 
   return (
@@ -160,6 +165,7 @@ export function MailView({ className = '' }: MailViewProps) {
               sendError={sendError}
               onClearError={clearSendError}
               {...(replyToId && { replyTo: replyToId })}
+              {...(replyRecipient && { initialRecipient: replyRecipient })}
               initialSubject={replySubject}
             />
           ) : (
