@@ -1,4 +1,7 @@
 import { spawn, execFileSync } from 'child_process';
+import { existsSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 
 /**
  * Result of executing a GT command.
@@ -30,8 +33,114 @@ export interface GtExecOptions {
 
 const DEFAULT_TIMEOUT = 30000;
 
-// GT commands must run from the town root to work correctly
-const GT_TOWN_ROOT = process.env['GT_TOWN_ROOT'] ?? '/Users/will/gt';
+/**
+ * Finds the gastown town root by walking up from the current directory
+ * looking for .beads/config.yaml WITHOUT .beads/redirect.
+ * (Directories with both are worktrees, not the actual town root)
+ */
+function findTownRoot(startDir?: string): string | null {
+  let dir = startDir ?? process.cwd();
+  const root = dirname(dir) === dir ? dir : '/'; // Handle both Unix and Windows roots
+
+  while (dir !== root) {
+    const beadsConfig = join(dir, '.beads', 'config.yaml');
+    const beadsRedirect = join(dir, '.beads', 'redirect');
+    // Town root has config.yaml but NOT redirect (worktrees have both)
+    if (existsSync(beadsConfig) && !existsSync(beadsRedirect)) {
+      return dir;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+
+  // Check root itself
+  const rootConfig = join(root, '.beads', 'config.yaml');
+  const rootRedirect = join(root, '.beads', 'redirect');
+  if (existsSync(rootConfig) && !existsSync(rootRedirect)) {
+    return root;
+  }
+
+  return null;
+}
+
+/**
+ * Finds the gastown rig root (e.g., gastown_boy) by walking up from current directory
+ * looking for .beads/redirect WITHOUT .beads/config.yaml.
+ * (Directories with both are worktrees, not the actual rig root)
+ */
+function findRigRoot(startDir?: string): string | null {
+  let dir = startDir ?? process.cwd();
+  const root = dirname(dir) === dir ? dir : '/';
+
+  while (dir !== root) {
+    const beadsRedirect = join(dir, '.beads', 'redirect');
+    const beadsConfig = join(dir, '.beads', 'config.yaml');
+    // Rig root has redirect but NOT config.yaml (worktrees have both)
+    if (existsSync(beadsRedirect) && !existsSync(beadsConfig)) {
+      return dir;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+
+  return null;
+}
+
+// Resolve town root: env var > dynamic discovery > error
+function resolveTownRoot(): string {
+  if (process.env['GT_TOWN_ROOT']) {
+    return process.env['GT_TOWN_ROOT'];
+  }
+
+  // Try to find town root from current directory
+  const discovered = findTownRoot();
+  if (discovered) {
+    return discovered;
+  }
+
+  // Try from this file's location (in case cwd is different)
+  const thisDir = dirname(fileURLToPath(import.meta.url));
+  const fromFile = findTownRoot(thisDir);
+  if (fromFile) {
+    return fromFile;
+  }
+
+  // Fallback: throw helpful error instead of using hardcoded path
+  throw new Error(
+    'Could not determine gastown town root. ' +
+      'Set GT_TOWN_ROOT environment variable or run from within a gastown town.'
+  );
+}
+
+// Resolve rig root for mail operations
+function resolveRigRoot(): string {
+  if (process.env['GT_TOWN_ROOT']) {
+    return `${process.env['GT_TOWN_ROOT']}/gastown_boy`;
+  }
+
+  // Try to find rig root from current directory
+  const discovered = findRigRoot();
+  if (discovered) {
+    return discovered;
+  }
+
+  // Try from this file's location
+  const thisDir = dirname(fileURLToPath(import.meta.url));
+  const fromFile = findRigRoot(thisDir);
+  if (fromFile) {
+    return fromFile;
+  }
+
+  // Fall back to deriving from town root
+  const townRoot = resolveTownRoot();
+  return `${townRoot}/gastown_boy`;
+}
+
+// Cache the resolved paths at module load time
+const GT_TOWN_ROOT = resolveTownRoot();
+const GT_RIG_ROOT = resolveRigRoot();
 
 /**
  * Resolves the gt binary path dynamically.
@@ -61,9 +170,12 @@ function resolveGtBinary(): string {
     // which/where failed, continue to fallbacks
   }
 
-  // 3. Try $HOME/go/bin/gt (common Go install location)
+  // 3. Try $HOME/go/bin/gt (common Go install location) - only if it exists
   if (process.env['HOME']) {
-    return `${process.env['HOME']}/go/bin/gt`;
+    const goPath = `${process.env['HOME']}/go/bin/gt`;
+    if (existsSync(goPath)) {
+      return goPath;
+    }
   }
 
   // 4. Last resort: let spawn try PATH resolution
@@ -268,9 +380,7 @@ export const gt = {
     async inbox<T = unknown>(options?: GtExecOptions): Promise<GtResult<T>> {
       return execGt<T>(['mail', 'inbox', '--json'], {
         ...options,
-        cwd: process.env['GT_TOWN_ROOT']
-          ? `${process.env['GT_TOWN_ROOT']}/gastown_boy`
-          : '/Users/will/gt/gastown_boy',
+        cwd: GT_RIG_ROOT,
       });
     },
 
@@ -284,9 +394,7 @@ export const gt = {
     ): Promise<GtResult<T>> {
       return execGt<T>(['mail', 'read', messageId, '--json'], {
         ...options,
-        cwd: process.env['GT_TOWN_ROOT']
-          ? `${process.env['GT_TOWN_ROOT']}/gastown_boy`
-          : '/Users/will/gt/gastown_boy',
+        cwd: GT_RIG_ROOT,
       });
     },
 
@@ -326,9 +434,7 @@ export const gt = {
       return execGt<string>(args, {
         ...options,
         parseJson: false,
-        cwd: process.env['GT_TOWN_ROOT']
-          ? `${process.env['GT_TOWN_ROOT']}/gastown_boy`
-          : '/Users/will/gt/gastown_boy',
+        cwd: GT_RIG_ROOT,
         env: {
           ...process.env,
           BD_ACTOR: 'gastown_boy/ui',
@@ -347,9 +453,7 @@ export const gt = {
       return execGt<string>(['mail', 'mark-read', messageId], {
         ...options,
         parseJson: false,
-        cwd: process.env['GT_TOWN_ROOT']
-          ? `${process.env['GT_TOWN_ROOT']}/gastown_boy`
-          : '/Users/will/gt/gastown_boy',
+        cwd: GT_RIG_ROOT,
       });
     },
 
@@ -363,9 +467,7 @@ export const gt = {
     ): Promise<GtResult<T>> {
       return execGt<T>(['mail', 'thread', threadId, '--json'], {
         ...options,
-        cwd: process.env['GT_TOWN_ROOT']
-          ? `${process.env['GT_TOWN_ROOT']}/gastown_boy`
-          : '/Users/will/gt/gastown_boy',
+        cwd: GT_RIG_ROOT,
       });
     },
   },
