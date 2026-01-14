@@ -98,9 +98,9 @@ export function SettingsView() {
       case 'loading':
         return '◐ CHECKING...';
       case 'connected':
-        return '● TUNNEL ACTIVE';
+        return '● ACTIVE';
       case 'not-running':
-        return '○ TUNNEL NOT RUNNING';
+        return '○ NOT RUNNING';
       case 'error':
         return '✗ ERROR';
     }
@@ -123,15 +123,13 @@ export function SettingsView() {
       <section style={styles.section}>
         <h2 style={styles.sectionTitle}>REMOTE ACCESS</h2>
 
-        <div style={styles.field}>
-          <span style={styles.label}>TUNNEL:</span>
+        <div style={styles.statusRow}>
           <span style={getStatusStyle()}>{getStatusText()}</span>
         </div>
 
         {tunnelStatus === 'connected' && ngrokUrl && (
           <>
-            <div style={styles.field}>
-              <span style={styles.label}>PUBLIC URL:</span>
+            <div style={styles.urlRow}>
               <div style={styles.urlField}>
                 <code style={styles.urlTextInner}>{displayUrl}</code>
                 <button
@@ -220,38 +218,48 @@ const colors = {
 
 const styles = {
   container: {
-    padding: '1rem',
+    padding: '0.75rem',
     fontFamily: '"Share Tech Mono", "Courier New", monospace',
     color: colors.primary,
-  },
+    maxWidth: '100%',
+    boxSizing: 'border-box',
+  } as CSSProperties,
 
   section: {
-    marginBottom: '2rem',
-    padding: '1rem',
+    marginBottom: '1.5rem',
+    padding: '0.75rem',
     border: `1px solid ${colors.primaryDim}`,
     borderRadius: '2px',
   },
 
   sectionTitle: {
-    fontSize: '1rem',
-    letterSpacing: '0.2em',
+    fontSize: '0.9rem',
+    letterSpacing: '0.15em',
     marginTop: 0,
-    marginBottom: '1rem',
+    marginBottom: '0.75rem',
     paddingBottom: '0.5rem',
     borderBottom: `1px solid ${colors.primaryDim}`,
   },
 
-  field: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: '1rem',
+  statusRow: {
     marginBottom: '0.75rem',
   },
 
+  urlRow: {
+    marginBottom: '0.75rem',
+  },
+
+  field: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem',
+    marginBottom: '0.75rem',
+  } as CSSProperties,
+
   label: {
     color: colors.primaryDim,
-    minWidth: '120px',
     letterSpacing: '0.1em',
+    fontSize: '0.8rem',
   },
 
   value: {
@@ -291,22 +299,26 @@ const styles = {
   urlField: {
     display: 'flex',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: '0.5rem',
-    padding: '0.5rem 0.75rem',
+    padding: '0.5rem',
     background: colors.background,
     border: `1px solid ${colors.primaryDim}`,
     borderRadius: '2px',
-    flex: 1,
+    width: '100%',
+    boxSizing: 'border-box',
   } as CSSProperties,
 
   urlTextInner: {
-    fontSize: '0.85rem',
+    fontSize: '0.8rem',
     wordBreak: 'break-all',
     flex: 1,
+    minWidth: 0,
+    lineHeight: 1.4,
   } as CSSProperties,
 
   qrButtonInline: {
-    padding: '0.25rem',
+    padding: '0.5rem',
     background: 'transparent',
     border: 'none',
     color: colors.primary,
@@ -316,10 +328,12 @@ const styles = {
     justifyContent: 'center',
     transition: 'color 0.1s',
     flexShrink: 0,
+    minWidth: '44px',
+    minHeight: '44px',
   } as CSSProperties,
 
   copyButtonInline: {
-    padding: '0.25rem',
+    padding: '0.5rem',
     background: 'transparent',
     border: 'none',
     color: colors.primary,
@@ -329,6 +343,8 @@ const styles = {
     justifyContent: 'center',
     transition: 'color 0.1s',
     flexShrink: 0,
+    minWidth: '44px',
+    minHeight: '44px',
   } as CSSProperties,
 
   copyButton: {
@@ -402,35 +418,38 @@ const styles = {
     background: colors.background,
     border: `2px solid ${colors.primary}`,
     borderRadius: '4px',
-    padding: '2rem',
+    padding: '1.5rem',
+    margin: '1rem',
+    maxWidth: '90vw',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '1.5rem',
+    gap: '1rem',
     boxShadow: `0 0 30px ${colors.primaryGlow}`,
   } as CSSProperties,
 
   qrTitle: {
     margin: 0,
-    fontSize: '1.2rem',
-    letterSpacing: '0.2em',
+    fontSize: '1rem',
+    letterSpacing: '0.15em',
     color: colors.primary,
     textShadow: `0 0 10px ${colors.primaryGlow}`,
-  },
+    textAlign: 'center',
+  } as CSSProperties,
 
   qrContainer: {
-    padding: '1rem',
+    padding: '0.75rem',
     background: colors.background,
     border: `1px solid ${colors.primaryDim}`,
     borderRadius: '4px',
   },
 
   qrUrl: {
-    fontSize: '0.8rem',
+    fontSize: '0.7rem',
     color: colors.primaryDim,
     wordBreak: 'break-all',
     textAlign: 'center',
-    maxWidth: '280px',
+    maxWidth: '250px',
   } as CSSProperties,
 
   qrCloseButton: {
@@ -444,6 +463,7 @@ const styles = {
     fontSize: '0.85rem',
     letterSpacing: '0.15em',
     transition: 'all 0.1s',
+    minHeight: '44px',
   } as CSSProperties,
 } satisfies Record<string, CSSProperties>;
 
