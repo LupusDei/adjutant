@@ -24,6 +24,8 @@ export interface GtExecOptions {
   timeout?: number;
   /** Whether to parse stdout as JSON (default: true for commands with --json) */
   parseJson?: boolean;
+  /** Additional environment variables to set */
+  env?: Record<string, string | undefined>;
 }
 
 const DEFAULT_TIMEOUT = 30000;
@@ -42,13 +44,13 @@ export async function execGt<T = unknown>(
   args: string[],
   options: GtExecOptions = {}
 ): Promise<GtResult<T>> {
-  const { cwd = GT_TOWN_ROOT, timeout = DEFAULT_TIMEOUT, parseJson = true } = options;
+  const { cwd = GT_TOWN_ROOT, timeout = DEFAULT_TIMEOUT, parseJson = true, env } = options;
 
   return new Promise((resolve) => {
     const child = spawn('gt', args, {
       cwd,
       timeout,
-      env: { ...process.env },
+      env: { ...process.env, ...env },
     });
 
     let stdout = '';
@@ -247,10 +249,16 @@ export const gt = {
         type?: 'notification' | 'task' | 'scavenge' | 'reply';
         priority?: 0 | 1 | 2 | 3 | 4;
         replyTo?: string;
+        permanent?: boolean;
       },
       options?: GtExecOptions
     ): Promise<GtResult<string>> {
       const args = ['mail', 'send', to, '-s', subject, '-m', body];
+
+      // UI messages should be permanent by default (not wisps)
+      if (sendOptions?.permanent !== false) {
+        args.push('--permanent');
+      }
 
       if (sendOptions?.type) {
         args.push('--type', sendOptions.type);
@@ -262,7 +270,18 @@ export const gt = {
         args.push('--reply-to', sendOptions.replyTo);
       }
 
-      return execGt<string>(args, { ...options, parseJson: false });
+      // Run from gastown_boy rig with explicit actor identity
+      return execGt<string>(args, {
+        ...options,
+        parseJson: false,
+        cwd: process.env['GT_TOWN_ROOT']
+          ? `${process.env['GT_TOWN_ROOT']}/gastown_boy`
+          : '/Users/will/gt/gastown_boy',
+        env: {
+          ...process.env,
+          BD_ACTOR: 'gastown_boy/ui',
+        },
+      });
     },
 
     /**
