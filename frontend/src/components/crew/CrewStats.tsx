@@ -1,6 +1,8 @@
 import type { CSSProperties } from 'react';
-import { useGastownStatus } from '../../hooks/useGastownStatus';
-import type { AgentStatus, RigStatus } from '../../types';
+import { useMemo } from 'react';
+import { usePolling } from '../../hooks/usePolling';
+import { api } from '../../services/api';
+import type { CrewMember } from '../../types';
 
 /**
  * Props for the CrewStats component.
@@ -11,27 +13,102 @@ export interface CrewStatsProps {
 }
 
 /**
+ * Grouped agent structure for hierarchical display.
+ */
+interface AgentGroup {
+  /** Town-level agents (mayor, deacon) */
+  town: CrewMember[];
+  /** Per-rig agent groups */
+  rigs: Map<string, RigAgents>;
+}
+
+/**
+ * Agents within a single rig.
+ */
+interface RigAgents {
+  crew: CrewMember[];
+  witness: CrewMember | null;
+  refinery: CrewMember | null;
+  polecats: CrewMember[];
+}
+
+/**
+ * Groups flat agent list into hierarchical structure.
+ */
+function groupAgents(agents: CrewMember[]): AgentGroup {
+  const town: CrewMember[] = [];
+  const rigs = new Map<string, RigAgents>();
+
+  for (const agent of agents) {
+    // Town-level agents have no rig
+    if (!agent.rig) {
+      if (agent.type === 'mayor' || agent.type === 'deacon') {
+        town.push(agent);
+      }
+      continue;
+    }
+
+    // Get or create rig group
+    if (!rigs.has(agent.rig)) {
+      rigs.set(agent.rig, {
+        crew: [],
+        witness: null,
+        refinery: null,
+        polecats: [],
+      });
+    }
+    const rigGroup = rigs.get(agent.rig)!;
+
+    // Sort into appropriate category
+    switch (agent.type) {
+      case 'crew':
+        rigGroup.crew.push(agent);
+        break;
+      case 'witness':
+        rigGroup.witness = agent;
+        break;
+      case 'refinery':
+        rigGroup.refinery = agent;
+        break;
+      case 'polecat':
+        rigGroup.polecats.push(agent);
+        break;
+    }
+  }
+
+  return { town, rigs };
+}
+
+/**
  * Pip-Boy styled crew stats dashboard.
  * Displays agents organized by hierarchy: Town-level → Per-rig sections.
  */
 export function CrewStats({ className = '' }: CrewStatsProps) {
   const {
-    status,
+    data: agents,
     loading,
     error,
     refresh,
     lastUpdated,
-  } = useGastownStatus();
+  } = usePolling<CrewMember[]>(() => api.agents.list(), {
+    interval: 5000,
+  });
 
-  const totalAgents = status ? countAllAgents(status.infrastructure, status.rigs) : 0;
-  const runningAgents = status ? countRunningAgents(status.infrastructure, status.rigs) : 0;
+  // Group agents into hierarchical structure
+  const grouped = useMemo(() => {
+    if (!agents) return null;
+    return groupAgents(agents);
+  }, [agents]);
+
+  const totalAgents = agents?.length ?? 0;
+  const runningAgents = agents?.filter(a => a.status !== 'offline').length ?? 0;
 
   return (
     <section style={styles.container} className={className}>
       <header style={styles.header}>
         <h2 style={styles.title}>CREW MANIFEST</h2>
         <div style={styles.syncStatus}>
-          <span style={styles.syncIndicator} data-live={!loading && !error}>
+          <span style={styles.syncIndicator}>
             {loading ? '◌' : error ? '✕' : '●'}
           </span>
           {loading ? 'SYNCING...' : error ? 'OFFLINE' : 'LIVE'}
@@ -50,28 +127,27 @@ export function CrewStats({ className = '' }: CrewStatsProps) {
       )}
 
       <div style={styles.body}>
-        {loading && !status && (
+        {loading && !agents && (
           <div style={styles.loadingState}>
             <div style={styles.loadingPulse} />
             INITIALIZING CREW TELEMETRY...
           </div>
         )}
 
-        {status && (
+        {grouped && (
           <>
             {/* Town-level agents */}
-            <TownSection
-              mayor={status.infrastructure.mayor}
-              deacon={status.infrastructure.deacon}
-            />
+            {grouped.town.length > 0 && (
+              <TownSection agents={grouped.town} />
+            )}
 
             {/* Per-rig sections */}
-            {status.rigs.map((rig) => (
-              <RigSection key={rig.name} rig={rig} />
+            {Array.from(grouped.rigs.entries()).map(([rigName, rigAgents]) => (
+              <RigSection key={rigName} name={rigName} agents={rigAgents} />
             ))}
 
-            {status.rigs.length === 0 && (
-              <div style={styles.emptyState}>NO RIGS CONFIGURED</div>
+            {grouped.rigs.size === 0 && grouped.town.length === 0 && (
+              <div style={styles.emptyState}>NO AGENTS CONFIGURED</div>
             )}
           </>
         )}
@@ -116,11 +192,13 @@ export function CrewStats({ className = '' }: CrewStatsProps) {
 // =============================================================================
 
 interface TownSectionProps {
-  mayor: AgentStatus;
-  deacon: AgentStatus;
+  agents: CrewMember[];
 }
 
-function TownSection({ mayor, deacon }: TownSectionProps) {
+function TownSection({ agents }: TownSectionProps) {
+  const mayor = agents.find(a => a.type === 'mayor');
+  const deacon = agents.find(a => a.type === 'deacon');
+
   return (
     <div style={styles.section}>
       <div style={styles.sectionHeader}>
@@ -129,8 +207,8 @@ function TownSection({ mayor, deacon }: TownSectionProps) {
         <span style={styles.sectionLine} />
       </div>
       <div style={styles.townGrid}>
-        <AgentCard agent={mayor} type="mayor" icon="👑" />
-        <AgentCard agent={deacon} type="deacon" icon="📋" />
+        {mayor && <AgentCard agent={mayor} icon="👑" />}
+        {deacon && <AgentCard agent={deacon} icon="📋" />}
       </div>
     </div>
   );
@@ -141,19 +219,25 @@ function TownSection({ mayor, deacon }: TownSectionProps) {
 // =============================================================================
 
 interface RigSectionProps {
-  rig: RigStatus;
+  name: string;
+  agents: RigAgents;
 }
 
-function RigSection({ rig }: RigSectionProps) {
-  const totalInRig = 2 + rig.crew.length + rig.polecats.length; // witness + refinery + crew + polecats
-  const runningInRig = [rig.witness, rig.refinery, ...rig.crew, ...rig.polecats]
-    .filter(a => a.running).length;
+function RigSection({ name, agents }: RigSectionProps) {
+  const allAgents = [
+    ...(agents.witness ? [agents.witness] : []),
+    ...(agents.refinery ? [agents.refinery] : []),
+    ...agents.crew,
+    ...agents.polecats,
+  ];
+  const totalInRig = allAgents.length;
+  const runningInRig = allAgents.filter(a => a.status !== 'offline').length;
 
   return (
     <div style={styles.section}>
       <div style={styles.sectionHeader}>
         <span style={styles.sectionIcon}>◇</span>
-        <span style={styles.sectionTitle}>RIG: {rig.name.toUpperCase()}</span>
+        <span style={styles.sectionTitle}>RIG: {name.toUpperCase()}</span>
         <span style={styles.rigStats}>
           {runningInRig}/{totalInRig} ACTIVE
         </span>
@@ -161,31 +245,33 @@ function RigSection({ rig }: RigSectionProps) {
       </div>
 
       {/* Crew Members */}
-      {rig.crew.length > 0 && (
+      {agents.crew.length > 0 && (
         <div style={styles.subsection}>
           <div style={styles.subsectionHeader}>
             <span style={styles.subsectionIcon}>├─</span>
             <span style={styles.subsectionTitle}>CREW</span>
           </div>
           <div style={styles.agentGrid}>
-            {rig.crew.map((agent) => (
-              <AgentCard key={agent.name} agent={agent} type="crew" icon="👷" />
+            {agents.crew.map((agent) => (
+              <AgentCard key={agent.id} agent={agent} icon="👷" />
             ))}
           </div>
         </div>
       )}
 
       {/* Witness | Refinery */}
-      <div style={styles.subsection}>
-        <div style={styles.subsectionHeader}>
-          <span style={styles.subsectionIcon}>├─</span>
-          <span style={styles.subsectionTitle}>INFRASTRUCTURE</span>
+      {(agents.witness || agents.refinery) && (
+        <div style={styles.subsection}>
+          <div style={styles.subsectionHeader}>
+            <span style={styles.subsectionIcon}>├─</span>
+            <span style={styles.subsectionTitle}>INFRASTRUCTURE</span>
+          </div>
+          <div style={styles.infraGrid}>
+            {agents.witness && <AgentCard agent={agents.witness} icon="👁" />}
+            {agents.refinery && <AgentCard agent={agents.refinery} icon="⚙" />}
+          </div>
         </div>
-        <div style={styles.infraGrid}>
-          <AgentCard agent={rig.witness} type="witness" icon="👁" />
-          <AgentCard agent={rig.refinery} type="refinery" icon="⚙" />
-        </div>
-      </div>
+      )}
 
       {/* Polecats */}
       <div style={styles.subsection}>
@@ -193,13 +279,15 @@ function RigSection({ rig }: RigSectionProps) {
           <span style={styles.subsectionIcon}>└─</span>
           <span style={styles.subsectionTitle}>POLECATS</span>
           <span style={styles.polecatCount}>
-            {rig.polecats.length > 0 ? `${rig.polecats.filter(p => p.running).length} ACTIVE` : 'NONE'}
+            {agents.polecats.length > 0
+              ? `${agents.polecats.filter(p => p.status !== 'offline').length} ACTIVE`
+              : 'NONE'}
           </span>
         </div>
-        {rig.polecats.length > 0 ? (
+        {agents.polecats.length > 0 ? (
           <div style={styles.polecatGrid}>
-            {rig.polecats.map((agent) => (
-              <AgentChip key={agent.name} agent={agent} />
+            {agents.polecats.map((agent) => (
+              <AgentChip key={agent.id} agent={agent} />
             ))}
           </div>
         ) : (
@@ -215,28 +303,27 @@ function RigSection({ rig }: RigSectionProps) {
 // =============================================================================
 
 interface AgentCardProps {
-  agent: AgentStatus;
-  type: 'mayor' | 'deacon' | 'witness' | 'refinery' | 'crew';
+  agent: CrewMember;
   icon: string;
 }
 
-function AgentCard({ agent, type, icon }: AgentCardProps) {
-  const statusColor = agent.running ? colors.working : colors.offline;
-  const stateColor = getStateColor(agent.state);
+function AgentCard({ agent, icon }: AgentCardProps) {
+  const isOnline = agent.status !== 'offline';
+  const statusColor = getStatusColor(agent.status);
 
   return (
     <div
       style={{
         ...styles.card,
-        borderColor: agent.running ? colors.panelBorder : colors.offlineBorder,
+        borderColor: isOnline ? colors.panelBorder : colors.offlineBorder,
       }}
       role="listitem"
-      aria-label={`${agent.name} - ${agent.running ? 'running' : 'stopped'}`}
+      aria-label={`${agent.name} - ${agent.status}`}
     >
       <div style={styles.cardHeader}>
         <span style={styles.typeIcon}>{icon}</span>
         <span style={styles.agentName}>{agent.name.toUpperCase()}</span>
-        <span style={styles.typeBadge}>{type.toUpperCase()}</span>
+        <span style={styles.typeBadge}>{agent.type.toUpperCase()}</span>
       </div>
 
       <div style={styles.cardBody}>
@@ -245,36 +332,25 @@ function AgentCard({ agent, type, icon }: AgentCardProps) {
             style={{
               ...styles.statusIndicator,
               backgroundColor: statusColor,
-              boxShadow: agent.running ? `0 0 8px ${statusColor}` : 'none',
+              boxShadow: isOnline ? `0 0 8px ${statusColor}` : 'none',
             }}
           />
           <span style={{ ...styles.statusText, color: statusColor }}>
-            {agent.running ? 'RUNNING' : 'STOPPED'}
+            {agent.status.toUpperCase()}
           </span>
-          {agent.state && agent.state !== 'idle' && (
-            <span style={{ ...styles.stateBadge, borderColor: stateColor, color: stateColor }}>
-              {agent.state.toUpperCase()}
-            </span>
-          )}
         </div>
 
         {agent.unreadMail > 0 && (
           <div style={styles.mailRow}>
             <span style={styles.mailIcon}>✉</span>
             <span style={styles.mailCount}>{agent.unreadMail} UNREAD</span>
-            {agent.firstMessageSubject && (
-              <span style={styles.mailPreview}>"{agent.firstMessageSubject}"</span>
-            )}
           </div>
         )}
 
-        {agent.pinnedWork && agent.pinnedWork.length > 0 && (
-          <div style={styles.workRow}>
-            <span style={styles.workIcon}>📌</span>
-            <span style={styles.workList}>
-              {agent.pinnedWork.slice(0, 2).join(', ')}
-              {agent.pinnedWork.length > 2 && ` +${agent.pinnedWork.length - 2}`}
-            </span>
+        {agent.currentTask && (
+          <div style={styles.taskRow}>
+            <span style={styles.taskIcon}>⚡</span>
+            <span style={styles.taskText}>{agent.currentTask}</span>
           </div>
         )}
       </div>
@@ -287,26 +363,27 @@ function AgentCard({ agent, type, icon }: AgentCardProps) {
 // =============================================================================
 
 interface AgentChipProps {
-  agent: AgentStatus;
+  agent: CrewMember;
 }
 
 function AgentChip({ agent }: AgentChipProps) {
-  const statusColor = agent.running ? colors.working : colors.offline;
+  const isOnline = agent.status !== 'offline';
+  const statusColor = getStatusColor(agent.status);
 
   return (
     <div
       style={{
         ...styles.chip,
-        borderColor: agent.running ? colors.primaryDim : colors.offlineBorder,
-        opacity: agent.running ? 1 : 0.6,
+        borderColor: isOnline ? colors.primaryDim : colors.offlineBorder,
+        opacity: isOnline ? 1 : 0.6,
       }}
-      title={`${agent.name} - ${agent.running ? 'running' : 'stopped'}${agent.state ? ` (${agent.state})` : ''}`}
+      title={`${agent.name} - ${agent.status}`}
     >
       <span
         style={{
           ...styles.chipIndicator,
           backgroundColor: statusColor,
-          boxShadow: agent.running ? `0 0 4px ${statusColor}` : 'none',
+          boxShadow: isOnline ? `0 0 4px ${statusColor}` : 'none',
         }}
       />
       <span style={styles.chipName}>{agent.name}</span>
@@ -321,46 +398,21 @@ function AgentChip({ agent }: AgentChipProps) {
 // Helpers
 // =============================================================================
 
-function getStateColor(state?: string): string {
-  switch (state) {
+function getStatusColor(status: string): string {
+  switch (status) {
     case 'working':
       return colors.working;
+    case 'idle':
+      return colors.idle;
+    case 'blocked':
+      return colors.blocked;
     case 'stuck':
       return colors.stuck;
-    case 'awaiting-gate':
-      return colors.blocked;
+    case 'offline':
+      return colors.offline;
     default:
       return colors.idle;
   }
-}
-
-function countAllAgents(
-  _infra: { mayor: AgentStatus; deacon: AgentStatus; daemon: AgentStatus },
-  rigs: RigStatus[]
-): number {
-  let count = 2; // mayor + deacon (daemon is internal, infra agents always counted)
-  for (const rig of rigs) {
-    count += 2; // witness + refinery
-    count += rig.crew.length;
-    count += rig.polecats.length;
-  }
-  return count;
-}
-
-function countRunningAgents(
-  infra: { mayor: AgentStatus; deacon: AgentStatus; daemon: AgentStatus },
-  rigs: RigStatus[]
-): number {
-  let count = 0;
-  if (infra.mayor.running) count++;
-  if (infra.deacon.running) count++;
-  for (const rig of rigs) {
-    if (rig.witness.running) count++;
-    if (rig.refinery.running) count++;
-    count += rig.crew.filter(a => a.running).length;
-    count += rig.polecats.filter(a => a.running).length;
-  }
-  return count;
 }
 
 // =============================================================================
@@ -641,14 +693,6 @@ const styles = {
     letterSpacing: '0.1em',
   },
 
-  stateBadge: {
-    fontSize: '0.6rem',
-    padding: '1px 5px',
-    border: '1px solid',
-    marginLeft: 'auto',
-    letterSpacing: '0.05em',
-  },
-
   mailRow: {
     display: 'flex',
     alignItems: 'center',
@@ -665,16 +709,7 @@ const styles = {
     fontWeight: 'bold',
   },
 
-  mailPreview: {
-    color: colors.primaryDim,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    maxWidth: '120px',
-    fontStyle: 'italic',
-  },
-
-  workRow: {
+  taskRow: {
     display: 'flex',
     alignItems: 'center',
     gap: '6px',
@@ -682,14 +717,15 @@ const styles = {
     color: colors.idle,
   },
 
-  workIcon: {
+  taskIcon: {
     fontSize: '0.7rem',
   },
 
-  workList: {
+  taskText: {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+    fontStyle: 'italic',
   },
 
   // Chip styles (for polecats)
