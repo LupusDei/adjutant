@@ -27,7 +27,7 @@ function App() {
       <CRTScreen showBootSequence={true} enableFlicker={true} enableScanlines={true} enableNoise={true}>
         <div className="app-container">
           <header className="app-header">
-            <h1>GASTOWN BOY</h1>
+            <h1>GASTOWN-BOY</h1>
             <div className="header-controls">
               <RigFilter />
               <NuclearPowerButton />

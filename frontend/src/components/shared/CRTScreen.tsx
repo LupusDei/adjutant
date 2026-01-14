@@ -104,7 +104,7 @@ function BootSequence({ phase }: { phase: number }) {
       )}
       {phase >= 3 && (
         <div className="boot-line">
-          INITIALIZING GASTOWN BOY v52.5...
+          INITIALIZING GASTOWN-BOY v52.5...
         </div>
       )}
       {phase >= 4 && (
