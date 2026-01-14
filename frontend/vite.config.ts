@@ -2,15 +2,9 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { ngrokPlugin } from "./vite-plugin-ngrok";
 
 export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-    // ngrok tunnel - only enabled when NGROK_AUTHTOKEN env var is set
-    ngrokPlugin({ enabled: !!process.env["NGROK_AUTHTOKEN"] }),
-  ],
+  plugins: [react(), tailwindcss()],
   server: {
     port: 3000,
     // Allow ngrok and other tunneling services
