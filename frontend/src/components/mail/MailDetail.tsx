@@ -173,27 +173,32 @@ function formatFullTimestamp(timestamp: string): string {
   });
 }
 
-// Pip-Boy color palette (matching MailList)
+// Pip-Boy color palette (matching MailList) - enhanced with more authentic colors
 const colors = {
-  primary: '#14F07D',
-  primaryDim: '#0A7A3E',
-  primaryGlow: '#14F07D40',
-  background: '#0A0A0A',
+  primary: '#1aff1a',
+  primaryDim: '#0d7a0d',
+  primaryGlow: 'rgba(26, 255, 26, 0.4)',
+  primaryBloom: 'rgba(26, 255, 26, 0.15)',
+  background: '#010301',
+  backgroundPanel: '#020502',
   urgent: '#FF4444',
-  high: '#FFAA00',
+  high: '#FFB000',
 } as const;
 
 const styles = {
   container: {
     display: 'flex',
     flexDirection: 'column',
-    fontFamily: '"Share Tech Mono", "Courier New", monospace',
+    fontFamily: '"VT323", "Share Tech Mono", "Courier New", monospace',
     color: colors.primary,
-    padding: '16px',
-    background: colors.background,
+    padding: '20px',
+    background: colors.backgroundPanel,
     border: `1px solid ${colors.primaryDim}`,
     borderRadius: '4px',
     minHeight: '200px',
+    position: 'relative',
+    /* Subtle inner glow */
+    boxShadow: `inset 0 0 30px rgba(26, 255, 26, 0.03)`,
   },
 
   loadingState: {
@@ -254,12 +259,13 @@ const styles = {
   },
 
   subject: {
-    fontSize: '1.1rem',
+    fontSize: '1.3rem',
     fontWeight: 'normal',
     margin: '0 0 16px 0',
-    letterSpacing: '0.05em',
+    letterSpacing: '0.08em',
     lineHeight: 1.3,
-    textShadow: `0 0 8px ${colors.primaryGlow}`,
+    textShadow: `0 0 2px ${colors.primary}, 0 0 8px ${colors.primaryGlow}, 0 0 16px ${colors.primaryBloom}`,
+    textTransform: 'uppercase',
   },
 
   metadata: {

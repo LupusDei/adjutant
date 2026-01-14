@@ -222,34 +222,56 @@
 
   .app-header h1 {
     font-family: var(--font-display);
-    font-size: 2.5rem;
+    font-size: 2.2rem;
     font-weight: 500;
-    letter-spacing: 0.4em;
+    letter-spacing: 0.35em;
     text-transform: uppercase;
     color: var(--color-pipboy-green-bright);
     text-shadow:
-      0 0 4px var(--color-pipboy-green),
-      0 0 8px var(--color-pipboy-green),
-      0 0 16px var(--color-pipboy-green-glow),
-      0 0 32px var(--color-pipboy-green-glow);
+      0 0 2px var(--color-pipboy-green),
+      0 0 6px var(--color-pipboy-green),
+      0 0 12px var(--color-pipboy-green-glow),
+      0 0 24px var(--color-pipboy-green-glow);
     margin: 0;
-    animation: header-glow 3s ease-in-out infinite;
+    animation: header-glow 4s ease-in-out infinite;
+    /* Slight 3D effect */
+    position: relative;
+  }
+
+  /* Decorative underline for header title */
+  .app-header h1::after {
+    content: "";
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      var(--color-pipboy-green-dim) 20%,
+      var(--color-pipboy-green) 50%,
+      var(--color-pipboy-green-dim) 80%,
+      transparent 100%
+    );
+    filter: blur(0.5px);
   }
 
   @keyframes header-glow {
     0%, 100% {
       text-shadow:
-        0 0 4px var(--color-pipboy-green),
-        0 0 8px var(--color-pipboy-green),
-        0 0 16px var(--color-pipboy-green-glow),
-        0 0 32px var(--color-pipboy-green-glow);
+        0 0 2px var(--color-pipboy-green),
+        0 0 6px var(--color-pipboy-green),
+        0 0 12px var(--color-pipboy-green-glow),
+        0 0 24px var(--color-pipboy-green-glow);
+      filter: brightness(1);
     }
     50% {
       text-shadow:
-        0 0 6px var(--color-pipboy-green),
-        0 0 12px var(--color-pipboy-green),
-        0 0 24px var(--color-pipboy-green-glow),
-        0 0 48px var(--color-pipboy-green-glow);
+        0 0 4px var(--color-pipboy-green),
+        0 0 10px var(--color-pipboy-green),
+        0 0 20px var(--color-pipboy-green-glow),
+        0 0 36px var(--color-pipboy-green-glow);
+      filter: brightness(1.05);
     }
   }
 
@@ -264,18 +286,20 @@
   .nav-tab {
     background: var(--color-pipboy-panel);
     border: 2px solid var(--color-pipboy-green-dim);
-    border-radius: 0;
+    border-radius: 3px;
     color: var(--color-pipboy-green-dim);
-    padding: 0.75rem 2rem;
+    padding: 0.6rem 1.8rem;
     font-family: var(--font-display);
-    font-size: 0.9rem;
+    font-size: 1rem;
     font-weight: 500;
-    letter-spacing: 0.2em;
+    letter-spacing: 0.15em;
     text-transform: uppercase;
     cursor: pointer;
-    transition: all 0.1s ease;
+    transition: all 0.15s ease;
     position: relative;
     overflow: hidden;
+    /* Subtle inset look */
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
   }
 
   /* Hover scanline effect */
@@ -301,19 +325,39 @@
   }
 
   .nav-tab.active {
-    background: linear-gradient(180deg, var(--color-pipboy-green-dim), var(--color-pipboy-panel));
+    background: linear-gradient(180deg,
+      rgba(32, 194, 14, 0.25) 0%,
+      rgba(32, 194, 14, 0.1) 50%,
+      var(--color-pipboy-panel) 100%
+    );
     border-color: var(--color-pipboy-green);
     color: var(--color-pipboy-green-bright);
     box-shadow:
-      var(--shadow-pipboy),
-      inset 0 1px 0 rgba(51, 255, 51, 0.3);
+      0 0 8px var(--color-pipboy-green-glow),
+      0 0 16px rgba(32, 194, 14, 0.2),
+      inset 0 1px 0 rgba(51, 255, 51, 0.4),
+      inset 0 -1px 3px rgba(0, 0, 0, 0.3);
     text-shadow:
-      0 0 4px var(--color-pipboy-green),
+      0 0 3px var(--color-pipboy-green),
       0 0 8px var(--color-pipboy-green-glow);
+  }
+
+  /* Active indicator bar at bottom */
+  .nav-tab.active::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background: var(--color-pipboy-green);
+    box-shadow: 0 0 6px var(--color-pipboy-green);
+    border-radius: 1px;
   }
 
   .nav-tab:active {
     transform: scale(0.98);
+    filter: brightness(0.9);
   }
 
   .app-content {
