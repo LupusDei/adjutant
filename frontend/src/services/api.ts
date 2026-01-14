@@ -16,7 +16,9 @@ import type {
 // Configuration
 // =============================================================================
 
-const API_BASE_URL = (import.meta.env['VITE_API_URL'] as string | undefined) ?? 'http://localhost:3001/api';
+// Use relative URL by default - works with Vite proxy for local dev AND ngrok tunneling
+// Set VITE_API_URL only when you need to hit a different backend (e.g., production)
+const API_BASE_URL = (import.meta.env['VITE_API_URL'] as string | undefined) ?? '/api';
 const DEFAULT_TIMEOUT = 30000;
 
 // =============================================================================

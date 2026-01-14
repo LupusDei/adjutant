@@ -7,6 +7,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 3000,
+    // Allow ngrok and other tunneling services
+    allowedHosts: [".ngrok-free.app", ".ngrok.io", ".loca.lt", ".localhost.run"],
     proxy: {
       "/api": {
         target: "http://localhost:3001",

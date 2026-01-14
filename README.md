@@ -105,8 +105,11 @@ NODE_ENV=development   # Environment mode
 Create `frontend/.env` to customize (all optional):
 
 ```env
-VITE_API_URL=http://localhost:3001  # Backend API URL (default: localhost:3001)
+# Only needed if connecting to a different backend (e.g., production)
+VITE_API_URL=https://api.example.com
 ```
+
+By default, the frontend uses the Vite proxy which forwards `/api` requests to `localhost:3001`. This also enables seamless ngrok tunneling - see [Remote Access](#remote-access-ngrok).
 
 See `backend/.env.example` and `frontend/.env.example` for full documentation.
 
@@ -154,15 +157,41 @@ gastown-boy/
 
 See [OpenAPI spec](specs/001-pipboy-ui/contracts/openapi.yaml) for full details.
 
-## Remote Access
+## Remote Access (ngrok)
 
-Gastown-Boy runs on localhost by default. For remote access, use ngrok:
+Access gastown_boy from your phone, another computer, or anywhere with an internet connection.
+
+### Prerequisites
+
+1. Install ngrok: `brew install ngrok`
+2. Sign up at [ngrok.com](https://ngrok.com) (free)
+3. Add your authtoken: `ngrok config add-authtoken <your-token>`
+
+### Quick Start
 
 ```bash
-ngrok http 3001  # Expose backend
+# Terminal 1: Start the dev server
+npm run dev
+
+# Terminal 2: Start the tunnel
+npm run tunnel
 ```
 
-Then update `VITE_API_URL` in frontend to the ngrok URL.
+The tunnel will display a public URL like `https://abc123.ngrok-free.app`. Open that URL on any device to access gastown_boy.
+
+### How It Works
+
+- Only the frontend needs to be tunneled (free tier compatible!)
+- The Vite dev server proxies `/api` requests to the backend automatically
+- No environment variables needed - it just works
+
+### Free Tier Limitations
+
+- **2-hour session limit** - URL changes when restarted
+- **Interstitial page** - First-time visitors see an ngrok warning page
+- **1 tunnel at a time** - But that's all we need!
+
+For longer sessions or custom domains, consider [ngrok paid plans](https://ngrok.com/pricing) or alternatives like [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) or [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/).
 
 ## Development
 

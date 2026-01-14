@@ -14,7 +14,8 @@
     "start": "npx concurrently -k -n backend,frontend -c blue,green \"npm run start:backend\" \"npm run start:frontend\"",
     "start:backend": "cd backend && npm start",
     "start:frontend": "cd frontend && npm run preview",
-    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "tunnel": "./scripts/tunnel.sh"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
