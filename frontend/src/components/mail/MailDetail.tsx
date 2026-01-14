@@ -102,7 +102,7 @@ export function MailDetail({
 
       {/* Message body */}
       <div style={styles.body}>
-        {message.body.split('\n').map((line, i) => (
+        {(message.body ?? '').split('\n').map((line, i) => (
           <p key={i} style={styles.bodyParagraph}>
             {line || '\u00A0'}
           </p>
