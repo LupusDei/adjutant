@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { PowerButton } from "../../../../src/components/power/PowerButton";
+import { RigProvider } from "../../../../src/contexts/RigContext";
 import { usePolling } from "../../../../src/hooks/usePolling";
 import { api } from "../../../../src/services/api";
 import type { GastownStatus } from "../../../../src/types";
@@ -58,6 +59,10 @@ function createMockStatus(
   };
 }
 
+function renderWithRigProvider(ui: React.ReactElement) {
+  return render(<RigProvider>{ui}</RigProvider>);
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
@@ -83,7 +88,7 @@ describe("PowerButton", () => {
         })
       );
 
-      render(<PowerButton />);
+      renderWithRigProvider(<PowerButton />);
 
       expect(screen.getByText("OFFLINE")).toBeInTheDocument();
       expect(screen.getByText("SYSTEM DOWN")).toBeInTheDocument();
@@ -97,7 +102,7 @@ describe("PowerButton", () => {
         })
       );
 
-      render(<PowerButton />);
+      renderWithRigProvider(<PowerButton />);
 
       expect(screen.getByText("ONLINE")).toBeInTheDocument();
       expect(screen.getByText("SYSTEM NOMINAL")).toBeInTheDocument();
@@ -111,7 +116,7 @@ describe("PowerButton", () => {
         })
       );
 
-      render(<PowerButton />);
+      renderWithRigProvider(<PowerButton />);
 
       expect(screen.getByText("STARTING")).toBeInTheDocument();
       expect(screen.getByText("IGNITING CORES")).toBeInTheDocument();
@@ -125,7 +130,7 @@ describe("PowerButton", () => {
         })
       );
 
-      render(<PowerButton />);
+      renderWithRigProvider(<PowerButton />);
 
       expect(screen.getByText("STOPPING")).toBeInTheDocument();
       expect(screen.getByText("POWERING DOWN")).toBeInTheDocument();
@@ -137,7 +142,7 @@ describe("PowerButton", () => {
         createMockPollingResult({ data: null })
       );
 
-      render(<PowerButton />);
+      renderWithRigProvider(<PowerButton />);
 
       expect(screen.getByText("UNKNOWN")).toBeInTheDocument();
       expect(screen.getByText("AWAITING SIGNAL")).toBeInTheDocument();
@@ -152,7 +157,7 @@ describe("PowerButton", () => {
         })
       );
 
-      render(<PowerButton />);
+      renderWithRigProvider(<PowerButton />);
 
       expect(screen.getByText("SYNCING...")).toBeInTheDocument();
     });
@@ -165,7 +170,7 @@ describe("PowerButton", () => {
         })
       );
 
-      render(<PowerButton />);
+      renderWithRigProvider(<PowerButton />);
 
       expect(screen.getByText("LIVE")).toBeInTheDocument();
     });
@@ -186,7 +191,7 @@ describe("PowerButton", () => {
       );
       vi.mocked(api.power.up).mockResolvedValue({ newState: "starting" });
 
-      render(<PowerButton />);
+      renderWithRigProvider(<PowerButton />);
 
       fireEvent.click(screen.getByRole("button"));
 
@@ -205,7 +210,7 @@ describe("PowerButton", () => {
       );
       vi.mocked(api.power.down).mockResolvedValue({ newState: "stopping" });
 
-      render(<PowerButton />);
+      renderWithRigProvider(<PowerButton />);
 
       fireEvent.click(screen.getByRole("button"));
 
@@ -221,7 +226,7 @@ describe("PowerButton", () => {
         })
       );
 
-      render(<PowerButton />);
+      renderWithRigProvider(<PowerButton />);
 
       expect(screen.getByRole("button")).toBeDisabled();
     });
@@ -231,7 +236,7 @@ describe("PowerButton", () => {
         createMockPollingResult({ data: null })
       );
 
-      render(<PowerButton />);
+      renderWithRigProvider(<PowerButton />);
 
       expect(screen.getByRole("button")).toBeDisabled();
     });
@@ -247,7 +252,7 @@ describe("PowerButton", () => {
         () => new Promise(() => {})
       );
 
-      render(<PowerButton />);
+      renderWithRigProvider(<PowerButton />);
 
       fireEvent.click(screen.getByRole("button"));
 
@@ -270,7 +275,7 @@ describe("PowerButton", () => {
         })
       );
 
-      render(<PowerButton />);
+      renderWithRigProvider(<PowerButton />);
 
       expect(screen.getByRole("alert")).toHaveTextContent("Connection failed");
     });
@@ -283,7 +288,7 @@ describe("PowerButton", () => {
       );
       vi.mocked(api.power.up).mockRejectedValue(new Error("Power failure"));
 
-      render(<PowerButton />);
+      renderWithRigProvider(<PowerButton />);
 
       fireEvent.click(screen.getByRole("button"));
 
@@ -300,7 +305,7 @@ describe("PowerButton", () => {
         })
       );
 
-      render(<PowerButton />);
+      renderWithRigProvider(<PowerButton />);
 
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
@@ -318,7 +323,7 @@ describe("PowerButton", () => {
         })
       );
 
-      render(<PowerButton />);
+      renderWithRigProvider(<PowerButton />);
 
       expect(screen.getByRole("button")).toHaveAttribute(
         "aria-label",
@@ -333,7 +338,7 @@ describe("PowerButton", () => {
         })
       );
 
-      render(<PowerButton />);
+      renderWithRigProvider(<PowerButton />);
 
       expect(screen.getByText("POWER CONTROL")).toBeInTheDocument();
     });

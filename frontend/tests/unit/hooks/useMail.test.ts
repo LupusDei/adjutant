@@ -47,6 +47,28 @@ function createMockMessageList(count: number): Message[] {
   );
 }
 
+async function flushPromises(count = 2): Promise<void> {
+  for (let i = 0; i < count; i += 1) {
+    await Promise.resolve();
+  }
+}
+
+async function advanceAndFlush(ms: number): Promise<void> {
+  await act(async () => {
+    vi.advanceTimersByTime(ms);
+    await flushPromises();
+  });
+}
+
+async function exhaustInitialRetries(): Promise<void> {
+  await act(async () => {
+    await flushPromises();
+  });
+  await advanceAndFlush(1000);
+  await advanceAndFlush(2000);
+  await advanceAndFlush(3000);
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
@@ -59,10 +81,11 @@ describe("useMail", () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   afterEach(() => {
+    vi.clearAllTimers();
     vi.useRealTimers();
   });
 
@@ -292,10 +315,7 @@ describe("useMail", () => {
 
       const { result } = renderHook(() => useMail());
 
-      await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve(); // Extra tick for catch block
-      });
+      await exhaustInitialRetries();
 
       expect(result.current.loading).toBe(false);
       expect(result.current.messages).toEqual([]);
@@ -306,22 +326,19 @@ describe("useMail", () => {
       const error = new Error("Temporary error");
       mockList
         .mockRejectedValueOnce(error)
+        .mockRejectedValueOnce(error)
+        .mockRejectedValueOnce(error)
+        .mockRejectedValueOnce(error)
         .mockResolvedValueOnce({ items: [], total: 0, hasMore: false });
 
-      const { result } = renderHook(() => useMail({ pollInterval: 1000 }));
+      const { result } = renderHook(() => useMail({ pollInterval: 10000 }));
 
       // Wait for first fetch (error)
-      await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
-      });
+      await exhaustInitialRetries();
       expect(result.current.error).toEqual(error);
 
       // Trigger next poll
-      await act(async () => {
-        vi.advanceTimersByTime(1000);
-        await Promise.resolve();
-      });
+      await advanceAndFlush(10000);
 
       expect(result.current.error).toBeNull();
     });
@@ -336,6 +353,7 @@ describe("useMail", () => {
 
       // Wait for successful initial fetch
       await act(async () => {
+        await Promise.resolve();
         await Promise.resolve();
       });
       expect(result.current.messages).toEqual(messages);

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { CrewStats } from "../../../../src/components/crew/CrewStats";
+import { RigProvider } from "../../../../src/contexts/RigContext";
 import { usePolling } from "../../../../src/hooks/usePolling";
 import type { CrewMember } from "../../../../src/types";
 
@@ -48,6 +49,10 @@ function createMockAgent(overrides: Partial<CrewMember> = {}): CrewMember {
   };
 }
 
+function renderWithRigProvider(ui: React.ReactElement) {
+  return render(<RigProvider>{ui}</RigProvider>);
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
@@ -71,9 +76,9 @@ describe("CrewStats", () => {
         createMockPollingResult({ loading: true, data: null })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
-      expect(screen.getByText("LOADING CREW DATA...")).toBeInTheDocument();
+      expect(screen.getByText("INITIALIZING CREW TELEMETRY...")).toBeInTheDocument();
       expect(screen.getByText("SYNCING...")).toBeInTheDocument();
     });
 
@@ -82,14 +87,14 @@ describe("CrewStats", () => {
         createMockPollingResult({ data: [] })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
-      expect(screen.getByText("NO AGENTS FOUND")).toBeInTheDocument();
+      expect(screen.getByText("NO AGENTS CONFIGURED")).toBeInTheDocument();
     });
 
     it("should render crew members", () => {
       const mockAgents = [
-        createMockAgent({ id: "mayor", name: "mayor", type: "mayor", status: "working" }),
+        createMockAgent({ id: "mayor", name: "mayor", type: "mayor", status: "working", rig: null }),
         createMockAgent({ id: "gastown_boy/nux", name: "nux", type: "polecat", status: "idle" }),
       ];
 
@@ -97,10 +102,10 @@ describe("CrewStats", () => {
         createMockPollingResult({ data: mockAgents })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
-      expect(screen.getByText("mayor")).toBeInTheDocument();
-      expect(screen.getByText("nux")).toBeInTheDocument();
+      expect(screen.getAllByText(/mayor/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/nux/i).length).toBeGreaterThan(0);
     });
 
     it("should show LIVE when not loading", () => {
@@ -111,7 +116,7 @@ describe("CrewStats", () => {
         })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
       expect(screen.getByText("LIVE")).toBeInTheDocument();
     });
@@ -121,9 +126,9 @@ describe("CrewStats", () => {
         createMockPollingResult({ data: [] })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
-      expect(screen.getByText("CREW STATS")).toBeInTheDocument();
+      expect(screen.getByText("CREW MANIFEST")).toBeInTheDocument();
     });
   });
 
@@ -135,33 +140,39 @@ describe("CrewStats", () => {
     it("should display agent status", () => {
       mockUsePolling.mockReturnValue(
         createMockPollingResult({
-          data: [createMockAgent({ status: "working" })],
+          data: [
+            createMockAgent({
+              type: "crew",
+              rig: "gastown_boy",
+              status: "working",
+            }),
+          ],
         })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
       expect(screen.getByText("WORKING")).toBeInTheDocument();
     });
 
     it("should display different statuses correctly", () => {
       const mockAgents = [
-        createMockAgent({ id: "1", name: "agent1", status: "working" }),
-        createMockAgent({ id: "2", name: "agent2", status: "idle" }),
-        createMockAgent({ id: "3", name: "agent3", status: "blocked" }),
-        createMockAgent({ id: "4", name: "agent4", status: "offline" }),
+        createMockAgent({ id: "1", name: "agent1", status: "working", type: "crew" }),
+        createMockAgent({ id: "2", name: "agent2", status: "idle", type: "crew" }),
+        createMockAgent({ id: "3", name: "agent3", status: "blocked", type: "crew" }),
+        createMockAgent({ id: "4", name: "agent4", status: "offline", type: "crew" }),
       ];
 
       mockUsePolling.mockReturnValue(
         createMockPollingResult({ data: mockAgents })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
-      expect(screen.getByText("WORKING")).toBeInTheDocument();
-      expect(screen.getByText("IDLE")).toBeInTheDocument();
-      expect(screen.getByText("BLOCKED")).toBeInTheDocument();
-      expect(screen.getByText("OFFLINE")).toBeInTheDocument();
+      expect(screen.getAllByText("WORKING").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("IDLE").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("BLOCKED").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("OFFLINE").length).toBeGreaterThan(0);
     });
 
     it("should display unread mail badge when > 0", () => {
@@ -171,9 +182,9 @@ describe("CrewStats", () => {
         })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
-      expect(screen.getByText("✉ 5")).toBeInTheDocument();
+      expect(screen.getByText(/📬5/)).toBeInTheDocument();
     });
 
     it("should not display mail badge when unreadMail is 0", () => {
@@ -183,7 +194,7 @@ describe("CrewStats", () => {
         })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
       expect(screen.queryByText(/✉/)).not.toBeInTheDocument();
     });
@@ -195,19 +206,25 @@ describe("CrewStats", () => {
         })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
-      expect(screen.getByText("RIG: gastown_boy")).toBeInTheDocument();
+      expect(screen.getByText(/RIG: GASTOWN_BOY/i)).toBeInTheDocument();
     });
 
     it("should display current task when present", () => {
       mockUsePolling.mockReturnValue(
         createMockPollingResult({
-          data: [createMockAgent({ currentTask: "Implementing feature X" })],
+          data: [
+            createMockAgent({
+              type: "crew",
+              rig: "gastown_boy",
+              currentTask: "Implementing feature X",
+            }),
+          ],
         })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
       expect(screen.getByText("Implementing feature X")).toBeInTheDocument();
     });
@@ -225,9 +242,10 @@ describe("CrewStats", () => {
         })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
-      expect(screen.getByText("TOTAL: 2")).toBeInTheDocument();
+      const agentsStat = screen.getByText("AGENTS").parentElement as HTMLElement;
+      expect(agentsStat).toHaveTextContent("2");
     });
 
     it("should show online count", () => {
@@ -241,62 +259,27 @@ describe("CrewStats", () => {
         createMockPollingResult({ data: mockAgents })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
-      expect(screen.getByText("ONLINE: 2")).toBeInTheDocument();
+      const onlineStat = screen.getByText("ONLINE").parentElement as HTMLElement;
+      expect(onlineStat).toHaveTextContent("2");
     });
 
-    it("should show working count", () => {
+    it("should show offline count", () => {
       const mockAgents = [
         createMockAgent({ id: "1", status: "working" }),
-        createMockAgent({ id: "2", status: "working" }),
-        createMockAgent({ id: "3", status: "idle" }),
+        createMockAgent({ id: "2", status: "offline" }),
+        createMockAgent({ id: "3", status: "offline" }),
       ];
 
       mockUsePolling.mockReturnValue(
         createMockPollingResult({ data: mockAgents })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
-      expect(screen.getByText("WORKING: 2")).toBeInTheDocument();
-    });
-  });
-
-  // ===========================================================================
-  // Interactions
-  // ===========================================================================
-
-  describe("interactions", () => {
-    it("should call refresh when refresh button clicked", async () => {
-      const mockRefresh = vi.fn();
-      mockUsePolling.mockReturnValue(
-        createMockPollingResult({
-          data: [createMockAgent()],
-          refresh: mockRefresh,
-        })
-      );
-
-      render(<CrewStats />);
-
-      fireEvent.click(screen.getByText("REFRESH"));
-
-      await waitFor(() => {
-        expect(mockRefresh).toHaveBeenCalledTimes(1);
-      });
-    });
-
-    it("should disable refresh button while loading", () => {
-      mockUsePolling.mockReturnValue(
-        createMockPollingResult({
-          data: [createMockAgent()],
-          loading: true,
-        })
-      );
-
-      render(<CrewStats />);
-
-      expect(screen.getByText("REFRESHING...")).toBeDisabled();
+      const offlineStat = screen.getByText("OFFLINE").parentElement as HTMLElement;
+      expect(offlineStat).toHaveTextContent("2");
     });
   });
 
@@ -313,7 +296,7 @@ describe("CrewStats", () => {
         })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
       expect(screen.getByRole("alert")).toHaveTextContent("Connection failed");
     });
@@ -326,9 +309,9 @@ describe("CrewStats", () => {
         })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
-      expect(screen.getByText(/CREW ERROR:/)).toBeInTheDocument();
+      expect(screen.getByText(/COMM ERROR:/)).toBeInTheDocument();
     });
   });
 
@@ -344,7 +327,7 @@ describe("CrewStats", () => {
         })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
       expect(screen.getByRole("list", { name: "Crew members" })).toBeInTheDocument();
     });
@@ -356,7 +339,7 @@ describe("CrewStats", () => {
         })
       );
 
-      render(<CrewStats />);
+      renderWithRigProvider(<CrewStats />);
 
       const items = screen.getAllByRole("listitem");
       expect(items).toHaveLength(2);

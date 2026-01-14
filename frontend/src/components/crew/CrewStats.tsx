@@ -137,7 +137,7 @@ export function CrewStats({ className = '' }: CrewStatsProps) {
         </div>
       )}
 
-      <div style={styles.body}>
+      <div style={styles.body} role="list" aria-label="Crew members">
         {loading && !agents && (
           <div style={styles.loadingState}>
             <div style={styles.loadingPulse} />
@@ -392,6 +392,8 @@ function AgentChip({ agent }: AgentChipProps) {
         opacity: isOnline ? 1 : 0.6,
       }}
       title={`${agent.name} - ${agent.status}`}
+      role="listitem"
+      aria-label={`${agent.name} - ${agent.status}`}
     >
       <span
         style={{
