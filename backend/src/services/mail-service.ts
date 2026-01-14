@@ -173,7 +173,7 @@ export async function getMessage(
 
   const townRoot = resolveTownRoot();
   const beadsDir = resolveBeadsDir(townRoot);
-  const result = await execBd<RawMessage>(["show", messageId, "--json"], {
+  const result = await execBd<RawMessage[]>(["show", messageId, "--json"], {
     cwd: townRoot,
     beadsDir,
   });
@@ -189,7 +189,7 @@ export async function getMessage(
     };
   }
 
-  if (!result.data) {
+  if (!result.data || result.data.length === 0) {
     return {
       success: false,
       error: {
@@ -199,7 +199,7 @@ export async function getMessage(
     };
   }
 
-  const transformed = transformMessage(result.data);
+  const transformed = transformMessage(result.data[0]);
   return { success: true, data: transformed };
 }
 
