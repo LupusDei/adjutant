@@ -88,7 +88,6 @@ export function NuclearPowerButton() {
       </button>
       <div className="power-status">
         <div className={`status-led ${isRunning ? 'on' : ''}`} />
-        <span className="status-text">{statusLabel}</span>
       </div>
     </div>
   );

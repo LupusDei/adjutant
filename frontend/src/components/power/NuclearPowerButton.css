@@ -148,13 +148,6 @@
   transition: all 0.3s ease;
 }
 
-.status-text {
-  font-size: 12px;
-  letter-spacing: 0.15em;
-  color: var(--switch-green-dim);
-  transition: all 0.3s ease;
-}
-
 /* ============================================
    Power ON State
    ============================================ */
@@ -196,11 +189,6 @@
     0 0 12px var(--switch-green-glow);
 }
 
-.power-on .status-text {
-  color: var(--switch-green);
-  text-shadow: 0 0 4px var(--switch-green-glow);
-}
-
 /* ============================================
    Power OFF State
    ============================================ */
@@ -233,10 +221,6 @@
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
-.power-off .status-text {
-  color: var(--switch-red);
-}
-
 /* ============================================
    Transitioning State
    ============================================ */
@@ -267,11 +251,6 @@
     inset 0 1px 2px rgba(0, 0, 0, 0.3),
     0 0 8px var(--switch-amber-glow);
   animation: led-blink 0.5s ease-in-out infinite;
-}
-
-.power-transitioning .status-text {
-  color: var(--switch-amber);
-  text-shadow: 0 0 4px var(--switch-amber-glow);
 }
 
 @keyframes track-pulse {
@@ -316,10 +295,6 @@
 
 .power-unknown .status-led {
   background: #444;
-}
-
-.power-unknown .status-text {
-  color: #555;
 }
 
 /* ============================================
