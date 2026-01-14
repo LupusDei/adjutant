@@ -57,6 +57,18 @@ interface StatusResponse {
   rigs: StatusRig[];
 }
 
+/**
+ * Raw agent data from gt agents list --all output.
+ */
+interface ListAgent {
+  name: string;
+  type: string;
+  rig: string | null;
+  running: boolean;
+  state: string;
+  unreadMail: number;
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -131,6 +143,24 @@ function transformStatusAgent(agent: StatusAgent): CrewMember {
   return result;
 }
 
+/**
+ * Transforms agents list output into CrewMember format.
+ */
+function transformListAgent(agent: ListAgent): CrewMember {
+  const nameParts = agent.name.split("/");
+  const displayName = nameParts[nameParts.length - 1] || agent.name;
+  const address = agent.rig ? `${agent.rig}/${agent.name}` : `${agent.name}/`;
+
+  return {
+    id: address,
+    name: displayName,
+    type: mapAgentType(agent.type),
+    rig: agent.rig ?? null,
+    status: mapStatus(agent.running, agent.state),
+    unreadMail: agent.unreadMail,
+  };
+}
+
 // ============================================================================
 // Service Functions
 // ============================================================================
@@ -140,16 +170,24 @@ function transformStatusAgent(agent: StatusAgent): CrewMember {
  * Uses gt status --json which includes mail counts.
  */
 export async function getAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
-  const result = await gt.status<StatusResponse>();
+  const result = await gt.status<StatusResponse>({ timeout: 10000 });
 
   if (!result.success) {
-    return {
-      success: false,
-      error: {
-        code: result.error?.code ?? "AGENTS_ERROR",
-        message: result.error?.message ?? "Failed to get status",
-      },
-    };
+    const fallback = await gt.agents.list<ListAgent[]>({ timeout: 5000 });
+    if (!fallback.success) {
+      return {
+        success: false,
+        error: {
+          code: fallback.error?.code ?? result.error?.code ?? "AGENTS_ERROR",
+          message:
+            fallback.error?.message ?? result.error?.message ?? "Failed to get status",
+        },
+      };
+    }
+
+    const crewMembers = (fallback.data ?? []).map(transformListAgent);
+    crewMembers.sort((a, b) => a.name.localeCompare(b.name));
+    return { success: true, data: crewMembers };
   }
 
   // Handle case where data might be undefined

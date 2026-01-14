@@ -187,6 +187,25 @@ describe("gt-executor", () => {
       );
     });
 
+    it("should return a timeout error when the command exceeds the limit", async () => {
+      vi.useFakeTimers();
+      try {
+        const resultPromise = execGt(["status"], { timeout: 1000 });
+
+        await vi.advanceTimersByTimeAsync(1000);
+        const result = await resultPromise;
+
+        expect(result.success).toBe(false);
+        expect(result.error).toEqual({
+          code: "TIMEOUT",
+          message: "Command timed out after 1000ms",
+        });
+        expect(result.exitCode).toBe(-1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("should handle empty stdout with parseJson true", async () => {
       const resultPromise = execGt(["status", "--json"]);
 

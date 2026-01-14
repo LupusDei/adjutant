@@ -207,6 +207,37 @@ export async function execGt<T = unknown>(
 
     let stdout = '';
     let stderr = '';
+    let settled = false;
+    const timeoutMs = Math.max(0, timeout);
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const finish = (result: GtResult<T>) => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      resolve(result);
+    };
+
+    if (timeoutMs) {
+      timeoutId = setTimeout(() => {
+        const message = `Command timed out after ${timeoutMs}ms`;
+        try {
+          child.kill();
+        } catch {
+          // Ignore kill errors; we're timing out anyway.
+        }
+        finish({
+          success: false,
+          error: {
+            code: 'TIMEOUT',
+            message,
+          },
+          exitCode: -1,
+        });
+      }, timeoutMs);
+    }
 
     child.stdout.on('data', (data: Buffer) => {
       stdout += data.toString();
@@ -217,7 +248,7 @@ export async function execGt<T = unknown>(
     });
 
     child.on('error', (err) => {
-      resolve({
+      finish({
         success: false,
         error: {
           code: 'SPAWN_ERROR',
@@ -228,11 +259,12 @@ export async function execGt<T = unknown>(
     });
 
     child.on('close', (code) => {
+      if (settled) return;
       const exitCode = code ?? 0;
 
       if (exitCode !== 0) {
         const stderrTrimmed = stderr.trim();
-        resolve({
+        finish({
           success: false,
           error: {
             code: 'COMMAND_FAILED',
@@ -248,9 +280,9 @@ export async function execGt<T = unknown>(
       if (parseJson && stdout.trim()) {
         try {
           const data = JSON.parse(stdout) as T;
-          resolve({ success: true, data, exitCode });
+          finish({ success: true, data, exitCode });
         } catch {
-          resolve({
+          finish({
             success: false,
             error: {
               code: 'PARSE_ERROR',
@@ -262,7 +294,7 @@ export async function execGt<T = unknown>(
         }
       } else {
         // Return raw stdout as data for non-JSON commands
-        resolve({
+        finish({
           success: true,
           data: stdout.trim() as unknown as T,
           exitCode,
