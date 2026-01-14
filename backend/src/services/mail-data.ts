@@ -1,5 +1,6 @@
 import { execBd, resolveBeadsDir, type BeadsIssue } from "./bd-client.js";
 import { parseMessageLabels } from "./gastown-utils.js";
+import { logWarn } from "../utils/index.js";
 
 export interface MailIndexEntry {
   unread: number;
@@ -21,6 +22,11 @@ function toTimestamp(value: string | undefined): number {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 0;
   return date.getTime();
+}
+
+function isUnread(issue: BeadsIssue): boolean {
+  const labels = parseMessageLabels(issue.labels);
+  return issue.status !== "closed" && !labels.hasReadLabel;
 }
 
 export async function listMailIssues(townRoot: string): Promise<BeadsIssue[]> {
@@ -53,6 +59,73 @@ export async function listMailIssues(townRoot: string): Promise<BeadsIssue[]> {
     seen.add(issue.id);
     deduped.push(issue);
   }
+  return deduped;
+}
+
+export async function listMailIssuesForIdentity(
+  townRoot: string,
+  identity: string
+): Promise<BeadsIssue[]> {
+  const beadsDir = resolveBeadsDir(townRoot);
+  const seen = new Set<string>();
+  const deduped: BeadsIssue[] = [];
+  const errors: string[] = [];
+  let anySucceeded = false;
+
+  const addIssues = (issues: BeadsIssue[]) => {
+    for (const issue of issues) {
+      if (seen.has(issue.id)) continue;
+      seen.add(issue.id);
+      deduped.push(issue);
+    }
+  };
+
+  const runQuery = async (args: string[]) => {
+    const result = await execBd<BeadsIssue[]>(args, { cwd: townRoot, beadsDir });
+    if (result.success) {
+      anySucceeded = true;
+      addIssues(result.data ?? []);
+      return;
+    }
+    if (result.error?.message) {
+      errors.push(result.error.message);
+    }
+  };
+
+  const identities = identityVariants(identity);
+
+  for (const variant of identities) {
+    for (const status of ["open", "hooked"]) {
+      await runQuery([
+        "list",
+        "--type",
+        "message",
+        "--assignee",
+        variant,
+        "--status",
+        status,
+        "--json",
+      ]);
+    }
+  }
+
+  for (const variant of identities) {
+    await runQuery([
+      "list",
+      "--type",
+      "message",
+      "--label",
+      `cc:${variant}`,
+      "--status",
+      "open",
+      "--json",
+    ]);
+  }
+
+  if (!anySucceeded && errors.length > 0) {
+    throw new Error(errors[0]);
+  }
+
   return deduped;
 }
 
@@ -108,4 +181,41 @@ export function buildMailIndex(
     });
   }
   return result;
+}
+
+export async function buildMailIndexForIdentities(
+  townRoot: string,
+  identities: string[]
+): Promise<Map<string, MailIndexEntry>> {
+  const uniqueIdentities = Array.from(new Set(identities));
+  const entries = await Promise.all(
+    uniqueIdentities.map(async (identity) => {
+      try {
+        const issues = await listMailIssuesForIdentity(townRoot, identity);
+        let unread = 0;
+        let latestTimestamp = 0;
+        let firstSubject: string | undefined;
+
+        for (const issue of issues) {
+          if (!isUnread(issue)) continue;
+          unread += 1;
+          const timestamp = toTimestamp(issue.created_at);
+          if (timestamp >= latestTimestamp) {
+            latestTimestamp = timestamp;
+            firstSubject = issue.title;
+          }
+        }
+
+        return [identity, { unread, firstSubject }] as const;
+      } catch (err) {
+        logWarn("mail index query failed", {
+          identity,
+          message: err instanceof Error ? err.message : "Unknown error",
+        });
+        return [identity, { unread: 0 }] as const;
+      }
+    })
+  );
+
+  return new Map(entries);
 }
