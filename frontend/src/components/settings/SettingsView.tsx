@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, type CSSProperties } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface NgrokTunnel {
   public_url: string;
@@ -18,6 +19,7 @@ type TunnelStatus = 'loading' | 'connected' | 'not-running' | 'error';
  */
 export function SettingsView() {
   const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
   const [tunnelStatus, setTunnelStatus] = useState<TunnelStatus>('loading');
   const [ngrokUrl, setNgrokUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -130,14 +132,33 @@ export function SettingsView() {
           <>
             <div style={styles.field}>
               <span style={styles.label}>PUBLIC URL:</span>
-              <div style={styles.urlContainer}>
-                <code style={styles.urlText}>{displayUrl}</code>
+              <div style={styles.urlField}>
+                <code style={styles.urlTextInner}>{displayUrl}</code>
                 <button
                   type="button"
-                  style={styles.copyButton}
-                  onClick={handleCopy}
+                  style={styles.qrButtonInline}
+                  onClick={() => setShowQR(true)}
+                  title="Show QR Code"
                 >
-                  {copied ? '✓ COPIED' : 'COPY'}
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13-2h3v3h-3v-3zm-3 3h3v3h-3v-3zm3 3h3v3h-3v-3zm-3 3h3v3h-3v-3zm3 0h3v3h-3v-3z"/>
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  style={styles.copyButtonInline}
+                  onClick={handleCopy}
+                  title={copied ? 'Copied!' : 'Copy URL'}
+                >
+                  {copied ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                    </svg>
+                  )}
                 </button>
               </div>
             </div>
@@ -145,19 +166,38 @@ export function SettingsView() {
             <p style={styles.hint}>
               Share this URL to access GASTOWN-BOY from other devices.
             </p>
+
+            {showQR && (
+              <div style={styles.qrOverlay} onClick={() => setShowQR(false)}>
+                <div style={styles.qrModal} onClick={(e) => e.stopPropagation()}>
+                  <h3 style={styles.qrTitle}>SCAN TO CONNECT</h3>
+                  <div style={styles.qrContainer}>
+                    <QRCodeSVG
+                      value={ngrokUrl}
+                      size={256}
+                      bgColor="#0A0A0A"
+                      fgColor="#14F07D"
+                      level="M"
+                    />
+                  </div>
+                  <code style={styles.qrUrl}>{ngrokUrl}</code>
+                  <button
+                    type="button"
+                    style={styles.qrCloseButton}
+                    onClick={() => setShowQR(false)}
+                  >
+                    CLOSE
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
 
         {tunnelStatus === 'not-running' && (
-          <div style={styles.instructions}>
-            <p style={styles.instructionText}>
-              To enable remote access, start the ngrok tunnel:
-            </p>
-            <code style={styles.codeBlock}>./scripts/tunnel.sh</code>
-            {errorMsg && (
-              <p style={styles.errorText}>Debug: {errorMsg}</p>
-            )}
-          </div>
+          <p style={styles.hint}>
+            No tunnel detected. Start ngrok to enable remote access.
+          </p>
         )}
 
         {tunnelStatus === 'loading' && (
@@ -165,30 +205,6 @@ export function SettingsView() {
         )}
       </section>
 
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>LOCAL ACCESS</h2>
-
-        <div style={styles.field}>
-          <span style={styles.label}>LOCAL URL:</span>
-          <div style={styles.urlContainer}>
-            <code style={styles.urlText}>{currentOrigin}</code>
-          </div>
-        </div>
-      </section>
-
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>SYSTEM INFO</h2>
-
-        <div style={styles.field}>
-          <span style={styles.label}>VERSION:</span>
-          <span style={styles.value}>v52.5</span>
-        </div>
-
-        <div style={styles.field}>
-          <span style={styles.label}>PLATFORM:</span>
-          <span style={styles.value}>{navigator.platform.toUpperCase()}</span>
-        </div>
-      </section>
     </div>
   );
 }
@@ -272,6 +288,49 @@ const styles = {
     flex: 1,
   } as CSSProperties,
 
+  urlField: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    padding: '0.5rem 0.75rem',
+    background: colors.background,
+    border: `1px solid ${colors.primaryDim}`,
+    borderRadius: '2px',
+    flex: 1,
+  } as CSSProperties,
+
+  urlTextInner: {
+    fontSize: '0.85rem',
+    wordBreak: 'break-all',
+    flex: 1,
+  } as CSSProperties,
+
+  qrButtonInline: {
+    padding: '0.25rem',
+    background: 'transparent',
+    border: 'none',
+    color: colors.primary,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'color 0.1s',
+    flexShrink: 0,
+  } as CSSProperties,
+
+  copyButtonInline: {
+    padding: '0.25rem',
+    background: 'transparent',
+    border: 'none',
+    color: colors.primary,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'color 0.1s',
+    flexShrink: 0,
+  } as CSSProperties,
+
   copyButton: {
     padding: '0.5rem 1rem',
     background: 'transparent',
@@ -325,6 +384,67 @@ const styles = {
     marginBottom: 0,
     opacity: 0.7,
   },
+
+  qrOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'rgba(0, 0, 0, 0.9)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  } as CSSProperties,
+
+  qrModal: {
+    background: colors.background,
+    border: `2px solid ${colors.primary}`,
+    borderRadius: '4px',
+    padding: '2rem',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '1.5rem',
+    boxShadow: `0 0 30px ${colors.primaryGlow}`,
+  } as CSSProperties,
+
+  qrTitle: {
+    margin: 0,
+    fontSize: '1.2rem',
+    letterSpacing: '0.2em',
+    color: colors.primary,
+    textShadow: `0 0 10px ${colors.primaryGlow}`,
+  },
+
+  qrContainer: {
+    padding: '1rem',
+    background: colors.background,
+    border: `1px solid ${colors.primaryDim}`,
+    borderRadius: '4px',
+  },
+
+  qrUrl: {
+    fontSize: '0.8rem',
+    color: colors.primaryDim,
+    wordBreak: 'break-all',
+    textAlign: 'center',
+    maxWidth: '280px',
+  } as CSSProperties,
+
+  qrCloseButton: {
+    padding: '0.75rem 2rem',
+    background: 'transparent',
+    border: `1px solid ${colors.primary}`,
+    borderRadius: '2px',
+    color: colors.primary,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontSize: '0.85rem',
+    letterSpacing: '0.15em',
+    transition: 'all 0.1s',
+  } as CSSProperties,
 } satisfies Record<string, CSSProperties>;
 
 export default SettingsView;
