@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "npm run kill && npx concurrently -k -n backend,frontend -c blue,green \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:remote": "npm run dev",
-    "dev:backend": "export GT_TOWN_ROOT=${GT_TOWN_ROOT:-/Users/will/gt} && cd backend && npm run dev",
+    "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev",
     "kill": "lsof -ti:3000,3001 | xargs kill -9 2>/dev/null || true",
     "build": "npm run build:backend && npm run build:frontend",

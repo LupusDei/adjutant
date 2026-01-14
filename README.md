@@ -98,7 +98,13 @@ PORT=3001              # API server port (default: 3001)
 GT_PATH=gt             # Path to gt binary (default: uses PATH)
 CORS_ORIGIN=http://localhost:5173  # Allowed CORS origin
 NODE_ENV=development   # Environment mode
+GT_TOWN_ROOT=/path/to/gt  # Gastown town root (auto-detected if running inside town)
 ```
+
+**Note on GT_TOWN_ROOT:** If running the dev server from a directory that's NOT inside
+your Gastown town (e.g., a separate clone), you must set `GT_TOWN_ROOT` to point to
+your town's root directory. The backend auto-detects this when running from within
+a town structure.
 
 ### Frontend Environment Variables
 
