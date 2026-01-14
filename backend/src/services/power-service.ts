@@ -1,11 +1,13 @@
 /**
  * Power service for gastown-boy.
  *
- * Controls gastown startup/shutdown and status queries,
- * wrapping the lower-level gt-executor power commands.
+ * Uses bd/tmux for read-side status and gt for up/down lifecycle control.
  */
 
-import { gt } from "./gt-executor.js";
+import { basename, join } from "path";
+import { collectAgentSnapshot, type AgentRuntimeInfo } from "./agent-data.js";
+import { resolveTownRoot, loadTownConfig, listRigNames } from "./gastown-workspace.js";
+import { execGtControl } from "./gt-control.js";
 import type { GastownStatus, PowerState, AgentStatus, RigStatus } from "../types/index.js";
 
 // ============================================================================
@@ -32,140 +34,65 @@ export interface PowerTransitionResult {
   newState: PowerState;
 }
 
-/**
- * Raw agent data from gt status --json.
- */
-interface RawStatusAgent {
-  name: string;
-  address: string;
-  session: string;
-  role: string;
-  running: boolean;
-  has_work: boolean;
-  state?: string;
-  unread_mail: number;
-  first_subject?: string;
-}
-
-/**
- * Raw rig data from gt status --json.
- */
-interface RawStatusRig {
-  name: string;
-  polecat_count: number;
-  crew_count: number;
-  has_witness: boolean;
-  has_refinery: boolean;
-  agents: RawStatusAgent[];
-}
-
-/**
- * Raw status response from gt status --json.
- */
-interface RawGtStatus {
-  name: string;
-  location: string;
-  overseer: {
-    name: string;
-    email: string;
-    username: string;
-    source: string;
-    unread_mail: number;
-  };
-  agents: RawStatusAgent[];
-  rigs: RawStatusRig[];
-}
-
 // ============================================================================
-// Transformation Helpers
+// Helpers
 // ============================================================================
 
-/**
- * Transform raw agent to AgentStatus format.
- */
-function transformAgent(raw: RawStatusAgent): AgentStatus {
-  const result: AgentStatus = {
-    name: raw.name,
-    running: raw.running,
-    unreadMail: raw.unread_mail,
-  };
-  if (raw.first_subject !== undefined) {
-    result.firstMessageSubject = raw.first_subject;
+const DEFAULT_AGENT: AgentStatus = {
+  name: "unknown",
+  running: false,
+  unreadMail: 0,
+};
+
+function normalizeAgentState(state?: string): AgentStatus["state"] | undefined {
+  if (!state) return undefined;
+  const normalized = state.toLowerCase();
+  if (normalized === "stuck" || normalized === "awaiting-gate") {
+    return normalized as AgentStatus["state"];
   }
-  if (raw.state !== undefined) {
-    result.state = raw.state as "idle" | "working" | "stuck" | "awaiting-gate";
+  if (normalized === "idle" || normalized === "working") {
+    return normalized as AgentStatus["state"];
   }
-  return result;
+  if (normalized === "blocked") {
+    return "awaiting-gate";
+  }
+  return undefined;
 }
 
-/**
- * Transform raw rig to RigStatus format.
- */
-function transformRig(raw: RawStatusRig): RigStatus {
-  const agents = raw.agents || [];
-  const witness = agents.find((a) => a.role === "witness");
-  const refinery = agents.find((a) => a.role === "refinery");
-  const crew = agents.filter((a) => a.role === "crew");
-  const polecats = agents.filter((a) => a.role === "polecat");
-
-  const defaultAgent: AgentStatus = {
-    name: "unknown",
-    running: false,
-    unreadMail: 0,
+function toAgentStatus(agent: AgentRuntimeInfo | undefined, fallbackName: string): AgentStatus {
+  if (!agent) {
+    return { ...DEFAULT_AGENT, name: fallbackName };
+  }
+  const status: AgentStatus = {
+    name: agent.name,
+    running: agent.running,
+    unreadMail: agent.unreadMail,
   };
+  if (agent.firstSubject) {
+    status.firstMessageSubject = agent.firstSubject;
+  }
+  const state = normalizeAgentState(agent.state);
+  if (state) {
+    status.state = state;
+  }
+  return status;
+}
+
+function buildRigStatus(rigName: string, townRoot: string, agents: AgentRuntimeInfo[]): RigStatus {
+  const rigAgents = agents.filter((agent) => agent.rig === rigName);
+  const witness = rigAgents.find((agent) => agent.role === "witness");
+  const refinery = rigAgents.find((agent) => agent.role === "refinery");
+  const crew = rigAgents.filter((agent) => agent.role === "crew");
+  const polecats = rigAgents.filter((agent) => agent.role === "polecat");
 
   return {
-    name: raw.name,
-    path: "", // Not provided by gt status
-    witness: witness ? transformAgent(witness) : defaultAgent,
-    refinery: refinery ? transformAgent(refinery) : defaultAgent,
-    crew: crew.map(transformAgent),
-    polecats: polecats.map(transformAgent),
-    mergeQueue: { pending: 0, inFlight: 0, blocked: 0 }, // Not provided by gt status
-  };
-}
-
-/**
- * Derive power state from agent running status.
- */
-function derivePowerState(agents: RawStatusAgent[]): PowerState {
-  const mayor = agents.find((a) => a.name === "mayor");
-  if (mayor?.running) return "running";
-  return "stopped";
-}
-
-/**
- * Transform raw gt status output to GastownStatus format.
- */
-function transformStatus(raw: RawGtStatus): GastownStatus {
-  const agents = raw.agents || [];
-  const mayor = agents.find((a) => a.name === "mayor");
-  const deacon = agents.find((a) => a.name === "deacon");
-
-  const defaultAgent: AgentStatus = {
-    name: "unknown",
-    running: false,
-    unreadMail: 0,
-  };
-
-  return {
-    powerState: derivePowerState(agents),
-    town: {
-      name: raw.name,
-      root: raw.location,
-    },
-    operator: {
-      name: raw.overseer.name,
-      email: raw.overseer.email,
-      unreadMail: raw.overseer.unread_mail,
-    },
-    infrastructure: {
-      mayor: mayor ? transformAgent(mayor) : defaultAgent,
-      deacon: deacon ? transformAgent(deacon) : defaultAgent,
-      daemon: defaultAgent, // Daemon not in gt status output
-    },
-    rigs: (raw.rigs || []).map(transformRig),
-    fetchedAt: new Date().toISOString(),
+    name: rigName,
+    path: join(townRoot, rigName),
+    witness: toAgentStatus(witness, "witness"),
+    refinery: toAgentStatus(refinery, "refinery"),
+    crew: crew.map((agent) => toAgentStatus(agent, agent.name)),
+    polecats: polecats.map((agent) => toAgentStatus(agent, agent.name)),
+    mergeQueue: { pending: 0, inFlight: 0, blocked: 0 },
   };
 }
 
@@ -177,45 +104,60 @@ function transformStatus(raw: RawGtStatus): GastownStatus {
  * Gets the current gastown status.
  */
 export async function getStatus(): Promise<PowerServiceResult<GastownStatus>> {
-  const result = await gt.status<RawGtStatus>();
+  try {
+    const townRoot = resolveTownRoot();
+    const townConfig = await loadTownConfig(townRoot);
+    const { agents, mailIndex } = await collectAgentSnapshot(townRoot, ["overseer"]);
 
-  if (!result.success) {
+    const mayor = agents.find((agent) => agent.role === "mayor");
+    const deacon = agents.find((agent) => agent.role === "deacon");
+
+    const rigNames = await listRigNames(townRoot);
+    const agentRigNames = new Set(agents.map((agent) => agent.rig).filter(Boolean) as string[]);
+    const rigSet = new Set([...rigNames, ...agentRigNames]);
+
+    const operatorMail = mailIndex.get("overseer");
+    const townName = townConfig.name ?? basename(townRoot);
+
+    const status: GastownStatus = {
+      powerState: mayor?.running ? "running" : "stopped",
+      town: {
+        name: townName,
+        root: townRoot,
+      },
+      operator: {
+        name: townConfig.owner?.name ?? "Overseer",
+        email: townConfig.owner?.email ?? "",
+        unreadMail: operatorMail?.unread ?? 0,
+      },
+      infrastructure: {
+        mayor: toAgentStatus(mayor, "mayor"),
+        deacon: toAgentStatus(deacon, "deacon"),
+        daemon: { ...DEFAULT_AGENT, name: "daemon" },
+      },
+      rigs: Array.from(rigSet).map((rig) => buildRigStatus(rig, townRoot, agents)),
+      fetchedAt: new Date().toISOString(),
+    };
+
+    return { success: true, data: status };
+  } catch (err) {
     return {
       success: false,
       error: {
-        code: result.error?.code ?? "STATUS_ERROR",
-        message: result.error?.message ?? "Failed to get gastown status",
+        code: "STATUS_ERROR",
+        message: err instanceof Error ? err.message : "Failed to get gastown status",
       },
     };
   }
-
-  if (!result.data) {
-    return {
-      success: false,
-      error: {
-        code: "INVALID_RESPONSE",
-        message: "Empty status response",
-      },
-    };
-  }
-
-  // Transform the raw status to expected format
-  const transformed = transformStatus(result.data);
-  return { success: true, data: transformed };
 }
 
 /**
  * Starts gastown (power up).
- *
- * Checks current state first to prevent redundant starts,
- * but will attempt startup even if status check fails (failsafe).
  */
 export async function powerUp(): Promise<PowerServiceResult<PowerTransitionResult>> {
-  // Get current state (best-effort)
   const statusResult = await getStatus();
   const currentState: PowerState | undefined = statusResult.data?.powerState;
 
-  // If already running, return error
   if (currentState === "running") {
     return {
       success: false,
@@ -226,8 +168,8 @@ export async function powerUp(): Promise<PowerServiceResult<PowerTransitionResul
     };
   }
 
-  // Attempt to start
-  const upResult = await gt.up();
+  const townRoot = resolveTownRoot();
+  const upResult = await execGtControl(["up"], { cwd: townRoot });
 
   if (!upResult.success) {
     return {
@@ -250,17 +192,11 @@ export async function powerUp(): Promise<PowerServiceResult<PowerTransitionResul
 
 /**
  * Stops gastown (power down).
- *
- * Checks current state first to prevent redundant stops,
- * but will attempt shutdown even if status check fails (failsafe).
- * Allows stopping during transitional states (starting, stopping).
  */
 export async function powerDown(): Promise<PowerServiceResult<PowerTransitionResult>> {
-  // Get current state (best-effort)
   const statusResult = await getStatus();
   const currentState: PowerState | undefined = statusResult.data?.powerState;
 
-  // If already stopped, return error
   if (currentState === "stopped") {
     return {
       success: false,
@@ -271,8 +207,8 @@ export async function powerDown(): Promise<PowerServiceResult<PowerTransitionRes
     };
   }
 
-  // Attempt to stop (allow during running, starting, or stopping states)
-  const downResult = await gt.down();
+  const townRoot = resolveTownRoot();
+  const downResult = await execGtControl(["down"], { cwd: townRoot });
 
   if (!downResult.success) {
     return {

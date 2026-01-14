@@ -1,11 +1,15 @@
 /**
  * Mail service for gastown-boy.
  *
- * This service provides a typed interface for mail operations,
- * wrapping the lower-level gt-executor mail commands.
+ * This service provides a typed interface for mail operations
+ * using bd/beads storage (no gt binary required).
  */
 
-import { gt } from "./gt-executor.js";
+import { randomBytes } from "crypto";
+import { execBd, resolveBeadsDir, type BeadsIssue } from "./bd-client.js";
+import { resolveTownRoot } from "./gastown-workspace.js";
+import { addressToIdentity, beadsIssueToMessage, parseMessageLabels } from "./gastown-utils.js";
+import { listMailIssues } from "./mail-data.js";
 import type { Message, SendMessageRequest, MessagePriority } from "../types/mail.js";
 
 // ============================================================================
@@ -25,23 +29,9 @@ export interface MailServiceResult<T> {
 }
 
 /**
- * Raw message format from gt mail commands.
+ * Raw message format from beads.
  */
-interface RawMessage {
-  id: string;
-  from: string;
-  to: string;
-  subject: string;
-  body: string;
-  timestamp: string;
-  read: boolean;
-  priority: string;
-  type: string;
-  thread_id: string;
-  reply_to?: string;
-  pinned?: boolean;
-  cc?: string[];
-}
+type RawMessage = BeadsIssue;
 
 // ============================================================================
 // Transformation Helpers
@@ -50,41 +40,69 @@ interface RawMessage {
 /**
  * Map priority string to numeric value.
  */
-function mapPriority(priority: string): MessagePriority {
-  const priorityMap: Record<string, MessagePriority> = {
-    urgent: 0,
-    high: 1,
-    normal: 2,
-    low: 3,
-    lowest: 4,
-  };
-  return priorityMap[priority.toLowerCase()] ?? 2;
+function mapPriority(priority: number | undefined): MessagePriority {
+  if (priority === 0 || priority === 1 || priority === 2 || priority === 3 || priority === 4) {
+    return priority;
+  }
+  return 2;
 }
 
 /**
  * Transform raw gt message to Message format.
  */
 function transformMessage(raw: RawMessage): Message {
-  const result: Message = {
-    id: raw.id,
-    from: raw.from,
-    to: raw.to,
-    subject: raw.subject,
-    body: raw.body,
-    timestamp: raw.timestamp,
-    read: raw.read,
+  return beadsIssueToMessage({
+    ...raw,
     priority: mapPriority(raw.priority),
-    type: raw.type as Message["type"],
-    threadId: raw.thread_id,
-    pinned: raw.pinned ?? false,
-  };
-  if (raw.reply_to) {
-    result.replyTo = raw.reply_to;
-  }
-  if (raw.cc) {
-    result.cc = raw.cc;
-  }
-  return result;
+  });
+}
+
+function resolveMailIdentity(): string {
+  return (
+    process.env["GT_MAIL_IDENTITY"] ??
+    process.env["BD_IDENTITY"] ??
+    process.env["GT_IDENTITY"] ??
+    "overseer"
+  );
+}
+
+function identityVariants(identity: string): string[] {
+  if (identity === "mayor/") return ["mayor/", "mayor"];
+  if (identity === "deacon/") return ["deacon/", "deacon"];
+  return [identity];
+}
+
+function matchesIdentity(issue: RawMessage, identity: string): boolean {
+  const variants = new Set(identityVariants(identity));
+  const assignee = issue.assignee ?? "";
+  if (variants.has(assignee)) return true;
+  const labels = parseMessageLabels(issue.labels);
+  return labels.cc.some((cc) => variants.has(cc));
+}
+
+function isNotFoundError(message?: string): boolean {
+  if (!message) return false;
+  const lower = message.toLowerCase();
+  return lower.includes("not found") || lower.includes("no such") || lower.includes("missing");
+}
+
+function generateThreadId(): string {
+  return `thread-${randomBytes(6).toString("hex")}`;
+}
+
+async function resolveThreadId(
+  townRoot: string,
+  beadsDir: string,
+  replyTo?: string
+): Promise<string | undefined> {
+  if (!replyTo) return undefined;
+  const result = await execBd<BeadsIssue>(["show", replyTo, "--json"], {
+    cwd: townRoot,
+    beadsDir,
+  });
+  if (!result.success || !result.data) return undefined;
+  const labels = parseMessageLabels(result.data.labels);
+  return labels.threadId;
 }
 
 // ============================================================================
@@ -95,31 +113,23 @@ function transformMessage(raw: RawMessage): Message {
  * Lists all mail messages, sorted by newest first.
  */
 export async function listMail(): Promise<MailServiceResult<Message[]>> {
-  const result = await gt.mail.inbox<RawMessage[]>();
+  const townRoot = resolveTownRoot();
+  const identity = addressToIdentity(resolveMailIdentity());
 
-  if (!result.success) {
+  let issues: RawMessage[];
+  try {
+    issues = await listMailIssues(townRoot);
+  } catch (err) {
     return {
       success: false,
       error: {
-        code: result.error?.code ?? "LIST_MAIL_ERROR",
-        message: result.error?.message ?? "Failed to list mail",
+        code: "LIST_MAIL_ERROR",
+        message: err instanceof Error ? err.message : "Failed to list mail",
       },
     };
   }
 
-  // Handle edge cases:
-  // - Empty/null data: treat as empty inbox
-  // - Non-array data: return error
-  const rawData = result.data;
-  if (!rawData) {
-    // No messages - return empty array
-    return { success: true, data: [] };
-  }
-  // Handle case where gt returns empty string instead of array
-  if (typeof rawData === 'string') {
-    if ((rawData as string).trim() === '') {
-      return { success: true, data: [] };
-    }
+  if (!Array.isArray(issues)) {
     return {
       success: false,
       error: {
@@ -128,22 +138,12 @@ export async function listMail(): Promise<MailServiceResult<Message[]>> {
       },
     };
   }
-  if (!Array.isArray(rawData)) {
-    return {
-      success: false,
-      error: {
-        code: "INVALID_RESPONSE",
-        message: "Invalid response from mail inbox",
-      },
-    };
-  }
-  const messages = rawData as RawMessage[];
 
-  // Transform and sort messages by timestamp, newest first
+  const messages = issues.filter((issue) => matchesIdentity(issue, identity));
   const transformed = messages.map(transformMessage);
-  const sorted = transformed.sort((a, b) => {
-    return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-  });
+  const sorted = transformed.sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
 
   return { success: true, data: sorted };
 }
@@ -164,13 +164,19 @@ export async function getMessage(
     };
   }
 
-  const result = await gt.mail.read<RawMessage>(messageId);
+  const townRoot = resolveTownRoot();
+  const beadsDir = resolveBeadsDir(townRoot);
+  const result = await execBd<RawMessage>(["show", messageId, "--json"], {
+    cwd: townRoot,
+    beadsDir,
+  });
 
   if (!result.success) {
+    const code = isNotFoundError(result.error?.message) ? "NOT_FOUND" : "GET_MESSAGE_ERROR";
     return {
       success: false,
       error: {
-        code: result.error?.code ?? "GET_MESSAGE_ERROR",
+        code,
         message: result.error?.message ?? `Failed to get message: ${messageId}`,
       },
     };
@@ -186,7 +192,6 @@ export async function getMessage(
     };
   }
 
-  // Transform raw message to expected format
   const transformed = transformMessage(result.data);
   return { success: true, data: transformed };
 }
@@ -218,24 +223,42 @@ export async function sendMail(
     };
   }
 
+  const townRoot = resolveTownRoot();
+  const beadsDir = resolveBeadsDir(townRoot);
   const to = request.to ?? "mayor/";
+  const from = resolveMailIdentity();
+  const toIdentity = addressToIdentity(to);
+  const fromIdentity = addressToIdentity(from);
+  const priority = mapPriority(request.priority);
+  const replyTo = request.replyTo;
+  const threadId = (await resolveThreadId(townRoot, beadsDir, replyTo)) ?? generateThreadId();
 
-  // Build send options, only including defined values
-  const sendOptions: {
-    type?: "notification" | "task" | "scavenge" | "reply";
-    priority?: 0 | 1 | 2 | 3 | 4;
-    replyTo?: string;
-  } = {};
-  if (request.type !== undefined) sendOptions.type = request.type;
-  if (request.priority !== undefined) sendOptions.priority = request.priority;
-  if (request.replyTo !== undefined) sendOptions.replyTo = request.replyTo;
+  const labels = [`from:${fromIdentity}`, `thread:${threadId}`];
+  if (replyTo) labels.push(`reply-to:${replyTo}`);
+  if (request.type) labels.push(`msg-type:${request.type}`);
 
-  const result = await gt.mail.send(
-    to,
+  const args = [
+    "create",
     request.subject,
+    "--type",
+    "message",
+    "--assignee",
+    toIdentity,
+    "-d",
     request.body,
-    sendOptions
-  );
+    "--priority",
+    priority.toString(),
+  ];
+  if (labels.length > 0) {
+    args.push("--labels", labels.join(","));
+  }
+  args.push("--actor", fromIdentity);
+
+  const result = await execBd<string>(args, {
+    cwd: townRoot,
+    beadsDir,
+    parseJson: false,
+  });
 
   if (!result.success) {
     return {
@@ -266,14 +289,21 @@ export async function markRead(
     };
   }
 
-  const result = await gt.mail.markRead(messageId);
+  const townRoot = resolveTownRoot();
+  const beadsDir = resolveBeadsDir(townRoot);
+  const result = await execBd<string>(["label", "add", messageId, "read"], {
+    cwd: townRoot,
+    beadsDir,
+    parseJson: false,
+  });
 
   if (!result.success) {
+    const code = isNotFoundError(result.error?.message) ? "NOT_FOUND" : "MARK_READ_ERROR";
     return {
       success: false,
       error: {
-        code: result.error?.code ?? "MARK_READ_ERROR",
-        message: result.error?.message ?? `Failed to mark message as read`,
+        code,
+        message: result.error?.message ?? "Failed to mark message as read",
       },
     };
   }

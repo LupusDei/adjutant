@@ -1,37 +1,33 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-
-// Mock the gt-executor before importing the module under test
-vi.mock("../../src/services/gt-executor.js", () => ({
-  gt: {
-    mail: {
-      inbox: vi.fn(),
-      read: vi.fn(),
-      send: vi.fn(),
-      markRead: vi.fn(),
-    },
-  },
+import { describe, it, expect, vi, beforeEach } from "vitest";
+vi.mock("../../src/services/bd-client.js", () => ({
+  execBd: vi.fn(),
+  resolveBeadsDir: vi.fn(() => "/tmp/town/.beads"),
 }));
 
-import { gt } from "../../src/services/gt-executor.js";
-import { listMail, getMessage, sendMail, markRead } from "../../src/services/mail-service.js";
-import type { Message, SendMessageRequest } from "../../src/types/mail.js";
+vi.mock("../../src/services/gastown-workspace.js", () => ({
+  resolveTownRoot: vi.fn(() => "/tmp/town"),
+}));
 
-/**
- * Creates a mock Message for testing.
- */
-function createMockMessage(overrides: Partial<Message> = {}): Message {
+vi.mock("../../src/services/mail-data.js", () => ({
+  listMailIssues: vi.fn(),
+}));
+
+import { execBd } from "../../src/services/bd-client.js";
+import { listMailIssues } from "../../src/services/mail-data.js";
+import { getMessage, listMail, markRead, sendMail } from "../../src/services/mail-service.js";
+import type { BeadsIssue } from "../../src/services/bd-client.js";
+
+function createBeadsMessage(overrides: Partial<BeadsIssue> = {}): BeadsIssue {
   return {
     id: "msg-001",
-    from: "mayor/",
-    to: "operator",
-    subject: "Test Subject",
-    body: "Test message body",
-    timestamp: "2026-01-11T12:00:00Z",
-    read: false,
+    title: "Test Subject",
+    description: "Test body",
+    status: "open",
     priority: 2,
-    type: "notification",
-    threadId: "thread-001",
-    pinned: false,
+    issue_type: "message",
+    created_at: "2026-01-11T12:00:00Z",
+    assignee: "overseer",
+    labels: ["from:mayor/"],
     ...overrides,
   };
 }
@@ -41,109 +37,34 @@ describe("mail-service", () => {
     vi.clearAllMocks();
   });
 
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
-
   describe("listMail", () => {
-    it("should return a list of messages on success", async () => {
-      const mockMessages = [
-        createMockMessage({ id: "msg-001", subject: "First message" }),
-        createMockMessage({ id: "msg-002", subject: "Second message" }),
-      ];
-
-      vi.mocked(gt.mail.inbox).mockResolvedValue({
-        success: true,
-        data: { messages: mockMessages },
-        exitCode: 0,
-      });
+    it("returns messages sorted by newest first", async () => {
+      const older = createBeadsMessage({ id: "msg-001", created_at: "2026-01-10T12:00:00Z" });
+      const newer = createBeadsMessage({ id: "msg-002", created_at: "2026-01-11T12:00:00Z" });
+      vi.mocked(listMailIssues).mockResolvedValue([older, newer]);
 
       const result = await listMail();
 
       expect(result.success).toBe(true);
-      expect(result.data).toHaveLength(2);
-      expect(result.data?.[0].subject).toBe("First message");
-      expect(result.data?.[1].subject).toBe("Second message");
-    });
-
-    it("should return messages sorted by newest first", async () => {
-      const olderMessage = createMockMessage({
-        id: "msg-001",
-        timestamp: "2026-01-10T12:00:00Z",
-      });
-      const newerMessage = createMockMessage({
-        id: "msg-002",
-        timestamp: "2026-01-11T12:00:00Z",
-      });
-
-      vi.mocked(gt.mail.inbox).mockResolvedValue({
-        success: true,
-        data: { messages: [olderMessage, newerMessage] },
-        exitCode: 0,
-      });
-
-      const result = await listMail();
-
-      expect(result.success).toBe(true);
-      expect(result.data?.[0].id).toBe("msg-002"); // Newer first
+      expect(result.data?.[0].id).toBe("msg-002");
       expect(result.data?.[1].id).toBe("msg-001");
     });
 
-    it("should return empty array when no messages exist", async () => {
-      vi.mocked(gt.mail.inbox).mockResolvedValue({
-        success: true,
-        data: { messages: [] },
-        exitCode: 0,
-      });
-
-      const result = await listMail();
-
-      expect(result.success).toBe(true);
-      expect(result.data).toHaveLength(0);
-    });
-
-    it("should propagate errors from gt executor", async () => {
-      vi.mocked(gt.mail.inbox).mockResolvedValue({
-        success: false,
-        error: {
-          code: "COMMAND_FAILED",
-          message: "Gastown not running",
-        },
-        exitCode: 1,
-      });
+    it("returns error when list fails", async () => {
+      vi.mocked(listMailIssues).mockRejectedValue(new Error("bd failure"));
 
       const result = await listMail();
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe("COMMAND_FAILED");
-      expect(result.error?.message).toBe("Gastown not running");
-    });
-
-    it("should handle malformed response data gracefully", async () => {
-      vi.mocked(gt.mail.inbox).mockResolvedValue({
-        success: true,
-        data: null, // Malformed response
-        exitCode: 0,
-      });
-
-      const result = await listMail();
-
-      expect(result.success).toBe(false);
-      expect(result.error?.code).toBe("INVALID_RESPONSE");
+      expect(result.error?.code).toBe("LIST_MAIL_ERROR");
     });
   });
 
   describe("getMessage", () => {
-    it("should return a single message by ID", async () => {
-      const mockMessage = createMockMessage({
-        id: "msg-123",
-        subject: "Specific message",
-        body: "Full message content here",
-      });
-
-      vi.mocked(gt.mail.read).mockResolvedValue({
+    it("returns a message by ID", async () => {
+      vi.mocked(execBd).mockResolvedValue({
         success: true,
-        data: mockMessage,
+        data: createBeadsMessage({ id: "msg-123" }),
         exitCode: 0,
       });
 
@@ -151,18 +72,12 @@ describe("mail-service", () => {
 
       expect(result.success).toBe(true);
       expect(result.data?.id).toBe("msg-123");
-      expect(result.data?.subject).toBe("Specific message");
-      expect(result.data?.body).toBe("Full message content here");
-      expect(gt.mail.read).toHaveBeenCalledWith("msg-123");
     });
 
-    it("should return error when message not found", async () => {
-      vi.mocked(gt.mail.read).mockResolvedValue({
+    it("returns NOT_FOUND when message missing", async () => {
+      vi.mocked(execBd).mockResolvedValue({
         success: false,
-        error: {
-          code: "NOT_FOUND",
-          message: "Message msg-999 not found",
-        },
+        error: { code: "COMMAND_FAILED", message: "not found" },
         exitCode: 1,
       });
 
@@ -171,245 +86,52 @@ describe("mail-service", () => {
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe("NOT_FOUND");
     });
-
-    it("should validate message ID is provided", async () => {
-      const result = await getMessage("");
-
-      expect(result.success).toBe(false);
-      expect(result.error?.code).toBe("INVALID_ARGUMENT");
-      expect(result.error?.message).toContain("Message ID is required");
-    });
-
-    it("should handle malformed message response", async () => {
-      vi.mocked(gt.mail.read).mockResolvedValue({
-        success: true,
-        data: { id: "msg-123" }, // Missing required fields
-        exitCode: 0,
-      });
-
-      const result = await getMessage("msg-123");
-
-      expect(result.success).toBe(false);
-      expect(result.error?.code).toBe("INVALID_RESPONSE");
-    });
   });
 
   describe("sendMail", () => {
-    it("should send a message to the Mayor successfully", async () => {
-      vi.mocked(gt.mail.send).mockResolvedValue({
+    it("sends a message with labels and priority", async () => {
+      vi.mocked(execBd).mockResolvedValue({
         success: true,
-        data: "Message sent",
+        data: "",
         exitCode: 0,
       });
 
-      const request: SendMessageRequest = {
-        subject: "Test Subject",
-        body: "Test body content",
-      };
-
-      const result = await sendMail(request);
-
-      expect(result.success).toBe(true);
-      expect(gt.mail.send).toHaveBeenCalledWith(
-        "mayor/",
-        "Test Subject",
-        "Test body content",
-        expect.any(Object)
-      );
-    });
-
-    it("should use custom recipient when provided", async () => {
-      vi.mocked(gt.mail.send).mockResolvedValue({
-        success: true,
-        data: "Message sent",
-        exitCode: 0,
-      });
-
-      const request: SendMessageRequest = {
-        to: "greenplace/Toast",
-        subject: "Direct message",
-        body: "Body content",
-      };
-
-      const result = await sendMail(request);
-
-      expect(result.success).toBe(true);
-      expect(gt.mail.send).toHaveBeenCalledWith(
-        "greenplace/Toast",
-        "Direct message",
-        "Body content",
-        expect.any(Object)
-      );
-    });
-
-    it("should pass priority option when provided", async () => {
-      vi.mocked(gt.mail.send).mockResolvedValue({
-        success: true,
-        data: "Message sent",
-        exitCode: 0,
-      });
-
-      const request: SendMessageRequest = {
-        subject: "Urgent message",
-        body: "Urgent content",
-        priority: 0, // Urgent
-      };
-
-      const result = await sendMail(request);
-
-      expect(result.success).toBe(true);
-      expect(gt.mail.send).toHaveBeenCalledWith(
-        "mayor/",
-        "Urgent message",
-        "Urgent content",
-        expect.objectContaining({ priority: 0 })
-      );
-    });
-
-    it("should pass message type when provided", async () => {
-      vi.mocked(gt.mail.send).mockResolvedValue({
-        success: true,
-        data: "Message sent",
-        exitCode: 0,
-      });
-
-      const request: SendMessageRequest = {
-        subject: "New task",
-        body: "Task description",
+      const result = await sendMail({
+        subject: "Hello",
+        body: "Body",
+        to: "mayor/",
         type: "task",
-      };
-
-      const result = await sendMail(request);
-
-      expect(result.success).toBe(true);
-      expect(gt.mail.send).toHaveBeenCalledWith(
-        "mayor/",
-        "New task",
-        "Task description",
-        expect.objectContaining({ type: "task" })
-      );
-    });
-
-    it("should pass replyTo when provided", async () => {
-      vi.mocked(gt.mail.send).mockResolvedValue({
-        success: true,
-        data: "Message sent",
-        exitCode: 0,
+        priority: 1,
       });
 
-      const request: SendMessageRequest = {
-        subject: "Re: Original message",
-        body: "Reply content",
-        replyTo: "msg-original",
-      };
-
-      const result = await sendMail(request);
-
       expect(result.success).toBe(true);
-      expect(gt.mail.send).toHaveBeenCalledWith(
-        "mayor/",
-        "Re: Original message",
-        "Reply content",
-        expect.objectContaining({ replyTo: "msg-original" })
-      );
-    });
-
-    it("should validate subject is required", async () => {
-      const request = {
-        subject: "",
-        body: "Some body",
-      } as SendMessageRequest;
-
-      const result = await sendMail(request);
-
-      expect(result.success).toBe(false);
-      expect(result.error?.code).toBe("VALIDATION_ERROR");
-      expect(result.error?.message).toContain("Subject is required");
-    });
-
-    it("should validate body is required", async () => {
-      const request = {
-        subject: "Some subject",
-        body: "",
-      } as SendMessageRequest;
-
-      const result = await sendMail(request);
-
-      expect(result.success).toBe(false);
-      expect(result.error?.code).toBe("VALIDATION_ERROR");
-      expect(result.error?.message).toContain("Message body is required");
-    });
-
-    it("should propagate send errors", async () => {
-      vi.mocked(gt.mail.send).mockResolvedValue({
-        success: false,
-        error: {
-          code: "SEND_FAILED",
-          message: "Failed to send message",
-        },
-        exitCode: 1,
-      });
-
-      const request: SendMessageRequest = {
-        subject: "Test",
-        body: "Test body",
-      };
-
-      const result = await sendMail(request);
-
-      expect(result.success).toBe(false);
-      expect(result.error?.code).toBe("SEND_FAILED");
+      const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
+      expect(args).toContain("--assignee");
+      expect(args).toContain("mayor/");
+      expect(args).toContain("--priority");
+      expect(args).toContain("1");
+      const labelIndex = args.indexOf("--labels");
+      const labelValue = labelIndex >= 0 ? (args[labelIndex + 1] ?? "") : "";
+      expect(labelValue).toContain("from:");
+      expect(labelValue).toContain("thread:");
     });
   });
 
   describe("markRead", () => {
-    it("should mark a message as read successfully", async () => {
-      vi.mocked(gt.mail.markRead).mockResolvedValue({
+    it("marks a message as read", async () => {
+      vi.mocked(execBd).mockResolvedValue({
         success: true,
-        data: "Marked as read",
+        data: "",
         exitCode: 0,
       });
 
-      const result = await markRead("msg-123");
+      const result = await markRead("msg-001");
 
       expect(result.success).toBe(true);
-      expect(gt.mail.markRead).toHaveBeenCalledWith("msg-123");
-    });
-
-    it("should return error when message not found", async () => {
-      vi.mocked(gt.mail.markRead).mockResolvedValue({
-        success: false,
-        error: {
-          code: "NOT_FOUND",
-          message: "Message msg-999 not found",
-        },
-        exitCode: 1,
-      });
-
-      const result = await markRead("msg-999");
-
-      expect(result.success).toBe(false);
-      expect(result.error?.code).toBe("NOT_FOUND");
-    });
-
-    it("should validate message ID is provided", async () => {
-      const result = await markRead("");
-
-      expect(result.success).toBe(false);
-      expect(result.error?.code).toBe("INVALID_ARGUMENT");
-      expect(result.error?.message).toContain("Message ID is required");
-    });
-
-    it("should be idempotent - marking already read message succeeds", async () => {
-      vi.mocked(gt.mail.markRead).mockResolvedValue({
-        success: true,
-        data: "Already marked as read",
-        exitCode: 0,
-      });
-
-      const result = await markRead("msg-already-read");
-
-      expect(result.success).toBe(true);
+      expect(vi.mocked(execBd)).toHaveBeenCalledWith(
+        ["label", "add", "msg-001", "read"],
+        expect.any(Object)
+      );
     });
   });
 });

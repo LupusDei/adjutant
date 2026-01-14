@@ -95,10 +95,12 @@ Create `backend/.env` to customize (all optional):
 
 ```env
 PORT=3001              # API server port (default: 3001)
-GT_PATH=gt             # Path to gt binary (default: uses PATH)
+GT_PATH=gt             # Path to gt binary for power controls (default: uses PATH)
+GT_BIN=gt              # Alternate gt binary override (same as GT_PATH)
 CORS_ORIGIN=http://localhost:5173  # Allowed CORS origin
 NODE_ENV=development   # Environment mode
 GT_TOWN_ROOT=/path/to/gt  # Gastown town root (auto-detected if running inside town)
+GT_MAIL_IDENTITY=overseer  # Mailbox identity for the UI (default: overseer)
 ```
 
 **Note on GT_TOWN_ROOT:** If running the dev server from a directory that's NOT inside
@@ -126,7 +128,7 @@ gastown-boy/
 ├── backend/
 │   ├── src/
 │   │   ├── routes/        # Express route handlers
-│   │   ├── services/      # GT command wrappers
+│   │   ├── services/      # bd/tmux data access + gt power controls
 │   │   ├── middleware/    # Error handling, etc.
 │   │   ├── types/         # TypeScript types + Zod schemas
 │   │   └── utils/         # Response helpers
