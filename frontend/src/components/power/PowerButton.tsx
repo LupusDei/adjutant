@@ -42,7 +42,7 @@ export function PowerButton({ className = '' }: PowerButtonProps) {
     refresh,
     lastUpdated,
   } = usePolling<GastownStatus>(() => api.getStatus(), {
-    interval: 2000,
+    interval: 10000,
   });
 
   // Sync available rigs to the filter context

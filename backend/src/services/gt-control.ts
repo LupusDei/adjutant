@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import { logError, logInfo, logWarn } from "../utils/index.js";
 
 export interface GtControlResult {
   success: boolean;
@@ -28,6 +29,8 @@ export async function execGtControl(
 ): Promise<GtControlResult> {
   const { cwd = process.cwd(), timeout = DEFAULT_TIMEOUT, env } = options;
   const gtBinary = resolveGtBinary();
+  const startedAt = Date.now();
+  logInfo("gt exec start", { args, binary: gtBinary });
 
   return new Promise((resolveResult) => {
     const child = spawn(gtBinary, args, {
@@ -55,6 +58,11 @@ export async function execGtControl(
         } catch {
           // Ignore kill errors on timeout.
         }
+        logWarn("gt exec timed out", {
+          args,
+          binary: gtBinary,
+          durationMs: Date.now() - startedAt,
+        });
         finish({
           success: false,
           error: { code: "TIMEOUT", message: `Command timed out after ${timeoutMs}ms` },
@@ -72,6 +80,12 @@ export async function execGtControl(
     });
 
     child.on("error", (err) => {
+      logError("gt exec spawn error", {
+        args,
+        binary: gtBinary,
+        message: err.message,
+        durationMs: Date.now() - startedAt,
+      });
       finish({
         success: false,
         error: { code: "SPAWN_ERROR", message: err.message },
@@ -83,6 +97,13 @@ export async function execGtControl(
       if (settled) return;
       const exitCode = code ?? 0;
       if (exitCode !== 0) {
+        logError("gt exec failed", {
+          args,
+          binary: gtBinary,
+          exitCode,
+          durationMs: Date.now() - startedAt,
+          message: stderr.trim() || `Command exited with code ${exitCode}`,
+        });
         finish({
           success: false,
           error: {
@@ -94,6 +115,12 @@ export async function execGtControl(
         return;
       }
 
+      logInfo("gt exec success", {
+        args,
+        binary: gtBinary,
+        exitCode,
+        durationMs: Date.now() - startedAt,
+      });
       finish({
         success: true,
         data: stdout.trim(),

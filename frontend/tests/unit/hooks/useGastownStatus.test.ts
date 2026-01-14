@@ -176,7 +176,7 @@ describe("useGastownStatus", () => {
       expect(mockGetStatus).toHaveBeenCalledTimes(3);
     });
 
-    it("should use default poll interval of 3 seconds", async () => {
+    it("should use default poll interval of 10 seconds", async () => {
       mockGetStatus.mockResolvedValue(createMockGastownStatus());
 
       renderHook(() => useGastownStatus());
@@ -186,8 +186,8 @@ describe("useGastownStatus", () => {
       });
       expect(mockGetStatus).toHaveBeenCalledTimes(1);
 
-      // Advance by less than default (3s)
-      vi.advanceTimersByTime(2000);
+      // Advance by less than default (10s)
+      vi.advanceTimersByTime(9000);
       expect(mockGetStatus).toHaveBeenCalledTimes(1);
 
       // Advance past default interval
@@ -214,7 +214,7 @@ describe("useGastownStatus", () => {
     it("should cleanup polling on unmount", async () => {
       mockGetStatus.mockResolvedValue(createMockGastownStatus());
 
-      const { unmount } = renderHook(() => useGastownStatus({ pollInterval: 3000 }));
+      const { unmount } = renderHook(() => useGastownStatus({ pollInterval: 10000 }));
 
       await act(async () => {
         await Promise.resolve();

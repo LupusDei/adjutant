@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { dirname, join, resolve } from "path";
+import { logError, logInfo, logWarn } from "../utils/index.js";
 
 export interface BeadsIssue {
   id: string;
@@ -73,6 +74,8 @@ export async function execBd<T = unknown>(
   const { cwd = process.cwd(), timeout = DEFAULT_TIMEOUT, parseJson = true, env } = options;
   const beadsDir = options.beadsDir ?? resolveBeadsDir(cwd);
   const fullArgs = ["--no-daemon", "--allow-stale", ...args];
+  const startedAt = Date.now();
+  logInfo("bd exec start", { args: fullArgs });
 
   return new Promise((resolveResult) => {
     const child = spawn("bd", fullArgs, {
@@ -100,6 +103,10 @@ export async function execBd<T = unknown>(
         } catch {
           // Ignore kill errors on timeout.
         }
+        logWarn("bd exec timed out", {
+          args: fullArgs,
+          durationMs: Date.now() - startedAt,
+        });
         finish({
           success: false,
           error: { code: "TIMEOUT", message: `Command timed out after ${timeoutMs}ms` },
@@ -117,6 +124,11 @@ export async function execBd<T = unknown>(
     });
 
     child.on("error", (err) => {
+      logError("bd exec spawn error", {
+        args: fullArgs,
+        message: err.message,
+        durationMs: Date.now() - startedAt,
+      });
       finish({
         success: false,
         error: { code: "SPAWN_ERROR", message: err.message },
@@ -131,6 +143,12 @@ export async function execBd<T = unknown>(
       const stdoutTrimmed = stdout.trim();
 
       if (exitCode !== 0 || (stdoutTrimmed === "" && stderrTrimmed !== "")) {
+        logError("bd exec failed", {
+          args: fullArgs,
+          exitCode,
+          durationMs: Date.now() - startedAt,
+          message: stderrTrimmed || `Command exited with code ${exitCode}`,
+        });
         finish({
           success: false,
           error: {
@@ -146,8 +164,20 @@ export async function execBd<T = unknown>(
       if (parseJson && stdoutTrimmed) {
         try {
           const data = JSON.parse(stdoutTrimmed) as T;
+          const meta: Record<string, unknown> = {
+            args: fullArgs,
+            exitCode,
+            durationMs: Date.now() - startedAt,
+          };
+          if (Array.isArray(data)) meta.count = data.length;
+          logInfo("bd exec success", meta);
           finish({ success: true, data, exitCode });
         } catch {
+          logError("bd exec parse error", {
+            args: fullArgs,
+            exitCode,
+            durationMs: Date.now() - startedAt,
+          });
           finish({
             success: false,
             error: {
@@ -161,6 +191,11 @@ export async function execBd<T = unknown>(
         return;
       }
 
+      logInfo("bd exec success", {
+        args: fullArgs,
+        exitCode,
+        durationMs: Date.now() - startedAt,
+      });
       finish({
         success: true,
         data: (parseJson ? undefined : stdoutTrimmed) as T,

@@ -91,7 +91,7 @@ export function CrewStats({ className = '' }: CrewStatsProps) {
     error,
     lastUpdated,
   } = usePolling<CrewMember[]>(() => api.agents.list(), {
-    interval: 5000,
+    interval: 10000,
   });
 
   const isNarrow = useMediaQuery('(max-width: 768px)');
