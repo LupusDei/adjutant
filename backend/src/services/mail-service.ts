@@ -107,8 +107,15 @@ export async function listMail(): Promise<MailServiceResult<Message[]>> {
     };
   }
 
-  // Validate response structure - gt mail inbox returns a raw array
-  if (!result.data || !Array.isArray(result.data)) {
+  // Handle edge cases:
+  // - Empty/null data: treat as empty inbox
+  // - Non-array data: return error
+  const messages = result.data;
+  if (!messages || (typeof messages === 'string' && messages.trim() === '')) {
+    // No messages or empty response - return empty array
+    return { success: true, data: [] };
+  }
+  if (!Array.isArray(messages)) {
     return {
       success: false,
       error: {
@@ -119,7 +126,7 @@ export async function listMail(): Promise<MailServiceResult<Message[]>> {
   }
 
   // Transform and sort messages by timestamp, newest first
-  const transformed = result.data.map(transformMessage);
+  const transformed = messages.map(transformMessage);
   const sorted = transformed.sort((a, b) => {
     return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
   });

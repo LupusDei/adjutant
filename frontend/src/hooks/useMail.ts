@@ -90,31 +90,39 @@ export function useMail(options: UseMailOptions = {}): UseMailResult {
   // Track mounted state
   const mountedRef = useRef(true);
 
-  // Fetch messages from API
-  const fetchMessages = useCallback(async () => {
+  // Fetch messages from API with optional retry logic
+  const fetchMessages = useCallback(async (retries = 0, retryDelay = 1000) => {
     if (!mountedRef.current) return;
 
     setLoading(true);
-    try {
-      const response = await api.mail.list();
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
-      if (mountedRef.current) {
-        setMessages(response.items);
-        setTotal(response.total);
-        setHasMore(response.hasMore);
-        setError(null);
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const response = await api.mail.list();
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
+        if (mountedRef.current) {
+          setMessages(response.items);
+          setTotal(response.total);
+          setHasMore(response.hasMore);
+          setError(null);
+          setLoading(false);
+        }
+        return; // Success - exit early
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        // If we have retries left and component is still mounted, wait and retry
+        if (attempt < retries && mountedRef.current) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelay * (attempt + 1)));
+        }
       }
-    } catch (err) {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
-      if (mountedRef.current) {
-        setError(err instanceof Error ? err : new Error(String(err)));
-        // Preserve existing messages on error
-      }
-    } finally {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
-      if (mountedRef.current) {
-        setLoading(false);
-      }
+    }
+
+    // All retries exhausted - set error state
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
+    if (mountedRef.current) {
+      setError(lastError);
+      setLoading(false);
     }
   }, []);
 
@@ -128,12 +136,12 @@ export function useMail(options: UseMailOptions = {}): UseMailResult {
       };
     }
 
-    // Initial fetch
-    void fetchMessages();
+    // Initial fetch with retries (backend may not be ready immediately)
+    void fetchMessages(3, 1000);
 
-    // Set up polling
+    // Set up polling (no retries needed for background refresh)
     const intervalId = setInterval(() => {
-      void fetchMessages();
+      void fetchMessages(0);
     }, pollInterval);
 
     return () => {
