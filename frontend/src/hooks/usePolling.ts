@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 
 /** Options for the usePolling hook. */
 export interface UsePollingOptions {
-  /** Polling interval in milliseconds. Default: 5000 */
+  /** Polling interval in milliseconds. Default: 60000 */
   interval?: number;
   /** Whether to fetch immediately on mount. Default: true */
   immediate?: boolean;
@@ -43,7 +43,7 @@ export function usePolling<T>(
   fetchFn: () => Promise<T>,
   options: UsePollingOptions = {}
 ): UsePollingResult<T> {
-  const { interval = 5000, immediate = true, enabled = true } = options;
+  const { interval = 60000, immediate = true, enabled = true } = options;
 
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(false);

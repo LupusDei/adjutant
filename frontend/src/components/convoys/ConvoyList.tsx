@@ -12,7 +12,7 @@ interface ConvoyListProps {
 export function ConvoyList({ sortBy }: ConvoyListProps) {
   const { data: convoys, loading, error } = usePolling<Convoy[]>(
     () => api.convoys.list(),
-    { interval: 15000 }
+    { interval: 60000 }
   );
 
   const sortedConvoys = useMemo(() => {

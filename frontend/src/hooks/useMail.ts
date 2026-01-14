@@ -11,7 +11,7 @@ import type { Message, SendMessageRequest } from "../types";
 
 /** Options for the useMail hook. */
 export interface UseMailOptions {
-  /** Polling interval in milliseconds. Default: 30000 (30 seconds) */
+  /** Polling interval in milliseconds. Default: 60000 (1 minute) */
   pollInterval?: number;
   /** Whether polling is enabled. Default: true */
   enabled?: boolean;
@@ -55,7 +55,7 @@ export interface UseMailResult {
   unreadCount: number;
 }
 
-const DEFAULT_POLL_INTERVAL = 30000;
+const DEFAULT_POLL_INTERVAL = 60000;
 
 /**
  * React hook for mail operations.

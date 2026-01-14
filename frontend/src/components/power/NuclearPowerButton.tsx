@@ -10,7 +10,7 @@ import './NuclearPowerButton.css';
  */
 export function NuclearPowerButton() {
   const { data, refresh } = usePolling<GastownStatus>(() => api.getStatus(), {
-    interval: 10000,
+    interval: 60000,
   });
 
   const [actionState, setActionState] = useState<PowerState | null>(null);

@@ -8,7 +8,7 @@ import type { GastownStatus, PowerState } from "../types";
 
 /** Options for the useGastownStatus hook. */
 export interface UseGastownStatusOptions {
-  /** Polling interval in milliseconds. Default: 10000 (10 seconds) */
+  /** Polling interval in milliseconds. Default: 60000 (1 minute) */
   pollInterval?: number;
   /** Whether status fetching is enabled. Default: true */
   enabled?: boolean;
@@ -75,7 +75,7 @@ export interface UseGastownStatusResult {
 export function useGastownStatus(
   options: UseGastownStatusOptions = {}
 ): UseGastownStatusResult {
-  const { pollInterval = 10000, enabled = true } = options;
+  const { pollInterval = 60000, enabled = true } = options;
 
   // Core state
   const [status, setStatus] = useState<GastownStatus | null>(null);
