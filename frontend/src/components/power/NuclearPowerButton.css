@@ -31,6 +31,32 @@
 }
 
 /* ============================================
+   Power Label
+   ============================================ */
+.power-label {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  color: var(--switch-green-dim);
+  text-transform: uppercase;
+  transition: color 0.3s ease, text-shadow 0.3s ease;
+}
+
+.power-on .power-label {
+  color: var(--switch-green);
+  text-shadow: 0 0 6px var(--switch-green-glow);
+}
+
+.power-off .power-label {
+  color: var(--switch-red-dim);
+}
+
+.power-transitioning .power-label {
+  color: var(--switch-amber);
+  text-shadow: 0 0 4px var(--switch-amber-glow);
+}
+
+/* ============================================
    Toggle Switch Button
    ============================================ */
 .toggle-switch {

@@ -69,6 +69,7 @@ export function NuclearPowerButton() {
 
   return (
     <div className={`power-toggle ${statusClass}`}>
+      <span className="power-label">TOWN</span>
       <button
         type="button"
         className="toggle-switch"
