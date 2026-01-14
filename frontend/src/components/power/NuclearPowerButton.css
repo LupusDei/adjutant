@@ -130,25 +130,6 @@
 }
 
 /* ============================================
-   Power Status Display
-   ============================================ */
-.power-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.status-led {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #333;
-  border: 1px solid #222;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
-  transition: all 0.3s ease;
-}
-
-/* ============================================
    Power ON State
    ============================================ */
 .power-on .switch-track {
@@ -173,20 +154,6 @@
 .power-on .track-label-on {
   color: var(--switch-green);
   text-shadow: 0 0 6px var(--switch-green-glow);
-}
-
-.power-on .status-led {
-  background: var(--switch-green);
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.3),
-    0 0 8px var(--switch-green-glow);
-}
-
-.power-on .status-led.on {
-  background: var(--switch-green-bright);
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.3),
-    0 0 12px var(--switch-green-glow);
 }
 
 /* ============================================
@@ -216,11 +183,6 @@
   text-shadow: 0 0 4px var(--switch-red-glow);
 }
 
-.power-off .status-led {
-  background: var(--switch-red-dim);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
 /* ============================================
    Transitioning State
    ============================================ */
@@ -245,14 +207,6 @@
   animation: indicator-blink 0.5s ease-in-out infinite;
 }
 
-.power-transitioning .status-led {
-  background: var(--switch-amber);
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.3),
-    0 0 8px var(--switch-amber-glow);
-  animation: led-blink 0.5s ease-in-out infinite;
-}
-
 @keyframes track-pulse {
   0%, 100% {
     box-shadow:
@@ -273,11 +227,6 @@
   50% { opacity: 0.4; }
 }
 
-@keyframes led-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
-
 /* ============================================
    Unknown State
    ============================================ */
@@ -291,10 +240,6 @@
 
 .power-unknown .thumb-indicator {
   background: #555;
-}
-
-.power-unknown .status-led {
-  background: #444;
 }
 
 /* ============================================
