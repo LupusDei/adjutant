@@ -65,6 +65,9 @@ export function RigProvider({ children }: { children: ReactNode }) {
       ? extractRigName(rigOrAddress)
       : rigOrAddress;
 
+    // Always show town-level items (mayor, deacon, etc.)
+    if (itemRig === null) return true;
+
     return itemRig === selectedRig;
   }, [selectedRig, availableRigs.length]);
 
