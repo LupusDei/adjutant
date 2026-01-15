@@ -45,7 +45,7 @@ export GT_TOWN_ROOT="$GT_DIR"
 if command -v ngrok &> /dev/null; then
     echo "Starting gastown-boy with GT_TOWN_ROOT=$GT_DIR + ngrok tunnel"
     echo ""
-    npx concurrently -k -n backend,frontend,ngrok -c blue,green,magenta \
+    npx concurrently -n backend,frontend,ngrok -c blue,green,magenta \
         "cd backend && npm run dev" \
         "cd frontend && npm run dev" \
         "./scripts/tunnel.sh --no-wait"
@@ -55,7 +55,7 @@ else
     echo ""
     echo "Starting gastown-boy with GT_TOWN_ROOT=$GT_DIR"
     echo ""
-    npx concurrently -k -n backend,frontend -c blue,green \
+    npx concurrently -n backend,frontend -c blue,green \
         "cd backend && npm run dev" \
         "cd frontend && npm run dev"
 fi
