@@ -2,6 +2,8 @@
 
 A retro terminal themed web UI for [Gastown](https://github.com/steveyegge/gastown) multi-agent orchestration.
 
+https://github.com/user-attachments/assets/1aaebcdf-aa24-4e88-9628-27ef91ad34d5
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
@@ -88,48 +90,6 @@ npx gastown-boy
 - **6 Themes**: GAS-BOY, BLOOD-BAG, VAULT-TEC, WASTELAND, PINK-MIST, RAD-STORM
 - **Remote Access**: Toggle ngrok tunnel with QR code
 - Fully responsive (mobile/tablet/desktop)
-
-## Screenshot
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│  ╔═══════════════════════════════════════════════════════╗   │
-│  ║  G A S T O W N - B O Y     [■ ONLINE]                 ║   │
-│  ╠═══════════════════════════════════════════════════════╣   │
-│  ║  [ MAIL ]    [ POWER ]    [ CREW ]                    ║   │
-│  ╠═══════════════════════════════════════════════════════╣   │
-│  ║  ┌─────────────┐  ┌─────────────────────────────────┐ ║   │
-│  ║  │ ▸ Inbox (3) │  │ From: mayor/                    │ ║   │
-│  ║  │   Sent      │  │ Subject: DISPATCH: New work     │ ║   │
-│  ║  │             │  │ ──────────────────────────────  │ ║   │
-│  ║  │             │  │ Work has been assigned to your  │ ║   │
-│  ║  │             │  │ rig. Check your hook.           │ ║   │
-│  ║  └─────────────┘  └─────────────────────────────────┘ ║   │
-│  ╚═══════════════════════════════════════════════════════╝   │
-│                    ░░░ PIP-BOY 3000 ░░░                       │
-└──────────────────────────────────────────────────────────────┘
-```
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────┐
-│                   Browser (React)                    │
-│  ┌─────────────┐ ┌─────────────┐ ┌───────────────┐ │
-│  │ Mail View   │ │ Power Ctrl  │ │ Crew Stats    │ │
-│  └──────┬──────┘ └──────┬──────┘ └───────┬───────┘ │
-└─────────┼───────────────┼─────────────────┼─────────┘
-          │               │ fetch()         │
-┌─────────┼───────────────┼─────────────────┼─────────┐
-│         └───────────────┼─────────────────┘         │
-│                   Node.js Backend                    │
-│              (Express + GT CLI wrapper)              │
-└─────────────────────────┼───────────────────────────┘
-                          │ child_process.spawn()
-┌─────────────────────────┼───────────────────────────┐
-│                 Gastown CLI (gt)                     │
-└─────────────────────────────────────────────────────┘
-```
 
 ## Tech Stack
 
