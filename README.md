@@ -2,6 +2,34 @@
 
 A retro terminal themed web UI for [Gastown](https://github.com/steveyegge/gastown) multi-agent orchestration.
 
+## Table of Contents
+
+- [Features](#features)
+- [Screenshot](#screenshot)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+  - [Custom Gastown Directory](#custom-gastown-directory)
+  - [Alternative: Run in separate terminals](#alternative-run-in-separate-terminals-for-more-control)
+- [Configuration](#configuration)
+  - [Backend Environment Variables](#backend-environment-variables)
+  - [Frontend Environment Variables](#frontend-environment-variables)
+- [Project Structure](#project-structure)
+- [API Endpoints](#api-endpoints)
+- [Remote Access (ngrok)](#remote-access-ngrok)
+  - [Prerequisites](#prerequisites-1)
+  - [Quick Start](#quick-start-1)
+  - [How It Works](#how-it-works)
+  - [UI Control](#ui-control)
+  - [Free Tier Limitations](#free-tier-limitations)
+- [Development](#development)
+  - [Commands](#commands)
+  - [Constitution](#constitution)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+- [Links](#links)
+
 ## Features
 
 ### 📊 Dashboard (Overview)
