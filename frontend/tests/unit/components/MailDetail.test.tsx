@@ -2,6 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MailDetail } from '../../../src/components/mail/MailDetail';
 import type { Message } from '../../../src/types';
+import { useIsMobile } from '../../../src/hooks/useMediaQuery';
+
+// Mock the useIsMobile hook
+vi.mock('../../../src/hooks/useMediaQuery', () => ({
+  useIsMobile: vi.fn(),
+}));
 
 // =============================================================================
 // Test Fixtures
@@ -29,6 +35,11 @@ function createMockMessage(overrides: Partial<Message> = {}): Message {
 // =============================================================================
 
 describe('MailDetail', () => {
+  beforeEach(() => {
+    // Default mock for useIsMobile to return false
+    (useIsMobile as vi.Mock).mockReturnValue(false);
+  });
+
   describe('loading state', () => {
     it('should show loading indicator when loading', () => {
       render(<MailDetail message={null} loading={true} />);
@@ -143,10 +154,15 @@ describe('MailDetail', () => {
   });
 
   describe('close button', () => {
+    beforeEach(() => {
+      // Ensure useIsMobile returns true for these tests so the close button is rendered
+      (useIsMobile as vi.Mock).mockReturnValue(true);
+    });
+
     it('should show close button when onClose is provided', () => {
       const message = createMockMessage();
       render(<MailDetail message={message} onClose={() => {}} />);
-      expect(screen.getByRole('button', { name: /close|back/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /close message/i })).toBeInTheDocument();
     });
 
     it('should not show close button when onClose is not provided', () => {
@@ -161,7 +177,7 @@ describe('MailDetail', () => {
 
       render(<MailDetail message={message} onClose={onClose} />);
 
-      fireEvent.click(screen.getByRole('button', { name: /close|back/i }));
+      fireEvent.click(screen.getByRole('button', { name: /close message/i }));
 
       expect(onClose).toHaveBeenCalledTimes(1);
     });

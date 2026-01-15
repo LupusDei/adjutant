@@ -9,6 +9,7 @@ describe("usePolling", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.clearAllTimers();
   });
 
   it("should fetch data immediately when immediate is true (default)", async () => {

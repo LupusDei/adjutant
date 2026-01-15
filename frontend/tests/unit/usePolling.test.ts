@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { usePolling } from "../../src/hooks/usePolling";
 
 describe("usePolling", () => {
@@ -10,6 +10,7 @@ describe("usePolling", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
+    vi.clearAllTimers();
   });
 
   describe("initial state", () => {
@@ -339,6 +340,7 @@ describe("usePolling", () => {
       });
 
       expect(fetchFn).toHaveBeenCalledTimes(2);
+
     });
 
     it("should not fetch immediately when immediate is false", async () => {

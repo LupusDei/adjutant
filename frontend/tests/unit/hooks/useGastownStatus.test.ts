@@ -193,7 +193,8 @@ describe("useGastownStatus", () => {
       // Advance past default interval
       await act(async () => {
         vi.advanceTimersByTime(1000);
-        await Promise.resolve();
+        vi.runAllTimers(); // Run all timers to ensure setInterval callback is executed
+        await Promise.resolve(); // Flush microtasks
       });
 
       expect(mockGetStatus).toHaveBeenCalledTimes(2);

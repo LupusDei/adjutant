@@ -1,7 +1,8 @@
-import { spawn, execFileSync } from 'child_process';
+import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { resolveTownRoot, resolveGtBinary } from './gastown-workspace.js';
 
 /**
  * Result of executing a GT command.
@@ -34,37 +35,6 @@ export interface GtExecOptions {
 const DEFAULT_TIMEOUT = 30000;
 
 /**
- * Finds the gastown town root by walking up from the current directory
- * looking for .beads/config.yaml WITHOUT .beads/redirect.
- * (Directories with both are worktrees, not the actual town root)
- */
-function findTownRoot(startDir?: string): string | null {
-  let dir = startDir ?? process.cwd();
-  const root = dirname(dir) === dir ? dir : '/'; // Handle both Unix and Windows roots
-
-  while (dir !== root) {
-    const beadsConfig = join(dir, '.beads', 'config.yaml');
-    const beadsRedirect = join(dir, '.beads', 'redirect');
-    // Town root has config.yaml but NOT redirect (worktrees have both)
-    if (existsSync(beadsConfig) && !existsSync(beadsRedirect)) {
-      return dir;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-
-  // Check root itself
-  const rootConfig = join(root, '.beads', 'config.yaml');
-  const rootRedirect = join(root, '.beads', 'redirect');
-  if (existsSync(rootConfig) && !existsSync(rootRedirect)) {
-    return root;
-  }
-
-  return null;
-}
-
-/**
  * Finds the gastown rig root (e.g., gastown_boy) by walking up from current directory
  * looking for .beads/redirect WITHOUT .beads/config.yaml.
  * (Directories with both are worktrees, not the actual rig root)
@@ -88,37 +58,9 @@ function findRigRoot(startDir?: string): string | null {
   return null;
 }
 
-// Resolve town root: env var > dynamic discovery > error
-function resolveTownRoot(): string {
-  if (process.env['GT_TOWN_ROOT']) {
-    return process.env['GT_TOWN_ROOT'];
-  }
-
-  // Try to find town root from current directory
-  const discovered = findTownRoot();
-  if (discovered) {
-    return discovered;
-  }
-
-  // Try from this file's location (in case cwd is different)
-  const thisDir = dirname(fileURLToPath(import.meta.url));
-  const fromFile = findTownRoot(thisDir);
-  if (fromFile) {
-    return fromFile;
-  }
-
-  // Fallback: throw helpful error instead of using hardcoded path
-  throw new Error(
-    'Could not determine gastown town root. ' +
-      'Set GT_TOWN_ROOT environment variable or run from within a gastown town.'
-  );
-}
-
 // Resolve rig root for mail operations
 function resolveRigRoot(): string {
-  if (process.env['GT_TOWN_ROOT']) {
-    return `${process.env['GT_TOWN_ROOT']}/gastown_boy`;
-  }
+  const townRoot = resolveTownRoot();
 
   // Try to find rig root from current directory
   const discovered = findRigRoot();
@@ -134,55 +76,12 @@ function resolveRigRoot(): string {
   }
 
   // Fall back to deriving from town root
-  const townRoot = resolveTownRoot();
   return `${townRoot}/gastown_boy`;
 }
 
 // Cache the resolved paths at module load time
 const GT_TOWN_ROOT = resolveTownRoot();
 const GT_RIG_ROOT = resolveRigRoot();
-
-/**
- * Resolves the gt binary path dynamically.
- * Priority: GT_BIN env var > `which gt` > $HOME/go/bin/gt > 'gt' (PATH lookup)
- */
-function resolveGtBinary(): string {
-  // 1. Explicit env var takes precedence
-  if (process.env['GT_BIN']) {
-    return process.env['GT_BIN'];
-  }
-
-  // 2. Try to find gt in PATH using 'which' (Unix) or 'where' (Windows)
-  try {
-    const whichCmd = process.platform === 'win32' ? 'where' : 'which';
-    const resolved = execFileSync(whichCmd, ['gt'], {
-      encoding: 'utf8',
-      timeout: 5000,
-    }).trim();
-    if (resolved) {
-      // 'where' on Windows may return multiple lines; take the first
-      const firstLine = resolved.split('\n')[0];
-      if (firstLine) {
-        return firstLine.trim();
-      }
-    }
-  } catch {
-    // which/where failed, continue to fallbacks
-  }
-
-  // 3. Try $HOME/go/bin/gt (common Go install location) - only if it exists
-  if (process.env['HOME']) {
-    const goPath = `${process.env['HOME']}/go/bin/gt`;
-    if (existsSync(goPath)) {
-      return goPath;
-    }
-  }
-
-  // 4. Last resort: let spawn try PATH resolution
-  return 'gt';
-}
-
-// Cache the resolved binary path at module load time
 const GT_BIN = resolveGtBinary();
 
 /**

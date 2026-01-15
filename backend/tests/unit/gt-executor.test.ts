@@ -9,6 +9,11 @@ vi.mock("child_process", () => ({
   execFileSync: vi.fn(() => "gt"),
 }));
 
+vi.mock("../../src/services/gastown-workspace.js", () => ({
+  resolveTownRoot: vi.fn(() => "/tmp/town"),
+  resolveGtBinary: vi.fn(() => "gt"),
+}));
+
 import { spawn } from "child_process";
 import { execGt, gt } from "../../src/services/gt-executor.js";
 

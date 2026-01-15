@@ -6,6 +6,7 @@ vi.mock("../../src/services/bd-client.js", () => ({
 
 vi.mock("../../src/services/gastown-workspace.js", () => ({
   resolveTownRoot: vi.fn(() => "/tmp/town"),
+  resolveGtBinary: vi.fn(() => "gt"),
 }));
 
 vi.mock("../../src/services/mail-data.js", () => ({

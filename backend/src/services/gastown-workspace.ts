@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "fs";
 import { readFile } from "fs/promises";
 import { dirname, join, resolve, sep, basename } from "path";
+import { execFileSync } from "child_process";
 
 export interface TownConfig {
   name?: string;
@@ -59,21 +60,88 @@ function findTownRoot(startDir: string): string | null {
 export function resolveTownRoot(): string {
   if (cachedTownRoot) return cachedTownRoot;
 
+  const home = process.env["HOME"];
+  const homeGt = home ? join(home, "gt") : null;
+  const homeGtIsTown = homeGt && existsSync(join(homeGt, "mayor", "town.json"));
+
+  // 1. Explicit environment variable
   const envRoot = process.env["GT_TOWN_ROOT"];
   if (envRoot) {
+    // If GT_TOWN_ROOT is just HOME, and ~/gt exists, prefer ~/gt
+    if (envRoot === home && homeGtIsTown) {
+      cachedTownRoot = homeGt!;
+      return cachedTownRoot;
+    }
     cachedTownRoot = envRoot;
     return envRoot;
   }
 
+  // 2. Try to detect town root from CWD
   const detected = findTownRoot(process.cwd());
-  if (!detected) {
-    throw new Error(
-      "Could not determine gastown town root. Set GT_TOWN_ROOT or run from within a town."
-    );
+
+  // If detected is just HOME, but ~/gt exists, prefer ~/gt
+  if (detected === home && homeGtIsTown) {
+    cachedTownRoot = homeGt!;
+    return cachedTownRoot;
   }
 
-  cachedTownRoot = detected;
-  return detected;
+  if (detected) {
+    cachedTownRoot = detected;
+    return detected;
+  }
+
+  // 3. Fallback to ~/gt if it exists
+  if (homeGtIsTown) {
+    cachedTownRoot = homeGt!;
+    return cachedTownRoot;
+  }
+
+  throw new Error(
+    "Could not determine gastown town root. Set GT_TOWN_ROOT or run from within a town."
+  );
+}
+
+/**
+ * Resolves the gastown binary path.
+ * Priority: GT_BIN env var > GT_PATH env var > `which gt` > $HOME/go/bin/gt > 'gt' (PATH lookup)
+ */
+export function resolveGtBinary(): string {
+  // 1. Explicit env var takes precedence
+  if (process.env["GT_BIN"]) {
+    return process.env["GT_BIN"];
+  }
+  if (process.env["GT_PATH"]) {
+    return process.env["GT_PATH"];
+  }
+
+  // 2. Try to find gt in PATH using 'which' (Unix) or 'where' (Windows)
+  try {
+    const whichCmd = process.platform === "win32" ? "where" : "which";
+    const resolved = execFileSync(whichCmd, ["gt"], {
+      encoding: "utf8",
+      timeout: 5000,
+    }).trim();
+    if (resolved) {
+      // 'where' on Windows may return multiple lines; take the first
+      const firstLine = resolved.split("\n")[0];
+      if (firstLine) {
+        return firstLine.trim();
+      }
+    }
+  } catch {
+    // which/where failed, continue to fallbacks
+  }
+
+  // 3. Try $HOME/go/bin/gt (common Go install location) - only if it exists
+  if (process.env["HOME"]) {
+    const goPath = join(process.env["HOME"], "go", "bin", "gt");
+    if (existsSync(goPath)) {
+      return goPath;
+    }
+  }
+
+  // 4. Last resort: let spawn try PATH resolution
+  return "gt";
 }
 
 export async function loadTownConfig(townRoot: string): Promise<TownConfig> {
