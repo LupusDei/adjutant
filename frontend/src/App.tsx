@@ -8,10 +8,11 @@ import { CRTScreen } from "./components/shared/CRTScreen";
 import { QuickInput } from "./components/shared/QuickInput";
 import { RigFilter } from "./components/shared/RigFilter";
 import { RigProvider } from "./contexts/RigContext";
+import { DashboardView } from "./components/dashboard/OverviewDashboard";
 
 export type ThemeId = 'green' | 'red' | 'blue' | 'tan' | 'pink' | 'purple';
 
-type TabId = "mail" | "convoys" | "crew" | "settings";
+type TabId = "dashboard" | "mail" | "convoys" | "crew" | "settings";
 
 interface Tab {
   id: TabId;
@@ -20,6 +21,7 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
+  { id: "dashboard", label: "DASHBOARD", icon: "📊" },
   { id: "mail", label: "MAIL", icon: "📧" },
   { id: "convoys", label: "CONVOYS", icon: "🚚" },
   { id: "crew", label: "CREW", icon: "👥" },
@@ -27,7 +29,7 @@ const TABS: Tab[] = [
 ];
 
 function App() {
-  const [activeTab, setActiveTab] = useState<TabId>("mail");
+  const [activeTab, setActiveTab] = useState<TabId>("dashboard");
   const [theme, setTheme] = useState<ThemeId>(
     (localStorage.getItem('gt-theme') as ThemeId) || 'green'
   );
@@ -65,6 +67,13 @@ function App() {
           </nav>
 
           <main className="app-content">
+            <section
+              className="tab-view"
+              hidden={activeTab !== "dashboard"}
+              aria-hidden={activeTab !== "dashboard"}
+            >
+              <DashboardView />
+            </section>
             <section
               className="tab-view"
               hidden={activeTab !== "mail"}
