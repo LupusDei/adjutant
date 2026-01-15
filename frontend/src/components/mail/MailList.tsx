@@ -157,10 +157,12 @@ const styles = {
   },
 
   loadingState: {
-    padding: '24px',
+    padding: '40px',
     textAlign: 'center',
     color: colors.primaryDim,
-    animation: 'blink 1s ease-in-out infinite',
+    fontSize: '0.8rem',
+    letterSpacing: '0.1em',
+    animation: 'blink-smooth 1s ease-in-out infinite',
   },
 
   emptyState: {

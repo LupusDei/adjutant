@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { Message } from '../../types';
+import { useIsMobile } from '../../hooks/useMediaQuery';
 
 /**
  * Props for the MailDetail component.
@@ -28,6 +29,8 @@ export function MailDetail({
   onReply,
   className = '',
 }: MailDetailProps) {
+  const isMobile = useIsMobile();
+
   if (loading) {
     return (
       <div style={styles.container} className={className}>
@@ -48,7 +51,7 @@ export function MailDetail({
     <article style={styles.container} className={className} aria-label="Message details">
       {/* Header with close button */}
       <header style={styles.header}>
-        {onClose && (
+        {onClose && isMobile && (
           <button
             type="button"
             style={styles.closeButton}
@@ -202,7 +205,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     color: colors.primaryDim,
-    animation: 'blink 1s ease-in-out infinite',
+    animation: 'blink-smooth 1s ease-in-out infinite',
   },
 
   emptyState: {

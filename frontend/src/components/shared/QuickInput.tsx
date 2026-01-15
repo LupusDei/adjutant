@@ -1,25 +1,39 @@
 import { useState, useRef, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { api } from '../../services/api';
+import { useIsMobile } from '../../hooks/useMediaQuery';
 
 /**
- * Floating Quick Input component for sending direct messages to the Mayor.
- * Appears at the bottom of the screen regardless of the active tab.
+ * Collapsible Quick Input component for sending direct messages to the Mayor.
+ * Appears as a FAB in the bottom right, expanding into a message box.
  */
 export function QuickInput() {
+  const [isExpanded, setIsExpanded] = useState(false);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isMobile = useIsMobile();
 
-  // Auto-resize textarea
+  // Auto-resize textarea when expanded
   useEffect(() => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = 'auto';
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 150)}px`;
+    if (isExpanded) {
+      const textarea = textareaRef.current;
+      if (textarea) {
+        textarea.style.height = 'auto';
+        const maxHeight = isMobile ? 250 : 150;
+        const minHeight = isMobile ? 120 : 24;
+        textarea.style.height = `${Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight))}px`;
+      }
     }
-  }, [text]);
+  }, [text, isExpanded, isMobile]);
+
+  // Focus when expanded
+  useEffect(() => {
+    if (isExpanded) {
+      setTimeout(() => textareaRef.current?.focus(), 100);
+    }
+  }, [isExpanded]);
 
   const handleSend = async () => {
     if (!text.trim() || sending) return;
@@ -39,8 +53,11 @@ export function QuickInput() {
       setText('');
       setStatus('success');
       
-      // Reset success status after 3 seconds
-      setTimeout(() => setStatus('idle'), 3000);
+      // Auto-collapse on success after a short delay
+      setTimeout(() => {
+        setStatus('idle');
+        setIsExpanded(false);
+      }, 2000);
     } catch (err) {
       console.error('Failed to send quick message:', err);
       setStatus('error');
@@ -54,14 +71,44 @@ export function QuickInput() {
       e.preventDefault();
       void handleSend();
     }
+    if (e.key === 'Escape' && isExpanded) {
+      setIsExpanded(false);
+    }
   };
 
+  if (!isExpanded) {
+    return (
+      <button
+        onClick={() => setIsExpanded(true)}
+        style={styles.fab}
+        title="Message Mayor"
+        aria-label="Quick message to Mayor"
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+        </svg>
+      </button>
+    );
+  }
+
   return (
-    <div style={styles.container}>
+    <div style={{
+      ...styles.container,
+      ...(isMobile ? styles.containerMobile : {}),
+    }}>
       <div style={styles.header}>
-        <span style={styles.label}>TO: MAYOR</span>
-        {status === 'success' && <span style={styles.success}>MESSAGE SENT</span>}
-        {status === 'error' && <span style={styles.error}>ERROR SENDING</span>}
+        <div style={styles.headerLeft}>
+          <span style={styles.label}>TO: MAYOR</span>
+          {status === 'success' && <span style={styles.success}>MESSAGE SENT</span>}
+          {status === 'error' && <span style={styles.error}>ERROR SENDING</span>}
+        </div>
+        <button 
+          style={styles.closeButton} 
+          onClick={() => setIsExpanded(false)}
+          title="Collapse"
+        >
+          ✕
+        </button>
       </div>
       <div style={styles.inputRow}>
         <textarea
@@ -69,21 +116,23 @@ export function QuickInput() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type message to Mayor... (Ctrl+Enter to send)"
+          placeholder={isMobile ? "Type message..." : "Type message to Mayor... (Ctrl+Enter)"}
           style={styles.textarea}
-          rows={1}
+          rows={isMobile ? 4 : 1}
           disabled={sending}
         />
-        <button
-          onClick={() => void handleSend()}
-          disabled={!text.trim() || sending}
-          style={{
-            ...styles.sendButton,
-            ...(text.trim() && !sending ? {} : styles.sendButtonDisabled),
-          }}
-        >
-          {sending ? '...' : 'SEND'}
-        </button>
+        <div style={styles.actions}>
+          <button
+            onClick={() => void handleSend()}
+            disabled={!text.trim() || sending}
+            style={{
+              ...styles.sendButton,
+              ...(text.trim() && !sending ? {} : styles.sendButtonDisabled),
+            }}
+          >
+            {sending ? '...' : 'SEND'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -94,91 +143,150 @@ const colors = {
   primary: 'var(--crt-phosphor)',
   primaryDim: 'var(--crt-phosphor-dim)',
   primaryGlow: 'var(--crt-phosphor-glow)',
-  background: 'rgba(10, 10, 10, 0.95)', // Slightly transparent background
+  background: 'rgba(10, 10, 10, 0.98)', 
   success: 'var(--crt-phosphor)',
   error: '#FF4444',
 } as const;
 
 const styles = {
+  fab: {
+    position: 'absolute',
+    bottom: '24px',
+    right: '24px',
+    width: '56px',
+    height: '56px',
+    borderRadius: '50%',
+    backgroundColor: colors.background,
+    border: `2px solid ${colors.primary}`,
+    color: colors.primary,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    boxShadow: `0 0 15px ${colors.primaryGlow}`,
+    zIndex: 1000,
+    transition: 'all 0.2s ease',
+    padding: 0,
+  } as CSSProperties,
+
   container: {
     position: 'absolute',
     bottom: '24px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    width: '600px',
-    maxWidth: '90vw',
+    right: '24px',
+    width: '400px',
+    maxWidth: 'calc(100vw - 48px)',
     backgroundColor: colors.background,
     border: `2px solid ${colors.primary}`,
     borderRadius: '4px',
     padding: '12px',
-    boxShadow: `0 0 15px ${colors.primaryGlow}, inset 0 0 10px ${colors.primaryGlow}`,
+    boxShadow: `0 0 20px ${colors.primaryGlow}, inset 0 0 10px ${colors.primaryGlow}`,
     fontFamily: '"Share Tech Mono", "Courier New", monospace',
     color: colors.primary,
     zIndex: 1000,
-    backdropFilter: 'blur(4px)',
-  },
+    backdropFilter: 'blur(8px)',
+    display: 'flex',
+    flexDirection: 'column',
+    animation: 'expand 0.2s ease-out',
+  } as CSSProperties,
+
+  containerMobile: {
+    width: 'calc(100vw - 32px)',
+    right: '16px',
+    bottom: '16px',
+    padding: '16px',
+  } as CSSProperties,
+
   header: {
     display: 'flex',
     justifyContent: 'space-between',
-    marginBottom: '8px',
+    alignItems: 'center',
+    marginBottom: '12px',
     fontSize: '0.75rem',
     fontWeight: 'bold',
     letterSpacing: '0.1em',
   },
+
+  headerLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  },
+
   label: {
     backgroundColor: colors.primaryDim,
     color: '#000',
-    padding: '2px 6px',
+    padding: '2px 8px',
     borderRadius: '2px',
   },
+
+  closeButton: {
+    background: 'transparent',
+    border: 'none',
+    color: colors.primaryDim,
+    cursor: 'pointer',
+    fontSize: '1.2rem',
+    padding: '4px',
+    lineHeight: 1,
+  },
+
   success: {
     color: colors.success,
     textShadow: `0 0 5px ${colors.success}`,
-    animation: 'blink 1s ease-in-out infinite',
+    animation: 'blink-smooth 1s ease-in-out infinite',
   },
+
   error: {
     color: colors.error,
     textShadow: `0 0 5px ${colors.error}`,
   },
+
   inputRow: {
     display: 'flex',
+    flexDirection: 'column',
     gap: '12px',
-    alignItems: 'flex-end',
-  },
+  } as CSSProperties,
+
   textarea: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    border: 'none',
-    borderBottom: `1px dashed ${colors.primaryDim}`,
+    width: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    border: `1px solid ${colors.primaryDim}`,
+    borderRadius: '2px',
     color: colors.primary,
     fontFamily: 'inherit',
     fontSize: '1rem',
     lineHeight: '1.5',
     outline: 'none',
     resize: 'none',
-    minHeight: '24px',
-    maxHeight: '150px',
-    padding: '4px 0',
+    minHeight: '80px',
+    padding: '8px',
     overflowY: 'auto',
+    boxSizing: 'border-box',
+  } as CSSProperties,
+
+  actions: {
+    display: 'flex',
+    justifyContent: 'flex-end',
   },
+
   sendButton: {
     backgroundColor: colors.primary,
     color: '#000',
     border: 'none',
     borderRadius: '2px',
-    padding: '6px 16px',
+    padding: '8px 24px',
     fontFamily: 'inherit',
     fontWeight: 'bold',
     cursor: 'pointer',
     fontSize: '0.9rem',
-    letterSpacing: '0.05em',
+    letterSpacing: '0.15em',
     transition: 'all 0.2s',
-    minWidth: '80px',
-    height: '32px',
+    minWidth: '100px',
   },
+
   sendButtonDisabled: {
     backgroundColor: colors.primaryDim,
     opacity: 0.5,
     cursor: 'not-allowed',
   },
 } satisfies Record<string, CSSProperties>;
+
