@@ -1,6 +1,6 @@
 {
   "name": "gastown-boy",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Retro terminal UI for Gastown multi-agent orchestration",
   "type": "module",
   "bin": {
