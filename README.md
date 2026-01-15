@@ -6,6 +6,7 @@ A retro terminal themed web UI for [Gastown](https://github.com/steveyegge/gasto
 
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
+- [Global Installation](#global-installation)
 - [Features](#features)
 - [Screenshot](#screenshot)
 - [Architecture](#architecture)
@@ -45,6 +46,32 @@ npm run dev -- /path/to/your/town
 ```
 
 > **Note:** Make sure Gastown is running (`gt up`) or start it from the UI. The app requires an active Gastown instance to display data.
+
+## Global Installation
+
+Install globally via npm to use `gt-boy` from anywhere:
+
+```bash
+npm install -g gastown-boy
+```
+
+**Usage:**
+
+```bash
+gt-boy                    # Uses ~/gt, starts ngrok if installed
+gt-boy /path/to/town      # Custom Gastown directory
+gt-boy --no-tunnel        # Disable ngrok tunnel
+gt-boy --port 8080        # Custom frontend port (default: 3000)
+gt-boy --api-port 8081    # Custom backend port (default: 3001)
+gt-boy --help             # Show all options
+```
+
+**One-time run with npx:**
+
+```bash
+npx gastown-boy           # Run without installing
+npx gastown-boy ~/my-town --no-tunnel
+```
 
 ## Features
 
