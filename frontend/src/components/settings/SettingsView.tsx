@@ -34,13 +34,14 @@ const THEMES: ThemeOption[] = [
 interface SettingsViewProps {
   theme: ThemeId;
   setTheme: (theme: ThemeId) => void;
+  isActive: boolean;
 }
 
 /**
  * Settings view component.
  * Displays system settings and connection info including the public URL for remote access.
  */
-export function SettingsView({ theme, setTheme }: SettingsViewProps) {
+export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [showCoffeeQR, setShowCoffeeQR] = useState(false);
@@ -99,10 +100,12 @@ export function SettingsView({ theme, setTheme }: SettingsViewProps) {
     }
   }, [isOnNgrok, currentOrigin]);
 
-  // Fetch status when tab opens
+  // Fetch status when tab becomes active
   useEffect(() => {
-    fetchTunnelStatus();
-  }, [fetchTunnelStatus]);
+    if (isActive) {
+      fetchTunnelStatus();
+    }
+  }, [isActive, fetchTunnelStatus]);
 
   // Handle toggle
   const handleToggle = useCallback(async () => {

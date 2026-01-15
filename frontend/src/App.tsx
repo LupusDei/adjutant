@@ -119,7 +119,7 @@ function App() {
               hidden={activeTab !== "settings"}
               aria-hidden={activeTab !== "settings"}
             >
-              <SettingsView theme={theme} setTheme={setTheme} />
+              <SettingsView theme={theme} setTheme={setTheme} isActive={activeTab === "settings"} />
             </section>
           </main>
 
