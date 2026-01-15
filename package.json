@@ -13,6 +13,7 @@
     "scripts"
   ],
   "scripts": {
+    "postinstall": "node bin/postinstall.js",
     "dev": "./scripts/dev.sh",
     "dev:remote": "./scripts/dev.sh",
     "dev:backend": "cd backend && npm run dev",
