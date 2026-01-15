@@ -7,12 +7,14 @@ import type { ConvoySortOption } from './ConvoysView';
 
 interface ConvoyListProps {
   sortBy: ConvoySortOption;
+  /** Whether this tab is currently active */
+  isActive?: boolean;
 }
 
-export function ConvoyList({ sortBy }: ConvoyListProps) {
+export function ConvoyList({ sortBy, isActive = true }: ConvoyListProps) {
   const { data: convoys, loading, error } = usePolling<Convoy[]>(
     () => api.convoys.list(),
-    { interval: 60000 }
+    { interval: 60000, enabled: isActive }
   );
 
   const sortedConvoys = useMemo(() => {

@@ -17,6 +17,8 @@ type MobileView = 'list' | 'detail';
 export interface MailViewProps {
   /** Optional CSS class name */
   className?: string;
+  /** Whether this tab is currently active */
+  isActive?: boolean;
 }
 
 /**
@@ -25,7 +27,7 @@ export interface MailViewProps {
  * Left panel displays the message list, right panel shows selected message details.
  * Uses the useMail hook for state management including selection, loading, and errors.
  */
-export function MailView({ className = '' }: MailViewProps) {
+export function MailView({ className = '', isActive = true }: MailViewProps) {
   const {
     loading,
     error,
@@ -41,7 +43,7 @@ export function MailView({ className = '' }: MailViewProps) {
     clearSendError,
     threadMessages,
     groupedMessages,
-  } = useMail();
+  } = useMail({ enabled: isActive });
 
   // Responsive: detect mobile viewport
   const isMobile = useIsMobile();

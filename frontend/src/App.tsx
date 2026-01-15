@@ -98,21 +98,21 @@ function App() {
               hidden={activeTab !== "mail"}
               aria-hidden={activeTab !== "mail"}
             >
-              <MailView />
+              <MailView isActive={activeTab === "mail"} />
             </section>
             <section
               className="tab-view"
               hidden={activeTab !== "convoys"}
               aria-hidden={activeTab !== "convoys"}
             >
-              <ConvoysView />
+              <ConvoysView isActive={activeTab === "convoys"} />
             </section>
             <section
               className="tab-view"
               hidden={activeTab !== "crew"}
               aria-hidden={activeTab !== "crew"}
             >
-              <CrewStats />
+              <CrewStats isActive={activeTab === "crew"} />
             </section>
             <section
               className="tab-view"

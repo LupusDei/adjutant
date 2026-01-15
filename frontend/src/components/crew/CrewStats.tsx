@@ -11,6 +11,8 @@ import type { CrewMember } from '../../types';
 export interface CrewStatsProps {
   /** Optional CSS class name */
   className?: string;
+  /** Whether this tab is currently active */
+  isActive?: boolean;
 }
 
 /**
@@ -84,7 +86,7 @@ function groupAgents(agents: CrewMember[]): AgentGroup {
  * Pip-Boy styled crew stats dashboard.
  * Displays agents organized by hierarchy: Town-level → Per-rig sections.
  */
-export function CrewStats({ className = '' }: CrewStatsProps) {
+export function CrewStats({ className = '', isActive = true }: CrewStatsProps) {
   const {
     data: agents,
     loading,
@@ -92,6 +94,7 @@ export function CrewStats({ className = '' }: CrewStatsProps) {
     lastUpdated,
   } = usePolling<CrewMember[]>(() => api.agents.list(), {
     interval: 60000,
+    enabled: isActive,
   });
 
   const isNarrow = useMediaQuery('(max-width: 768px)');

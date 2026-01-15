@@ -3,7 +3,12 @@ import { ConvoyList } from './ConvoyList';
 
 export type ConvoySortOption = 'ACTIVITY' | 'PRIORITY' | 'PROGRESS' | 'ID';
 
-export function ConvoysView() {
+export interface ConvoysViewProps {
+  /** Whether this tab is currently active */
+  isActive?: boolean;
+}
+
+export function ConvoysView({ isActive = true }: ConvoysViewProps) {
   const [sortBy, setSortBy] = useState<ConvoySortOption>('ACTIVITY');
 
   return (
@@ -25,7 +30,7 @@ export function ConvoysView() {
           </select>
         </div>
       </header>
-      <ConvoyList sortBy={sortBy} />
+      <ConvoyList sortBy={sortBy} isActive={isActive} />
     </div>
   );
 }
