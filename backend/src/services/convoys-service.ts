@@ -11,92 +11,105 @@ export interface ConvoysServiceResult<T> {
   };
 }
 
+/**
+ * Extracts epic ID from a label like "epic:hq-j7l5"
+ */
+function extractEpicId(label: string): string | null {
+  if (label.startsWith("epic:")) {
+    return label.slice(5);
+  }
+  return null;
+}
+
 export async function listConvoys(): Promise<ConvoysServiceResult<Convoy[]>> {
   try {
     const beadsDirs = await listAllBeadsDirs();
-    const allConvoys: BeadsIssue[] = [];
-    const dirToIds = new Map<string, string[]>();
-    
-    // 1. Fetch convoys from all discovered databases
+
+    // Map: epicId -> { tasks: BeadsIssue[], dirInfo }
+    const epicToTasks = new Map<string, { tasks: BeadsIssue[], dirPath: string, workDir: string }>();
+
+    // 1. Fetch all open issues from all beads directories and find epic:* labels
     for (const dirInfo of beadsDirs) {
       const result = await execBd<BeadsIssue[]>(
-        ["list", "--type=convoy", "--status=open", "-q", "--json"],
+        ["list", "--status=open", "-q", "--json", "--limit=0"],
         { cwd: dirInfo.workDir, beadsDir: dirInfo.path }
       );
-      if (result.success && result.data) {
-        allConvoys.push(...result.data);
-        const ids = result.data.map(c => c.id);
-        dirToIds.set(dirInfo.path, ids);
+
+      if (!result.success || !result.data) continue;
+
+      for (const issue of result.data) {
+        const labels = issue.labels || [];
+        for (const label of labels) {
+          const epicId = extractEpicId(label);
+          if (epicId) {
+            if (!epicToTasks.has(epicId)) {
+              epicToTasks.set(epicId, { tasks: [], dirPath: dirInfo.path, workDir: dirInfo.workDir });
+            }
+            epicToTasks.get(epicId)!.tasks.push(issue);
+          }
+        }
       }
     }
 
-    if (allConvoys.length === 0) {
+    if (epicToTasks.size === 0) {
       return { success: true, data: [] };
     }
 
-    // 2. Fetch details for each convoy to get dependencies (tracks)
-    const fullConvoysMap = new Map<string, BeadsIssue>();
-
-    for (const dirInfo of beadsDirs) {
-        const idsInDir = dirToIds.get(dirInfo.path);
-        if (!idsInDir || idsInDir.length === 0) continue;
-
-        const result = await execBd<any[]>(
-            ["show", ...idsInDir, "-q", "--json"],
-            { cwd: dirInfo.workDir, beadsDir: dirInfo.path }
-        );
-        
-        if (result.data) {
-            for (const fc of result.data) {
-                if (fc.issue_type !== 'convoy') continue;
-                
-                const existing = fullConvoysMap.get(fc.id);
-                // Keep the one with the most dependencies (likely the most complete view)
-                if (!existing || (fc.dependencies && fc.dependencies.length > (existing.dependencies?.length || 0))) {
-                    fullConvoysMap.set(fc.id, fc);
-                }
-            }
-        }
-    }
-
-    // 3. Assemble response
+    // 2. Fetch epic details for each discovered epic
     const result: Convoy[] = [];
-    const finalConvoys = Array.from(fullConvoysMap.values());
-    
-    for (const fc of finalConvoys) {
+    const epicIds = Array.from(epicToTasks.keys());
+
+    // Try to fetch epic details from any beads dir (they route by prefix)
+    const firstDirInfo = beadsDirs[0];
+    if (firstDirInfo) {
+      const epicDetailsResult = await execBd<BeadsIssue[]>(
+        ["show", ...epicIds, "-q", "--json"],
+        { cwd: firstDirInfo.workDir, beadsDir: firstDirInfo.path }
+      );
+
+      const epicDetails = new Map<string, BeadsIssue>();
+      if (epicDetailsResult.success && epicDetailsResult.data) {
+        for (const epic of epicDetailsResult.data) {
+          epicDetails.set(epic.id, epic);
+        }
+      }
+
+      // 3. Build convoy response for each epic
+      for (const [epicId, { tasks }] of epicToTasks) {
+        const epic = epicDetails.get(epicId);
+
+        // Build tracked issues from tasks
         const trackedIssues: TrackedIssue[] = [];
         let completed = 0;
 
-        if (fc.dependencies) {
-            for (const dep of fc.dependencies as any[]) {
-                // Expanded dependencies in 'bd show --json' use 'dependency_type'
-                if (dep.dependency_type === 'tracks') {
-                    trackedIssues.push({
-                        id: dep.id,
-                        title: dep.title,
-                        status: dep.status,
-                        assignee: dep.assignee || undefined,
-                        issueType: dep.issue_type,
-                        updatedAt: dep.updated_at,
-                        priority: dep.priority
-                    });
-                    if (dep.status === 'closed') {
-                        completed++;
-                    }
-                }
-            }
+        for (const task of tasks) {
+          const trackedIssue: TrackedIssue = {
+            id: task.id,
+            title: task.title,
+            status: task.status,
+            issueType: task.issue_type,
+            priority: task.priority
+          };
+          if (task.assignee) trackedIssue.assignee = task.assignee;
+          if (task.updated_at) trackedIssue.updatedAt = task.updated_at;
+
+          trackedIssues.push(trackedIssue);
+          if (task.status === "closed") {
+            completed++;
+          }
         }
 
         result.push({
-            id: fc.id,
-            title: fc.title,
-            status: fc.status,
-            progress: {
-                completed,
-                total: trackedIssues.length
-            },
-            trackedIssues
+          id: epicId,
+          title: epic?.title || `Epic ${epicId}`,
+          status: epic?.status || "open",
+          progress: {
+            completed,
+            total: trackedIssues.length
+          },
+          trackedIssues
         });
+      }
     }
 
     return { success: true, data: result };
