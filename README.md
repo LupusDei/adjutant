@@ -149,6 +149,7 @@ A retro terminal themed web UI for [Gastown](https://github.com/steveyegge/gasto
 - Node.js 20+
 - [Gastown](https://github.com/steveyegge/gastown) installed with `gt` in PATH
 - A Gastown town initialized (`gt install <path>`)
+- [ngrok](https://ngrok.com) installed and configured (for remote access tunnel)
 
 ## Quick Start
 
@@ -160,11 +161,11 @@ cd gastown-boy
 # Install all dependencies (one command)
 npm run install:all
 
-# Start everything (backend + frontend in one command)
+# Start everything (backend + frontend + ngrok tunnel)
 npm run dev
 ```
 
-Open http://localhost:5173 in your browser.
+Open http://localhost:5173 in your browser, or use the ngrok URL for remote access.
 
 ### Custom Gastown Directory
 
@@ -265,7 +266,7 @@ See [OpenAPI spec](specs/001-pipboy-ui/contracts/openapi.yaml) for full details.
 
 ## Remote Access (ngrok)
 
-Access gastown_boy from your phone, another computer, or anywhere with an internet connection.
+The `npm run dev` command automatically starts an ngrok tunnel for remote access.
 
 ### Prerequisites
 
@@ -273,24 +274,24 @@ Access gastown_boy from your phone, another computer, or anywhere with an intern
 2. Sign up at [ngrok.com](https://ngrok.com) (free)
 3. Add your authtoken: `ngrok config add-authtoken <your-token>`
 
-### Quick Start
+### Accessing Remotely
+
+When you run `npm run dev`, you'll see three services start:
+- **Backend** (blue) - API server on port 3001
+- **Frontend** (green) - UI on port 5173
+- **ngrok** (magenta) - Tunnel with a public URL like `https://abc123.ngrok-free.app`
+
+Share the ngrok URL to access gastown_boy from any device.
+
+### Alternative: Run ngrok separately
+
+If you prefer to run ngrok in a separate terminal:
 
 ```bash
-# One command starts everything (backend + frontend + ngrok)
-npm run dev:remote
-```
+# Terminal 1: Backend + Frontend only
+GT_TOWN_ROOT=~/gt npm run dev:backend & npm run dev:frontend
 
-The tunnel will display a public URL like `https://abc123.ngrok-free.app`. Open that URL on any device to access gastown_boy.
-
-### Alternative: Separate Terminals
-
-If you prefer running ngrok in a separate terminal (for easier URL visibility):
-
-```bash
-# Terminal 1: Start dev server
-npm run dev
-
-# Terminal 2: Start tunnel
+# Terminal 2: Tunnel
 npm run tunnel
 ```
 

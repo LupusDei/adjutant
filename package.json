@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "./scripts/dev.sh",
-    "dev:remote": "./scripts/dev-remote.sh",
+    "dev:remote": "./scripts/dev.sh",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev",
     "kill": "lsof -ti:3000,3001 | xargs kill -9 2>/dev/null || true",
