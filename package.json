@@ -1,8 +1,17 @@
 {
   "name": "gastown-boy",
   "version": "0.1.0",
-  "description": "Pip-Boy style UI for Gas Town multi-agent workspace",
-  "private": true,
+  "description": "Retro terminal UI for Gastown multi-agent orchestration",
+  "type": "module",
+  "bin": {
+    "gt-boy": "./bin/cli.js"
+  },
+  "files": [
+    "bin",
+    "backend",
+    "frontend",
+    "scripts"
+  ],
   "scripts": {
     "dev": "./scripts/dev.sh",
     "dev:remote": "./scripts/dev.sh",
@@ -17,12 +26,34 @@
     "start:frontend": "cd frontend && npm run preview",
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "tunnel": "./scripts/tunnel.sh",
-    "tunnel:auto": "./scripts/tunnel.sh --no-wait"
+    "tunnel:auto": "./scripts/tunnel.sh --no-wait",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "gastown",
+    "cli",
+    "terminal",
+    "ui",
+    "multi-agent",
+    "orchestration"
+  ],
+  "author": "wsaults",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wsaults/gastown-boy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wsaults/gastown-boy/issues"
+  },
+  "homepage": "https://github.com/wsaults/gastown-boy#readme",
+  "dependencies": {
+    "commander": "^12.1.0"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   }
 }
