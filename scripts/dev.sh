@@ -38,9 +38,6 @@ if [ ! -f "$GT_DIR/mayor/town.json" ]; then
     echo "Continuing anyway..."
 fi
 
-# Kill any existing processes on our ports
-lsof -ti:3000,3001 | xargs kill -9 2>/dev/null || true
-
 # Export GT_TOWN_ROOT
 export GT_TOWN_ROOT="$GT_DIR"
 
