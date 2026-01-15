@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ConvoysView } from "./components/convoys/ConvoysView";
 import { CrewStats } from "./components/crew/CrewStats";
 import { MailView } from "./components/mail/MailView";
@@ -28,11 +28,29 @@ const TABS: Tab[] = [
   { id: "settings", label: "SETTINGS", icon: "⚙️" },
 ];
 
+function useIsSmallScreen(breakpoint = 768) {
+  const [isSmall, setIsSmall] = useState(
+    typeof window !== 'undefined' ? window.innerWidth <= breakpoint : false
+  );
+
+  const handleResize = useCallback(() => {
+    setIsSmall(window.innerWidth <= breakpoint);
+  }, [breakpoint]);
+
+  useEffect(() => {
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [handleResize]);
+
+  return isSmall;
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
   const [theme, setTheme] = useState<ThemeId>(
     (localStorage.getItem('gt-theme') as ThemeId) || 'green'
   );
+  const isSmallScreen = useIsSmallScreen();
 
   // Apply theme to body globally
   useEffect(() => {
@@ -60,8 +78,9 @@ function App() {
                 onClick={() => {
                   setActiveTab(tab.id);
                 }}
+                title={tab.label}
               >
-                {tab.label}
+                {isSmallScreen && tab.id === "settings" ? tab.icon : tab.label}
               </button>
             ))}
           </nav>
