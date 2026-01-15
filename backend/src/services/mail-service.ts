@@ -286,6 +286,7 @@ export async function sendMail(
       cwd: townRoot,
       beadsDir,
       parseJson: false,
+      env: { BD_ACTOR: fromIdentity },
     });
 
     if (!result.success) {
@@ -365,6 +366,7 @@ export async function sendMail(
     cwd: townRoot,
     beadsDir,
     parseJson: false,
+    env: { BD_ACTOR: fromIdentity },
   });
 
   if (!result.success) {
