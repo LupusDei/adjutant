@@ -11,6 +11,8 @@ import type { GastownStatus, PowerState } from '../../types';
 export interface PowerButtonProps {
   /** Optional CSS class name */
   className?: string;
+  /** If true, the power button functionality is disabled and a "coming soon" message is displayed. */
+  comingSoon?: boolean;
 }
 
 type PowerDisplayState = PowerState | 'unknown';
@@ -34,7 +36,7 @@ const POWER_SUBLABELS: Record<PowerDisplayState, string> = {
 /**
  * PowerButton component with state visualization and control.
  */
-export function PowerButton({ className = '' }: PowerButtonProps) {
+export function PowerButton({ className = '', comingSoon = false }: PowerButtonProps) {
   const {
     data,
     loading,
@@ -101,7 +103,7 @@ export function PowerButton({ className = '' }: PowerButtonProps) {
   })();
 
   const handleToggle = async () => {
-    if (!powerState || isTransitioning || actionLoading) return;
+    if (comingSoon || !powerState || isTransitioning || actionLoading) return;
 
     setActionLoading(true);
     setActionError(null);
@@ -174,6 +176,27 @@ export function PowerButton({ className = '' }: PowerButtonProps) {
           </div>
         </div>
 
+      {comingSoon ? (
+        <div title="Power controls under maintenance. Our finest engineers are toiling away to bring this feature online. Stand by for future directives." style={{ cursor: 'not-allowed' }}>
+          <button
+            type="button"
+            className={actionLoading ? 'power-button-loading' : ''}
+            style={{
+              ...styles.powerButton,
+              borderColor: statusColors.accent,
+              color: statusColors.accent,
+              boxShadow: `0 0 12px ${statusColors.glow}`,
+              opacity: 0.4, // Dim the button when comingSoon
+              cursor: 'not-allowed',
+            }}
+            onClick={() => {}} // No-op when comingSoon
+            disabled={true} // Always disabled when comingSoon
+            aria-label="Power controls coming soon"
+          >
+            SYSTEM OFFLINE
+          </button>
+        </div>
+      ) : (
         <button
           type="button"
           className={actionLoading ? 'power-button-loading' : ''}
@@ -194,6 +217,7 @@ export function PowerButton({ className = '' }: PowerButtonProps) {
         >
           {actionLoading ? 'EXECUTING...' : buttonLabel}
         </button>
+      )}
       </div>
 
       {(error != null || actionError != null) && (

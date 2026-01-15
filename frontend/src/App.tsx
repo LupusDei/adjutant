@@ -46,7 +46,7 @@ function App() {
             <h1 className="crt-glow">GASTOWN-BOY</h1>
             <div className="header-controls">
               <RigFilter />
-              <NuclearPowerButton />
+              <NuclearPowerButton comingSoon={true} />
             </div>
           </header>
 

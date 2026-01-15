@@ -8,7 +8,7 @@ import './NuclearPowerButton.css';
  * Power toggle switch for the header.
  * Simple flip switch to control Gastown power state.
  */
-export function NuclearPowerButton() {
+export function NuclearPowerButton({ comingSoon = true }: { comingSoon?: boolean }) {
   const { data, refresh } = usePolling<GastownStatus>(() => api.getStatus(), {
     interval: 60000,
   });
@@ -29,7 +29,7 @@ export function NuclearPowerButton() {
   }, [actionState, data?.powerState]);
 
   const handleToggle = useCallback(async () => {
-    if (isTransitioning || actionLoading || !powerState) return;
+    if (comingSoon || isTransitioning || actionLoading || !powerState) return;
 
     setActionLoading(true);
 
@@ -73,11 +73,12 @@ export function NuclearPowerButton() {
       <button
         type="button"
         className="toggle-switch"
-        onClick={() => void handleToggle()}
-        disabled={isTransitioning || actionLoading || !powerState}
-        aria-label={`Power is ${statusLabel}. Click to ${isRunning ? 'shut down' : 'start'} Gastown.`}
+        onClick={comingSoon ? () => {} : () => void handleToggle()}
+        disabled={comingSoon || isTransitioning || actionLoading || !powerState}
+        aria-label={comingSoon ? "Power controls under maintenance" : `Power is ${statusLabel}. Click to ${isRunning ? 'shut down' : 'start'} Gastown.`}
         aria-pressed={isRunning}
         role="switch"
+        title={comingSoon ? "Power controls under maintenance. Our finest engineers are toiling away to bring this feature online. Stand by for future directives." : undefined}
       >
         <div className="switch-track">
           <span className="track-label track-label-on">ON</span>
