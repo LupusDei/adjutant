@@ -26,7 +26,7 @@ export const mailRouter = Router();
  * List all mail messages, sorted by newest first.
  */
 mailRouter.get("/", async (req, res) => {
-  const showAll = req.query.all === "true";
+  const showAll = req.query["all"] === "true";
   const result = await listMail(showAll ? null : undefined);
 
   if (!result.success) {

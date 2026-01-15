@@ -167,6 +167,8 @@ export interface CrewMember {
   currentTask?: string;
   /** Number of unread messages */
   unreadMail: number;
+  /** First unread message subject (for preview) */
+  firstSubject?: string;
 }
 
 // ============================================================================
@@ -208,4 +210,3 @@ export type PowerResponse = ApiResponse<{
 export type AgentsResponse = ApiResponse<CrewMember[]>;
 
 export * from './convoys';
-export * from './mail';

@@ -175,10 +175,9 @@ export function buildMailIndex(
 
   const result = new Map<string, MailIndexEntry>();
   for (const [identity, entry] of index.entries()) {
-    result.set(identity, {
-      unread: entry.unread,
-      firstSubject: entry.firstSubject,
-    });
+    const mailEntry: MailIndexEntry = { unread: entry.unread };
+    if (entry.firstSubject) mailEntry.firstSubject = entry.firstSubject;
+    result.set(identity, mailEntry);
   }
   return result;
 }
@@ -188,7 +187,9 @@ export async function buildMailIndexForIdentities(
   identities: string[]
 ): Promise<Map<string, MailIndexEntry>> {
   const uniqueIdentities = Array.from(new Set(identities));
-  const entries = await Promise.all(
+  const result = new Map<string, MailIndexEntry>();
+
+  await Promise.all(
     uniqueIdentities.map(async (identity) => {
       try {
         const issues = await listMailIssuesForIdentity(townRoot, identity);
@@ -206,16 +207,18 @@ export async function buildMailIndexForIdentities(
           }
         }
 
-        return [identity, { unread, firstSubject }] as const;
+        const entry: MailIndexEntry = { unread };
+        if (firstSubject) entry.firstSubject = firstSubject;
+        result.set(identity, entry);
       } catch (err) {
         logWarn("mail index query failed", {
           identity,
           message: err instanceof Error ? err.message : "Unknown error",
         });
-        return [identity, { unread: 0 }] as const;
+        result.set(identity, { unread: 0 });
       }
     })
   );
 
-  return new Map(entries);
+  return result;
 }

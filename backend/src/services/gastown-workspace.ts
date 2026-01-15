@@ -150,7 +150,7 @@ export async function loadTownConfig(townRoot: string): Promise<TownConfig> {
     const raw = await readFile(townPath, "utf8");
     return JSON.parse(raw) as TownConfig;
   } catch {
-    return { name: undefined };
+    return {};
   }
 }
 

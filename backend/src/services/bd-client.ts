@@ -174,7 +174,7 @@ export async function execBd<T = unknown>(
             exitCode,
             durationMs: Date.now() - startedAt,
           };
-          if (Array.isArray(data)) meta.count = data.length;
+          if (Array.isArray(data)) meta["count"] = data.length;
           logInfo("bd exec success", meta);
           finish({ success: true, data, exitCode });
         } catch {

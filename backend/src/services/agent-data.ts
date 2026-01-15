@@ -1,5 +1,3 @@
-import { existsSync } from "fs";
-import { join, basename, resolve, dirname } from "path";
 import { execBd, type BeadsIssue } from "./bd-client.js";
 import { listAllBeadsDirs } from "./gastown-workspace.js";
 import {
@@ -123,7 +121,7 @@ export async function collectAgentSnapshot(
     const state = issue.agent_state ?? fields.agentState;
     const hookBead = issue.hook_bead ?? fields.hookBead;
 
-    baseAgents.push({
+    const agentEntry: Omit<AgentRuntimeInfo, "unreadMail" | "firstSubject"> = {
       id: issue.id,
       name,
       role,
@@ -131,9 +129,10 @@ export async function collectAgentSnapshot(
       address,
       sessionName,
       running,
-      state,
-      hookBead,
-    });
+    };
+    if (state) agentEntry.state = state;
+    if (hookBead) agentEntry.hookBead = hookBead;
+    baseAgents.push(agentEntry);
   }
 
   // Synthesize agents from running tmux sessions if not found in beads
@@ -154,7 +153,7 @@ export async function collectAgentSnapshot(
       // gt-{rig}-refinery
       // gt-{rig}-crew-{name}
       // gt-{rig}-{name} (polecat)
-      if (parts.length >= 3) {
+      if (parts.length >= 3 && parts[1] && parts[2]) {
         rig = parts[1];
         const typeOrName = parts[2];
         
@@ -191,7 +190,6 @@ export async function collectAgentSnapshot(
             sessionName,
             running: true,
             state: "running", // It has a session, so it's running
-            hookBead: undefined,
           });
         }
       }
@@ -201,13 +199,14 @@ export async function collectAgentSnapshot(
   const mailIssues = await listMailIssues(townRoot);
   const mailIndex = buildMailIndex(mailIssues, Array.from(identities));
 
-  const agents = baseAgents.map((agent) => {
+  const agents: AgentRuntimeInfo[] = baseAgents.map((agent) => {
     const mailInfo = mailIndex.get(addressToIdentity(agent.address));
-    return {
+    const result: AgentRuntimeInfo = {
       ...agent,
       unreadMail: mailInfo?.unread ?? 0,
-      firstSubject: mailInfo?.firstSubject,
     };
+    if (mailInfo?.firstSubject) result.firstSubject = mailInfo.firstSubject;
+    return result;
   });
 
   return { agents, mailIndex };

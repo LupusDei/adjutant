@@ -20,31 +20,35 @@ export function parseAgentBeadId(id: string, defaultRig?: string | null): Parsed
   const rest = id.slice(hyphenIdx + 1);
   const parts = rest.split("-");
 
-  if (parts.length >= 2 && parts[0].toLowerCase() === "dog") {
+  const first = parts[0];
+  const second = parts[1];
+  const third = parts[2];
+
+  if (parts.length >= 2 && first && first.toLowerCase() === "dog") {
     return { rig: null, role: "dog", name: parts.slice(1).join("-") };
   }
 
   const knownRoles = ["mayor", "deacon", "witness", "refinery", "crew", "polecat"];
 
-  if (defaultRig && parts.length >= 1 && knownRoles.includes(parts[0].toLowerCase())) {
+  if (defaultRig && parts.length >= 1 && first && knownRoles.includes(first.toLowerCase())) {
     return {
       rig: defaultRig,
-      role: parts[0],
+      role: first,
       name: parts.length > 1 ? parts.slice(1).join("-") : null,
     };
   }
 
-  if (parts.length === 1) {
-    return { rig: null, role: parts[0], name: null };
+  if (parts.length === 1 && first) {
+    return { rig: null, role: first, name: null };
   }
-  if (parts.length === 2) {
-    return { rig: parts[0], role: parts[1], name: null };
+  if (parts.length === 2 && first && second) {
+    return { rig: first, role: second, name: null };
   }
-  if (parts.length === 3) {
-    return { rig: parts[0], role: parts[1], name: parts[2] };
+  if (parts.length === 3 && first && second && third) {
+    return { rig: first, role: second, name: third };
   }
-  if (parts.length >= 3) {
-    return { rig: parts[0], role: parts[1], name: parts.slice(2).join("-") };
+  if (parts.length >= 3 && first && second) {
+    return { rig: first, role: second, name: parts.slice(2).join("-") };
   }
   return null;
 }
@@ -140,30 +144,34 @@ export interface BeadsMessageLabels {
 }
 
 export function parseMessageLabels(labels: string[] | undefined): BeadsMessageLabels {
-  const result: BeadsMessageLabels = {
-    sender: undefined,
-    threadId: undefined,
-    replyTo: undefined,
-    msgType: undefined,
-    cc: [],
-    hasReadLabel: false,
-  };
+  let sender: string | undefined;
+  let threadId: string | undefined;
+  let replyTo: string | undefined;
+  let msgType: string | undefined;
+  const cc: string[] = [];
+  let hasReadLabel = false;
 
   for (const label of labels ?? []) {
     if (label.startsWith("from:")) {
-      result.sender = label.slice("from:".length);
+      sender = label.slice("from:".length);
     } else if (label.startsWith("thread:")) {
-      result.threadId = label.slice("thread:".length);
+      threadId = label.slice("thread:".length);
     } else if (label.startsWith("reply-to:")) {
-      result.replyTo = label.slice("reply-to:".length);
+      replyTo = label.slice("reply-to:".length);
     } else if (label.startsWith("msg-type:")) {
-      result.msgType = label.slice("msg-type:".length);
+      msgType = label.slice("msg-type:".length);
     } else if (label.startsWith("cc:")) {
-      result.cc.push(label.slice("cc:".length));
+      cc.push(label.slice("cc:".length));
     } else if (label === "read") {
-      result.hasReadLabel = true;
+      hasReadLabel = true;
     }
   }
+
+  const result: BeadsMessageLabels = { cc, hasReadLabel };
+  if (sender) result.sender = sender;
+  if (threadId) result.threadId = threadId;
+  if (replyTo) result.replyTo = replyTo;
+  if (msgType) result.msgType = msgType;
 
   return result;
 }
@@ -201,7 +209,7 @@ export function beadsIssueToMessage(issue: BeadsIssue): Message {
   const from = labelInfo.sender ? identityToAddress(labelInfo.sender) : "unknown";
   const to = issue.assignee ? identityToAddress(issue.assignee) : "unknown";
 
-  return {
+  const message: Message = {
     id: issue.id,
     from,
     to,
@@ -212,8 +220,9 @@ export function beadsIssueToMessage(issue: BeadsIssue): Message {
     priority: mapBeadsPriority(issue.priority),
     type: mapBeadsMessageType(labelInfo.msgType),
     threadId: labelInfo.threadId ?? "",
-    replyTo: labelInfo.replyTo,
     pinned: issue.pinned ?? false,
     cc: labelInfo.cc.map(identityToAddress),
   };
+  if (labelInfo.replyTo) message.replyTo = labelInfo.replyTo;
+  return message;
 }

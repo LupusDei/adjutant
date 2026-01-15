@@ -190,7 +190,8 @@ export async function getMessage(
     };
   }
 
-  if (!result.data || result.data.length === 0) {
+  const firstMessage = result.data?.[0];
+  if (!firstMessage) {
     return {
       success: false,
       error: {
@@ -200,7 +201,7 @@ export async function getMessage(
     };
   }
 
-  const transformed = transformMessage(result.data[0]);
+  const transformed = transformMessage(firstMessage);
   return { success: true, data: transformed };
 }
 
@@ -238,13 +239,21 @@ export async function sendMail(
 
   // Try using gt mail send first (ensures notifications trigger)
   try {
-    const result = await gt.mail.send(to, request.subject, request.body, {
-      type: request.type as 'notification' | 'task' | 'scavenge' | 'reply' | undefined,
+    const sendOptions: {
+      type?: 'notification' | 'task' | 'scavenge' | 'reply';
+      priority?: 0 | 1 | 2 | 3 | 4;
+      replyTo?: string;
+      permanent?: boolean;
+      notify?: boolean;
+    } = {
       priority,
-      replyTo,
       permanent: true, // Default to permanent
       notify: true,    // Ensure agent is notified
-    }, {
+    };
+    if (request.type) sendOptions.type = request.type as 'notification' | 'task' | 'scavenge' | 'reply';
+    if (replyTo) sendOptions.replyTo = replyTo;
+
+    const result = await gt.mail.send(to, request.subject, request.body, sendOptions, {
       env: {
         BD_ACTOR: from, // Override actor with current identity
       }
