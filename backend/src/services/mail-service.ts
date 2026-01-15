@@ -241,7 +241,7 @@ export async function sendMail(
   }
 
   const to = request.to ?? "mayor/";
-  const from = resolveMailIdentity();
+  const from = request.from ?? resolveMailIdentity();
   const priority = mapPriority(request.priority);
   const replyTo = request.replyTo;
 

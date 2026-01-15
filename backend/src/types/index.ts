@@ -68,6 +68,8 @@ export interface Message {
 export interface SendMessageRequest {
   /** Recipient address (default: "mayor/") */
   to?: string | undefined;
+  /** Sender address (default: resolved from environment) */
+  from?: string | undefined;
   /** Message subject (required) */
   subject: string;
   /** Message body (required) */
@@ -272,6 +274,7 @@ export const MessageSchema = z.object({
 
 export const SendMessageRequestSchema = z.object({
   to: z.string().optional().default("mayor/"),
+  from: z.string().optional(),
   subject: z.string().min(1, "Subject is required"),
   body: z.string().min(1, "Message body is required"),
   priority: MessagePrioritySchema.optional(),

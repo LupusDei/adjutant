@@ -66,6 +66,8 @@ export interface Message {
 export interface SendMessageRequest {
   /** Recipient address (default: "mayor/") */
   to?: string;
+  /** Sender address (default: resolved from environment) */
+  from?: string;
   /** Message subject (required) */
   subject: string;
   /** Message body (required) */

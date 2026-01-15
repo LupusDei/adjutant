@@ -44,6 +44,7 @@ export function QuickInput() {
     try {
       await api.mail.send({
         to: 'mayor/',
+        from: 'overseer',
         subject: text.slice(0, 50).trim() + (text.length > 50 ? '...' : ''),
         body: text,
         priority: 2, // Normal
