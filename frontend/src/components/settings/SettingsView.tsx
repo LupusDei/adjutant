@@ -43,6 +43,7 @@ interface SettingsViewProps {
 export function SettingsView({ theme, setTheme }: SettingsViewProps) {
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [showCoffeeQR, setShowCoffeeQR] = useState(false);
   const [tunnelStatus, setTunnelStatus] = useState<TunnelStatus>('loading');
   const [ngrokUrl, setNgrokUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -200,147 +201,192 @@ export function SettingsView({ theme, setTheme }: SettingsViewProps) {
   const canToggle = !isToggling && !isOnNgrok && tunnelStatus !== 'loading';
 
   return (
-    <div style={styles.container}>
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>REMOTE ACCESS</h2>
+    <div style={{ position: 'relative', height: '100%', width: '100%', overflow: 'hidden' }}>
+      <div style={styles.container}>
+        <section style={styles.section}>
+          <h2 style={styles.sectionTitle}>REMOTE ACCESS</h2>
 
-        <div style={styles.field}>
-          <span style={styles.label}>TUNNEL:</span>
-          <div style={styles.toggleRow}>
-            <button
-              type="button"
-              style={{
-                ...styles.toggleButton,
-                ...(isToggleOn ? styles.toggleOn : styles.toggleOff),
-                ...((!canToggle) ? styles.toggleDisabled : {}),
-              }}
-              onClick={handleToggle}
-              disabled={!canToggle}
-              title={isOnNgrok ? 'Cannot toggle while accessed via tunnel' : undefined}
-            >
-              <span
+          <div style={styles.field}>
+            <span style={styles.label}>TUNNEL:</span>
+            <div style={styles.toggleRow}>
+              <button
+                type="button"
                 style={{
-                  ...styles.toggleKnob,
-                  ...(isToggleOn ? styles.toggleKnobOn : styles.toggleKnobOff),
+                  ...styles.toggleButton,
+                  ...(isToggleOn ? styles.toggleOn : styles.toggleOff),
+                  ...((!canToggle) ? styles.toggleDisabled : {}),
                 }}
-              />
-            </button>
-            <span style={getStatusStyle()}>{getStatusText()}</span>
-          </div>
-        </div>
-
-        {tunnelStatus === 'connected' && ngrokUrl && (
-          <>
-            <div style={styles.field}>
-              <div style={styles.urlField}>
-                <code style={styles.urlTextInner}>{displayUrl}</code>
-                <button
-                  type="button"
-                  style={styles.qrButtonInline}
-                  onClick={() => setShowQR(true)}
-                  title="Show QR Code"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13-2h3v3h-3v-3zm-3 3h3v3h-3v-3zm3 3h3v3h-3v-3zm-3 3h3v3h-3v-3zm3 0h3v3h-3v-3z"/>
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  style={styles.copyButtonInline}
-                  onClick={handleCopy}
-                  title={copied ? 'Copied!' : 'Copy URL'}
-                >
-                  {copied ? (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
-                    </svg>
-                  ) : (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
-                    </svg>
-                  )}
-                </button>
-              </div>
+                onClick={handleToggle}
+                disabled={!canToggle}
+                title={isOnNgrok ? 'Cannot toggle while accessed via tunnel' : undefined}
+              >
+                <span
+                  style={{
+                    ...styles.toggleKnob,
+                    ...(isToggleOn ? styles.toggleKnobOn : styles.toggleKnobOff),
+                  }}
+                />
+              </button>
+              <span style={getStatusStyle()}>{getStatusText()}</span>
             </div>
+          </div>
 
-            <p style={styles.hint}>
-              Share this URL to access GASTOWN-BOY from other devices.
-            </p>
-
-            {showQR && (
-              <div style={styles.qrOverlay} onClick={() => setShowQR(false)}>
-                <div style={styles.qrModal} onClick={(e) => e.stopPropagation()}>
-                  <h3 style={styles.qrTitle}>SCAN TO CONNECT</h3>
-                  <div style={styles.qrContainer}>
-                    <QRCodeSVG
-                      value={ngrokUrl}
-                      size={256}
-                      bgColor="#0A0A0A"
-                      fgColor={colors.primary}
-                      level="M"
-                    />
-                  </div>
-                  <code style={styles.qrUrl}>{ngrokUrl}</code>
+          {tunnelStatus === 'connected' && ngrokUrl && (
+            <>
+              <div style={styles.field}>
+                <div style={styles.urlField}>
+                  <code style={styles.urlTextInner}>{displayUrl}</code>
                   <button
                     type="button"
-                    style={styles.qrCloseButton}
-                    onClick={() => setShowQR(false)}
+                    style={styles.qrButtonInline}
+                    onClick={() => setShowQR(true)}
+                    title="Show QR Code"
                   >
-                    CLOSE
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13-2h3v3h-3v-3zm-3 3h3v3h-3v-3zm3 3h3v3h-3v-3zm-3 3h3v3h-3v-3zm3 0h3v3h-3v-3z"/>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    style={styles.copyButtonInline}
+                    onClick={handleCopy}
+                    title={copied ? 'Copied!' : 'Copy URL'}
+                  >
+                    {copied ? (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                      </svg>
+                    ) : (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                      </svg>
+                    )}
                   </button>
                 </div>
               </div>
-            )}
-          </>
-        )}
 
-        {tunnelStatus === 'not-running' && (
-          <p style={styles.hint}>
-            Toggle ON to enable remote access via ngrok tunnel.
-          </p>
-        )}
+              <p style={styles.hint}>
+                Share this URL to access GASTOWN-BOY from other devices.
+              </p>
 
-        {tunnelStatus === 'starting' && (
-          <p style={styles.hint}>Starting ngrok tunnel...</p>
-        )}
+              {showQR && (
+                <div style={styles.qrOverlay} onClick={() => setShowQR(false)}>
+                  <div style={styles.qrModal} onClick={(e) => e.stopPropagation()}>
+                    <h3 style={styles.qrTitle}>SCAN TO CONNECT</h3>
+                    <div style={styles.qrContainer}>
+                      <QRCodeSVG
+                        value={ngrokUrl}
+                        size={256}
+                        bgColor="#0A0A0A"
+                        fgColor={colors.primary}
+                        level="M"
+                      />
+                    </div>
+                    <code style={styles.qrUrl}>{ngrokUrl}</code>
+                    <button
+                      type="button"
+                      style={styles.qrCloseButton}
+                      onClick={() => setShowQR(false)}
+                    >
+                      CLOSE
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
-        {tunnelStatus === 'loading' && (
-          <p style={styles.hint}>Checking tunnel status...</p>
-        )}
+          {tunnelStatus === 'not-running' && (
+            <p style={styles.hint}>
+              Toggle ON to enable remote access via ngrok tunnel.
+            </p>
+          )}
 
-        {tunnelStatus === 'error' && errorMsg && (
-          <p style={styles.errorHint}>Error: {errorMsg}</p>
-        )}
-      </section>
+          {tunnelStatus === 'starting' && (
+            <p style={styles.hint}>Starting ngrok tunnel...</p>
+          )}
 
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>SYSTEM THEME</h2>
-        <div style={styles.themeGrid}>
-          {THEMES.map((t) => (
+          {tunnelStatus === 'loading' && (
+            <p style={styles.hint}>Checking tunnel status...</p>
+          )}
+
+          {tunnelStatus === 'error' && errorMsg && (
+            <p style={styles.errorHint}>Error: {errorMsg}</p>
+          )}
+        </section>
+
+        <section style={styles.section}>
+          <h2 style={styles.sectionTitle}>SYSTEM THEME</h2>
+          <div style={styles.themeGrid}>
+            {THEMES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                style={{
+                  ...styles.themeButton,
+                  borderColor: theme === t.id ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)',
+                  borderWidth: theme === t.id ? '2px' : '1px',
+                  padding: theme === t.id ? '7px' : '8px',
+                  backgroundColor: 'transparent',
+                  boxShadow: theme === t.id ? '0 0 8px var(--crt-phosphor-glow)' : 'none',
+                }}
+                onClick={() => setTheme(t.id)}
+              >
+                <div style={{ ...styles.themePreview, backgroundColor: t.color }} />
+                <span style={{ 
+                  ...styles.themeLabel,
+                  color: theme === t.id ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)'
+                }}>
+                  {t.label}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <button
+        type="button"
+        style={styles.coffeeButton}
+        onClick={() => setShowCoffeeQR(true)}
+        title="Fuel the Developer"
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+          <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+          <line x1="6" y1="1" x2="6" y2="4"></line>
+          <line x1="10" y1="1" x2="10" y2="4"></line>
+          <line x1="14" y1="1" x2="14" y2="4"></line>
+        </svg>
+      </button>
+
+      {showCoffeeQR && (
+        <div style={styles.qrOverlay} onClick={() => setShowCoffeeQR(false)}>
+          <div style={styles.qrModal} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ ...styles.qrTitle, fontSize: '1.8rem' }}>WITNESS THE CAFFEINE</h3>
+            <div style={styles.qrContainer}>
+              <QRCodeSVG
+                value="https://buymeacoffee.com/wsaults"
+                size={280}
+                bgColor="#0A0A0A"
+                fgColor={colors.primary}
+                level="M"
+              />
+            </div>
+            <code style={{ ...styles.qrUrl, fontSize: '1.1rem', maxWidth: '320px' }}>buymeacoffee.com/wsaults</code>
+            <p style={{ ...styles.hint, fontSize: '1rem', textAlign: 'center', marginTop: '0.5rem', fontStyle: 'italic', color: colors.primary }}>
+              "FUEL FOR THE GREAT JOURNEY"
+            </p>
             <button
-              key={t.id}
               type="button"
-              style={{
-                ...styles.themeButton,
-                borderColor: theme === t.id ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)',
-                borderWidth: theme === t.id ? '2px' : '1px',
-                padding: theme === t.id ? '7px' : '8px',
-                backgroundColor: 'transparent',
-                boxShadow: theme === t.id ? '0 0 8px var(--crt-phosphor-glow)' : 'none',
-              }}
-              onClick={() => setTheme(t.id)}
+              style={{ ...styles.qrCloseButton, fontSize: '1.2rem', padding: '1rem 3rem' }}
+              onClick={() => setShowCoffeeQR(false)}
             >
-              <div style={{ ...styles.themePreview, backgroundColor: t.color }} />
-              <span style={{ 
-                ...styles.themeLabel,
-                color: theme === t.id ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)'
-              }}>
-                {t.label}
-              </span>
+              VALHALLA!
             </button>
-          ))}
+          </div>
         </div>
-      </section>
+      )}
     </div>
   );
 }
@@ -496,6 +542,24 @@ const styles = {
     flex: 1,
     minWidth: 0,
     lineHeight: 1.4,
+  } as CSSProperties,
+
+  coffeeButton: {
+    position: 'absolute',
+    bottom: '12px',
+    right: '12px',
+    background: 'transparent',
+    border: 'none',
+    color: colors.primary,
+    cursor: 'pointer',
+    opacity: 0.6,
+    transition: 'all 0.2s',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '8px',
+    zIndex: 5,
+    filter: `drop-shadow(0 0 2px ${colors.primaryGlow})`,
   } as CSSProperties,
 
   qrButtonInline: {
