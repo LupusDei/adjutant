@@ -25,6 +25,7 @@ export interface AgentRuntimeInfo {
   hookBeadTitle?: string;
   unreadMail: number;
   firstSubject?: string;
+  firstFrom?: string;
   branch?: string;
 }
 

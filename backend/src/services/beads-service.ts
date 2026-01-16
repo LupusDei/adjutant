@@ -91,12 +91,32 @@ function transformBead(issue: BeadsIssue): BeadInfo {
   };
 }
 
-// Status groups for convenience
-const STATUS_GROUPS: Record<string, string[]> = {
-  default: ["open", "in_progress", "blocked"],
-  active: ["open", "in_progress", "blocked"],
-  all: [], // Empty means no filter
-};
+/**
+ * Default status preset: shows active work (not deferred or closed).
+ */
+const DEFAULT_STATUSES: BeadStatus[] = ["blocked", "in_progress", "hooked", "open"];
+
+/**
+ * All valid statuses for filtering.
+ */
+const ALL_STATUSES: BeadStatus[] = ["open", "hooked", "in_progress", "blocked", "deferred", "closed"];
+
+/**
+ * Parses status filter into array of statuses to include.
+ * Returns null if all statuses should be shown.
+ */
+function parseStatusFilter(filter: string | undefined): BeadStatus[] | null {
+  if (!filter || filter === "all") {
+    return null; // Show all
+  }
+  if (filter === "default") {
+    return DEFAULT_STATUSES;
+  }
+  // Handle comma-separated values
+  const statuses = filter.split(",").map((s) => s.trim().toLowerCase());
+  const valid = statuses.filter((s) => ALL_STATUSES.includes(s as BeadStatus));
+  return valid.length > 0 ? (valid as BeadStatus[]) : null;
+}
 
 export async function listBeads(
   options: ListBeadsOptions = {}
@@ -105,26 +125,38 @@ export async function listBeads(
     const townRoot = resolveTownRoot();
     const beadsDir = resolveBeadsDir(townRoot);
 
-    // Build bd list args
-    const args: string[] = ["list", "-q", "--json"];
+    const args = ["list", "--json"];
 
-    // Handle status filtering
-    const statusParam = options.status ?? "default";
-    if (statusParam !== "all") {
-      const statuses = STATUS_GROUPS[statusParam] ?? statusParam.split(",");
-      for (const s of statuses) {
-        args.push(`--status=${s.trim()}`);
-      }
+    // Parse status filter
+    const statusesToInclude = parseStatusFilter(options.status);
+    const needsClientSideFilter = statusesToInclude !== null && statusesToInclude.length > 1;
+
+    // Handle status filter
+    // bd CLI doesn't support multiple --status flags, so:
+    // - For single status: use CLI flag
+    // - For multiple statuses (default preset, comma-separated): fetch all and filter client-side
+    if (statusesToInclude === null) {
+      // Show all statuses
+      args.push("--all");
+    } else if (statusesToInclude.length === 1 && statusesToInclude[0]) {
+      // Single status - use CLI flag
+      args.push("--status", statusesToInclude[0]);
+    } else {
+      // Multiple statuses - fetch all and filter client-side
+      args.push("--all");
     }
 
-    // Type filter
+    // Filter by type if specified
     if (options.type) {
-      args.push(`--type=${options.type}`);
+      args.push("--type", options.type);
     }
 
-    // Limit
-    if (options.limit) {
-      args.push(`--limit=${options.limit}`);
+    // Limit results (apply a higher limit if filtering client-side)
+    const requestLimit = needsClientSideFilter
+      ? Math.max((options.limit ?? 100) * 2, 200)
+      : options.limit;
+    if (requestLimit) {
+      args.push("--limit", requestLimit.toString());
     }
 
     const result = await execBd<BeadsIssue[]>(args, { cwd: townRoot, beadsDir });
@@ -142,6 +174,13 @@ export async function listBeads(
     // Transform raw issues to BeadInfo for the UI
     let beads = (result.data ?? []).map(transformBead);
 
+    // Apply client-side status filter if needed
+    if (needsClientSideFilter && statusesToInclude) {
+      beads = beads.filter((b) =>
+        statusesToInclude.includes(b.status.toLowerCase() as BeadStatus)
+      );
+    }
+
     // Filter by rig if specified
     if (options.rig) {
       beads = beads.filter((b) => b.rig === options.rig);
@@ -156,6 +195,11 @@ export async function listBeads(
       const bDate = b.updatedAt ?? b.createdAt;
       return bDate.localeCompare(aDate); // Newest first
     });
+
+    // Apply final limit if we fetched extra for filtering
+    if (needsClientSideFilter && options.limit && beads.length > options.limit) {
+      beads = beads.slice(0, options.limit);
+    }
 
     return { success: true, data: beads };
   } catch (err) {
