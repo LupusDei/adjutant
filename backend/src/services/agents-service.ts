@@ -71,8 +71,13 @@ function transformAgent(agent: AgentRuntimeInfo): CrewMember {
     status: mapStatus(agent.running, agent.state),
     unreadMail: agent.unreadMail,
   };
+  // Mail preview - first unread subject
   if (agent.firstSubject) {
-    result.currentTask = agent.firstSubject;
+    result.firstSubject = agent.firstSubject;
+  }
+  // Current work - from hook bead title (fetched in agent-data.ts)
+  if (agent.hookBeadTitle) {
+    result.currentTask = agent.hookBeadTitle;
   }
   if (agent.branch) {
     result.branch = agent.branch;

@@ -173,6 +173,8 @@ export interface CrewMember {
   currentTask?: string;
   /** Number of unread messages */
   unreadMail: number;
+  /** First unread message subject (for preview) */
+  firstSubject?: string;
   /** Current git branch (for polecats) */
   branch?: string;
 }
@@ -336,4 +338,6 @@ export const CrewMemberSchema = z.object({
   status: CrewMemberStatusSchema,
   currentTask: z.string().optional(),
   unreadMail: z.number(),
+  firstSubject: z.string().optional(),
+  branch: z.string().optional(),
 });

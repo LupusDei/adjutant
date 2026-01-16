@@ -22,6 +22,7 @@ export interface AgentRuntimeInfo {
   running: boolean;
   state?: string;
   hookBead?: string;
+  hookBeadTitle?: string;
   unreadMail: number;
   firstSubject?: string;
   branch?: string;
@@ -84,7 +85,7 @@ function getPolecatBranch(rig: string, polecatName: string): string | undefined 
 
 async function fetchAgents(cwd: string, beadsDir: string): Promise<BeadsIssue[]> {
   const issues: BeadsIssue[] = [];
-  
+
   // Fetch active agents (default status=open)
   const openResult = await execBd<BeadsIssue[]>(
     ["list", "--type=agent", "--json"],
@@ -104,6 +105,37 @@ async function fetchAgents(cwd: string, beadsDir: string): Promise<BeadsIssue[]>
   }
 
   return issues;
+}
+
+/**
+ * Fetches bead titles for a list of bead IDs.
+ * Returns a map of beadId -> title.
+ */
+async function fetchBeadTitles(
+  beadIds: string[],
+  cwd: string,
+  beadsDir: string
+): Promise<Map<string, string>> {
+  const titles = new Map<string, string>();
+  if (beadIds.length === 0) return titles;
+
+  // Fetch each bead individually (bd show --json <id>)
+  // Could be optimized with batch fetch if bd supports it
+  const results = await Promise.all(
+    beadIds.map(async (id) => {
+      const result = await execBd<BeadsIssue>(["show", id, "--json"], { cwd, beadsDir });
+      if (result.success && result.data) {
+        return { id, title: result.data.title };
+      }
+      return null;
+    })
+  );
+
+  for (const r of results) {
+    if (r) titles.set(r.id, r.title);
+  }
+
+  return titles;
 }
 
 export async function collectAgentSnapshot(
@@ -229,6 +261,16 @@ export async function collectAgentSnapshot(
   const mailIssues = await listMailIssues(townRoot);
   const mailIndex = buildMailIndex(mailIssues, Array.from(identities));
 
+  // Collect all hook bead IDs and fetch their titles
+  const hookBeadIds = baseAgents
+    .filter((a) => a.hookBead)
+    .map((a) => a.hookBead as string);
+  const uniqueHookBeadIds = [...new Set(hookBeadIds)];
+
+  // Fetch hook bead titles from the town-level beads directory
+  const townBeadsDir = join(townRoot, ".beads");
+  const hookBeadTitles = await fetchBeadTitles(uniqueHookBeadIds, townRoot, townBeadsDir);
+
   const agents: AgentRuntimeInfo[] = baseAgents.map((agent) => {
     const mailInfo = mailIndex.get(addressToIdentity(agent.address));
     const result: AgentRuntimeInfo = {
@@ -236,6 +278,12 @@ export async function collectAgentSnapshot(
       unreadMail: mailInfo?.unread ?? 0,
     };
     if (mailInfo?.firstSubject) result.firstSubject = mailInfo.firstSubject;
+
+    // Add hook bead title for current task display
+    if (agent.hookBead) {
+      const title = hookBeadTitles.get(agent.hookBead);
+      if (title) result.hookBeadTitle = title;
+    }
 
     // Get branch for polecats
     if (agent.role === "polecat" && agent.rig) {
