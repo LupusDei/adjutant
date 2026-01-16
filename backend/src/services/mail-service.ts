@@ -96,10 +96,6 @@ function generateThreadId(): string {
   return `thread-${randomBytes(6).toString("hex")}`;
 }
 
-function generateMessageId(): string {
-  return `gb-${randomBytes(6).toString("hex")}`;
-}
-
 function formatReplyInstructions(messageId: string, senderAddress: string): string {
   return `\n\n---\nTo reply: gt mail send ${senderAddress} -s "RE: ..." -m "your message" --reply-to ${messageId}`;
 }
@@ -250,64 +246,7 @@ export async function sendMail(
   const priority = mapPriority(request.priority);
   const replyTo = request.replyTo;
 
-  // When includeReplyInstructions is true, we need to pre-generate the message ID
-  // and use bd create directly (skipping gt.mail.send) so we can specify the ID
-  if (request.includeReplyInstructions) {
-    const townRoot = resolveTownRoot();
-    const beadsDir = resolveBeadsDir(townRoot);
-    const toIdentity = addressToIdentity(to);
-    const fromIdentity = addressToIdentity(from);
-    const threadId = (await resolveThreadId(townRoot, beadsDir, replyTo)) ?? generateThreadId();
-    const messageId = generateMessageId();
-
-    // Format sender address for reply (ensure trailing slash for gt mail send)
-    const senderAddress = fromIdentity.endsWith("/") ? fromIdentity : `${fromIdentity}/`;
-    const bodyWithReplyInstructions = request.body + formatReplyInstructions(messageId, senderAddress);
-
-    const labels = [`from:${fromIdentity}`, `thread:${threadId}`];
-    if (replyTo) labels.push(`reply-to:${replyTo}`);
-    if (request.type) labels.push(`msg-type:${request.type}`);
-
-    const args = [
-      "create",
-      request.subject,
-      "--type",
-      "message",
-      "--id",
-      messageId,
-      "--assignee",
-      toIdentity,
-      "-d",
-      bodyWithReplyInstructions,
-      "--priority",
-      priority.toString(),
-    ];
-    if (labels.length > 0) {
-      args.push("--labels", labels.join(","));
-    }
-    args.push("--actor", fromIdentity);
-
-    const result = await execBd<string>(args, {
-      cwd: townRoot,
-      beadsDir,
-      parseJson: false,
-      env: { BD_ACTOR: fromIdentity },
-    });
-
-    if (!result.success) {
-      return {
-        success: false,
-        error: {
-          code: result.error?.code ?? "SEND_FAILED",
-          message: result.error?.message ?? "Failed to send message",
-        },
-      };
-    }
-
-    return { success: true };
-  }
-
-  // Standard path: Try using gt mail send first (ensures notifications trigger)
+  // Use gt mail send (ensures notifications trigger)
   try {
     const sendOptions: {
       type?: 'notification' | 'task' | 'scavenge' | 'reply';
@@ -330,6 +269,34 @@ export async function sendMail(
     });
 
     if (result.success) {
+      // If reply instructions requested, find the message and append them
+      if (request.includeReplyInstructions) {
+        try {
+          const townRoot = resolveTownRoot();
+          const beadsDir = resolveBeadsDir(townRoot);
+          const fromIdentity = addressToIdentity(from);
+
+          // Find the message we just sent (most recent from this sender with this subject)
+          const findResult = await execBd<BeadsIssue[]>(
+            ["list", "--type", "message", "--json", "--limit", "1"],
+            { cwd: townRoot, beadsDir }
+          );
+
+          if (findResult.success && findResult.data?.[0]) {
+            const msg = findResult.data[0];
+            const replyInstructions = formatReplyInstructions(msg.id, `${fromIdentity}/`);
+            const updatedBody = request.body + replyInstructions;
+
+            await execBd(
+              ["update", msg.id, "-d", updatedBody],
+              { cwd: townRoot, beadsDir, parseJson: false }
+            );
+          }
+        } catch (err) {
+          // Non-fatal - message was sent, just couldn't add reply instructions
+          console.warn("Failed to add reply instructions:", err);
+        }
+      }
       return { success: true };
     }
 
