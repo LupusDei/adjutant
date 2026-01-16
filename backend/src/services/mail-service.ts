@@ -59,12 +59,9 @@ function transformMessage(raw: RawMessage): Message {
 }
 
 function resolveMailIdentity(): string {
-  return (
-    process.env["GT_MAIL_IDENTITY"] ??
-    process.env["BD_IDENTITY"] ??
-    process.env["GT_IDENTITY"] ??
-    "overseer"
-  );
+  // gastown-boy UI always sends as 'overseer' - don't inherit polecat env vars
+  // Only GT_MAIL_IDENTITY can override (explicit config for this app)
+  return process.env["GT_MAIL_IDENTITY"] ?? "overseer";
 }
 
 /**
