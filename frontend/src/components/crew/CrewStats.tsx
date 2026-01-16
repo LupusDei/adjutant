@@ -424,7 +424,9 @@ function AgentCard({ agent, icon }: AgentCardProps) {
 
         {agent.firstSubject && (
           <div style={styles.mailRow}>
-            <span style={styles.mailPreview}>📨 "{agent.firstSubject}"</span>
+            <span style={styles.mailPreview}>
+              📨 "{agent.firstSubject}"{agent.firstFrom && ` (from ${agent.firstFrom})`}
+            </span>
           </div>
         )}
 

@@ -173,6 +173,8 @@ export interface CrewMember {
   unreadMail: number;
   /** First unread message subject (for preview) */
   firstSubject?: string;
+  /** Sender of first unread message (for preview) */
+  firstFrom?: string;
   /** Current git branch (for polecats) */
   branch?: string;
 }

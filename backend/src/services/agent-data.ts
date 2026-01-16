@@ -25,6 +25,7 @@ export interface AgentRuntimeInfo {
   hookBeadTitle?: string;
   unreadMail: number;
   firstSubject?: string;
+  firstFrom?: string;
   branch?: string;
 }
 
@@ -278,6 +279,7 @@ export async function collectAgentSnapshot(
       unreadMail: mailInfo?.unread ?? 0,
     };
     if (mailInfo?.firstSubject) result.firstSubject = mailInfo.firstSubject;
+    if (mailInfo?.firstFrom) result.firstFrom = mailInfo.firstFrom;
 
     // Add hook bead title for current task display
     if (agent.hookBead) {

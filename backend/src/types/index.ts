@@ -175,6 +175,8 @@ export interface CrewMember {
   unreadMail: number;
   /** First unread message subject (for preview) */
   firstSubject?: string;
+  /** Sender of first unread message (for preview) */
+  firstFrom?: string;
   /** Current git branch (for polecats) */
   branch?: string;
 }
@@ -339,5 +341,6 @@ export const CrewMemberSchema = z.object({
   currentTask: z.string().optional(),
   unreadMail: z.number(),
   firstSubject: z.string().optional(),
+  firstFrom: z.string().optional(),
   branch: z.string().optional(),
 });

@@ -5,6 +5,7 @@ import { logWarn } from "../utils/index.js";
 export interface MailIndexEntry {
   unread: number;
   firstSubject?: string;
+  firstFrom?: string;
 }
 
 interface InternalMailIndexEntry extends MailIndexEntry {
@@ -168,6 +169,7 @@ export function buildMailIndex(
         if (timestamp >= entry.latestTimestamp) {
           entry.latestTimestamp = timestamp;
           entry.firstSubject = issue.title;
+          if (labels.sender) entry.firstFrom = labels.sender;
         }
       }
     }
@@ -177,6 +179,7 @@ export function buildMailIndex(
   for (const [identity, entry] of index.entries()) {
     const mailEntry: MailIndexEntry = { unread: entry.unread };
     if (entry.firstSubject) mailEntry.firstSubject = entry.firstSubject;
+    if (entry.firstFrom) mailEntry.firstFrom = entry.firstFrom;
     result.set(identity, mailEntry);
   }
   return result;
@@ -196,6 +199,7 @@ export async function buildMailIndexForIdentities(
         let unread = 0;
         let latestTimestamp = 0;
         let firstSubject: string | undefined;
+        let firstFrom: string | undefined;
 
         for (const issue of issues) {
           if (!isUnread(issue)) continue;
@@ -204,11 +208,14 @@ export async function buildMailIndexForIdentities(
           if (timestamp >= latestTimestamp) {
             latestTimestamp = timestamp;
             firstSubject = issue.title;
+            const labels = parseMessageLabels(issue.labels);
+            firstFrom = labels.sender;
           }
         }
 
         const entry: MailIndexEntry = { unread };
         if (firstSubject) entry.firstSubject = firstSubject;
+        if (firstFrom) entry.firstFrom = firstFrom;
         result.set(identity, entry);
       } catch (err) {
         logWarn("mail index query failed", {

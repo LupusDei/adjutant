@@ -71,9 +71,12 @@ function transformAgent(agent: AgentRuntimeInfo): CrewMember {
     status: mapStatus(agent.running, agent.state),
     unreadMail: agent.unreadMail,
   };
-  // Mail preview - first unread subject
+  // Mail preview - first unread subject and sender
   if (agent.firstSubject) {
     result.firstSubject = agent.firstSubject;
+  }
+  if (agent.firstFrom) {
+    result.firstFrom = agent.firstFrom;
   }
   // Current work - from hook bead title (fetched in agent-data.ts)
   if (agent.hookBeadTitle) {
