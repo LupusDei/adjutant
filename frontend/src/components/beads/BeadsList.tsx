@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, type CSSProperties } from 'react';
+import { useState, useCallback, useEffect, useMemo, type CSSProperties } from 'react';
 import { usePolling } from '../../hooks/usePolling';
 import { api } from '../../services/api';
 import type { BeadInfo } from '../../types';
@@ -8,6 +8,13 @@ export type BeadsStatusFilter = 'default' | 'open' | 'hooked' | 'in_progress' | 
 export interface BeadsListProps {
   statusFilter: BeadsStatusFilter;
   isActive?: boolean;
+}
+
+/** Group of beads belonging to a rig */
+interface BeadGroup {
+  rig: string | null;
+  displayName: string;
+  beads: BeadInfo[];
 }
 
 /**
@@ -82,9 +89,45 @@ function formatAssignee(assignee: string | null): string {
   return parts[parts.length - 1] || assignee;
 }
 
+/**
+ * Groups beads by rig, maintaining sort order within each group.
+ */
+function groupBeadsByRig(beads: BeadInfo[]): BeadGroup[] {
+  const groupMap = new Map<string | null, BeadInfo[]>();
+
+  for (const bead of beads) {
+    const existing = groupMap.get(bead.rig);
+    if (existing) {
+      existing.push(bead);
+    } else {
+      groupMap.set(bead.rig, [bead]);
+    }
+  }
+
+  // Convert to array and sort: town-level (null) first, then alphabetically
+  const groups: BeadGroup[] = [];
+  const sortedRigs = Array.from(groupMap.keys()).sort((a, b) => {
+    if (a === null) return -1;
+    if (b === null) return 1;
+    return a.localeCompare(b);
+  });
+
+  for (const rig of sortedRigs) {
+    const rigBeads = groupMap.get(rig) ?? [];
+    groups.push({
+      rig,
+      displayName: rig ? rig.toUpperCase().replace(/_/g, ' ') : 'TOWN LEVEL',
+      beads: rigBeads,
+    });
+  }
+
+  return groups;
+}
+
 export function BeadsList({ statusFilter, isActive = true }: BeadsListProps) {
   const [slingingId, setSlingingId] = useState<string | null>(null);
   const [slingResult, setSlingResult] = useState<{ id: string; success: boolean } | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string | null>>(new Set());
 
   const {
     data: beads,
@@ -101,10 +144,28 @@ export function BeadsList({ statusFilter, isActive = true }: BeadsListProps) {
     }
   );
 
+  // Group beads by rig
+  const beadGroups = useMemo(() => {
+    if (!beads) return [];
+    return groupBeadsByRig(beads);
+  }, [beads]);
+
   // Refetch when status filter changes
   useEffect(() => {
     void refresh();
   }, [statusFilter, refresh]);
+
+  const toggleGroup = useCallback((rig: string | null) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(rig)) {
+        next.delete(rig);
+      } else {
+        next.add(rig);
+      }
+      return next;
+    });
+  }, []);
 
   const handleSling = useCallback(async (bead: BeadInfo) => {
     setSlingingId(bead.id);
@@ -157,77 +218,102 @@ export function BeadsList({ statusFilter, isActive = true }: BeadsListProps) {
 
   return (
     <div style={styles.container}>
-      <table style={styles.table}>
-        <thead>
-          <tr style={styles.headerRow}>
-            <th style={{ ...styles.th, width: '80px' }}>ID</th>
-            <th style={{ ...styles.th, width: '40px' }}>PRI</th>
-            <th style={{ ...styles.th, width: '60px' }}>TYPE</th>
-            <th style={styles.th}>TITLE</th>
-            <th style={{ ...styles.th, width: '70px' }}>STATUS</th>
-            <th style={{ ...styles.th, width: '80px' }}>ASSIGNEE</th>
-            <th style={{ ...styles.th, width: '70px' }}>UPDATED</th>
-            <th style={{ ...styles.th, width: '60px' }}>ACTION</th>
-          </tr>
-        </thead>
-        <tbody>
-          {beads.map((bead) => {
-            const priorityInfo = getPriorityInfo(bead.priority);
-            const statusInfo = getStatusInfo(bead.status);
-            const isClosed = bead.status.toLowerCase() === 'closed';
+      {beadGroups.map((group) => {
+        const isCollapsed = collapsedGroups.has(group.rig);
+        const groupKey = group.rig ?? '__town__';
 
-            const isSlinging = slingingId === bead.id;
-            const result = slingResult?.id === bead.id ? slingResult : null;
-            const canSling = !isClosed && !bead.assignee;
+        return (
+          <div key={groupKey} style={styles.group}>
+            {/* Group Header */}
+            <button
+              style={styles.groupHeader}
+              onClick={() => toggleGroup(group.rig)}
+              aria-expanded={!isCollapsed}
+            >
+              <span style={styles.groupChevron}>
+                {isCollapsed ? '▶' : '▼'}
+              </span>
+              <span style={styles.groupName}>{group.displayName}</span>
+              <span style={styles.groupCount}>[{group.beads.length}]</span>
+            </button>
 
-            const isDeferred = bead.status.toLowerCase() === 'deferred';
+            {/* Group Content */}
+            {!isCollapsed && (
+              <table style={styles.table}>
+                <thead>
+                  <tr style={styles.headerRow}>
+                    <th style={{ ...styles.th, width: '80px' }}>ID</th>
+                    <th style={{ ...styles.th, width: '40px' }}>PRI</th>
+                    <th style={{ ...styles.th, width: '60px' }}>TYPE</th>
+                    <th style={styles.th}>TITLE</th>
+                    <th style={{ ...styles.th, width: '70px' }}>STATUS</th>
+                    <th style={{ ...styles.th, width: '80px' }}>ASSIGNEE</th>
+                    <th style={{ ...styles.th, width: '70px' }}>UPDATED</th>
+                    <th style={{ ...styles.th, width: '60px' }}>ACTION</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.beads.map((bead) => {
+                    const priorityInfo = getPriorityInfo(bead.priority);
+                    const statusInfo = getStatusInfo(bead.status);
+                    const isClosed = bead.status.toLowerCase() === 'closed';
 
-            return (
-              <tr
-                key={bead.id}
-                style={{
-                  ...styles.row,
-                  opacity: isClosed || isDeferred ? 0.5 : 1,
-                  backgroundColor: statusInfo.bgColor ?? 'transparent',
-                }}
-              >
-                <td style={styles.idCell}>{bead.id}</td>
-                <td style={{ ...styles.cell, color: priorityInfo.color }}>
-                  {priorityInfo.label}
-                </td>
-                <td style={styles.typeCell}>{bead.type.toUpperCase()}</td>
-                <td style={styles.titleCell} title={bead.title}>
-                  {bead.title}
-                </td>
-                <td style={{ ...styles.cell, color: statusInfo.color, fontWeight: statusInfo.bgColor ? 'bold' : 'normal' }}>
-                  {statusInfo.label}
-                </td>
-                <td style={styles.cell}>{formatAssignee(bead.assignee)}</td>
-                <td style={styles.dateCell}>
-                  {formatDate(bead.updatedAt ?? bead.createdAt)}
-                </td>
-                <td style={styles.actionCell}>
-                  {canSling && (
-                    <button
-                      style={{
-                        ...styles.slingButton,
-                        ...(isSlinging && styles.slingButtonLoading),
-                        ...(result?.success && styles.slingButtonSuccess),
-                        ...(result && !result.success && styles.slingButtonError),
-                      }}
-                      onClick={() => handleSling(bead)}
-                      disabled={isSlinging || !!result}
-                      title="Request mayor to sling this bead"
-                    >
-                      {isSlinging ? '...' : result?.success ? '✓' : result ? '✗' : 'SLING'}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                    const isSlinging = slingingId === bead.id;
+                    const result = slingResult?.id === bead.id ? slingResult : null;
+                    const canSling = !isClosed && !bead.assignee;
+
+                    const isDeferred = bead.status.toLowerCase() === 'deferred';
+
+                    return (
+                      <tr
+                        key={bead.id}
+                        style={{
+                          ...styles.row,
+                          opacity: isClosed || isDeferred ? 0.5 : 1,
+                          backgroundColor: statusInfo.bgColor ?? 'transparent',
+                        }}
+                      >
+                        <td style={styles.idCell}>{bead.id}</td>
+                        <td style={{ ...styles.cell, color: priorityInfo.color }}>
+                          {priorityInfo.label}
+                        </td>
+                        <td style={styles.typeCell}>{bead.type.toUpperCase()}</td>
+                        <td style={styles.titleCell} title={bead.title}>
+                          {bead.title}
+                        </td>
+                        <td style={{ ...styles.cell, color: statusInfo.color, fontWeight: statusInfo.bgColor ? 'bold' : 'normal' }}>
+                          {statusInfo.label}
+                        </td>
+                        <td style={styles.cell}>{formatAssignee(bead.assignee)}</td>
+                        <td style={styles.dateCell}>
+                          {formatDate(bead.updatedAt ?? bead.createdAt)}
+                        </td>
+                        <td style={styles.actionCell}>
+                          {canSling && (
+                            <button
+                              style={{
+                                ...styles.slingButton,
+                                ...(isSlinging && styles.slingButtonLoading),
+                                ...(result?.success && styles.slingButtonSuccess),
+                                ...(result && !result.success && styles.slingButtonError),
+                              }}
+                              onClick={() => handleSling(bead)}
+                              disabled={isSlinging || !!result}
+                              title="Request mayor to sling this bead"
+                            >
+                              {isSlinging ? '...' : result?.success ? '✓' : result ? '✗' : 'SLING'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -237,6 +323,39 @@ const styles = {
     flex: 1,
     overflow: 'auto',
     padding: '8px',
+  },
+  group: {
+    marginBottom: '12px',
+  },
+  groupHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    width: '100%',
+    padding: '8px 12px',
+    backgroundColor: '#111',
+    border: '1px solid var(--crt-phosphor-dim)',
+    borderRadius: '2px',
+    cursor: 'pointer',
+    fontFamily: '"Share Tech Mono", monospace',
+    fontSize: '0.85rem',
+    color: 'var(--crt-phosphor)',
+    letterSpacing: '0.1em',
+    textAlign: 'left',
+    transition: 'background-color 0.15s ease',
+  },
+  groupChevron: {
+    fontSize: '0.7rem',
+    color: 'var(--crt-phosphor-dim)',
+    width: '12px',
+  },
+  groupName: {
+    flex: 1,
+    fontWeight: 'bold',
+  },
+  groupCount: {
+    color: 'var(--crt-phosphor-dim)',
+    fontSize: '0.75rem',
   },
   loadingState: {
     display: 'flex',
@@ -276,6 +395,7 @@ const styles = {
     borderCollapse: 'collapse',
     fontFamily: '"Share Tech Mono", monospace',
     fontSize: '0.8rem',
+    marginTop: '4px',
   },
   headerRow: {
     borderBottom: '1px solid var(--crt-phosphor-dim)',

@@ -195,6 +195,8 @@ export interface BeadInfo {
   type: string;
   /** Assignee address or null */
   assignee: string | null;
+  /** Rig name extracted from assignee (e.g., "gastown_boy") or null for town-level */
+  rig: string | null;
   /** Labels attached to the bead */
   labels: string[];
   /** Creation timestamp */
