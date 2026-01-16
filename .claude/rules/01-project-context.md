@@ -4,6 +4,14 @@
 
 A Fallout Pip-Boy themed web UI for interacting with Gastown, a multi-agent orchestration system.
 
+**CRITICAL**: Gastown-Boy is the DASHBOARD for ALL of Gas Town. It runs from `~/gt` and displays:
+- **All beads** from `~/gt/.beads/` (town beads, hq-* prefix)
+- **All agents** across all rigs (gastown, gastown_boy, etc.)
+- **All mail, convoys, and system state**
+
+The UI is NOT just for the gastown_boy rig - it's the Mayor's command center for the entire town.
+See `00-critical-scope.md` for the full explanation.
+
 ## Core Features
 
 1. **Mail Interface** - Split-view inbox/outbox for Mayor communication
