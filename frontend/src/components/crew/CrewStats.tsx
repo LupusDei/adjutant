@@ -1,9 +1,37 @@
 import type { CSSProperties } from 'react';
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { usePolling } from '../../hooks/usePolling';
 import { api } from '../../services/api';
 import type { CrewMember } from '../../types';
+
+/** localStorage key for polecat filter preference */
+const SHOW_ALL_POLECATS_KEY = 'gastown-boy:showAllPolecats';
+
+/**
+ * Hook for persisting show-all-polecats preference to localStorage.
+ */
+function useShowAllPolecats(): [boolean, (value: boolean) => void] {
+  const [showAll, setShowAll] = useState(() => {
+    try {
+      const stored = localStorage.getItem(SHOW_ALL_POLECATS_KEY);
+      return stored === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const setShowAllPersisted = useCallback((value: boolean) => {
+    setShowAll(value);
+    try {
+      localStorage.setItem(SHOW_ALL_POLECATS_KEY, String(value));
+    } catch {
+      // localStorage not available, ignore
+    }
+  }, []);
+
+  return [showAll, setShowAllPersisted];
+}
 
 /**
  * Props for the CrewStats component.
@@ -98,6 +126,7 @@ export function CrewStats({ className = '', isActive = true }: CrewStatsProps) {
   });
 
   const isNarrow = useMediaQuery('(max-width: 768px)');
+  const [showAllPolecats, setShowAllPolecats] = useShowAllPolecats();
 
   // Group agents into hierarchical structure
   const grouped = useMemo(() => {
@@ -121,16 +150,38 @@ export function CrewStats({ className = '', isActive = true }: CrewStatsProps) {
     <section style={styles.container} className={className}>
       <header style={styles.header}>
         <h2 style={styles.title} className="crt-glow">CREW MANIFEST</h2>
-        <div style={styles.syncStatus}>
-          <span style={styles.syncIndicator}>
-            {loading ? '◌' : error ? '✕' : '●'}
-          </span>
-          {loading ? 'SYNCING...' : error ? 'OFFLINE' : 'LIVE'}
-          {lastUpdated && !loading && (
-            <span style={styles.syncTime}>
-              {lastUpdated.toLocaleTimeString()}
+        <div style={styles.headerControls}>
+          <label style={styles.toggleLabel}>
+            <span
+              style={{
+                ...styles.toggleCheckbox,
+                backgroundColor: showAllPolecats ? colors.primary : 'transparent',
+                borderColor: showAllPolecats ? colors.primary : colors.primaryDim,
+              }}
+              role="checkbox"
+              aria-checked={showAllPolecats}
+            >
+              {showAllPolecats && <span style={styles.toggleCheckmark}>✓</span>}
             </span>
-          )}
+            <input
+              type="checkbox"
+              checked={showAllPolecats}
+              onChange={(e) => setShowAllPolecats(e.target.checked)}
+              style={styles.toggleHiddenInput}
+            />
+            <span style={styles.toggleText}>SHOW ALL</span>
+          </label>
+          <div style={styles.syncStatus}>
+            <span style={styles.syncIndicator}>
+              {loading ? '◌' : error ? '✕' : '●'}
+            </span>
+            {loading ? 'SYNCING...' : error ? 'OFFLINE' : 'LIVE'}
+            {lastUpdated && !loading && (
+              <span style={styles.syncTime}>
+                {lastUpdated.toLocaleTimeString()}
+              </span>
+            )}
+          </div>
         </div>
       </header>
 
@@ -163,6 +214,7 @@ export function CrewStats({ className = '', isActive = true }: CrewStatsProps) {
                 agents={rigAgents}
                 agentGridStyle={agentGridStyle}
                 infraGridStyle={infraGridStyle}
+                showAllPolecats={showAllPolecats}
               />
             ))}
 
@@ -236,9 +288,18 @@ interface RigSectionProps {
   agents: RigAgents;
   agentGridStyle: CSSProperties;
   infraGridStyle: CSSProperties;
+  /** Whether to show all polecats including inactive ones */
+  showAllPolecats: boolean;
 }
 
-function RigSection({ name, agents, agentGridStyle, infraGridStyle }: RigSectionProps) {
+function RigSection({ name, agents, agentGridStyle, infraGridStyle, showAllPolecats }: RigSectionProps) {
+  // Filter polecats based on showAll preference
+  const visiblePolecats = showAllPolecats
+    ? agents.polecats
+    : agents.polecats.filter(p => p.status !== 'offline');
+  const totalPolecats = agents.polecats.length;
+  const activePolecats = agents.polecats.filter(p => p.status !== 'offline').length;
+
   const allAgents = [
     ...(agents.witness ? [agents.witness] : []),
     ...(agents.refinery ? [agents.refinery] : []),
@@ -294,19 +355,23 @@ function RigSection({ name, agents, agentGridStyle, infraGridStyle }: RigSection
           <span style={styles.subsectionIcon}>└─</span>
           <span style={styles.subsectionTitle} className="crt-glow">POLECATS</span>
           <span style={styles.polecatCount}>
-            {agents.polecats.length > 0
-              ? `${agents.polecats.filter(p => p.status !== 'offline').length} ACTIVE`
+            {totalPolecats > 0
+              ? showAllPolecats
+                ? `${activePolecats}/${totalPolecats} ACTIVE`
+                : `${activePolecats} ACTIVE`
               : 'NONE'}
           </span>
         </div>
-        {agents.polecats.length > 0 ? (
+        {visiblePolecats.length > 0 ? (
           <div style={styles.polecatGrid}>
-            {agents.polecats.map((agent) => (
+            {visiblePolecats.map((agent) => (
               <AgentChip key={agent.id} agent={agent} />
             ))}
           </div>
         ) : (
-          <div style={styles.polecatEmpty}>NO ACTIVE POLECATS</div>
+          <div style={styles.polecatEmpty}>
+            {totalPolecats > 0 ? 'NO ACTIVE POLECATS' : 'NO POLECATS'}
+          </div>
         )}
       </div>
     </div>
@@ -511,6 +576,57 @@ const styles = {
     color: colors.primary,
     fontSize: '0.7rem',
     opacity: 0.7,
+  },
+
+  headerControls: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+  },
+
+  toggleLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    cursor: 'pointer',
+    fontSize: '0.7rem',
+    letterSpacing: '0.1em',
+    textTransform: 'uppercase',
+    color: colors.primaryDim,
+    transition: 'color 0.2s ease',
+  },
+
+  toggleCheckbox: {
+    width: '14px',
+    height: '14px',
+    border: `1px solid ${colors.primaryDim}`,
+    backgroundColor: 'transparent',
+    cursor: 'pointer',
+    position: 'relative',
+    transition: 'all 0.2s ease',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+
+  toggleCheckmark: {
+    color: colors.background,
+    fontSize: '10px',
+    fontWeight: 'bold',
+    lineHeight: 1,
+  },
+
+  toggleHiddenInput: {
+    position: 'absolute',
+    opacity: 0,
+    width: 0,
+    height: 0,
+    pointerEvents: 'none',
+  },
+
+  toggleText: {
+    userSelect: 'none',
   },
 
   body: {
