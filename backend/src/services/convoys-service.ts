@@ -25,8 +25,13 @@ export async function listConvoys(): Promise<ConvoysServiceResult<Convoy[]>> {
   try {
     const beadsDirs = await listAllBeadsDirs();
 
-    // Map: epicId -> { tasks: BeadsIssue[], dirInfo }
-    const epicToTasks = new Map<string, { tasks: BeadsIssue[], dirPath: string, workDir: string }>();
+    // Map: epicId -> { tasks: BeadsIssue[], rig (most common source), dirPath, workDir }
+    const epicToTasks = new Map<string, {
+      tasks: BeadsIssue[],
+      rigCounts: Map<string | null, number>,
+      dirPath: string,
+      workDir: string
+    }>();
 
     // 1. Fetch all open issues from all beads directories and find epic:* labels
     for (const dirInfo of beadsDirs) {
@@ -43,9 +48,18 @@ export async function listConvoys(): Promise<ConvoysServiceResult<Convoy[]>> {
           const epicId = extractEpicId(label);
           if (epicId) {
             if (!epicToTasks.has(epicId)) {
-              epicToTasks.set(epicId, { tasks: [], dirPath: dirInfo.path, workDir: dirInfo.workDir });
+              epicToTasks.set(epicId, {
+                tasks: [],
+                rigCounts: new Map(),
+                dirPath: dirInfo.path,
+                workDir: dirInfo.workDir
+              });
             }
-            epicToTasks.get(epicId)!.tasks.push(issue);
+            const entry = epicToTasks.get(epicId)!;
+            entry.tasks.push(issue);
+            // Track which rig this task came from
+            const currentCount = entry.rigCounts.get(dirInfo.rig) ?? 0;
+            entry.rigCounts.set(dirInfo.rig, currentCount + 1);
           }
         }
       }
@@ -75,8 +89,18 @@ export async function listConvoys(): Promise<ConvoysServiceResult<Convoy[]>> {
       }
 
       // 3. Build convoy response for each epic
-      for (const [epicId, { tasks }] of epicToTasks) {
+      for (const [epicId, { tasks, rigCounts }] of epicToTasks) {
         const epic = epicDetails.get(epicId);
+
+        // Determine the most common rig for this convoy
+        let convoyRig: string | null = null;
+        let maxCount = 0;
+        for (const [rig, count] of rigCounts) {
+          if (count > maxCount) {
+            maxCount = count;
+            convoyRig = rig;
+          }
+        }
 
         // Build tracked issues from tasks
         const trackedIssues: TrackedIssue[] = [];
@@ -103,6 +127,7 @@ export async function listConvoys(): Promise<ConvoysServiceResult<Convoy[]>> {
           id: epicId,
           title: epic?.title || `Epic ${epicId}`,
           status: epic?.status || "open",
+          rig: convoyRig,
           progress: {
             completed,
             total: trackedIssues.length

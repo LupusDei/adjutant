@@ -12,6 +12,8 @@ export interface Convoy {
   id: string;
   title: string;
   status: string;
+  /** The rig this convoy is associated with, or null for town-level convoys */
+  rig: string | null;
   progress: {
     completed: number;
     total: number;
