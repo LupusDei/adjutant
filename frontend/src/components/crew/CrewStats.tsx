@@ -406,7 +406,6 @@ function AgentCard({ agent, icon }: AgentCardProps) {
         {agent.unreadMail > 0 && (
           <span style={styles.headerMailBadge}>📬{agent.unreadMail}</span>
         )}
-        <span style={styles.typeBadge}>{agent.type.toUpperCase()}</span>
       </div>
 
       <div style={styles.cardBody}>
