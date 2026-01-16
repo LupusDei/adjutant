@@ -1,4 +1,4 @@
-import { execBd } from "./bd-client.js";
+import { execBd, stripBeadPrefix } from "./bd-client.js";
 import { resolveTownRoot, resolveBeadsDir } from "./gastown-workspace.js";
 import type { Convoy, TrackedIssue } from "../types/convoys.js";
 
@@ -30,7 +30,6 @@ interface TrackedDep {
   issue_type?: string;
   assignee?: string;
   updated_at?: string;
-  description?: string;
   dependency_type: string;
 }
 
@@ -79,9 +78,10 @@ export async function listConvoys(): Promise<ConvoysServiceResult<Convoy[]>> {
     }
 
     // 2. Fetch full details for each convoy (to get dependencies/tracked issues)
-    const convoyIds = convoyBeads.map(c => c.id);
+    // Note: bd show expects short IDs (without prefix), so we strip the prefix
+    const shortIds = convoyBeads.map(c => stripBeadPrefix(c.id));
     const showResult = await execBd<ConvoyDetail[]>(
-      ["show", ...convoyIds, "-q", "--json"],
+      ["show", ...shortIds, "-q", "--json"],
       { cwd: townRoot, beadsDir }
     );
 
@@ -135,7 +135,6 @@ export async function listConvoys(): Promise<ConvoysServiceResult<Convoy[]>> {
         if (dep.priority !== undefined) tracked.priority = dep.priority;
         if (dep.assignee) tracked.assignee = dep.assignee;
         if (dep.updated_at) tracked.updatedAt = dep.updated_at;
-        if (dep.description) tracked.description = dep.description;
 
         trackedIssues.push(tracked);
         if (dep.status === "closed") {

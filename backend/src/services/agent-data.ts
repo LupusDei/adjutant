@@ -1,7 +1,7 @@
 import { execFileSync } from "child_process";
 import { existsSync } from "fs";
 import { join } from "path";
-import { execBd, type BeadsIssue } from "./bd-client.js";
+import { execBd, stripBeadPrefix, type BeadsIssue } from "./bd-client.js";
 import { listAllBeadsDirs, resolveTownRoot } from "./gastown-workspace.js";
 import {
   addressToIdentity,
@@ -25,7 +25,6 @@ export interface AgentRuntimeInfo {
   hookBeadTitle?: string;
   unreadMail: number;
   firstSubject?: string;
-  firstFrom?: string;
   branch?: string;
 }
 
@@ -121,10 +120,11 @@ async function fetchBeadTitles(
   if (beadIds.length === 0) return titles;
 
   // Fetch each bead individually (bd show --json <id>)
-  // Could be optimized with batch fetch if bd supports it
+  // Note: bd show expects short IDs (without prefix), so we strip the prefix
   const results = await Promise.all(
     beadIds.map(async (id) => {
-      const result = await execBd<BeadsIssue>(["show", id, "--json"], { cwd, beadsDir });
+      const shortId = stripBeadPrefix(id);
+      const result = await execBd<BeadsIssue>(["show", shortId, "--json"], { cwd, beadsDir });
       if (result.success && result.data) {
         return { id, title: result.data.title };
       }
@@ -279,7 +279,6 @@ export async function collectAgentSnapshot(
       unreadMail: mailInfo?.unread ?? 0,
     };
     if (mailInfo?.firstSubject) result.firstSubject = mailInfo.firstSubject;
-    if (mailInfo?.firstFrom) result.firstFrom = mailInfo.firstFrom;
 
     // Add hook bead title for current task display
     if (agent.hookBead) {

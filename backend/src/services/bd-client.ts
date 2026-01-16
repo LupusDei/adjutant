@@ -45,6 +45,19 @@ export interface BdExecOptions {
 const DEFAULT_TIMEOUT = 30000;
 const REDIRECT_DEPTH = 3;
 
+/**
+ * Strips the bead prefix from an ID for use with bd show.
+ * bd show expects short IDs (e.g., "vts8") not full IDs (e.g., "hq-vts8").
+ * @param fullId Full bead ID like "hq-vts8" or "hq-cv-hfove"
+ * @returns Short ID like "vts8" or "cv-hfove"
+ */
+export function stripBeadPrefix(fullId: string): string {
+  // Known prefixes are typically 2-3 chars followed by hyphen (hq-, gt-, gb-, etc.)
+  // Pattern: <prefix>-<rest> where prefix is 2-3 alphanumeric chars
+  const match = fullId.match(/^[a-z]{2,3}-(.+)$/i);
+  return match?.[1] ?? fullId;
+}
+
 function resolveBeadsDirWithDepth(beadsDir: string, depth: number): string {
   if (depth <= 0) return beadsDir;
   const redirectPath = join(beadsDir, "redirect");
