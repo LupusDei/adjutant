@@ -41,6 +41,15 @@ fi
 # Export GT_TOWN_ROOT
 export GT_TOWN_ROOT="$GT_DIR"
 
+# Auto-install dependencies if missing
+if [ ! -d "node_modules" ] || [ ! -d "backend/node_modules" ] || [ ! -d "frontend/node_modules" ]; then
+    echo "Installing dependencies..."
+    npm install
+    (cd backend && npm install)
+    (cd frontend && npm install)
+    echo ""
+fi
+
 # Check if ngrok is installed
 if command -v ngrok &> /dev/null; then
     echo "Starting gastown-boy with GT_TOWN_ROOT=$GT_DIR + ngrok tunnel"
