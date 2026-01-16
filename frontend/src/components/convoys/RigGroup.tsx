@@ -14,7 +14,7 @@ interface RigGroupProps {
 export function RigGroup({ rig, count, children, defaultExpanded = true }: RigGroupProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
-  const displayName = rig ? rig.toUpperCase() : 'TOWN';
+  const displayName = rig ? rig.toUpperCase() : 'TOWN-LEVEL';
   const icon = rig ? '>' : '~';
 
   return (
