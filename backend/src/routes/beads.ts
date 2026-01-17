@@ -38,7 +38,8 @@ beadsRouter.get("/", async (req, res) => {
   const typeParam = req.query["type"] as string | undefined;
   const limitStr = req.query["limit"] as string | undefined;
   const includeSystem = req.query["includeSystem"] === "true";
-  const limit = limitStr ? parseInt(limitStr, 10) : 100;
+  // Higher default to show low-priority bugs (P3) which sort to the end
+  const limit = limitStr ? parseInt(limitStr, 10) : 500;
 
   // Default to showing active work (open + in_progress + blocked)
   const status = statusParam ?? "default";

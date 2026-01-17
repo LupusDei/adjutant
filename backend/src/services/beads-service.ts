@@ -206,8 +206,11 @@ async function fetchBeadsFromDatabase(
     args.push("--type", options.type);
   }
 
+  // When using --all with client-side filtering, request more to ensure
+  // low-priority items aren't cut off before filtering. The database
+  // may have 1000+ beads with P3 bugs near the end of sorted results.
   const requestLimit = needsClientSideFilter
-    ? Math.max((options.limit ?? 100) * 2, 200)
+    ? Math.max((options.limit ?? 100) * 10, 2000)
     : options.limit;
   if (requestLimit) {
     args.push("--limit", requestLimit.toString());
