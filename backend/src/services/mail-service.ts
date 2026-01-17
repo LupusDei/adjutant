@@ -246,8 +246,11 @@ export async function sendMail(
   const priority = mapPriority(request.priority);
   const replyTo = request.replyTo;
 
-  // Use gt mail send (ensures notifications trigger)
-  try {
+  // If custom from is specified, use bd create directly (gt mail send doesn't support --from)
+  const useDirectCreate = request.from !== undefined;
+
+  // Use gt mail send (ensures notifications trigger) - only when using default sender
+  if (!useDirectCreate) try {
     const sendOptions: {
       type?: 'notification' | 'task' | 'scavenge' | 'reply';
       priority?: 0 | 1 | 2 | 3 | 4;
