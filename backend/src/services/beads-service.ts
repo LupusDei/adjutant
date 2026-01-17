@@ -3,6 +3,8 @@
  * IMPORTANT: gastown_boy is the dashboard for ALL of Gas Town.
  */
 
+import { readFileSync } from "fs";
+import { join } from "path";
 import { execBd, resolveBeadsDir, type BeadsIssue } from "./bd-client.js";
 import { listAllBeadsDirs, resolveTownRoot } from "./gastown-workspace.js";
 
@@ -80,21 +82,54 @@ function extractRig(assignee: string | null | undefined): string | null {
 }
 
 /**
+ * Cached prefix-to-source map loaded from routes.jsonl.
+ * Maps prefix (e.g., "gb") to rig name (e.g., "gastown_boy").
+ */
+let prefixToSourceMap: Map<string, string> | null = null;
+
+/**
+ * Loads prefix-to-source mapping from routes.jsonl.
+ * Extracts rig name from path (e.g., "gastown_boy/mayor/rig" → "gastown_boy").
+ */
+function loadPrefixMap(): Map<string, string> {
+  if (prefixToSourceMap) return prefixToSourceMap;
+
+  prefixToSourceMap = new Map();
+  try {
+    const townRoot = resolveTownRoot();
+    const routesPath = join(townRoot, ".beads", "routes.jsonl");
+    const content = readFileSync(routesPath, "utf8");
+
+    for (const line of content.split("\n")) {
+      if (!line.trim()) continue;
+      const route = JSON.parse(line) as { prefix: string; path: string };
+      // Extract prefix without trailing dash (e.g., "gb-" → "gb")
+      const prefix = route.prefix.replace(/-$/, "");
+      // Extract rig name from path (first segment, or "town" for ".")
+      const rigName = route.path === "." ? "town" : route.path.split("/")[0];
+      if (rigName) {
+        prefixToSourceMap.set(prefix, rigName);
+      }
+    }
+  } catch {
+    // Fallback defaults if routes.jsonl not found
+    prefixToSourceMap.set("hq", "town");
+    prefixToSourceMap.set("gb", "gastown_boy");
+    prefixToSourceMap.set("gt", "gastown");
+  }
+
+  return prefixToSourceMap;
+}
+
+/**
  * Maps bead prefix to rig name for UI grouping.
- * Determines source from prefix, not database location.
+ * Reads from routes.jsonl dynamically.
  */
 function prefixToSource(beadId: string): string {
   const prefix = beadId.split("-")[0];
-  switch (prefix) {
-    case "gb":
-      return "gastown_boy";
-    case "gt":
-      return "gastown";
-    case "hq":
-      return "town";
-    default:
-      return "unknown";
-  }
+  if (!prefix) return "unknown";
+  const map = loadPrefixMap();
+  return map.get(prefix) ?? "unknown";
 }
 
 /**
