@@ -199,6 +199,8 @@ export interface BeadInfo {
   assignee: string | null;
   /** Rig name extracted from assignee (e.g., "gastown_boy") or null for town-level */
   rig: string | null;
+  /** Source database: "town" for hq-*, or rig name for rig-specific beads */
+  source: string;
   /** Labels attached to the bead */
   labels: string[];
   /** Creation timestamp */

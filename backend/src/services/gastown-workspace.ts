@@ -286,19 +286,24 @@ export function resolveBeadsDir(workDir: string): string {
 export async function listAllBeadsDirs(): Promise<BeadsDirInfo[]> {
   const townRoot = resolveTownRoot();
   const results: BeadsDirInfo[] = [];
-  const scannedPaths = new Set<string>();
+  const scannedBeadsPaths = new Set<string>();
 
   const addDir = (workDir: string, rig: string | null) => {
     const absPath = resolve(workDir);
-    if (scannedPaths.has(absPath)) return;
-    if (existsSync(join(absPath, ".beads"))) {
-      results.push({
-        path: resolveBeadsDir(absPath),
-        rig,
-        workDir: absPath
-      });
-      scannedPaths.add(absPath);
-    }
+    if (!existsSync(join(absPath, ".beads"))) return;
+
+    // Resolve the actual beads path (following redirects)
+    const beadsPath = resolveBeadsDir(absPath);
+
+    // Deduplicate by resolved beads path, not workDir
+    if (scannedBeadsPaths.has(beadsPath)) return;
+
+    results.push({
+      path: beadsPath,
+      rig,
+      workDir: absPath
+    });
+    scannedBeadsPaths.add(beadsPath);
   };
 
   // 1. Town root
@@ -329,7 +334,7 @@ export async function listAllBeadsDirs(): Promise<BeadsDirInfo[]> {
   // 4. Heuristic search up from CWD
   let current = process.cwd();
   while (true) {
-    addDir(current, scannedPaths.has(resolve(current)) ? null : basename(current));
+    addDir(current, scannedBeadsPaths.has(resolveBeadsDir(resolve(current))) ? null : basename(current));
     const parent = dirname(current);
     if (parent === current) break;
     current = parent;

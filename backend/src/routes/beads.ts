@@ -6,7 +6,7 @@
  */
 
 import { Router } from "express";
-import { listBeads } from "../services/beads-service.js";
+import { listBeads, listAllBeads } from "../services/beads-service.js";
 import { resolveTownRoot, resolveRigPath } from "../services/gastown-workspace.js";
 import { success, internalError } from "../utils/responses.js";
 
@@ -32,7 +32,6 @@ export const beadsRouter = Router();
  * - limit: Max results (default: 100)
  */
 beadsRouter.get("/", async (req, res) => {
-  // No default rig filter - show ALL town beads
   const rig = req.query["rig"] as string | undefined;
   const statusParam = req.query["status"] as string | undefined;
   const typeParam = req.query["type"] as string | undefined;
@@ -42,16 +41,30 @@ beadsRouter.get("/", async (req, res) => {
   // Default to showing active work (open + in_progress + blocked)
   const status = statusParam ?? "default";
 
-  // Resolve rig path if a specific rig is requested
-  let rigPath: string | undefined;
-  if (rig) {
-    const townRoot = resolveTownRoot();
-    rigPath = resolveRigPath(rig, townRoot) ?? undefined;
+  // If no rig specified, fetch from ALL beads databases
+  if (!rig) {
+    const result = await listAllBeads({
+      ...(typeParam && { type: typeParam }),
+      status,
+      limit,
+    });
+
+    if (!result.success) {
+      return res.status(500).json(
+        internalError(result.error?.message ?? "Failed to list beads")
+      );
+    }
+
+    return res.json(success(result.data));
   }
 
+  // Rig specified - fetch from that rig's database only
+  const townRoot = resolveTownRoot();
+  const rigPath = resolveRigPath(rig, townRoot) ?? undefined;
+
   const result = await listBeads({
-    ...(rig && { rig }), // Only filter by rig if explicitly requested
-    ...(rigPath && { rigPath }), // Use rig-specific beads database
+    rig,
+    ...(rigPath && { rigPath }),
     ...(typeParam && { type: typeParam }),
     status,
     limit,

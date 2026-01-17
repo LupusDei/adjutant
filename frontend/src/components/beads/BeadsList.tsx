@@ -13,9 +13,9 @@ export interface BeadsListProps {
   isActive?: boolean;
 }
 
-/** Group of beads belonging to a rig */
+/** Group of beads from a source database */
 interface BeadGroup {
-  rig: string | null;
+  source: string;
   displayName: string;
   beads: BeadInfo[];
 }
@@ -93,34 +93,35 @@ function formatAssignee(assignee: string | null): string {
 }
 
 /**
- * Groups beads by rig, maintaining sort order within each group.
+ * Groups beads by source database, maintaining sort order within each group.
  */
-function groupBeadsByRig(beads: BeadInfo[]): BeadGroup[] {
-  const groupMap = new Map<string | null, BeadInfo[]>();
+function groupBeadsBySource(beads: BeadInfo[]): BeadGroup[] {
+  const groupMap = new Map<string, BeadInfo[]>();
 
   for (const bead of beads) {
-    const existing = groupMap.get(bead.rig);
+    const source = bead.source ?? 'town';
+    const existing = groupMap.get(source);
     if (existing) {
       existing.push(bead);
     } else {
-      groupMap.set(bead.rig, [bead]);
+      groupMap.set(source, [bead]);
     }
   }
 
-  // Convert to array and sort: town-level (null) first, then alphabetically
+  // Convert to array and sort: town first, then alphabetically
   const groups: BeadGroup[] = [];
-  const sortedRigs = Array.from(groupMap.keys()).sort((a, b) => {
-    if (a === null) return -1;
-    if (b === null) return 1;
+  const sortedSources = Array.from(groupMap.keys()).sort((a, b) => {
+    if (a === 'town') return -1;
+    if (b === 'town') return 1;
     return a.localeCompare(b);
   });
 
-  for (const rig of sortedRigs) {
-    const rigBeads = groupMap.get(rig) ?? [];
+  for (const source of sortedSources) {
+    const sourceBeads = groupMap.get(source) ?? [];
     groups.push({
-      rig,
-      displayName: rig ? rig.toUpperCase().replace(/_/g, ' ') : 'TOWN LEVEL',
-      beads: rigBeads,
+      source,
+      displayName: source === 'town' ? 'TOWN (hq-*)' : `${source.toUpperCase().replace(/_/g, ' ')}`,
+      beads: sourceBeads,
     });
   }
 
@@ -130,11 +131,11 @@ function groupBeadsByRig(beads: BeadInfo[]): BeadGroup[] {
 export function BeadsList({ statusFilter, isActive = true }: BeadsListProps) {
   const [actionInProgress, setActionInProgress] = useState<{ id: string; type: ActionType } | null>(null);
   const [actionResult, setActionResult] = useState<{ id: string; type: ActionType; success: boolean } | null>(null);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string | null>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-  // Get selected rig from RigFilter context
+  // Get selected rig from RigFilter context (not used for filtering anymore, but kept for future use)
   const { selectedRig } = useRigFilter();
 
   const {
@@ -143,13 +144,11 @@ export function BeadsList({ statusFilter, isActive = true }: BeadsListProps) {
     error,
     refresh,
   } = usePolling<BeadInfo[]>(
-    // Pass selected rig to fetch from that rig's beads database
-    // When no rig selected (null), fetches from town-level beads
+    // Fetch from ALL beads databases (no rig filter)
     () => api.beads.list({
       status: statusFilter,
       type: 'task',
-      limit: 50,
-      rig: selectedRig ?? undefined,
+      limit: 100,
     }),
     {
       interval: 30000,
@@ -157,24 +156,24 @@ export function BeadsList({ statusFilter, isActive = true }: BeadsListProps) {
     }
   );
 
-  // Group beads by rig
+  // Group beads by source database
   const beadGroups = useMemo(() => {
     if (!beads) return [];
-    return groupBeadsByRig(beads);
+    return groupBeadsBySource(beads);
   }, [beads]);
 
-  // Refetch when status filter or selected rig changes
+  // Refetch when status filter changes
   useEffect(() => {
     void refresh();
-  }, [statusFilter, selectedRig, refresh]);
+  }, [statusFilter, refresh]);
 
-  const toggleGroup = useCallback((rig: string | null) => {
+  const toggleGroup = useCallback((source: string) => {
     setCollapsedGroups(prev => {
       const next = new Set(prev);
-      if (next.has(rig)) {
-        next.delete(rig);
+      if (next.has(source)) {
+        next.delete(source);
       } else {
-        next.add(rig);
+        next.add(source);
       }
       return next;
     });
@@ -255,15 +254,14 @@ export function BeadsList({ statusFilter, isActive = true }: BeadsListProps) {
   return (
     <div style={styles.container}>
       {beadGroups.map((group) => {
-        const isCollapsed = collapsedGroups.has(group.rig);
-        const groupKey = group.rig ?? '__town__';
+        const isCollapsed = collapsedGroups.has(group.source);
 
         return (
-          <div key={groupKey} style={styles.group}>
+          <div key={group.source} style={styles.group}>
             {/* Group Header */}
             <button
               style={styles.groupHeader}
-              onClick={() => toggleGroup(group.rig)}
+              onClick={() => toggleGroup(group.source)}
               aria-expanded={!isCollapsed}
             >
               <span style={styles.groupChevron}>

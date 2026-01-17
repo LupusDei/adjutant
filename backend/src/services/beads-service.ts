@@ -4,7 +4,7 @@
  */
 
 import { execBd, resolveBeadsDir, type BeadsIssue } from "./bd-client.js";
-import { resolveTownRoot } from "./gastown-workspace.js";
+import { listAllBeadsDirs, resolveTownRoot } from "./gastown-workspace.js";
 
 // ============================================================================
 // Types
@@ -22,6 +22,8 @@ export interface BeadInfo {
   assignee: string | null;
   /** Rig name extracted from assignee (e.g., "gastown_boy") or null for town-level */
   rig: string | null;
+  /** Source database: "town" for hq-*, or rig name for rig-specific beads */
+  source: string;
   labels: string[];
   createdAt: string;
   updatedAt: string | null;
@@ -77,8 +79,10 @@ function extractRig(assignee: string | null | undefined): string | null {
 
 /**
  * Transform raw BeadsIssue to BeadInfo for the UI.
+ * @param issue The raw issue from bd CLI
+ * @param source The source database ("town" or rig name)
  */
-function transformBead(issue: BeadsIssue): BeadInfo {
+function transformBead(issue: BeadsIssue, source: string): BeadInfo {
   return {
     id: issue.id,
     title: issue.title,
@@ -87,6 +91,7 @@ function transformBead(issue: BeadsIssue): BeadInfo {
     type: issue.issue_type,
     assignee: issue.assignee ?? null,
     rig: extractRig(issue.assignee),
+    source,
     labels: issue.labels ?? [],
     createdAt: issue.created_at,
     updatedAt: issue.updated_at ?? null,
@@ -120,75 +125,70 @@ function parseStatusFilter(filter: string | undefined): BeadStatus[] | null {
   return valid.length > 0 ? (valid as BeadStatus[]) : null;
 }
 
+/**
+ * Fetches beads from a single database.
+ */
+async function fetchBeadsFromDatabase(
+  workDir: string,
+  beadsDir: string,
+  source: string,
+  options: ListBeadsOptions
+): Promise<BeadInfo[]> {
+  const args = ["list", "--json"];
+
+  const statusesToInclude = parseStatusFilter(options.status);
+  const needsClientSideFilter = statusesToInclude !== null && statusesToInclude.length > 1;
+
+  if (statusesToInclude === null) {
+    args.push("--all");
+  } else if (statusesToInclude.length === 1 && statusesToInclude[0]) {
+    args.push("--status", statusesToInclude[0]);
+  } else {
+    args.push("--all");
+  }
+
+  if (options.type) {
+    args.push("--type", options.type);
+  }
+
+  const requestLimit = needsClientSideFilter
+    ? Math.max((options.limit ?? 100) * 2, 200)
+    : options.limit;
+  if (requestLimit) {
+    args.push("--limit", requestLimit.toString());
+  }
+
+  const result = await execBd<BeadsIssue[]>(args, { cwd: workDir, beadsDir });
+  if (!result.success || !result.data) {
+    return [];
+  }
+
+  let beads = result.data.map((issue) => transformBead(issue, source));
+
+  if (needsClientSideFilter && statusesToInclude) {
+    beads = beads.filter((b) =>
+      statusesToInclude.includes(b.status.toLowerCase() as BeadStatus)
+    );
+  }
+
+  return beads;
+}
+
+/**
+ * Lists beads from a single database (legacy behavior for rig-specific queries).
+ */
 export async function listBeads(
   options: ListBeadsOptions = {}
 ): Promise<BeadsServiceResult<BeadInfo[]>> {
   try {
     const townRoot = resolveTownRoot();
-
-    // Use rig-specific beads dir if rigPath provided, otherwise town-level
     const workDir = options.rigPath ?? townRoot;
     const beadsDir = resolveBeadsDir(workDir);
+    const source = options.rig ?? "town";
 
-    const args = ["list", "--json"];
-
-    // Parse status filter
-    const statusesToInclude = parseStatusFilter(options.status);
-    const needsClientSideFilter = statusesToInclude !== null && statusesToInclude.length > 1;
-
-    // Handle status filter
-    // bd CLI doesn't support multiple --status flags, so:
-    // - For single status: use CLI flag
-    // - For multiple statuses (default preset, comma-separated): fetch all and filter client-side
-    if (statusesToInclude === null) {
-      // Show all statuses
-      args.push("--all");
-    } else if (statusesToInclude.length === 1 && statusesToInclude[0]) {
-      // Single status - use CLI flag
-      args.push("--status", statusesToInclude[0]);
-    } else {
-      // Multiple statuses - fetch all and filter client-side
-      args.push("--all");
-    }
-
-    // Filter by type if specified
-    if (options.type) {
-      args.push("--type", options.type);
-    }
-
-    // Limit results (apply a higher limit if filtering client-side)
-    const requestLimit = needsClientSideFilter
-      ? Math.max((options.limit ?? 100) * 2, 200)
-      : options.limit;
-    if (requestLimit) {
-      args.push("--limit", requestLimit.toString());
-    }
-
-    const result = await execBd<BeadsIssue[]>(args, { cwd: workDir, beadsDir });
-
-    if (!result.success) {
-      return {
-        success: false,
-        error: {
-          code: "BD_ERROR",
-          message: result.error?.message ?? "Failed to list beads",
-        },
-      };
-    }
-
-    // Transform raw issues to BeadInfo for the UI
-    let beads = (result.data ?? []).map(transformBead);
-
-    // Apply client-side status filter if needed
-    if (needsClientSideFilter && statusesToInclude) {
-      beads = beads.filter((b) =>
-        statusesToInclude.includes(b.status.toLowerCase() as BeadStatus)
-      );
-    }
+    let beads = await fetchBeadsFromDatabase(workDir, beadsDir, source, options);
 
     // Filter by rig if specified AND we're not already querying a rig-specific database.
-    // When rigPath is provided, we're querying that rig's database directly,
-    // so all beads belong to that rig and no filtering is needed.
     if (options.rig && !options.rigPath) {
       beads = beads.filter((b) => b.rig === options.rig);
     }
@@ -200,15 +200,60 @@ export async function listBeads(
       }
       const aDate = a.updatedAt ?? a.createdAt;
       const bDate = b.updatedAt ?? b.createdAt;
-      return bDate.localeCompare(aDate); // Newest first
+      return bDate.localeCompare(aDate);
     });
 
-    // Apply final limit if we fetched extra for filtering
-    if (needsClientSideFilter && options.limit && beads.length > options.limit) {
+    if (options.limit && beads.length > options.limit) {
       beads = beads.slice(0, options.limit);
     }
 
     return { success: true, data: beads };
+  } catch (err) {
+    return {
+      success: false,
+      error: {
+        code: "BEADS_ERROR",
+        message: err instanceof Error ? err.message : "Failed to list beads",
+      },
+    };
+  }
+}
+
+/**
+ * Lists beads from ALL beads databases (town + all rigs).
+ * Used when no specific rig is selected to show a unified view.
+ */
+export async function listAllBeads(
+  options: Omit<ListBeadsOptions, "rig" | "rigPath"> = {}
+): Promise<BeadsServiceResult<BeadInfo[]>> {
+  try {
+    const beadsDirs = await listAllBeadsDirs();
+
+    // Fetch from all databases in parallel
+    const fetchPromises = beadsDirs.map(async (dirInfo) => {
+      const source = dirInfo.rig ?? "town";
+      return fetchBeadsFromDatabase(dirInfo.workDir, dirInfo.path, source, options);
+    });
+
+    const results = await Promise.all(fetchPromises);
+    let allBeads = results.flat();
+
+    // Sort by priority, then by updated date
+    allBeads.sort((a, b) => {
+      if (a.priority !== b.priority) {
+        return a.priority - b.priority;
+      }
+      const aDate = a.updatedAt ?? a.createdAt;
+      const bDate = b.updatedAt ?? b.createdAt;
+      return bDate.localeCompare(aDate);
+    });
+
+    // Apply limit after merging and sorting
+    if (options.limit && allBeads.length > options.limit) {
+      allBeads = allBeads.slice(0, options.limit);
+    }
+
+    return { success: true, data: allBeads };
   } catch (err) {
     return {
       success: false,
