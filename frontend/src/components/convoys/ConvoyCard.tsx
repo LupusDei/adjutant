@@ -1,452 +1,175 @@
-import { useState, useMemo, useEffect, type CSSProperties } from 'react';
+import type { CSSProperties } from 'react';
 import type { Convoy, TrackedIssue } from '../../types';
 
 interface ConvoyCardProps {
   convoy: Convoy;
 }
 
-function useIsSmallScreen(breakpoint = 768) {
-  const [isSmall, setIsSmall] = useState(
-    typeof window !== 'undefined' ? window.innerWidth <= breakpoint : false
-  );
-
-  useEffect(() => {
-    const handleResize = () => setIsSmall(window.innerWidth <= breakpoint);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [breakpoint]);
-
-  return isSmall;
-}
-
+/**
+ * Display a single convoy with its progress and tracked issues.
+ */
 export function ConvoyCard({ convoy }: ConvoyCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const isSmallScreen = useIsSmallScreen();
-  
-  const { completed, total } = convoy.progress;
-  const percentage = total > 0 ? (completed / total) * 100 : 0;
-  const isSingle = total === 1;
-  const isDone = completed === total && total > 0;
-
-  // Compute aggregated info
-  const info = useMemo(() => {
-    const workers = new Set<string>();
-    let lastActive: Date | null = null;
-    let maxPriority = 4;
-
-    convoy.trackedIssues.forEach(issue => {
-      if (issue.assignee) {
-        // Extract short name: "rig/polecats/nux" -> "nux"
-        const parts = issue.assignee.split('/');
-        const shortName = parts[parts.length - 1];
-        if (shortName) workers.add(shortName);
-      }
-      if (issue.updatedAt) {
-        const d = new Date(issue.updatedAt);
-        if (!lastActive || d > lastActive) lastActive = d;
-      }
-      if (issue.priority !== undefined && issue.priority < maxPriority) {
-        maxPriority = issue.priority;
-      }
-    });
-
-    return {
-      workers: Array.from(workers),
-      lastActive,
-      priority: maxPriority
-    };
-  }, [convoy.trackedIssues]);
-
-  const formatRelativeTime = (date: Date | null) => {
-    if (!date) return 'UNKNOWN';
-    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-    if (seconds < 60) return 'JUST NOW';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}M AGO`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}H AGO`;
-    return date.toLocaleDateString();
-  };
+  const progress = convoy.progress.total > 0
+    ? Math.round((convoy.progress.completed / convoy.progress.total) * 100)
+    : 100;
 
   return (
-    <div 
-      style={{
-        ...styles.container,
-        borderColor: isExpanded ? colors.primary : colors.panelBorder
-      }}
-    >
-      <div 
-        style={styles.mainRow} 
-        onClick={() => setIsExpanded(!isExpanded)}
-        role="button"
-        aria-expanded={isExpanded}
-      >
-        {/* Left: ID & Priority (hidden on small screens) */}
-        {!isSmallScreen && (
-          <div style={styles.leftSection}>
-            <span style={{
-              ...styles.statusIcon,
-              color: isDone ? colors.working : colors.primary
-            }}>
-              {isDone ? '●' : '○'}
-            </span>
-            <div style={styles.idGroup}>
-              <span style={styles.id}>{convoy.id}</span>
-              <span style={{
-                ...styles.priority,
-                color: info.priority <= 1 ? colors.stuck : colors.primaryDim
-              }}>
-                P{info.priority}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Middle: Title & Workers */}
-        <div style={styles.middleSection}>
-          <div style={styles.titleRow}>
-            {isSmallScreen && (
-              <span style={{
-                ...styles.statusIcon,
-                color: isDone ? colors.working : colors.primary,
-                marginRight: '8px'
-              }}>
-                {isDone ? '●' : '○'}
-              </span>
-            )}
-            <span style={styles.title}>{convoy.title}</span>
-            {!isSmallScreen && (
-              <span style={styles.statusBadge}>{convoy.status.toUpperCase()}</span>
-            )}
-          </div>
-          <div style={styles.metadataRow}>
-            <span style={styles.activityTime}>{formatRelativeTime(info.lastActive)}</span>
-            <span style={styles.metaDivider}>|</span>
-            <div style={styles.workerList}>
-              {info.workers.length > 0 ? (
-                info.workers.map(w => <span key={w} style={styles.workerChip}>@{w}</span>)
-              ) : (
-                <span style={styles.unassigned}>UNASSIGNED</span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Progress */}
-        <div style={{
-          ...styles.rightSection,
-          ...(isSmallScreen ? { flexDirection: 'column', alignItems: 'flex-end', gap: '4px', minWidth: 'auto' } : {})
-        }}>
-          {isSmallScreen && (
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <span style={{
-                ...styles.priority,
-                color: info.priority <= 1 ? colors.stuck : colors.primaryDim
-              }}>
-                P{info.priority}
-              </span>
-              <span style={styles.statusBadge}>{convoy.status.toUpperCase()}</span>
-            </div>
-          )}
-          {!isSingle ? (
-            <div style={styles.progressContainer}>
-              <div style={styles.progressLabel}>
-                {completed}/{total}
-              </div>
-              <div style={styles.progressBarBg}>
-                <div
-                  style={{
-                    ...styles.progressBarFill,
-                    width: `${percentage}%`,
-                    backgroundColor: isDone ? colors.working : colors.primary
-                  }}
-                />
-              </div>
-            </div>
-          ) : (
-            <div style={{
-              ...styles.singleProgress,
-              color: isDone ? colors.working : colors.primaryDim
-            }}>
-              {isDone ? 'LANDED' : 'IN FLIGHT'}
-            </div>
-          )}
-          {!isSmallScreen && (
-            <span style={{
-              ...styles.expandIcon,
-              transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)'
-            }}>▶</span>
-          )}
-        </div>
+    <div style={styles.card}>
+      <div style={styles.header}>
+        <span style={styles.id}>{convoy.id.toUpperCase()}</span>
+        <span style={styles.status}>{convoy.status.toUpperCase()}</span>
       </div>
+      <div style={styles.title}>{convoy.title}</div>
 
-      {/* Expanded View: Issue List */}
-      {isExpanded && (
-        <div style={styles.detailsArea}>
-          <div style={styles.detailsHeader}>TRACKED ISSUES</div>
-          <div style={styles.issueList}>
-            {convoy.trackedIssues
-              .filter(issue => issue.issueType?.toLowerCase() !== 'message')
-              .map(issue => (
-                <TrackedIssueRow key={issue.id} issue={issue} />
-              ))}
-          </div>
+      <div style={styles.progressSection}>
+        <div style={styles.progressBar}>
+          <div style={{ ...styles.progressFill, width: `${progress}%` }} />
         </div>
-      )}
-    </div>
-  );
-}
-
-function TrackedIssueRow({ issue }: { issue: TrackedIssue }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const isClosed = issue.status === 'closed';
-  const hasDescription = issue.description && issue.description.trim().length > 0;
-
-  return (
-    <div style={styles.issueContainer}>
-      <div
-        style={{
-          ...styles.issueRow,
-          cursor: hasDescription ? 'pointer' : 'default',
-        }}
-        onClick={() => hasDescription && setIsExpanded(!isExpanded)}
-        role={hasDescription ? 'button' : undefined}
-        aria-expanded={hasDescription ? isExpanded : undefined}
-      >
-        <span style={{
-          ...styles.issueStatus,
-          color: isClosed ? colors.working : colors.primaryDim
-        }}>
-          {isClosed ? '✓' : '…'}
+        <span style={styles.progressText}>
+          {convoy.progress.completed}/{convoy.progress.total} ({progress}%)
         </span>
-        <span style={styles.issueId}>{issue.id}</span>
-        <span style={styles.issueType}>[{issue.issueType?.toUpperCase()}]</span>
-        <span style={styles.issueTitle}>{issue.title}</span>
-        {issue.assignee && (
-          <span style={styles.issueAssignee}>@{issue.assignee.split('/').pop()}</span>
-        )}
-        {hasDescription && (
-          <span style={{
-            ...styles.issueExpandIcon,
-            transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)'
-          }}>▶</span>
-        )}
       </div>
-      {isExpanded && hasDescription && (
-        <div style={styles.issueDescription}>
-          {issue.description}
+
+      {convoy.trackedIssues.length > 0 && (
+        <div style={styles.issuesList}>
+          {convoy.trackedIssues.slice(0, 3).map((issue: TrackedIssue) => (
+            <IssueRow key={issue.id} issue={issue} />
+          ))}
+          {convoy.trackedIssues.length > 3 && (
+            <div style={styles.moreIssues}>
+              +{convoy.trackedIssues.length - 3} more
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-const colors = {
-  primary: 'var(--crt-phosphor)',
-  primaryBright: 'var(--crt-phosphor-bright)',
-  primaryDim: 'var(--crt-phosphor-dim)',
-  background: '#0A0A0A',
-  backgroundDark: '#050505',
-  panelBorder: 'var(--crt-phosphor-dim)',
-  working: 'var(--crt-phosphor-bright)',
-  stuck: '#FF4444',
-} as const;
+function IssueRow({ issue }: { issue: TrackedIssue }) {
+  const statusColor = getStatusColor(issue.status);
+
+  return (
+    <div style={styles.issueRow}>
+      <span style={{ ...styles.issueStatus, color: statusColor }}>
+        [{issue.status.toUpperCase().slice(0, 4)}]
+      </span>
+      <span style={styles.issueId}>{issue.id}</span>
+      <span style={styles.issueTitle}>{issue.title}</span>
+    </div>
+  );
+}
+
+function getStatusColor(status: string): string {
+  switch (status.toLowerCase()) {
+    case 'open':
+      return 'var(--crt-phosphor)';
+    case 'in_progress':
+    case 'in-progress':
+      return 'var(--crt-phosphor-bright)';
+    case 'closed':
+    case 'done':
+      return 'var(--crt-phosphor-dim)';
+    case 'blocked':
+      return '#FF4444';
+    default:
+      return 'var(--crt-phosphor)';
+  }
+}
 
 const styles = {
-  container: {
-    border: `1px solid ${colors.panelBorder}`,
-    backgroundColor: colors.backgroundDark,
-    display: 'flex',
-    flexDirection: 'column',
-    fontFamily: '"Share Tech Mono", "Courier New", monospace',
-    transition: 'all 0.2s ease',
+  card: {
+    backgroundColor: 'rgba(0, 255, 0, 0.03)',
+    border: '1px solid var(--crt-phosphor-dim)',
+    borderRadius: '2px',
+    padding: '12px',
+    fontFamily: '"Share Tech Mono", monospace',
+    transition: 'border-color 0.2s',
   },
-  mainRow: {
-    padding: '8px 16px',
+  header: {
     display: 'flex',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: '20px',
-    cursor: 'pointer',
-    minHeight: '64px',
-  },
-  leftSection: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    minWidth: '140px',
-  },
-  statusIcon: {
-    fontSize: '1.2rem',
-  },
-  idGroup: {
-    display: 'flex',
-    flexDirection: 'column',
+    marginBottom: '6px',
   },
   id: {
-    color: colors.primary,
-    fontWeight: 'bold',
-    fontSize: '0.9rem',
-  },
-  priority: {
-    fontSize: '0.7rem',
-    fontWeight: 'bold',
-  },
-  middleSection: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-    minWidth: 0,
-  },
-  titleRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-  },
-  title: {
-    color: colors.primary,
-    fontSize: '1rem',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  statusBadge: {
-    fontSize: '0.6rem',
-    padding: '0px 4px',
-    border: `1px solid ${colors.primaryDim}`,
-    color: colors.primaryDim,
-    flexShrink: 0,
-  },
-  metadataRow: {
-    display: 'flex',
-    gap: '8px',
-    alignItems: 'center',
-    fontSize: '0.7rem',
-  },
-  activityTime: {
-    color: colors.primaryDim,
-  },
-  metaDivider: {
-    color: 'var(--crt-phosphor-glow)',
-  },
-  workerList: {
-    display: 'flex',
-    gap: '6px',
-    flexWrap: 'wrap',
-  },
-  workerChip: {
-    color: colors.primaryBright,
-    backgroundColor: 'var(--crt-phosphor-glow)',
-    padding: '0 4px',
-    fontSize: '0.65rem',
-  },
-  unassigned: {
-    color: colors.primaryDim,
-    fontStyle: 'italic',
-    fontSize: '0.65rem',
-  },
-  rightSection: {
-    minWidth: '140px',
-    display: 'flex',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    gap: '16px',
-  },
-  progressContainer: {
-    width: '80px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
-  progressLabel: {
-    textAlign: 'center',
-    fontSize: '0.75rem',
-    color: colors.primary,
-  },
-  progressBarBg: {
-    height: '4px',
-    backgroundColor: 'rgba(10, 122, 62, 0.2)',
-    width: '100%',
-  },
-  progressBarFill: {
-    height: '100%',
-    transition: 'width 0.3s ease',
-  },
-  singleProgress: {
-    fontSize: '0.75rem',
-    fontWeight: 'bold',
-    letterSpacing: '0.05em',
-  },
-  expandIcon: {
-    fontSize: '0.7rem',
-    color: colors.primaryDim,
-    transition: 'transform 0.2s ease',
-  },
-  detailsArea: {
-    padding: '12px 16px',
-    borderTop: `1px solid var(--crt-phosphor-dim)`,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-  },
-  detailsHeader: {
-    fontSize: '0.7rem',
-    color: colors.primaryDim,
-    marginBottom: '8px',
+    fontSize: '11px',
+    color: 'var(--crt-phosphor-dim)',
     letterSpacing: '0.1em',
   },
-  issueList: {
+  status: {
+    fontSize: '10px',
+    color: 'var(--crt-phosphor)',
+    padding: '2px 6px',
+    backgroundColor: 'rgba(0, 255, 0, 0.1)',
+    borderRadius: '2px',
+    letterSpacing: '0.05em',
+  },
+  title: {
+    fontSize: '13px',
+    color: 'var(--crt-phosphor)',
+    marginBottom: '10px',
+    lineHeight: 1.3,
+  },
+  progressSection: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '10px',
+  },
+  progressBar: {
+    flex: 1,
+    height: '6px',
+    backgroundColor: 'rgba(0, 255, 0, 0.1)',
+    borderRadius: '1px',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: 'var(--crt-phosphor)',
+    transition: 'width 0.3s',
+  },
+  progressText: {
+    fontSize: '10px',
+    color: 'var(--crt-phosphor-dim)',
+    whiteSpace: 'nowrap',
+    minWidth: '70px',
+    textAlign: 'right',
+  },
+  issuesList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '6px',
+    gap: '4px',
+    borderTop: '1px solid rgba(0, 255, 0, 0.1)',
+    paddingTop: '8px',
   },
   issueRow: {
     display: 'flex',
-    gap: '10px',
-    fontSize: '0.75rem',
+    gap: '8px',
+    fontSize: '11px',
     alignItems: 'center',
   },
   issueStatus: {
-    fontSize: '0.9rem',
-    width: '12px',
-  },
-  issueId: {
-    color: colors.primary,
-    minWidth: '60px',
-  },
-  issueType: {
-    color: colors.primaryDim,
-    fontSize: '0.65rem',
+    fontSize: '9px',
+    fontWeight: 600,
     minWidth: '50px',
   },
+  issueId: {
+    color: 'var(--crt-phosphor-dim)',
+    fontSize: '10px',
+    minWidth: '60px',
+  },
   issueTitle: {
-    flex: 1,
-    color: colors.primary,
+    color: 'var(--crt-phosphor)',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+    flex: 1,
   },
-  issueAssignee: {
-    color: colors.primaryBright,
-    fontSize: '0.7rem',
-  },
-  issueContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  issueExpandIcon: {
-    fontSize: '0.6rem',
-    color: colors.primaryDim,
-    transition: 'transform 0.2s ease',
-    marginLeft: 'auto',
-    flexShrink: 0,
-  },
-  issueDescription: {
-    padding: '8px 12px 8px 22px',
-    fontSize: '0.7rem',
-    color: colors.primaryDim,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderLeft: `2px solid var(--crt-phosphor-glow)`,
-    marginLeft: '12px',
-    whiteSpace: 'pre-wrap',
-    lineHeight: '1.4',
+  moreIssues: {
+    fontSize: '10px',
+    color: 'var(--crt-phosphor-dim)',
+    textAlign: 'center',
+    paddingTop: '4px',
   },
 } satisfies Record<string, CSSProperties>;
