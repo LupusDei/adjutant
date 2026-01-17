@@ -147,21 +147,21 @@ async function fetchBeadTitles(
 
     const { workDir, beadsDir } = dirInfo;
 
-    // Fetch each bead in this group
-    const groupPromise = Promise.all(
-      ids.map(async (id) => {
-        const shortId = stripBeadPrefix(id);
-        const result = await execBd<BeadsIssue>(["show", shortId, "--json"], {
-          cwd: workDir,
-          beadsDir,
-        });
-        if (result.success && result.data) {
-          titles.set(id, result.data.title);
+    // Batch fetch all beads in this group with a single bd show call
+    const shortIds = ids.map(stripBeadPrefix);
+    const groupPromise = (async () => {
+      const result = await execBd<BeadsIssue[]>(
+        ["show", ...shortIds, "-q", "--json"],
+        { cwd: workDir, beadsDir }
+      );
+      if (result.success && result.data) {
+        for (const bead of result.data) {
+          titles.set(bead.id, bead.title);
         }
-      })
-    );
+      }
+    })();
 
-    fetchPromises.push(groupPromise.then(() => {}));
+    fetchPromises.push(groupPromise);
   }
 
   await Promise.all(fetchPromises);
