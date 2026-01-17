@@ -56,8 +56,7 @@ describe('BeadsList', () => {
       await waitFor(() => {
         expect(api.beads.list).toHaveBeenCalledWith({
           status: 'open',
-          type: 'task',
-          limit: 50,
+          limit: 500,
         });
       });
     });
@@ -68,8 +67,7 @@ describe('BeadsList', () => {
       await waitFor(() => {
         expect(api.beads.list).toHaveBeenCalledWith({
           status: 'open',
-          type: 'task',
-          limit: 50,
+          limit: 500,
         });
       });
 
@@ -81,8 +79,7 @@ describe('BeadsList', () => {
       await waitFor(() => {
         expect(api.beads.list).toHaveBeenCalledWith({
           status: 'closed',
-          type: 'task',
-          limit: 50,
+          limit: 500,
         });
       });
     });
@@ -104,8 +101,7 @@ describe('BeadsList', () => {
         // Should eventually fetch with the final filter value
         expect(api.beads.list).toHaveBeenLastCalledWith({
           status: 'all',
-          type: 'task',
-          limit: 50,
+          limit: 500,
         });
       });
     });
