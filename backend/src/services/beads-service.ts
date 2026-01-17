@@ -220,7 +220,7 @@ export async function listBeads(
 }
 
 /**
- * Lists beads from ALL beads databases (town + all rigs).
+ * Lists beads from ALL rig beads databases (excludes town-level hq-* beads).
  * Used when no specific rig is selected to show a unified view.
  */
 export async function listAllBeads(
@@ -229,9 +229,12 @@ export async function listAllBeads(
   try {
     const beadsDirs = await listAllBeadsDirs();
 
-    // Fetch from all databases in parallel
-    const fetchPromises = beadsDirs.map(async (dirInfo) => {
-      const source = dirInfo.rig ?? "town";
+    // Filter out town-level beads (hq-*) - only show rig-specific beads
+    const rigDirs = beadsDirs.filter((dirInfo) => dirInfo.rig !== null);
+
+    // Fetch from all rig databases in parallel
+    const fetchPromises = rigDirs.map(async (dirInfo) => {
+      const source = dirInfo.rig!;
       return fetchBeadsFromDatabase(dirInfo.workDir, dirInfo.path, source, options);
     });
 
