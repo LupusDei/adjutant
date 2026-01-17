@@ -330,17 +330,19 @@
 /* ============================================
    Typography
    ============================================ */
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-display);
-  color: var(--pipboy-text);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    color: var(--pipboy-text);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
 
-h1 { font-size: 2rem; }
-h2 { font-size: 1.5rem; }
-h3 { font-size: 1.25rem; }
-h4 { font-size: 1rem; }
+  h1 { font-size: 2rem; }
+  h2 { font-size: 1.5rem; }
+  h3 { font-size: 1.25rem; }
+  h4 { font-size: 1rem; }
+}
 
 a {
   color: var(--pipboy-green);
