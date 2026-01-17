@@ -193,8 +193,8 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '' }: B
     // Fetch from ALL beads databases (no rig filter)
     () => api.beads.list({
       status: statusFilter,
-      type: 'task',
-      limit: 100,
+      // Don't filter by type - show all beads (tasks, bugs, features, etc.)
+      limit: 500,
     }),
     {
       interval: 30000,
