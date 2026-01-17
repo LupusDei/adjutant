@@ -229,8 +229,11 @@ export async function listAllBeads(
   try {
     const beadsDirs = await listAllBeadsDirs();
 
-    // Filter out town-level beads (hq-*) - only show rig-specific beads
-    const rigDirs = beadsDirs.filter((dirInfo) => dirInfo.rig !== null);
+    // Only include known rig databases (exclude town-level and user-level beads)
+    const knownRigs = new Set(["gastown", "gastown_boy"]);
+    const rigDirs = beadsDirs.filter((dirInfo) =>
+      dirInfo.rig !== null && knownRigs.has(dirInfo.rig)
+    );
 
     // Fetch from all rig databases in parallel
     const fetchPromises = rigDirs.map(async (dirInfo) => {
