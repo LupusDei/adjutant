@@ -1,15 +1,40 @@
 # Testing Rules
 
-## Test-First Development (TDD)
+## TDD is Mandatory
 
-Per the project constitution, follow TDD for:
+**All development MUST follow Test-Driven Development. No exceptions.**
+
+### The Red-Green-Refactor Cycle
+
+1. **Red**: Write a failing test first
+2. **Green**: Write minimal code to make the test pass
+3. **Refactor**: Clean up while keeping tests green
+
+### TDD Applies To
+
 - Backend services (`mail-service`, `power-service`, `status-service`, `gt-executor`)
 - Custom React hooks (`useMail`, `useGastownStatus`, `usePolling`)
+- All new features and functionality
+- Bug fixes (write a test that reproduces the bug first)
+- API endpoints and request handlers
 
-**Workflow**:
-1. Write failing test first
-2. Implement minimum code to pass
-3. Refactor if needed
+### Workflow for Each Task
+
+```
+1. Read the requirements
+2. Write test(s) that verify expected behavior
+3. Run tests - confirm they FAIL (Red phase)
+4. Implement the minimum code to pass
+5. Run tests - confirm they PASS (Green phase)
+6. Refactor if needed, keeping tests green
+7. Commit test + implementation together
+```
+
+### Enforcement
+
+- PRs without tests for new functionality will be rejected
+- Bug fixes must include a regression test
+- Code coverage should not decrease
 
 ## What to Test
 
