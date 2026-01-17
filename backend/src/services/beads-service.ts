@@ -186,8 +186,10 @@ export async function listBeads(
       );
     }
 
-    // Filter by rig if specified
-    if (options.rig) {
+    // Filter by rig if specified AND we're not already querying a rig-specific database.
+    // When rigPath is provided, we're querying that rig's database directly,
+    // so all beads belong to that rig and no filtering is needed.
+    if (options.rig && !options.rigPath) {
       beads = beads.filter((b) => b.rig === options.rig);
     }
 

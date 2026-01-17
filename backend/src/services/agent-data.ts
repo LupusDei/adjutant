@@ -2,7 +2,12 @@ import { execFileSync } from "child_process";
 import { existsSync } from "fs";
 import { join } from "path";
 import { execBd, stripBeadPrefix, type BeadsIssue } from "./bd-client.js";
-import { listAllBeadsDirs, resolveTownRoot } from "./gastown-workspace.js";
+import {
+  extractBeadPrefix,
+  listAllBeadsDirs,
+  resolveBeadsDirFromId,
+  resolveTownRoot,
+} from "./gastown-workspace.js";
 import {
   addressToIdentity,
   parseAgentBeadId,
@@ -110,33 +115,56 @@ async function fetchAgents(cwd: string, beadsDir: string): Promise<BeadsIssue[]>
 
 /**
  * Fetches bead titles for a list of bead IDs.
+ * Routes each bead to the correct beads database based on its prefix.
  * Returns a map of beadId -> title.
  */
 async function fetchBeadTitles(
   beadIds: string[],
-  cwd: string,
-  beadsDir: string
+  townRoot: string
 ): Promise<Map<string, string>> {
   const titles = new Map<string, string>();
   if (beadIds.length === 0) return titles;
 
-  // Fetch each bead individually (bd show --json <id>)
-  // Note: bd show expects short IDs (without prefix), so we strip the prefix
-  const results = await Promise.all(
-    beadIds.map(async (id) => {
-      const shortId = stripBeadPrefix(id);
-      const result = await execBd<BeadsIssue>(["show", shortId, "--json"], { cwd, beadsDir });
-      if (result.success && result.data) {
-        return { id, title: result.data.title };
-      }
-      return null;
-    })
-  );
-
-  for (const r of results) {
-    if (r) titles.set(r.id, r.title);
+  // Group beads by prefix to batch requests to the same database
+  const beadsByPrefix = new Map<string, string[]>();
+  for (const id of beadIds) {
+    const prefix = extractBeadPrefix(id) ?? "hq";
+    const group = beadsByPrefix.get(prefix) ?? [];
+    group.push(id);
+    beadsByPrefix.set(prefix, group);
   }
 
+  // Fetch from each database in parallel
+  const fetchPromises: Promise<void>[] = [];
+
+  for (const [, ids] of beadsByPrefix) {
+    // Use the first ID to resolve the beads directory for this group
+    const firstId = ids[0];
+    if (!firstId) continue;
+
+    const dirInfo = resolveBeadsDirFromId(firstId, townRoot);
+    if (!dirInfo) continue;
+
+    const { workDir, beadsDir } = dirInfo;
+
+    // Fetch each bead in this group
+    const groupPromise = Promise.all(
+      ids.map(async (id) => {
+        const shortId = stripBeadPrefix(id);
+        const result = await execBd<BeadsIssue>(["show", shortId, "--json"], {
+          cwd: workDir,
+          beadsDir,
+        });
+        if (result.success && result.data) {
+          titles.set(id, result.data.title);
+        }
+      })
+    );
+
+    fetchPromises.push(groupPromise.then(() => {}));
+  }
+
+  await Promise.all(fetchPromises);
   return titles;
 }
 
@@ -269,9 +297,8 @@ export async function collectAgentSnapshot(
     .map((a) => a.hookBead as string);
   const uniqueHookBeadIds = [...new Set(hookBeadIds)];
 
-  // Fetch hook bead titles from the town-level beads directory
-  const townBeadsDir = join(townRoot, ".beads");
-  const hookBeadTitles = await fetchBeadTitles(uniqueHookBeadIds, townRoot, townBeadsDir);
+  // Fetch hook bead titles, routing each to the correct beads database by prefix
+  const hookBeadTitles = await fetchBeadTitles(uniqueHookBeadIds, townRoot);
 
   const agents: AgentRuntimeInfo[] = baseAgents.map((agent) => {
     const mailInfo = mailIndex.get(addressToIdentity(agent.address));

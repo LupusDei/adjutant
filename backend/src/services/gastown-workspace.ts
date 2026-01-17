@@ -178,6 +178,16 @@ const EXTERNAL_RIG_PATHS: Record<string, string> = {
 };
 
 /**
+ * Maps bead prefixes to rig names.
+ * Used to route bead lookups to the correct beads database.
+ */
+const BEAD_PREFIX_TO_RIG: Record<string, string | null> = {
+  hq: null, // Town-level beads
+  gt: "gastown",
+  gb: "gastown_boy",
+};
+
+/**
  * Resolves the filesystem path for a rig.
  * Checks external paths first, then falls back to townRoot/rigName.
  */
@@ -206,6 +216,53 @@ export function resolveRigPath(rigName: string, townRoot: string): string | null
   }
 
   return null;
+}
+
+/**
+ * Extracts the prefix from a bead ID.
+ * E.g., "hq-abc123" → "hq", "gb-xyz" → "gb"
+ */
+export function extractBeadPrefix(beadId: string): string | null {
+  const match = beadId.match(/^([a-z]{2,3})-/i);
+  return match?.[1]?.toLowerCase() ?? null;
+}
+
+/**
+ * Resolves the beads directory for a bead ID based on its prefix.
+ * Returns { workDir, beadsDir } for use with execBd.
+ */
+export function resolveBeadsDirFromId(
+  beadId: string,
+  townRoot: string
+): { workDir: string; beadsDir: string } | null {
+  const prefix = extractBeadPrefix(beadId);
+  if (!prefix) return null;
+
+  const rigName = BEAD_PREFIX_TO_RIG[prefix];
+
+  // Town-level beads (hq-*)
+  if (rigName === null || rigName === undefined) {
+    if (prefix === "hq") {
+      return {
+        workDir: townRoot,
+        beadsDir: resolveBeadsDir(townRoot),
+      };
+    }
+    // Unknown prefix - default to town level
+    return {
+      workDir: townRoot,
+      beadsDir: resolveBeadsDir(townRoot),
+    };
+  }
+
+  // Rig-specific beads
+  const rigPath = resolveRigPath(rigName, townRoot);
+  if (!rigPath) return null;
+
+  return {
+    workDir: rigPath,
+    beadsDir: resolveBeadsDir(rigPath),
+  };
 }
 
 /**
