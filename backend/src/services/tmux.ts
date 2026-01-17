@@ -37,3 +37,16 @@ export async function listTmuxSessions(): Promise<Set<string>> {
     return new Set();
   }
 }
+
+/**
+ * Captures the content of a tmux pane, including ANSI escape codes.
+ * @param sessionName - The tmux session name (e.g., "gt-gastown_boy-nux")
+ * @returns The raw terminal output with ANSI escape codes preserved
+ * @throws Error if the session doesn't exist or capture fails
+ */
+export async function captureTmuxPane(sessionName: string): Promise<string> {
+  // -e preserves ANSI escape sequences for terminal styling
+  // -p outputs to stdout instead of a buffer
+  const output = await execTmux(["capture-pane", "-t", sessionName, "-e", "-p"]);
+  return output;
+}

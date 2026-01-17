@@ -4,13 +4,15 @@
  * Endpoints:
  * - GET /api/agents - Get all agents as CrewMember list
  * - POST /api/agents/spawn-polecat - Request polecat spawn for a rig
+ * - GET /api/agents/:rig/:polecat/terminal - Capture polecat terminal content
  */
 
 import { Router } from "express";
 import { z } from "zod";
 import { getAgents } from "../services/agents-service.js";
 import { sendMail } from "../services/mail-service.js";
-import { success, internalError, badRequest } from "../utils/responses.js";
+import { captureTmuxPane, listTmuxSessions } from "../services/tmux.js";
+import { success, internalError, badRequest, notFound } from "../utils/responses.js";
 
 export const agentsRouter = Router();
 
@@ -68,4 +70,39 @@ agentsRouter.post("/spawn-polecat", async (req, res) => {
   }
 
   return res.json(success({ rig, requested: true }));
+});
+
+/**
+ * GET /api/agents/:rig/:polecat/terminal
+ * Captures and returns the terminal content for a polecat's tmux session.
+ * Includes ANSI escape codes for proper terminal rendering with xterm.js.
+ */
+agentsRouter.get("/:rig/:polecat/terminal", async (req, res) => {
+  const { rig, polecat } = req.params;
+
+  // Build the expected tmux session name
+  const sessionName = `gt-${rig}-${polecat}`;
+
+  // Check if session exists
+  const sessions = await listTmuxSessions();
+  if (!sessions.has(sessionName)) {
+    return res.status(404).json(
+      notFound("Terminal session", sessionName)
+    );
+  }
+
+  try {
+    const content = await captureTmuxPane(sessionName);
+
+    return res.json(
+      success({
+        content,
+        sessionName,
+        timestamp: new Date().toISOString(),
+      })
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to capture terminal";
+    return res.status(500).json(internalError(message));
+  }
 });

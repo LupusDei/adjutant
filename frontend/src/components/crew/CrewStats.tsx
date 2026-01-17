@@ -3,6 +3,7 @@ import { useMemo, useState, useCallback } from 'react';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { usePolling } from '../../hooks/usePolling';
 import { api, ApiError } from '../../services/api';
+import { TerminalPane } from '../terminal';
 import type { CrewMember } from '../../types';
 
 /** localStorage key for polecat filter preference */
@@ -127,6 +128,7 @@ export function CrewStats({ className = '', isActive = true }: CrewStatsProps) {
 
   const isNarrow = useMediaQuery('(max-width: 768px)');
   const [showAllPolecats, setShowAllPolecats] = useShowAllPolecats();
+  const [expandedPolecat, setExpandedPolecat] = useState<string | null>(null);
 
   // Group agents into hierarchical structure
   const grouped = useMemo(() => {
@@ -215,6 +217,8 @@ export function CrewStats({ className = '', isActive = true }: CrewStatsProps) {
                 agentGridStyle={agentGridStyle}
                 infraGridStyle={infraGridStyle}
                 showAllPolecats={showAllPolecats}
+                expandedPolecat={expandedPolecat}
+                onPolecatClick={setExpandedPolecat}
               />
             ))}
 
@@ -290,12 +294,16 @@ interface RigSectionProps {
   infraGridStyle: CSSProperties;
   /** Whether to show all polecats including inactive ones */
   showAllPolecats: boolean;
+  /** Currently expanded polecat ID (for terminal view) */
+  expandedPolecat: string | null;
+  /** Callback when a polecat is clicked to expand/collapse terminal */
+  onPolecatClick: (polecatId: string | null) => void;
 }
 
 /** Spawn button state */
 type SpawnState = 'idle' | 'loading' | 'success' | 'error';
 
-function RigSection({ name, agents, agentGridStyle, infraGridStyle, showAllPolecats }: RigSectionProps) {
+function RigSection({ name, agents, agentGridStyle, infraGridStyle, showAllPolecats, expandedPolecat, onPolecatClick }: RigSectionProps) {
   const [spawnState, setSpawnState] = useState<SpawnState>('idle');
   const [spawnError, setSpawnError] = useState<string | null>(null);
 
@@ -400,10 +408,32 @@ function RigSection({ name, agents, agentGridStyle, infraGridStyle, showAllPolec
           </span>
         </div>
         {visiblePolecats.length > 0 ? (
-          <div style={agentGridStyle}>
-            {visiblePolecats.map((agent) => (
-              <AgentCard key={agent.id} agent={agent} icon="🐱" />
-            ))}
+          <div style={styles.polecatList}>
+            {visiblePolecats.map((agent) => {
+              const isExpanded = expandedPolecat === agent.id;
+              const isOnline = agent.status !== 'offline';
+              return (
+                <div key={agent.id} style={styles.polecatWrapper}>
+                  <PolecatCard
+                    agent={agent}
+                    isExpanded={isExpanded}
+                    onClick={() => onPolecatClick(isExpanded ? null : agent.id)}
+                    disabled={!isOnline}
+                  />
+                  {isExpanded && agent.rig && (
+                    <div style={styles.terminalContainer}>
+                      <TerminalPane
+                        rig={agent.rig}
+                        polecat={agent.name}
+                        pollInterval={2000}
+                        onClose={() => onPolecatClick(null)}
+                        style={{ height: '300px' }}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div style={styles.polecatEmpty}>
@@ -545,6 +575,70 @@ function AgentCard({ agent, icon }: AgentCardProps) {
         )}
       </div>
     </div>
+  );
+}
+
+// =============================================================================
+// Polecat Card - Expandable card for polecats with terminal view
+// =============================================================================
+
+interface PolecatCardProps {
+  agent: CrewMember;
+  isExpanded: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+}
+
+function PolecatCard({ agent, isExpanded, onClick, disabled }: PolecatCardProps) {
+  const isOnline = agent.status !== 'offline';
+  const isActive = agent.currentTask && agent.status === 'idle';
+  const displayStatus = isActive ? 'active' : agent.status;
+  const statusColor = getStatusColor(displayStatus);
+
+  return (
+    <button
+      style={{
+        ...styles.polecatCard,
+        borderColor: isExpanded ? colors.primaryBright : (isOnline ? colors.panelBorder : colors.offlineBorder),
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
+      }}
+      onClick={onClick}
+      disabled={disabled}
+      aria-expanded={isExpanded}
+      aria-label={`${agent.name} - ${displayStatus}${isExpanded ? ' (terminal open)' : ''}`}
+    >
+      <div style={styles.polecatCardHeader}>
+        <span style={styles.polecatIcon}>🐱</span>
+        <span style={styles.polecatName}>{agent.name.toUpperCase()}</span>
+        <span
+          style={{
+            ...styles.statusIndicator,
+            backgroundColor: statusColor,
+            boxShadow: isOnline ? `0 0 6px ${statusColor}` : 'none',
+          }}
+        />
+        <span style={{ ...styles.polecatStatus, color: statusColor }}>
+          {displayStatus.toUpperCase()}
+        </span>
+        {agent.unreadMail > 0 && (
+          <span style={styles.polecatMail}>📬{agent.unreadMail}</span>
+        )}
+        <span style={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
+      </div>
+      {agent.currentTask && (
+        <div style={styles.polecatTask}>
+          <span style={styles.taskIcon}>⚡</span>
+          <span style={styles.taskText}>{agent.currentTask}</span>
+        </div>
+      )}
+      {agent.branch && (
+        <div style={styles.polecatBranch}>
+          <span style={styles.branchIcon}>⎇</span>
+          <span style={styles.branchText}>{agent.branch}</span>
+        </div>
+      )}
+    </button>
   );
 }
 
@@ -913,6 +1007,92 @@ const styles = {
     display: 'flex',
     flexWrap: 'wrap',
     gap: '8px',
+  },
+
+  polecatList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+
+  polecatWrapper: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0',
+  },
+
+  polecatCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    padding: '10px 12px',
+    border: `1px solid ${colors.panelBorder}`,
+    backgroundColor: colors.backgroundDark,
+    fontFamily: '"Share Tech Mono", monospace',
+    color: colors.primary,
+    textAlign: 'left',
+    transition: 'border-color 0.2s ease, background-color 0.2s ease',
+    width: '100%',
+  },
+
+  polecatCardHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+
+  polecatIcon: {
+    fontSize: '1rem',
+  },
+
+  polecatName: {
+    flex: 1,
+    fontSize: '0.85rem',
+    fontWeight: 'bold',
+    letterSpacing: '0.1em',
+  },
+
+  polecatStatus: {
+    fontSize: '0.7rem',
+    letterSpacing: '0.1em',
+    marginLeft: '4px',
+  },
+
+  polecatMail: {
+    fontSize: '0.7rem',
+    color: colors.primaryBright,
+    marginLeft: '8px',
+  },
+
+  expandIcon: {
+    fontSize: '0.6rem',
+    color: colors.primaryDim,
+    marginLeft: 'auto',
+  },
+
+  polecatTask: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    fontSize: '0.7rem',
+    color: colors.idle,
+    marginLeft: '24px',
+  },
+
+  polecatBranch: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    fontSize: '0.65rem',
+    color: colors.primaryDim,
+    marginLeft: '24px',
+  },
+
+  terminalContainer: {
+    borderLeft: `1px solid ${colors.panelBorder}`,
+    borderRight: `1px solid ${colors.panelBorder}`,
+    borderBottom: `1px solid ${colors.panelBorder}`,
+    marginTop: '-1px',
   },
 
   polecatEmpty: {

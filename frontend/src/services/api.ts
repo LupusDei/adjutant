@@ -207,6 +207,18 @@ export const api = {
         body: { rig },
       });
     },
+
+    /**
+     * Get terminal content for a polecat's tmux session.
+     * Returns raw output with ANSI escape codes for xterm.js rendering.
+     */
+    async getTerminal(rig: string, polecat: string): Promise<{
+      content: string;
+      sessionName: string;
+      timestamp: string;
+    }> {
+      return apiFetch(`/agents/${encodeURIComponent(rig)}/${encodeURIComponent(polecat)}/terminal`);
+    },
   },
 
   /**
