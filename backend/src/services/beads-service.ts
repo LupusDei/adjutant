@@ -29,6 +29,8 @@ export interface BeadInfo {
 
 export interface ListBeadsOptions {
   rig?: string;
+  /** Path to rig's directory containing .beads/ - if provided, queries that rig's beads database */
+  rigPath?: string;
   status?: string;
   type?: string;
   limit?: number;
@@ -123,7 +125,10 @@ export async function listBeads(
 ): Promise<BeadsServiceResult<BeadInfo[]>> {
   try {
     const townRoot = resolveTownRoot();
-    const beadsDir = resolveBeadsDir(townRoot);
+
+    // Use rig-specific beads dir if rigPath provided, otherwise town-level
+    const workDir = options.rigPath ?? townRoot;
+    const beadsDir = resolveBeadsDir(workDir);
 
     const args = ["list", "--json"];
 
@@ -159,7 +164,7 @@ export async function listBeads(
       args.push("--limit", requestLimit.toString());
     }
 
-    const result = await execBd<BeadsIssue[]>(args, { cwd: townRoot, beadsDir });
+    const result = await execBd<BeadsIssue[]>(args, { cwd: workDir, beadsDir });
 
     if (!result.success) {
       return {

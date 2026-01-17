@@ -7,6 +7,7 @@
 
 import { Router } from "express";
 import { listBeads } from "../services/beads-service.js";
+import { resolveTownRoot, resolveRigPath } from "../services/gastown-workspace.js";
 import { success, internalError } from "../utils/responses.js";
 
 export const beadsRouter = Router();
@@ -41,8 +42,16 @@ beadsRouter.get("/", async (req, res) => {
   // Default to showing active work (open + in_progress + blocked)
   const status = statusParam ?? "default";
 
+  // Resolve rig path if a specific rig is requested
+  let rigPath: string | undefined;
+  if (rig) {
+    const townRoot = resolveTownRoot();
+    rigPath = resolveRigPath(rig, townRoot) ?? undefined;
+  }
+
   const result = await listBeads({
     ...(rig && { rig }), // Only filter by rig if explicitly requested
+    ...(rigPath && { rigPath }), // Use rig-specific beads database
     ...(typeParam && { type: typeParam }),
     status,
     limit,

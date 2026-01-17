@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { usePolling } from '../../hooks/usePolling';
+import { useRigFilter } from '../../contexts/RigContext';
 import { api } from '../../services/api';
 import type { BeadInfo } from '../../types';
 
@@ -133,15 +134,23 @@ export function BeadsList({ statusFilter, isActive = true }: BeadsListProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
+  // Get selected rig from RigFilter context
+  const { selectedRig } = useRigFilter();
+
   const {
     data: beads,
     loading,
     error,
     refresh,
   } = usePolling<BeadInfo[]>(
-    // No rig filter - show ALL town beads (gastown_boy is dashboard for all of Gas Town)
-    // Filter to task type only - excludes messages, agents, etc.
-    () => api.beads.list({ status: statusFilter, type: 'task', limit: 50 }),
+    // Pass selected rig to fetch from that rig's beads database
+    // When no rig selected (null), fetches from town-level beads
+    () => api.beads.list({
+      status: statusFilter,
+      type: 'task',
+      limit: 50,
+      rig: selectedRig ?? undefined,
+    }),
     {
       interval: 30000,
       enabled: isActive,
@@ -154,10 +163,10 @@ export function BeadsList({ statusFilter, isActive = true }: BeadsListProps) {
     return groupBeadsByRig(beads);
   }, [beads]);
 
-  // Refetch when status filter changes
+  // Refetch when status filter or selected rig changes
   useEffect(() => {
     void refresh();
-  }, [statusFilter, refresh]);
+  }, [statusFilter, selectedRig, refresh]);
 
   const toggleGroup = useCallback((rig: string | null) => {
     setCollapsedGroups(prev => {

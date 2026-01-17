@@ -170,6 +170,45 @@ export async function listRigNames(townRoot: string): Promise<string[]> {
 }
 
 /**
+ * Known external rig paths that aren't subdirectories of townRoot.
+ * Can be extended via GT_RIG_PATHS env var (format: "rigName=/path,rigName2=/path2")
+ */
+const EXTERNAL_RIG_PATHS: Record<string, string> = {
+  gastown_boy: "/Users/will/Projects/Saults/gastown-boy",
+};
+
+/**
+ * Resolves the filesystem path for a rig.
+ * Checks external paths first, then falls back to townRoot/rigName.
+ */
+export function resolveRigPath(rigName: string, townRoot: string): string | null {
+  // Check external rig paths from env
+  const envPaths = process.env["GT_RIG_PATHS"];
+  if (envPaths) {
+    for (const pair of envPaths.split(",")) {
+      const [name, path] = pair.split("=").map((s) => s.trim());
+      if (name === rigName && path && existsSync(path)) {
+        return path;
+      }
+    }
+  }
+
+  // Check known external paths
+  const externalPath = EXTERNAL_RIG_PATHS[rigName];
+  if (externalPath && existsSync(externalPath)) {
+    return externalPath;
+  }
+
+  // Fall back to rig as subdirectory of townRoot
+  const rigPath = join(townRoot, rigName);
+  if (existsSync(rigPath)) {
+    return rigPath;
+  }
+
+  return null;
+}
+
+/**
  * Returns a beads directory path for a given workspace directory,
  * following redirects if present.
  */
