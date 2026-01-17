@@ -202,13 +202,20 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '' }: B
     }
   );
 
-  // Apply search query to filter beads
+  // Exclude message and epic types, then apply search query
   const searchedBeads = useMemo(() => {
     if (!beads) return [];
-    if (!searchQuery.trim()) return beads;
+
+    // Filter out message and epic types
+    const EXCLUDED_TYPES = ['message', 'epic'];
+    const filteredBeads = beads.filter(
+      (bead) => !EXCLUDED_TYPES.includes(bead.type.toLowerCase())
+    );
+
+    if (!searchQuery.trim()) return filteredBeads;
 
     const query = searchQuery.toLowerCase().trim();
-    return beads.filter((bead) => {
+    return filteredBeads.filter((bead) => {
       // Check ID and title (always defined)
       if (fuzzyMatch(query, bead.id).matches) return true;
       if (fuzzyMatch(query, bead.title).matches) return true;
