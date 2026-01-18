@@ -30,22 +30,22 @@ export const beadsRouter = Router();
  *   Default: "default" (active work only)
  * - type: Filter by bead type (e.g., "task", "bug", "feature")
  * - limit: Max results (default: 100)
- * - includeSystem: Set to "true" to include hq- system beads (default: false)
+ * - excludeTown: Set to "true" to exclude hq- town beads (default: false - shows all)
  */
 beadsRouter.get("/", async (req, res) => {
   const rig = req.query["rig"] as string | undefined;
   const statusParam = req.query["status"] as string | undefined;
   const typeParam = req.query["type"] as string | undefined;
   const limitStr = req.query["limit"] as string | undefined;
-  const includeSystem = req.query["includeSystem"] === "true";
+  const excludeTown = req.query["excludeTown"] === "true";
   // Higher default to show low-priority bugs (P3) which sort to the end
   const limit = limitStr ? parseInt(limitStr, 10) : 500;
 
   // Default to showing active work (open + in_progress + blocked)
   const status = statusParam ?? "default";
 
-  // Exclude hq- system beads by default
-  const excludePrefixes = includeSystem ? [] : ["hq-"];
+  // Include hq- town beads by default (gastown_boy is the dashboard for ALL of Gas Town)
+  const excludePrefixes = excludeTown ? ["hq-"] : [];
 
   // If no rig specified, fetch from ALL beads databases
   if (!rig) {

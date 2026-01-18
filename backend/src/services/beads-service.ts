@@ -116,6 +116,7 @@ function loadPrefixMap(): Map<string, string> {
     prefixToSourceMap.set("hq", "town");
     prefixToSourceMap.set("gb", "gastown_boy");
     prefixToSourceMap.set("gt", "gastown");
+    prefixToSourceMap.set("wr", "WritingExperiment");
   }
 
   return prefixToSourceMap;
@@ -278,25 +279,36 @@ export async function listBeads(
 }
 
 /**
- * Lists beads from ALL rig beads databases (excludes town-level hq-* beads).
- * Used when no specific rig is selected to show a unified view.
+ * Lists beads from town AND rig beads databases.
+ * IMPORTANT: gastown_boy is the dashboard for ALL of Gas Town.
+ * By default, this shows town-level hq-* beads (the unified view).
  */
 export async function listAllBeads(
   options: Omit<ListBeadsOptions, "rig" | "rigPath"> = {}
 ): Promise<BeadsServiceResult<BeadInfo[]>> {
   try {
+    const townRoot = resolveTownRoot();
     const beadsDirs = await listAllBeadsDirs();
 
-    // Only include known rig databases (exclude town-level and user-level beads)
-    const knownRigs = new Set(["gastown", "gastown_boy"]);
-    const rigDirs = beadsDirs.filter((dirInfo) =>
-      dirInfo.rig !== null && knownRigs.has(dirInfo.rig)
-    );
+    // Include town beads (hq-*) - this is the primary source
+    const townBeadsDir = join(townRoot, ".beads");
+    const databasesToQuery: Array<{ workDir: string; beadsDir: string; source: string }> = [
+      { workDir: townRoot, beadsDir: townBeadsDir, source: "town" },
+    ];
 
-    // Fetch from all rig databases in parallel
-    const fetchPromises = rigDirs.map(async (dirInfo) => {
-      const source = dirInfo.rig!;
-      return fetchBeadsFromDatabase(dirInfo.workDir, dirInfo.path, source, options);
+    // Also include all discovered rig databases for rig-specific beads
+    const rigDirs = beadsDirs.filter((dirInfo) => dirInfo.rig !== null);
+    for (const dirInfo of rigDirs) {
+      databasesToQuery.push({
+        workDir: dirInfo.workDir,
+        beadsDir: dirInfo.path,
+        source: dirInfo.rig!,
+      });
+    }
+
+    // Fetch from all databases in parallel (town + rigs)
+    const fetchPromises = databasesToQuery.map(async (db) => {
+      return fetchBeadsFromDatabase(db.workDir, db.beadsDir, db.source, options);
     });
 
     const results = await Promise.all(fetchPromises);
