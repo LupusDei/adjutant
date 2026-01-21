@@ -79,10 +79,25 @@ function resolveRigRoot(): string {
   return `${townRoot}/gastown_boy`;
 }
 
-// Cache the resolved paths at module load time
-const GT_TOWN_ROOT = resolveTownRoot();
-const GT_RIG_ROOT = resolveRigRoot();
-const GT_BIN = resolveGtBinary();
+// Lazy resolution - only resolve when first needed to avoid startup crashes
+let _gtTownRoot: string | null = null;
+let _gtRigRoot: string | null = null;
+let _gtBin: string | null = null;
+
+function getGtTownRoot(): string {
+  if (!_gtTownRoot) _gtTownRoot = resolveTownRoot();
+  return _gtTownRoot;
+}
+
+function getGtRigRoot(): string {
+  if (!_gtRigRoot) _gtRigRoot = resolveRigRoot();
+  return _gtRigRoot;
+}
+
+function getGtBin(): string {
+  if (!_gtBin) _gtBin = resolveGtBinary();
+  return _gtBin;
+}
 
 /**
  * Executes a GT command and returns the result.
@@ -95,10 +110,10 @@ export async function execGt<T = unknown>(
   args: string[],
   options: GtExecOptions = {}
 ): Promise<GtResult<T>> {
-  const { cwd = GT_TOWN_ROOT, timeout = DEFAULT_TIMEOUT, parseJson = true, env } = options;
+  const { cwd = getGtTownRoot(), timeout = DEFAULT_TIMEOUT, parseJson = true, env } = options;
 
   return new Promise((resolve) => {
-    const child = spawn(GT_BIN, args, {
+    const child = spawn(getGtBin(), args, {
       cwd,
       timeout,
       env: { ...process.env, ...env },
@@ -311,7 +326,7 @@ export const gt = {
     async inbox<T = unknown>(options?: GtExecOptions): Promise<GtResult<T>> {
       return execGt<T>(['mail', 'inbox', '--json'], {
         ...options,
-        cwd: GT_RIG_ROOT,
+        cwd: getGtRigRoot(),
       });
     },
 
@@ -325,7 +340,7 @@ export const gt = {
     ): Promise<GtResult<T>> {
       return execGt<T>(['mail', 'read', messageId, '--json'], {
         ...options,
-        cwd: GT_RIG_ROOT,
+        cwd: getGtRigRoot(),
       });
     },
 
@@ -372,7 +387,7 @@ export const gt = {
       return execGt<string>(args, {
         ...options,
         parseJson: false,
-        cwd: GT_RIG_ROOT,
+        cwd: getGtRigRoot(),
         env: {
           ...process.env,
           ...options?.env,
@@ -392,7 +407,7 @@ export const gt = {
       return execGt<string>(['mail', 'mark-read', messageId], {
         ...options,
         parseJson: false,
-        cwd: GT_RIG_ROOT,
+        cwd: getGtRigRoot(),
       });
     },
 
@@ -406,7 +421,7 @@ export const gt = {
     ): Promise<GtResult<T>> {
       return execGt<T>(['mail', 'thread', threadId, '--json'], {
         ...options,
-        cwd: GT_RIG_ROOT,
+        cwd: getGtRigRoot(),
       });
     },
   },

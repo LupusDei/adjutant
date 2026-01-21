@@ -63,6 +63,7 @@ export function resolveTownRoot(): string {
   const home = process.env["HOME"];
   const homeGt = home ? join(home, "gt") : null;
   const homeGtIsTown = homeGt && existsSync(join(homeGt, "mayor", "town.json"));
+  const homeGtExists = homeGt && existsSync(homeGt);
 
   // 1. Explicit environment variable
   const envRoot = process.env["GT_TOWN_ROOT"];
@@ -90,8 +91,14 @@ export function resolveTownRoot(): string {
     return detected;
   }
 
-  // 3. Fallback to ~/gt if it exists
+  // 3. Fallback to ~/gt if it has the proper town structure
   if (homeGtIsTown) {
+    cachedTownRoot = homeGt!;
+    return cachedTownRoot;
+  }
+
+  // 4. Fallback to ~/gt if it exists as a directory (lenient mode for partial setups)
+  if (homeGtExists) {
     cachedTownRoot = homeGt!;
     return cachedTownRoot;
   }
