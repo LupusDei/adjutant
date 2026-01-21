@@ -8,7 +8,7 @@ export default defineConfig({
   server: {
     port: 3000,
     // Allow ngrok and other tunneling services
-    allowedHosts: [".ngrok-free.app", ".ngrok.io", ".loca.lt", ".localhost.run"],
+    allowedHosts: true,
     proxy: {
       "/api": {
         target: "http://localhost:3001",
