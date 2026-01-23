@@ -28,3 +28,5 @@ state.json
 
 # Claude Code
 .claude/
+
+backend/.audio-cache/

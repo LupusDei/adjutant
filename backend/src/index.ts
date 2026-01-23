@@ -1,7 +1,9 @@
+import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, convoysRouter, mailRouter, powerRouter, statusRouter, tunnelRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, convoysRouter, mailRouter, powerRouter, statusRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { logInfo } from "./utils/index.js";
+import { startCacheCleanupScheduler } from "./services/audio-cache.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 3001;
@@ -31,6 +33,7 @@ app.use("/api/mail", mailRouter);
 app.use("/api/power", powerRouter);
 app.use("/api/status", statusRouter);
 app.use("/api/tunnel", tunnelRouter);
+app.use("/api/voice", voiceRouter);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
@@ -38,4 +41,7 @@ app.get("/health", (_req, res) => {
 
 app.listen(PORT, () => {
   logInfo("backend server listening", { port: PORT });
+
+  // Start audio cache cleanup scheduler (T056)
+  startCacheCleanupScheduler();
 });

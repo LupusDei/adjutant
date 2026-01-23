@@ -1,0 +1,42 @@
+/* OverseerToggle styles */
+
+.overseer-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  background: transparent;
+  border: 1px solid var(--pipboy-green-dim, #00aa00);
+  color: var(--pipboy-green-dim, #00aa00);
+  font-family: inherit;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-transform: uppercase;
+}
+
+.overseer-toggle:hover {
+  border-color: var(--pipboy-green, #00ff00);
+  color: var(--pipboy-green, #00ff00);
+}
+
+.overseer-toggle-active {
+  background: var(--pipboy-green-dim, #00aa00);
+  border-color: var(--pipboy-green, #00ff00);
+  color: var(--pipboy-bg, #0a0a0a);
+  text-shadow: none;
+}
+
+.overseer-toggle-active:hover {
+  background: var(--pipboy-green, #00ff00);
+}
+
+.overseer-toggle-icon {
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.overseer-toggle-label {
+  font-weight: 500;
+}

@@ -13,6 +13,8 @@ export interface BeadsListProps {
   isActive?: boolean;
   /** Search query for fuzzy filtering */
   searchQuery?: string;
+  /** Filter to overseer-relevant beads only */
+  overseerView?: boolean;
 }
 
 /** Group of beads from a source database */
@@ -177,7 +179,7 @@ function groupBeadsBySource(beads: BeadInfo[]): BeadGroup[] {
   return groups;
 }
 
-export function BeadsList({ statusFilter, isActive = true, searchQuery = '' }: BeadsListProps) {
+export function BeadsList({ statusFilter, isActive = true, searchQuery = '', overseerView = false }: BeadsListProps) {
   const [actionInProgress, setActionInProgress] = useState<{ id: string; type: ActionType } | null>(null);
   const [actionResult, setActionResult] = useState<{ id: string; type: ActionType; success: boolean } | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -202,15 +204,81 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '' }: B
     }
   );
 
-  // Exclude message and epic types, then apply search query
+  // Exclude message and epic types, then apply search query and overseer filter
   const searchedBeads = useMemo(() => {
     if (!beads) return [];
 
-    // Filter out non-actionable bead types
+    // Base excluded types (always filtered out)
     const EXCLUDED_TYPES = ['message', 'epic', 'convoy', 'agent'];
-    const filteredBeads = beads.filter(
+
+    // Additional type exclusions for overseer view (Gas Town operations)
+    const OVERSEER_EXCLUDED_TYPES = [
+      'role',
+      'witness',
+      'wisp',
+      'infrastructure',
+      'coordination',
+      'sync',
+    ];
+
+    // Sources to exclude in overseer view (internal/operational)
+    const OVERSEER_EXCLUDED_SOURCES = [
+      'witness',
+      'wisp',
+    ];
+
+    // Title patterns that indicate Gas Town operational beads
+    const OVERSEER_EXCLUDED_TITLE_PATTERNS = [
+      'witness',
+      'wisp',
+      'internal',
+      'sync',
+      'coordination',
+      'mail delivery',
+      'polecat',
+      'crew assignment',
+      'rig status',
+      'heartbeat',
+      'health check',
+    ];
+
+    let filteredBeads = beads.filter(
       (bead) => !EXCLUDED_TYPES.includes(bead.type.toLowerCase())
     );
+
+    // Apply overseer filter: hide Gas Town operational beads
+    if (overseerView) {
+      filteredBeads = filteredBeads.filter((bead) => {
+        const typeLower = bead.type.toLowerCase();
+        const sourceLower = (bead.source ?? '').toLowerCase();
+        const titleLower = bead.title.toLowerCase();
+        const idLower = bead.id.toLowerCase();
+        const assigneeLower = (bead.assignee ?? '').toLowerCase();
+        const labelsLower = (bead.labels ?? []).map(l => l.toLowerCase());
+
+        // Exclude any bead with "wisp" anywhere in its data
+        if (typeLower.includes('wisp')) return false;
+        if (sourceLower.includes('wisp')) return false;
+        if (titleLower.includes('wisp')) return false;
+        if (idLower.includes('wisp')) return false;
+        if (assigneeLower.includes('wisp')) return false;
+        if (labelsLower.some(label => label.includes('wisp'))) return false;
+
+        // Exclude operational types
+        if (OVERSEER_EXCLUDED_TYPES.includes(typeLower)) return false;
+
+        // Exclude beads from operational sources
+        if (OVERSEER_EXCLUDED_SOURCES.some(src => sourceLower.includes(src))) return false;
+
+        // Exclude beads with operational title patterns
+        if (OVERSEER_EXCLUDED_TITLE_PATTERNS.some(pattern => titleLower.includes(pattern))) return false;
+
+        // Exclude merge beads
+        if (titleLower.startsWith('merge:')) return false;
+
+        return true;
+      });
+    }
 
     if (!searchQuery.trim()) return filteredBeads;
 
@@ -223,7 +291,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '' }: B
       if (bead.assignee && fuzzyMatch(query, bead.assignee).matches) return true;
       return false;
     });
-  }, [beads, searchQuery]);
+  }, [beads, searchQuery, overseerView]);
 
   // Group beads by source database
   const beadGroups = useMemo(() => {

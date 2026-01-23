@@ -1,6 +1,7 @@
-import { useState, type CSSProperties, type FormEvent } from 'react';
+import { useState, useCallback, type CSSProperties, type FormEvent } from 'react';
 import type { SendMessageRequest, MessagePriority } from '../../types';
 import { RecipientSelector } from './RecipientSelector';
+import { VoiceMicButton } from '../voice';
 
 /**
  * Props for the ComposeMessage component.
@@ -45,6 +46,16 @@ export function ComposeMessage({
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState('');
   const [priority, setPriority] = useState<MessagePriority>(2);
+
+  // Handle voice transcript - append to body with smart spacing
+  const handleVoiceTranscript = useCallback((text: string) => {
+    setBody((prev) => {
+      if (!prev.trim()) return text;
+      // Add space if previous text doesn't end with whitespace
+      const separator = prev.endsWith(' ') || prev.endsWith('\n') ? '' : ' ';
+      return prev + separator + text;
+    });
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -166,9 +177,16 @@ export function ComposeMessage({
 
       {/* Body field */}
       <div style={styles.fieldGroupExpand}>
-        <label style={styles.label} htmlFor="compose-body">
-          MESSAGE:
-        </label>
+        <div style={styles.labelRow}>
+          <label style={styles.label} htmlFor="compose-body">
+            MESSAGE:
+          </label>
+          <VoiceMicButton
+            onTranscript={handleVoiceTranscript}
+            disabled={sending}
+            className="compose-voice-mic"
+          />
+        </div>
         <textarea
           id="compose-body"
           style={styles.textarea}
@@ -331,6 +349,13 @@ const styles = {
     fontSize: '0.75rem',
     color: colors.primaryDim,
     letterSpacing: '0.1em',
+  },
+
+  labelRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
   },
 
   input: {

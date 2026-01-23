@@ -15,12 +15,24 @@ export interface GroupedMessage extends Message {
   threadCount: number;
 }
 
+/** Notification info for new messages */
+export interface NewMessageNotification {
+  id: string;
+  subject: string;
+  from: string;
+  priority: number;
+}
+
 /** Options for the useMail hook. */
 export interface UseMailOptions {
   /** Polling interval in milliseconds. Default: 60000 (1 minute) */
   pollInterval?: number;
   /** Whether polling is enabled. Default: true */
   enabled?: boolean;
+  /** Callback when new unread messages arrive (for audio notifications) - T044 */
+  onNewMessage?: (notification: NewMessageNotification) => void;
+  /** Enable overseer view filter (shows only mayor/overseer related messages) */
+  overseerView?: boolean;
 }
 
 /** Return type for the useMail hook. */
@@ -78,8 +90,23 @@ const DEFAULT_POLL_INTERVAL = 60000;
  * const { messages, loading, sendMessage, markAsRead } = useMail();
  * ```
  */
+/**
+ * Check if a message is relevant to the overseer.
+ * Matches messages where from/to contains "mayor" or "overseer".
+ */
+function isOverseerRelevant(msg: Message): boolean {
+  const fromLower = msg.from.toLowerCase();
+  const toLower = msg.to.toLowerCase();
+  return (
+    fromLower.includes('mayor') ||
+    fromLower.includes('overseer') ||
+    toLower.includes('mayor') ||
+    toLower.includes('overseer')
+  );
+}
+
 export function useMail(options: UseMailOptions = {}): UseMailResult {
-  const { pollInterval = DEFAULT_POLL_INTERVAL, enabled = true } = options;
+  const { pollInterval = DEFAULT_POLL_INTERVAL, enabled = true, onNewMessage, overseerView = false } = options;
 
   // Message list state
   const [messages, setMessages] = useState<Message[]>([]);
@@ -100,6 +127,10 @@ export function useMail(options: UseMailOptions = {}): UseMailResult {
   // Track mounted state
   const mountedRef = useRef(true);
 
+  // Track seen message IDs for new message detection - T044
+  const seenMessageIdsRef = useRef(new Set<string>());
+  const isInitialFetchRef = useRef(true);
+
   // Fetch messages from API with optional retry logic
   const fetchMessages = useCallback(async (retries = 0, retryDelay = 1000) => {
     if (!mountedRef.current) return;
@@ -112,6 +143,24 @@ export function useMail(options: UseMailOptions = {}): UseMailResult {
         const response = await api.mail.list({ all: true });
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
         if (mountedRef.current) {
+          // T044: Detect new unread messages for audio notifications
+          if (!isInitialFetchRef.current && onNewMessage) {
+            for (const msg of response.items) {
+              if (!msg.read && !seenMessageIdsRef.current.has(msg.id)) {
+                onNewMessage({
+                  id: msg.id,
+                  subject: msg.subject,
+                  from: msg.from,
+                  priority: msg.priority,
+                });
+              }
+            }
+          }
+
+          // Update seen IDs
+          seenMessageIdsRef.current = new Set(response.items.map((m) => m.id));
+          isInitialFetchRef.current = false;
+
           setMessages(response.items);
           setTotal(response.total);
           setHasMore(response.hasMore);
@@ -134,7 +183,7 @@ export function useMail(options: UseMailOptions = {}): UseMailResult {
       setError(lastError);
       setLoading(false);
     }
-  }, []);
+  }, [onNewMessage]);
 
   // Initial fetch and polling
   useEffect(() => {
@@ -251,10 +300,16 @@ export function useMail(options: UseMailOptions = {}): UseMailResult {
     setSelectedError(null);
   }, []);
 
-  // Compute unread count
+  // Apply overseer filter if enabled
+  const filteredMessages = useMemo(
+    () => (overseerView ? messages.filter(isOverseerRelevant) : messages),
+    [messages, overseerView]
+  );
+
+  // Compute unread count (respects overseer filter)
   const unreadCount = useMemo(
-    () => messages.filter((msg) => !msg.read).length,
-    [messages]
+    () => filteredMessages.filter((msg) => !msg.read).length,
+    [filteredMessages]
   );
 
   // Compute thread messages for selected message
@@ -266,10 +321,11 @@ export function useMail(options: UseMailOptions = {}): UseMailResult {
   }, [messages, selectedMessage?.threadId]);
 
   // Group messages by thread, showing only the most recent message per thread
+  // Uses filteredMessages to respect overseer filter
   const groupedMessages = useMemo((): GroupedMessage[] => {
     const threadMap = new Map<string, { messages: Message[]; latest: Message }>();
 
-    for (const msg of messages) {
+    for (const msg of filteredMessages) {
       const existing = threadMap.get(msg.threadId);
       if (existing) {
         existing.messages.push(msg);
@@ -289,7 +345,7 @@ export function useMail(options: UseMailOptions = {}): UseMailResult {
         threadCount: threadMsgs.length,
       }))
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [messages]);
+  }, [filteredMessages]);
 
   return {
     messages,

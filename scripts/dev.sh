@@ -15,15 +15,26 @@
 
 set -e
 
+# Load environment variables from backend/.env if it exists
+if [ -f "backend/.env" ]; then
+    export $(grep -v '^#' backend/.env | xargs)
+fi
+
 # Colors
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# Get GT directory from argument or default to ~/gt
-GT_DIR="${1:-$HOME/gt}"
+# Get GT directory from GT_TOWN_ROOT env var, argument, or default to ~/gt
+if [ -n "$GT_TOWN_ROOT" ]; then
+    GT_DIR="$GT_TOWN_ROOT"
+    echo "Using GT directory from GT_TOWN_ROOT: $GT_DIR"
+else
+    GT_DIR="${1:-$HOME/gt}"
+    echo "Using GT directory from argument: $GT_DIR"
+fi
 
-# Expand tilde if present
-GT_DIR="${GT_DIR/#\~/$HOME}"
+    # Expand tilde if present
+    GT_DIR="${GT_DIR/#\~/$HOME}"
 
 # Validate directory exists
 if [ ! -d "$GT_DIR" ]; then

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { CSSProperties } from 'react';
 import { MailList } from './MailList';
 import { MailDetail } from './MailDetail';
@@ -6,6 +6,7 @@ import { ComposeMessage } from './ComposeMessage';
 import { useMail } from '../../hooks/useMail';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useRigFilteredItems } from '../../contexts/RigContext';
+import { OverseerToggle } from '../shared/OverseerToggle';
 import type { SendMessageRequest } from '../../types';
 
 /** Mobile navigation view mode */
@@ -28,6 +29,13 @@ export interface MailViewProps {
  * Uses the useMail hook for state management including selection, loading, and errors.
  */
 export function MailView({ className = '', isActive = true }: MailViewProps) {
+  // Overseer view filter state
+  const [overseerView, setOverseerView] = useState(false);
+
+  const handleOverseerToggle = useCallback((enabled: boolean) => {
+    setOverseerView(enabled);
+  }, []);
+
   const {
     loading,
     error,
@@ -43,7 +51,7 @@ export function MailView({ className = '', isActive = true }: MailViewProps) {
     clearSendError,
     threadMessages,
     groupedMessages,
-  } = useMail({ enabled: isActive });
+  } = useMail({ enabled: isActive, overseerView });
 
   // Responsive: detect mobile viewport
   const isMobile = useIsMobile();
@@ -148,6 +156,10 @@ export function MailView({ className = '', isActive = true }: MailViewProps) {
           {unreadCount > 0 && (
             <span style={styles.unreadBadge}>{unreadCount} UNREAD</span>
           )}
+          <OverseerToggle
+            storageKey="mail-overseer-view"
+            onChange={handleOverseerToggle}
+          />
         </div>
         <div style={styles.headerRight}>
           <button

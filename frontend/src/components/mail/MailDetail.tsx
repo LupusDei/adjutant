@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { Message } from '../../types';
 import { useIsMobile } from '../../hooks/useMediaQuery';
+import { VoicePlayButton } from '../voice';
 
 /**
  * Props for the MailDetail component.
@@ -167,6 +168,13 @@ export function MailDetail({
         <div style={styles.footerLeft}>
           {message.pinned && <span style={styles.statusBadge}>📌 PINNED</span>}
           {message.replyTo && <span style={styles.statusBadge}>↩ REPLY</span>}
+          {/* T024: Voice playback button */}
+          <VoicePlayButton
+            text={message.body || ''}
+            agentId={message.from}
+            compact
+            showProgress={false}
+          />
         </div>
         <div style={styles.footerRight}>
           {onReply && (

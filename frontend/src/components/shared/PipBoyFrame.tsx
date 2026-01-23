@@ -1,4 +1,5 @@
 import type { ReactNode, CSSProperties } from 'react';
+import { MasterMuteToggle } from '../voice';
 
 /**
  * Props for the PipBoyFrame layout component
@@ -14,6 +15,10 @@ export interface PipBoyFrameProps {
   connectionError?: boolean;
   /** Optional error message for tooltip */
   errorMessage?: string;
+  /** T045: Whether audio is muted */
+  isMuted?: boolean;
+  /** T045: Callback when mute toggle is clicked */
+  onToggleMute?: () => void;
 }
 
 /**
@@ -26,22 +31,34 @@ export function PipBoyFrame({
   title,
   className = '',
   connectionError = false,
-  errorMessage = 'CONNECTION LOST'
+  errorMessage = 'CONNECTION LOST',
+  isMuted,
+  onToggleMute,
 }: PipBoyFrameProps) {
+  const showMuteToggle = isMuted !== undefined && onToggleMute !== undefined;
+
   return (
     <div style={styles.container} className={className}>
       <div style={styles.outerFrame}>
         <div style={styles.innerFrame}>
-          {(title != null || connectionError) && (
+          {(title != null || connectionError || showMuteToggle) && (
             <header style={styles.header}>
               <div style={styles.headerRow}>
                 {title && <h1 style={styles.title}>{title}</h1>}
-                {connectionError && (
-                  <div style={styles.errorIndicator} className="pulse-error" title={errorMessage}>
-                    <span style={styles.errorIcon}>⚠</span>
-                    <span style={styles.errorText}>{errorMessage}</span>
-                  </div>
-                )}
+                <div style={styles.headerControls}>
+                  {showMuteToggle && (
+                    <MasterMuteToggle
+                      isMuted={isMuted}
+                      onToggle={onToggleMute}
+                    />
+                  )}
+                  {connectionError && (
+                    <div style={styles.errorIndicator} className="pulse-error" title={errorMessage}>
+                      <span style={styles.errorIcon}>⚠</span>
+                      <span style={styles.errorText}>{errorMessage}</span>
+                    </div>
+                  )}
+                </div>
               </div>
               <div style={styles.headerLine} />
             </header>
@@ -107,6 +124,12 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: '16px',
+  },
+
+  headerControls: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
   },
 
   title: {

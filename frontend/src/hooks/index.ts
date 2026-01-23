@@ -15,3 +15,12 @@ export { useDashboardCrew } from "./useDashboardCrew";
 
 export { useFuzzySearch, fuzzyMatch, fuzzyMatchFields } from "./useFuzzySearch";
 export type { FuzzyMatchResult, UseFuzzySearchOptions, UseFuzzySearchResult } from "./useFuzzySearch";
+
+export { useVoicePlayer } from "./useVoicePlayer";
+export type { UseVoicePlayerReturn } from "./useVoicePlayer";
+
+export { useVoiceInput } from "./useVoiceInput";
+export type { UseVoiceInputReturn, VoiceInputState } from "./useVoiceInput";
+
+export { useAudioNotifications } from "./useAudioNotifications";
+export type { UseAudioNotificationsReturn, NotificationItem, NotificationPriority } from "./useAudioNotifications";

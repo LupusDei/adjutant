@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, type CSSProperties } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { ThemeId } from '../../App';
+import { NotificationSettings, VoiceConfigPanel } from '../voice';
 
 interface TunnelStatusData {
   state: 'stopped' | 'starting' | 'running' | 'error';
@@ -336,7 +337,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                 onClick={() => setTheme(t.id)}
               >
                 <div style={{ ...styles.themePreview, backgroundColor: t.color }} />
-                <span style={{ 
+                <span style={{
                   ...styles.themeLabel,
                   color: theme === t.id ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)'
                 }}>
@@ -345,6 +346,17 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
               </button>
             ))}
           </div>
+        </section>
+
+        {/* T052: Voice Settings Section */}
+        <section style={styles.section}>
+          <h2 style={styles.sectionTitle}>AUDIO SETTINGS</h2>
+          <NotificationSettings />
+        </section>
+
+        <section style={styles.section}>
+          <h2 style={styles.sectionTitle}>VOICE CONFIGURATION</h2>
+          <VoiceConfigPanel />
         </section>
       </div>
 

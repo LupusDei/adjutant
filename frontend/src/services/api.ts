@@ -13,6 +13,13 @@ import type {
   Convoy,
   BeadInfo,
 } from '../types';
+import type {
+  SynthesizeRequest,
+  SynthesizeResponse,
+  TranscribeResponse,
+  VoiceConfigResponse,
+  VoiceStatus,
+} from '../types/voice';
 
 // =============================================================================
 // Configuration
@@ -255,6 +262,64 @@ export const api = {
 
       const query = searchParams.toString();
       return apiFetch(`/beads${query ? `?${query}` : ''}`);
+    },
+  },
+
+  /**
+   * Voice operations - T020
+   */
+  voice: {
+    /**
+     * Synthesize text to speech.
+     */
+    async synthesize(request: SynthesizeRequest): Promise<ApiResponse<SynthesizeResponse>> {
+      const result = await apiFetch<SynthesizeResponse>('/voice/synthesize', {
+        method: 'POST',
+        body: request,
+      });
+      return { success: true, data: result, timestamp: new Date().toISOString() };
+    },
+
+    /**
+     * Get the audio URL for a filename.
+     */
+    getAudioUrl(filename: string): string {
+      const base = (import.meta.env['VITE_API_URL'] as string | undefined) ?? '/api';
+      return `${base}/voice/audio/${encodeURIComponent(filename)}`;
+    },
+
+    /**
+     * Get voice configuration.
+     */
+    async getConfig(): Promise<VoiceConfigResponse> {
+      return apiFetch('/voice/config');
+    },
+
+    /**
+     * Check voice service status.
+     */
+    async getStatus(): Promise<VoiceStatus> {
+      return apiFetch('/voice/status');
+    },
+
+    /**
+     * Transcribe audio to text.
+     */
+    async transcribe(
+      audioData: Uint8Array,
+      mimeType: string
+    ): Promise<ApiResponse<TranscribeResponse>> {
+      const url = `${API_BASE_URL}/voice/transcribe`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': mimeType,
+        },
+        body: audioData,
+      });
+
+      const json = (await response.json()) as ApiResponse<TranscribeResponse>;
+      return json;
     },
   },
 };

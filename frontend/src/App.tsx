@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { BeadsView } from "./components/beads/BeadsView";
+import { MayorChat } from "./components/chat/MayorChat";
 import { ConvoysView } from "./components/convoys/ConvoysView";
 import { CrewStats } from "./components/crew/CrewStats";
 import { MailView } from "./components/mail/MailView";
+import { OverseerNotificationStatus } from "./components/notifications";
 import { NuclearPowerButton } from "./components/power/NuclearPowerButton";
 import { SettingsView } from "./components/settings/SettingsView";
 import { CRTScreen } from "./components/shared/CRTScreen";
@@ -13,7 +15,7 @@ import { DashboardView } from "./components/dashboard/OverviewDashboard";
 
 export type ThemeId = 'green' | 'red' | 'blue' | 'tan' | 'pink' | 'purple';
 
-type TabId = "dashboard" | "mail" | "convoys" | "crew" | "beads" | "settings";
+type TabId = "dashboard" | "mail" | "chat" | "convoys" | "crew" | "beads" | "settings";
 
 interface Tab {
   id: TabId;
@@ -24,6 +26,7 @@ interface Tab {
 const TABS: Tab[] = [
   { id: "dashboard", label: "OVERVIEW", icon: "📊" },
   { id: "mail", label: "MAIL", icon: "📧" },
+  { id: "chat", label: "CHAT", icon: "💬" },
   { id: "convoys", label: "CONVOYS", icon: "🚚" },
   { id: "crew", label: "CREW", icon: "👥" },
   { id: "beads", label: "BEADS", icon: "📿" },
@@ -67,6 +70,7 @@ function App() {
           <header className="app-header">
             <h1 className="crt-glow">GASTOWN-BOY</h1>
             <div className="header-controls">
+              <OverseerNotificationStatus />
               <RigFilter />
               <NuclearPowerButton comingSoon={true} />
             </div>
@@ -101,6 +105,13 @@ function App() {
               aria-hidden={activeTab !== "mail"}
             >
               <MailView isActive={activeTab === "mail"} />
+            </section>
+            <section
+              className="tab-view"
+              hidden={activeTab !== "chat"}
+              aria-hidden={activeTab !== "chat"}
+            >
+              <MayorChat isActive={activeTab === "chat"} />
             </section>
             <section
               className="tab-view"

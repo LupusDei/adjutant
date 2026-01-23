@@ -1,3 +1,4 @@
 prefix: gb
+issue-prefix: gb
 sync-branch: "beads-sync-gastown_boy"
 daemon-interval: "30s"

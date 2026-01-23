@@ -1,5 +1,6 @@
-import { useState, type CSSProperties } from 'react';
+import { useState, useCallback, type CSSProperties } from 'react';
 import { BeadsList, type BeadsStatusFilter } from './BeadsList';
+import { OverseerToggle } from '../shared/OverseerToggle';
 
 export interface BeadsViewProps {
   /** Whether this tab is currently active */
@@ -11,12 +12,24 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
   const [statusFilter, setStatusFilter] = useState<BeadsStatusFilter>('default');
   const [searchInput, setSearchInput] = useState('');
 
+  // Overseer view filter state
+  const [overseerView, setOverseerView] = useState(false);
+
+  const handleOverseerToggle = useCallback((enabled: boolean) => {
+    setOverseerView(enabled);
+  }, []);
+
   return (
     <div style={styles.container}>
       <header style={styles.header}>
         <h2 style={styles.title} className="crt-glow">BEADS TRACKER</h2>
 
         <div style={styles.controls}>
+          <OverseerToggle
+            storageKey="beads-overseer-view"
+            onChange={handleOverseerToggle}
+          />
+
           {/* Search Input */}
           <div style={styles.searchContainer}>
             <input
@@ -55,7 +68,7 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
           </select>
         </div>
       </header>
-      <BeadsList statusFilter={statusFilter} isActive={isActive} searchQuery={searchInput} />
+      <BeadsList statusFilter={statusFilter} isActive={isActive} searchQuery={searchInput} overseerView={overseerView} />
     </div>
   );
 }

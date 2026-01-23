@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import type { CSSProperties } from 'react';
 import { api } from '../../services/api';
 import { useIsMobile } from '../../hooks/useMediaQuery';
+import { VoiceMicButton } from '../voice';
 
 /**
  * Collapsible Quick Input component for sending direct messages to the Mayor.
@@ -21,6 +22,16 @@ export function QuickInput() {
     api.mail.getIdentity()
       .then(setIdentity)
       .catch(() => setIdentity('overseer'));
+  }, []);
+
+  // Handle voice transcript - append to text with smart spacing
+  const handleVoiceTranscript = useCallback((transcript: string) => {
+    setText((prev) => {
+      if (!prev.trim()) return transcript;
+      // Add space if previous text doesn't end with whitespace
+      const separator = prev.endsWith(' ') || prev.endsWith('\n') ? '' : ' ';
+      return prev + separator + transcript;
+    });
   }, []);
 
   // Auto-resize textarea when expanded
@@ -133,6 +144,11 @@ export function QuickInput() {
           disabled={sending}
         />
         <div style={styles.actions}>
+          <VoiceMicButton
+            onTranscript={handleVoiceTranscript}
+            disabled={sending}
+            className="quick-input-voice-mic"
+          />
           <button
             onClick={() => void handleSend()}
             disabled={!text.trim() || sending}
@@ -285,6 +301,8 @@ const styles = {
   actions: {
     display: 'flex',
     justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: '8px',
   },
 
   sendButton: {
