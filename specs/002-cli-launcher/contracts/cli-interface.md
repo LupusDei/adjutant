@@ -1,4 +1,4 @@
-# CLI Interface Contract: gt-boy
+# CLI Interface Contract: adjutant
 
 **Feature**: 002-cli-launcher
 **Version**: 1.0.0
@@ -7,14 +7,14 @@
 ## Command Synopsis
 
 ```
-gt-boy [options]
-gt-boy --help
-gt-boy --version
+adjutant [options]
+adjutant --help
+adjutant --version
 ```
 
 ## Description
 
-Launches the gastown-boy UI from a gastown directory. Starts both the backend API server and frontend development server, then opens the UI in the default browser.
+Launches the adjutant UI from a gastown directory. Starts both the backend API server and frontend development server, then opens the UI in the default browser.
 
 ## Options
 
@@ -30,9 +30,9 @@ Launches the gastown-boy UI from a gastown directory. Starts both the backend AP
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `GT_BOY_PORT` | Frontend server port | 5173 |
-| `GT_BOY_BACKEND_PORT` | Backend API server port | 3001 |
-| `GT_BOY_NO_BROWSER` | Skip browser open (set to "1" or "true") | false |
+| `ADJUTANT_PORT` | Frontend server port | 5173 |
+| `ADJUTANT_BACKEND_PORT` | Backend API server port | 3001 |
+| `ADJUTANT_NO_BROWSER` | Skip browser open (set to "1" or "true") | false |
 
 Environment variables are overridden by command-line options.
 
@@ -46,7 +46,7 @@ Environment variables are overridden by command-line options.
 | 3 | `BACKEND_START_FAILED` | Backend server failed to start |
 | 4 | `FRONTEND_START_FAILED` | Frontend server failed to start |
 | 5 | `GT_NOT_FOUND` | `gt` command not found in PATH |
-| 6 | `ALREADY_RUNNING` | gt-boy already running for this directory |
+| 6 | `ALREADY_RUNNING` | adjutant already running for this directory |
 
 ## Signals
 
@@ -62,8 +62,8 @@ Shutdown timeout is 5 seconds. If servers don't stop gracefully, they are force-
 ### Startup Messages
 
 ```
-gt-boy v1.0.0
-Starting gastown-boy from /path/to/town...
+adjutant v1.0.0
+Starting adjutant from /path/to/town...
 
 [backend]  Starting on port 3001...
 [backend]  Ready at http://localhost:3001
@@ -87,11 +87,11 @@ Goodbye!
 
 ```
 Error: Not a gastown directory
-  Run gt-boy from a directory containing a gastown town or rig.
+  Run adjutant from a directory containing a gastown town or rig.
   Expected to find: .beads/ directory
 
 Error: Port 5173 is already in use
-  Try: gt-boy --port 5174
+  Try: adjutant --port 5174
   Or check what's using the port: lsof -i :5173
 
 Error: gt command not found
@@ -106,49 +106,49 @@ Error: gt command not found
 ```bash
 # Start from a gastown directory
 cd ~/gt/my-project
-gt-boy
+adjutant
 ```
 
 ### Custom Ports
 
 ```bash
 # Use different ports to avoid conflicts
-gt-boy --port 4000 --backend-port 4001
+adjutant --port 4000 --backend-port 4001
 ```
 
 ### Headless Mode
 
 ```bash
 # Start servers without opening browser
-gt-boy --no-browser
+adjutant --no-browser
 ```
 
 ### Using Environment Variables
 
 ```bash
 # Set defaults via environment
-export GT_BOY_PORT=4000
-gt-boy  # Uses port 4000
+export ADJUTANT_PORT=4000
+adjutant  # Uses port 4000
 ```
 
 ## Help Output
 
 ```
-Usage: gt-boy [options]
+Usage: adjutant [options]
 
-Launch gastown-boy from a gastown directory
+Launch adjutant from a gastown directory
 
 Options:
   -V, --version                output the version number
-  -p, --port <number>          frontend server port (default: 5173, env: GT_BOY_PORT)
-  -b, --backend-port <number>  backend API server port (default: 3001, env: GT_BOY_BACKEND_PORT)
+  -p, --port <number>          frontend server port (default: 5173, env: ADJUTANT_PORT)
+  -b, --backend-port <number>  backend API server port (default: 3001, env: ADJUTANT_BACKEND_PORT)
   --no-browser                 skip opening browser automatically
   -h, --help                   display help for command
 
 Examples:
-  $ gt-boy                     # Start with defaults
-  $ gt-boy -p 4000             # Use custom frontend port
-  $ gt-boy --no-browser        # Don't open browser
+  $ adjutant                     # Start with defaults
+  $ adjutant -p 4000             # Use custom frontend port
+  $ adjutant --no-browser        # Don't open browser
 
 Must be run from a gastown directory (contains .beads/).
 ```

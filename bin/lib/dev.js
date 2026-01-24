@@ -30,7 +30,7 @@ export async function startDev(options) {
 
   // Validate directory exists
   if (!existsSync(resolvedGtDir)) {
-    throw new Error(`GT directory does not exist: ${resolvedGtDir}\nUsage: gt-boy [path-to-gt]`);
+    throw new Error(`GT directory does not exist: ${resolvedGtDir}\nUsage: adjutant [path-to-gt]`);
   }
 
   // Check for town.json marker
@@ -67,7 +67,7 @@ export async function startDev(options) {
   }
 
   const modeText = tunnel && ngrokAvailable ? ' + ngrok tunnel' : '';
-  console.log(`${COLORS.green}Starting gt-boy with GT_TOWN_ROOT=${resolvedGtDir}${modeText}${COLORS.reset}\n`);
+  console.log(`${COLORS.green}Starting Adjutant with GT_TOWN_ROOT=${resolvedGtDir}${modeText}${COLORS.reset}\n`);
 
   // Start all processes
   const processes = commands.map(({ name, command, args, cwd }) => {

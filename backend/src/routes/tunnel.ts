@@ -1,5 +1,5 @@
 /**
- * Tunnel routes for the gastown-boy API.
+ * Tunnel routes for the Adjutant API.
  *
  * Endpoints:
  * - GET  /api/tunnel/status - Get current tunnel status

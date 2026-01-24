@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Postinstall script for gastown-boy
+ * Postinstall script for adjutant
  * Installs dependencies in backend and frontend subdirectories
  */
 
@@ -22,7 +22,7 @@ const COLORS = {
 };
 
 function log(color, message) {
-  console.log(`${color}[gt-boy]${COLORS.reset} ${message}`);
+  console.log(`${color}[adjutant]${COLORS.reset} ${message}`);
 }
 
 function installDeps(dir, name) {
@@ -59,7 +59,7 @@ if (process.env.CI || process.env.npm_command === 'pack' || process.env.npm_comm
   process.exit(0);
 }
 
-log(COLORS.green, 'Setting up gastown-boy...');
+log(COLORS.green, 'Setting up adjutant...');
 installDeps('backend', 'Backend');
 installDeps('frontend', 'Frontend');
-log(COLORS.green, 'Setup complete! Run: gt-boy --help');
+log(COLORS.green, 'Setup complete! Run: adjutant --help');

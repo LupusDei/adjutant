@@ -13,7 +13,7 @@ const __dirname = dirname(__filename);
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
 
 program
-  .name('gt-boy')
+  .name('adjutant')
   .description('Retro terminal UI for Gastown multi-agent orchestration')
   .version(pkg.version)
   .argument('[gt-dir]', 'Path to Gastown town directory', '~/gt')

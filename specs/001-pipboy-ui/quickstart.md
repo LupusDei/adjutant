@@ -5,7 +5,7 @@
 
 ## Prerequisites
 
-Before running gastown-boy, ensure you have:
+Before running adjutant, ensure you have:
 
 1. **Node.js 20+** installed
 2. **gastown** installed and configured (`gt` command available in PATH)
@@ -22,8 +22,8 @@ gt status
 
 ```bash
 # Clone the repository
-git clone <repo-url> gastown-boy
-cd gastown-boy
+git clone <repo-url> adjutant
+cd adjutant
 
 # Install dependencies for both frontend and backend
 cd backend && npm install
@@ -87,7 +87,7 @@ VITE_POLL_INTERVAL=3000
 
 ## Remote Access (ngrok)
 
-To access gastown-boy remotely:
+To access adjutant remotely:
 
 1. Start both frontend and backend locally
 2. Use ngrok to expose the backend:

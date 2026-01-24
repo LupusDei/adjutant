@@ -68,7 +68,7 @@ function App() {
       <CRTScreen showBootSequence={true} enableFlicker={true} enableScanlines={true} enableNoise={true}>
         <div className="app-container">
           <header className="app-header">
-            <h1 className="crt-glow">GASTOWN-BOY</h1>
+            <h1 className="crt-glow">ADJUTANT</h1>
             <div className="header-controls">
               <OverseerNotificationStatus />
               <RigFilter />

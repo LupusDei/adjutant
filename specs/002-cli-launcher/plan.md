@@ -5,7 +5,7 @@
 
 ## Summary
 
-Create a `gt-boy` CLI command that launches the gastown-boy system from a gastown directory. The CLI will start the backend server, frontend dev server, and open the browser - all managed as child processes with graceful shutdown on Ctrl+C.
+Create a `adjutant` CLI command that launches the adjutant system from a gastown directory. The CLI will start the backend server, frontend dev server, and open the browser - all managed as child processes with graceful shutdown on Ctrl+C.
 
 ## Technical Context
 
@@ -52,7 +52,7 @@ specs/[###-feature]/
 ```text
 cli/
 ├── src/
-│   ├── index.ts             # CLI entry point (gt-boy command)
+│   ├── index.ts             # CLI entry point (adjutant command)
 │   ├── commands/
 │   │   └── start.ts         # Main start command logic
 │   ├── services/

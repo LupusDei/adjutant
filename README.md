@@ -1,4 +1,4 @@
-# Gastown-Boy
+# Adjutant
 
 A retro terminal themed web UI for [Gastown](https://github.com/steveyegge/gastown) multi-agent orchestration.
 
@@ -35,8 +35,8 @@ https://github.com/user-attachments/assets/1aaebcdf-aa24-4e88-9628-27ef91ad34d5
 ## Quick Start
 
 ```bash
-npm install -g gastown-boy
-gt-boy
+npm install -g adjutant
+adjutant
 ```
 
 That's it! The UI opens at `http://localhost:3000`.
@@ -44,49 +44,49 @@ That's it! The UI opens at `http://localhost:3000`.
 **Options:**
 
 ```bash
-gt-boy                    # Uses ~/gt, starts ngrok if installed
-gt-boy /path/to/town      # Custom Gastown directory
-gt-boy --no-tunnel        # Disable ngrok tunnel
-gt-boy --port 8080        # Custom frontend port (default: 3000)
-gt-boy --api-port 8081    # Custom backend port (default: 3001)
-gt-boy --help             # Show all options
+adjutant                    # Uses ~/gt, starts ngrok if installed
+adjutant /path/to/town      # Custom Gastown directory
+adjutant --no-tunnel        # Disable ngrok tunnel
+adjutant --port 8080        # Custom frontend port (default: 3000)
+adjutant --api-port 8081    # Custom backend port (default: 3001)
+adjutant --help             # Show all options
 ```
 
 **One-time run without installing:**
 
 ```bash
-npx gastown-boy
+npx adjutant
 ```
 
 > **Note:** Make sure Gastown is running (`gt up`) or start it from the UI. The app requires an active Gastown instance to display data.
 
 ## Features
 
-### 📊 Dashboard (Overview)
+### Dashboard (Overview)
 - Real-time snapshot of system status
 - Mail widget with recent messages and unread count
 - Crew & Polecats widget showing active agents
 - Unfinished convoys with progress tracking
 
-### ✉️ Mail
+### Mail
 - Split-view inbox/outbox interface
 - Thread-based message grouping
 - Quick reply and compose
 - Rig-based filtering
 
-### 🚚 Convoys
+### Convoys
 - Track multi-issue work packages
 - Priority-based sorting (P0-P4)
 - Progress visualization
 - Expandable issue details
 
-### 👷 Crew & Polecats
-- Hierarchical agent display (Town → Rigs)
+### Crew & Polecats
+- Hierarchical agent display (Town -> Rigs)
 - Real-time status indicators (working/idle/blocked/stuck/offline)
 - Unread mail badges per agent
 - Current task display
 
-### ⚙️ Settings
+### Settings
 - **6 Themes**: GAS-BOY, BLOOD-BAG, VAULT-TEC, WASTELAND, PINK-MIST, RAD-STORM
 - **Remote Access**: Toggle ngrok tunnel with QR code
 - Fully responsive (mobile/tablet/desktop)
@@ -127,7 +127,7 @@ See `.env.example` files for full documentation.
 ## Project Structure
 
 ```
-gastown-boy/
+adjutant/
 ├── backend/src/
 │   ├── routes/      # Express route handlers
 │   ├── services/    # GT CLI wrappers
@@ -184,8 +184,8 @@ You can also control the tunnel from the **Settings** tab (toggle, QR code, copy
 ## Contributing
 
 ```bash
-git clone https://github.com/wsaults/gastown-boy.git
-cd gastown-boy
+git clone https://github.com/wsaults/adjutant.git
+cd adjutant
 npm run install:all
 npm run dev           # Start all services (Mac/Linux)
 ```

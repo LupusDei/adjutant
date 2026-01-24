@@ -1,5 +1,5 @@
 /**
- * Mail routes for the gastown-boy API.
+ * Mail routes for the Adjutant API.
  *
  * Endpoints:
  * - GET  /api/mail        - List all mail messages

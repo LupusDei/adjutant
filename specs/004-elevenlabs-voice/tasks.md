@@ -1,7 +1,7 @@
 # Tasks: ElevenLabs Voice Integration
 
 **Input**: Design documents from `/specs/004-elevenlabs-voice/`
-**Prerequisites**: spec.md (required), existing gastown-boy infrastructure
+**Prerequisites**: spec.md (required), existing adjutant infrastructure
 **Reference**: [squadron-comms-plugin](https://github.com/1Shot-Labs/squadron-comms-plugin)
 
 **Tests**: Per constitution principle II (Test-First Development), unit tests are included for services and hooks. Pure UI components are exempt.

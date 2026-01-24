@@ -124,7 +124,7 @@ async function apiFetch<T>(
 // =============================================================================
 
 /**
- * API client for communicating with the gastown-boy backend.
+ * API client for communicating with the Adjutant backend.
  * Provides methods for status, power, mail, and agent operations.
  */
 export const api = {

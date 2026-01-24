@@ -6,7 +6,7 @@
 
 ## Overview
 
-Integrate ElevenLabs text-to-speech and speech-to-text capabilities into the Gastown-Boy dashboard, enabling bidirectional voice communication with agents. Users can speak commands/messages to agents and receive audio updates when tasks complete or important events occur.
+Integrate ElevenLabs text-to-speech and speech-to-text capabilities into the Adjutant dashboard, enabling bidirectional voice communication with agents. Users can speak commands/messages to agents and receive audio updates when tasks complete or important events occur.
 
 ## Problem Statement
 

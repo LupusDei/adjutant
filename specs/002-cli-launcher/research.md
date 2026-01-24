@@ -46,11 +46,11 @@
 import { Command, Option } from 'commander';
 
 const program = new Command()
-  .name('gt-boy')
-  .description('Launch gastown-boy from a gastown directory')
+  .name('adjutant')
+  .description('Launch adjutant from a gastown directory')
   .version('1.0.0')
-  .addOption(new Option('-p, --port <number>', 'frontend port').default(5173).env('GT_BOY_PORT'))
-  .addOption(new Option('--backend-port <number>', 'backend port').default(3001).env('GT_BOY_BACKEND_PORT'))
+  .addOption(new Option('-p, --port <number>', 'frontend port').default(5173).env('ADJUTANT_PORT'))
+  .addOption(new Option('--backend-port <number>', 'backend port').default(3001).env('ADJUTANT_BACKEND_PORT'))
   .action((options) => {
     startGastownBoy(options);
   });
@@ -164,7 +164,7 @@ process.on('exit', () => shutdown('exit'));
 
 **Rationale**: Two-layer approach provides robust detection:
 1. **Port check** (primary): Use `net.createServer()` to test if port is available
-2. **PID file** (secondary): Write PID to `~/.gt-boy.pid` on start, check on subsequent runs
+2. **PID file** (secondary): Write PID to `~/.adjutant.pid` on start, check on subsequent runs
 
 **Port Check Implementation**:
 ```typescript
@@ -202,8 +202,8 @@ function isPortAvailable(port: number): Promise<boolean> {
 
 **Structure**:
 ```
-gastown-boy/
-├── cli/          # New: gt-boy command
+adjutant/
+├── cli/          # New: adjutant command
 ├── frontend/     # React UI (started by CLI)
 ├── backend/      # Express API (started by CLI)
 └── specs/        # Feature specs

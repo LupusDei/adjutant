@@ -22,7 +22,7 @@ const RigContext = createContext<RigContextValue | null>(null);
 /**
  * Storage key for persisting rig selection.
  */
-const STORAGE_KEY = 'gastown-boy-selected-rig';
+const STORAGE_KEY = 'adjutant-selected-rig';
 
 /**
  * Provider component for rig filter state.

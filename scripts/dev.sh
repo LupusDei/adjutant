@@ -1,5 +1,5 @@
 #!/bin/bash
-# Start gastown-boy dev servers + ngrok with optional GT directory
+# Start Adjutant dev servers + ngrok with optional GT directory
 #
 # Usage:
 #   ./scripts/dev.sh [GT_DIR]
@@ -63,7 +63,7 @@ fi
 
 # Check if ngrok is installed
 if command -v ngrok &> /dev/null; then
-    echo "Starting gastown-boy with GT_TOWN_ROOT=$GT_DIR + ngrok tunnel"
+    echo "Starting Adjutant with GT_TOWN_ROOT=$GT_DIR + ngrok tunnel"
     echo ""
     npx concurrently -n backend,frontend,ngrok -c blue,green,magenta \
         "cd backend && npm run dev" \
@@ -73,7 +73,7 @@ else
     echo -e "${YELLOW}ngrok not installed - starting without remote access${NC}"
     echo "To enable remote access: brew install ngrok && ngrok config add-authtoken <token>"
     echo ""
-    echo "Starting gastown-boy with GT_TOWN_ROOT=$GT_DIR"
+    echo "Starting Adjutant with GT_TOWN_ROOT=$GT_DIR"
     echo ""
     npx concurrently -n backend,frontend -c blue,green \
         "cd backend && npm run dev" \

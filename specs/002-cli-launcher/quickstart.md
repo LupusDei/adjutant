@@ -39,7 +39,7 @@ TSEOF
 # Update package.json for ESM
 npm pkg set type=module
 npm pkg set main=dist/index.js
-npm pkg set bin.gt-boy=dist/index.js
+npm pkg set bin.adjutant=dist/index.js
 npm pkg set scripts.build="tsc"
 npm pkg set scripts.dev="tsc --watch"
 npm pkg set scripts.test="vitest"
@@ -55,11 +55,11 @@ import { Command, Option } from 'commander';
 import { startCommand } from './commands/start.js';
 
 const program = new Command()
-  .name('gt-boy')
-  .description('Launch gastown-boy from a gastown directory')
+  .name('adjutant')
+  .description('Launch adjutant from a gastown directory')
   .version('1.0.0')
-  .addOption(new Option('-p, --port <number>', 'frontend server port').default(5173).env('GT_BOY_PORT'))
-  .addOption(new Option('-b, --backend-port <number>', 'backend API server port').default(3001).env('GT_BOY_BACKEND_PORT'))
+  .addOption(new Option('-p, --port <number>', 'frontend server port').default(5173).env('ADJUTANT_PORT'))
+  .addOption(new Option('-b, --backend-port <number>', 'backend API server port').default(3001).env('ADJUTANT_BACKEND_PORT'))
   .addOption(new Option('--no-browser', 'skip opening browser automatically'))
   .action(startCommand);
 
@@ -132,7 +132,7 @@ npm link
 
 # Test from a gastown directory
 cd ~/gt/my-project
-gt-boy --help
+adjutant --help
 ```
 
 ## 6. Verify Exit Codes
@@ -140,12 +140,12 @@ gt-boy --help
 ```bash
 # Test error cases
 cd /tmp
-gt-boy
+adjutant
 echo "Exit code: $?"  # Should be 1 (NOT_GASTOWN_DIR)
 
 # Test success case
 cd ~/gt/my-project
-gt-boy
+adjutant
 # Press Ctrl+C
 echo "Exit code: $?"  # Should be 0
 ```

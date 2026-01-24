@@ -6,7 +6,7 @@
 
 ## Overview
 
-The gastown-boy UI is stateless - all data originates from gastown via CLI commands. This document defines the TypeScript types that represent gastown data in our application.
+The Adjutant UI is stateless - all data originates from gastown via CLI commands. This document defines the TypeScript types that represent gastown data in our application.
 
 ## Core Entities
 

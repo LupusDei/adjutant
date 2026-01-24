@@ -198,4 +198,4 @@ interface PortCheckResult {
 | `E003` | `BACKEND_START_FAILED` | Backend server failed to start |
 | `E004` | `FRONTEND_START_FAILED` | Frontend server failed to start |
 | `E005` | `GT_NOT_FOUND` | `gt` command not found in PATH |
-| `E006` | `ALREADY_RUNNING` | gt-boy is already running for this directory |
+| `E006` | `ALREADY_RUNNING` | adjutant is already running for this directory |

@@ -1,5 +1,5 @@
 /**
- * Status route for the gastown-boy API.
+ * Status route for the Adjutant API.
  *
  * Endpoints:
  * - GET /api/status - Get current gastown system status

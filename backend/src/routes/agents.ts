@@ -1,5 +1,5 @@
 /**
- * Agents route for the gastown-boy API.
+ * Agents route for the Adjutant API.
  *
  * Endpoints:
  * - GET /api/agents - Get all agents as CrewMember list
@@ -58,7 +58,7 @@ agentsRouter.post("/spawn-polecat", async (req, res) => {
   const result = await sendMail({
     to: "mayor/",
     subject: `[spawn-polecat] ${rig}`,
-    body: `Request from gastown-boy UI to spawn a new polecat for rig: ${rig}`,
+    body: `Request from Adjutant UI to spawn a new polecat for rig: ${rig}`,
     type: "task",
     priority: 1,
   });

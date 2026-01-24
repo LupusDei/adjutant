@@ -1,12 +1,12 @@
 openapi: 3.1.0
 info:
-  title: Gastown-Boy API
+  title: Adjutant API
   description: |
-    Backend API for the Pip-Boy themed gastown UI.
+    Backend API for the Adjutant gastown UI.
     Wraps gastown CLI commands and exposes them as REST endpoints.
   version: 1.0.0
   contact:
-    name: Gastown-Boy
+    name: Adjutant
 
 servers:
   - url: http://localhost:3001/api

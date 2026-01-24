@@ -13,7 +13,7 @@ Templates requiring updates: ✅ No updates required (new project)
 Follow-up TODOs: None
 -->
 
-# Gastown-Boy Constitution
+# Adjutant Constitution
 
 ## Core Principles
 
@@ -25,7 +25,7 @@ type guards or schema validation (e.g., Zod). Type assertions (`as`) are
 prohibited except when interfacing with untyped third-party libraries, and such
 cases MUST include a comment explaining why the assertion is safe.
 
-**Rationale**: The gastown-boy UI interfaces with an external multi-agent
+**Rationale**: The Adjutant UI interfaces with an external multi-agent
 orchestration system. Type safety at boundaries prevents runtime errors when
 the gastown API evolves or returns unexpected data.
 
@@ -74,7 +74,7 @@ abstractions only when duplication occurs three or more times. Premature
 optimization is prohibited. Configuration options MUST be added only when
 multiple valid use cases exist.
 
-**Rationale**: The gastown-boy UI has a focused purpose (Mayor mail, power
+**Rationale**: The Adjutant UI has a focused purpose (Mayor mail, power
 controls, crew stats). Over-engineering the presentation layer wastes effort
 and adds maintenance burden.
 
@@ -105,7 +105,7 @@ All PRs MUST satisfy the following before merge:
 
 ## Governance
 
-This constitution supersedes all other practices for the gastown-boy project.
+This constitution supersedes all other practices for the Adjutant project.
 Amendments require:
 
 1. Written proposal documenting the change and rationale

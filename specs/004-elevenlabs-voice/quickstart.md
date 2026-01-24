@@ -1,12 +1,12 @@
 # ElevenLabs Voice Integration - Quickstart Guide
 
-This guide walks you through setting up and using the voice features in Gastown-Boy.
+This guide walks you through setting up and using the voice features in Adjutant.
 
 ## Prerequisites
 
 1. **ElevenLabs Account**: Sign up at [elevenlabs.io](https://elevenlabs.io)
 2. **API Key**: Get your API key from [Settings > API Keys](https://elevenlabs.io/app/settings/api-keys)
-3. **Running Gastown-Boy**: Backend and frontend must be running
+3. **Running Adjutant**: Backend and frontend must be running
 
 ## Setup
 

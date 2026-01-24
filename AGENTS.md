@@ -2,10 +2,10 @@
 
 ## CRITICAL: Understand Your Scope
 
-**Gastown-Boy is the DASHBOARD for ALL of Gas Town.**
+**Adjutant is the DASHBOARD for ALL of Gas Town.**
 
 When building UI features, remember:
-- Beads tab shows `~/gt/.beads/` (town beads, hq-* prefix), NOT gastown_boy/.beads/
+- Beads tab shows `~/gt/.beads/` (town beads, hq-* prefix), NOT adjutant/.beads/
 - Agent lists show ALL rigs and agents across the entire town
 - This is the Mayor's command center for everything
 

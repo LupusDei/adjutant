@@ -1,5 +1,5 @@
 /**
- * Beads route for the gastown-boy API.
+ * Beads route for the Adjutant API.
  *
  * Endpoints:
  * - GET /api/beads - List beads for the rig
@@ -16,7 +16,7 @@ export const beadsRouter = Router();
  * GET /api/beads
  * Returns beads for the beads tab.
  *
- * IMPORTANT: gastown_boy is the dashboard for ALL of Gas Town.
+ * IMPORTANT: Adjutant is the dashboard for ALL of Gas Town.
  * By default, we show ALL beads from the town, not filtered by rig.
  * See .claude/rules/00-critical-scope.md for context.
  *
@@ -44,7 +44,7 @@ beadsRouter.get("/", async (req, res) => {
   // Default to showing active work (open + in_progress + blocked)
   const status = statusParam ?? "default";
 
-  // Include hq- town beads by default (gastown_boy is the dashboard for ALL of Gas Town)
+  // Include hq- town beads by default (Adjutant is the dashboard for ALL of Gas Town)
   const excludePrefixes = excludeTown ? ["hq-"] : [];
 
   // If no rig specified, fetch from ALL beads databases

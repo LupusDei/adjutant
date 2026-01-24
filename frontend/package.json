@@ -1,7 +1,7 @@
 {
-  "name": "gastown-boy-frontend",
+  "name": "adjutant-frontend",
   "version": "0.2.2",
-  "description": "Pip-Boy themed UI for gastown",
+  "description": "Adjutant UI for gastown",
   "type": "module",
   "scripts": {
     "dev": "vite",

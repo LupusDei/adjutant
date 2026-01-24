@@ -1,5 +1,5 @@
 /**
- * Mail service for gastown-boy.
+ * Mail service for Adjutant.
  *
  * This service provides a typed interface for mail operations
  * using bd/beads storage (no gt binary required).
@@ -60,7 +60,7 @@ function transformMessage(raw: RawMessage): Message {
 }
 
 function resolveMailIdentity(): string {
-  // gastown-boy UI always sends as 'overseer' - don't inherit polecat env vars
+  // Adjutant UI always sends as 'overseer' - don't inherit polecat env vars
   // Only GT_MAIL_IDENTITY can override (explicit config for this app)
   return process.env["GT_MAIL_IDENTITY"] ?? "overseer";
 }

@@ -40,11 +40,11 @@
 
 ---
 
-## Phase 3: User Story 1 - Start Gastown-Boy (Priority: P1) 🎯 MVP
+## Phase 3: User Story 1 - Start Adjutant (Priority: P1) 🎯 MVP
 
-**Goal**: Run `gt-boy` from a gastown directory to start backend, frontend, and open browser
+**Goal**: Run `adjutant` from a gastown directory to start backend, frontend, and open browser
 
-**Independent Test**: Run `gt-boy` from a directory with `.beads/`, verify servers start and browser opens
+**Independent Test**: Run `adjutant` from a directory with `.beads/`, verify servers start and browser opens
 
 ### Tests for User Story 1 (TDD per constitution)
 
@@ -63,7 +63,7 @@
 - [ ] T017 [US1] Implement browser opening with open package in cli/src/commands/start.ts
 - [ ] T018 [US1] Add startup progress logging (prefixed output) in cli/src/services/process-manager.ts
 
-**Checkpoint**: User Story 1 complete - can run `gt-boy` and launch the system
+**Checkpoint**: User Story 1 complete - can run `adjutant` and launch the system
 
 ---
 
@@ -71,7 +71,7 @@
 
 **Goal**: Ctrl+C cleanly stops both servers within 5 seconds
 
-**Independent Test**: Run `gt-boy`, press Ctrl+C, verify both servers stop and terminal returns
+**Independent Test**: Run `adjutant`, press Ctrl+C, verify both servers stop and terminal returns
 
 ### Tests for User Story 2 (TDD per constitution)
 
@@ -93,7 +93,7 @@
 
 **Goal**: Specify custom ports with `--port` and `--backend-port` flags
 
-**Independent Test**: Run `gt-boy --port 4000`, verify UI accessible on port 4000
+**Independent Test**: Run `adjutant --port 4000`, verify UI accessible on port 4000
 
 ### Tests for User Story 3 (TDD per constitution)
 
@@ -121,7 +121,7 @@
 - [ ] T034 [P] Add --help output with examples in cli/src/index.ts
 - [ ] T035 Implement duplicate instance detection (already running) in cli/src/commands/start.ts
 - [ ] T036 Add JSDoc documentation to all public functions in cli/src/
-- [ ] T037 Run build and verify gt-boy command works via npm link
+- [ ] T037 Run build and verify adjutant command works via npm link
 - [ ] T038 Validate against quickstart.md scenarios
 
 ---
@@ -195,13 +195,13 @@ Task: T009 "Unit test for process spawning"
 1. Complete Phase 1: Setup
 2. Complete Phase 2: Foundational
 3. Complete Phase 3: User Story 1
-4. **STOP and VALIDATE**: Test `gt-boy` from a gastown directory
+4. **STOP and VALIDATE**: Test `adjutant` from a gastown directory
 5. Deploy/demo if ready - core functionality works!
 
 ### Incremental Delivery
 
 1. Complete Setup + Foundational → Foundation ready
-2. Add User Story 1 → Test independently → **MVP!** (can launch gt-boy)
+2. Add User Story 1 → Test independently → **MVP!** (can launch adjutant)
 3. Add User Story 2 → Test independently → Clean shutdown
 4. Add User Story 3 → Test independently → Custom ports
 5. Polish phase → Production ready

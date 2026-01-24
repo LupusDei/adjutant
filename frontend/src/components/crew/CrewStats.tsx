@@ -7,7 +7,7 @@ import { TerminalPane } from '../terminal';
 import type { CrewMember } from '../../types';
 
 /** localStorage key for polecat filter preference */
-const SHOW_ALL_POLECATS_KEY = 'gastown-boy:showAllPolecats';
+const SHOW_ALL_POLECATS_KEY = 'adjutant:showAllPolecats';
 
 /**
  * Hook for persisting show-all-polecats preference to localStorage.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# tunnel.sh - Expose gastown_boy UI via ngrok for remote access
+# tunnel.sh - Expose Adjutant UI via ngrok for remote access
 #
 # Usage:
 #   ./scripts/tunnel.sh           # Start tunnel (checks if server is running)
@@ -81,7 +81,7 @@ fi
 
 echo -e "${GREEN}Starting ngrok tunnel on port $PORT...${NC}"
 echo ""
-echo "The tunnel URL will appear below. Share it to access gastown_boy remotely."
+echo "The tunnel URL will appear below. Share it to access Adjutant remotely."
 echo ""
 echo "---"
 

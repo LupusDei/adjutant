@@ -1,15 +1,15 @@
 # Project Context
 
-## What is Gastown-Boy?
+## What is Adjutant?
 
-A Fallout Pip-Boy themed web UI for interacting with Gastown, a multi-agent orchestration system.
+A retro terminal themed web UI for interacting with Gastown, a multi-agent orchestration system.
 
-**CRITICAL**: Gastown-Boy is the DASHBOARD for ALL of Gas Town. It runs from `~/gt` and displays:
+**CRITICAL**: Adjutant is the DASHBOARD for ALL of Gas Town. It runs from `~/gt` and displays:
 - **All beads** from `~/gt/.beads/` (town beads, hq-* prefix)
-- **All agents** across all rigs (gastown, gastown_boy, etc.)
+- **All agents** across all rigs (gastown, adjutant, etc.)
 - **All mail, convoys, and system state**
 
-The UI is NOT just for the gastown_boy rig - it's the Mayor's command center for the entire town.
+The UI is NOT just for the adjutant rig - it's the Mayor's command center for the entire town.
 See `00-critical-scope.md` for the full explanation.
 
 ## Core Features

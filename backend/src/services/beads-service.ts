@@ -1,6 +1,6 @@
 /**
  * Beads service for listing beads from town level.
- * IMPORTANT: gastown_boy is the dashboard for ALL of Gas Town.
+ * IMPORTANT: Adjutant is the dashboard for ALL of Gas Town.
  */
 
 import { readFileSync } from "fs";
@@ -313,7 +313,7 @@ export async function listBeads(
 
 /**
  * Lists beads from town AND rig beads databases.
- * IMPORTANT: gastown_boy is the dashboard for ALL of Gas Town.
+ * IMPORTANT: Adjutant is the dashboard for ALL of Gas Town.
  * By default, this shows town-level hq-* beads (the unified view).
  */
 export async function listAllBeads(

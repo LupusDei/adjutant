@@ -9,7 +9,7 @@
 - **Title**: CLI Launcher
 - **Type**: epic
 - **Priority**: 1
-- **Description**: Create a `gt-boy` CLI command that launches the gastown-boy system from a gastown directory. The CLI starts the backend server, frontend dev server, and opens the browser - all managed as child processes with graceful shutdown on Ctrl+C.
+- **Description**: Create a `adjutant` CLI command that launches the adjutant system from a gastown directory. The CLI starts the backend server, frontend dev server, and opens the browser - all managed as child processes with graceful shutdown on Ctrl+C.
 
 ## Epics
 
@@ -28,11 +28,11 @@
 - **Blocks**: US1, US2, US3
 - **Tasks**: 3
 
-### US1: Start Gastown-Boy
+### US1: Start Adjutant
 
 - **Type**: epic
 - **Priority**: 1
-- **Description**: Run `gt-boy` from a gastown directory to start backend, frontend, and open browser
+- **Description**: Run `adjutant` from a gastown directory to start backend, frontend, and open browser
 - **MVP**: true
 - **Tasks**: 11
 
@@ -77,7 +77,7 @@
 | Implement Logger utility with colored output | cli/src/utils/logger.ts |
 | Create CLI entry point skeleton with commander.js | cli/src/index.ts |
 
-### US1: Start Gastown-Boy
+### US1: Start Adjutant
 
 | Title | Path |
 |-------|------|
@@ -125,7 +125,7 @@
 | Add --help output with examples | cli/src/index.ts |
 | Implement duplicate instance detection (already running) | cli/src/commands/start.ts |
 | Add JSDoc documentation to all public functions | cli/src/ |
-| Run build and verify gt-boy command works via npm link | - |
+| Run build and verify adjutant command works via npm link | - |
 | Validate against quickstart.md scenarios | - |
 
 ## Summary

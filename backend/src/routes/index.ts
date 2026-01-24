@@ -1,5 +1,5 @@
 /**
- * Route exports for the gastown-boy API.
+ * Route exports for the Adjutant API.
  */
 
 export { agentsRouter } from "./agents.js";

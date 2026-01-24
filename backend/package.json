@@ -1,7 +1,7 @@
 {
-  "name": "gastown-boy-backend",
+  "name": "adjutant-backend",
   "version": "0.2.2",
-  "description": "Backend API for Pip-Boy UI - wraps gastown CLI commands",
+  "description": "Backend API for Adjutant - wraps gastown CLI commands",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

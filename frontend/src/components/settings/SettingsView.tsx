@@ -270,7 +270,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
               </div>
 
               <p style={styles.hint}>
-                Share this URL to access GASTOWN-BOY from other devices.
+                Share this URL to access ADJUTANT from other devices.
               </p>
 
               {showQR && (

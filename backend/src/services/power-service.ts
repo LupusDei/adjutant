@@ -1,5 +1,5 @@
 /**
- * Power service for gastown-boy.
+ * Power service for Adjutant.
  *
  * Uses bd/tmux for read-side status and gt for up/down lifecycle control.
  */

@@ -6,7 +6,7 @@
 
 ## Overview
 
-Enhance the Gastown-Boy dashboard with overseer-focused filtering for Mail and Beads, plus an SMS-style conversation interface for direct communication with the Mayor.
+Enhance the Adjutant dashboard with overseer-focused filtering for Mail and Beads, plus an SMS-style conversation interface for direct communication with the Mayor.
 
 ## Problem Statement
 

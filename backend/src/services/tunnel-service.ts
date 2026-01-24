@@ -1,5 +1,5 @@
 /**
- * Tunnel service for gastown-boy.
+ * Tunnel service for Adjutant.
  *
  * Controls ngrok tunnel startup/shutdown for remote access.
  * Manages the ngrok child process and queries its status.

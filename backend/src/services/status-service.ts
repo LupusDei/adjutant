@@ -1,5 +1,5 @@
 /**
- * Status service for gastown-boy.
+ * Status service for Adjutant.
  *
  * Provides crew member data transformation from gastown status.
  * Delegates to agents-service for the actual implementation.

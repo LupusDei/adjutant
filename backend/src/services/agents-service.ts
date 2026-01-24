@@ -1,5 +1,5 @@
 /**
- * Agents service for gastown-boy.
+ * Agents service for Adjutant.
  *
  * Retrieves and transforms agent information into CrewMember format
  * for the dashboard display using bd/tmux data.

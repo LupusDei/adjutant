@@ -1,6 +1,6 @@
 # Voice API Contracts
 
-OpenAPI-style documentation for the Gastown-Boy Voice API.
+OpenAPI-style documentation for the Adjutant Voice API.
 
 **Base URL**: `/api/voice`
 

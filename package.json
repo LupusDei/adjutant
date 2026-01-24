@@ -1,10 +1,10 @@
 {
-  "name": "gastown-boy",
+  "name": "adjutant",
   "version": "0.2.3",
   "description": "Retro terminal UI for Gastown multi-agent orchestration",
   "type": "module",
   "bin": {
-    "gt-boy": "./bin/cli.js"
+    "adjutant": "./bin/cli.js"
   },
   "files": [
     "bin",
@@ -42,12 +42,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wsaults/gastown-boy.git"
+    "url": "git+https://github.com/wsaults/adjutant.git"
   },
   "bugs": {
-    "url": "https://github.com/wsaults/gastown-boy/issues"
+    "url": "https://github.com/wsaults/adjutant/issues"
   },
-  "homepage": "https://github.com/wsaults/gastown-boy#readme",
+  "homepage": "https://github.com/wsaults/adjutant#readme",
   "dependencies": {
     "commander": "^12.1.0"
   },
