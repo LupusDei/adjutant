@@ -11,14 +11,25 @@
 #   2. Sign up at ngrok.com and get your authtoken
 #   3. Configure: ngrok config add-authtoken <your-token>
 #
+# Environment variables (set in backend/.env):
+#   NGROK_DOMAIN - Permanent domain (e.g., your-domain.ngrok.io)
+#   NGROK_PORT   - Port to tunnel (default: 3000)
+#   NGROK_AUTH   - Basic auth credentials (format: user:password)
+#
 # How it works:
-#   - Tunnels the frontend (port 3000) to a public ngrok URL
-#   - The Vite proxy forwards /api requests to the backend (port 3001)
-#   - You only need ONE tunnel (free tier compatible!)
+#   - Tunnels the frontend (port 3000) which proxies /api to backend
+#   - If NGROK_DOMAIN is set, uses permanent domain
+#   - Otherwise, generates a random ngrok URL
 
 set -e
 
-PORT=3000
+# Load environment variables from backend/.env if it exists
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/../backend/.env" ]; then
+    export $(grep -v '^#' "$SCRIPT_DIR/../backend/.env" | grep -v '^$' | xargs)
+fi
+
+PORT="${NGROK_PORT:-3000}"
 NGROK_CMD="ngrok"
 NO_WAIT=false
 
@@ -81,9 +92,23 @@ fi
 
 echo -e "${GREEN}Starting ngrok tunnel on port $PORT...${NC}"
 echo ""
-echo "The tunnel URL will appear below. Share it to access Adjutant remotely."
+
+# Build ngrok command arguments
+NGROK_ARGS=""
+
+if [ -n "$NGROK_DOMAIN" ]; then
+    NGROK_ARGS="$NGROK_ARGS --url=https://$NGROK_DOMAIN"
+    echo "Using permanent domain: $NGROK_DOMAIN"
+else
+    echo "No NGROK_DOMAIN set - using random URL"
+    echo "Set NGROK_DOMAIN in backend/.env for a permanent URL"
+fi
+
+if [ -n "$NGROK_AUTH" ]; then
+    NGROK_ARGS="$NGROK_ARGS --basic-auth=$NGROK_AUTH"
+    echo "Password protection: enabled"
+fi
+
 echo ""
 echo "---"
-
-# Start ngrok
-$NGROK_CMD http $PORT
+$NGROK_CMD http $NGROK_ARGS $PORT
