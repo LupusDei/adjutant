@@ -24,3 +24,9 @@ export type { UseVoiceInputReturn, VoiceInputState } from "./useVoiceInput";
 
 export { useAudioNotifications } from "./useAudioNotifications";
 export type { UseAudioNotificationsReturn, NotificationItem, NotificationPriority } from "./useAudioNotifications";
+
+export { useMobileAudio } from "./useMobileAudio";
+export type { UseMobileAudioReturn } from "./useMobileAudio";
+
+export { useOverseerNotifications } from "./useOverseerNotifications";
+export type { UseOverseerNotificationsReturn, OverseerNotificationSettings } from "./useOverseerNotifications";

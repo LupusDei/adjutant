@@ -267,7 +267,9 @@ export async function synthesizeNotification(
     normal: 1.0,
     low: 0.95,
   };
-  const speed = (voiceConfig.speed ?? 1.0) * (speedMultiplier[priority] ?? 1.0);
+  const rawSpeed = (voiceConfig.speed ?? 1.0) * (speedMultiplier[priority] ?? 1.0);
+  // Clamp to ElevenLabs API limits (0.7-1.2)
+  const speed = Math.max(0.7, Math.min(1.2, rawSpeed));
 
   const voiceId = voiceConfig.voiceId;
 

@@ -12,7 +12,7 @@ import { z } from "zod";
 export const VoiceConfigSchema = z.object({
   voiceId: z.string().min(1, "Voice ID is required"),
   name: z.string().min(1, "Voice name is required"),
-  speed: z.number().min(0.5).max(2.0).default(1.0),
+  speed: z.number().min(0.7).max(1.2).default(1.0),
   stability: z.number().min(0).max(1).optional(),
   similarityBoost: z.number().min(0).max(1).optional(),
 });

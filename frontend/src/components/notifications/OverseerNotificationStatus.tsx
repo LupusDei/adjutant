@@ -28,10 +28,31 @@ export const OverseerNotificationStatus: React.FC<OverseerNotificationStatusProp
     notificationCount,
     lastNotification,
     error,
+    needsAudioUnlock,
+    unlockAudio,
   } = useOverseerNotifications();
+
+  // Handle unlock button click
+  const handleUnlock = async () => {
+    await unlockAudio();
+  };
 
   return (
     <div className={`notification-status ${className}`}>
+      {/* Show unlock button on mobile when audio needs to be unlocked */}
+      {needsAudioUnlock && enabled && (
+        <button
+          type="button"
+          className="notification-unlock-button"
+          onClick={handleUnlock}
+          title="Tap to enable audio on mobile"
+          aria-label="Enable audio playback"
+        >
+          <span className="notification-icon">🔇</span>
+          <span className="notification-unlock-text">TAP</span>
+        </button>
+      )}
+
       <button
         type="button"
         className={`notification-status-button ${enabled ? 'notification-enabled' : 'notification-disabled'} ${isPlaying ? 'notification-playing' : ''}`}

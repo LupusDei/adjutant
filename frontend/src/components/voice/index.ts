@@ -19,3 +19,6 @@ export type { VoiceConfigPanelProps } from './VoiceConfigPanel';
 
 export { VoicePreview } from './VoicePreview';
 export type { VoicePreviewProps } from './VoicePreview';
+
+export { MobileAudioUnlock } from './MobileAudioUnlock';
+export type { MobileAudioUnlockProps } from './MobileAudioUnlock';

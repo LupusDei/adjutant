@@ -173,7 +173,7 @@ export interface SynthesizeSpeechOptions {
   stability?: number;
   /** Similarity boost (0-1) */
   similarityBoost?: number;
-  /** Speech rate/speed (0.5-2.0) */
+  /** Speech rate/speed (0.7-1.2, ElevenLabs API constraint) */
   speed?: number;
 }
 
@@ -390,10 +390,13 @@ export async function transcribeSpeech(
       audio.byteOffset + audio.byteLength
     ) as ArrayBuffer;
     const blob = new Blob([arrayBuffer], { type: mimeType });
-    formData.append("audio", blob, "audio.webm");
+    formData.append("file", blob, "audio.webm");
+
+    // model_id is required by ElevenLabs STT API
+    formData.append("model_id", "scribe_v1");
 
     if (language) {
-      formData.append("language", language);
+      formData.append("language_code", language);
     }
     return formData;
   };

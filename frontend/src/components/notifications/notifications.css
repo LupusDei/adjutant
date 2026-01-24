@@ -140,6 +140,46 @@
   cursor: help;
 }
 
+/* Mobile audio unlock button */
+.notification-unlock-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 170, 0, 0.15);
+  border: 2px solid #ffaa00;
+  color: #ffaa00;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: 2px;
+  animation: unlock-pulse 2s ease-in-out infinite;
+  letter-spacing: 0.05em;
+}
+
+.notification-unlock-button:hover {
+  background: rgba(255, 170, 0, 0.25);
+  box-shadow: 0 0 12px rgba(255, 170, 0, 0.5);
+}
+
+.notification-unlock-button:active {
+  transform: scale(0.95);
+}
+
+.notification-unlock-text {
+  font-size: 0.75rem;
+}
+
+@keyframes unlock-pulse {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(255, 170, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(255, 170, 0, 0.6);
+  }
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .notification-now-playing {

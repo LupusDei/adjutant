@@ -5,6 +5,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../services/api';
 import type { Message, SendMessageRequest } from '../../types';
+import { useVoiceInput } from '../../hooks/useVoiceInput';
+import { useVoicePlayer } from '../../hooks/useVoicePlayer';
 import './chat.css';
 
 export interface MayorChatProps {
@@ -77,9 +79,25 @@ export const MayorChat: React.FC<MayorChatProps> = ({ isActive = true }) => {
   const [error, setError] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);
+  const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Voice input hook for recording
+  const voiceInput = useVoiceInput();
+
+  // Voice player hook for playback
+  const voicePlayer = useVoicePlayer();
+
+  // Handle transcript from voice input
+  useEffect(() => {
+    if (voiceInput.transcript) {
+      setInputValue((prev) => prev + (prev ? ' ' : '') + voiceInput.transcript);
+      voiceInput.clearTranscript();
+      inputRef.current?.focus();
+    }
+  }, [voiceInput.transcript, voiceInput.clearTranscript]);
 
   // Scroll to bottom when messages change
   const scrollToBottom = useCallback(() => {
@@ -155,6 +173,37 @@ export const MayorChat: React.FC<MayorChatProps> = ({ isActive = true }) => {
     }
   };
 
+  // Handle voice recording
+  const handleMicClick = async () => {
+    if (voiceInput.isRecording) {
+      voiceInput.stopRecording();
+    } else {
+      await voiceInput.startRecording();
+    }
+  };
+
+  // Handle playing a message
+  const handlePlayMessage = async (msg: Message) => {
+    if (voicePlayer.isPlaying && playingMessageId === msg.id) {
+      voicePlayer.stop();
+      setPlayingMessageId(null);
+    } else {
+      setPlayingMessageId(msg.id);
+      try {
+        await voicePlayer.play(msg.body);
+      } finally {
+        setPlayingMessageId(null);
+      }
+    }
+  };
+
+  // Track when voice player stops
+  useEffect(() => {
+    if (!voicePlayer.isPlaying && !voicePlayer.isLoading) {
+      setPlayingMessageId(null);
+    }
+  }, [voicePlayer.isPlaying, voicePlayer.isLoading]);
+
   if (loading) {
     return (
       <div className="mayor-chat">
@@ -196,13 +245,27 @@ export const MayorChat: React.FC<MayorChatProps> = ({ isActive = true }) => {
         ) : (
           messages.map((msg) => {
             const isUser = isUserMessage(msg);
+            const isPlayingThis = playingMessageId === msg.id;
+            const isLoadingThis = isPlayingThis && voicePlayer.isLoading;
             return (
               <div
                 key={msg.id}
                 className={`chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-mayor'}`}
               >
-                <div className="chat-bubble-sender">
-                  {isUser ? 'YOU' : 'MAYOR'}
+                <div className="chat-bubble-header">
+                  <span className="chat-bubble-sender">
+                    {isUser ? 'YOU' : 'MAYOR'}
+                  </span>
+                  <button
+                    type="button"
+                    className={`chat-play-btn ${isPlayingThis ? 'chat-play-btn-active' : ''}`}
+                    onClick={() => void handlePlayMessage(msg)}
+                    disabled={isLoadingThis}
+                    aria-label={isPlayingThis ? 'Stop' : 'Play message'}
+                    title={isPlayingThis ? 'Stop' : 'Play message'}
+                  >
+                    {isLoadingThis ? '◌' : isPlayingThis ? '⏹' : '▶'}
+                  </button>
                 </div>
                 <div className="chat-bubble-content">
                   {msg.body}
@@ -219,15 +282,25 @@ export const MayorChat: React.FC<MayorChatProps> = ({ isActive = true }) => {
 
       {/* Input area */}
       <div className="chat-input-area">
+        <button
+          type="button"
+          onClick={() => void handleMicClick()}
+          disabled={sending || voiceInput.isProcessing}
+          className={`chat-mic-btn ${voiceInput.isRecording ? 'chat-mic-btn-recording' : ''}`}
+          aria-label={voiceInput.isRecording ? 'Stop recording' : 'Start recording'}
+          title={voiceInput.isRecording ? 'Stop recording' : 'Record voice message'}
+        >
+          {voiceInput.isProcessing ? '◌' : voiceInput.isRecording ? '⏹' : '🎤'}
+        </button>
         <input
           ref={inputRef}
           type="text"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="TYPE MESSAGE..."
+          placeholder={voiceInput.isRecording ? 'RECORDING...' : 'TYPE OR RECORD MESSAGE...'}
           className="chat-input"
-          disabled={sending}
+          disabled={sending || voiceInput.isRecording}
           autoFocus
         />
         <button
@@ -238,6 +311,9 @@ export const MayorChat: React.FC<MayorChatProps> = ({ isActive = true }) => {
           {sending ? '...' : 'SEND'}
         </button>
       </div>
+      {voiceInput.error && (
+        <div className="chat-voice-error">{voiceInput.error}</div>
+      )}
     </div>
   );
 };

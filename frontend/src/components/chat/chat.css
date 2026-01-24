@@ -130,11 +130,54 @@
   color: var(--crt-phosphor, #00ff00);
 }
 
+/* Chat bubble header with sender and play button */
+.chat-bubble-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
 .chat-bubble-sender {
   font-size: 0.65rem;
   letter-spacing: 0.1em;
-  margin-bottom: 4px;
   opacity: 0.7;
+}
+
+/* Play button on chat bubbles */
+.chat-play-btn {
+  background: transparent;
+  border: 1px solid currentColor;
+  color: inherit;
+  width: 22px;
+  height: 22px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+}
+
+.chat-play-btn:hover:not(:disabled) {
+  opacity: 1;
+}
+
+.chat-play-btn-active {
+  opacity: 1;
+  animation: pulse-glow 1s ease-in-out infinite;
+}
+
+.chat-bubble-user .chat-play-btn {
+  border-color: #0a0a0a;
+  color: #0a0a0a;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
 }
 
 .chat-bubble-user .chat-bubble-sender {
@@ -218,6 +261,53 @@
   opacity: 0.4;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+/* Mic button */
+.chat-mic-btn {
+  padding: 10px 12px;
+  background-color: transparent;
+  border: 2px solid var(--crt-phosphor-dim, #00aa00);
+  color: var(--crt-phosphor, #00ff00);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.chat-mic-btn:hover:not(:disabled) {
+  border-color: var(--crt-phosphor, #00ff00);
+  box-shadow: 0 0 8px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.3));
+}
+
+.chat-mic-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chat-mic-btn-recording {
+  border-color: #ff4444;
+  color: #ff4444;
+  animation: recording-pulse 1s ease-in-out infinite;
+}
+
+@keyframes recording-pulse {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(255, 68, 68, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(255, 68, 68, 0.6);
+  }
+}
+
+/* Voice error message */
+.chat-voice-error {
+  padding: 6px 16px;
+  background-color: rgba(255, 68, 68, 0.1);
+  border-top: 1px solid #ff4444;
+  color: #ff4444;
+  font-size: 0.75rem;
+  text-align: center;
 }
 
 /* Scrollbar styling */

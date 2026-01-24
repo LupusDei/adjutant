@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../services/api';
 import type { Message } from '../types';
+import { useMobileAudio } from './useMobileAudio';
 
 const API_BASE_URL = (import.meta.env['VITE_API_URL'] as string | undefined) ?? '/api';
 
@@ -36,17 +37,23 @@ export interface UseOverseerNotificationsReturn {
   lastNotification: string | null;
   /** Any error that occurred */
   error: string | null;
+  /** Whether mobile audio needs to be unlocked */
+  needsAudioUnlock: boolean;
+  /** Unlock mobile audio (call on user tap) */
+  unlockAudio: () => Promise<boolean>;
 }
 
 const STORAGE_KEY = 'overseer-notifications';
 const DEFAULT_POLL_INTERVAL = 15000; // 15 seconds for responsive updates
 
 /**
- * Check if a message is directed to/from the Overseer.
+ * Check if a message is relevant for the Overseer dashboard.
+ * Includes messages to/from mayor/overseer.
  */
 function isOverseerRelevant(msg: Message): boolean {
   const fromLower = msg.from.toLowerCase();
   const toLower = msg.to.toLowerCase();
+
   return (
     fromLower.includes('mayor') ||
     fromLower.includes('overseer') ||
@@ -56,9 +63,28 @@ function isOverseerRelevant(msg: Message): boolean {
 }
 
 /**
+ * Check if a message should trigger a voice notification.
+ * Read all relevant messages except those sent BY the overseer.
+ */
+function shouldReadAloud(msg: Message): boolean {
+  const fromLower = msg.from.toLowerCase();
+
+  // Skip messages sent BY the overseer - we don't need to read our own outgoing messages
+  if (fromLower.includes('overseer')) {
+    return false;
+  }
+
+  // Read everything else that passed isOverseerRelevant
+  return true;
+}
+
+/**
  * Hook for automatic audio notifications when new Overseer mail arrives.
  */
 export function useOverseerNotifications(): UseOverseerNotificationsReturn {
+  // Mobile audio support
+  const mobileAudio = useMobileAudio();
+
   // Load settings from localStorage
   const [settings, setSettings] = useState<OverseerNotificationSettings>(() => {
     try {
@@ -84,7 +110,6 @@ export function useOverseerNotifications(): UseOverseerNotificationsReturn {
   // Track seen message IDs to detect new messages
   const seenMessageIdsRef = useRef(new Set<string>());
   const isInitialFetchRef = useRef(true);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const notificationQueueRef = useRef<Message[]>([]);
   const isProcessingRef = useRef(false);
 
@@ -99,6 +124,12 @@ export function useOverseerNotifications(): UseOverseerNotificationsReturn {
       return;
     }
 
+    // On mobile, don't try to play if audio isn't unlocked
+    if (mobileAudio.isMobile && !mobileAudio.isUnlocked) {
+      console.log('[OverseerNotifications] Waiting for audio unlock on mobile');
+      return;
+    }
+
     isProcessingRef.current = true;
     setIsPlaying(true);
 
@@ -107,9 +138,10 @@ export function useOverseerNotifications(): UseOverseerNotificationsReturn {
       if (!msg) continue;
 
       try {
-        // Create notification text
-        const notificationText = `New message from ${msg.from}: ${msg.subject}`;
-        setLastNotification(notificationText);
+        // Create notification text - read full message body, not just subject
+        const messageBody = msg.body?.trim() || msg.subject;
+        const notificationText = `Message from ${msg.from}. ${messageBody}`;
+        setLastNotification(`From ${msg.from}: ${msg.subject}`);
 
         // Synthesize notification audio
         const response = await fetch(`${API_BASE_URL}/voice/notification`, {
@@ -122,24 +154,51 @@ export function useOverseerNotifications(): UseOverseerNotificationsReturn {
           }),
         });
 
+        // Check if response is OK before parsing JSON
+        if (!response.ok) {
+          console.error(`[OverseerNotifications] API error: ${response.status} ${response.statusText}`);
+          continue;
+        }
+
+        // Check content type to avoid parsing HTML as JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType?.includes('application/json')) {
+          console.error(`[OverseerNotifications] Expected JSON, got: ${contentType}`);
+          continue;
+        }
+
         const result = await response.json() as {
           success: boolean;
           data?: { audioUrl: string; skipped?: boolean };
         };
 
+        console.log('[OverseerNotifications] API response:', result);
+
         if (result.success && result.data?.audioUrl && !result.data.skipped) {
-          // Play the audio
-          const audio = new Audio(result.data.audioUrl);
-          audio.volume = settings.volume;
-          audioRef.current = audio;
+          const audioUrl = result.data.audioUrl;
+          console.log('[OverseerNotifications] Playing audio:', audioUrl);
 
-          await new Promise<void>((resolve, reject) => {
-            audio.onended = () => resolve();
-            audio.onerror = () => reject(new Error('Audio playback failed'));
-            audio.play().catch(reject);
-          });
-
+          // On mobile, use the mobile audio player (requires unlock)
+          // On desktop, create a fresh Audio element (more reliable)
+          if (mobileAudio.isMobile) {
+            await mobileAudio.play(audioUrl, settings.volume);
+          } else {
+            // Desktop: create new Audio element for each notification
+            const audio = new Audio(audioUrl);
+            audio.volume = settings.volume;
+            await new Promise<void>((resolve, reject) => {
+              audio.onended = () => resolve();
+              audio.onerror = () => reject(new Error('Audio playback failed'));
+              audio.play().catch(reject);
+            });
+          }
           setNotificationCount((c) => c + 1);
+        } else {
+          console.log('[OverseerNotifications] Skipping playback:', {
+            success: result.success,
+            hasAudioUrl: !!result.data?.audioUrl,
+            skipped: result.data?.skipped
+          });
         }
       } catch (err) {
         console.error('Failed to play notification:', err);
@@ -149,7 +208,7 @@ export function useOverseerNotifications(): UseOverseerNotificationsReturn {
 
     isProcessingRef.current = false;
     setIsPlaying(false);
-  }, [settings.volume]);
+  }, [settings.volume, mobileAudio]);
 
   // Poll for new messages
   useEffect(() => {
@@ -163,7 +222,9 @@ export function useOverseerNotifications(): UseOverseerNotificationsReturn {
         // Detect new unread messages
         if (!isInitialFetchRef.current) {
           for (const msg of overseerMessages) {
-            if (!msg.read && !seenMessageIdsRef.current.has(msg.id)) {
+            // Only queue if unread, not seen before, and should be read aloud
+            // (skips messages from overseer - we don't read our own outgoing messages)
+            if (!msg.read && !seenMessageIdsRef.current.has(msg.id) && shouldReadAloud(msg)) {
               // Queue notification
               notificationQueueRef.current.push(msg);
             }
@@ -194,12 +255,9 @@ export function useOverseerNotifications(): UseOverseerNotificationsReturn {
 
     return () => {
       clearInterval(intervalId);
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
+      mobileAudio.stop();
     };
-  }, [settings.enabled, settings.pollInterval, processQueue]);
+  }, [settings.enabled, settings.pollInterval, processQueue, mobileAudio]);
 
   // Toggle enabled
   const setEnabled = useCallback((enabled: boolean) => {
@@ -207,22 +265,23 @@ export function useOverseerNotifications(): UseOverseerNotificationsReturn {
     if (!enabled) {
       // Clear queue and stop playing
       notificationQueueRef.current = [];
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
+      mobileAudio.stop();
       setIsPlaying(false);
     }
-  }, []);
+  }, [mobileAudio]);
 
   // Set volume
   const setVolume = useCallback((volume: number) => {
     const clampedVolume = Math.max(0, Math.min(1, volume));
     setSettings((prev) => ({ ...prev, volume: clampedVolume }));
-    if (audioRef.current) {
-      audioRef.current.volume = clampedVolume;
-    }
   }, []);
+
+  // Process queue when audio is unlocked on mobile
+  useEffect(() => {
+    if (mobileAudio.isUnlocked && notificationQueueRef.current.length > 0 && !isProcessingRef.current) {
+      void processQueue();
+    }
+  }, [mobileAudio.isUnlocked, processQueue]);
 
   return {
     enabled: settings.enabled,
@@ -233,6 +292,8 @@ export function useOverseerNotifications(): UseOverseerNotificationsReturn {
     notificationCount,
     lastNotification,
     error,
+    needsAudioUnlock: mobileAudio.needsUnlock,
+    unlockAudio: mobileAudio.unlock,
   };
 }
 

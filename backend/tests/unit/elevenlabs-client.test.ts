@@ -120,13 +120,13 @@ describe("elevenlabs-client", () => {
       await synthesizeSpeech({
         text: "Fast speech",
         voiceId: "voice-123",
-        speed: 1.5,
+        speed: 1.1,
       });
 
       const callArgs = mockFetch.mock.calls[0];
       const body = JSON.parse(callArgs[1].body);
 
-      expect(body.voice_settings.speed).toBe(1.5);
+      expect(body.voice_settings.speed).toBe(1.1);
     });
 
     it("should throw on empty text", async () => {
