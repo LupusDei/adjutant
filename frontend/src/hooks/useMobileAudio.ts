@@ -40,17 +40,29 @@ let globalIsUnlocked = false;
 let globalUnlockListeners: Set<() => void> = new Set();
 
 /**
- * Check if device is mobile
+ * Check if device is mobile or tablet (has autoplay restrictions)
  */
 function checkIsMobile(): boolean {
   if (typeof window === 'undefined') return false;
 
-  const userAgent = navigator.userAgent.toLowerCase();
-  const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+  const userAgent = navigator.userAgent;
+  const userAgentLower = userAgent.toLowerCase();
+
+  // Standard mobile UA detection
+  const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgentLower);
+
+  // Modern iPads (iPadOS 13+) report as "Macintosh" in their UA but have touch
+  // Detect them by checking for touch + Mac platform (real Macs have maxTouchPoints = 0)
+  const isIPadOS = /Macintosh/i.test(userAgent) && navigator.maxTouchPoints > 1;
+
   const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   const isSmallScreen = window.innerWidth <= 768;
 
-  return isMobileUA || (isTouchDevice && isSmallScreen);
+  // Device needs mobile audio handling if:
+  // 1. Traditional mobile/tablet UA, OR
+  // 2. Modern iPad (Macintosh UA + touch), OR
+  // 3. Touch device with small screen
+  return isMobileUA || isIPadOS || (isTouchDevice && isSmallScreen);
 }
 
 /**
