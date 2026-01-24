@@ -1,4 +1,4 @@
-prefix: gb
-issue-prefix: gb
-sync-branch: "beads-sync-gastown_boy"
+prefix: adj
+issue-prefix: adj
+sync-branch: "beads-sync-adjutant"
 daemon-interval: "30s"
