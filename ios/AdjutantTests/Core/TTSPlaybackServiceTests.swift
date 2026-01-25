@@ -2,7 +2,7 @@ import XCTest
 import Combine
 import AVFoundation
 import AdjutantKit
-@testable import Adjutant
+@testable import AdjutantUI
 
 @MainActor
 final class TTSPlaybackServiceTests: XCTestCase {
@@ -125,7 +125,7 @@ final class TTSPlaybackServiceTests: XCTestCase {
         sut.volume = 0.75
 
         wait(for: [expectation], timeout: 1.0)
-        XCTAssertEqual(receivedVolume, 0.75, accuracy: 0.01)
+        XCTAssertEqual(Double(receivedVolume ?? 0), 0.75, accuracy: 0.01)
     }
 
     // MARK: - State Publisher Tests
