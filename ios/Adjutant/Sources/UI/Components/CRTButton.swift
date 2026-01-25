@@ -1,3 +1,6 @@
+#if canImport(UIKit)
+import UIKit
+#endif
 import SwiftUI
 
 // MARK: - CRTButton
@@ -197,8 +200,10 @@ public struct CRTButton: View {
         guard !isLoading else { return }
 
         // Haptic feedback
+        #if canImport(UIKit)
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
         impactFeedback.impactOccurred()
+        #endif
 
         action()
     }

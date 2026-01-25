@@ -142,13 +142,12 @@ public struct BadgeView: View {
         }
     }
 
-    @ViewBuilder
-    private var shape: some Shape {
+    private var shape: AnyShape {
         switch style {
         case .count:
-            Capsule()
+            AnyShape(Capsule())
         default:
-            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+            AnyShape(RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm))
         }
     }
 
