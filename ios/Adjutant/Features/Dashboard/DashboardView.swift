@@ -6,12 +6,19 @@ struct DashboardView: View {
     @StateObject private var viewModel = DashboardViewModel()
     @EnvironmentObject private var coordinator: AppCoordinator
     @Environment(\.crtTheme) private var theme
+    @ObservedObject private var appState = AppState.shared
 
     var body: some View {
         ScrollView {
             VStack(spacing: CRTTheme.Spacing.md) {
-                // Header
-                dashboardHeader
+                // Header with rig filter and power status
+                AppHeaderView(
+                    title: "DASHBOARD",
+                    subtitle: "SYSTEM OVERVIEW",
+                    availableRigs: appState.availableRigs,
+                    isLoading: viewModel.isRefreshing,
+                    onPowerTap: { coordinator.navigate(to: .settings) }
+                )
 
                 // Widget Grid
                 LazyVGrid(columns: gridColumns, spacing: CRTTheme.Spacing.md) {
@@ -67,22 +74,6 @@ struct DashboardView: View {
     }
 
     // MARK: - Subviews
-
-    private var dashboardHeader: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxs) {
-                CRTText("DASHBOARD", style: .header)
-                CRTText("SYSTEM OVERVIEW", style: .caption, color: theme.dim)
-            }
-
-            Spacer()
-
-            if viewModel.isRefreshing {
-                InlineLoadingIndicator()
-            }
-        }
-        .padding(.horizontal, CRTTheme.Spacing.md)
-    }
 
     private var gridColumns: [GridItem] {
         [GridItem(.flexible(), spacing: CRTTheme.Spacing.md)]

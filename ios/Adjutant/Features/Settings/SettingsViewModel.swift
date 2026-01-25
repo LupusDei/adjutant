@@ -192,10 +192,8 @@ final class SettingsViewModel: BaseViewModel {
     }
 
     private func fetchAvailableRigs() async {
-        await performAsyncAction(showLoading: false) {
-            // Fetch rigs from API - for now use placeholder data
-            // Replace with actual API call when available
-            self.availableRigs = ["adjutant", "beads", "gastown", "longeye"]
-        }
+        // Fetch rigs from AppState which calls the API
+        await AppState.shared.fetchAvailableRigs()
+        availableRigs = AppState.shared.availableRigs
     }
 }

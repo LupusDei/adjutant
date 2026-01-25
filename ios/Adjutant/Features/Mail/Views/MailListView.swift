@@ -6,6 +6,7 @@ struct MailListView: View {
     @Environment(\.crtTheme) private var theme
     @StateObject private var viewModel: MailListViewModel
     @EnvironmentObject private var coordinator: AppCoordinator
+    @ObservedObject private var appState = AppState.shared
 
     init(viewModel: MailListViewModel = MailListViewModel()) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -13,6 +14,15 @@ struct MailListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Header with rig filter and power status
+            AppHeaderView(
+                title: "MAIL",
+                availableRigs: appState.availableRigs,
+                isLoading: viewModel.isLoading,
+                onPowerTap: { coordinator.navigate(to: .settings) }
+            )
+            .padding(.vertical, CRTTheme.Spacing.sm)
+
             // Filter bar
             filterBar
 
@@ -33,12 +43,7 @@ struct MailListView: View {
             }
         }
         .background(CRTTheme.Background.screen)
-        .navigationTitle("MAIL")
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                searchButton
-            }
-        }
+        .navigationBarHidden(true)
         .onAppear {
             viewModel.onAppear()
         }
@@ -64,6 +69,8 @@ struct MailListView: View {
             }
 
             Spacer()
+
+            searchButton
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)

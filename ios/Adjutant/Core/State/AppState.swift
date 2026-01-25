@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import AdjutantKit
 
 /// Global application state container.
 /// Manages app-wide state that needs to be shared across multiple views and ViewModels.
@@ -23,6 +24,9 @@ final class AppState: ObservableObject {
     /// Currently selected rig filter (nil means all rigs)
     @Published var selectedRig: String?
 
+    /// Available rigs in the system (fetched from /api/status)
+    @Published private(set) var availableRigs: [String] = []
+
     /// Whether overseer mode is enabled (filters infrastructure content)
     @Published var isOverseerMode = true
 
@@ -40,6 +44,10 @@ final class AppState: ObservableObject {
 
     /// Current API base URL
     @Published var apiBaseURL: URL = URL(string: "http://localhost:3001/api")!
+
+    // MARK: - Dependencies
+
+    private var apiClient: APIClient?
 
     // MARK: - Private Properties
 
@@ -76,6 +84,32 @@ final class AppState: ObservableObject {
     /// - Parameter available: Whether network is available
     func updateNetworkAvailability(_ available: Bool) {
         isNetworkAvailable = available
+    }
+
+    /// Updates the list of available rigs
+    /// - Parameter rigs: Array of rig names
+    func updateAvailableRigs(_ rigs: [String]) {
+        availableRigs = rigs
+    }
+
+    /// Fetches available rigs from the API
+    /// Call this on app startup and when refreshing status
+    func fetchAvailableRigs() async {
+        let client = apiClient ?? APIClient()
+        do {
+            let status = try await client.getStatus()
+            let rigNames = status.rigs.map { $0.name }
+            availableRigs = rigNames.sorted()
+
+            // Also update power state from status
+            // Convert from AdjutantKit.PowerState to local PowerState
+            if let localState = PowerState(rawValue: status.powerState.rawValue) {
+                updatePowerState(localState)
+            }
+        } catch {
+            // On error, keep existing rigs list
+            // Optionally log the error
+        }
     }
 
     // MARK: - Persistence

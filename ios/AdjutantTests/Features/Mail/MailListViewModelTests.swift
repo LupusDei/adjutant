@@ -256,4 +256,38 @@ final class MailListViewModelTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - Rig Filter Tests
+
+    func testRigFilterFiltersMessagesByRig() async {
+        await viewModel.loadMessages()
+        let initialCount = viewModel.filteredMessages.count
+
+        // Set a rig filter that won't match any mock messages
+        // (mock messages use "mayor/", "witness/", etc. which are town-level)
+        AppState.shared.selectedRig = "testrig"
+
+        // Since none of the mock messages are from "testrig/", filtered should be empty
+        XCTAssertTrue(viewModel.filteredMessages.isEmpty)
+
+        // Clear rig filter
+        AppState.shared.selectedRig = nil
+        XCTAssertEqual(viewModel.filteredMessages.count, initialCount)
+    }
+
+    func testRigFilterMatchesFromAddress() async {
+        await viewModel.loadMessages()
+
+        // The mock messages have addresses like "crew/onyx" - so filter by "crew"
+        AppState.shared.selectedRig = "crew"
+
+        // Should find the message from "crew/onyx"
+        XCTAssertFalse(viewModel.filteredMessages.isEmpty)
+        XCTAssertTrue(viewModel.filteredMessages.allSatisfy {
+            $0.from.lowercased().hasPrefix("crew/") || $0.to.lowercased().hasPrefix("crew/")
+        })
+
+        // Clean up
+        AppState.shared.selectedRig = nil
+    }
 }

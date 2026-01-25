@@ -27,6 +27,11 @@ final class MailListViewModel: BaseViewModel {
     /// Whether search is active
     @Published var isSearching: Bool = false
 
+    /// Currently selected rig filter (synced from AppState)
+    private var selectedRig: String? {
+        AppState.shared.selectedRig
+    }
+
     // MARK: - Filter Types
 
     /// Available mail filter options
@@ -55,6 +60,17 @@ final class MailListViewModel: BaseViewModel {
     init(apiClient: APIClient? = nil) {
         self.apiClient = apiClient
         super.init()
+        setupRigFilterObserver()
+    }
+
+    /// Sets up observation of rig filter changes from AppState
+    private func setupRigFilterObserver() {
+        AppState.shared.$selectedRig
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.applyFilter()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Data Loading
@@ -152,7 +168,14 @@ final class MailListViewModel: BaseViewModel {
     private func applyFilter() {
         var result = messages
 
-        // Apply filter
+        // Apply rig filter
+        if let rig = selectedRig {
+            result = result.filter { message in
+                messageMatchesRig(message, rig: rig)
+            }
+        }
+
+        // Apply status filter
         switch currentFilter {
         case .all:
             break
@@ -173,6 +196,16 @@ final class MailListViewModel: BaseViewModel {
         }
 
         filteredMessages = result
+    }
+
+    /// Checks if a message is related to a specific rig
+    /// Messages are considered related if the from or to address starts with the rig name
+    private func messageMatchesRig(_ message: Message, rig: String) -> Bool {
+        let rigPrefix = rig.lowercased() + "/"
+        let fromLower = message.from.lowercased()
+        let toLower = message.to.lowercased()
+
+        return fromLower.hasPrefix(rigPrefix) || toLower.hasPrefix(rigPrefix)
     }
 
     /// Updates the read status of a message locally

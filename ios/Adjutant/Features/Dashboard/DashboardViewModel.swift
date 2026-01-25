@@ -67,6 +67,7 @@ final class DashboardViewModel: BaseViewModel {
         async let mailResult = fetchMail()
         async let crewResult = fetchCrew()
         async let convoysResult = fetchConvoys()
+        async let _ : () = AppState.shared.fetchAvailableRigs()
 
         // Await all results
         let (mail, crew, convoys) = await (mailResult, crewResult, convoysResult)
