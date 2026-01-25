@@ -22,7 +22,8 @@ let package = Package(
         .target(
             name: "Adjutant",
             dependencies: ["AdjutantKit"],
-            path: "Adjutant"
+            path: "Adjutant",
+            exclude: ["App/AdjutantApp.swift"]
         ),
         .testTarget(
             name: "AdjutantTests",
