@@ -1,0 +1,110 @@
+{
+  "": {
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/master.swiftdeps"
+  },
+  "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/AdjutantKit.swift": {
+    "dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/AdjutantKit.d",
+    "object": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/AdjutantKit.swift.o",
+    "swiftmodule": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/AdjutantKit~partial.swiftmodule",
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/AdjutantKit.swiftdeps",
+    "diagnostics": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/AdjutantKit.dia"
+  },
+  "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Agent.swift": {
+    "dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Agent.d",
+    "object": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Agent.swift.o",
+    "swiftmodule": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Agent~partial.swiftmodule",
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Agent.swiftdeps",
+    "diagnostics": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Agent.dia"
+  },
+  "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/ApiResponse.swift": {
+    "dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/ApiResponse.d",
+    "object": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/ApiResponse.swift.o",
+    "swiftmodule": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/ApiResponse~partial.swiftmodule",
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/ApiResponse.swiftdeps",
+    "diagnostics": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/ApiResponse.dia"
+  },
+  "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Bead.swift": {
+    "dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Bead.d",
+    "object": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Bead.swift.o",
+    "swiftmodule": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Bead~partial.swiftmodule",
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Bead.swiftdeps",
+    "diagnostics": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Bead.dia"
+  },
+  "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Convoy.swift": {
+    "dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Convoy.d",
+    "object": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Convoy.swift.o",
+    "swiftmodule": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Convoy~partial.swiftmodule",
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Convoy.swiftdeps",
+    "diagnostics": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Convoy.dia"
+  },
+  "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Enums.swift": {
+    "dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Enums.d",
+    "object": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Enums.swift.o",
+    "swiftmodule": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Enums~partial.swiftmodule",
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Enums.swiftdeps",
+    "diagnostics": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Enums.dia"
+  },
+  "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/GastownStatus.swift": {
+    "dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/GastownStatus.d",
+    "object": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/GastownStatus.swift.o",
+    "swiftmodule": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/GastownStatus~partial.swiftmodule",
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/GastownStatus.swiftdeps",
+    "diagnostics": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/GastownStatus.dia"
+  },
+  "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Message.swift": {
+    "dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Message.d",
+    "object": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Message.swift.o",
+    "swiftmodule": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Message~partial.swiftmodule",
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Message.swiftdeps",
+    "diagnostics": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Message.dia"
+  },
+  "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Tunnel.swift": {
+    "dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Tunnel.d",
+    "object": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Tunnel.swift.o",
+    "swiftmodule": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Tunnel~partial.swiftmodule",
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Tunnel.swiftdeps",
+    "diagnostics": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Tunnel.dia"
+  },
+  "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Voice.swift": {
+    "dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Voice.d",
+    "object": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Voice.swift.o",
+    "swiftmodule": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Voice~partial.swiftmodule",
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Voice.swiftdeps",
+    "diagnostics": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Voice.dia"
+  },
+  "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/APIClient+Endpoints.swift": {
+    "dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIClient+Endpoints.d",
+    "object": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIClient+Endpoints.swift.o",
+    "swiftmodule": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIClient+Endpoints~partial.swiftmodule",
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIClient+Endpoints.swiftdeps",
+    "diagnostics": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIClient+Endpoints.dia"
+  },
+  "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/APIClient.swift": {
+    "dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIClient.d",
+    "object": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIClient.swift.o",
+    "swiftmodule": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIClient~partial.swiftmodule",
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIClient.swiftdeps",
+    "diagnostics": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIClient.dia"
+  },
+  "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/APIError.swift": {
+    "dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIError.d",
+    "object": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIError.swift.o",
+    "swiftmodule": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIError~partial.swiftmodule",
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIError.swiftdeps",
+    "diagnostics": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIError.dia"
+  },
+  "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/RetryPolicy.swift": {
+    "dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/RetryPolicy.d",
+    "object": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/RetryPolicy.swift.o",
+    "swiftmodule": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/RetryPolicy~partial.swiftmodule",
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/RetryPolicy.swiftdeps",
+    "diagnostics": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/RetryPolicy.dia"
+  },
+  "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Utils/Logger.swift": {
+    "dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Logger.d",
+    "object": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Logger.swift.o",
+    "swiftmodule": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Logger~partial.swiftmodule",
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Logger.swiftdeps",
+    "diagnostics": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Logger.dia"
+  }
+}

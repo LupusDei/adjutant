@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.build/master.swiftdeps"
+  },
+  "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.derived/runner.swift": {
+    "dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.build/runner.d",
+    "object": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.build/runner.swift.o",
+    "swiftmodule": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.build/runner~partial.swiftmodule",
+    "swift-dependencies": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.build/runner.swiftdeps",
+    "diagnostics": "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.build/runner.dia"
+  }
+}

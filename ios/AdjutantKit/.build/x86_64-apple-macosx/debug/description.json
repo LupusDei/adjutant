@@ -1,0 +1,923 @@
+{
+  "builtTestProducts" : [
+    {
+      "binaryPath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.xctest/Contents/MacOS/AdjutantKitPackageTests",
+      "packagePath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit",
+      "productName" : "AdjutantKitPackageTests"
+    }
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.AdjutantKit-x86_64-apple-macosx15.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/sources",
+      "importPath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/AdjutantKit.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Agent.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/ApiResponse.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Bead.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Convoy.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Enums.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/GastownStatus.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Message.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Tunnel.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Voice.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/APIClient+Endpoints.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/APIClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/APIError.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/RetryPolicy.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Utils/Logger.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "AdjutantKit",
+      "moduleOutputPath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/Modules/AdjutantKit.swiftmodule",
+      "objects" : [
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/AdjutantKit.swift.o",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Agent.swift.o",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/ApiResponse.swift.o",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Bead.swift.o",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Convoy.swift.o",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Enums.swift.o",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/GastownStatus.swift.o",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Message.swift.o",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Tunnel.swift.o",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Voice.swift.o",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIClient+Endpoints.swift.o",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIClient.swift.o",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIError.swift.o",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/RetryPolicy.swift.o",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Logger.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "x86_64-apple-macosx13.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j20",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/include/AdjutantKit-Swift.h",
+        "-swift-version",
+        "5",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "adjutantkit"
+      ],
+      "outputFileMapPath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/AdjutantKit.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Agent.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/ApiResponse.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Bead.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Convoy.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Enums.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/GastownStatus.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Message.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Tunnel.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Voice.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIClient+Endpoints.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIClient.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIError.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/RetryPolicy.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Logger.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/Modules/AdjutantKit.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/AdjutantKit.swift",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Agent.swift",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/ApiResponse.swift",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Bead.swift",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Convoy.swift",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Enums.swift",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/GastownStatus.swift",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Message.swift",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Tunnel.swift",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Voice.swift",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/APIClient+Endpoints.swift",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/APIClient.swift",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/APIError.swift",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/RetryPolicy.swift",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Utils/Logger.swift"
+      ],
+      "tempsPath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.AdjutantKitPackageTests-x86_64-apple-macosx15.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.build/sources",
+      "importPath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.derived/runner.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/Modules/AdjutantKitTests.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "AdjutantKitPackageTests",
+      "moduleOutputPath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/Modules/AdjutantKitPackageTests.swiftmodule",
+      "objects" : [
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.build/runner.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "x86_64-apple-macosx13.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j20",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.build/include/AdjutantKitPackageTests-Swift.h",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "adjutantkit"
+      ],
+      "outputFileMapPath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/Modules/AdjutantKitPackageTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.derived/runner.swift"
+      ],
+      "tempsPath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.AdjutantKitTests-x86_64-apple-macosx15.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitTests.build/sources",
+      "importPath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Tests/AdjutantKitTests/APIClientTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Tests/AdjutantKitTests/ModelTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/Modules/AdjutantKit.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "AdjutantKitTests",
+      "moduleOutputPath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/Modules/AdjutantKitTests.swiftmodule",
+      "objects" : [
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitTests.build/APIClientTests.swift.o",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitTests.build/ModelTests.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "x86_64-apple-macosx14.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j20",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-swift-version",
+        "5",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "adjutantkit"
+      ],
+      "outputFileMapPath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitTests.build/APIClientTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitTests.build/ModelTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/Modules/AdjutantKitTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Tests/AdjutantKitTests/APIClientTests.swift",
+        "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Tests/AdjutantKitTests/ModelTests.swift"
+      ],
+      "tempsPath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitTests.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "AdjutantKit" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "AdjutantKit",
+      "-package-name",
+      "adjutantkit",
+      "-c",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/AdjutantKit.swift",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Agent.swift",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/ApiResponse.swift",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Bead.swift",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Convoy.swift",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Enums.swift",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/GastownStatus.swift",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Message.swift",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Tunnel.swift",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Voice.swift",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/APIClient+Endpoints.swift",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/APIClient.swift",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/APIError.swift",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/RetryPolicy.swift",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Utils/Logger.swift",
+      "-I",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/Modules",
+      "-target",
+      "x86_64-apple-macosx13.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j20",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/include/AdjutantKit-Swift.h",
+      "-swift-version",
+      "5",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "adjutantkit",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "AdjutantKitPackageTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "AdjutantKitPackageTests",
+      "-package-name",
+      "adjutantkit",
+      "-c",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.derived/runner.swift",
+      "-I",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/Modules",
+      "-target",
+      "x86_64-apple-macosx13.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j20",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.build/include/AdjutantKitPackageTests-Swift.h",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "adjutantkit",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "AdjutantKitTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "AdjutantKitTests",
+      "-package-name",
+      "adjutantkit",
+      "-c",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Tests/AdjutantKitTests/APIClientTests.swift",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Tests/AdjutantKitTests/ModelTests.swift",
+      "-I",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/Modules",
+      "-target",
+      "x86_64-apple-macosx14.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j20",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-swift-version",
+      "5",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "adjutantkit",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "AdjutantKit" : [
+
+    ],
+    "AdjutantKitPackageTests" : [
+      "AdjutantKitTests",
+      "AdjutantKit"
+    ],
+    "AdjutantKitTests" : [
+      "AdjutantKit"
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+    "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.derived/runner.swift" : {
+      "inputs" : [
+
+      ],
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.derived/runner.swift"
+        }
+      ]
+    }
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/AdjutantKit.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Agent.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/ApiResponse.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Bead.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Convoy.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Enums.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/GastownStatus.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Message.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Tunnel.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Models/Voice.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/APIClient+Endpoints.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/APIClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/APIError.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Networking/RetryPolicy.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Sources/AdjutantKit/Utils/Logger.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/sources"
+    },
+    "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.derived/runner.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.build/sources"
+    },
+    "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIClient+Endpoints.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIClient.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/APIError.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/AdjutantKit.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Agent.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/ApiResponse.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Bead.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Convoy.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Enums.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/GastownStatus.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Logger.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Message.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/RetryPolicy.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Tunnel.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKit.build/Voice.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitTests.build/APIClientTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitTests.build/ModelTests.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitPackageTests.product/Objects.LinkFileList"
+    },
+    "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Tests/AdjutantKitTests/APIClientTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/Tests/AdjutantKitTests/ModelTests.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/AdjutantKitTests.build/sources"
+    },
+    "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/Reason/code/ai/gt/adjutant/polecats/jasper/adjutant/ios/AdjutantKit/.build/x86_64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+    }
+  }
+}

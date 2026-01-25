@@ -380,6 +380,27 @@ final class RetryPolicyTests: XCTestCase {
         // Should have some variance (not all the same)
         XCTAssertTrue(delays.count > 1, "Expected variance in delays with jitter")
     }
+
+    func testDefaultPolicy() {
+        let policy = RetryPolicy.default
+        XCTAssertEqual(policy.maxAttempts, 3)
+        XCTAssertEqual(policy.baseDelay, 1.0)
+        XCTAssertEqual(policy.maxDelay, 30.0)
+        XCTAssertEqual(policy.multiplier, 2.0)
+        XCTAssertEqual(policy.jitter, 0.1)
+    }
+
+    func testAggressivePolicy() {
+        let policy = RetryPolicy.aggressive
+        XCTAssertEqual(policy.maxAttempts, 5)
+        XCTAssertEqual(policy.baseDelay, 0.5)
+        XCTAssertEqual(policy.maxDelay, 60.0)
+    }
+
+    func testNonePolicy() {
+        let policy = RetryPolicy.none
+        XCTAssertEqual(policy.maxAttempts, 0)
+    }
 }
 
 // MARK: - Error Tests
@@ -420,5 +441,82 @@ final class APIErrorTests: XCTestCase {
 
         let error3 = APIClientError.httpError(statusCode: 404, message: "Not Found")
         XCTAssertTrue(error3.localizedDescription.contains("404"))
+    }
+
+    func testErrorEquality() {
+        let error1 = APIClientError.timeout
+        let error2 = APIClientError.timeout
+        XCTAssertEqual(error1, error2)
+
+        let error3 = APIClientError.networkError("a")
+        let error4 = APIClientError.networkError("a")
+        XCTAssertEqual(error3, error4)
+
+        let error5 = APIClientError.networkError("a")
+        let error6 = APIClientError.networkError("b")
+        XCTAssertNotEqual(error5, error6)
+    }
+}
+
+final class APIClientConfigurationTests: XCTestCase {
+    func testDevelopmentConfiguration() {
+        let config = APIClientConfiguration.development
+        XCTAssertEqual(config.baseURL.absoluteString, "http://localhost:3001/api")
+        XCTAssertEqual(config.defaultTimeout, 30.0)
+        XCTAssertEqual(config.terminalTimeout, 10.0)
+        XCTAssertEqual(config.voiceTimeout, 60.0)
+    }
+
+    func testCustomConfiguration() {
+        let config = APIClientConfiguration(
+            baseURL: URL(string: "https://example.com/api")!,
+            defaultTimeout: 15.0,
+            terminalTimeout: 5.0,
+            voiceTimeout: 120.0,
+            retryPolicy: .aggressive
+        )
+
+        XCTAssertEqual(config.baseURL.absoluteString, "https://example.com/api")
+        XCTAssertEqual(config.defaultTimeout, 15.0)
+        XCTAssertEqual(config.terminalTimeout, 5.0)
+        XCTAssertEqual(config.voiceTimeout, 120.0)
+        XCTAssertEqual(config.retryPolicy.maxAttempts, 5)
+    }
+}
+
+final class ApiErrorStructTests: XCTestCase {
+    func testApiErrorDecoding() throws {
+        let json = """
+        {
+            "code": "NOT_FOUND",
+            "message": "Resource not found",
+            "details": "The requested message does not exist"
+        }
+        """
+
+        let error = try JSONDecoder().decode(ApiError.self, from: json.data(using: .utf8)!)
+        XCTAssertEqual(error.code, "NOT_FOUND")
+        XCTAssertEqual(error.message, "Resource not found")
+        XCTAssertEqual(error.details, "The requested message does not exist")
+    }
+
+    func testApiErrorWithoutDetails() throws {
+        let json = """
+        {
+            "code": "INTERNAL_ERROR",
+            "message": "Server error"
+        }
+        """
+
+        let error = try JSONDecoder().decode(ApiError.self, from: json.data(using: .utf8)!)
+        XCTAssertEqual(error.code, "INTERNAL_ERROR")
+        XCTAssertEqual(error.message, "Server error")
+        XCTAssertNil(error.details)
+    }
+
+    func testApiErrorEquality() {
+        let error1 = ApiError(code: "TEST", message: "Test message")
+        let error2 = ApiError(code: "TEST", message: "Test message")
+        XCTAssertEqual(error1, error2)
     }
 }
