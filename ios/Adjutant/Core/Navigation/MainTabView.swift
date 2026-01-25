@@ -12,26 +12,26 @@ struct MainTabView: View {
     @State private var unreadMailCount: Int = 0
 
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                // Main content area with navigation
-                TabContent(selectedTab: coordinator.selectedTab, coordinator: coordinator)
-                    .environmentObject(coordinator)
+        VStack(spacing: 0) {
+            // Offline indicator (shows when network unavailable)
+            OfflineIndicator()
 
-                // Custom tab bar
-                CRTTabBar(
-                    selectedTab: $coordinator.selectedTab,
-                    unreadCount: unreadMailCount
-                )
-            }
+            // Main content area with navigation
+            TabContent(selectedTab: coordinator.selectedTab, coordinator: coordinator)
+                .environmentObject(coordinator)
 
-            // Quick Input FAB - appears on all tabs
-            QuickInputFAB()
+            // Custom tab bar
+            CRTTabBar(
+                selectedTab: $coordinator.selectedTab,
+                unreadCount: unreadMailCount
+            )
         }
         .background(CRTTheme.Background.screen)
         .environmentObject(coordinator)
         .onAppear {
             loadUnreadCount()
+            // Start network monitoring
+            _ = NetworkMonitor.shared
         }
     }
 
@@ -218,11 +218,28 @@ private struct ChatPlaceholderView: View {
     }
 }
 
-/// Convoys tab view wrapper.
-/// Uses the full ConvoysListView implementation from Features/Convoys.
+/// Convoys tab view.
 struct ConvoysView: View {
+    @Environment(\.crtTheme) private var theme
+    @EnvironmentObject private var coordinator: AppCoordinator
+
     var body: some View {
-        ConvoysListView()
+        VStack(spacing: CRTTheme.Spacing.lg) {
+            Spacer()
+
+            Image(systemName: "shippingbox.fill")
+                .font(.system(size: 48))
+                .foregroundColor(theme.dim)
+                .crtGlow(color: theme.primary, radius: 8, intensity: 0.3)
+
+            CRTText("CONVOYS", style: .header)
+            CRTText("Work package tracking", style: .caption, color: theme.dim)
+            CRTText("Coming soon...", style: .body, color: theme.dim.opacity(0.6))
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(CRTTheme.Background.screen)
     }
 }
 
