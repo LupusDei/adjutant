@@ -52,6 +52,16 @@ final class ChatViewModel: BaseViewModel {
         self.speechService = speechService
         super.init()
         setupSpeechBindings()
+        loadFromCache()
+    }
+
+    /// Loads cached chat messages for immediate display
+    private func loadFromCache() {
+        let cached = ResponseCache.shared.chatMessages
+        if !cached.isEmpty {
+            messages = cached
+            lastMessageId = messages.last?.id
+        }
     }
 
     deinit {
@@ -81,6 +91,8 @@ final class ChatViewModel: BaseViewModel {
                 (msg1.date ?? Date.distantPast) < (msg2.date ?? Date.distantPast)
             }
             self.lastMessageId = self.messages.last?.id
+            // Update cache for next navigation
+            ResponseCache.shared.updateChatMessages(self.messages)
         }
     }
 

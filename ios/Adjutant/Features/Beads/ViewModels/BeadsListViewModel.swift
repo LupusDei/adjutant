@@ -81,6 +81,16 @@ final class BeadsListViewModel: BaseViewModel {
         self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
         setupRigFilterObserver()
+        loadFromCache()
+    }
+
+    /// Loads cached beads for immediate display
+    private func loadFromCache() {
+        let cached = ResponseCache.shared.beads
+        if !cached.isEmpty {
+            beads = cached
+            applyFilter()
+        }
     }
 
     /// Sets up observation of rig filter changes from AppState
@@ -137,6 +147,8 @@ final class BeadsListViewModel: BaseViewModel {
                 return ($0.updatedDate ?? $0.createdDate ?? Date.distantPast) >
                        ($1.updatedDate ?? $1.createdDate ?? Date.distantPast)
             }
+            // Update cache for next navigation
+            ResponseCache.shared.updateBeads(self.beads)
             self.applyFilter()
         }
     }
@@ -173,6 +185,8 @@ final class BeadsListViewModel: BaseViewModel {
                 return ($0.updatedDate ?? $0.createdDate ?? Date.distantPast) >
                        ($1.updatedDate ?? $1.createdDate ?? Date.distantPast)
             }
+            // Update cache for next navigation
+            ResponseCache.shared.updateBeads(self.beads)
             self.applyFilter()
         }
     }

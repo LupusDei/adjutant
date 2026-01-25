@@ -74,6 +74,17 @@ final class CrewListViewModel: BaseViewModel {
     init(apiClient: APIClient? = nil) {
         self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
+        loadFromCache()
+    }
+
+    /// Loads cached crew for immediate display
+    private func loadFromCache() {
+        let cached = ResponseCache.shared.crewMembers
+        if !cached.isEmpty {
+            allCrewMembers = cached
+            updateAvailableRigs()
+            applyFilters()
+        }
     }
 
     deinit {
@@ -99,6 +110,8 @@ final class CrewListViewModel: BaseViewModel {
         await performAsyncAction(showLoading: allCrewMembers.isEmpty) {
             let agents = try await self.apiClient.getAgents()
             self.allCrewMembers = agents
+            // Update cache for next navigation
+            ResponseCache.shared.updateCrewMembers(agents)
             self.updateAvailableRigs()
             self.applyFilters()
         }

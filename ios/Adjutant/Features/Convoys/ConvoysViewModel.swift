@@ -63,6 +63,16 @@ final class ConvoysViewModel: BaseViewModel {
         self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
         setupRigFilterObserver()
+        loadFromCache()
+    }
+
+    /// Loads cached convoys for immediate display
+    private func loadFromCache() {
+        let cached = ResponseCache.shared.convoys
+        if !cached.isEmpty {
+            convoys = cached
+            applyFiltersAndSort()
+        }
     }
 
     deinit {
@@ -113,6 +123,8 @@ final class ConvoysViewModel: BaseViewModel {
             guard let self = self else { return }
             let loadedConvoys = try await apiClient.getConvoys()
             self.convoys = loadedConvoys
+            // Update cache for next navigation
+            ResponseCache.shared.updateConvoys(loadedConvoys)
             self.applyFiltersAndSort()
         }
     }

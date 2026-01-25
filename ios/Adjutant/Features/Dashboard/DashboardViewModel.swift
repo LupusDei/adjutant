@@ -40,6 +40,18 @@ final class DashboardViewModel: BaseViewModel {
     init(apiClient: APIClient? = nil) {
         self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
+        loadFromCache()
+    }
+
+    /// Loads cached dashboard data for immediate display
+    private func loadFromCache() {
+        let cache = ResponseCache.shared
+        if cache.hasCache(for: .dashboard) {
+            recentMail = cache.dashboardMail
+            crewMembers = cache.dashboardCrew
+            convoys = cache.dashboardConvoys
+            unreadCount = recentMail.filter { !$0.read }.count
+        }
     }
 
     deinit {
@@ -86,6 +98,13 @@ final class DashboardViewModel: BaseViewModel {
         if let convoys = convoys {
             self.convoys = convoys.filter { !$0.isComplete }
         }
+
+        // Update cache for next navigation
+        ResponseCache.shared.updateDashboard(
+            mail: self.recentMail,
+            crew: self.crewMembers,
+            convoys: self.convoys
+        )
 
         isRefreshing = false
     }

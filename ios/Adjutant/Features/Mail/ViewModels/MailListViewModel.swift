@@ -70,6 +70,16 @@ final class MailListViewModel: BaseViewModel {
         self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
         setupRigFilterObserver()
+        loadFromCache()
+    }
+
+    /// Loads cached messages for immediate display
+    private func loadFromCache() {
+        let cached = ResponseCache.shared.messages
+        if !cached.isEmpty {
+            messages = cached
+            applyFilter()
+        }
     }
 
     /// Sets up observation of rig filter changes from AppState
@@ -122,6 +132,8 @@ final class MailListViewModel: BaseViewModel {
                 // Sort by date descending (newest first)
                 ($0.date ?? Date.distantPast) > ($1.date ?? Date.distantPast)
             }
+            // Update cache for next navigation
+            ResponseCache.shared.updateMessages(self.messages)
             self.applyFilter()
             // Update global unread count for badge
             self.updateUnreadBadge()
@@ -156,6 +168,8 @@ final class MailListViewModel: BaseViewModel {
             self.messages = response.items.sorted {
                 ($0.date ?? Date.distantPast) > ($1.date ?? Date.distantPast)
             }
+            // Update cache for next navigation
+            ResponseCache.shared.updateMessages(self.messages)
             self.applyFilter()
             self.updateUnreadBadge()
         }
