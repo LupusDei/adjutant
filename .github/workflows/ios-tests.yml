@@ -1,0 +1,63 @@
+name: iOS Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ios/**'
+
+jobs:
+  test-adjutant-kit:
+    name: AdjutantKit Tests
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: ios/AdjutantKit
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.2.app
+
+      - name: Build and Test
+        run: swift test --parallel
+
+  test-adjutant-app:
+    name: Adjutant App Tests
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: ios
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.2.app
+
+      - name: Build for Testing
+        run: |
+          xcodebuild build-for-testing \
+            -scheme Adjutant \
+            -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.2' \
+            -quiet
+
+      - name: Run Tests
+        run: |
+          xcodebuild test-without-building \
+            -scheme Adjutant \
+            -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.2' \
+            -resultBundlePath TestResults.xcresult \
+            -quiet
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-results
+          path: ios/TestResults.xcresult
