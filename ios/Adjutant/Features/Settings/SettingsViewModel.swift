@@ -93,8 +93,9 @@ final class SettingsViewModel: BaseViewModel {
         // Load persisted values
         self.selectedTheme = AppState.shared.currentTheme
         self.notificationsEnabled = UserDefaults.standard.bool(forKey: "notificationsEnabled")
-        self.voiceVolume = UserDefaults.standard.double(forKey: "voiceVolume")
-        if self.voiceVolume == 0 { self.voiceVolume = 0.8 } // Default volume
+
+        let savedVolume = UserDefaults.standard.double(forKey: "voiceVolume")
+        self.voiceVolume = savedVolume == 0 ? 0.8 : savedVolume // Default volume
 
         if let voiceRaw = UserDefaults.standard.string(forKey: "selectedVoice"),
            let voice = VoiceOption(rawValue: voiceRaw) {

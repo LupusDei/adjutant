@@ -97,7 +97,7 @@ struct AppHeaderView: View {
         .buttonStyle(.plain)
         .disabled(appState.powerState.isTransitioning)
         .accessibilityLabel("Power status: \(powerStatusLabel)")
-        .accessibilityHint(onPowerTap != nil ? "Tap to toggle power" : nil)
+        .accessibilityHint(onPowerTap != nil ? "Tap to toggle power" : "")
     }
 
     // MARK: - Power Status Helpers

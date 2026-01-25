@@ -2,13 +2,18 @@ import SwiftUI
 import AdjutantKit
 
 /// Mail inbox list view displaying messages with filtering and search.
+@MainActor
 struct MailListView: View {
     @Environment(\.crtTheme) private var theme
     @StateObject private var viewModel: MailListViewModel
     @EnvironmentObject private var coordinator: AppCoordinator
     @ObservedObject private var appState = AppState.shared
 
-    init(viewModel: MailListViewModel = MailListViewModel()) {
+    init() {
+        _viewModel = StateObject(wrappedValue: MailListViewModel())
+    }
+
+    init(viewModel: MailListViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
     }
 
@@ -43,7 +48,9 @@ struct MailListView: View {
             }
         }
         .background(CRTTheme.Background.screen)
+        #if os(iOS)
         .navigationBarHidden(true)
+        #endif
         .onAppear {
             viewModel.onAppear()
         }
@@ -94,7 +101,9 @@ struct MailListView: View {
             TextField("Search messages...", text: $viewModel.searchText)
                 .font(CRTTheme.Typography.font(size: 14))
                 .foregroundColor(theme.primary)
+                #if os(iOS)
                 .autocapitalization(.none)
+                #endif
                 .disableAutocorrection(true)
 
             if !viewModel.searchText.isEmpty {

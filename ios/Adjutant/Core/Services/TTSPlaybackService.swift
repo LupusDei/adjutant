@@ -151,7 +151,11 @@ public final class TTSPlaybackService: NSObject, TTSPlaybackServiceProtocol {
 
     public var isAvailable: Bool {
         get async {
+            #if os(iOS)
             return audioSession != nil
+            #else
+            return true
+            #endif
         }
     }
 
@@ -190,7 +194,9 @@ public final class TTSPlaybackService: NSObject, TTSPlaybackServiceProtocol {
     // MARK: - Private Properties
 
     private var audioPlayer: AVAudioPlayer?
+    #if os(iOS)
     private var audioSession: AVAudioSession?
+    #endif
     private let apiClient: APIClient
     private let baseURL: URL
     private var cancellables = Set<AnyCancellable>()
@@ -207,6 +213,7 @@ public final class TTSPlaybackService: NSObject, TTSPlaybackServiceProtocol {
     // MARK: - Audio Session Configuration
 
     private func configureAudioSession() {
+        #if os(iOS)
         do {
             audioSession = AVAudioSession.sharedInstance()
             try audioSession?.setCategory(
@@ -218,6 +225,7 @@ public final class TTSPlaybackService: NSObject, TTSPlaybackServiceProtocol {
         } catch {
             state = .error(message: "Failed to configure audio session: \(error.localizedDescription)")
         }
+        #endif
     }
 
     // MARK: - Queue Management

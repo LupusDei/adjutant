@@ -30,8 +30,8 @@ struct ChatView: View {
             if let speechError = viewModel.speechError {
                 ErrorBanner(
                     message: speechError,
-                    onDismiss: { viewModel.clearSpeechError() },
-                    onRetry: nil
+                    onRetry: nil,
+                    onDismiss: { viewModel.clearSpeechError() }
                 )
                 .padding(.horizontal)
             }

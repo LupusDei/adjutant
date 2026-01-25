@@ -3,7 +3,7 @@ import Foundation
 /// Protocol defining the base interface for all services in the application.
 /// Services encapsulate business logic and data operations, providing a clean
 /// abstraction layer between ViewModels and data sources.
-protocol ServiceProtocol {
+public protocol ServiceProtocol {
     /// The type of error this service can throw
     associatedtype ServiceError: Error
 

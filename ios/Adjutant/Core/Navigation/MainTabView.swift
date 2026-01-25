@@ -63,7 +63,9 @@ private struct TabContent: View {
                 .tag(tab)
             }
         }
+        #if os(iOS)
         .tabViewStyle(.page(indexDisplayMode: .never))
+        #endif
     }
 
     @ViewBuilder

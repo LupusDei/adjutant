@@ -3,6 +3,7 @@ import AdjutantKit
 
 /// Main convoys list view displaying active work packages with progress tracking.
 /// Features rig filtering, sorting options, and expandable convoy cards.
+@MainActor
 struct ConvoysListView: View {
     @Environment(\.crtTheme) private var theme
     @StateObject private var viewModel: ConvoysViewModel
@@ -11,7 +12,11 @@ struct ConvoysListView: View {
 
     @State private var showingSortPicker = false
 
-    init(viewModel: ConvoysViewModel = ConvoysViewModel()) {
+    init() {
+        _viewModel = StateObject(wrappedValue: ConvoysViewModel())
+    }
+
+    init(viewModel: ConvoysViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
     }
 

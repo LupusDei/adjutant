@@ -145,7 +145,9 @@ public final class SpeechRecognitionService: NSObject, SpeechRecognitionServiceP
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private let audioEngine = AVAudioEngine()
+    #if os(iOS)
     private var audioSession: AVAudioSession?
+    #endif
 
     // MARK: - Initialization
 
@@ -184,6 +186,7 @@ public final class SpeechRecognitionService: NSObject, SpeechRecognitionServiceP
         }
 
         // Request microphone authorization
+        #if os(iOS)
         let micStatus: Bool
         if #available(iOS 17.0, *) {
             micStatus = await AVAudioApplication.requestRecordPermission()
@@ -194,8 +197,10 @@ public final class SpeechRecognitionService: NSObject, SpeechRecognitionServiceP
                 }
             }
         }
-
         let finalStatus: SpeechAuthorizationStatus = micStatus ? .authorized : .microphoneDenied
+        #else
+        let finalStatus: SpeechAuthorizationStatus = .authorized
+        #endif
         await MainActor.run {
             self.authorizationStatus = finalStatus
         }
@@ -214,8 +219,12 @@ public final class SpeechRecognitionService: NSObject, SpeechRecognitionServiceP
             authorizationStatus = .restricted
         case .authorized:
             // Check microphone too
+            #if os(iOS)
             let micStatus = AVAudioSession.sharedInstance().recordPermission
             authorizationStatus = micStatus == .granted ? .authorized : .microphoneDenied
+            #else
+            authorizationStatus = .authorized
+            #endif
         @unknown default:
             authorizationStatus = .notDetermined
         }
@@ -257,6 +266,7 @@ public final class SpeechRecognitionService: NSObject, SpeechRecognitionServiceP
         state = .starting
 
         // Configure audio session
+        #if os(iOS)
         do {
             audioSession = AVAudioSession.sharedInstance()
             try audioSession?.setCategory(.record, mode: .measurement, options: .duckOthers)
@@ -265,6 +275,7 @@ public final class SpeechRecognitionService: NSObject, SpeechRecognitionServiceP
             state = .error(message: "Failed to configure audio session: \(error.localizedDescription)")
             throw SpeechRecognitionError.audioSessionFailed(error)
         }
+        #endif
 
         // Create recognition request
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
@@ -332,7 +343,7 @@ public final class SpeechRecognitionService: NSObject, SpeechRecognitionServiceP
             let nsError = error as NSError
             if nsError.domain == "kAFAssistantErrorDomain" && nsError.code == 1110 {
                 // "No speech detected" - not really an error
-                finalize()
+                finalizeRecording()
                 return
             }
 
@@ -348,11 +359,11 @@ public final class SpeechRecognitionService: NSObject, SpeechRecognitionServiceP
 
         // Check if this is the final result
         if result.isFinal {
-            finalize()
+            finalizeRecording()
         }
     }
 
-    private func finalize() {
+    private func finalizeRecording() {
         let text = transcription.trimmingCharacters(in: .whitespacesAndNewlines)
         finalTranscription = text.isEmpty ? nil : text
         cleanup()
@@ -368,7 +379,9 @@ public final class SpeechRecognitionService: NSObject, SpeechRecognitionServiceP
         recognitionTask = nil
 
         // Deactivate audio session
+        #if os(iOS)
         try? audioSession?.setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
     }
 }
 

@@ -76,7 +76,7 @@ final class ChatViewModel: BaseViewModel {
     override func refresh() async {
         await performAsyncAction(showLoading: messages.isEmpty) {
             let response = try await self.apiClient.getMail(filter: .user, all: false)
-            self.messages = self.filterMayorMessages(response.data).sorted { msg1, msg2 in
+            self.messages = self.filterMayorMessages(response.items).sorted { msg1, msg2 in
                 // Sort by timestamp, oldest first (for chat display)
                 (msg1.date ?? Date.distantPast) < (msg2.date ?? Date.distantPast)
             }
@@ -94,7 +94,7 @@ final class ChatViewModel: BaseViewModel {
         await performAsyncAction(showLoading: false) {
             // For now, load all messages - pagination could be added later
             let response = try await self.apiClient.getMail(filter: .user, all: true)
-            let allMayorMessages = self.filterMayorMessages(response.data).sorted { msg1, msg2 in
+            let allMayorMessages = self.filterMayorMessages(response.items).sorted { msg1, msg2 in
                 (msg1.date ?? Date.distantPast) < (msg2.date ?? Date.distantPast)
             }
 
@@ -260,7 +260,7 @@ final class ChatViewModel: BaseViewModel {
                 if let response = await performAsync(showLoading: false, {
                     try await self.apiClient.getMail(filter: .user, all: false)
                 }) {
-                    let newMayorMessages = filterMayorMessages(response.data)
+                    let newMayorMessages = filterMayorMessages(response.items)
                     if let newest = newMayorMessages.first, newest.id != lastMessageId {
                         await refresh()
                     }

@@ -1,4 +1,9 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 /// Typography definitions for the CRT theme
 public enum CRTTypography {
@@ -69,9 +74,15 @@ public enum CRTTypography {
 extension Font {
     /// CRT terminal font at specified size
     public static func crt(_ size: CGFloat) -> Font {
+        #if os(iOS)
         if let _ = UIFont(name: CRTTypography.fontFamily, size: size) {
             return .custom(CRTTypography.fontFamily, size: size)
         }
+        #elseif os(macOS)
+        if let _ = NSFont(name: CRTTypography.fontFamily, size: size) {
+            return .custom(CRTTypography.fontFamily, size: size)
+        }
+        #endif
         return .system(size: size, design: .monospaced)
     }
 
@@ -108,7 +119,7 @@ extension Font {
 extension View {
     /// Apply CRT text styling with glow effect
     public func crtTextStyle(
-        _ theme: CRTTheme,
+        _ theme: CRTTheme.ColorTheme,
         size: CGFloat = CRTTypography.sizeBase,
         letterSpacing: CGFloat = CRTTypography.letterSpacingWide
     ) -> some View {
@@ -119,7 +130,7 @@ extension View {
     }
 
     /// Apply CRT header styling (uppercase, wide tracking)
-    public func crtHeaderStyle(_ theme: CRTTheme, size: CGFloat = CRTTypography.sizeLG) -> some View {
+    public func crtHeaderStyle(_ theme: CRTTheme.ColorTheme, size: CGFloat = CRTTypography.sizeLG) -> some View {
         self
             .font(.crt(size))
             .foregroundColor(theme.primary)
@@ -128,7 +139,7 @@ extension View {
     }
 
     /// Apply CRT label styling (smaller, uppercase)
-    public func crtLabelStyle(_ theme: CRTTheme) -> some View {
+    public func crtLabelStyle(_ theme: CRTTheme.ColorTheme) -> some View {
         self
             .font(.crt(CRTTypography.sizeXS))
             .foregroundColor(theme.dim)
@@ -143,7 +154,7 @@ extension AttributedString {
     /// Create an attributed string with CRT styling
     public static func crt(
         _ string: String,
-        theme: CRTTheme,
+        theme: CRTTheme.ColorTheme,
         size: CGFloat = CRTTypography.sizeBase
     ) -> AttributedString {
         var attributed = AttributedString(string)
