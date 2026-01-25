@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import AdjutantKit
 
 /// Protocol defining the interface for navigation coordinators.
 /// Coordinators manage navigation flow and decouple navigation logic from views.
@@ -50,7 +51,7 @@ enum AppRoute: Hashable {
     case mailDetail(id: String)
     case mailCompose(replyTo: String? = nil)
     case convoyDetail(id: String)
-    case agentDetail(id: String)
+    case agentDetail(member: CrewMember)
     case beadDetail(id: String)
     case polecatTerminal(rig: String, polecat: String)
 

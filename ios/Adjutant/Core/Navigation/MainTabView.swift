@@ -81,7 +81,7 @@ private struct TabContent: View {
             ConvoysListView()
         case .crew:
             CrewListView(apiClient: AppState.shared.apiClient) { member in
-                coordinator.navigate(to: .agentDetail(id: member.id))
+                coordinator.navigate(to: .agentDetail(member: member))
             }
         case .beads:
             BeadsView()
@@ -97,8 +97,8 @@ private struct TabContent: View {
             MailDetailView(messageId: id)
         case .convoyDetail(let id):
             ConvoyDetailPlaceholder(id: id)
-        case .agentDetail(let id):
-            AgentDetailPlaceholder(id: id)
+        case .agentDetail(let member):
+            CrewDetailView(member: member)
         case .beadDetail(let id):
             BeadDetailPlaceholder(id: id)
         case .themeSettings, .voiceSettings, .tunnelSettings:
@@ -216,20 +216,6 @@ private struct ConvoyDetailPlaceholder: View {
     var body: some View {
         VStack {
             CRTText("CONVOY DETAIL", style: .header)
-            CRTText("ID: \(id)", style: .mono, color: theme.dim)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(CRTTheme.Background.screen)
-    }
-}
-
-private struct AgentDetailPlaceholder: View {
-    let id: String
-    @Environment(\.crtTheme) private var theme
-
-    var body: some View {
-        VStack {
-            CRTText("AGENT DETAIL", style: .header)
             CRTText("ID: \(id)", style: .mono, color: theme.dim)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

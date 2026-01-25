@@ -38,7 +38,7 @@ struct DashboardView: View {
                         issueCount: viewModel.crewWithIssues,
                         onTap: { coordinator.navigate(to: .crew) },
                         onMemberTap: { member in
-                            coordinator.navigate(to: .agentDetail(id: member.id))
+                            coordinator.navigate(to: .agentDetail(member: member))
                         }
                     )
 
