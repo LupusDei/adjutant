@@ -15,16 +15,18 @@ let package = Package(
             targets: ["Adjutant"]
         )
     ],
-    dependencies: [],
+    dependencies: [
+        .package(path: "AdjutantKit")
+    ],
     targets: [
         .target(
             name: "Adjutant",
-            dependencies: [],
+            dependencies: ["AdjutantKit"],
             path: "Adjutant"
         ),
         .testTarget(
             name: "AdjutantTests",
-            dependencies: ["Adjutant"],
+            dependencies: ["Adjutant", "AdjutantKit"],
             path: "AdjutantTests"
         )
     ]
