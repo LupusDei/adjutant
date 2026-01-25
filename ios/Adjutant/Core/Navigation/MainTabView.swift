@@ -76,11 +76,13 @@ private struct TabContent: View {
         case .mail:
             MailListView()
         case .chat:
-            ChatPlaceholderView()
+            ChatView(apiClient: AppState.shared.apiClient)
         case .convoys:
-            ConvoysView()
+            ConvoysListView()
         case .crew:
-            CrewView()
+            CrewListView(apiClient: AppState.shared.apiClient) { member in
+                coordinator.navigate(to: .agentDetail(id: member.id))
+            }
         case .beads:
             BeadsView()
         case .settings:
@@ -200,75 +202,7 @@ private struct CRTTabBarItem: View {
     }
 }
 
-// MARK: - Placeholder Views
-
-/// Placeholder for Chat view when APIClient is not available.
-private struct ChatPlaceholderView: View {
-    @Environment(\.crtTheme) private var theme
-
-    var body: some View {
-        VStack(spacing: CRTTheme.Spacing.lg) {
-            Image(systemName: "message.fill")
-                .font(.system(size: 48))
-                .foregroundColor(theme.dim)
-
-            CRTText("CHAT", style: .header)
-            CRTText("Direct channel to Mayor", style: .caption, color: theme.dim)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(CRTTheme.Background.screen)
-    }
-}
-
-/// Convoys tab view.
-struct ConvoysView: View {
-    @Environment(\.crtTheme) private var theme
-    @EnvironmentObject private var coordinator: AppCoordinator
-
-    var body: some View {
-        VStack(spacing: CRTTheme.Spacing.lg) {
-            Spacer()
-
-            Image(systemName: "shippingbox.fill")
-                .font(.system(size: 48))
-                .foregroundColor(theme.dim)
-                .crtGlow(color: theme.primary, radius: 8, intensity: 0.3)
-
-            CRTText("CONVOYS", style: .header)
-            CRTText("Work package tracking", style: .caption, color: theme.dim)
-            CRTText("Coming soon...", style: .body, color: theme.dim.opacity(0.6))
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(CRTTheme.Background.screen)
-    }
-}
-
-/// Crew tab view.
-struct CrewView: View {
-    @Environment(\.crtTheme) private var theme
-    @EnvironmentObject private var coordinator: AppCoordinator
-
-    var body: some View {
-        VStack(spacing: CRTTheme.Spacing.lg) {
-            Spacer()
-
-            Image(systemName: "person.3.fill")
-                .font(.system(size: 48))
-                .foregroundColor(theme.dim)
-                .crtGlow(color: theme.primary, radius: 8, intensity: 0.3)
-
-            CRTText("CREW", style: .header)
-            CRTText("Agent status dashboard", style: .caption, color: theme.dim)
-            CRTText("Coming soon...", style: .body, color: theme.dim.opacity(0.6))
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(CRTTheme.Background.screen)
-    }
-}
+// MARK: - Type Aliases
 
 /// Beads tab view - uses BeadsListView from Features/Beads.
 typealias BeadsView = BeadsListView
