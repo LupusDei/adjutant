@@ -54,7 +54,12 @@ final class AppState: ObservableObject {
 
     // MARK: - Dependencies
 
-    private var apiClient: APIClient?
+    /// Shared API client configured with the current base URL
+    /// This client is recreated when apiBaseURL changes
+    private(set) var apiClient: APIClient
+
+    /// Internal reference for status fetching
+    private var _statusApiClient: APIClient?
 
     // MARK: - Private Properties
 
@@ -63,7 +68,17 @@ final class AppState: ObservableObject {
     // MARK: - Initialization
 
     private init() {
+        // Initialize apiClient with default URL (will be updated in loadPersistedState)
+        let config = APIClientConfiguration(baseURL: URL(string: "http://localhost:3001/api")!)
+        self.apiClient = APIClient(configuration: config)
+
         loadPersistedState()
+    }
+
+    /// Recreates the API client with the current base URL
+    private func recreateAPIClient() {
+        let config = APIClientConfiguration(baseURL: apiBaseURL)
+        apiClient = APIClient(configuration: config)
     }
 
     // MARK: - State Updates
@@ -102,7 +117,7 @@ final class AppState: ObservableObject {
     /// Fetches available rigs from the API
     /// Call this on app startup and when refreshing status
     func fetchAvailableRigs() async {
-        let client = apiClient ?? APIClient()
+        let client = apiClient
         do {
             let status = try await client.getStatus()
             let rigNames = status.rigs.map { $0.name }
@@ -134,6 +149,7 @@ final class AppState: ObservableObject {
         if let urlString = UserDefaults.standard.string(forKey: "apiBaseURL"),
            let url = URL(string: urlString) {
             apiBaseURL = url
+            recreateAPIClient()
         }
 
         // Set up persistence observers
@@ -167,8 +183,9 @@ final class AppState: ObservableObject {
 
         $apiBaseURL
             .dropFirst()
-            .sink { url in
+            .sink { [weak self] url in
                 UserDefaults.standard.set(url.absoluteString, forKey: "apiBaseURL")
+                self?.recreateAPIClient()
             }
             .store(in: &cancellables)
     }

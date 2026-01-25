@@ -61,8 +61,8 @@ final class QuickInputViewModel: BaseViewModel {
 
     // MARK: - Initialization
 
-    init(apiClient: APIClient = APIClient()) {
-        self.apiClient = apiClient
+    init(apiClient: APIClient? = nil) {
+        self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
     }
 

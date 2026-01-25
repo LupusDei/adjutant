@@ -71,8 +71,8 @@ final class CrewListViewModel: BaseViewModel {
 
     // MARK: - Initialization
 
-    init(apiClient: APIClient) {
-        self.apiClient = apiClient
+    init(apiClient: APIClient? = nil) {
+        self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
     }
 

@@ -67,7 +67,7 @@ final class MailListViewModel: BaseViewModel {
     // MARK: - Initialization
 
     init(apiClient: APIClient? = nil) {
-        self.apiClient = apiClient
+        self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
         setupRigFilterObserver()
     }

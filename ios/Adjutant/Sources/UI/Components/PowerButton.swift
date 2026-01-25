@@ -280,8 +280,8 @@ final class PowerButtonViewModel: ObservableObject {
     private let apiClient: APIClient
     private var cancellables = Set<AnyCancellable>()
 
-    init(apiClient: APIClient = APIClient()) {
-        self.apiClient = apiClient
+    init(apiClient: APIClient? = nil) {
+        self.apiClient = apiClient ?? AppState.shared.apiClient
         setupBindings()
     }
 

@@ -47,8 +47,8 @@ final class ChatViewModel: BaseViewModel {
 
     // MARK: - Initialization
 
-    init(apiClient: APIClient, speechService: SpeechRecognitionServiceProtocol? = nil) {
-        self.apiClient = apiClient
+    init(apiClient: APIClient? = nil, speechService: SpeechRecognitionServiceProtocol? = nil) {
+        self.apiClient = apiClient ?? AppState.shared.apiClient
         self.speechService = speechService
         super.init()
         setupSpeechBindings()

@@ -36,7 +36,7 @@ final class MailDetailViewModel: BaseViewModel {
 
     init(messageId: String, apiClient: APIClient? = nil) {
         self.messageId = messageId
-        self.apiClient = apiClient ?? APIClient()
+        self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
     }
 

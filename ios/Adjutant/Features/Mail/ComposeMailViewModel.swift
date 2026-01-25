@@ -65,7 +65,7 @@ final class ComposeMailViewModel: BaseViewModel {
 
     init(replyToId: String? = nil, apiClient: APIClient? = nil) {
         self.replyToId = replyToId
-        self.apiClient = apiClient ?? APIClient()
+        self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
 
         setupRecipientFiltering()
