@@ -89,7 +89,9 @@ struct CrewListView: View {
                     .textFieldStyle(.plain)
                     .font(CRTTheme.Typography.font(size: 14))
                     .foregroundColor(theme.primary)
-                    .autocapitalization(.none)
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
                     .disableAutocorrection(true)
                     .placeholder(when: viewModel.searchText.isEmpty) {
                         Text("Search by name...")
@@ -233,10 +235,10 @@ struct CrewListView: View {
                 if let error = viewModel.errorMessage {
                     ErrorBanner(
                         message: error,
-                        onDismiss: { viewModel.clearError() },
                         onRetry: {
                             Task { await viewModel.refresh() }
-                        }
+                        },
+                        onDismiss: { viewModel.clearError() }
                     )
                     .padding(.horizontal)
                 }
@@ -302,7 +304,9 @@ struct CrewListView: View {
             .listStyle(.plain)
             .background(CRTTheme.Background.screen)
             .navigationTitle("Filter by Rig")
-            .navigationBarTitleDisplayMode(.inline)
+            #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {

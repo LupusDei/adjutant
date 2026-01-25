@@ -555,25 +555,6 @@ private struct AboutRow: View {
     }
 }
 
-// MARK: - Empty State View (if not already defined)
-
-private struct EmptyStateView: View {
-    @Environment(\.crtTheme) private var theme
-
-    let title: String
-    let icon: String
-
-    var body: some View {
-        VStack(spacing: CRTTheme.Spacing.sm) {
-            Image(systemName: icon)
-                .font(.system(size: 32))
-                .foregroundColor(theme.dim)
-
-            CRTText(title, style: .caption, color: theme.dim)
-        }
-    }
-}
-
 // MARK: - Preview
 
 #Preview("Settings View") {

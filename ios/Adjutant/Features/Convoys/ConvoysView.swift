@@ -33,7 +33,9 @@ struct ConvoysListView: View {
             contentView
         }
         .background(CRTTheme.Background.screen)
+        #if os(iOS)
         .navigationBarHidden(true)
+        #endif
         .onAppear {
             viewModel.onAppear()
         }
@@ -238,10 +240,10 @@ struct ConvoysListView: View {
                 if let error = viewModel.errorMessage {
                     ErrorBanner(
                         message: error,
-                        onDismiss: { viewModel.clearError() },
                         onRetry: {
                             Task { await viewModel.refresh() }
-                        }
+                        },
+                        onDismiss: { viewModel.clearError() }
                     )
                 }
             }
@@ -278,7 +280,9 @@ struct ConvoysListView: View {
             .listStyle(.plain)
             .background(CRTTheme.Background.screen)
             .navigationTitle("Sort By")
-            .navigationBarTitleDisplayMode(.inline)
+            #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {

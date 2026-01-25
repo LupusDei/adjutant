@@ -38,7 +38,9 @@ struct ComposeMailView: View {
                 .padding(CRTTheme.Spacing.md)
             }
             .background(CRTTheme.Background.screen)
-            .navigationBarTitleDisplayMode(.inline)
+            #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     CRTText(viewModel.isReply ? "REPLY" : "COMPOSE", style: .subheader, glowIntensity: .subtle)

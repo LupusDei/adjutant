@@ -129,10 +129,10 @@ struct ChatView: View {
                     if let error = viewModel.errorMessage {
                         ErrorBanner(
                             message: error,
-                            onDismiss: { viewModel.clearError() },
                             onRetry: {
                                 Task { await viewModel.refresh() }
-                            }
+                            },
+                            onDismiss: { viewModel.clearError() }
                         )
                         .padding(.horizontal)
                     }

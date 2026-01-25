@@ -404,8 +404,8 @@ extension MailListViewModel {
             read: true,
             priority: .normal,
             type: .reply,
-            replyTo: "msg-001",
             threadId: "thread-005",
+            replyTo: "msg-001",
             pinned: false,
             isInfrastructure: false
         )
