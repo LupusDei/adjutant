@@ -51,9 +51,18 @@ final class MailListViewModel: BaseViewModel {
         }
     }
 
+    // MARK: - Configuration
+
+    /// Polling interval for auto-refresh (30 seconds per spec)
+    private let pollingInterval: TimeInterval = 30.0
+
     // MARK: - Dependencies
 
     private let apiClient: APIClient?
+
+    // MARK: - Private Properties
+
+    private var pollingTask: Task<Void, Never>?
 
     // MARK: - Initialization
 
@@ -71,6 +80,22 @@ final class MailListViewModel: BaseViewModel {
                 self?.applyFilter()
             }
             .store(in: &cancellables)
+    }
+
+    deinit {
+        pollingTask?.cancel()
+    }
+
+    // MARK: - Lifecycle
+
+    override func onAppear() {
+        super.onAppear()
+        startPolling()
+    }
+
+    override func onDisappear() {
+        super.onDisappear()
+        stopPolling()
     }
 
     // MARK: - Data Loading
@@ -98,7 +123,47 @@ final class MailListViewModel: BaseViewModel {
                 ($0.date ?? Date.distantPast) > ($1.date ?? Date.distantPast)
             }
             self.applyFilter()
+            // Update global unread count for badge
+            self.updateUnreadBadge()
         }
+    }
+
+    // MARK: - Polling
+
+    private func startPolling() {
+        stopPolling()
+        pollingTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(pollingInterval * 1_000_000_000))
+                guard !Task.isCancelled else { break }
+                await refreshSilently()
+            }
+        }
+    }
+
+    private func stopPolling() {
+        pollingTask?.cancel()
+        pollingTask = nil
+    }
+
+    /// Silently refresh data in the background (no loading indicator)
+    private func refreshSilently() async {
+        guard let apiClient = apiClient else { return }
+
+        await performAsync(showLoading: false) { [weak self] in
+            guard let self = self else { return }
+            let response = try await apiClient.getMail(all: true)
+            self.messages = response.items.sorted {
+                ($0.date ?? Date.distantPast) > ($1.date ?? Date.distantPast)
+            }
+            self.applyFilter()
+            self.updateUnreadBadge()
+        }
+    }
+
+    /// Updates the global unread mail count for badge display
+    private func updateUnreadBadge() {
+        AppState.shared.updateUnreadMailCount(unreadCount)
     }
 
     // MARK: - Actions
@@ -229,6 +294,7 @@ final class MailListViewModel: BaseViewModel {
             )
             messages[index] = updated
             applyFilter()
+            updateUnreadBadge()
         }
     }
 
@@ -236,6 +302,7 @@ final class MailListViewModel: BaseViewModel {
     private func removeMessage(_ message: Message) {
         messages.removeAll { $0.id == message.id }
         applyFilter()
+        updateUnreadBadge()
     }
 
     // MARK: - Computed Properties

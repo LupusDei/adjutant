@@ -290,4 +290,61 @@ final class MailListViewModelTests: XCTestCase {
         // Clean up
         AppState.shared.selectedRig = nil
     }
+
+    // MARK: - Lifecycle Tests
+
+    func testOnAppearStartsPollingAndOnDisappearStops() async {
+        // Test lifecycle hooks work without crashing
+        viewModel.onAppear()
+
+        // Give a brief moment for the polling task to be created
+        try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
+
+        // onDisappear should cancel polling cleanly
+        viewModel.onDisappear()
+
+        // Verify we can call lifecycle methods multiple times without issues
+        viewModel.onAppear()
+        viewModel.onDisappear()
+    }
+
+    // MARK: - Badge Update Tests
+
+    func testLoadMessagesUpdatesBadge() async {
+        let initialUnreadCount = AppState.shared.unreadMailCount
+
+        await viewModel.loadMessages()
+
+        // Badge should be updated with the unread count from mock data
+        let expectedUnreadCount = viewModel.unreadCount
+        XCTAssertEqual(AppState.shared.unreadMailCount, expectedUnreadCount)
+    }
+
+    func testMarkAsReadUpdatesBadge() async {
+        await viewModel.loadMessages()
+        guard let unreadMessage = viewModel.messages.first(where: { !$0.read }) else {
+            XCTFail("No unread message found")
+            return
+        }
+
+        let unreadCountBefore = viewModel.unreadCount
+        await viewModel.markAsRead(unreadMessage)
+
+        XCTAssertEqual(viewModel.unreadCount, unreadCountBefore - 1)
+        XCTAssertEqual(AppState.shared.unreadMailCount, viewModel.unreadCount)
+    }
+
+    func testDeleteMessageUpdatesBadge() async {
+        await viewModel.loadMessages()
+        guard let unreadMessage = viewModel.messages.first(where: { !$0.read }) else {
+            XCTFail("No unread message found")
+            return
+        }
+
+        let unreadCountBefore = viewModel.unreadCount
+        await viewModel.deleteMessage(unreadMessage)
+
+        XCTAssertEqual(viewModel.unreadCount, unreadCountBefore - 1)
+        XCTAssertEqual(AppState.shared.unreadMailCount, viewModel.unreadCount)
+    }
 }

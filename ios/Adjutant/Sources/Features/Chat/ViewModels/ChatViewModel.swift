@@ -33,7 +33,8 @@ final class ChatViewModel: BaseViewModel {
     // MARK: - Private Properties
 
     private var pollingTask: Task<Void, Never>?
-    private let pollingInterval: TimeInterval = 5.0
+    /// Polling interval for chat (30 seconds per spec)
+    private let pollingInterval: TimeInterval = 30.0
     private var lastMessageId: String?
 
     // MARK: - Initialization
