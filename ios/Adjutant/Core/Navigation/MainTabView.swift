@@ -12,16 +12,21 @@ struct MainTabView: View {
     @State private var unreadMailCount: Int = 0
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Main content area with navigation
-            TabContent(selectedTab: coordinator.selectedTab, coordinator: coordinator)
-                .environmentObject(coordinator)
+        ZStack {
+            VStack(spacing: 0) {
+                // Main content area with navigation
+                TabContent(selectedTab: coordinator.selectedTab, coordinator: coordinator)
+                    .environmentObject(coordinator)
 
-            // Custom tab bar
-            CRTTabBar(
-                selectedTab: $coordinator.selectedTab,
-                unreadCount: unreadMailCount
-            )
+                // Custom tab bar
+                CRTTabBar(
+                    selectedTab: $coordinator.selectedTab,
+                    unreadCount: unreadMailCount
+                )
+            }
+
+            // Quick Input FAB - appears on all tabs
+            QuickInputFAB()
         }
         .background(CRTTheme.Background.screen)
         .environmentObject(coordinator)
