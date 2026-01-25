@@ -45,6 +45,13 @@ final class AppState: ObservableObject {
     /// Current API base URL
     @Published var apiBaseURL: URL = URL(string: "http://localhost:3001/api")!
 
+    /// Whether onboarding has been completed (URL is configured)
+    var isOnboardingComplete: Bool {
+        // Check if URL is not localhost (user has configured a real URL)
+        let host = apiBaseURL.host ?? ""
+        return !host.contains("localhost") && !host.contains("127.0.0.1")
+    }
+
     // MARK: - Dependencies
 
     private var apiClient: APIClient?
