@@ -80,13 +80,38 @@ function getSharedAudioElement(): HTMLAudioElement {
 }
 
 /**
- * Try to unlock audio by playing a silent sound
+ * Try to unlock audio by playing a silent sound and resuming AudioContext
+ * Uses multiple approaches for maximum compatibility across iOS versions
  */
 async function tryUnlockAudio(): Promise<boolean> {
   if (globalIsUnlocked) return true;
 
   const audio = getSharedAudioElement();
+  let audioContextUnlocked = false;
+  let audioElementUnlocked = false;
 
+  // Approach 1: Unlock via AudioContext (more reliable on newer iOS)
+  try {
+    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (AudioContextClass) {
+      const ctx = new AudioContextClass();
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+      // Create and play a short silent buffer
+      const buffer = ctx.createBuffer(1, 1, 22050);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(0);
+      audioContextUnlocked = true;
+      console.log('[MobileAudio] AudioContext unlocked');
+    }
+  } catch (err) {
+    console.warn('[MobileAudio] AudioContext unlock failed:', err);
+  }
+
+  // Approach 2: Unlock via Audio element (fallback)
   try {
     // Create a short silent audio data URL
     // This is a minimal valid MP3 file (silence)
@@ -99,19 +124,23 @@ async function tryUnlockAudio(): Promise<boolean> {
     await audio.play();
     audio.pause();
     audio.currentTime = 0;
-    // Don't set src to '' - it causes errors. Keep the silent mp3 loaded.
+    audioElementUnlocked = true;
+    console.log('[MobileAudio] Audio element unlocked');
+  } catch (err) {
+    console.warn('[MobileAudio] Audio element unlock failed:', err);
+  }
 
+  // Success if either method worked
+  if (audioContextUnlocked || audioElementUnlocked) {
     globalIsUnlocked = true;
-
     // Notify all listeners
     globalUnlockListeners.forEach(listener => listener());
-
     console.log('[MobileAudio] Audio unlocked successfully');
     return true;
-  } catch (err) {
-    console.warn('[MobileAudio] Failed to unlock audio:', err);
-    return false;
   }
+
+  console.warn('[MobileAudio] Failed to unlock audio with any method');
+  return false;
 }
 
 // =============================================================================
