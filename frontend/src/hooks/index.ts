@@ -30,3 +30,9 @@ export type { UseMobileAudioReturn } from "./useMobileAudio";
 
 export { useOverseerNotifications } from "./useOverseerNotifications";
 export type { UseOverseerNotificationsReturn, OverseerNotificationSettings } from "./useOverseerNotifications";
+
+export { useCrewMessaging, buildCrewAddress, isMessageForCrewMember, isCrewMessage } from "./useCrewMessaging";
+export type { CrewMessageRequest, UseCrewMessagingOptions, UseCrewMessagingResult } from "./useCrewMessaging";
+
+export { useCrewNotifications } from "./useCrewNotifications";
+export type { CrewNotificationInfo, UseCrewNotificationsOptions, UseCrewNotificationsReturn } from "./useCrewNotifications";

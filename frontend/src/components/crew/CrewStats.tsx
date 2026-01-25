@@ -605,13 +605,16 @@ function PolecatCard({ agent, isExpanded, onClick, disabled }: PolecatCardProps)
       }}
       onClick={onClick}
       disabled={disabled}
+      role="listitem"
       aria-expanded={isExpanded}
       aria-label={`${agent.name} - ${displayStatus}${isExpanded ? ' (terminal open)' : ''}`}
     >
-      <div style={styles.polecatCardHeader}>
+      <div style={styles.polecatCardHeader} data-testid="status-row">
         <span style={styles.polecatIcon}>🐱</span>
         <span style={styles.polecatName}>{agent.name.toUpperCase()}</span>
         <span
+          data-testid="status-indicator"
+          className={isActive ? 'pulsate' : ''}
           style={{
             ...styles.statusIndicator,
             backgroundColor: statusColor,
