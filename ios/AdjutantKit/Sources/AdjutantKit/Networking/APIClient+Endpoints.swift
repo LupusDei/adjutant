@@ -3,7 +3,24 @@ import Foundation
 // MARK: - Status Endpoints
 
 extension APIClient {
-    /// Get current Gastown system status
+    /// Retrieves the current status of the Gas Town system.
+    ///
+    /// Returns comprehensive information about the system including:
+    /// - Power state (running, stopped, starting, stopping)
+    /// - System uptime
+    /// - List of active rigs
+    /// - Agent counts and status summary
+    ///
+    /// ## Example
+    /// ```swift
+    /// let status = try await client.getStatus()
+    /// print("Power: \(status.power)")
+    /// print("Uptime: \(status.uptime ?? "unknown")")
+    /// print("Active rigs: \(status.rigs.count)")
+    /// ```
+    ///
+    /// - Returns: A ``GastownStatus`` containing complete system information.
+    /// - Throws: ``APIClientError`` if the request fails.
     public func getStatus() async throws -> GastownStatus {
         try await requestWithEnvelope(.get, path: "/status")
     }
@@ -31,13 +48,39 @@ extension APIClient {
 // MARK: - Mail Endpoints
 
 extension APIClient {
-    /// Mail filter options
+    /// Filter options for mail queries.
+    ///
+    /// Use these to filter messages by category:
+    /// - `.user`: Regular user messages
+    /// - `.infrastructure`: System and coordination messages
     public enum MailFilter: String {
         case user
         case infrastructure
     }
 
-    /// List all mail messages
+    /// Retrieves mail messages from the inbox.
+    ///
+    /// By default, returns only the current identity's unread and recent messages.
+    /// Use the `all` parameter to retrieve the complete message history.
+    ///
+    /// ## Example
+    /// ```swift
+    /// // Get default inbox view
+    /// let inbox = try await client.getMail()
+    /// print("Messages: \(inbox.items.count)")
+    ///
+    /// // Get all user messages
+    /// let allMail = try await client.getMail(filter: .user, all: true)
+    ///
+    /// // Get infrastructure messages only
+    /// let sysMail = try await client.getMail(filter: .infrastructure)
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - filter: Optional filter to show only user or infrastructure messages.
+    ///   - all: If true, retrieves all messages instead of recent only.
+    /// - Returns: A paginated response containing ``Message`` items.
+    /// - Throws: ``APIClientError`` if the request fails.
     public func getMail(filter: MailFilter? = nil, all: Bool = false) async throws -> PaginatedResponse<Message> {
         var queryItems: [URLQueryItem] = []
         if let filter {
@@ -54,7 +97,34 @@ extension APIClient {
         )
     }
 
-    /// Send a new message
+    /// Sends a new message to the specified recipient.
+    ///
+    /// Messages are the primary communication mechanism in Gas Town.
+    /// All agents and the Mayor can receive messages through their mailboxes.
+    ///
+    /// ## Example
+    /// ```swift
+    /// // Simple message
+    /// let request = SendMessageRequest(
+    ///     to: "greenplace/witness",
+    ///     subject: "Status Update",
+    ///     body: "All systems operational."
+    /// )
+    /// try await client.sendMail(request)
+    ///
+    /// // High priority message
+    /// let urgent = SendMessageRequest(
+    ///     to: "mayor/",
+    ///     subject: "CRITICAL: System failure",
+    ///     body: "Immediate attention required.",
+    ///     priority: .urgent
+    /// )
+    /// try await client.sendMail(urgent)
+    /// ```
+    ///
+    /// - Parameter request: A ``SendMessageRequest`` with message details.
+    /// - Returns: A ``SuccessResponse`` indicating the message was sent.
+    /// - Throws: ``APIClientError`` if the request fails.
     public func sendMail(_ request: SendMessageRequest) async throws -> SuccessResponse {
         try await requestWithEnvelope(.post, path: "/mail", body: request)
     }

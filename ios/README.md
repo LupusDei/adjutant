@@ -118,12 +118,134 @@ xcodebuild test \
 
 ## Architecture
 
-The app follows **MVVM + Coordinator** architecture:
+The app follows **MVVM + Coordinator** architecture with a clean separation of concerns.
 
-- **Model**: Data models and business logic
-- **View**: SwiftUI views
-- **ViewModel**: View state management and business logic binding
-- **Coordinator**: Navigation flow management
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         SwiftUI Views                           │
+│  (Dashboard, Mail, Crew, Settings, Chat)                        │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         ViewModels                               │
+│  (DashboardViewModel, MailListViewModel, CrewListViewModel)     │
+│  - State management via @Published                               │
+│  - Business logic and data transformation                        │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                       AdjutantKit                                │
+│  (APIClient, Models, Networking)                                 │
+│  - Type-safe API communication                                   │
+│  - Automatic retry with exponential backoff                      │
+│  - Error handling                                                │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Adjutant Backend Server                       │
+│  (Node.js server at localhost:3001)                              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Components
+
+| Component | Description |
+|-----------|-------------|
+| **View** | SwiftUI views with CRT-themed styling. Purely presentational. |
+| **ViewModel** | Observable objects that manage view state and coordinate with services. |
+| **Coordinator** | Manages navigation flow between screens. |
+| **AdjutantKit** | Swift Package providing networking and data models. |
+| **Theme** | CRT-style visual components (phosphor glow, scan lines, retro typography). |
+
+### Key Design Patterns
+
+**Dependency Injection**
+ViewModels accept dependencies through initializers, enabling testability:
+```swift
+class MailListViewModel: BaseViewModel {
+    private let apiClient: APIClient?
+
+    init(apiClient: APIClient? = nil) {
+        self.apiClient = apiClient
+        super.init()
+    }
+}
+```
+
+**App State**
+Global state is managed through a shared `AppState` singleton:
+```swift
+@MainActor
+final class AppState: ObservableObject {
+    static let shared = AppState()
+
+    @Published var selectedRig: String?
+    @Published var availableRigs: [String] = []
+}
+```
+
+**Theme System**
+The CRT visual theme is propagated through SwiftUI's environment:
+```swift
+@Environment(\.crtTheme) private var theme
+
+// Apply theme
+Text("HELLO")
+    .foregroundColor(theme.primary)
+    .crtGlow(color: theme.primary, radius: 8)
+```
+
+### Feature Modules
+
+| Module | Description |
+|--------|-------------|
+| **Dashboard** | System overview with status widgets |
+| **Mail** | Message inbox, compose, and detail views |
+| **Crew** | Agent listing with status indicators |
+| **Settings** | Theme selection and app configuration |
+| **Chat** | Voice interaction interface |
+
+## AdjutantKit
+
+The networking layer is extracted into a separate Swift Package for reusability and testability.
+
+### Quick Start
+
+```swift
+import AdjutantKit
+
+// Create client
+let client = APIClient()
+
+// Fetch data
+let status = try await client.getStatus()
+let messages = try await client.getMail()
+let agents = try await client.getAgents()
+
+// Send message
+let request = SendMessageRequest(
+    to: "mayor/",
+    subject: "Hello",
+    body: "Test message"
+)
+try await client.sendMail(request)
+```
+
+### Documentation
+
+AdjutantKit includes DocC documentation. Generate it with:
+
+```bash
+cd AdjutantKit
+swift package generate-documentation
+```
+
+Or browse inline in Xcode with Option+Click on any symbol.
 
 ## Contributing
 
