@@ -30,3 +30,7 @@ state.json
 .claude/
 
 backend/.audio-cache/
+
+# Gas Town (added by gt)
+.beads/
+.logs/
