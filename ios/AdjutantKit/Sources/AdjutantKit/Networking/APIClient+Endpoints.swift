@@ -75,6 +75,18 @@ extension APIClient {
         let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
         return try await requestWithEnvelope(.post, path: "/mail/\(encodedId)/read")
     }
+
+    /// Mark a message as unread
+    public func markMessageAsUnread(id: String) async throws -> SuccessResponse {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        return try await requestWithEnvelope(.post, path: "/mail/\(encodedId)/unread")
+    }
+
+    /// Delete a message
+    public func deleteMail(id: String) async throws -> SuccessResponse {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        return try await requestWithEnvelope(.delete, path: "/mail/\(encodedId)")
+    }
 }
 
 // MARK: - Agents Endpoints
