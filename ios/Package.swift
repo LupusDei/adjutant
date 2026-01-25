@@ -11,8 +11,8 @@ let package = Package(
     ],
     products: [
         .library(
-            name: "Adjutant",
-            targets: ["Adjutant"]
+            name: "AdjutantUI",
+            targets: ["AdjutantUI"]
         )
     ],
     dependencies: [
@@ -20,14 +20,14 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "Adjutant",
+            name: "AdjutantUI",
             dependencies: ["AdjutantKit"],
             path: "Adjutant",
             exclude: ["App/AdjutantApp.swift"]
         ),
         .testTarget(
             name: "AdjutantTests",
-            dependencies: ["Adjutant", "AdjutantKit"],
+            dependencies: ["AdjutantUI", "AdjutantKit"],
             path: "AdjutantTests"
         )
     ]

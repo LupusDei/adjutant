@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AdjutantUI
 
 @main
 struct AdjutantApp: App {
