@@ -18,7 +18,7 @@ final class ChatViewModel: BaseViewModel {
     @Published private(set) var isTyping: Bool = false
 
     /// Whether voice input is active
-    @Published var isRecordingVoice: Bool = false
+    @Published private(set) var isRecordingVoice: Bool = false
 
     /// Whether there are more messages to load
     @Published private(set) var hasMoreHistory: Bool = true
@@ -26,9 +26,16 @@ final class ChatViewModel: BaseViewModel {
     /// Whether we're currently loading more history
     @Published private(set) var isLoadingHistory: Bool = false
 
+    /// Speech recognition authorization status
+    @Published private(set) var speechAuthorizationStatus: SpeechAuthorizationStatus = .notDetermined
+
+    /// Speech recognition error message
+    @Published private(set) var speechError: String?
+
     // MARK: - Dependencies
 
     private let apiClient: APIClient
+    private let speechService: SpeechRecognitionServiceProtocol?
 
     // MARK: - Private Properties
 
@@ -36,12 +43,15 @@ final class ChatViewModel: BaseViewModel {
     /// Polling interval for chat (30 seconds per spec)
     private let pollingInterval: TimeInterval = 30.0
     private var lastMessageId: String?
+    private var speechCancellables = Set<AnyCancellable>()
 
     // MARK: - Initialization
 
-    init(apiClient: APIClient) {
+    init(apiClient: APIClient, speechService: SpeechRecognitionServiceProtocol? = nil) {
         self.apiClient = apiClient
+        self.speechService = speechService
         super.init()
+        setupSpeechBindings()
     }
 
     deinit {
@@ -130,6 +140,103 @@ final class ChatViewModel: BaseViewModel {
     func sendVoiceTranscription(_ text: String) async {
         inputText = text
         await sendMessage()
+    }
+
+    // MARK: - Voice Input
+
+    /// Toggle voice recording on/off
+    func toggleVoiceRecording() {
+        guard let service = speechService else {
+            speechError = "Speech recognition not available"
+            return
+        }
+
+        if isRecordingVoice {
+            service.stopRecording()
+        } else {
+            startVoiceRecording()
+        }
+    }
+
+    /// Start voice recording after checking authorization
+    private func startVoiceRecording() {
+        guard let service = speechService else { return }
+
+        // Check if already authorized
+        if service.authorizationStatus == .authorized {
+            do {
+                try service.startRecording()
+            } catch {
+                speechError = error.localizedDescription
+            }
+        } else {
+            // Request authorization first
+            Task {
+                let status = await service.requestAuthorization()
+                if status == .authorized {
+                    do {
+                        try service.startRecording()
+                    } catch {
+                        self.speechError = error.localizedDescription
+                    }
+                } else {
+                    self.speechError = status.errorMessage
+                }
+            }
+        }
+    }
+
+    /// Set up bindings to speech service publishers
+    private func setupSpeechBindings() {
+        guard let service = speechService else { return }
+
+        // Bind recording state
+        service.statePublisher
+            .receive(on: DispatchQueue.main)
+            .map { $0.isRecording }
+            .assign(to: &$isRecordingVoice)
+
+        // Bind transcription to input text while recording
+        service.transcriptionPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] text in
+                guard let self = self, self.isRecordingVoice else { return }
+                self.inputText = text
+            }
+            .store(in: &speechCancellables)
+
+        // Handle final transcription - auto-send if non-empty
+        service.finalTranscriptionPublisher
+            .receive(on: DispatchQueue.main)
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .sink { [weak self] text in
+                guard let self = self else { return }
+                Task {
+                    await self.sendVoiceTranscription(text)
+                }
+            }
+            .store(in: &speechCancellables)
+
+        // Bind authorization status
+        service.authorizationStatusPublisher
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$speechAuthorizationStatus)
+
+        // Handle errors from state
+        service.statePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                if case .error(let message) = state {
+                    self?.speechError = message
+                }
+            }
+            .store(in: &speechCancellables)
+    }
+
+    /// Clear speech error
+    func clearSpeechError() {
+        speechError = nil
     }
 
     // MARK: - Private Methods

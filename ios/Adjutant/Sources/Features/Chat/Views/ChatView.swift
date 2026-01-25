@@ -8,8 +8,9 @@ struct ChatView: View {
     @StateObject private var viewModel: ChatViewModel
     @State private var scrollProxy: ScrollViewProxy?
 
-    init(apiClient: APIClient) {
-        _viewModel = StateObject(wrappedValue: ChatViewModel(apiClient: apiClient))
+    init(apiClient: APIClient, speechService: SpeechRecognitionServiceProtocol? = nil) {
+        let service = speechService ?? SpeechRecognitionService()
+        _viewModel = StateObject(wrappedValue: ChatViewModel(apiClient: apiClient, speechService: service))
     }
 
     var body: some View {
@@ -25,6 +26,16 @@ struct ChatView: View {
                 typingIndicator
             }
 
+            // Speech error banner
+            if let speechError = viewModel.speechError {
+                ErrorBanner(
+                    message: speechError,
+                    onDismiss: { viewModel.clearSpeechError() },
+                    onRetry: nil
+                )
+                .padding(.horizontal)
+            }
+
             // Input area
             ChatInputView(
                 text: $viewModel.inputText,
@@ -37,8 +48,7 @@ struct ChatView: View {
                     }
                 },
                 onVoiceToggle: {
-                    viewModel.isRecordingVoice.toggle()
-                    // Voice recording implementation would go here
+                    viewModel.toggleVoiceRecording()
                 }
             )
         }

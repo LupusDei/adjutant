@@ -287,3 +287,184 @@ final class ChatViewModelTests: XCTestCase {
         }
     }
 }
+
+// MARK: - Speech Integration Tests
+
+@MainActor
+final class ChatViewModelSpeechTests: XCTestCase {
+    private var viewModel: ChatViewModel!
+    private var mockAPIClient: APIClient!
+    private var mockSpeechService: MockSpeechRecognitionService!
+    private var cancellables: Set<AnyCancellable>!
+
+    override func setUp() async throws {
+        cancellables = Set<AnyCancellable>()
+        mockAPIClient = createMockAPIClient()
+        mockSpeechService = MockSpeechRecognitionService()
+        viewModel = ChatViewModel(apiClient: mockAPIClient, speechService: mockSpeechService)
+    }
+
+    override func tearDown() async throws {
+        viewModel = nil
+        mockAPIClient = nil
+        mockSpeechService = nil
+        cancellables = nil
+        MockURLProtocol.mockHandler = nil
+    }
+
+    // MARK: - Initial State Tests
+
+    func testInitialSpeechState() {
+        XCTAssertFalse(viewModel.isRecordingVoice)
+        XCTAssertNil(viewModel.speechError)
+    }
+
+    // MARK: - Voice Toggle Tests
+
+    func testToggleVoiceRecordingStartsRecording() {
+        mockSpeechService.authorizationStatus = .authorized
+
+        viewModel.toggleVoiceRecording()
+
+        XCTAssertTrue(mockSpeechService.startRecordingCalled)
+    }
+
+    func testToggleVoiceRecordingStopsWhenAlreadyRecording() {
+        mockSpeechService.authorizationStatus = .authorized
+        mockSpeechService.state = .recording
+
+        viewModel.toggleVoiceRecording()
+
+        XCTAssertTrue(mockSpeechService.stopRecordingCalled)
+    }
+
+    func testToggleVoiceRecordingRequestsAuthorizationIfNeeded() async {
+        mockSpeechService.authorizationStatus = .notDetermined
+        mockSpeechService.authorizationToReturn = .authorized
+
+        viewModel.toggleVoiceRecording()
+
+        // Give async authorization time to complete
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(mockSpeechService.requestAuthorizationCalled)
+        XCTAssertTrue(mockSpeechService.startRecordingCalled)
+    }
+
+    func testToggleVoiceRecordingSetsErrorWhenAuthorizationDenied() async {
+        mockSpeechService.authorizationStatus = .notDetermined
+        mockSpeechService.authorizationToReturn = .denied
+
+        viewModel.toggleVoiceRecording()
+
+        // Give async authorization time to complete
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertNotNil(viewModel.speechError)
+    }
+
+    func testToggleVoiceRecordingSetsErrorWhenServiceThrows() {
+        mockSpeechService.authorizationStatus = .authorized
+        mockSpeechService.shouldThrowOnStartRecording = true
+
+        viewModel.toggleVoiceRecording()
+
+        XCTAssertNotNil(viewModel.speechError)
+    }
+
+    // MARK: - Transcription Binding Tests
+
+    func testTranscriptionUpdatesInputText() async {
+        mockSpeechService.authorizationStatus = .authorized
+
+        // Start recording
+        viewModel.toggleVoiceRecording()
+
+        // Simulate transcription
+        mockSpeechService.simulateTranscription("Hello world")
+
+        // Give binding time to propagate
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        // Note: The input text binding only updates while recording
+        // Since mockSpeechService.state is set to .recording in startRecording(),
+        // and we're using the mock, the state is .recording
+        XCTAssertEqual(viewModel.inputText, "Hello world")
+    }
+
+    // MARK: - Recording State Binding Tests
+
+    func testRecordingStateBindsToIsRecordingVoice() {
+        let expectation = XCTestExpectation(description: "isRecordingVoice updated")
+
+        viewModel.$isRecordingVoice
+            .dropFirst()
+            .sink { isRecording in
+                if isRecording {
+                    expectation.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+
+        mockSpeechService.state = .recording
+
+        wait(for: [expectation], timeout: 1.0)
+        XCTAssertTrue(viewModel.isRecordingVoice)
+    }
+
+    // MARK: - Error Handling Tests
+
+    func testSpeechErrorBindsFromState() {
+        let expectation = XCTestExpectation(description: "speechError updated")
+
+        viewModel.$speechError
+            .dropFirst()
+            .sink { error in
+                if error != nil {
+                    expectation.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+
+        mockSpeechService.simulateError("Test error")
+
+        wait(for: [expectation], timeout: 1.0)
+        XCTAssertEqual(viewModel.speechError, "Test error")
+    }
+
+    func testClearSpeechError() {
+        viewModel.toggleVoiceRecording()
+        mockSpeechService.shouldThrowOnStartRecording = true
+
+        // This would have set an error if the service threw, but since we set the flag after toggle,
+        // let's manually set the error state
+        mockSpeechService.simulateError("Test error")
+
+        // Now clear it
+        viewModel.clearSpeechError()
+
+        XCTAssertNil(viewModel.speechError)
+    }
+
+    // MARK: - No Speech Service Tests
+
+    func testToggleVoiceRecordingWithNoServiceSetsError() {
+        let viewModelNoSpeech = ChatViewModel(apiClient: mockAPIClient, speechService: nil)
+
+        viewModelNoSpeech.toggleVoiceRecording()
+
+        XCTAssertNotNil(viewModelNoSpeech.speechError)
+        XCTAssertEqual(viewModelNoSpeech.speechError, "Speech recognition not available")
+    }
+
+    // MARK: - Helpers
+
+    private func createMockAPIClient() -> APIClient {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: config)
+
+        let apiConfig = APIClientConfiguration(baseURL: URL(string: "http://test.local")!)
+        return APIClient(configuration: apiConfig, session: session)
+    }
+}
