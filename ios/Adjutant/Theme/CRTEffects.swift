@@ -124,24 +124,24 @@ extension View {
 
 /// Glow effect for CRT phosphor simulation
 public struct PhosphorGlow: ViewModifier {
-    let theme: CRTTheme
+    let theme: CRTTheme.ColorTheme
     let radius: CGFloat
 
-    public init(theme: CRTTheme, radius: CGFloat = 4) {
+    public init(theme: CRTTheme.ColorTheme, radius: CGFloat = 4) {
         self.theme = theme
         self.radius = radius
     }
 
     public func body(content: Content) -> some View {
         content
-            .shadow(color: theme.glow, radius: radius / 2, x: 0, y: 0)
-            .shadow(color: theme.glow, radius: radius, x: 0, y: 0)
+            .shadow(color: theme.bright, radius: radius / 2, x: 0, y: 0)
+            .shadow(color: theme.bright, radius: radius, x: 0, y: 0)
     }
 }
 
 extension View {
     /// Apply phosphor glow effect
-    public func phosphorGlow(_ theme: CRTTheme, radius: CGFloat = 4) -> some View {
+    public func phosphorGlow(_ theme: CRTTheme.ColorTheme, radius: CGFloat = 4) -> some View {
         modifier(PhosphorGlow(theme: theme, radius: radius))
     }
 }
@@ -150,7 +150,7 @@ extension View {
 
 /// Text shadow glow for CRT text
 public struct TextGlow: ViewModifier {
-    let theme: CRTTheme
+    let theme: CRTTheme.ColorTheme
     let size: GlowSize
 
     public enum GlowSize {
@@ -167,7 +167,7 @@ public struct TextGlow: ViewModifier {
         }
     }
 
-    public init(theme: CRTTheme, size: GlowSize = .medium) {
+    public init(theme: CRTTheme.ColorTheme, size: GlowSize = .medium) {
         self.theme = theme
         self.size = size
     }
@@ -175,13 +175,13 @@ public struct TextGlow: ViewModifier {
     public func body(content: Content) -> some View {
         content
             .shadow(color: theme.primary, radius: size.radii.inner, x: 0, y: 0)
-            .shadow(color: theme.glow, radius: size.radii.outer, x: 0, y: 0)
+            .shadow(color: theme.bright, radius: size.radii.outer, x: 0, y: 0)
     }
 }
 
 extension View {
     /// Apply CRT text glow
-    public func crtGlow(_ theme: CRTTheme, size: TextGlow.GlowSize = .medium) -> some View {
+    public func crtGlow(_ theme: CRTTheme.ColorTheme, size: TextGlow.GlowSize = .medium) -> some View {
         modifier(TextGlow(theme: theme, size: size))
     }
 }
@@ -234,17 +234,19 @@ public struct VignetteOverlay: View {
     }
 
     public var body: some View {
-        RadialGradient(
-            stops: [
-                .init(color: .clear, location: 0),
-                .init(color: .clear, location: 0.5),
-                .init(color: .black.opacity(intensity), location: 0.8),
-                .init(color: .black.opacity(intensity * 2), location: 1)
-            ],
-            center: .center,
-            startRadius: 0,
-            endRadius: UIScreen.main.bounds.width * 0.8
-        )
+        GeometryReader { geometry in
+            RadialGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: .clear, location: 0.5),
+                    .init(color: .black.opacity(intensity), location: 0.8),
+                    .init(color: .black.opacity(intensity * 2), location: 1)
+                ],
+                center: .center,
+                startRadius: 0,
+                endRadius: geometry.size.width * 0.8
+            )
+        }
         .allowsHitTesting(false)
     }
 }
@@ -278,7 +280,7 @@ public struct CRTScreenContainer<Content: View>: View {
     public var body: some View {
         ZStack {
             // Background
-            CRTTheme.screenBackground
+            CRTTheme.Background.screen
                 .ignoresSafeArea()
 
             // Content with glow border
@@ -327,11 +329,11 @@ public struct ScreenGlare: View {
 
 /// Pulsing glow for active/working status indicators
 public struct PulsingGlow: ViewModifier {
-    let theme: CRTTheme
+    let theme: CRTTheme.ColorTheme
 
     @State private var isPulsing = false
 
-    public init(theme: CRTTheme) {
+    public init(theme: CRTTheme.ColorTheme) {
         self.theme = theme
     }
 
@@ -348,7 +350,7 @@ public struct PulsingGlow: ViewModifier {
 
 extension View {
     /// Apply pulsing glow for active states
-    public func pulsingGlow(_ theme: CRTTheme) -> some View {
+    public func pulsingGlow(_ theme: CRTTheme.ColorTheme) -> some View {
         modifier(PulsingGlow(theme: theme))
     }
 }

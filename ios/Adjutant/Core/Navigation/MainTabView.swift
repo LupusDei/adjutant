@@ -268,30 +268,8 @@ struct CrewView: View {
     }
 }
 
-/// Beads tab view.
-struct BeadsView: View {
-    @Environment(\.crtTheme) private var theme
-    @EnvironmentObject private var coordinator: AppCoordinator
-
-    var body: some View {
-        VStack(spacing: CRTTheme.Spacing.lg) {
-            Spacer()
-
-            Image(systemName: "circle.grid.3x3.fill")
-                .font(.system(size: 48))
-                .foregroundColor(theme.dim)
-                .crtGlow(color: theme.primary, radius: 8, intensity: 0.3)
-
-            CRTText("BEADS", style: .header)
-            CRTText("Issue and task tracker", style: .caption, color: theme.dim)
-            CRTText("Coming soon...", style: .body, color: theme.dim.opacity(0.6))
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(CRTTheme.Background.screen)
-    }
-}
+/// Beads tab view - uses BeadsListView from Features/Beads.
+typealias BeadsView = BeadsListView
 
 // MARK: - Detail Placeholders
 

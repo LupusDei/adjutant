@@ -10,7 +10,7 @@ public final class ThemeManager: ObservableObject {
     private static let themeKey = "selectedCRTTheme"
 
     /// The currently selected theme
-    @Published public var currentTheme: CRTTheme {
+    @Published public var currentTheme: CRTTheme.ColorTheme {
         didSet {
             UserDefaults.standard.set(currentTheme.rawValue, forKey: Self.themeKey)
         }
@@ -18,7 +18,7 @@ public final class ThemeManager: ObservableObject {
 
     private init() {
         if let savedTheme = UserDefaults.standard.string(forKey: Self.themeKey),
-           let theme = CRTTheme(rawValue: savedTheme) {
+           let theme = CRTTheme.ColorTheme(rawValue: savedTheme) {
             self.currentTheme = theme
         } else {
             self.currentTheme = .green
@@ -27,7 +27,7 @@ public final class ThemeManager: ObservableObject {
 
     /// Cycle to the next theme
     public func nextTheme() {
-        let themes = CRTTheme.allCases
+        let themes = CRTTheme.ColorTheme.allCases
         guard let currentIndex = themes.firstIndex(of: currentTheme) else { return }
         let nextIndex = (currentIndex + 1) % themes.count
         currentTheme = themes[nextIndex]
@@ -35,24 +35,10 @@ public final class ThemeManager: ObservableObject {
 
     /// Cycle to the previous theme
     public func previousTheme() {
-        let themes = CRTTheme.allCases
+        let themes = CRTTheme.ColorTheme.allCases
         guard let currentIndex = themes.firstIndex(of: currentTheme) else { return }
         let previousIndex = (currentIndex - 1 + themes.count) % themes.count
         currentTheme = themes[previousIndex]
-    }
-}
-
-// MARK: - Environment Key
-
-private struct ThemeEnvironmentKey: EnvironmentKey {
-    static let defaultValue: CRTTheme = .green
-}
-
-extension EnvironmentValues {
-    /// The current CRT theme
-    public var crtTheme: CRTTheme {
-        get { self[ThemeEnvironmentKey.self] }
-        set { self[ThemeEnvironmentKey.self] = newValue }
     }
 }
 
@@ -64,8 +50,8 @@ extension View {
         self.environment(\.crtTheme, themeManager.currentTheme)
     }
 
-    /// Apply a specific theme to the view hierarchy
-    public func withCRTTheme(_ theme: CRTTheme) -> some View {
+    /// Apply a specific color theme to the view hierarchy
+    public func withColorTheme(_ theme: CRTTheme.ColorTheme) -> some View {
         self.environment(\.crtTheme, theme)
     }
 }
@@ -75,20 +61,20 @@ extension View {
 /// Property wrapper for theme selection with AppStorage
 @propertyWrapper
 public struct ThemeStorage: DynamicProperty {
-    @AppStorage("selectedCRTTheme") private var themeRawValue: String = CRTTheme.green.rawValue
+    @AppStorage("selectedCRTTheme") private var themeRawValue: String = CRTTheme.ColorTheme.green.rawValue
 
     public init() {}
 
-    public var wrappedValue: CRTTheme {
+    public var wrappedValue: CRTTheme.ColorTheme {
         get {
-            CRTTheme(rawValue: themeRawValue) ?? .green
+            CRTTheme.ColorTheme(rawValue: themeRawValue) ?? .green
         }
         nonmutating set {
             themeRawValue = newValue.rawValue
         }
     }
 
-    public var projectedValue: Binding<CRTTheme> {
+    public var projectedValue: Binding<CRTTheme.ColorTheme> {
         Binding(
             get: { self.wrappedValue },
             set: { self.wrappedValue = $0 }

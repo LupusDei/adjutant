@@ -3,7 +3,7 @@ import SwiftUI
 /// Preview demonstrating all CRT themes and effects
 struct ThemePreviewView: View {
     @StateObject private var themeManager = ThemeManager.shared
-    @ThemeStorage private var selectedTheme: CRTTheme
+    @ThemeStorage private var selectedTheme: CRTTheme.ColorTheme
 
     var body: some View {
         CRTScreenContainer(
