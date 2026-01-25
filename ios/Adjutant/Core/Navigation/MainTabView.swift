@@ -218,28 +218,11 @@ private struct ChatPlaceholderView: View {
     }
 }
 
-/// Convoys tab view.
+/// Convoys tab view wrapper.
+/// Uses the full ConvoysListView implementation from Features/Convoys.
 struct ConvoysView: View {
-    @Environment(\.crtTheme) private var theme
-    @EnvironmentObject private var coordinator: AppCoordinator
-
     var body: some View {
-        VStack(spacing: CRTTheme.Spacing.lg) {
-            Spacer()
-
-            Image(systemName: "shippingbox.fill")
-                .font(.system(size: 48))
-                .foregroundColor(theme.dim)
-                .crtGlow(color: theme.primary, radius: 8, intensity: 0.3)
-
-            CRTText("CONVOYS", style: .header)
-            CRTText("Work package tracking", style: .caption, color: theme.dim)
-            CRTText("Coming soon...", style: .body, color: theme.dim.opacity(0.6))
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(CRTTheme.Background.screen)
+        ConvoysListView()
     }
 }
 
