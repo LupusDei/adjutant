@@ -8,16 +8,12 @@
 import SwiftUI
 
 struct ContentView: View {
+    @StateObject private var dependencyContainer = DependencyContainer()
+
     var body: some View {
-        VStack {
-            Image(systemName: "terminal.fill")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Adjutant")
-                .font(.largeTitle)
-                .fontWeight(.bold)
-        }
-        .padding()
+        MainTabView()
+            .environmentObject(dependencyContainer)
+            .preferredColorScheme(.dark)
     }
 }
 

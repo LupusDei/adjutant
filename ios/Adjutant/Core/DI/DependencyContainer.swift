@@ -3,7 +3,7 @@ import Foundation
 /// Lightweight dependency injection container for managing service instances.
 /// Supports both singleton and factory registrations for flexible lifecycle management.
 @MainActor
-final class DependencyContainer {
+final class DependencyContainer: ObservableObject {
     // MARK: - Singleton
 
     static let shared = DependencyContainer()
@@ -15,7 +15,7 @@ final class DependencyContainer {
 
     // MARK: - Initialization
 
-    private init() {}
+    init() {}
 
     // MARK: - Registration
 
