@@ -102,9 +102,9 @@ struct MailListView: View {
                 .font(CRTTheme.Typography.font(size: 14))
                 .foregroundColor(theme.primary)
                 #if os(iOS)
-                .autocapitalization(.none)
+                .textInputAutocapitalization(.never)
                 #endif
-                .disableAutocorrection(true)
+                .autocorrectionDisabled()
 
             if !viewModel.searchText.isEmpty {
                 Button {
