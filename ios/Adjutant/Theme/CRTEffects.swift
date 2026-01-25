@@ -81,6 +81,7 @@ public struct ScanBarOverlay: View {
 /// CRT screen flicker effect modifier
 public struct FlickerEffect: ViewModifier {
     @State private var opacity: Double = 1.0
+    @State private var timer: Timer?
 
     let enabled: Bool
     let intensity: ClosedRange<Double>
@@ -97,10 +98,14 @@ public struct FlickerEffect: ViewModifier {
                 guard enabled else { return }
                 startFlicker()
             }
+            .onDisappear {
+                timer?.invalidate()
+                timer = nil
+            }
     }
 
     private func startFlicker() {
-        Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { _ in
             withAnimation(.linear(duration: 0.05)) {
                 opacity = Double.random(in: intensity)
             }
@@ -188,6 +193,7 @@ public struct NoiseOverlay: View {
     let opacity: Double
 
     @State private var phase: Int = 0
+    @State private var timer: Timer?
 
     public init(opacity: Double = 0.03) {
         self.opacity = opacity
@@ -206,9 +212,13 @@ public struct NoiseOverlay: View {
         .allowsHitTesting(false)
         .id(phase)
         .onAppear {
-            Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
                 phase = (phase + 1) % 5
             }
+        }
+        .onDisappear {
+            timer?.invalidate()
+            timer = nil
         }
     }
 }
