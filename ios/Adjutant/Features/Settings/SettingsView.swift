@@ -20,6 +20,9 @@ struct SettingsView: View {
                 // Tunnel Section
                 tunnelSection
 
+                // Server URL Section
+                serverSection
+
                 // Notifications Section
                 notificationsSection
 
@@ -183,6 +186,87 @@ struct SettingsView: View {
         case .starting, .stopping: return CRTTheme.State.warning
         case .stopped: return CRTTheme.State.offline
         }
+    }
+
+    // MARK: - Server Section
+
+    private var serverSection: some View {
+        CRTCard(header: "SERVER") {
+            VStack(spacing: CRTTheme.Spacing.md) {
+                // Current URL display
+                VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
+                    CRTText("API ENDPOINT", style: .caption, color: theme.dim)
+
+                    HStack {
+                        Image(systemName: "link")
+                            .foregroundColor(theme.dim)
+                            .font(.system(size: 14))
+
+                        TextField("https://your-tunnel.ngrok.io", text: $viewModel.serverURL)
+                            .textFieldStyle(.plain)
+                            .font(.crt(CRTTypography.sizeBase))
+                            .foregroundColor(theme.primary)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                            .keyboardType(.URL)
+                            .textContentType(.URL)
+                    }
+                    .padding(CRTTheme.Spacing.sm)
+                    .background(
+                        RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
+                            .fill(CRTTheme.Background.panel)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
+                            .stroke(
+                                viewModel.serverErrorMessage != nil ? CRTTheme.State.error : theme.dim.opacity(0.5),
+                                lineWidth: 1
+                            )
+                    )
+
+                    // Error message
+                    if let error = viewModel.serverErrorMessage {
+                        HStack(spacing: CRTTheme.Spacing.xs) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(CRTTheme.State.error)
+                                .font(.system(size: 12))
+                            CRTText(error, style: .caption, color: CRTTheme.State.error)
+                        }
+                    }
+                }
+
+                // Save button
+                HStack(spacing: CRTTheme.Spacing.md) {
+                    CRTButton(
+                        viewModel.isValidatingServer ? "SAVING..." : "SAVE",
+                        variant: .primary,
+                        size: .medium
+                    ) {
+                        Task {
+                            await viewModel.updateServerURL()
+                        }
+                    }
+                    .disabled(viewModel.serverURL.isEmpty || viewModel.isValidatingServer)
+
+                    CRTButton(
+                        "RESET",
+                        variant: .ghost,
+                        size: .medium
+                    ) {
+                        viewModel.resetServerURL()
+                    }
+                    .disabled(viewModel.isValidatingServer)
+                }
+
+                // Help text
+                CRTText(
+                    "Enter your ngrok tunnel URL. The app will reconnect to the new server.",
+                    style: .caption,
+                    color: theme.dim
+                )
+            }
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
     }
 
     // MARK: - Notifications Section

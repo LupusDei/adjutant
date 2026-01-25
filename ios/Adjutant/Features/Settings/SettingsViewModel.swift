@@ -52,6 +52,15 @@ final class SettingsViewModel: BaseViewModel {
     /// Whether tunnel operation is in progress
     @Published private(set) var isTunnelOperating: Bool = false
 
+    /// Current server URL (from AppState)
+    @Published var serverURL: String = ""
+
+    /// Whether server URL is being validated
+    @Published private(set) var isValidatingServer: Bool = false
+
+    /// Server validation error message
+    @Published var serverErrorMessage: String?
+
     // MARK: - App Info
 
     /// App version string
@@ -166,6 +175,62 @@ final class SettingsViewModel: BaseViewModel {
         isTunnelOperating = false
     }
 
+    // MARK: - Server URL
+
+    /// Updates the server URL
+    func updateServerURL() async {
+        serverErrorMessage = nil
+
+        // Clean up the URL
+        var cleanURL = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Add https:// if no scheme provided
+        if !cleanURL.hasPrefix("http://") && !cleanURL.hasPrefix("https://") {
+            cleanURL = "https://" + cleanURL
+        }
+
+        // Remove trailing slash
+        if cleanURL.hasSuffix("/") {
+            cleanURL = String(cleanURL.dropLast())
+        }
+
+        // Append /api if not present
+        if !cleanURL.hasSuffix("/api") {
+            cleanURL = cleanURL + "/api"
+        }
+
+        // Validate URL format
+        guard let url = URL(string: cleanURL),
+              let host = url.host,
+              !host.isEmpty else {
+            serverErrorMessage = "Invalid URL format"
+            return
+        }
+
+        // Block localhost URLs
+        if host.contains("localhost") || host.contains("127.0.0.1") {
+            serverErrorMessage = "Please enter a remote server URL"
+            return
+        }
+
+        isValidatingServer = true
+
+        // Save the URL
+        AppState.shared.apiBaseURL = url
+        serverURL = cleanURL
+
+        // Brief delay to show validation state
+        try? await Task.sleep(nanoseconds: 500_000_000)
+
+        isValidatingServer = false
+    }
+
+    /// Resets the server URL to show onboarding again
+    func resetServerURL() {
+        AppState.shared.apiBaseURL = URL(string: "http://localhost:3001/api")!
+        serverURL = ""
+    }
+
     // MARK: - Private Methods
 
     private func setupBindings() {
@@ -190,6 +255,7 @@ final class SettingsViewModel: BaseViewModel {
         selectedTheme = AppState.shared.currentTheme
         powerState = AppState.shared.powerState
         isVoiceAvailable = AppState.shared.isVoiceAvailable
+        serverURL = AppState.shared.apiBaseURL.absoluteString
     }
 
     private func fetchAvailableRigs() async {
