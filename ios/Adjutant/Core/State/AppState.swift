@@ -32,6 +32,9 @@ final class AppState: ObservableObject {
     /// Whether voice features are available
     @Published private(set) var isVoiceAvailable = false
 
+    /// Whether voice/notifications are muted
+    @Published var isVoiceMuted = false
+
     /// Network connectivity status
     @Published private(set) var isNetworkAvailable = true
 
@@ -84,6 +87,7 @@ final class AppState: ObservableObject {
         }
 
         isOverseerMode = UserDefaults.standard.bool(forKey: "isOverseerMode")
+        isVoiceMuted = UserDefaults.standard.bool(forKey: "isVoiceMuted")
         selectedRig = UserDefaults.standard.string(forKey: "selectedRig")
 
         if let urlString = UserDefaults.standard.string(forKey: "apiBaseURL"),
@@ -103,6 +107,13 @@ final class AppState: ObservableObject {
             .dropFirst()
             .sink { isOverseer in
                 UserDefaults.standard.set(isOverseer, forKey: "isOverseerMode")
+            }
+            .store(in: &cancellables)
+
+        $isVoiceMuted
+            .dropFirst()
+            .sink { isMuted in
+                UserDefaults.standard.set(isMuted, forKey: "isVoiceMuted")
             }
             .store(in: &cancellables)
 
