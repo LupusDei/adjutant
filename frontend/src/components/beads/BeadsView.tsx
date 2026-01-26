@@ -29,57 +29,61 @@ const OVERSEER_EXCLUDED_PATTERNS = [
 export function BeadsView({ isActive = true }: BeadsViewProps) {
   const [searchInput, setSearchInput] = useState('');
   const [rigFilter, setRigFilter] = useState<RigFilter>(() => {
-    return localStorage.getItem('beads-rig-filter') ?? 'ALL';
+    return localStorage.getItem('beads-rig-filter') ?? 'TOWN';
   });
+  const [rigOptions, setRigOptions] = useState<string[]>([]);
   const [overseerView, setOverseerView] = useState(false);
   const [beads, setBeads] = useState<BeadInfo[]>([]);
+
+  // Convert UI rig filter to API parameter
+  const apiRig = rigFilter === 'ALL' ? undefined : rigFilter === 'TOWN' ? 'town' : rigFilter;
 
   // Fetch beads from API
   const {
     data: fetchedBeads,
     loading,
     error,
+    refresh,
   } = usePolling<BeadInfo[]>(
-    () => api.beads.list({ status: 'all', limit: 500 }),
+    () => api.beads.list({ status: 'all', limit: 500, rig: apiRig }),
     { interval: 30000, enabled: isActive }
   );
 
+  // Refetch when rig filter changes
+  useEffect(() => {
+    void refresh();
+  }, [rigFilter, refresh]);
+
   // Update local beads state when fetch completes
+  // Also update rig options when fetching from 'ALL' to populate dropdown
   useEffect(() => {
     if (fetchedBeads) {
       setBeads(fetchedBeads);
-    }
-  }, [fetchedBeads]);
-
-  // Extract unique rigs from beads for filter dropdown
-  const rigOptions = useMemo(() => {
-    const rigs = new Set<string>();
-    for (const bead of beads) {
-      if (bead.source && bead.source !== 'town' && bead.source !== 'unknown') {
-        rigs.add(bead.source);
+      // Only update rig options when we have beads from all rigs
+      if (rigFilter === 'ALL') {
+        const rigs = new Set<string>();
+        for (const bead of fetchedBeads) {
+          if (bead.source && bead.source !== 'town' && bead.source !== 'unknown') {
+            rigs.add(bead.source);
+          }
+        }
+        setRigOptions(Array.from(rigs).sort());
       }
     }
-    return Array.from(rigs).sort();
-  }, [beads]);
+  }, [fetchedBeads, rigFilter]);
 
   // Persist rig filter to localStorage
   useEffect(() => {
     localStorage.setItem('beads-rig-filter', rigFilter);
   }, [rigFilter]);
 
-  // Filter beads based on search, rig, and overseer view
+  // Filter beads based on search and overseer view
+  // Note: Rig filtering is now done server-side via API parameter
   const filteredBeads = useMemo(() => {
     let result = beads;
 
     // Filter out excluded types
     result = result.filter((b) => !EXCLUDED_TYPES.includes(b.type.toLowerCase()));
-
-    // Apply rig filter
-    if (rigFilter === 'TOWN') {
-      result = result.filter((b) => b.source === 'town');
-    } else if (rigFilter !== 'ALL') {
-      result = result.filter((b) => b.source === rigFilter);
-    }
 
     // Apply overseer filter
     if (overseerView) {
@@ -120,7 +124,7 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
     }
 
     return result;
-  }, [beads, rigFilter, overseerView, searchInput]);
+  }, [beads, overseerView, searchInput]);
 
   const handleOverseerToggle = useCallback((enabled: boolean) => {
     setOverseerView(enabled);
@@ -196,7 +200,7 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
             onChange={(e) => setRigFilter(e.target.value as RigFilter)}
             style={styles.select}
           >
-            <option value="ALL">ALL</option>
+            <option value="ALL">ALL RIGS</option>
             <option value="TOWN">TOWN</option>
             {rigOptions.map((rig) => (
               <option key={rig} value={rig}>
