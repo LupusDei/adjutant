@@ -87,7 +87,7 @@ export async function execBd<T = unknown>(
 ): Promise<BdResult<T>> {
   const { cwd = process.cwd(), timeout = DEFAULT_TIMEOUT, parseJson = true, env } = options;
   const beadsDir = options.beadsDir ?? resolveBeadsDir(cwd);
-  const fullArgs = ["--no-daemon", "--allow-stale", ...args];
+  const fullArgs = ["--no-daemon", "--allow-stale", "--lock-timeout", "2s", ...args];
   const startedAt = Date.now();
   logInfo("bd exec start", { args: fullArgs });
 
