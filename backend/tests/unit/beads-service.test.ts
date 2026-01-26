@@ -4,6 +4,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../src/services/bd-client.js", () => ({
   execBd: vi.fn(),
   resolveBeadsDir: vi.fn((dir: string) => `${dir}/.beads`),
+  stripBeadPrefix: vi.fn((fullId: string) => {
+    // Known prefixes are typically 2-3 chars followed by hyphen (hq-, gt-, gb-, etc.)
+    const match = fullId.match(/^[a-z]{2,3}-(.+)$/i);
+    return match?.[1] ?? fullId;
+  }),
 }));
 
 vi.mock("../../src/services/gastown-workspace.js", () => ({
@@ -12,7 +17,8 @@ vi.mock("../../src/services/gastown-workspace.js", () => ({
 }));
 
 import { execBd, type BeadsIssue } from "../../src/services/bd-client.js";
-import { listBeads } from "../../src/services/beads-service.js";
+import { listBeads, getBead } from "../../src/services/beads-service.js";
+import { listAllBeadsDirs } from "../../src/services/gastown-workspace.js";
 
 // =============================================================================
 // Test Fixtures
@@ -202,6 +208,227 @@ describe("beads-service", () => {
       expect(result.data?.[0].id).toBe("hq-003");
       expect(result.data?.[1].id).toBe("hq-002");
       expect(result.data?.[2].id).toBe("hq-001");
+    });
+  });
+
+  describe("getBead", () => {
+    it("should return bead details for valid town bead (hq-* prefix)", async () => {
+      const mockIssue = createBead({
+        id: "hq-vts8",
+        title: "Town Level Task",
+        description: "A town-level task description",
+        assignee: "mayor/crew/alice",
+      });
+
+      vi.mocked(execBd).mockResolvedValue({
+        success: true,
+        data: mockIssue,
+        exitCode: 0,
+      });
+
+      const result = await getBead("hq-vts8");
+
+      expect(result.success).toBe(true);
+      expect(result.data?.id).toBe("hq-vts8");
+      expect(result.data?.title).toBe("Town Level Task");
+      expect(result.data?.description).toBe("A town-level task description");
+      expect(result.data?.source).toBe("town");
+      // mayor/ assignees should have null rig
+      expect(result.data?.rig).toBeNull();
+    });
+
+    it("should return bead details for valid rig bead (adj-* prefix)", async () => {
+      // Set up the mock to return the adjutant rig directory
+      vi.mocked(listAllBeadsDirs).mockResolvedValue([
+        { path: "/tmp/town/adjutant/.beads", workDir: "/tmp/town/adjutant", rig: "adjutant" },
+      ]);
+
+      const mockIssue = createBead({
+        id: "adj-67tta",
+        title: "Adjutant Rig Task",
+        description: "A rig-specific task",
+        assignee: "adjutant/polecats/quartz",
+      });
+
+      vi.mocked(execBd).mockResolvedValue({
+        success: true,
+        data: mockIssue,
+        exitCode: 0,
+      });
+
+      const result = await getBead("adj-67tta");
+
+      expect(result.success).toBe(true);
+      expect(result.data?.id).toBe("adj-67tta");
+      expect(result.data?.title).toBe("Adjutant Rig Task");
+      expect(result.data?.rig).toBe("adjutant");
+    });
+
+    it("should return error for invalid bead ID format (no prefix)", async () => {
+      const result = await getBead("");
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe("INVALID_BEAD_ID");
+      expect(result.error?.message).toContain("Invalid bead ID format");
+    });
+
+    it("should return error for non-existent bead", async () => {
+      vi.mocked(execBd).mockResolvedValue({
+        success: false,
+        error: { code: "BEAD_NOT_FOUND", message: "Bead not found: hq-9999" },
+        exitCode: 1,
+      });
+
+      const result = await getBead("hq-9999");
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe("BEAD_NOT_FOUND");
+    });
+
+    it("should correctly map BeadsIssue to BeadDetail (all fields)", async () => {
+      const mockIssue: BeadsIssue = {
+        id: "hq-full",
+        title: "Full Details Test",
+        description: "Complete description",
+        status: "in_progress",
+        priority: 1,
+        issue_type: "feature",
+        created_at: "2026-01-15T10:00:00Z",
+        updated_at: "2026-01-16T12:00:00Z",
+        closed_at: null,
+        assignee: "gastown_boy/polecats/toast",
+        labels: ["urgent", "backend"],
+        agent_state: "working",
+        pinned: true,
+        wisp: false,
+        dependencies: [
+          { issue_id: "hq-full", depends_on_id: "hq-dep1", type: "blocks" },
+        ],
+      };
+
+      vi.mocked(execBd).mockResolvedValue({
+        success: true,
+        data: mockIssue,
+        exitCode: 0,
+      });
+
+      const result = await getBead("hq-full");
+
+      expect(result.success).toBe(true);
+      const detail = result.data!;
+      expect(detail.id).toBe("hq-full");
+      expect(detail.title).toBe("Full Details Test");
+      expect(detail.description).toBe("Complete description");
+      expect(detail.status).toBe("in_progress");
+      expect(detail.priority).toBe(1);
+      expect(detail.type).toBe("feature");
+      expect(detail.createdAt).toBe("2026-01-15T10:00:00Z");
+      expect(detail.updatedAt).toBe("2026-01-16T12:00:00Z");
+      expect(detail.closedAt).toBeNull();
+      expect(detail.assignee).toBe("gastown_boy/polecats/toast");
+      expect(detail.rig).toBe("gastown_boy");
+      expect(detail.labels).toEqual(["urgent", "backend"]);
+      expect(detail.agentState).toBe("working");
+      expect(detail.isPinned).toBe(true);
+      expect(detail.isWisp).toBe(false);
+      expect(detail.dependencies).toHaveLength(1);
+      expect(detail.dependencies[0]).toEqual({
+        issueId: "hq-full",
+        dependsOnId: "hq-dep1",
+        type: "blocks",
+      });
+    });
+
+    it("should handle missing optional fields gracefully", async () => {
+      const minimalIssue: BeadsIssue = {
+        id: "hq-min",
+        title: "Minimal Bead",
+        description: "",
+        status: "open",
+        priority: 3,
+        issue_type: "task",
+        created_at: "2026-01-15T10:00:00Z",
+        // All optional fields omitted
+      };
+
+      vi.mocked(execBd).mockResolvedValue({
+        success: true,
+        data: minimalIssue,
+        exitCode: 0,
+      });
+
+      const result = await getBead("hq-min");
+
+      expect(result.success).toBe(true);
+      const detail = result.data!;
+      expect(detail.description).toBe("");
+      expect(detail.updatedAt).toBeNull();
+      expect(detail.closedAt).toBeNull();
+      expect(detail.assignee).toBeNull();
+      expect(detail.rig).toBeNull();
+      expect(detail.labels).toEqual([]);
+      expect(detail.agentState).toBeNull();
+      expect(detail.isPinned).toBe(false);
+      expect(detail.isWisp).toBe(false);
+      expect(detail.dependencies).toEqual([]);
+    });
+
+    it("should call execBd with correct args (show with --json)", async () => {
+      vi.mocked(execBd).mockResolvedValue({
+        success: true,
+        data: createBead({ id: "hq-test" }),
+        exitCode: 0,
+      });
+
+      await getBead("hq-test");
+
+      const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
+      expect(args).toContain("show");
+      expect(args).toContain("test"); // short ID without prefix
+      expect(args).toContain("--json");
+    });
+
+    it("should strip prefix correctly for multi-part IDs", async () => {
+      vi.mocked(execBd).mockResolvedValue({
+        success: true,
+        data: createBead({ id: "hq-cv-hfove" }),
+        exitCode: 0,
+      });
+
+      await getBead("hq-cv-hfove");
+
+      const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
+      // Should strip "hq-" and keep "cv-hfove"
+      expect(args).toContain("cv-hfove");
+    });
+
+    it("should try town database for unknown prefix and handle not found", async () => {
+      // For unknown prefix, getBead tries the town database
+      vi.mocked(listAllBeadsDirs).mockResolvedValue([]);
+
+      // Mock execBd to return not found error
+      vi.mocked(execBd).mockResolvedValue({
+        success: false,
+        error: { code: "BEAD_NOT_FOUND", message: "Bead not found: xyz-test" },
+        exitCode: 1,
+      });
+
+      const result = await getBead("xyz-test");
+
+      // Unknown prefix defaults to town, so it tries town database
+      // When bd returns BEAD_NOT_FOUND, we get that error
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe("BEAD_NOT_FOUND");
+    });
+
+    it("should handle exceptions during getBead", async () => {
+      vi.mocked(execBd).mockRejectedValue(new Error("Database connection failed"));
+
+      const result = await getBead("hq-error");
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe("GET_BEAD_ERROR");
+      expect(result.error?.message).toBe("Database connection failed");
     });
   });
 });

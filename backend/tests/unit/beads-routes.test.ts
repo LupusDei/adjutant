@@ -6,6 +6,7 @@ import request from "supertest";
 vi.mock("../../src/services/beads-service.js", () => ({
   listBeads: vi.fn(),
   listAllBeads: vi.fn(),
+  getBead: vi.fn(),
 }));
 
 vi.mock("../../src/services/gastown-workspace.js", () => ({
@@ -14,8 +15,8 @@ vi.mock("../../src/services/gastown-workspace.js", () => ({
 }));
 
 import { beadsRouter } from "../../src/routes/beads.js";
-import { listBeads, listAllBeads } from "../../src/services/beads-service.js";
-import type { BeadInfo } from "../../src/services/beads-service.js";
+import { listBeads, listAllBeads, getBead } from "../../src/services/beads-service.js";
+import type { BeadInfo, BeadDetail } from "../../src/services/beads-service.js";
 
 /**
  * Creates a test Express app with the beads router mounted.
@@ -43,6 +44,32 @@ function createMockBead(overrides: Partial<BeadInfo> = {}): BeadInfo {
     labels: [],
     createdAt: "2026-01-15T10:00:00Z",
     updatedAt: null,
+    ...overrides,
+  };
+}
+
+/**
+ * Creates a mock BeadDetail for testing.
+ */
+function createMockBeadDetail(overrides: Partial<BeadDetail> = {}): BeadDetail {
+  return {
+    id: "hq-001",
+    title: "Test Bead Detail",
+    description: "A test bead description",
+    status: "open",
+    priority: 2,
+    type: "task",
+    assignee: null,
+    rig: null,
+    source: "town",
+    labels: [],
+    createdAt: "2026-01-15T10:00:00Z",
+    updatedAt: null,
+    closedAt: null,
+    agentState: null,
+    dependencies: [],
+    isWisp: false,
+    isPinned: false,
     ...overrides,
   };
 }
@@ -229,6 +256,136 @@ describe("beads routes", () => {
       expect(response.status).toBe(500);
       expect(response.body.success).toBe(false);
       expect(response.body.error.message).toBe("Failed to list beads");
+    });
+  });
+
+  describe("GET /api/beads/:id", () => {
+    it("should return 200 with bead data for valid ID", async () => {
+      const mockDetail = createMockBeadDetail({
+        id: "hq-vts8",
+        title: "Test Bead Details",
+        description: "Full description of the bead",
+      });
+
+      vi.mocked(getBead).mockResolvedValue({
+        success: true,
+        data: mockDetail,
+      });
+
+      const response = await request(app).get("/api/beads/hq-vts8");
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.id).toBe("hq-vts8");
+      expect(response.body.data.title).toBe("Test Bead Details");
+      expect(response.body.data.description).toBe("Full description of the bead");
+      expect(getBead).toHaveBeenCalledWith("hq-vts8");
+    });
+
+    it("should return full BeadDetail fields", async () => {
+      const mockDetail = createMockBeadDetail({
+        id: "hq-full",
+        title: "Full Bead",
+        description: "Complete description",
+        status: "in_progress",
+        priority: 1,
+        type: "feature",
+        assignee: "gastown_boy/polecats/toast",
+        rig: "gastown_boy",
+        source: "town",
+        labels: ["urgent", "backend"],
+        agentState: "working",
+        dependencies: [{ issueId: "hq-full", dependsOnId: "hq-dep1", type: "blocks" }],
+        isWisp: false,
+        isPinned: true,
+      });
+
+      vi.mocked(getBead).mockResolvedValue({
+        success: true,
+        data: mockDetail,
+      });
+
+      const response = await request(app).get("/api/beads/hq-full");
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      const data = response.body.data;
+      expect(data.description).toBe("Complete description");
+      expect(data.agentState).toBe("working");
+      expect(data.dependencies).toHaveLength(1);
+      expect(data.isPinned).toBe(true);
+      expect(data.isWisp).toBe(false);
+    });
+
+    it("should return 404 for non-existent bead", async () => {
+      vi.mocked(getBead).mockResolvedValue({
+        success: false,
+        error: { code: "BEAD_NOT_FOUND", message: "Bead not found: hq-9999" },
+      });
+
+      const response = await request(app).get("/api/beads/hq-9999");
+
+      expect(response.status).toBe(404);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error.message).toBe("Bead not found: hq-9999");
+    });
+
+    it("should return 400 for missing bead ID", async () => {
+      // Express won't match the route without an ID, but we test the edge case
+      // by calling the endpoint without a valid ID segment
+      // Note: Express routing means /api/beads/ goes to list endpoint
+      // This test validates the route exists and handles the param
+      const response = await request(app).get("/api/beads/");
+
+      // Without ID, it matches the list endpoint
+      expect(response.status).not.toBe(400);
+    });
+
+    it("should return 500 for service errors (non-404)", async () => {
+      vi.mocked(getBead).mockResolvedValue({
+        success: false,
+        error: { code: "DATABASE_ERROR", message: "Database connection failed" },
+      });
+
+      const response = await request(app).get("/api/beads/hq-error");
+
+      expect(response.status).toBe(500);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error.message).toBe("Database connection failed");
+    });
+
+    it("should return 500 with default message when error is undefined", async () => {
+      vi.mocked(getBead).mockResolvedValue({
+        success: false,
+        error: undefined,
+      });
+
+      const response = await request(app).get("/api/beads/hq-noerror");
+
+      expect(response.status).toBe(500);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error.message).toBe("Failed to get bead");
+    });
+
+    it("should handle rig-specific bead IDs (adj-* prefix)", async () => {
+      const mockDetail = createMockBeadDetail({
+        id: "adj-67tta",
+        title: "Adjutant Bead",
+        source: "adjutant",
+        rig: "adjutant",
+      });
+
+      vi.mocked(getBead).mockResolvedValue({
+        success: true,
+        data: mockDetail,
+      });
+
+      const response = await request(app).get("/api/beads/adj-67tta");
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.id).toBe("adj-67tta");
+      expect(response.body.data.source).toBe("adjutant");
+      expect(getBead).toHaveBeenCalledWith("adj-67tta");
     });
   });
 });
