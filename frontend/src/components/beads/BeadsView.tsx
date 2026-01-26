@@ -35,6 +35,18 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
   const [overseerView, setOverseerView] = useState(false);
   const [beads, setBeads] = useState<BeadInfo[]>([]);
 
+  // Fetch rig options on mount from status endpoint
+  useEffect(() => {
+    void api.getStatus().then((status) => {
+      if (status.rigs && status.rigs.length > 0) {
+        const rigNames = status.rigs.map((r) => r.name).sort();
+        setRigOptions(rigNames);
+      }
+    }).catch(() => {
+      // Silently ignore - dropdown will just show ALL/TOWN
+    });
+  }, []);
+
   // Convert UI rig filter to API parameter
   const apiRig = rigFilter === 'ALL' ? undefined : rigFilter === 'TOWN' ? 'town' : rigFilter;
 
@@ -55,22 +67,11 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
   }, [rigFilter, refresh]);
 
   // Update local beads state when fetch completes
-  // Also update rig options when fetching from 'ALL' to populate dropdown
   useEffect(() => {
     if (fetchedBeads) {
       setBeads(fetchedBeads);
-      // Only update rig options when we have beads from all rigs
-      if (rigFilter === 'ALL') {
-        const rigs = new Set<string>();
-        for (const bead of fetchedBeads) {
-          if (bead.source && bead.source !== 'town' && bead.source !== 'unknown') {
-            rigs.add(bead.source);
-          }
-        }
-        setRigOptions(Array.from(rigs).sort());
-      }
     }
-  }, [fetchedBeads, rigFilter]);
+  }, [fetchedBeads]);
 
   // Persist rig filter to localStorage
   useEffect(() => {
