@@ -155,9 +155,29 @@ final class ChatViewModel: BaseViewModel {
         // Clear input immediately for responsive feel
         inputText = ""
 
+        // Generate subject from message body (first ~50 chars, truncated at word boundary)
+        let subject = Self.generateSubject(from: text)
+
+        // Create optimistic local message for immediate display
+        let optimisticMessage = Message(
+            id: "local-\(UUID().uuidString)",
+            from: "user",
+            to: selectedRecipient,
+            subject: subject,
+            body: text,
+            timestamp: ISO8601DateFormatter().string(from: Date()),
+            read: true,
+            priority: .normal,
+            type: .task,
+            threadId: "local-thread",
+            pinned: false,
+            isInfrastructure: false
+        )
+
+        // Add to messages immediately (optimistic update)
+        messages.append(optimisticMessage)
+
         await performAsyncAction(showLoading: false) {
-            // Generate subject from message body (first ~50 chars, truncated at word boundary)
-            let subject = Self.generateSubject(from: text)
             let request = SendMessageRequest(
                 to: self.selectedRecipient,
                 subject: subject,
