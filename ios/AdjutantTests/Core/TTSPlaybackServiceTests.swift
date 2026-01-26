@@ -18,6 +18,8 @@ final class TTSPlaybackServiceTests: XCTestCase {
             apiClient: mockAPIClient.client,
             baseURL: URL(string: "http://localhost:3000")!
         )
+        // Disable auto-play so tests can verify queue state before playback
+        sut.autoPlayEnabled = false
         cancellables = []
     }
 
@@ -174,19 +176,22 @@ final class TTSPlaybackServiceTests: XCTestCase {
 
     func testPlaybackItemEquality() {
         let id = UUID()
+        let createdAt = Date()
         let item1 = PlaybackItem(
             id: id,
             text: "Test",
             audioURL: URL(string: "http://test.com/audio.mp3")!,
             duration: 5.0,
-            voiceId: "voice1"
+            voiceId: "voice1",
+            createdAt: createdAt
         )
         let item2 = PlaybackItem(
             id: id,
             text: "Test",
             audioURL: URL(string: "http://test.com/audio.mp3")!,
             duration: 5.0,
-            voiceId: "voice1"
+            voiceId: "voice1",
+            createdAt: createdAt
         )
 
         XCTAssertEqual(item1, item2)

@@ -163,6 +163,11 @@ public final class TTSPlaybackService: NSObject, TTSPlaybackServiceProtocol {
 
     @Published private(set) public var state: PlaybackState = .idle
     @Published private(set) public var queue: [PlaybackItem] = []
+
+    /// Whether to automatically start playback when items are enqueued while idle.
+    /// Set to false in tests to verify queue state before playback begins.
+    public var autoPlayEnabled: Bool = true
+
     @Published public var volume: Float = 1.0 {
         didSet {
             audioPlayer?.volume = volume
@@ -235,8 +240,8 @@ public final class TTSPlaybackService: NSObject, TTSPlaybackServiceProtocol {
         let insertIndex = queue.firstIndex { $0.priority < item.priority } ?? queue.endIndex
         queue.insert(item, at: insertIndex)
 
-        // Auto-start if idle
-        if case .idle = state {
+        // Auto-start if idle and auto-play is enabled
+        if autoPlayEnabled, case .idle = state {
             playNext()
         }
     }
