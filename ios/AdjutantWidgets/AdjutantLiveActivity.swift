@@ -9,46 +9,7 @@
 import SwiftUI
 import WidgetKit
 import ActivityKit
-
-// MARK: - Activity Attributes
-
-/// Attributes for the Gastown Live Activity.
-/// This must match the definition in the main app's LiveActivityService.
-public struct GastownActivityAttributes: ActivityAttributes {
-    /// The rig name this activity is monitoring
-    public let rigName: String
-
-    /// Dynamic state that updates throughout the activity lifecycle
-    public struct ContentState: Codable, Hashable {
-        /// Current power state of the Gastown system
-        public let powerState: String
-
-        /// Count of unread mail messages
-        public let unreadMailCount: Int
-
-        /// Number of active agents currently working
-        public let activeAgents: Int
-
-        /// Timestamp of the last update
-        public let lastUpdated: Date
-
-        public init(
-            powerState: String,
-            unreadMailCount: Int,
-            activeAgents: Int,
-            lastUpdated: Date = Date()
-        ) {
-            self.powerState = powerState
-            self.unreadMailCount = unreadMailCount
-            self.activeAgents = activeAgents
-            self.lastUpdated = lastUpdated
-        }
-    }
-
-    public init(rigName: String) {
-        self.rigName = rigName
-    }
-}
+import AdjutantKit
 
 // MARK: - Live Activity Widget
 
@@ -100,8 +61,8 @@ private struct LockScreenView: View {
             PowerStateView(powerState: context.state.powerState)
 
             VStack(alignment: .leading, spacing: 4) {
-                // Rig name
-                Text(context.attributes.rigName)
+                // Town name
+                Text(context.attributes.townName)
                     .font(.headline)
                     .fontWeight(.semibold)
 
@@ -139,16 +100,14 @@ private struct LockScreenView: View {
         .activityBackgroundTint(backgroundTint(for: context.state.powerState))
     }
 
-    private func backgroundTint(for powerState: String) -> Color {
-        switch powerState.lowercased() {
-        case "running":
+    private func backgroundTint(for powerState: PowerState) -> Color {
+        switch powerState {
+        case .running:
             return .green.opacity(0.3)
-        case "starting", "stopping":
+        case .starting, .stopping:
             return .yellow.opacity(0.3)
-        case "stopped":
+        case .stopped:
             return .gray.opacity(0.3)
-        default:
-            return .blue.opacity(0.3)
         }
     }
 }
@@ -183,7 +142,7 @@ private struct ExpandedCenterView: View {
     let context: ActivityViewContext<GastownActivityAttributes>
 
     var body: some View {
-        Text(context.attributes.rigName)
+        Text(context.attributes.townName)
             .font(.headline)
             .fontWeight(.semibold)
     }
@@ -268,7 +227,7 @@ private struct MinimalView: View {
 
 /// Visual indicator for power state.
 private struct PowerStateView: View {
-    let powerState: String
+    let powerState: PowerState
 
     var body: some View {
         ZStack {
@@ -303,81 +262,77 @@ private struct StatusBadge: View {
 // MARK: - Helper Functions
 
 /// Returns the appropriate SF Symbol for a power state.
-private func powerStateIcon(for powerState: String) -> String {
-    switch powerState.lowercased() {
-    case "running":
+private func powerStateIcon(for powerState: PowerState) -> String {
+    switch powerState {
+    case .running:
         return "bolt.fill"
-    case "starting":
+    case .starting:
         return "arrow.up.circle.fill"
-    case "stopping":
+    case .stopping:
         return "arrow.down.circle.fill"
-    case "stopped":
+    case .stopped:
         return "moon.fill"
-    default:
-        return "questionmark.circle.fill"
     }
 }
 
 /// Returns the appropriate color for a power state.
-private func powerStateColor(for powerState: String) -> Color {
-    switch powerState.lowercased() {
-    case "running":
+private func powerStateColor(for powerState: PowerState) -> Color {
+    switch powerState {
+    case .running:
         return .green
-    case "starting", "stopping":
+    case .starting, .stopping:
         return .yellow
-    case "stopped":
+    case .stopped:
         return .gray
-    default:
-        return .blue
     }
 }
 
 // MARK: - Previews
 
-#Preview("Lock Screen", as: .content, using: GastownActivityAttributes(rigName: "adjutant")) {
+#Preview("Lock Screen", as: .content, using: GastownActivityAttributes(townName: "Gastown")) {
     AdjutantLiveActivity()
 } contentStates: {
     GastownActivityAttributes.ContentState(
-        powerState: "running",
+        powerState: .running,
         unreadMailCount: 3,
         activeAgents: 5,
         lastUpdated: Date()
     )
     GastownActivityAttributes.ContentState(
-        powerState: "stopped",
+        powerState: .stopped,
         unreadMailCount: 0,
         activeAgents: 0,
         lastUpdated: Date()
     )
 }
 
-#Preview("Dynamic Island Expanded", as: .dynamicIsland(.expanded), using: GastownActivityAttributes(rigName: "adjutant")) {
+#Preview("Dynamic Island Expanded", as: .dynamicIsland(.expanded), using: GastownActivityAttributes(townName: "Gastown")) {
     AdjutantLiveActivity()
 } contentStates: {
     GastownActivityAttributes.ContentState(
-        powerState: "running",
+        powerState: .running,
         unreadMailCount: 3,
         activeAgents: 5,
         lastUpdated: Date()
     )
 }
 
-#Preview("Dynamic Island Compact", as: .dynamicIsland(.compact), using: GastownActivityAttributes(rigName: "adjutant")) {
+#Preview("Dynamic Island Compact", as: .dynamicIsland(.compact), using: GastownActivityAttributes(townName: "Gastown")) {
     AdjutantLiveActivity()
 } contentStates: {
     GastownActivityAttributes.ContentState(
-        powerState: "running",
+        powerState: .running,
         unreadMailCount: 3,
         activeAgents: 5,
         lastUpdated: Date()
     )
 }
 
-#Preview("Dynamic Island Minimal", as: .dynamicIsland(.minimal), using: GastownActivityAttributes(rigName: "adjutant")) {
+#Preview("Dynamic Island Minimal", as: .dynamicIsland(.minimal), using: GastownActivityAttributes(townName: "Gastown")) {
     AdjutantLiveActivity()
 } contentStates: {
     GastownActivityAttributes.ContentState(
-        powerState: "running",
+        powerState: .running,
         unreadMailCount: 3,
         activeAgents: 5,
         lastUpdated: Date()
