@@ -1,12 +1,14 @@
 import SwiftUI
 import AdjutantKit
 
-/// Main chat view for direct messaging with the Mayor.
+/// Main chat view for direct messaging with agents.
 /// Features SMS-style bubbles, auto-scroll, typing indicator, and voice input.
+/// Supports chatting with Mayor or any crew agent.
 struct ChatView: View {
     @Environment(\.crtTheme) private var theme
     @StateObject private var viewModel: ChatViewModel
     @State private var scrollProxy: ScrollViewProxy?
+    @State private var showRecipientSelector = false
 
     init(apiClient: APIClient, speechService: SpeechRecognitionServiceProtocol? = nil) {
         let service = speechService ?? SpeechRecognitionService()
@@ -39,6 +41,7 @@ struct ChatView: View {
             // Input area
             ChatInputView(
                 text: $viewModel.inputText,
+                recipientName: viewModel.recipientShortName,
                 isRecordingVoice: viewModel.isRecordingVoice,
                 canSend: viewModel.canSend,
                 onSend: {
@@ -62,27 +65,49 @@ struct ChatView: View {
         .onChange(of: viewModel.messages.count) { _, _ in
             scrollToBottom()
         }
+        .sheet(isPresented: $showRecipientSelector) {
+            RecipientSelectorSheet(
+                recipients: viewModel.availableRecipients,
+                selectedRecipient: viewModel.selectedRecipient,
+                onSelect: { recipient in
+                    Task {
+                        await viewModel.setRecipient(recipient)
+                    }
+                    showRecipientSelector = false
+                }
+            )
+        }
     }
 
     // MARK: - Subviews
 
     private var chatHeader: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                CRTText("MAYOR", style: .subheader, glowIntensity: .medium)
-                CRTText("DIRECT CHANNEL", style: .caption, glowIntensity: .subtle, color: theme.dim)
-            }
+        Button {
+            showRecipientSelector = true
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: CRTTheme.Spacing.xs) {
+                        CRTText(viewModel.recipientDisplayName, style: .subheader, glowIntensity: .medium)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(theme.primary)
+                    }
+                    CRTText("DIRECT CHANNEL", style: .caption, glowIntensity: .subtle, color: theme.dim)
+                }
 
-            Spacer()
+                Spacer()
 
-            // Status indicator
-            HStack(spacing: CRTTheme.Spacing.xxs) {
-                Circle()
-                    .fill(CRTTheme.State.success)
-                    .frame(width: 8, height: 8)
-                CRTText("ONLINE", style: .caption, glowIntensity: .subtle, color: CRTTheme.State.success)
+                // Status indicator
+                HStack(spacing: CRTTheme.Spacing.xxs) {
+                    Circle()
+                        .fill(CRTTheme.State.success)
+                        .frame(width: 8, height: 8)
+                    CRTText("ONLINE", style: .caption, glowIntensity: .subtle, color: CRTTheme.State.success)
+                }
             }
         }
+        .buttonStyle(.plain)
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
         .background(
@@ -182,7 +207,7 @@ struct ChatView: View {
                 .foregroundColor(theme.dim)
 
             CRTText("NO MESSAGES", style: .subheader, glowIntensity: .subtle, color: theme.dim)
-            CRTText("Send a message to start a conversation with the Mayor.",
+            CRTText("Send a message to start a conversation with \(viewModel.recipientDisplayName).",
                     style: .body, glowIntensity: .none, color: theme.dim.opacity(0.6))
                 .multilineTextAlignment(.center)
         }
@@ -191,7 +216,7 @@ struct ChatView: View {
 
     private var typingIndicator: some View {
         HStack(spacing: CRTTheme.Spacing.xs) {
-            CRTText("MAYOR IS TYPING", style: .caption, glowIntensity: .subtle, color: theme.dim)
+            CRTText("\(viewModel.recipientDisplayName) IS TYPING", style: .caption, glowIntensity: .subtle, color: theme.dim)
             TypingDots()
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
@@ -235,6 +260,133 @@ private struct TypingDots: View {
         .onDisappear {
             timer?.invalidate()
             timer = nil
+        }
+    }
+}
+
+// MARK: - Recipient Selector Sheet
+
+/// Sheet view for selecting a chat recipient
+private struct RecipientSelectorSheet: View {
+    @Environment(\.crtTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
+
+    let recipients: [CrewMember]
+    let selectedRecipient: String
+    let onSelect: (String) -> Void
+
+    @State private var searchText = ""
+
+    private var filteredRecipients: [CrewMember] {
+        if searchText.isEmpty {
+            return recipients
+        }
+        let query = searchText.lowercased()
+        return recipients.filter { crew in
+            crew.id.lowercased().contains(query) ||
+            crew.name.lowercased().contains(query)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Search field
+                CRTTextField("Search agents...", text: $searchText, icon: "magnifyingglass")
+                    .padding(CRTTheme.Spacing.md)
+
+                // Recipients list
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        // Mayor is always first
+                        recipientRow(
+                            id: "mayor/",
+                            name: "Mayor",
+                            type: .mayor,
+                            isSelected: selectedRecipient == "mayor/"
+                        )
+
+                        Divider()
+                            .background(theme.dim.opacity(0.3))
+
+                        // Other recipients
+                        ForEach(filteredRecipients) { crew in
+                            recipientRow(
+                                id: crew.id,
+                                name: crew.name,
+                                type: crew.type,
+                                isSelected: selectedRecipient == crew.id
+                            )
+
+                            if crew.id != filteredRecipients.last?.id {
+                                Divider()
+                                    .background(theme.dim.opacity(0.3))
+                            }
+                        }
+                    }
+                }
+            }
+            .background(CRTTheme.Background.screen)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    CRTText("SELECT RECIPIENT", style: .subheader, glowIntensity: .subtle)
+                }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(theme.primary)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func recipientRow(id: String, name: String, type: AgentType, isSelected: Bool) -> some View {
+        Button {
+            onSelect(id)
+        } label: {
+            HStack {
+                // Agent icon
+                Image(systemName: iconForAgentType(type))
+                    .font(.system(size: 20))
+                    .foregroundColor(isSelected ? theme.primary : theme.dim)
+                    .frame(width: 32)
+
+                // Name and ID
+                VStack(alignment: .leading, spacing: 2) {
+                    CRTText(name.uppercased(), style: .body, glowIntensity: isSelected ? .medium : .subtle)
+                    CRTText(id, style: .caption, glowIntensity: .none)
+                        .foregroundColor(theme.dim)
+                }
+
+                Spacer()
+
+                // Selection indicator
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(theme.primary)
+                }
+            }
+            .padding(.horizontal, CRTTheme.Spacing.md)
+            .padding(.vertical, CRTTheme.Spacing.sm)
+            .background(isSelected ? theme.primary.opacity(0.1) : Color.clear)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func iconForAgentType(_ type: AgentType) -> String {
+        switch type {
+        case .mayor: return "crown"
+        case .deacon: return "bell"
+        case .witness: return "eye"
+        case .refinery: return "gearshape.2"
+        case .crew: return "person"
+        case .polecat: return "bolt"
         }
     }
 }

@@ -27,6 +27,8 @@ final class ChatViewModelTests: XCTestCase {
     func testInitialState() {
         XCTAssertTrue(viewModel.messages.isEmpty)
         XCTAssertEqual(viewModel.inputText, "")
+        XCTAssertEqual(viewModel.selectedRecipient, "mayor/")
+        XCTAssertTrue(viewModel.availableRecipients.isEmpty)
         XCTAssertFalse(viewModel.isTyping)
         XCTAssertFalse(viewModel.isRecordingVoice)
         XCTAssertTrue(viewModel.hasMoreHistory)
@@ -50,7 +52,7 @@ final class ChatViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.errorMessage)
     }
 
-    func testRefreshFiltersOnlyMayorMessages() async {
+    func testRefreshFiltersOnlySelectedRecipientMessages() async {
         let testMessages = [
             createTestMessage(id: "test-1", from: "mayor/", to: "user"),
             createTestMessage(id: "test-2", from: "other/", to: "user"), // Should be filtered out
@@ -61,6 +63,7 @@ final class ChatViewModelTests: XCTestCase {
 
         await viewModel.refresh()
 
+        // Default recipient is "mayor/", so should filter to mayor messages
         XCTAssertEqual(viewModel.messages.count, 2)
         XCTAssertTrue(viewModel.messages.allSatisfy { $0.from == "mayor/" || $0.to == "mayor/" })
     }
@@ -166,14 +169,23 @@ final class ChatViewModelTests: XCTestCase {
 
     // MARK: - Outgoing Message Detection Tests
 
-    func testIsOutgoingForMessageToMayor() {
+    func testIsOutgoingForMessageToSelectedRecipient() {
+        // Default recipient is "mayor/"
         let outgoingMessage = createTestMessage(id: "test", from: "user", to: "mayor/")
         XCTAssertTrue(viewModel.isOutgoing(outgoingMessage))
     }
 
-    func testIsOutgoingFalseForMessageFromMayor() {
+    func testIsOutgoingFalseForMessageFromSelectedRecipient() {
+        // Default recipient is "mayor/"
         let incomingMessage = createTestMessage(id: "test", from: "mayor/", to: "user")
         XCTAssertFalse(viewModel.isOutgoing(incomingMessage))
+    }
+
+    // MARK: - Recipient Display Name Tests
+
+    func testRecipientDisplayNameForMayor() {
+        // Default recipient is "mayor/"
+        XCTAssertEqual(viewModel.recipientDisplayName, "MAYOR")
     }
 
     // MARK: - Load More History Tests

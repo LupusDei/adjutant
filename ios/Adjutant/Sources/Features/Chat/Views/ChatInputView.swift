@@ -6,6 +6,7 @@ struct ChatInputView: View {
     @FocusState private var isTextFieldFocused: Bool
 
     @Binding var text: String
+    let recipientName: String
     let isRecordingVoice: Bool
     let canSend: Bool
     let onSend: () -> Void
@@ -121,7 +122,7 @@ struct ChatInputView: View {
     }
 
     private var promptText: Text {
-        Text("MESSAGE MAYOR...")
+        Text("MESSAGE \(recipientName)...")
             .foregroundColor(theme.dim.opacity(0.5))
     }
 }
@@ -138,6 +139,7 @@ struct ChatInputView: View {
                 Spacer()
                 ChatInputView(
                     text: $text,
+                    recipientName: "MAYOR",
                     isRecordingVoice: isRecording,
                     canSend: !text.isEmpty,
                     onSend: { text = "" },
@@ -153,7 +155,7 @@ struct ChatInputView: View {
 
 #Preview("ChatInputView with Text") {
     struct PreviewWrapper: View {
-        @State private var text = "Hello Mayor, I have a question"
+        @State private var text = "Hello, I have a question"
         @State private var isRecording = false
 
         var body: some View {
@@ -161,6 +163,7 @@ struct ChatInputView: View {
                 Spacer()
                 ChatInputView(
                     text: $text,
+                    recipientName: "STUKOV",
                     isRecordingVoice: isRecording,
                     canSend: !text.isEmpty,
                     onSend: { },

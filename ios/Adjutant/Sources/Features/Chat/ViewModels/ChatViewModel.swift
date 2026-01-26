@@ -2,8 +2,9 @@ import Foundation
 import Combine
 import AdjutantKit
 
-/// ViewModel for the Mayor Chat feature.
+/// ViewModel for the Chat feature.
 /// Handles loading messages, sending new messages, and managing chat state.
+/// Supports chatting with Mayor or any crew agent.
 @MainActor
 final class ChatViewModel: BaseViewModel {
     // MARK: - Published Properties
@@ -14,7 +15,13 @@ final class ChatViewModel: BaseViewModel {
     /// Current input text
     @Published var inputText: String = ""
 
-    /// Whether the Mayor is currently typing (simulated)
+    /// Currently selected recipient (default: mayor/)
+    @Published private(set) var selectedRecipient: String = "mayor/"
+
+    /// All available recipients (agents)
+    @Published private(set) var availableRecipients: [CrewMember] = []
+
+    /// Whether the recipient is currently typing (simulated)
     @Published private(set) var isTyping: Bool = false
 
     /// Whether voice input is active
@@ -72,6 +79,9 @@ final class ChatViewModel: BaseViewModel {
 
     override func onAppear() {
         super.onAppear()
+        Task {
+            await loadRecipients()
+        }
         startPolling()
     }
 
@@ -86,7 +96,7 @@ final class ChatViewModel: BaseViewModel {
     override func refresh() async {
         await performAsyncAction(showLoading: messages.isEmpty) {
             let response = try await self.apiClient.getMail(filter: .user, all: false)
-            self.messages = self.filterMayorMessages(response.items).sorted { msg1, msg2 in
+            self.messages = self.filterRecipientMessages(response.items).sorted { msg1, msg2 in
                 // Sort by timestamp, oldest first (for chat display)
                 (msg1.date ?? Date.distantPast) < (msg2.date ?? Date.distantPast)
             }
@@ -94,6 +104,22 @@ final class ChatViewModel: BaseViewModel {
             // Update cache for next navigation
             ResponseCache.shared.updateChatMessages(self.messages)
         }
+    }
+
+    /// Loads available recipients from the API
+    func loadRecipients() async {
+        await performAsyncAction(showLoading: false) {
+            let agents = try await self.apiClient.getAgents()
+            self.availableRecipients = agents
+        }
+    }
+
+    /// Sets the current recipient and refreshes messages
+    func setRecipient(_ recipient: String) async {
+        guard recipient != selectedRecipient else { return }
+        selectedRecipient = recipient
+        messages = [] // Clear messages while loading
+        await refresh()
     }
 
     /// Load more history (older messages)
@@ -106,22 +132,22 @@ final class ChatViewModel: BaseViewModel {
         await performAsyncAction(showLoading: false) {
             // For now, load all messages - pagination could be added later
             let response = try await self.apiClient.getMail(filter: .user, all: true)
-            let allMayorMessages = self.filterMayorMessages(response.items).sorted { msg1, msg2 in
+            let allRecipientMessages = self.filterRecipientMessages(response.items).sorted { msg1, msg2 in
                 (msg1.date ?? Date.distantPast) < (msg2.date ?? Date.distantPast)
             }
 
             // If we got the same count, there's no more history
-            if allMayorMessages.count <= self.messages.count {
+            if allRecipientMessages.count <= self.messages.count {
                 self.hasMoreHistory = false
             } else {
-                self.messages = allMayorMessages
+                self.messages = allRecipientMessages
             }
         }
     }
 
     // MARK: - Sending Messages
 
-    /// Send a message to the Mayor
+    /// Send a message to the selected recipient
     func sendMessage() async {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
@@ -133,7 +159,7 @@ final class ChatViewModel: BaseViewModel {
             // Generate subject from message body (first ~50 chars, truncated at word boundary)
             let subject = Self.generateSubject(from: text)
             let request = SendMessageRequest(
-                to: "mayor/",
+                to: self.selectedRecipient,
                 subject: subject,
                 body: text,
                 type: .task
@@ -275,10 +301,10 @@ final class ChatViewModel: BaseViewModel {
         return prefix + "..."
     }
 
-    /// Filter messages to only include Mayor conversations
-    private func filterMayorMessages(_ messages: [Message]) -> [Message] {
+    /// Filter messages to only include conversations with the selected recipient
+    private func filterRecipientMessages(_ messages: [Message]) -> [Message] {
         messages.filter { message in
-            message.from == "mayor/" || message.to == "mayor/"
+            message.from == selectedRecipient || message.to == selectedRecipient
         }
     }
 
@@ -294,8 +320,8 @@ final class ChatViewModel: BaseViewModel {
                 if let response = await performAsync(showLoading: false, {
                     try await self.apiClient.getMail(filter: .user, all: false)
                 }) {
-                    let newMayorMessages = filterMayorMessages(response.items)
-                    if let newest = newMayorMessages.first, newest.id != lastMessageId {
+                    let newRecipientMessages = filterRecipientMessages(response.items)
+                    if let newest = newRecipientMessages.first, newest.id != lastMessageId {
                         await refresh()
                     }
                 }
@@ -307,11 +333,28 @@ final class ChatViewModel: BaseViewModel {
 
     /// Check if a message is from the user (outgoing)
     func isOutgoing(_ message: Message) -> Bool {
-        message.to == "mayor/"
+        message.to == selectedRecipient
     }
 
     /// Check if we can send a message
     var canSend: Bool {
         !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isLoading
+    }
+
+    /// Display name for the selected recipient
+    var recipientDisplayName: String {
+        // Check if we have this recipient in our list
+        if let crew = availableRecipients.first(where: { $0.id == selectedRecipient }) {
+            return crew.name.uppercased()
+        }
+        // Fallback: format the ID (e.g., "mayor/" -> "MAYOR")
+        return selectedRecipient
+            .replacingOccurrences(of: "/", with: "")
+            .uppercased()
+    }
+
+    /// Short ID for the recipient (for input placeholder)
+    var recipientShortName: String {
+        recipientDisplayName
     }
 }
