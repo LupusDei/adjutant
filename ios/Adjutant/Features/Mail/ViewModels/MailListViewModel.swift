@@ -70,6 +70,7 @@ final class MailListViewModel: BaseViewModel {
         self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
         setupRigFilterObserver()
+        setupOverseerModeObserver()
         loadFromCache()
     }
 
@@ -85,6 +86,16 @@ final class MailListViewModel: BaseViewModel {
     /// Sets up observation of rig filter changes from AppState
     private func setupRigFilterObserver() {
         AppState.shared.$selectedRig
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.applyFilter()
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Sets up observation of overseer mode changes from AppState
+    private func setupOverseerModeObserver() {
+        AppState.shared.$isOverseerMode
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.applyFilter()
@@ -252,6 +263,11 @@ final class MailListViewModel: BaseViewModel {
             result = result.filter { message in
                 messageMatchesRig(message, rig: rig)
             }
+        }
+
+        // Apply overseer mode filter (hide infrastructure messages)
+        if AppState.shared.isOverseerMode {
+            result = result.filter { !$0.isInfrastructure }
         }
 
         // Apply status filter

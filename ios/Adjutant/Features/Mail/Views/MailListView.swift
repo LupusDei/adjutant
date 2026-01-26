@@ -63,6 +63,9 @@ struct MailListView: View {
 
     private var filterBar: some View {
         HStack(spacing: CRTTheme.Spacing.xs) {
+            // Overseer toggle
+            overseerToggle
+
             ForEach(MailListViewModel.MailFilter.allCases) { filter in
                 FilterChip(
                     title: filter.displayName,
@@ -88,6 +91,40 @@ struct MailListView: View {
                 .foregroundColor(theme.primary.opacity(0.2)),
             alignment: .bottom
         )
+    }
+
+    // MARK: - Overseer Toggle
+
+    private var overseerToggle: some View {
+        Button {
+            withAnimation(.easeInOut(duration: CRTTheme.Animation.fast)) {
+                appState.isOverseerMode.toggle()
+            }
+        } label: {
+            HStack(spacing: CRTTheme.Spacing.xxs) {
+                Image(systemName: appState.isOverseerMode ? "eye" : "eye.slash")
+                    .font(.system(size: 12))
+
+                Text("OVERSEER")
+                    .font(CRTTheme.Typography.font(size: 11, weight: .medium))
+                    .tracking(0.5)
+            }
+            .foregroundColor(appState.isOverseerMode ? theme.primary : theme.dim)
+            .padding(.horizontal, CRTTheme.Spacing.sm)
+            .padding(.vertical, CRTTheme.Spacing.xxs)
+            .background(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                    .fill(appState.isOverseerMode ? theme.primary.opacity(0.15) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                    .stroke(
+                        appState.isOverseerMode ? theme.primary : theme.primary.opacity(0.3),
+                        lineWidth: 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Search Bar
