@@ -53,6 +53,10 @@ function getStatusInfo(status: string): { label: string; color: string; bgColor?
       return { label: 'OPEN', color: 'var(--crt-phosphor)' };
     case 'in_progress':
       return { label: 'ACTIVE', color: '#00FF88', bgColor: 'rgba(0, 255, 136, 0.1)' }; // Bright cyan-green
+    case 'in_review':
+      return { label: 'REVIEW', color: '#00BFFF', bgColor: 'rgba(0, 191, 255, 0.1)' }; // Sky blue
+    case 'merging':
+      return { label: 'MERGING', color: '#DA70D6', bgColor: 'rgba(218, 112, 214, 0.1)' }; // Orchid purple
     case 'blocked':
       return { label: 'BLOCKED', color: '#FF6B35', bgColor: 'rgba(255, 107, 53, 0.1)' }; // Warning orange
     case 'deferred':
@@ -441,6 +445,8 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
                     const statusInfo = getStatusInfo(bead.status);
                     const isClosed = bead.status.toLowerCase() === 'closed';
                     const isDeferred = bead.status.toLowerCase() === 'deferred';
+                    // Active work states where agent name should be prominently shown
+                    const isActiveWork = ['hooked', 'in_progress', 'in_review', 'merging'].includes(bead.status.toLowerCase());
 
                     const currentAction = actionInProgress?.id === bead.id ? actionInProgress : null;
                     const result = actionResult?.id === bead.id ? actionResult : null;
@@ -471,7 +477,10 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
                         <td style={{ ...styles.cell, color: statusInfo.color, fontWeight: statusInfo.bgColor ? 'bold' : 'normal' }}>
                           {statusInfo.label}
                         </td>
-                        <td style={styles.cell}>
+                        <td style={{
+                          ...styles.cell,
+                          ...(isActiveWork && bead.assignee ? styles.activeAssigneeCell : {}),
+                        }}>
                           {highlightMatches(formatAssignee(bead.assignee), highlightQuery)}
                         </td>
                         <td style={styles.dateCell}>
@@ -644,6 +653,11 @@ const styles = {
     padding: '8px 6px',
     color: 'var(--crt-phosphor)',
     whiteSpace: 'nowrap',
+  },
+  activeAssigneeCell: {
+    color: 'var(--crt-phosphor-bright)',
+    fontWeight: 'bold',
+    textShadow: '0 0 4px var(--crt-phosphor-glow)',
   },
   idCell: {
     padding: '8px 6px',
