@@ -125,6 +125,45 @@ final class ChatViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.canSend)
     }
 
+    // MARK: - Subject Generation Tests
+
+    func testSendMessageGeneratesSubjectFromBody() async {
+        viewModel.inputText = "Hello Mayor, how are you today?"
+
+        var capturedSubject: String?
+        MockURLProtocol.mockHandler = { request in
+            if let body = request.httpBody,
+               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
+                capturedSubject = json["subject"] as? String
+            }
+            return self.mockSendMailSuccess()
+        }()
+
+        await viewModel.sendMessage()
+
+        XCTAssertEqual(capturedSubject, "Hello Mayor, how are you today?")
+    }
+
+    func testSendMessageTruncatesLongSubject() async {
+        viewModel.inputText = "This is a very long message that should be truncated at the word boundary to form a subject line"
+
+        var capturedSubject: String?
+        MockURLProtocol.mockHandler = { request in
+            if let body = request.httpBody,
+               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
+                capturedSubject = json["subject"] as? String
+            }
+            return self.mockSendMailSuccess()
+        }()
+
+        await viewModel.sendMessage()
+
+        // Should be truncated at word boundary before 50 chars, with "..."
+        XCTAssertNotNil(capturedSubject)
+        XCTAssertTrue(capturedSubject!.hasSuffix("..."))
+        XCTAssertLessThanOrEqual(capturedSubject!.count, 53) // 50 + "..."
+    }
+
     // MARK: - Outgoing Message Detection Tests
 
     func testIsOutgoingForMessageToMayor() {

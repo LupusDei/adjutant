@@ -130,9 +130,11 @@ final class ChatViewModel: BaseViewModel {
         inputText = ""
 
         await performAsyncAction(showLoading: false) {
+            // Generate subject from message body (first ~50 chars, truncated at word boundary)
+            let subject = Self.generateSubject(from: text)
             let request = SendMessageRequest(
                 to: "mayor/",
-                subject: "",
+                subject: subject,
                 body: text,
                 type: .task
             )
@@ -252,6 +254,26 @@ final class ChatViewModel: BaseViewModel {
     }
 
     // MARK: - Private Methods
+
+    /// Generate a subject line from the message body
+    /// - Parameter body: The full message body text
+    /// - Returns: First ~50 characters truncated at word boundary, or "Chat" if empty
+    private static func generateSubject(from body: String) -> String {
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "Chat" }
+
+        // If short enough, use as-is
+        if trimmed.count <= 50 {
+            return trimmed
+        }
+
+        // Truncate at word boundary
+        let prefix = String(trimmed.prefix(50))
+        if let lastSpace = prefix.lastIndex(of: " ") {
+            return String(prefix[..<lastSpace]) + "..."
+        }
+        return prefix + "..."
+    }
 
     /// Filter messages to only include Mayor conversations
     private func filterMayorMessages(_ messages: [Message]) -> [Message] {
