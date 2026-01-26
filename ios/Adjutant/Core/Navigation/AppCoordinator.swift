@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 /// Main application coordinator managing app-wide navigation.
 /// Handles tab selection and navigation within each tab's stack.
@@ -24,6 +25,9 @@ final class AppCoordinator: Coordinator, ObservableObject {
     /// Navigation paths for each tab (preserved during tab switches)
     private var tabPaths: [AppTab: NavigationPath] = [:]
 
+    /// Cancellables for notification observers
+    private var cancellables = Set<AnyCancellable>()
+
     // MARK: - Initialization
 
     init() {
@@ -31,6 +35,46 @@ final class AppCoordinator: Coordinator, ObservableObject {
         for tab in AppTab.allCases {
             tabPaths[tab] = NavigationPath()
         }
+
+        // Set up notification deep linking observers
+        setupNotificationObservers()
+    }
+
+    // MARK: - Notification Deep Linking
+
+    /// Sets up observers for notification tap deep linking
+    private func setupNotificationObservers() {
+        // Handle mail notification taps
+        NotificationCenter.default.publisher(for: .navigateToMail)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let mailId = notification.userInfo?["mailId"] as? String else { return }
+                self?.handleMailNotificationTap(mailId: mailId)
+            }
+            .store(in: &cancellables)
+
+        // Handle task notification taps
+        NotificationCenter.default.publisher(for: .navigateToTask)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let taskId = notification.userInfo?["taskId"] as? String else { return }
+                self?.handleTaskNotificationTap(taskId: taskId)
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Handles navigation when a mail notification is tapped
+    /// - Parameter mailId: The ID of the mail to navigate to
+    private func handleMailNotificationTap(mailId: String) {
+        selectTab(.mail)
+        navigate(to: .mailDetail(id: mailId))
+    }
+
+    /// Handles navigation when a task notification is tapped
+    /// - Parameter taskId: The ID of the task/bead to navigate to
+    private func handleTaskNotificationTap(taskId: String) {
+        selectTab(.beads)
+        navigate(to: .beadDetail(id: taskId))
     }
 
     // MARK: - Navigation

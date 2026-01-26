@@ -7,6 +7,7 @@
 
 import Foundation
 import UserNotifications
+import AdjutantKit
 
 /// Singleton service for managing local and push notifications.
 ///
@@ -325,6 +326,59 @@ public final class NotificationService: NSObject, ObservableObject {
     /// Clears the app badge.
     public func clearBadge() async {
         await setBadgeCount(0)
+    }
+
+    // MARK: - New Mail Processing
+
+    /// Processes an array of messages to detect and notify about new unread mail.
+    ///
+    /// This method checks each message against the known mail IDs in AppState.
+    /// For any new unread messages, it schedules a local notification.
+    ///
+    /// - Parameter messages: The array of messages to process
+    /// - Returns: The number of new notifications scheduled
+    @discardableResult
+    public func processNewMessages(_ messages: [Message]) async -> Int {
+        guard isAuthorized else {
+            print("[NotificationService] Skipping new mail notifications - not authorized")
+            return 0
+        }
+
+        // Extract all message IDs
+        let allIds = Set(messages.map { $0.id })
+
+        // Find new IDs using AppState
+        let newIds = AppState.shared.addMailIds(allIds)
+
+        guard !newIds.isEmpty else {
+            return 0
+        }
+
+        // Filter to only new unread messages
+        let newUnreadMessages = messages.filter { newIds.contains($0.id) && !$0.read }
+
+        guard !newUnreadMessages.isEmpty else {
+            return 0
+        }
+
+        print("[NotificationService] Processing \(newUnreadMessages.count) new unread messages")
+
+        // Schedule notifications for new unread messages
+        var scheduledCount = 0
+        for message in newUnreadMessages {
+            await scheduleNewMailNotification(
+                from: message.from,
+                subject: message.subject,
+                mailId: message.id
+            )
+            scheduledCount += 1
+        }
+
+        // Update badge with total unread count
+        let totalUnread = messages.filter { !$0.read }.count
+        await setBadgeCount(totalUnread)
+
+        return scheduledCount
     }
 }
 

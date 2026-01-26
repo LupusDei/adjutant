@@ -89,6 +89,9 @@ final class DashboardViewModel: BaseViewModel {
             self.recentMail = Array(mail.items.prefix(maxRecentMail))
             self.unreadCount = mail.items.filter { !$0.read }.count
             AppState.shared.updateUnreadMailCount(self.unreadCount)
+
+            // Process new messages for notifications
+            await NotificationService.shared.processNewMessages(mail.items)
         }
 
         if let crew = crew {

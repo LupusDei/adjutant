@@ -8,6 +8,7 @@
 import UIKit
 import UserNotifications
 import BackgroundTasks
+import AdjutantUI
 
 class AppDelegate: NSObject, UIApplicationDelegate {
 
