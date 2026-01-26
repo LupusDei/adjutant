@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		6263C1652F26C5EC00A53DC1 /* AdjutantKit in Frameworks */ = {isa = PBXBuildFile; productRef = 6263C1642F26C5EC00A53DC1 /* AdjutantKit */; };
 		A01234560000000000000001 /* AdjutantApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000001 /* AdjutantApp.swift */; };
+		A01234560000000000000040 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000040 /* AppDelegate.swift */; };
 		A01234560000000000000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000003 /* Assets.xcassets */; };
 		A01234560000000000000004 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000004 /* Preview Assets.xcassets */; };
 		A01234560000000000000010 /* AdjutantTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000010 /* AdjutantTests.swift */; };
@@ -38,6 +39,7 @@
 /* Begin PBXFileReference section */
 		A01234570000000000000001 /* AdjutantApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjutantApp.swift; sourceTree = "<group>"; };
 		A01234570000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A01234570000000000000040 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A01234570000000000000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A01234570000000000000004 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		A01234570000000000000010 /* AdjutantTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjutantTests.swift; sourceTree = "<group>"; };
@@ -104,6 +106,7 @@
 			isa = PBXGroup;
 			children = (
 				A01234570000000000000001 /* AdjutantApp.swift */,
+				A01234570000000000000040 /* AppDelegate.swift */,
 				A01234570000000000000002 /* ContentView.swift */,
 			);
 			path = App;
@@ -345,6 +348,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A01234560000000000000001 /* AdjutantApp.swift in Sources */,
+				A01234560000000000000040 /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
