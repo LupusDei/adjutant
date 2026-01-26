@@ -16,12 +16,11 @@ export const beadsRouter = Router();
  * GET /api/beads
  * Returns beads for the beads tab.
  *
- * IMPORTANT: Adjutant is the dashboard for ALL of Gas Town.
- * By default, we show ALL beads from the town, not filtered by rig.
- * See .claude/rules/00-critical-scope.md for context.
- *
  * Query params:
- * - rig: Filter by rig (optional - omit to show all beads)
+ * - rig: Scope which database(s) to query. Options:
+ *   - "town": Query only town (hq-*) database (default)
+ *   - "all": Query all databases (town + all rigs)
+ *   - "<rig-name>": Query only that rig's database (e.g., "adjutant")
  * - status: Status filter. Options:
  *   - "default": Shows open + in_progress + blocked (active work)
  *   - "open", "in_progress", "blocked", "deferred", "closed": Single status
@@ -29,11 +28,11 @@ export const beadsRouter = Router();
  *   - "all": Shows everything
  *   Default: "default" (active work only)
  * - type: Filter by bead type (e.g., "task", "bug", "feature")
- * - limit: Max results (default: 100)
- * - excludeTown: Set to "true" to exclude hq- town beads (default: false - shows all)
+ * - limit: Max results (default: 500)
+ * - excludeTown: Set to "true" to exclude hq- town beads when rig=all (default: false)
  */
 beadsRouter.get("/", async (req, res) => {
-  const rig = req.query["rig"] as string | undefined;
+  const rigParam = req.query["rig"] as string | undefined;
   const statusParam = req.query["status"] as string | undefined;
   const typeParam = req.query["type"] as string | undefined;
   const limitStr = req.query["limit"] as string | undefined;
@@ -44,11 +43,12 @@ beadsRouter.get("/", async (req, res) => {
   // Default to showing active work (open + in_progress + blocked)
   const status = statusParam ?? "default";
 
-  // Include hq- town beads by default (Adjutant is the dashboard for ALL of Gas Town)
-  const excludePrefixes = excludeTown ? ["hq-"] : [];
+  // Normalize rig parameter: undefined/empty defaults to "town"
+  const rig = rigParam?.trim() || "town";
 
-  // If no rig specified, fetch from ALL beads databases
-  if (!rig) {
+  // rig=all: Query ALL beads databases (town + all rigs)
+  if (rig === "all") {
+    const excludePrefixes = excludeTown ? ["hq-"] : [];
     const result = await listAllBeads({
       ...(typeParam && { type: typeParam }),
       status,
@@ -65,12 +65,15 @@ beadsRouter.get("/", async (req, res) => {
     return res.json(success(result.data));
   }
 
-  // Rig specified - fetch from that rig's database only
+  // rig=town or rig=<specific>: Query single database
   const townRoot = resolveTownRoot();
-  const rigPath = resolveRigPath(rig, townRoot) ?? undefined;
+
+  // For "town", query the town database directly (no rigPath needed)
+  // For other rigs, resolve their path
+  const rigPath = rig === "town" ? undefined : resolveRigPath(rig, townRoot) ?? undefined;
 
   const result = await listBeads({
-    rig,
+    // Don't pass rig for filtering - we want all beads from the database
     ...(rigPath && { rigPath }),
     ...(typeParam && { type: typeParam }),
     status,

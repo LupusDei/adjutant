@@ -56,8 +56,8 @@ describe("beads routes", () => {
   });
 
   describe("GET /api/beads", () => {
-    it("should return empty array when no beads", async () => {
-      vi.mocked(listAllBeads).mockResolvedValue({
+    it("should return empty array when no beads (defaults to town)", async () => {
+      vi.mocked(listBeads).mockResolvedValue({
         success: true,
         data: [],
       });
@@ -67,15 +67,17 @@ describe("beads routes", () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.data).toEqual([]);
+      expect(listBeads).toHaveBeenCalled();
+      expect(listAllBeads).not.toHaveBeenCalled();
     });
 
     it("should return list of beads", async () => {
       const mockBeads = [
-        createMockBead({ id: "gb-001", title: "First bead" }),
-        createMockBead({ id: "gb-002", title: "Second bead" }),
+        createMockBead({ id: "hq-001", title: "First bead" }),
+        createMockBead({ id: "hq-002", title: "Second bead" }),
       ];
 
-      vi.mocked(listAllBeads).mockResolvedValue({
+      vi.mocked(listBeads).mockResolvedValue({
         success: true,
         data: mockBeads,
       });
@@ -89,7 +91,19 @@ describe("beads routes", () => {
       expect(response.body.data[1].title).toBe("Second bead");
     });
 
-    it("should call listBeads when rig query parameter is provided", async () => {
+    it("should call listBeads when rig=town (explicit)", async () => {
+      vi.mocked(listBeads).mockResolvedValue({
+        success: true,
+        data: [],
+      });
+
+      await request(app).get("/api/beads?rig=town");
+
+      expect(listBeads).toHaveBeenCalled();
+      expect(listAllBeads).not.toHaveBeenCalled();
+    });
+
+    it("should call listBeads when rig is a specific rig name", async () => {
       vi.mocked(listBeads).mockResolvedValue({
         success: true,
         data: [],
@@ -101,77 +115,90 @@ describe("beads routes", () => {
       expect(listAllBeads).not.toHaveBeenCalled();
     });
 
-    it("should call listAllBeads when no rig specified", async () => {
+    it("should call listAllBeads when rig=all", async () => {
       vi.mocked(listAllBeads).mockResolvedValue({
         success: true,
         data: [],
       });
 
-      await request(app).get("/api/beads");
+      await request(app).get("/api/beads?rig=all");
 
       expect(listAllBeads).toHaveBeenCalled();
       expect(listBeads).not.toHaveBeenCalled();
     });
 
-    it("should pass status query parameter", async () => {
+    it("should pass status query parameter with rig=all", async () => {
       vi.mocked(listAllBeads).mockResolvedValue({
         success: true,
         data: [],
       });
 
-      await request(app).get("/api/beads?status=closed");
+      await request(app).get("/api/beads?rig=all&status=closed");
 
       expect(listAllBeads).toHaveBeenCalledWith(
         expect.objectContaining({ status: "closed" })
       );
     });
 
+    it("should pass status query parameter (default town)", async () => {
+      vi.mocked(listBeads).mockResolvedValue({
+        success: true,
+        data: [],
+      });
+
+      await request(app).get("/api/beads?status=closed");
+
+      expect(listBeads).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "closed" })
+      );
+    });
+
     it("should pass type query parameter", async () => {
-      vi.mocked(listAllBeads).mockResolvedValue({
+      vi.mocked(listBeads).mockResolvedValue({
         success: true,
         data: [],
       });
 
       await request(app).get("/api/beads?type=bug");
 
-      expect(listAllBeads).toHaveBeenCalledWith(
+      expect(listBeads).toHaveBeenCalledWith(
         expect.objectContaining({ type: "bug" })
       );
     });
 
     it("should pass limit query parameter", async () => {
-      vi.mocked(listAllBeads).mockResolvedValue({
+      vi.mocked(listBeads).mockResolvedValue({
         success: true,
         data: [],
       });
 
       await request(app).get("/api/beads?limit=50");
 
-      expect(listAllBeads).toHaveBeenCalledWith(
+      expect(listBeads).toHaveBeenCalledWith(
         expect.objectContaining({ limit: 50 })
       );
     });
 
     it("should use default limit of 500 when not provided", async () => {
-      vi.mocked(listAllBeads).mockResolvedValue({
+      vi.mocked(listBeads).mockResolvedValue({
         success: true,
         data: [],
       });
 
       await request(app).get("/api/beads");
 
-      expect(listAllBeads).toHaveBeenCalledWith(
+      expect(listBeads).toHaveBeenCalledWith(
         expect.objectContaining({ limit: 500 })
       );
     });
 
-    it("should return 500 on listAllBeads error", async () => {
+    it("should return 500 on listAllBeads error (rig=all)", async () => {
       vi.mocked(listAllBeads).mockResolvedValue({
         success: false,
         error: { code: "BD_ERROR", message: "Database not found" },
       });
 
-      const response = await request(app).get("/api/beads");
+      const response = await request(app).get("/api/beads?rig=all");
 
       expect(response.status).toBe(500);
       expect(response.body.success).toBe(false);
@@ -191,8 +218,8 @@ describe("beads routes", () => {
       expect(response.body.error.message).toBe("Rig database not found");
     });
 
-    it("should return 500 with default message on unknown error", async () => {
-      vi.mocked(listAllBeads).mockResolvedValue({
+    it("should return 500 on listBeads error (default town)", async () => {
+      vi.mocked(listBeads).mockResolvedValue({
         success: false,
         error: undefined,
       });
