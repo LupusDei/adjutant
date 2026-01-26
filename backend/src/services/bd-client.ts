@@ -87,12 +87,7 @@ export async function execBd<T = unknown>(
 ): Promise<BdResult<T>> {
   const { cwd = process.cwd(), timeout = DEFAULT_TIMEOUT, parseJson = true, env } = options;
   const beadsDir = options.beadsDir ?? resolveBeadsDir(cwd);
-  // Use --no-db for read operations to avoid SQLite lock contention.
-  // JSONL reads are lock-free and safe for parallel queries.
-  const isReadOnly = args[0] === "list" || args[0] === "show" || args[0] === "search" || args[0] === "count";
-  const fullArgs = isReadOnly
-    ? ["--no-daemon", "--no-db", ...args]
-    : ["--no-daemon", "--allow-stale", ...args];
+  const fullArgs = ["--no-daemon", "--allow-stale", ...args];
   const startedAt = Date.now();
   logInfo("bd exec start", { args: fullArgs });
 
