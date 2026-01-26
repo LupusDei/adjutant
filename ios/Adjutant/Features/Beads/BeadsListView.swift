@@ -1,10 +1,11 @@
 import SwiftUI
 import AdjutantKit
 
-/// Main beads list view displaying all beads with filtering and search.
+/// Main beads view displaying all beads in a Kanban board with filtering and search.
 struct BeadsListView: View {
     @StateObject private var viewModel = BeadsListViewModel()
     @EnvironmentObject private var coordinator: AppCoordinator
+    @ObservedObject private var appState = AppState.shared
     @Environment(\.crtTheme) private var theme
 
     var body: some View {
@@ -33,13 +34,11 @@ struct BeadsListView: View {
     // MARK: - Header
 
     private var headerView: some View {
-        HStack(spacing: CRTTheme.Spacing.md) {
+        HStack(spacing: CRTTheme.Spacing.sm) {
             // Title
             VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxxs) {
-                CRTText("BEADS", style: .header)
+                CRTText("WORK BOARD", style: .header)
                     .crtGlow(color: theme.primary, radius: 4, intensity: 0.4)
-
-                CRTText("Issue & Task Tracker", style: .caption, color: theme.dim)
             }
 
             Spacer()
@@ -83,15 +82,55 @@ struct BeadsListView: View {
 
     private var filterBar: some View {
         VStack(spacing: CRTTheme.Spacing.xs) {
+            // Top row: Overseer toggle + Rig filter
+            HStack(spacing: CRTTheme.Spacing.sm) {
+                // Overseer toggle
+                overseerToggle
+
+                Spacer()
+
+                // Rig filter dropdown
+                RigFilterDropdown(availableRigs: appState.availableRigs)
+            }
+
             // Search field
             searchField
-
-            // Filter chips
-            filterChips
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
         .background(CRTTheme.Background.elevated)
+    }
+
+    private var overseerToggle: some View {
+        Button {
+            withAnimation(.easeInOut(duration: CRTTheme.Animation.fast)) {
+                appState.isOverseerMode.toggle()
+            }
+        } label: {
+            HStack(spacing: CRTTheme.Spacing.xxs) {
+                Image(systemName: appState.isOverseerMode ? "eye" : "eye.slash")
+                    .font(.system(size: 12))
+
+                Text("OVERSEER")
+                    .font(CRTTheme.Typography.font(size: 11, weight: .medium))
+                    .tracking(0.5)
+            }
+            .foregroundColor(appState.isOverseerMode ? theme.primary : theme.dim)
+            .padding(.horizontal, CRTTheme.Spacing.sm)
+            .padding(.vertical, CRTTheme.Spacing.xxs)
+            .background(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                    .fill(appState.isOverseerMode ? theme.primary.opacity(0.15) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                    .stroke(
+                        appState.isOverseerMode ? theme.primary : theme.primary.opacity(0.3),
+                        lineWidth: 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var searchField: some View {
@@ -128,38 +167,6 @@ struct BeadsListView: View {
         )
     }
 
-    private var filterChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: CRTTheme.Spacing.xs) {
-                ForEach(BeadsListViewModel.BeadFilter.allCases) { filter in
-                    FilterChip(
-                        title: filter.displayName,
-                        icon: filter.systemImage,
-                        isSelected: viewModel.currentFilter == filter,
-                        count: countForFilter(filter)
-                    ) {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            viewModel.currentFilter = filter
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func countForFilter(_ filter: BeadsListViewModel.BeadFilter) -> Int? {
-        switch filter {
-        case .all:
-            return viewModel.beads.count
-        case .open:
-            return viewModel.openCount
-        case .assigned:
-            return viewModel.beads.filter { $0.assignee != nil && !$0.assignee!.isEmpty }.count
-        case .priority:
-            return viewModel.priorityCount
-        }
-    }
-
     // MARK: - Content
 
     @ViewBuilder
@@ -171,7 +178,7 @@ struct BeadsListView: View {
         } else if viewModel.isEmpty {
             emptyView
         } else {
-            beadsList
+            kanbanBoard
         }
     }
 
@@ -181,7 +188,7 @@ struct BeadsListView: View {
             ProgressView()
                 .progressViewStyle(CircularProgressViewStyle(tint: theme.primary))
                 .scaleEffect(1.5)
-            CRTText("LOADING BEADS...", style: .body, color: theme.dim)
+            CRTText("SCANNING BEADS DATABASE...", style: .body, color: theme.dim)
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -196,7 +203,7 @@ struct BeadsListView: View {
                 .foregroundColor(CRTTheme.State.error)
                 .crtGlow(color: CRTTheme.State.error, radius: 8, intensity: 0.4)
 
-            CRTText("ERROR", style: .header, color: CRTTheme.State.error)
+            CRTText("SCAN FAILED", style: .header, color: CRTTheme.State.error)
             CRTText(message, style: .body, color: theme.dim)
 
             Button {
@@ -241,78 +248,59 @@ struct BeadsListView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var beadsList: some View {
-        ScrollView {
-            LazyVStack(spacing: 1) {
-                ForEach(viewModel.filteredBeads) { bead in
-                    BeadRowView(bead: bead) {
-                        coordinator.navigate(to: .beadDetail(id: bead.id))
-                    }
-                }
-            }
-            .padding(.vertical, 1)
-        }
-        .refreshable {
-            await viewModel.refresh()
+    private var kanbanBoard: some View {
+        KanbanBoardView(beads: filteredBeadsForKanban) { bead in
+            coordinator.navigate(to: .beadDetail(id: bead.id))
         }
     }
-}
 
-// MARK: - Filter Chip
+    /// Beads filtered for Kanban display with overseer mode applied
+    private var filteredBeadsForKanban: [BeadInfo] {
+        var result = viewModel.filteredBeads
 
-private struct FilterChip: View {
-    @Environment(\.crtTheme) private var theme
+        // Apply overseer mode filtering
+        if appState.isOverseerMode {
+            let excludedTypes = ["message", "epic", "convoy", "agent", "role", "witness", "wisp", "infrastructure", "coordination", "sync"]
+            let excludedPatterns = ["witness", "wisp", "internal", "sync", "coordination", "mail delivery", "polecat", "crew assignment", "rig status", "heartbeat", "health check"]
 
-    let title: String
-    let icon: String
-    let isSelected: Bool
-    let count: Int?
-    let action: () -> Void
+            result = result.filter { bead in
+                let typeLower = bead.type.lowercased()
+                let titleLower = bead.title.lowercased()
+                let idLower = bead.id.lowercased()
+                let assigneeLower = (bead.assignee ?? "").lowercased()
 
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: CRTTheme.Spacing.xxs) {
-                Image(systemName: icon)
-                    .font(.system(size: 11))
-
-                Text(title)
-                    .font(CRTTheme.Typography.font(size: 11, weight: isSelected ? .bold : .medium))
-
-                if let count = count, count > 0 {
-                    Text("(\(count))")
-                        .font(CRTTheme.Typography.font(size: 10))
-                        .foregroundColor(isSelected ? theme.primary : theme.dim)
+                // Exclude wisp-related beads
+                if typeLower.contains("wisp") || titleLower.contains("wisp") ||
+                    idLower.contains("wisp") || assigneeLower.contains("wisp") {
+                    return false
                 }
+
+                // Exclude operational types
+                if excludedTypes.contains(typeLower) {
+                    return false
+                }
+
+                // Exclude by title patterns
+                if excludedPatterns.contains(where: { titleLower.contains($0) }) {
+                    return false
+                }
+
+                // Exclude merge beads
+                if titleLower.hasPrefix("merge:") {
+                    return false
+                }
+
+                return true
             }
-            .foregroundColor(isSelected ? theme.primary : theme.dim)
-            .padding(.horizontal, CRTTheme.Spacing.sm)
-            .padding(.vertical, CRTTheme.Spacing.xxs)
-            .background(
-                isSelected ?
-                    theme.primary.opacity(0.15) :
-                    CRTTheme.Background.panel
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                    .stroke(
-                        isSelected ? theme.primary : theme.primary.opacity(0.3),
-                        lineWidth: 1
-                    )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm))
-            .crtGlow(
-                color: theme.primary,
-                radius: isSelected ? 3 : 0,
-                intensity: isSelected ? 0.3 : 0
-            )
         }
-        .buttonStyle(.plain)
+
+        return result
     }
 }
 
 // MARK: - Preview
 
-#Preview("Beads List") {
+#Preview("Work Board") {
     BeadsListView()
         .environmentObject(AppCoordinator())
 }

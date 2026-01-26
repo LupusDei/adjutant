@@ -1,20 +1,45 @@
 import SwiftUI
 import AdjutantKit
 
-/// A draggable card view for displaying a bead in the Kanban board.
-/// Matches the frontend KanbanCard.tsx component with Pip-Boy terminal aesthetic.
+/// A card view for displaying a bead in the Kanban board.
+/// Supports tap actions and dragging state with Pip-Boy terminal aesthetic.
 struct KanbanCardView: View {
     @Environment(\.crtTheme) private var theme
 
     let bead: BeadInfo
     let isDragging: Bool
+    let onTap: (() -> Void)?
 
-    init(bead: BeadInfo, isDragging: Bool = false) {
+    init(bead: BeadInfo, isDragging: Bool = false, onTap: (() -> Void)? = nil) {
         self.bead = bead
         self.isDragging = isDragging
+        self.onTap = onTap
     }
 
     var body: some View {
+        Group {
+            if let onTap = onTap {
+                Button(action: onTap) {
+                    cardContent
+                }
+                .buttonStyle(.plain)
+            } else {
+                cardContent
+            }
+        }
+        .opacity(isDragging ? 0.5 : 1.0)
+        .crtGlow(
+            color: theme.primary,
+            radius: isDragging ? 10 : 0,
+            intensity: isDragging ? 0.6 : 0
+        )
+        .animation(.easeInOut(duration: CRTTheme.Animation.fast), value: isDragging)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint(onTap != nil ? "Double tap to view details" : "")
+    }
+
+    private var cardContent: some View {
         VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxs) {
             // Header: ID + Priority
             headerRow
@@ -32,15 +57,6 @@ struct KanbanCardView: View {
                 .stroke(theme.dim.opacity(0.5), lineWidth: 1)
         )
         .cornerRadius(CRTTheme.CornerRadius.sm)
-        .opacity(isDragging ? 0.5 : 1.0)
-        .crtGlow(
-            color: theme.primary,
-            radius: isDragging ? 10 : 0,
-            intensity: isDragging ? 0.6 : 0
-        )
-        .animation(.easeInOut(duration: CRTTheme.Animation.fast), value: isDragging)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityLabel)
     }
 
     // MARK: - Subviews
@@ -52,13 +68,12 @@ struct KanbanCardView: View {
                 .font(CRTTheme.Typography.font(size: 10, weight: .bold))
                 .foregroundColor(theme.bright)
                 .tracking(CRTTheme.Typography.letterSpacing)
+                .lineLimit(1)
 
             Spacer()
 
             // Priority badge
-            Text(priorityLabel)
-                .font(CRTTheme.Typography.font(size: 9, weight: .bold))
-                .foregroundColor(priorityColor)
+            BadgeView("P\(bead.priority)", style: .priority(bead.priority))
         }
     }
 
@@ -97,25 +112,6 @@ struct KanbanCardView: View {
 
     // MARK: - Helpers
 
-    private var priorityLabel: String {
-        "P\(bead.priority)"
-    }
-
-    private var priorityColor: Color {
-        switch bead.priority {
-        case 0:
-            return CRTTheme.Priority.urgent       // #FF4444
-        case 1:
-            return CRTTheme.Priority.high         // #FFB000
-        case 2:
-            return theme.primary                  // Theme green
-        case 3:
-            return theme.dim                      // Dim theme
-        default:
-            return CRTTheme.Priority.lowest       // #666666
-        }
-    }
-
     private func formatAssignee(_ assignee: String?) -> String? {
         guard let assignee, !assignee.isEmpty else { return nil }
         let parts = assignee.split(separator: "/")
@@ -123,7 +119,7 @@ struct KanbanCardView: View {
     }
 
     private var accessibilityLabel: String {
-        var label = "\(bead.title), \(bead.type), priority \(bead.priority)"
+        var label = "\(bead.title), \(bead.type), priority \(bead.priority), status \(bead.status)"
         if let assignee = bead.assignee {
             label += ", assigned to \(formatAssignee(assignee) ?? assignee)"
         }
@@ -151,7 +147,8 @@ struct KanbanCardView: View {
                 labels: ["ios", "feature"],
                 createdAt: "2026-01-25T10:00:00Z",
                 updatedAt: nil
-            )
+            ),
+            onTap: {}
         )
 
         KanbanCardView(
@@ -167,7 +164,8 @@ struct KanbanCardView: View {
                 labels: [],
                 createdAt: "2026-01-25T08:00:00Z",
                 updatedAt: nil
-            )
+            ),
+            onTap: {}
         )
 
         KanbanCardView(
@@ -183,7 +181,8 @@ struct KanbanCardView: View {
                 labels: [],
                 createdAt: "2026-01-24T10:00:00Z",
                 updatedAt: nil
-            )
+            ),
+            onTap: {}
         )
     }
     .padding()
