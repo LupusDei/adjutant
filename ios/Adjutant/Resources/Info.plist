@@ -44,8 +44,8 @@
 	</array>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.jmm.adjutant.refresh</string>
-		<string>com.jmm.adjutant.processing</string>
+		<string>com.adjutant.refresh</string>
+		<string>com.adjutant.processing</string>
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>

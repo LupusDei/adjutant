@@ -26,10 +26,10 @@ public final class BackgroundTaskService: ObservableObject {
     // MARK: - Constants
 
     /// Task identifier for app refresh (quick updates)
-    public static let appRefreshTaskIdentifier = "com.jmm.adjutant.refresh"
+    public static let appRefreshTaskIdentifier = "com.adjutant.refresh"
 
     /// Task identifier for background processing (longer operations)
-    public static let processingTaskIdentifier = "com.jmm.adjutant.processing"
+    public static let processingTaskIdentifier = "com.adjutant.processing"
 
     /// Minimum interval between refresh tasks (15 minutes)
     private static let refreshInterval: TimeInterval = 15 * 60
