@@ -277,7 +277,9 @@ struct BeadsListView: View {
             draggingBeadId: draggingBeadId,
             targetColumnId: targetColumnId,
             onBeadTap: { bead in
-                coordinator.navigate(to: .beadDetail(id: bead.id))
+                Task { @MainActor in
+                    coordinator.navigate(to: .beadDetail(id: bead.id))
+                }
             },
             onDrop: { bead, targetColumn in
                 Task {
