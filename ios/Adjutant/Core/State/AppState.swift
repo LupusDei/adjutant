@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UserNotifications
 import AdjutantKit
 
 /// Global application state container.
@@ -44,6 +45,14 @@ final class AppState: ObservableObject {
 
     /// Current API base URL
     @Published var apiBaseURL: URL = URL(string: "http://localhost:3001/api")!
+
+    // MARK: - Notification State
+
+    /// Current notification permission status
+    @Published private(set) var notificationPermissionStatus: UNAuthorizationStatus = .notDetermined
+
+    /// Set of known mail IDs (used to detect new mail)
+    @Published private(set) var knownMailIds: Set<String> = []
 
     /// Whether onboarding has been completed (URL is configured)
     var isOnboardingComplete: Bool {
@@ -121,6 +130,42 @@ final class AppState: ObservableObject {
     /// - Parameter available: Whether network is available
     func updateNetworkAvailability(_ available: Bool) {
         isNetworkAvailable = available
+    }
+
+    // MARK: - Notification State Updates
+
+    /// Updates the notification permission status
+    /// - Parameter status: The current authorization status
+    func updateNotificationPermissionStatus(_ status: UNAuthorizationStatus) {
+        notificationPermissionStatus = status
+    }
+
+    /// Refreshes the notification permission status from the system
+    func refreshNotificationPermissionStatus() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        notificationPermissionStatus = settings.authorizationStatus
+    }
+
+    /// Adds mail IDs to the known set and returns any new IDs
+    /// - Parameter mailIds: The mail IDs to check
+    /// - Returns: Set of mail IDs that were not previously known
+    @discardableResult
+    func addMailIds(_ mailIds: Set<String>) -> Set<String> {
+        let newIds = mailIds.subtracting(knownMailIds)
+        knownMailIds.formUnion(mailIds)
+        return newIds
+    }
+
+    /// Checks if a mail ID is new (not in known set)
+    /// - Parameter mailId: The mail ID to check
+    /// - Returns: true if the mail ID is not in the known set
+    func isNewMail(_ mailId: String) -> Bool {
+        !knownMailIds.contains(mailId)
+    }
+
+    /// Clears all known mail IDs (e.g., on logout or data reset)
+    func clearKnownMailIds() {
+        knownMailIds.removeAll()
     }
 
     /// Updates the list of available rigs
