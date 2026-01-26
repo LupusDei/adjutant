@@ -20,7 +20,7 @@ final class DashboardViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.recentMail.isEmpty)
         XCTAssertEqual(viewModel.unreadCount, 0)
         XCTAssertTrue(viewModel.crewMembers.isEmpty)
-        XCTAssertTrue(viewModel.convoys.isEmpty)
+        XCTAssertTrue(viewModel.recentBeads.isEmpty)
         XCTAssertFalse(viewModel.isRefreshing)
         XCTAssertFalse(viewModel.isLoading)
     }
@@ -100,90 +100,130 @@ final class DashboardViewModelTests: XCTestCase {
         XCTAssertEqual(issueCount, 2)
     }
 
-    func testTotalConvoyProgressWithEmptyConvoys() {
-        // Empty convoys should return 0 progress
-        let convoys: [Convoy] = []
-        let progress = calculateTotalProgress(convoys)
-        XCTAssertEqual(progress, 0)
+    // MARK: - Beads Tests
+
+    func testOpenBeadsCount() {
+        // Test that open beads count correctly filters out closed beads
+        let openBead = BeadInfo(
+            id: "adj-001",
+            title: "Open bead",
+            status: "open",
+            priority: 1,
+            type: "task",
+            assignee: nil,
+            rig: "adjutant",
+            source: "adjutant",
+            labels: [],
+            createdAt: "2026-01-25T10:00:00Z",
+            updatedAt: nil
+        )
+        let closedBead = BeadInfo(
+            id: "adj-002",
+            title: "Closed bead",
+            status: "closed",
+            priority: 1,
+            type: "task",
+            assignee: nil,
+            rig: "adjutant",
+            source: "adjutant",
+            labels: [],
+            createdAt: "2026-01-25T10:00:00Z",
+            updatedAt: nil
+        )
+
+        let beads = [openBead, closedBead]
+        let openCount = beads.filter { $0.status != "closed" }.count
+        XCTAssertEqual(openCount, 1)
     }
 
-    func testTotalConvoyProgressCalculation() {
-        let convoy1 = Convoy(
-            id: "convoy-1",
-            title: "Convoy 1",
-            status: "in_progress",
-            rig: "rig",
-            progress: ConvoyProgress(completed: 3, total: 10),
-            trackedIssues: []
+    func testActiveBeadsCount() {
+        // Test that active beads count filters for hooked and in_progress
+        let hookedBead = BeadInfo(
+            id: "adj-001",
+            title: "Hooked bead",
+            status: "hooked",
+            priority: 1,
+            type: "task",
+            assignee: nil,
+            rig: "adjutant",
+            source: "adjutant",
+            labels: [],
+            createdAt: "2026-01-25T10:00:00Z",
+            updatedAt: nil
         )
-        let convoy2 = Convoy(
-            id: "convoy-2",
-            title: "Convoy 2",
+        let inProgressBead = BeadInfo(
+            id: "adj-002",
+            title: "In progress bead",
             status: "in_progress",
-            rig: "rig",
-            progress: ConvoyProgress(completed: 7, total: 10),
-            trackedIssues: []
+            priority: 1,
+            type: "task",
+            assignee: nil,
+            rig: "adjutant",
+            source: "adjutant",
+            labels: [],
+            createdAt: "2026-01-25T10:00:00Z",
+            updatedAt: nil
+        )
+        let openBead = BeadInfo(
+            id: "adj-003",
+            title: "Open bead",
+            status: "open",
+            priority: 1,
+            type: "task",
+            assignee: nil,
+            rig: "adjutant",
+            source: "adjutant",
+            labels: [],
+            createdAt: "2026-01-25T10:00:00Z",
+            updatedAt: nil
         )
 
-        let convoys = [convoy1, convoy2]
-        let progress = calculateTotalProgress(convoys)
-
-        // Total: 10/20 = 0.5
-        XCTAssertEqual(progress, 0.5)
+        let beads = [hookedBead, inProgressBead, openBead]
+        let activeCount = beads.filter { $0.status == "hooked" || $0.status == "in_progress" }.count
+        XCTAssertEqual(activeCount, 2)
     }
 
-    func testTotalConvoyProgressWithZeroTotal() {
-        let convoy = Convoy(
-            id: "convoy-1",
-            title: "Empty Convoy",
-            status: "in_progress",
-            rig: "rig",
-            progress: ConvoyProgress(completed: 0, total: 0),
-            trackedIssues: []
+    func testBeadsByColumnGrouping() {
+        // Test that beads are correctly grouped by status into Kanban columns
+        let openBead = BeadInfo(
+            id: "adj-001",
+            title: "Open bead",
+            status: "open",
+            priority: 1,
+            type: "task",
+            assignee: nil,
+            rig: "adjutant",
+            source: "adjutant",
+            labels: [],
+            createdAt: "2026-01-25T10:00:00Z",
+            updatedAt: nil
+        )
+        let hookedBead = BeadInfo(
+            id: "adj-002",
+            title: "Hooked bead",
+            status: "hooked",
+            priority: 1,
+            type: "task",
+            assignee: nil,
+            rig: "adjutant",
+            source: "adjutant",
+            labels: [],
+            createdAt: "2026-01-25T10:00:00Z",
+            updatedAt: nil
         )
 
-        let progress = calculateTotalProgress([convoy])
-        XCTAssertEqual(progress, 0)
+        let beads = [openBead, hookedBead]
+        var result: [String: [BeadInfo]] = [:]
+        for bead in beads {
+            result[bead.status, default: []].append(bead)
+        }
+
+        XCTAssertEqual(result["open"]?.count, 1)
+        XCTAssertEqual(result["hooked"]?.count, 1)
+        XCTAssertNil(result["closed"])
     }
 
     // MARK: - Model Tests
-
-    func testConvoyIsComplete() {
-        let incompleteConvoy = Convoy(
-            id: "convoy-1",
-            title: "In Progress",
-            status: "in_progress",
-            rig: nil,
-            progress: ConvoyProgress(completed: 5, total: 10),
-            trackedIssues: []
-        )
-
-        let completeConvoy = Convoy(
-            id: "convoy-2",
-            title: "Complete",
-            status: "complete",
-            rig: nil,
-            progress: ConvoyProgress(completed: 10, total: 10),
-            trackedIssues: []
-        )
-
-        XCTAssertFalse(incompleteConvoy.isComplete)
-        XCTAssertTrue(completeConvoy.isComplete)
-    }
-
-    func testConvoyProgressPercentage() {
-        let progress50 = ConvoyProgress(completed: 5, total: 10)
-        XCTAssertEqual(progress50.percentage, 0.5)
-
-        let progress100 = ConvoyProgress(completed: 10, total: 10)
-        XCTAssertEqual(progress100.percentage, 1.0)
-
-        let progressZero = ConvoyProgress(completed: 0, total: 10)
-        XCTAssertEqual(progressZero.percentage, 0.0)
-
-        let progressEmpty = ConvoyProgress(completed: 0, total: 0)
-        XCTAssertEqual(progressEmpty.percentage, 0.0)
-    }
 
     func testMessageSenderName() {
         let message1 = Message(
@@ -219,14 +259,4 @@ final class DashboardViewModelTests: XCTestCase {
         XCTAssertEqual(message2.senderName, "greenplace/Toast")
     }
 
-    // MARK: - Helper Functions
-
-    /// Calculate total progress across convoys (mirrors ViewModel logic)
-    private func calculateTotalProgress(_ convoys: [Convoy]) -> Double {
-        guard !convoys.isEmpty else { return 0 }
-        let totalCompleted = convoys.reduce(0) { $0 + $1.progress.completed }
-        let totalItems = convoys.reduce(0) { $0 + $1.progress.total }
-        guard totalItems > 0 else { return 0 }
-        return Double(totalCompleted) / Double(totalItems)
-    }
 }

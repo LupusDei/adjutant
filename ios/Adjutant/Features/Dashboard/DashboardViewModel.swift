@@ -3,10 +3,13 @@ import Combine
 import AdjutantKit
 import ActivityKit
 
-/// ViewModel for the Dashboard view, coordinating Mail, Crew, and Convoy data.
+/// ViewModel for the Dashboard view, coordinating Beads, Mail, and Crew data.
 @MainActor
 final class DashboardViewModel: BaseViewModel {
     // MARK: - Published Properties
+
+    /// Recent beads for Kanban preview (limited to most recently updated)
+    @Published private(set) var recentBeads: [BeadInfo] = []
 
     /// Recent mail messages (limited to most recent)
     @Published private(set) var recentMail: [Message] = []
@@ -17,9 +20,6 @@ final class DashboardViewModel: BaseViewModel {
     /// Crew members with their statuses
     @Published private(set) var crewMembers: [CrewMember] = []
 
-    /// Active convoys
-    @Published private(set) var convoys: [Convoy] = []
-
     /// Whether the dashboard is currently refreshing (includes background polling)
     @Published private(set) var isRefreshing = false
 
@@ -28,8 +28,11 @@ final class DashboardViewModel: BaseViewModel {
     /// Polling interval for auto-refresh (in seconds)
     var pollingInterval: TimeInterval = 30.0
 
+    /// Maximum number of recent beads to display per column
+    private let maxBeadsPerColumn = 5
+
     /// Maximum number of recent mail messages to display
-    private let maxRecentMail = 5
+    private let maxRecentMail = 3
 
     /// Town name for Live Activity (default: "Gastown")
     private let townName = "Gastown"
@@ -53,8 +56,12 @@ final class DashboardViewModel: BaseViewModel {
         if cache.hasCache(for: .dashboard) {
             recentMail = cache.dashboardMail
             crewMembers = cache.dashboardCrew
-            convoys = cache.dashboardConvoys
             unreadCount = recentMail.filter { !$0.read }.count
+        }
+        // Load cached beads
+        let cachedBeads = cache.beads
+        if !cachedBeads.isEmpty {
+            recentBeads = sortBeadsByRecency(cachedBeads)
         }
     }
 
@@ -80,15 +87,21 @@ final class DashboardViewModel: BaseViewModel {
         isRefreshing = true
 
         // Fetch all data concurrently
+        async let beadsResult = fetchBeads()
         async let mailResult = fetchMail()
         async let crewResult = fetchCrew()
-        async let convoysResult = fetchConvoys()
         async let _ : () = AppState.shared.fetchAvailableRigs()
 
         // Await all results
-        let (mail, crew, convoys) = await (mailResult, crewResult, convoysResult)
+        let (beads, mail, crew) = await (beadsResult, mailResult, crewResult)
 
         // Update state
+        if let beads = beads {
+            self.recentBeads = sortBeadsByRecency(beads)
+            // Update cache for next navigation
+            ResponseCache.shared.updateBeads(beads)
+        }
+
         if let mail = mail {
             self.recentMail = Array(mail.items.prefix(maxRecentMail))
             self.unreadCount = mail.items.filter { !$0.read }.count
@@ -102,15 +115,11 @@ final class DashboardViewModel: BaseViewModel {
             self.crewMembers = crew
         }
 
-        if let convoys = convoys {
-            self.convoys = convoys.filter { !$0.isComplete }
-        }
-
         // Update cache for next navigation
         ResponseCache.shared.updateDashboard(
             mail: self.recentMail,
             crew: self.crewMembers,
-            convoys: self.convoys
+            convoys: []
         )
 
         // Update Live Activity with current state
@@ -180,6 +189,14 @@ final class DashboardViewModel: BaseViewModel {
 
     // MARK: - Private Fetch Methods
 
+    private func fetchBeads() async -> [BeadInfo]? {
+        await performAsync(showLoading: false) {
+            // Fetch beads scoped to selected rig (or all if none selected)
+            let rigParam = AppState.shared.selectedRig ?? "all"
+            return try await self.apiClient.getBeads(rig: rigParam, status: .all)
+        }
+    }
+
     private func fetchMail() async -> PaginatedResponse<Message>? {
         await performAsync(showLoading: false) {
             try await self.apiClient.getMail(filter: .user)
@@ -189,12 +206,6 @@ final class DashboardViewModel: BaseViewModel {
     private func fetchCrew() async -> [CrewMember]? {
         await performAsync(showLoading: false) {
             try await self.apiClient.getAgents()
-        }
-    }
-
-    private func fetchConvoys() async -> [Convoy]? {
-        await performAsync(showLoading: false) {
-            try await self.apiClient.getConvoys()
         }
     }
 
@@ -210,12 +221,43 @@ final class DashboardViewModel: BaseViewModel {
         crewMembers.filter { $0.status == .stuck || $0.status == .blocked }.count
     }
 
-    /// Total convoy progress percentage
-    var totalConvoyProgress: Double {
-        guard !convoys.isEmpty else { return 0 }
-        let totalCompleted = convoys.reduce(0) { $0 + $1.progress.completed }
-        let totalItems = convoys.reduce(0) { $0 + $1.progress.total }
-        guard totalItems > 0 else { return 0 }
-        return Double(totalCompleted) / Double(totalItems)
+    /// Beads grouped by Kanban column status for display
+    var beadsByColumn: [KanbanColumnId: [BeadInfo]] {
+        var result: [KanbanColumnId: [BeadInfo]] = [:]
+        for column in KanbanColumnId.allCases {
+            result[column] = []
+        }
+        for bead in recentBeads {
+            let column = mapStatusToColumn(bead.status)
+            result[column, default: []].append(bead)
+        }
+        // Limit beads per column
+        for column in KanbanColumnId.allCases {
+            if result[column]?.count ?? 0 > maxBeadsPerColumn {
+                result[column] = Array(result[column]!.prefix(maxBeadsPerColumn))
+            }
+        }
+        return result
+    }
+
+    /// Count of open beads (not closed)
+    var openBeadsCount: Int {
+        recentBeads.filter { $0.status != "closed" }.count
+    }
+
+    /// Count of beads currently hooked or in progress
+    var activeBeadsCount: Int {
+        recentBeads.filter { $0.status == "hooked" || $0.status == "in_progress" }.count
+    }
+
+    // MARK: - Private Helpers
+
+    /// Sorts beads by most recently updated first
+    private func sortBeadsByRecency(_ beads: [BeadInfo]) -> [BeadInfo] {
+        beads.sorted { a, b in
+            let dateA = a.updatedDate ?? a.createdDate ?? Date.distantPast
+            let dateB = b.updatedDate ?? b.createdDate ?? Date.distantPast
+            return dateA > dateB
+        }
     }
 }

@@ -20,18 +20,20 @@ struct DashboardView: View {
                     onPowerTap: { coordinator.navigate(to: .settings) }
                 )
 
-                // Widget Grid
-                LazyVGrid(columns: gridColumns, spacing: CRTTheme.Spacing.md) {
-                    // Mail Widget
-                    MailWidget(
-                        unreadCount: viewModel.unreadCount,
-                        recentMessages: viewModel.recentMail,
-                        onTap: { coordinator.navigate(to: .mail) },
-                        onMessageTap: { message in
-                            coordinator.navigate(to: .mailDetail(id: message.id))
-                        }
-                    )
+                // Beads Kanban Preview (top, full width)
+                BeadsKanbanWidget(
+                    beadsByColumn: viewModel.beadsByColumn,
+                    openCount: viewModel.openBeadsCount,
+                    activeCount: viewModel.activeBeadsCount,
+                    onTap: { coordinator.navigate(to: .beads) },
+                    onBeadTap: { bead in
+                        coordinator.navigate(to: .beadDetail(id: bead.id))
+                    }
+                )
+                .padding(.horizontal, CRTTheme.Spacing.md)
 
+                // Bottom row: Crew + Mail
+                LazyVGrid(columns: gridColumns, spacing: CRTTheme.Spacing.md) {
                     // Crew Widget
                     CrewWidget(
                         crewMembers: viewModel.activeCrewMembers,
@@ -42,13 +44,13 @@ struct DashboardView: View {
                         }
                     )
 
-                    // Convoy Widget
-                    ConvoyWidget(
-                        convoys: viewModel.convoys,
-                        totalProgress: viewModel.totalConvoyProgress,
-                        onTap: { coordinator.navigate(to: .convoys) },
-                        onConvoyTap: { convoy in
-                            coordinator.navigate(to: .convoyDetail(id: convoy.id))
+                    // Mail Widget (moved from top)
+                    MailWidget(
+                        unreadCount: viewModel.unreadCount,
+                        recentMessages: viewModel.recentMail,
+                        onTap: { coordinator.navigate(to: .mail) },
+                        onMessageTap: { message in
+                            coordinator.navigate(to: .mailDetail(id: message.id))
                         }
                     )
                 }
@@ -341,15 +343,24 @@ private struct CrewMemberRow: View {
     }
 }
 
-// MARK: - Convoy Widget
+// MARK: - Beads Kanban Widget
 
-private struct ConvoyWidget: View {
+private struct BeadsKanbanWidget: View {
     @Environment(\.crtTheme) private var theme
 
-    let convoys: [Convoy]
-    let totalProgress: Double
+    let beadsByColumn: [KanbanColumnId: [BeadInfo]]
+    let openCount: Int
+    let activeCount: Int
     let onTap: () -> Void
-    let onConvoyTap: (Convoy) -> Void
+    let onBeadTap: (BeadInfo) -> Void
+
+    /// Columns to display in the preview (excludes CLOSED for compactness)
+    private let displayColumns: [KanbanColumnDefinition] = [
+        kanbanColumns[0], // OPEN
+        kanbanColumns[1], // HOOKED
+        kanbanColumns[2], // IN PROGRESS
+        kanbanColumns[4], // BLOCKED
+    ]
 
     var body: some View {
         CRTCard(style: .standard) {
@@ -357,14 +368,18 @@ private struct ConvoyWidget: View {
                 // Header
                 Button(action: onTap) {
                     HStack {
-                        Image(systemName: "shippingbox.fill")
+                        Image(systemName: "circle.grid.3x3")
                             .foregroundColor(theme.primary)
-                        CRTText("CONVOYS", style: .subheader)
+                        CRTText("WORK BOARD", style: .subheader)
 
                         Spacer()
 
-                        if !convoys.isEmpty {
-                            CRTText("\(Int(totalProgress * 100))%", style: .mono, glowIntensity: .subtle)
+                        if openCount > 0 {
+                            BadgeView("\(openCount) OPEN", style: .status(.success))
+                        }
+
+                        if activeCount > 0 {
+                            BadgeView("\(activeCount) ACTIVE", style: .status(.info))
                         }
 
                         Image(systemName: "chevron.right")
@@ -377,83 +392,148 @@ private struct ConvoyWidget: View {
                 Divider()
                     .background(theme.dim.opacity(0.3))
 
-                // Convoy list
-                if convoys.isEmpty {
+                // Kanban columns preview
+                if isEmpty {
                     EmptyStateView(
-                        title: "NO ACTIVE CONVOYS",
-                        icon: "checkmark.circle"
+                        title: "NO BEADS",
+                        icon: "circle.grid.3x3"
                     )
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, CRTTheme.Spacing.sm)
                 } else {
-                    ForEach(convoys.prefix(3)) { convoy in
-                        Button(action: { onConvoyTap(convoy) }) {
-                            ConvoyProgressRow(convoy: convoy)
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    if convoys.count > 3 {
-                        Button(action: onTap) {
-                            HStack {
-                                Spacer()
-                                CRTText("VIEW ALL (\(convoys.count))", style: .caption, color: theme.primary)
-                                Image(systemName: "arrow.right")
-                                    .font(.caption)
-                                    .foregroundColor(theme.primary)
-                                Spacer()
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .top, spacing: CRTTheme.Spacing.xs) {
+                            ForEach(displayColumns, id: \.id) { column in
+                                KanbanPreviewColumn(
+                                    column: column,
+                                    beads: beadsByColumn[column.id] ?? [],
+                                    onBeadTap: onBeadTap
+                                )
+                                .frame(width: 140)
                             }
                         }
-                        .buttonStyle(.plain)
-                        .padding(.top, CRTTheme.Spacing.xxs)
+                        .padding(.vertical, CRTTheme.Spacing.xxs)
                     }
+
+                    // View all button
+                    Button(action: onTap) {
+                        HStack {
+                            Spacer()
+                            CRTText("VIEW FULL BOARD", style: .caption, color: theme.primary)
+                            Image(systemName: "arrow.right")
+                                .font(.caption)
+                                .foregroundColor(theme.primary)
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, CRTTheme.Spacing.xxs)
                 }
             }
         }
     }
+
+    private var isEmpty: Bool {
+        beadsByColumn.values.allSatisfy { $0.isEmpty }
+    }
 }
 
-private struct ConvoyProgressRow: View {
+/// Compact column view for the Kanban preview on the dashboard
+private struct KanbanPreviewColumn: View {
     @Environment(\.crtTheme) private var theme
-    let convoy: Convoy
+
+    let column: KanbanColumnDefinition
+    let beads: [BeadInfo]
+    let onBeadTap: (BeadInfo) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
+        VStack(spacing: 0) {
+            // Column header
             HStack {
-                CRTText(convoy.title, style: .body)
+                Text(column.title)
+                    .font(CRTTheme.Typography.font(size: 9, weight: .bold))
+                    .foregroundColor(column.color)
+                    .tracking(0.5)
+
+                Spacer()
+
+                Text("\(beads.count)")
+                    .font(CRTTheme.Typography.font(size: 9))
+                    .foregroundColor(theme.dim)
+            }
+            .padding(.horizontal, CRTTheme.Spacing.xxs)
+            .padding(.vertical, CRTTheme.Spacing.xxs)
+            .background(CRTTheme.Background.elevated)
+            .overlay(
+                Rectangle()
+                    .fill(column.color)
+                    .frame(height: 2),
+                alignment: .bottom
+            )
+
+            // Beads
+            if beads.isEmpty {
+                Text("—")
+                    .font(CRTTheme.Typography.font(size: 9))
+                    .foregroundColor(theme.dim.opacity(0.5))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, CRTTheme.Spacing.md)
+            } else {
+                VStack(spacing: CRTTheme.Spacing.xxs) {
+                    ForEach(beads.prefix(3)) { bead in
+                        Button(action: { onBeadTap(bead) }) {
+                            BeadPreviewCard(bead: bead)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if beads.count > 3 {
+                        Text("+\(beads.count - 3) more")
+                            .font(CRTTheme.Typography.font(size: 8))
+                            .foregroundColor(theme.dim)
+                    }
+                }
+                .padding(CRTTheme.Spacing.xxs)
+            }
+        }
+        .background(CRTTheme.Background.panel)
+        .overlay(
+            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                .stroke(theme.primary.opacity(0.2), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm))
+    }
+}
+
+/// Compact bead card for the dashboard preview
+private struct BeadPreviewCard: View {
+    @Environment(\.crtTheme) private var theme
+    let bead: BeadInfo
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            // ID + Priority
+            HStack {
+                Text(bead.id)
+                    .font(CRTTheme.Typography.font(size: 8, weight: .bold))
+                    .foregroundColor(theme.bright)
                     .lineLimit(1)
 
                 Spacer()
 
-                CRTText(
-                    "\(convoy.progress.completed)/\(convoy.progress.total)",
-                    style: .mono,
-                    color: theme.dim
-                )
+                BadgeView("P\(bead.priority)", style: .priority(bead.priority))
             }
 
-            // Progress bar
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    // Background
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(theme.dim.opacity(0.2))
-                        .frame(height: 4)
-
-                    // Progress
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(theme.primary)
-                        .frame(width: geometry.size.width * convoy.progress.percentage, height: 4)
-                        .crtGlow(color: theme.primary, radius: 3, intensity: 0.4)
-                }
-            }
-            .frame(height: 4)
-
-            if let rig = convoy.rig {
-                CRTText("RIG: \(rig.uppercased())", style: .caption, color: theme.dim)
-            }
+            // Title
+            Text(bead.title)
+                .font(CRTTheme.Typography.font(size: 9))
+                .foregroundColor(theme.primary)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, CRTTheme.Spacing.xxs)
+        .padding(CRTTheme.Spacing.xxs)
+        .background(CRTTheme.Background.elevated)
+        .cornerRadius(CRTTheme.CornerRadius.sm)
     }
 }
 
