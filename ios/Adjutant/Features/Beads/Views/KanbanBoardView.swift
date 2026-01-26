@@ -1,8 +1,9 @@
 import SwiftUI
 import AdjutantKit
 
-/// A 7-column Kanban board for displaying beads across workflow stages.
-/// Columns: BACKLOG -> OPEN -> IN PROGRESS -> TESTING -> MERGING -> COMPLETE -> CLOSED
+/// A 5-column Kanban board for displaying beads across workflow stages.
+/// Columns: OPEN -> HOOKED -> IN PROGRESS -> CLOSED -> BLOCKED
+/// BLOCKED appears last as exceptional items needing attention.
 /// Supports drag-and-drop between columns with optimistic updates.
 struct KanbanBoardView: View {
     @Environment(\.crtTheme) private var theme

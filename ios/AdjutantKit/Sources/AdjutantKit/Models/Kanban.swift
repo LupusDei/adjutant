@@ -2,13 +2,13 @@ import Foundation
 import SwiftUI
 
 /// Kanban column identifiers matching bead status values.
-/// Workflow: open -> hooked -> in_progress -> blocked -> closed
+/// Workflow: open -> hooked -> in_progress -> closed -> blocked
 public enum KanbanColumnId: String, Codable, CaseIterable, Identifiable {
     case open
     case hooked
     case inProgress = "in_progress"
-    case blocked
     case closed
+    case blocked
 
     public var id: String { rawValue }
 }
@@ -42,12 +42,13 @@ public struct KanbanColumnDefinition {
 }
 
 /// Column definitions in workflow order with Pip-Boy theme colors.
+/// BLOCKED appears last as exceptional items needing attention.
 public let kanbanColumns: [KanbanColumnDefinition] = [
     KanbanColumnDefinition(id: .open, title: "OPEN", color: Color(hex: 0x00FF00)),
     KanbanColumnDefinition(id: .hooked, title: "HOOKED", color: Color(hex: 0x00FFFF)),
     KanbanColumnDefinition(id: .inProgress, title: "IN PROGRESS", color: Color(hex: 0x00FF88)),
-    KanbanColumnDefinition(id: .blocked, title: "BLOCKED", color: Color(hex: 0xFF6B35)),
     KanbanColumnDefinition(id: .closed, title: "CLOSED", color: Color(hex: 0x444444)),
+    KanbanColumnDefinition(id: .blocked, title: "BLOCKED", color: Color(hex: 0xFF6B35)),
 ]
 
 /// Maps bead statuses to Kanban columns.
