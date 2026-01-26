@@ -239,7 +239,7 @@ public final class BackgroundTaskService: ObservableObject {
         let response = try await apiClient.getMail()
 
         // Count unread messages
-        let unreadCount = response.items.filter { !$0.isRead }.count
+        let unreadCount = response.items.filter { !$0.read }.count
         return unreadCount
     }
 
