@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import AdjutantKit
+import ActivityKit
 
 /// ViewModel for the Dashboard view, coordinating Mail, Crew, and Convoy data.
 @MainActor
@@ -29,6 +30,9 @@ final class DashboardViewModel: BaseViewModel {
 
     /// Maximum number of recent mail messages to display
     private let maxRecentMail = 5
+
+    /// Town name for Live Activity (default: "Gastown")
+    private let townName = "Gastown"
 
     // MARK: - Private Properties
 
@@ -106,7 +110,44 @@ final class DashboardViewModel: BaseViewModel {
             convoys: self.convoys
         )
 
+        // Update Live Activity with current state
+        await syncLiveActivity()
+
         isRefreshing = false
+    }
+
+    // MARK: - Live Activity
+
+    /// Syncs the Live Activity with current dashboard state.
+    private func syncLiveActivity() async {
+        guard #available(iOS 16.1, *) else { return }
+
+        let activeAgentCount = activeCrewMembers.count
+
+        // Get the power state from AppState (convert local to AdjutantKit type)
+        let localPowerState = AppState.shared.powerState
+        let powerState: AdjutantKit.PowerState
+        switch localPowerState {
+        case .stopped:
+            powerState = .stopped
+        case .starting:
+            powerState = .starting
+        case .running:
+            powerState = .running
+        case .stopping:
+            powerState = .stopping
+        }
+
+        let state = LiveActivityService.createState(
+            powerState: powerState,
+            unreadMailCount: unreadCount,
+            activeAgents: activeAgentCount
+        )
+
+        await LiveActivityService.shared.syncActivity(
+            townName: townName,
+            state: state
+        )
     }
 
     /// Silently refresh data in the background (no loading indicator)

@@ -1,5 +1,6 @@
 import XCTest
 import Combine
+import AdjutantKit
 @testable import AdjutantUI
 
 @MainActor
@@ -61,12 +62,13 @@ final class LiveActivityServiceTests: XCTestCase {
 
     func testContentStateInitialization() {
         let state = GastownActivityAttributes.ContentState(
-            powerState: "running",
+            powerState: .running,
             unreadMailCount: 5,
-            activeAgents: 3
+            activeAgents: 3,
+            lastUpdated: Date()
         )
 
-        XCTAssertEqual(state.powerState, "running")
+        XCTAssertEqual(state.powerState, .running)
         XCTAssertEqual(state.unreadMailCount, 5)
         XCTAssertEqual(state.activeAgents, 3)
         XCTAssertNotNil(state.lastUpdated)
@@ -75,7 +77,7 @@ final class LiveActivityServiceTests: XCTestCase {
     func testContentStateWithExplicitDate() {
         let testDate = Date(timeIntervalSince1970: 0)
         let state = GastownActivityAttributes.ContentState(
-            powerState: "stopped",
+            powerState: .stopped,
             unreadMailCount: 0,
             activeAgents: 0,
             lastUpdated: testDate
@@ -87,13 +89,13 @@ final class LiveActivityServiceTests: XCTestCase {
     func testContentStateEquality() {
         let date = Date()
         let state1 = GastownActivityAttributes.ContentState(
-            powerState: "running",
+            powerState: .running,
             unreadMailCount: 5,
             activeAgents: 3,
             lastUpdated: date
         )
         let state2 = GastownActivityAttributes.ContentState(
-            powerState: "running",
+            powerState: .running,
             unreadMailCount: 5,
             activeAgents: 3,
             lastUpdated: date
@@ -104,14 +106,16 @@ final class LiveActivityServiceTests: XCTestCase {
 
     func testContentStateInequality() {
         let state1 = GastownActivityAttributes.ContentState(
-            powerState: "running",
+            powerState: .running,
             unreadMailCount: 5,
-            activeAgents: 3
+            activeAgents: 3,
+            lastUpdated: Date()
         )
         let state2 = GastownActivityAttributes.ContentState(
-            powerState: "stopped",
+            powerState: .stopped,
             unreadMailCount: 5,
-            activeAgents: 3
+            activeAgents: 3,
+            lastUpdated: Date()
         )
 
         XCTAssertNotEqual(state1, state2)
@@ -120,8 +124,8 @@ final class LiveActivityServiceTests: XCTestCase {
     // MARK: - Attributes Tests
 
     func testAttributesInitialization() {
-        let attributes = GastownActivityAttributes(rigName: "test-rig")
-        XCTAssertEqual(attributes.rigName, "test-rig")
+        let attributes = GastownActivityAttributes(townName: "test-town")
+        XCTAssertEqual(attributes.townName, "test-town")
     }
 
     // MARK: - Error Tests
@@ -160,21 +164,26 @@ final class LiveActivityServiceTests: XCTestCase {
 
     // MARK: - Create State Helper Tests
 
-    func testCreateStateFromAppState() {
-        // Get the shared AppState
-        let appState = AppState.shared
+    func testCreateStateWithParameters() {
+        let state = LiveActivityService.createState(
+            powerState: .running,
+            unreadMailCount: 10,
+            activeAgents: 5
+        )
 
-        let state = LiveActivityService.createState(from: appState, activeAgents: 5)
-
-        XCTAssertEqual(state.powerState, appState.powerState.rawValue)
-        XCTAssertEqual(state.unreadMailCount, appState.unreadMailCount)
+        XCTAssertEqual(state.powerState, .running)
+        XCTAssertEqual(state.unreadMailCount, 10)
         XCTAssertEqual(state.activeAgents, 5)
     }
 
-    func testCreateStateDefaultActiveAgents() {
-        let appState = AppState.shared
-        let state = LiveActivityService.createState(from: appState)
+    func testCreateStateWithStoppedState() {
+        let state = LiveActivityService.createState(
+            powerState: .stopped,
+            unreadMailCount: 0,
+            activeAgents: 0
+        )
 
+        XCTAssertEqual(state.powerState, .stopped)
         XCTAssertEqual(state.activeAgents, 0)
     }
 
@@ -211,9 +220,10 @@ final class LiveActivityServiceTests: XCTestCase {
     func testUpdateActivityWithNoActiveActivity() async {
         // Should handle gracefully when trying to update non-existent activity
         let state = GastownActivityAttributes.ContentState(
-            powerState: "running",
+            powerState: .running,
             unreadMailCount: 1,
-            activeAgents: 2
+            activeAgents: 2,
+            lastUpdated: Date()
         )
 
         // Should not throw - just prints a message

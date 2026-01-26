@@ -8,6 +8,9 @@
 import UIKit
 import UserNotifications
 import BackgroundTasks
+import ActivityKit
+import AdjutantKit
+import AdjutantUI
 
 class AppDelegate: NSObject, UIApplicationDelegate {
 
@@ -19,7 +22,17 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         registerForPushNotifications(application)
         registerBackgroundTasks()
+        startLiveActivityOnLaunch()
         return true
+    }
+
+    func applicationWillTerminate(_ application: UIApplication) {
+        // End Live Activity when app terminates
+        if #available(iOS 16.1, *) {
+            Task {
+                await LiveActivityService.shared.endActivity()
+            }
+        }
     }
 
     // MARK: - Push Notifications
@@ -69,5 +82,27 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
     func scheduleBackgroundProcessing() {
         BackgroundTaskService.shared.scheduleBackgroundProcessing()
+    }
+
+    // MARK: - Live Activity
+
+    /// Starts a Live Activity on app launch with initial state.
+    /// The activity will be updated by DashboardViewModel polling.
+    private func startLiveActivityOnLaunch() {
+        guard #available(iOS 16.1, *) else { return }
+
+        Task {
+            let initialState = GastownActivityAttributes.ContentState(
+                powerState: .stopped,
+                unreadMailCount: 0,
+                activeAgents: 0,
+                lastUpdated: Date()
+            )
+
+            await LiveActivityService.shared.startActivity(
+                townName: "Gastown",
+                initialState: initialState
+            )
+        }
     }
 }

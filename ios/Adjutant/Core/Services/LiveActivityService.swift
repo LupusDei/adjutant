@@ -9,46 +9,7 @@
 import Foundation
 import ActivityKit
 import Combine
-
-// MARK: - Activity Attributes
-
-/// Attributes for the Gastown Live Activity.
-/// Defines the static content and dynamic ContentState for the activity.
-public struct GastownActivityAttributes: ActivityAttributes {
-    /// The rig name this activity is monitoring
-    public let rigName: String
-
-    /// Dynamic state that updates throughout the activity lifecycle
-    public struct ContentState: Codable, Hashable {
-        /// Current power state of the Gastown system
-        public let powerState: String
-
-        /// Count of unread mail messages
-        public let unreadMailCount: Int
-
-        /// Number of active agents currently working
-        public let activeAgents: Int
-
-        /// Timestamp of the last update
-        public let lastUpdated: Date
-
-        public init(
-            powerState: String,
-            unreadMailCount: Int,
-            activeAgents: Int,
-            lastUpdated: Date = Date()
-        ) {
-            self.powerState = powerState
-            self.unreadMailCount = unreadMailCount
-            self.activeAgents = activeAgents
-            self.lastUpdated = lastUpdated
-        }
-    }
-
-    public init(rigName: String) {
-        self.rigName = rigName
-    }
-}
+import AdjutantKit
 
 // MARK: - Live Activity Service
 
@@ -105,15 +66,15 @@ public final class LiveActivityService: ObservableObject {
 
     // MARK: - Activity Lifecycle
 
-    /// Starts a new Live Activity for the specified rig.
+    /// Starts a new Live Activity for the specified town.
     ///
     /// - Parameters:
-    ///   - rigName: The name of the rig to monitor
+    ///   - townName: The name of the town to monitor
     ///   - initialState: The initial state to display
     /// - Returns: The activity ID if successful, nil otherwise
     @discardableResult
     public func startActivity(
-        rigName: String,
+        townName: String,
         initialState: GastownActivityAttributes.ContentState
     ) async -> String? {
         guard isSupported else {
@@ -124,7 +85,7 @@ public final class LiveActivityService: ObservableObject {
         // End any existing activity first
         await endActivity()
 
-        let attributes = GastownActivityAttributes(rigName: rigName)
+        let attributes = GastownActivityAttributes(townName: townName)
         let activityContent = ActivityContent(
             state: initialState,
             staleDate: Date().addingTimeInterval(60 * 15) // 15 minutes
@@ -179,7 +140,7 @@ public final class LiveActivityService: ObservableObject {
 
         // Create a final state to show
         let finalState = GastownActivityAttributes.ContentState(
-            powerState: "stopped",
+            powerState: .stopped,
             unreadMailCount: 0,
             activeAgents: 0,
             lastUpdated: Date()
@@ -247,18 +208,21 @@ public final class LiveActivityService: ObservableObject {
 
     // MARK: - Convenience Methods
 
-    /// Creates a ContentState from the current AppState.
+    /// Creates a ContentState from dashboard data.
     ///
-    /// - Parameter appState: The current app state
-    /// - Parameter activeAgents: Number of active agents (from status API)
+    /// - Parameters:
+    ///   - powerState: Current power state
+    ///   - unreadMailCount: Number of unread mail messages
+    ///   - activeAgents: Number of active agents
     /// - Returns: A ContentState populated with current values
     static func createState(
-        from appState: AppState,
-        activeAgents: Int = 0
+        powerState: AdjutantKit.PowerState,
+        unreadMailCount: Int,
+        activeAgents: Int
     ) -> GastownActivityAttributes.ContentState {
         return GastownActivityAttributes.ContentState(
-            powerState: appState.powerState.rawValue,
-            unreadMailCount: appState.unreadMailCount,
+            powerState: powerState,
+            unreadMailCount: unreadMailCount,
             activeAgents: activeAgents,
             lastUpdated: Date()
         )
@@ -269,16 +233,16 @@ public final class LiveActivityService: ObservableObject {
     /// If no activity exists, starts a new one. Otherwise, updates the existing one.
     ///
     /// - Parameters:
-    ///   - rigName: The rig name (used for new activities)
+    ///   - townName: The town name (used for new activities)
     ///   - state: The state to display
     public func syncActivity(
-        rigName: String,
+        townName: String,
         state: GastownActivityAttributes.ContentState
     ) async {
         if hasActiveActivity {
             await updateActivity(with: state)
         } else {
-            await startActivity(rigName: rigName, initialState: state)
+            await startActivity(townName: townName, initialState: state)
         }
     }
 }
