@@ -31,6 +31,9 @@ public struct ContentView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .task {
+            await AppState.shared.checkVoiceAvailability()
+        }
     }
 }
 

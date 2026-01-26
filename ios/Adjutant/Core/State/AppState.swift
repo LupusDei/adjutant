@@ -73,6 +73,21 @@ final class AppState: ObservableObject {
         self.apiClient = APIClient(configuration: config)
 
         loadPersistedState()
+        setupNetworkRecoveryObserver()
+    }
+
+    /// Sets up observer to re-check voice availability when network recovers
+    private func setupNetworkRecoveryObserver() {
+        NetworkMonitor.shared.$isConnected
+            .removeDuplicates()
+            .dropFirst() // Skip initial value
+            .filter { $0 } // Only trigger when network becomes available
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    await self?.checkVoiceAvailability()
+                }
+            }
+            .store(in: &cancellables)
     }
 
     /// Recreates the API client with the current base URL
@@ -131,6 +146,18 @@ final class AppState: ObservableObject {
         } catch {
             // On error, keep existing rigs list
             // Optionally log the error
+        }
+    }
+
+    /// Checks if voice service is available from the API
+    /// Call this on app startup and when network recovers
+    func checkVoiceAvailability() async {
+        let client = apiClient
+        do {
+            let status = try await client.getVoiceStatus()
+            updateVoiceAvailability(status.available)
+        } catch {
+            updateVoiceAvailability(false)
         }
     }
 
