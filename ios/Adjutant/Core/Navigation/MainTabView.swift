@@ -7,9 +7,7 @@ struct MainTabView: View {
     @StateObject private var coordinator = AppCoordinator()
     @EnvironmentObject private var dependencyContainer: DependencyContainer
     @Environment(\.crtTheme) private var theme
-
-    /// Unread mail count for badge display
-    @State private var unreadMailCount: Int = 0
+    @ObservedObject private var appState = AppState.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,21 +21,15 @@ struct MainTabView: View {
             // Custom tab bar
             CRTTabBar(
                 selectedTab: $coordinator.selectedTab,
-                unreadCount: unreadMailCount
+                unreadCount: appState.unreadMailCount
             )
         }
         .background(CRTTheme.Background.screen)
         .environmentObject(coordinator)
         .onAppear {
-            loadUnreadCount()
             // Start network monitoring
             _ = NetworkMonitor.shared
         }
-    }
-
-    private func loadUnreadCount() {
-        // TODO: Load actual unread count from API
-        unreadMailCount = 3
     }
 }
 
