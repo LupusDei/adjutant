@@ -72,10 +72,12 @@ public struct OnboardingView: View {
                             .textFieldStyle(.plain)
                             .font(.crt(CRTTypography.sizeBase))
                             .foregroundColor(theme.primary)
+                            #if os(iOS)
                             .autocapitalization(.none)
-                            .disableAutocorrection(true)
                             .keyboardType(.URL)
                             .textContentType(.URL)
+                            #endif
+                            .autocorrectionDisabled()
                     }
                     .padding(CRTTheme.Spacing.md)
                     .background(

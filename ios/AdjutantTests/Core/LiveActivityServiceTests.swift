@@ -1,3 +1,4 @@
+#if os(iOS)
 import XCTest
 import Combine
 import AdjutantKit
@@ -230,3 +231,4 @@ final class LiveActivityServiceTests: XCTestCase {
         await sut.updateActivity(with: state)
     }
 }
+#endif

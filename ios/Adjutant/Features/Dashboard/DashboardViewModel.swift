@@ -123,6 +123,7 @@ final class DashboardViewModel: BaseViewModel {
 
     /// Syncs the Live Activity with current dashboard state.
     private func syncLiveActivity() async {
+        #if os(iOS)
         guard #available(iOS 16.1, *) else { return }
 
         let activeAgentCount = activeCrewMembers.count
@@ -151,6 +152,7 @@ final class DashboardViewModel: BaseViewModel {
             townName: townName,
             state: state
         )
+        #endif
     }
 
     /// Silently refresh data in the background (no loading indicator)

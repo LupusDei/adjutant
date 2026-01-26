@@ -6,9 +6,12 @@
 //
 
 import Foundation
-import BackgroundTasks
 import Combine
 import AdjutantKit
+
+#if os(iOS)
+import BackgroundTasks
+#endif
 
 /// Manages background task scheduling and execution for app refresh and mail checking.
 ///
@@ -64,6 +67,7 @@ public final class BackgroundTaskService: ObservableObject {
     /// Registers background task handlers with BGTaskScheduler.
     /// Call this from AppDelegate's `application(_:didFinishLaunchingWithOptions:)`.
     public func registerBackgroundTasks() {
+        #if os(iOS)
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.appRefreshTaskIdentifier,
             using: nil
@@ -83,6 +87,9 @@ public final class BackgroundTaskService: ObservableObject {
         }
 
         print("[BackgroundTaskService] Registered background tasks")
+        #else
+        print("[BackgroundTaskService] Background tasks not available on this platform")
+        #endif
     }
 
     // MARK: - Task Scheduling
@@ -90,6 +97,7 @@ public final class BackgroundTaskService: ObservableObject {
     /// Schedules an app refresh task to run in the background.
     /// Call this when the app enters the background.
     public func scheduleAppRefresh() {
+        #if os(iOS)
         let request = BGAppRefreshTaskRequest(identifier: Self.appRefreshTaskIdentifier)
         request.earliestBeginDate = Date(timeIntervalSinceNow: Self.refreshInterval)
 
@@ -100,11 +108,13 @@ public final class BackgroundTaskService: ObservableObject {
             print("[BackgroundTaskService] Failed to schedule app refresh: \(error.localizedDescription)")
             lastError = error
         }
+        #endif
     }
 
     /// Schedules a background processing task for heavier operations.
     /// Processing tasks have more execution time but stricter scheduling.
     public func scheduleBackgroundProcessing() {
+        #if os(iOS)
         let request = BGProcessingTaskRequest(identifier: Self.processingTaskIdentifier)
         request.requiresNetworkConnectivity = true
         request.requiresExternalPower = false
@@ -116,16 +126,20 @@ public final class BackgroundTaskService: ObservableObject {
             print("[BackgroundTaskService] Failed to schedule background processing: \(error.localizedDescription)")
             lastError = error
         }
+        #endif
     }
 
     /// Cancels all pending background tasks.
     public func cancelAllTasks() {
+        #if os(iOS)
         BGTaskScheduler.shared.cancelAllTaskRequests()
         print("[BackgroundTaskService] Cancelled all pending tasks")
+        #endif
     }
 
     // MARK: - Task Handlers
 
+    #if os(iOS)
     private func handleAppRefresh(task: BGAppRefreshTask) async {
         // Schedule next refresh immediately to ensure continuity
         scheduleAppRefresh()
@@ -166,6 +180,7 @@ public final class BackgroundTaskService: ObservableObject {
         isRefreshing = false
         task.setTaskCompleted(success: success)
     }
+    #endif
 
     // MARK: - Refresh Operations
 

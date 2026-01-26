@@ -1,7 +1,7 @@
 import XCTest
 import Combine
 import Speech
-@testable import Adjutant
+@testable import AdjutantUI
 
 @MainActor
 final class SpeechRecognitionServiceTests: XCTestCase {

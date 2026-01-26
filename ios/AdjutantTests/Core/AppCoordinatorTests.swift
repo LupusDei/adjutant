@@ -1,6 +1,6 @@
 import XCTest
 import SwiftUI
-@testable import Adjutant
+@testable import AdjutantUI
 
 @MainActor
 final class AppCoordinatorTests: XCTestCase {

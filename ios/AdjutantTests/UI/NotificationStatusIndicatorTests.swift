@@ -1,5 +1,5 @@
 import XCTest
-@testable import Adjutant
+@testable import AdjutantUI
 
 @MainActor
 final class NotificationStatusIndicatorTests: XCTestCase {

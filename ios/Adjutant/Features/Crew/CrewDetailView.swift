@@ -24,17 +24,27 @@ struct CrewDetailView: View {
             }
         }
         .background(CRTTheme.Background.screen)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .toolbar {
             ToolbarItem(placement: .principal) {
                 CRTText(viewModel.member.name.uppercased(), style: .subheader, glowIntensity: .subtle)
             }
 
+            #if os(iOS)
             if viewModel.hasTerm {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
                     toolbarButtons
                 }
             }
+            #else
+            if viewModel.hasTerm {
+                ToolbarItemGroup(placement: .automatic) {
+                    toolbarButtons
+                }
+            }
+            #endif
         }
         .onAppear {
             viewModel.onAppear()

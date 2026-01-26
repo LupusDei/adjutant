@@ -1,5 +1,5 @@
 import XCTest
-@testable import Adjutant
+@testable import AdjutantUI
 @testable import AdjutantKit
 
 @MainActor

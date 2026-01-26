@@ -7,9 +7,11 @@
 //
 
 import Foundation
-import ActivityKit
 import Combine
 import AdjutantKit
+
+#if os(iOS)
+import ActivityKit
 
 // MARK: - Live Activity Service
 
@@ -272,3 +274,4 @@ public enum LiveActivityError: LocalizedError {
         }
     }
 }
+#endif

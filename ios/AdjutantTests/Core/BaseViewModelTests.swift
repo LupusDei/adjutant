@@ -1,6 +1,6 @@
 import XCTest
 import Combine
-@testable import Adjutant
+@testable import AdjutantUI
 
 @MainActor
 final class BaseViewModelTests: XCTestCase {

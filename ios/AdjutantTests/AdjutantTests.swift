@@ -6,7 +6,7 @@
 //
 
 import XCTest
-@testable import Adjutant
+@testable import AdjutantUI
 
 final class AdjutantTests: XCTestCase {
 
