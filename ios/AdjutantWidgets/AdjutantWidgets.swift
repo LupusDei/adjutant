@@ -14,9 +14,10 @@ import WidgetKit
 @main
 struct AdjutantWidgetsBundle: WidgetBundle {
     var body: some Widget {
-        // Widgets will be added here as they are implemented:
-        // - GastownActivityWidget (Live Activity for active work)
-        // - StatusWidget (home screen widget for system status)
+        // Live Activity for Gas Town status on Lock Screen and Dynamic Island
+        AdjutantLiveActivity()
+
+        // Home screen widget (placeholder for now)
         AdjutantPlaceholderWidget()
     }
 }
