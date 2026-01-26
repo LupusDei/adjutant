@@ -76,9 +76,22 @@ final class AppState: ObservableObject {
 
     // MARK: - Initialization
 
+    /// Returns the persisted API base URL from UserDefaults, or localhost as fallback
+    private static func loadPersistedBaseURL() -> URL {
+        if let urlString = UserDefaults.standard.string(forKey: "apiBaseURL"),
+           let url = URL(string: urlString) {
+            return url
+        }
+        return URL(string: "http://localhost:3001/api")!
+    }
+
     private init() {
-        // Initialize apiClient with default URL (will be updated in loadPersistedState)
-        let config = APIClientConfiguration(baseURL: URL(string: "http://localhost:3001/api")!)
+        // IMPORTANT: Load persisted URL FIRST before creating APIClient
+        // This prevents early API calls from going to localhost when a saved URL exists
+        let persistedURL = Self.loadPersistedBaseURL()
+        self.apiBaseURL = persistedURL
+
+        let config = APIClientConfiguration(baseURL: persistedURL)
         self.apiClient = APIClient(configuration: config)
 
         loadPersistedState()
