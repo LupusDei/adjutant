@@ -239,6 +239,32 @@ final class BeadsListViewModel: BaseViewModel {
                (bead.assignee?.lowercased().hasPrefix(rigLower + "/") ?? false)
     }
 
+    // MARK: - Status Updates
+
+    /// Updates a bead's status locally for optimistic UI updates.
+    /// Call this for immediate UI feedback during drag-and-drop.
+    func updateBeadStatusLocally(beadId: String, newStatus: String) {
+        beads = beads.map { bead in
+            if bead.id == beadId {
+                return BeadInfo(
+                    id: bead.id,
+                    title: bead.title,
+                    status: newStatus,
+                    priority: bead.priority,
+                    type: bead.type,
+                    assignee: bead.assignee,
+                    rig: bead.rig,
+                    source: bead.source,
+                    labels: bead.labels,
+                    createdAt: bead.createdAt,
+                    updatedAt: bead.updatedAt
+                )
+            }
+            return bead
+        }
+        applyFilter()
+    }
+
     // MARK: - Computed Properties
 
     /// Count of open beads

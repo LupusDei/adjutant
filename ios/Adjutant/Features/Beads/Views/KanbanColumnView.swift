@@ -2,12 +2,16 @@ import SwiftUI
 import AdjutantKit
 
 /// A single column in the Kanban board displaying beads with a specific status.
+/// Supports drag-and-drop as a drop target with visual feedback.
 struct KanbanColumnView: View {
     @Environment(\.crtTheme) private var theme
 
     let column: KanbanColumnDefinition
     let beads: [BeadInfo]
+    let draggingBeadId: String?
+    let isDropTarget: Bool
     let onBeadTap: (BeadInfo) -> Void
+    let onDrop: (BeadInfo) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,9 +24,20 @@ struct KanbanColumnView: View {
         .background(CRTTheme.Background.panel)
         .overlay(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                .stroke(theme.primary.opacity(0.2), lineWidth: 1)
+                .stroke(isDropTarget ? column.color : theme.primary.opacity(0.2), lineWidth: isDropTarget ? 2 : 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm))
+        .crtGlow(
+            color: column.color,
+            radius: isDropTarget ? 8 : 0,
+            intensity: isDropTarget ? 0.4 : 0
+        )
+        .animation(.easeInOut(duration: CRTTheme.Animation.fast), value: isDropTarget)
+        .dropDestination(for: BeadInfo.self) { items, _ in
+            guard let bead = items.first else { return false }
+            onDrop(bead)
+            return true
+        }
     }
 
     // MARK: - Subviews
@@ -60,9 +75,15 @@ struct KanbanColumnView: View {
             } else {
                 LazyVStack(spacing: CRTTheme.Spacing.xs) {
                     ForEach(beads) { bead in
-                        KanbanCardView(bead: bead, onTap: {
-                            onBeadTap(bead)
-                        })
+                        KanbanCardView(
+                            bead: bead,
+                            isDragging: draggingBeadId == bead.id,
+                            onTap: { onBeadTap(bead) }
+                        )
+                        .draggable(bead) {
+                            KanbanCardView(bead: bead, isDragging: true)
+                                .frame(width: 150)
+                        }
                     }
                 }
                 .padding(CRTTheme.Spacing.xs)
@@ -71,9 +92,9 @@ struct KanbanColumnView: View {
     }
 
     private var emptyState: some View {
-        Text("EMPTY")
+        Text(isDropTarget ? "DROP HERE" : "EMPTY")
             .font(CRTTheme.Typography.font(size: 9))
-            .foregroundColor(theme.dim.opacity(0.5))
+            .foregroundColor(isDropTarget ? column.color : theme.dim.opacity(0.5))
             .tracking(1)
             .frame(maxWidth: .infinity)
             .padding(.vertical, CRTTheme.Spacing.lg)
@@ -114,13 +135,19 @@ struct KanbanColumnView: View {
                     updatedAt: nil
                 )
             ],
-            onBeadTap: { _ in }
+            draggingBeadId: nil,
+            isDropTarget: false,
+            onBeadTap: { _ in },
+            onDrop: { _ in }
         )
 
         KanbanColumnView(
             column: kanbanColumns[0], // BACKLOG
             beads: [],
-            onBeadTap: { _ in }
+            draggingBeadId: "adj-001",
+            isDropTarget: true,
+            onBeadTap: { _ in },
+            onDrop: { _ in }
         )
     }
     .padding()

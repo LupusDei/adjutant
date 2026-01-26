@@ -3,11 +3,15 @@ import AdjutantKit
 
 /// A 7-column Kanban board for displaying beads across workflow stages.
 /// Columns: BACKLOG -> OPEN -> IN PROGRESS -> TESTING -> MERGING -> COMPLETE -> CLOSED
+/// Supports drag-and-drop between columns with optimistic updates.
 struct KanbanBoardView: View {
     @Environment(\.crtTheme) private var theme
 
     let beads: [BeadInfo]
+    let draggingBeadId: String?
+    let targetColumnId: KanbanColumnId?
     let onBeadTap: (BeadInfo) -> Void
+    let onDrop: (BeadInfo, KanbanColumnId) -> Void
 
     /// Groups beads into columns based on their status
     private var columns: [KanbanColumn] {
@@ -36,7 +40,12 @@ struct KanbanBoardView: View {
                                 color: column.color
                             ),
                             beads: column.beads,
-                            onBeadTap: onBeadTap
+                            draggingBeadId: draggingBeadId,
+                            isDropTarget: targetColumnId == column.id && draggingBeadId != nil,
+                            onBeadTap: onBeadTap,
+                            onDrop: { bead in
+                                onDrop(bead, column.id)
+                            }
                         )
                         .frame(width: columnWidth(for: geometry.size))
                     }
@@ -137,7 +146,10 @@ struct KanbanBoardView: View {
                 updatedAt: nil
             )
         ],
-        onBeadTap: { _ in }
+        draggingBeadId: nil,
+        targetColumnId: nil,
+        onBeadTap: { _ in },
+        onDrop: { _, _ in }
     )
     .background(CRTTheme.Background.screen)
 }

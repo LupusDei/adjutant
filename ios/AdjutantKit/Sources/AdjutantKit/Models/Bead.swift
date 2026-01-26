@@ -1,4 +1,6 @@
 import Foundation
+import UniformTypeIdentifiers
+import CoreTransferable
 
 /// A bead (issue/task) in the gastown system
 public struct BeadInfo: Codable, Identifiable, Equatable, Hashable {
@@ -69,5 +71,13 @@ public struct BeadInfo: Codable, Identifiable, Equatable, Hashable {
     /// Get priority as MessagePriority enum
     public var priorityLevel: MessagePriority? {
         MessagePriority(rawValue: priority)
+    }
+}
+
+// MARK: - Transferable for Drag & Drop
+
+extension BeadInfo: Transferable {
+    public static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .json)
     }
 }

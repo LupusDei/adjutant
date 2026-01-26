@@ -2,22 +2,42 @@ import SwiftUI
 import AdjutantKit
 
 /// Main beads view displaying all beads in a Kanban board with filtering and search.
+/// Supports drag-and-drop between columns with optimistic updates.
 struct BeadsListView: View {
     @StateObject private var viewModel = BeadsListViewModel()
     @EnvironmentObject private var coordinator: AppCoordinator
     @ObservedObject private var appState = AppState.shared
     @Environment(\.crtTheme) private var theme
 
+    // MARK: - Drag & Drop State
+
+    @State private var draggingBeadId: String?
+    @State private var targetColumnId: KanbanColumnId?
+    @State private var isUpdating = false
+    @State private var updateError: String?
+
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            headerView
+        ZStack {
+            VStack(spacing: 0) {
+                // Header
+                headerView
 
-            // Filter bar
-            filterBar
+                // Filter bar
+                filterBar
 
-            // Content
-            content
+                // Content
+                content
+            }
+
+            // Error toast overlay
+            if let error = updateError {
+                errorToast(error)
+            }
+
+            // Updating indicator overlay
+            if isUpdating {
+                updatingIndicator
+            }
         }
         .background(CRTTheme.Background.screen)
         .onAppear {
@@ -249,8 +269,100 @@ struct BeadsListView: View {
     }
 
     private var kanbanBoard: some View {
-        KanbanBoardView(beads: filteredBeadsForKanban) { bead in
-            coordinator.navigate(to: .beadDetail(id: bead.id))
+        KanbanBoardView(
+            beads: filteredBeadsForKanban,
+            draggingBeadId: draggingBeadId,
+            targetColumnId: targetColumnId,
+            onBeadTap: { bead in
+                coordinator.navigate(to: .beadDetail(id: bead.id))
+            },
+            onDrop: { bead, targetColumn in
+                Task {
+                    await handleDrop(bead: bead, to: targetColumn)
+                }
+            }
+        )
+    }
+
+    // MARK: - Drag & Drop Handling
+
+    private func handleDrop(bead: BeadInfo, to targetColumn: KanbanColumnId) async {
+        let fromColumn = mapStatusToColumn(bead.status)
+
+        // Don't process drop on same column
+        guard fromColumn != targetColumn else {
+            draggingBeadId = nil
+            targetColumnId = nil
+            return
+        }
+
+        // Clear drag state
+        draggingBeadId = nil
+        targetColumnId = nil
+
+        // Save previous status for rollback
+        let previousStatus = bead.status
+        let newStatus = targetColumn.rawValue
+
+        // Optimistic update
+        viewModel.updateBeadStatusLocally(beadId: bead.id, newStatus: newStatus)
+
+        // API call
+        isUpdating = true
+        do {
+            let apiClient = AppState.shared.apiClient
+            _ = try await apiClient.updateBeadStatus(id: bead.id, status: newStatus)
+            isUpdating = false
+        } catch {
+            // Rollback on error
+            viewModel.updateBeadStatusLocally(beadId: bead.id, newStatus: previousStatus)
+            isUpdating = false
+
+            // Show error toast (auto-dismiss after 3 seconds)
+            updateError = "Failed to update \(bead.id): \(error.localizedDescription)"
+            Task {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                updateError = nil
+            }
+        }
+    }
+
+    // MARK: - Overlays
+
+    private func errorToast(_ message: String) -> some View {
+        VStack {
+            Text(message)
+                .font(CRTTheme.Typography.font(size: 12))
+                .foregroundColor(.white)
+                .padding(.horizontal, CRTTheme.Spacing.md)
+                .padding(.vertical, CRTTheme.Spacing.xs)
+                .background(
+                    RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
+                        .fill(CRTTheme.State.error.opacity(0.9))
+                )
+                .shadow(color: .black.opacity(0.5), radius: 8, x: 0, y: 2)
+
+            Spacer()
+        }
+        .padding(.top, CRTTheme.Spacing.xs)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .animation(.easeInOut(duration: 0.2), value: updateError != nil)
+    }
+
+    private var updatingIndicator: some View {
+        VStack {
+            HStack {
+                Spacer()
+
+                Text("UPDATING...")
+                    .font(CRTTheme.Typography.font(size: 11, weight: .medium))
+                    .foregroundColor(theme.primary)
+                    .tracking(1)
+                    .padding(.trailing, CRTTheme.Spacing.md)
+                    .padding(.top, CRTTheme.Spacing.xs)
+            }
+
+            Spacer()
         }
     }
 
