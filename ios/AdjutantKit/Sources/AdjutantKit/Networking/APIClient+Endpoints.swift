@@ -241,6 +241,28 @@ extension APIClient {
             queryItems: queryItems.isEmpty ? nil : queryItems
         )
     }
+
+    /// Update a bead's status (e.g., for Kanban drag-and-drop)
+    ///
+    /// Updates the status of a bead in its source database.
+    ///
+    /// ## Example
+    /// ```swift
+    /// // Move bead to in_progress
+    /// let result = try await client.updateBeadStatus(id: "hq-vts8", status: "in_progress")
+    /// print("Bead \(result.id) is now \(result.status)")
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - id: Full bead ID (e.g., "hq-vts8", "gb-53tj")
+    ///   - status: New status value (open, in_progress, blocked, closed, etc.)
+    /// - Returns: A ``BeadUpdateResponse`` confirming the update.
+    /// - Throws: ``APIClientError`` if the request fails or status is invalid.
+    public func updateBeadStatus(id: String, status: String) async throws -> BeadUpdateResponse {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let request = BeadStatusUpdateRequest(status: status)
+        return try await requestWithEnvelope(.patch, path: "/beads/\(encodedId)", body: request)
+    }
 }
 
 // MARK: - Tunnel Endpoints

@@ -333,3 +333,23 @@ public struct SpawnPolecatResponse: Codable, Equatable {
         self.requested = requested
     }
 }
+
+/// Request body for updating a bead's status
+public struct BeadStatusUpdateRequest: Codable, Equatable {
+    public let status: String
+
+    public init(status: String) {
+        self.status = status
+    }
+}
+
+/// Response from updating a bead's status
+public struct BeadUpdateResponse: Codable, Equatable {
+    public let id: String
+    public let status: String
+
+    public init(id: String, status: String) {
+        self.id = id
+        self.status = status
+    }
+}
