@@ -209,6 +209,34 @@ export interface BeadInfo {
   updatedAt: string | null;
 }
 
+/** Extended bead info with full details for detail view. */
+export interface BeadDetail extends BeadInfo {
+  /** Full description (markdown) */
+  description: string;
+  /** Timestamp when bead was closed */
+  closedAt: string | null;
+  /** Hooked bead ID */
+  hookBead: string | null;
+  /** Role bead ID */
+  roleBead: string | null;
+  /** Agent state (working, idle, stuck, stale) */
+  agentState: string | null;
+  /** Whether bead is pinned */
+  pinned: boolean;
+  /** Dependency relationships */
+  dependencies: BeadDependency[];
+}
+
+/** Bead dependency relationship. */
+export interface BeadDependency {
+  /** The bead that has this dependency */
+  issueId: string;
+  /** The bead it depends on */
+  dependsOnId: string;
+  /** Dependency type (blocks, blocked_by, etc.) */
+  type: string;
+}
+
 // ============================================================================
 // API Response Types
 // ============================================================================

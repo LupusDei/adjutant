@@ -12,6 +12,7 @@ import type {
   PowerState,
   Convoy,
   BeadInfo,
+  BeadDetail,
 } from '../types';
 import type {
   SynthesizeRequest,
@@ -262,6 +263,14 @@ export const api = {
 
       const query = searchParams.toString();
       return apiFetch(`/beads${query ? `?${query}` : ''}`);
+    },
+
+    /**
+     * Get a single bead by ID with full details.
+     * @param id Full bead ID (e.g., "hq-vts8", "adj-53tj")
+     */
+    async get(id: string): Promise<BeadDetail> {
+      return apiFetch(`/beads/${encodeURIComponent(id)}`);
     },
 
     /**

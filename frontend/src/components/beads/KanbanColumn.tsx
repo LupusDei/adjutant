@@ -19,6 +19,7 @@ export interface KanbanColumnProps {
   onDragOver: (e: DragEvent<HTMLDivElement>, columnId: KanbanColumnId) => void;
   onDragLeave: (e: DragEvent<HTMLDivElement>) => void;
   onDrop: (e: DragEvent<HTMLDivElement>, columnId: KanbanColumnId) => void;
+  onBeadClick?: (bead: BeadInfo) => void;
 }
 
 export function KanbanColumn({
@@ -33,6 +34,7 @@ export function KanbanColumn({
   onDragOver,
   onDragLeave,
   onDrop,
+  onBeadClick,
 }: KanbanColumnProps) {
   const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -87,6 +89,7 @@ export function KanbanColumn({
               bead={bead}
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
+              onClick={onBeadClick}
               isDragging={draggingBeadId === bead.id}
             />
           ))

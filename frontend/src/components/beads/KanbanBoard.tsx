@@ -11,9 +11,10 @@ import type { BeadInfo } from '../../types';
 export interface KanbanBoardProps {
   beads: BeadInfo[];
   onBeadsChange: (updater: (prev: BeadInfo[]) => BeadInfo[]) => void;
+  onBeadClick?: (bead: BeadInfo) => void;
 }
 
-export function KanbanBoard({ beads, onBeadsChange }: KanbanBoardProps) {
+export function KanbanBoard({ beads, onBeadsChange, onBeadClick }: KanbanBoardProps) {
   const [error, setError] = useState<string | null>(null);
 
   const handleError = useCallback((err: Error, beadId: string) => {
@@ -66,6 +67,7 @@ export function KanbanBoard({ beads, onBeadsChange }: KanbanBoardProps) {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
+            onBeadClick={onBeadClick}
           />
         ))}
       </div>

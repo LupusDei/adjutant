@@ -10,6 +10,7 @@ export interface KanbanCardProps {
   bead: BeadInfo;
   onDragStart: (e: DragEvent<HTMLDivElement>, bead: BeadInfo) => void;
   onDragEnd: (e: DragEvent<HTMLDivElement>) => void;
+  onClick?: (bead: BeadInfo) => void;
   isDragging?: boolean;
 }
 
@@ -42,7 +43,7 @@ function formatAssignee(assignee: string | null): string | null {
   return parts[parts.length - 1] ?? assignee;
 }
 
-export function KanbanCard({ bead, onDragStart, onDragEnd, isDragging = false }: KanbanCardProps) {
+export function KanbanCard({ bead, onDragStart, onDragEnd, onClick, isDragging = false }: KanbanCardProps) {
   const priorityInfo = getPriorityInfo(bead.priority);
   const assignee = formatAssignee(bead.assignee);
 
@@ -51,6 +52,10 @@ export function KanbanCard({ bead, onDragStart, onDragEnd, isDragging = false }:
     e.dataTransfer.setData('text/plain', bead.id);
     onDragStart(e, bead);
   }, [bead, onDragStart]);
+
+  const handleClick = useCallback(() => {
+    onClick?.(bead);
+  }, [bead, onClick]);
 
   const cardStyle: CSSProperties = {
     ...styles.card,
@@ -63,6 +68,7 @@ export function KanbanCard({ bead, onDragStart, onDragEnd, isDragging = false }:
       draggable
       onDragStart={handleDragStart}
       onDragEnd={onDragEnd}
+      onClick={handleClick}
       style={cardStyle}
     >
       {/* Header: ID + Priority */}

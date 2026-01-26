@@ -6,9 +6,9 @@
  */
 
 import { Router } from "express";
-import { listBeads, listAllBeads, updateBeadStatus, type BeadStatus } from "../services/beads-service.js";
+import { listBeads, listAllBeads, updateBeadStatus, getBead, type BeadStatus } from "../services/beads-service.js";
 import { resolveTownRoot, resolveRigPath } from "../services/gastown-workspace.js";
-import { success, internalError, badRequest } from "../utils/responses.js";
+import { success, internalError, badRequest, notFound } from "../utils/responses.js";
 
 export const beadsRouter = Router();
 
@@ -44,7 +44,8 @@ beadsRouter.get("/", async (req, res) => {
   const status = statusParam ?? "default";
 
   // Normalize rig parameter: undefined/empty defaults to "town"
-  const rig = rigParam?.trim() || "town";
+  const trimmed = rigParam?.trim();
+  const rig = trimmed && trimmed.length > 0 ? trimmed : "town";
 
   // rig=all: Query ALL beads databases (town + all rigs)
   if (rig === "all") {
@@ -90,6 +91,37 @@ beadsRouter.get("/", async (req, res) => {
 });
 
 /**
+ * GET /api/beads/:id
+ * Gets a single bead by ID with full details.
+ *
+ * Path params:
+ * - id: Full bead ID (e.g., "hq-vts8", "adj-53tj")
+ *
+ * Response:
+ * - { success: true, data: BeadDetail }
+ */
+beadsRouter.get("/:id", async (req, res) => {
+  const beadId = req.params.id;
+
+  if (!beadId) {
+    return res.status(400).json(badRequest("Bead ID is required"));
+  }
+
+  const result = await getBead(beadId);
+
+  if (!result.success) {
+    const statusCode = result.error?.code === "NOT_FOUND" ? 404 : 500;
+    return res.status(statusCode).json(
+      statusCode === 404
+        ? notFound("Bead", beadId)
+        : internalError(result.error?.message ?? "Failed to get bead")
+    );
+  }
+
+  return res.json(success(result.data));
+});
+
+/**
  * PATCH /api/beads/:id
  * Updates a bead's status.
  *
@@ -103,7 +135,7 @@ beadsRouter.get("/", async (req, res) => {
  * - { success: true, data: { id: string, status: string } }
  */
 beadsRouter.patch("/:id", async (req, res) => {
-  const beadId = req.params["id"];
+  const beadId = req.params.id;
   const { status } = req.body as { status?: string };
 
   if (!beadId) {

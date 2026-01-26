@@ -32,6 +32,25 @@ export interface BeadInfo {
   updatedAt: string | null;
 }
 
+/**
+ * Extended bead info with full details for the detail view.
+ */
+export interface BeadDetail extends BeadInfo {
+  description: string;
+  closedAt: string | null;
+  hookBead: string | null;
+  roleBead: string | null;
+  agentState: string | null;
+  pinned: boolean;
+  dependencies: BeadDependency[];
+}
+
+export interface BeadDependency {
+  issueId: string;
+  dependsOnId: string;
+  type: string;
+}
+
 export interface ListBeadsOptions {
   rig?: string;
   /** Path to rig's directory containing .beads/ - if provided, queries that rig's beads database */
@@ -188,6 +207,26 @@ function transformBead(issue: BeadsIssue, _dbSource: string): BeadInfo {
     labels: issue.labels ?? [],
     createdAt: issue.created_at,
     updatedAt: issue.updated_at ?? null,
+  };
+}
+
+/**
+ * Transform raw BeadsIssue to BeadDetail for the detail view.
+ */
+function transformBeadDetail(issue: BeadsIssue, _dbSource: string): BeadDetail {
+  return {
+    ...transformBead(issue, _dbSource),
+    description: issue.description ?? "",
+    closedAt: issue.closed_at ?? null,
+    hookBead: issue.hook_bead ?? null,
+    roleBead: issue.role_bead ?? null,
+    agentState: issue.agent_state ?? null,
+    pinned: issue.pinned ?? false,
+    dependencies: (issue.dependencies ?? []).map((d) => ({
+      issueId: d.issue_id,
+      dependsOnId: d.depends_on_id,
+      type: d.type,
+    })),
   };
 }
 
@@ -498,6 +537,91 @@ export async function updateBeadStatus(
       error: {
         code: "UPDATE_ERROR",
         message: err instanceof Error ? err.message : "Failed to update bead status",
+      },
+    };
+  }
+}
+
+/**
+ * Gets a single bead by ID with full details.
+ * @param beadId Full bead ID (e.g., "hq-vts8" or "adj-53tj")
+ * @returns Result with BeadDetail or error
+ */
+export async function getBead(
+  beadId: string
+): Promise<BeadsServiceResult<BeadDetail>> {
+  try {
+    // Build prefix map for source resolution
+    await ensurePrefixMap();
+
+    // Get the prefix from the bead ID
+    const prefix = beadId.split("-")[0];
+    if (!prefix) {
+      return {
+        success: false,
+        error: {
+          code: "INVALID_BEAD_ID",
+          message: `Invalid bead ID format: ${beadId}`,
+        },
+      };
+    }
+
+    // Determine which database this bead belongs to
+    const map = loadPrefixMap();
+    const source = map.get(prefix);
+
+    let workDir: string;
+    let beadsDir: string;
+
+    if (!source || source === "town") {
+      // Town-level bead (hq-*)
+      const townRoot = resolveTownRoot();
+      workDir = townRoot;
+      beadsDir = resolveBeadsDir(townRoot);
+    } else {
+      // Rig-specific bead - need to find the rig path
+      const beadsDirs = await listAllBeadsDirs();
+      const rigDir = beadsDirs.find((d) => d.rig === source);
+      if (!rigDir) {
+        return {
+          success: false,
+          error: {
+            code: "RIG_NOT_FOUND",
+            message: `Cannot find rig database for prefix: ${prefix}`,
+          },
+        };
+      }
+      workDir = rigDir.workDir;
+      beadsDir = rigDir.path;
+    }
+
+    // Execute bd show command with --json flag
+    // bd show expects the short ID (without prefix)
+    const shortId = beadId.includes("-") ? beadId.split("-").slice(1).join("-") : beadId;
+    const args = ["show", shortId, "--json"];
+
+    const result = await execBd<BeadsIssue>(args, { cwd: workDir, beadsDir });
+
+    if (!result.success || !result.data) {
+      return {
+        success: false,
+        error: {
+          code: result.error?.code ?? "NOT_FOUND",
+          message: result.error?.message ?? `Bead not found: ${beadId}`,
+        },
+      };
+    }
+
+    return {
+      success: true,
+      data: transformBeadDetail(result.data, source ?? "unknown"),
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: {
+        code: "GET_ERROR",
+        message: err instanceof Error ? err.message : "Failed to get bead",
       },
     };
   }

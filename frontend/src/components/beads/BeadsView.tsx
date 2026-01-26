@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, type CSSProperties } from 'react';
 import { KanbanBoard } from './KanbanBoard';
+import { BeadDetailView } from './BeadDetailView';
 import { OverseerToggle } from '../shared/OverseerToggle';
 import { usePolling } from '../../hooks/usePolling';
 import { fuzzyMatch } from '../../hooks/useFuzzySearch';
@@ -48,6 +49,7 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
   });
   const [overseerView, setOverseerView] = useState(false);
   const [beads, setBeads] = useState<BeadInfo[]>([]);
+  const [selectedBeadId, setSelectedBeadId] = useState<string | null>(null);
 
   // Fetch rig options on mount from status endpoint
   useEffect(() => {
@@ -195,6 +197,14 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
     setBeads(updater);
   }, []);
 
+  const handleBeadClick = useCallback((bead: BeadInfo) => {
+    setSelectedBeadId(bead.id);
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    setSelectedBeadId(null);
+  }, []);
+
   if (loading && beads.length === 0) {
     return (
       <div style={styles.container}>
@@ -286,7 +296,16 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
         </div>
       </header>
 
-      <KanbanBoard beads={filteredBeads} onBeadsChange={handleBeadsChange} />
+      <KanbanBoard
+        beads={filteredBeads}
+        onBeadsChange={handleBeadsChange}
+        onBeadClick={handleBeadClick}
+      />
+
+      <BeadDetailView
+        beadId={selectedBeadId}
+        onClose={handleCloseDetail}
+      />
     </div>
   );
 }
