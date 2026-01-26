@@ -1,0 +1,17 @@
+# Fastlane App Configuration
+# See: https://docs.fastlane.tools/advanced/Appfile/
+
+# The bundle identifier of the app
+app_identifier ENV["APP_IDENTIFIER"] || "com.jmm.Adjutant"
+
+# Your Apple Developer Portal username
+apple_id ENV["APPLE_ID"]
+
+# The ID of your App Store Connect team (if applicable)
+itc_team_id ENV["ITC_TEAM_ID"]
+
+# The ID of your Developer Portal team (if applicable)
+team_id ENV["TEAM_ID"] || "2BRYAM5Q52"
+
+# For more information about the Appfile, see:
+# https://docs.fastlane.tools/advanced/Appfile/

@@ -15,3 +15,22 @@ DerivedData/
 
 # macOS
 .DS_Store
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+fastlane/.env
+fastlane/.env.*
+!fastlane/.env.default
+fastlane/AuthKey*.p8
+fastlane/README.md
+
+# Build output
+build/
+
+# Ruby (bundler)
+.bundle/
+vendor/bundle
+Gemfile.lock

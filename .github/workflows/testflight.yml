@@ -1,0 +1,83 @@
+name: Deploy to TestFlight
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+  workflow_dispatch:
+    inputs:
+      changelog:
+        description: 'Changelog for TestFlight'
+        required: false
+        default: 'New build from CI'
+
+jobs:
+  deploy:
+    name: Build and Deploy to TestFlight
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: ios
+
+    env:
+      # App configuration
+      APP_IDENTIFIER: com.jmm.Adjutant
+      TEAM_ID: 2BRYAM5Q52
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.2.app
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+          working-directory: ios
+
+      - name: Install Fastlane
+        run: |
+          gem install bundler
+          bundle install
+
+      - name: Setup App Store Connect API Key
+        env:
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+        run: |
+          mkdir -p fastlane
+          echo "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > fastlane/AuthKey.p8
+
+      - name: Configure Fastlane Environment
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+        run: |
+          cat > fastlane/.env << EOF
+          APP_STORE_CONNECT_API_KEY_ID=$APP_STORE_CONNECT_API_KEY_ID
+          APP_STORE_CONNECT_API_ISSUER_ID=$APP_STORE_CONNECT_API_ISSUER_ID
+          APP_STORE_CONNECT_API_KEY_PATH=./AuthKey.p8
+          APP_IDENTIFIER=$APP_IDENTIFIER
+          TEAM_ID=$TEAM_ID
+          MATCH_GIT_URL=$MATCH_GIT_URL
+          MATCH_PASSWORD=$MATCH_PASSWORD
+          CHANGELOG=${{ github.event.inputs.changelog || 'CI build from commit' }} ${{ github.sha }}
+          EOF
+
+      - name: Setup SSH for Match
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.MATCH_DEPLOY_KEY }}
+
+      - name: Build and Upload to TestFlight
+        run: bundle exec fastlane beta
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f fastlane/AuthKey.p8
+          rm -f fastlane/.env

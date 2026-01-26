@@ -1,0 +1,6 @@
+source "https://rubygems.org"
+
+gem "fastlane"
+
+# Optional plugins (uncomment if needed)
+# gem "fastlane-plugin-firebase_app_distribution"

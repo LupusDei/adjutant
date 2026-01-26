@@ -1,0 +1,30 @@
+# Matchfile for certificate and provisioning profile management
+# See: https://docs.fastlane.tools/actions/match/
+
+# Git repo URL for storing certificates
+# IMPORTANT: Create a private repo for this (e.g., github.com/your-org/certificates)
+git_url(ENV["MATCH_GIT_URL"])
+
+# Storage mode: "git" for git repo, "google_cloud" or "s3" for cloud storage
+storage_mode("git")
+
+# The type of profile to create/fetch
+type("appstore")
+
+# The bundle identifier(s) of your app
+app_identifier(ENV["APP_IDENTIFIER"] || "com.jmm.Adjutant")
+
+# Your Apple Developer Portal username
+username(ENV["APPLE_ID"])
+
+# Team ID
+team_id(ENV["TEAM_ID"] || "2BRYAM5Q52")
+
+# Readonly mode for CI (won't create new certs if they don't exist)
+readonly(is_ci)
+
+# Clone using shallow clone for faster CI
+shallow_clone(true)
+
+# Force match to regenerate certificates if they're expired
+force_for_new_devices(false)

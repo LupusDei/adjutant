@@ -1,0 +1,84 @@
+# Fastfile for Adjutant iOS app
+# See: https://docs.fastlane.tools
+
+default_platform(:ios)
+
+platform :ios do
+  before_all do
+    setup_ci if ENV['CI']
+  end
+
+  desc "Sync certificates and provisioning profiles"
+  lane :sync_certs do
+    match(type: "appstore", readonly: is_ci)
+  end
+
+  desc "Increment build number"
+  lane :bump_build do
+    # Use the latest TestFlight build number + 1
+    latest_build = latest_testflight_build_number(
+      app_identifier: ENV["APP_IDENTIFIER"] || "com.jmm.Adjutant"
+    )
+    increment_build_number(
+      build_number: latest_build + 1,
+      xcodeproj: "Adjutant.xcodeproj"
+    )
+  end
+
+  desc "Build the app for TestFlight"
+  lane :build_beta do
+    sync_certs
+    bump_build
+
+    build_app(
+      scheme: "Adjutant",
+      configuration: "Release",
+      export_method: "app-store",
+      export_options: {
+        provisioningProfiles: {
+          ENV["APP_IDENTIFIER"] || "com.jmm.Adjutant" => ENV["PROVISIONING_PROFILE_NAME"] || "match AppStore com.jmm.Adjutant"
+        }
+      },
+      output_directory: "./build",
+      output_name: "Adjutant.ipa"
+    )
+  end
+
+  desc "Upload to TestFlight for internal testing"
+  lane :beta do
+    build_beta
+
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      distribute_external: false,
+      changelog: ENV["CHANGELOG"] || "New build from CI"
+    )
+  end
+
+  desc "Submit to App Store for review"
+  lane :release do
+    build_beta
+
+    upload_to_app_store(
+      skip_screenshots: true,
+      skip_metadata: false,
+      submit_for_review: false,  # Set to true for auto-submit
+      automatic_release: false,
+      force: true  # Skip verification prompt
+    )
+  end
+
+  desc "Run tests"
+  lane :test do
+    run_tests(
+      scheme: "Adjutant",
+      device: "iPhone 15",
+      clean: true
+    )
+  end
+
+  error do |lane, exception|
+    # Error handling - could add Slack notification here
+    UI.error("Error in lane #{lane}: #{exception.message}")
+  end
+end
