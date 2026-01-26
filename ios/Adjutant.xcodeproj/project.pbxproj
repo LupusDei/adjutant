@@ -17,6 +17,10 @@
 		A01234560000000000000020 /* AdjutantUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000020 /* AdjutantUITests.swift */; };
 		A01234560000000000000021 /* AdjutantUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000021 /* AdjutantUITestsLaunchTests.swift */; };
 		A01234560000000000000052 /* AdjutantUI in Frameworks */ = {isa = PBXBuildFile; productRef = A01234710000000000000003 /* AdjutantUI */; };
+		A012345600000000000000W1 /* AdjutantWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A012345700000000000000W1 /* AdjutantWidgets.swift */; };
+		A012345600000000000000W2 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A012345700000000000000W2 /* WidgetKit.framework */; };
+		A012345600000000000000W3 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A012345700000000000000W3 /* SwiftUI.framework */; };
+		A012345600000000000000W4 /* AdjutantWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A012345B00000000000000W1 /* AdjutantWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -34,6 +38,13 @@
 			remoteGlobalIDString = A012345A0000000000000001;
 			remoteInfo = Adjutant;
 		};
+		A0123458000000000000W001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A01234590000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A012345A00000000000000W1;
+			remoteInfo = AdjutantWidgets;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
@@ -47,9 +58,14 @@
 		A01234570000000000000020 /* AdjutantUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjutantUITests.swift; sourceTree = "<group>"; };
 		A01234570000000000000021 /* AdjutantUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjutantUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		A01234570000000000000030 /* TTSPlaybackService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSPlaybackService.swift; sourceTree = "<group>"; };
+		A012345700000000000000W1 /* AdjutantWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjutantWidgets.swift; sourceTree = "<group>"; };
+		A012345700000000000000W2 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		A012345700000000000000W3 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		A012345700000000000000W4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A012345B0000000000000001 /* Adjutant.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Adjutant.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A012345B0000000000000010 /* AdjutantTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AdjutantTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A012345B0000000000000020 /* AdjutantUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AdjutantUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A012345B00000000000000W1 /* AdjutantWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AdjutantWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -76,6 +92,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A012345C00000000000000W1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A012345600000000000000W2 /* WidgetKit.framework in Frameworks */,
+				A012345600000000000000W3 /* SwiftUI.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -83,10 +108,30 @@
 			isa = PBXGroup;
 			children = (
 				A012345D0000000000000002 /* Adjutant */,
+				A012345D00000000000000W1 /* AdjutantWidgets */,
 				A012345D0000000000000010 /* AdjutantTests */,
 				A012345D0000000000000020 /* AdjutantUITests */,
+				A012345D00000000000000W9 /* Frameworks */,
 				A012345D0000000000000099 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		A012345D00000000000000W1 /* AdjutantWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				A012345700000000000000W1 /* AdjutantWidgets.swift */,
+				A012345700000000000000W4 /* Info.plist */,
+			);
+			path = AdjutantWidgets;
+			sourceTree = "<group>";
+		};
+		A012345D00000000000000W9 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A012345700000000000000W2 /* WidgetKit.framework */,
+				A012345700000000000000W3 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		A012345D0000000000000002 /* Adjutant */ = {
@@ -182,6 +227,7 @@
 				A012345B0000000000000001 /* Adjutant.app */,
 				A012345B0000000000000010 /* AdjutantTests.xctest */,
 				A012345B0000000000000020 /* AdjutantUITests.xctest */,
+				A012345B00000000000000W1 /* AdjutantWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -197,10 +243,12 @@
 				A01234600000000000000001 /* Sources */,
 				A012345C0000000000000001 /* Frameworks */,
 				A01234610000000000000001 /* Resources */,
+				A0123461000000000000W001 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A0123462000000000000W001 /* PBXTargetDependency */,
 			);
 			name = Adjutant;
 			packageProductDependencies = (
@@ -247,6 +295,23 @@
 			productReference = A012345B0000000000000020 /* AdjutantUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		A012345A00000000000000W1 /* AdjutantWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A012345E00000000000000W1 /* Build configuration list for PBXNativeTarget "AdjutantWidgets" */;
+			buildPhases = (
+				A0123460000000000000W001 /* Sources */,
+				A012345C00000000000000W1 /* Frameworks */,
+				A0123461000000000000W002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AdjutantWidgets;
+			productName = AdjutantWidgets;
+			productReference = A012345B00000000000000W1 /* AdjutantWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -267,6 +332,9 @@
 					A012345A0000000000000020 = {
 						CreatedOnToolsVersion = 15.2;
 						TestTargetID = A012345A0000000000000001;
+					};
+					A012345A00000000000000W1 = {
+						CreatedOnToolsVersion = 15.2;
 					};
 				};
 			};
@@ -290,6 +358,7 @@
 				A012345A0000000000000001 /* Adjutant */,
 				A012345A0000000000000010 /* AdjutantTests */,
 				A012345A0000000000000020 /* AdjutantUITests */,
+				A012345A00000000000000W1 /* AdjutantWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -318,7 +387,28 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A0123461000000000000W002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A0123461000000000000W001 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A012345600000000000000W4 /* AdjutantWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
 		A012345F0000000000000001 /* SwiftLint */ = {
@@ -370,6 +460,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A0123460000000000000W001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A012345600000000000000W1 /* AdjutantWidgets.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -382,6 +480,11 @@
 			isa = PBXTargetDependency;
 			target = A012345A0000000000000001 /* Adjutant */;
 			targetProxy = A01234580000000000000020 /* PBXContainerItemProxy */;
+		};
+		A0123462000000000000W001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A012345A00000000000000W1 /* AdjutantWidgets */;
+			targetProxy = A0123458000000000000W001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -631,6 +734,60 @@
 			};
 			name = Release;
 		};
+		A0123467000000000000W001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2BRYAM5Q52;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AdjutantWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Adjutant Widgets";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jmm.Adjutant.AdjutantWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A0123467000000000000W002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2BRYAM5Q52;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AdjutantWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Adjutant Widgets";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jmm.Adjutant.AdjutantWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -666,6 +823,15 @@
 			buildConfigurations = (
 				A01234630000000000000001 /* Debug */,
 				A01234630000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A012345E00000000000000W1 /* Build configuration list for PBXNativeTarget "AdjutantWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A0123467000000000000W001 /* Debug */,
+				A0123467000000000000W002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
