@@ -100,7 +100,7 @@ private struct TabContent: View {
         case .agentDetail(let member):
             CrewDetailView(member: member)
         case .beadDetail(let id):
-            BeadDetailPlaceholder(id: id)
+            BeadDetailView(beadId: id)
         case .themeSettings, .voiceSettings, .tunnelSettings:
             SettingsView()
         default:
@@ -223,19 +223,6 @@ private struct ConvoyDetailPlaceholder: View {
     }
 }
 
-private struct BeadDetailPlaceholder: View {
-    let id: String
-    @Environment(\.crtTheme) private var theme
-
-    var body: some View {
-        VStack {
-            CRTText("BEAD DETAIL", style: .header)
-            CRTText("ID: \(id)", style: .mono, color: theme.dim)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(CRTTheme.Background.screen)
-    }
-}
 
 // MARK: - Preview
 
