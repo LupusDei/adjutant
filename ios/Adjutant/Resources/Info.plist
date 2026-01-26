@@ -4,8 +4,8 @@
 <dict>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.jmm.Adjutant.refresh</string>
-		<string>com.jmm.Adjutant.processing</string>
+		<string>com.jmm.adjutant.refresh</string>
+		<string>com.jmm.adjutant.processing</string>
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Adjutant needs microphone access to enable voice input for sending messages to the Mayor.</string>
