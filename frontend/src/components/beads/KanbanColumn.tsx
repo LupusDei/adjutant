@@ -100,7 +100,6 @@ const styles = {
   column: {
     flex: '1 1 0',
     minWidth: '140px',
-    maxWidth: '200px',
     backgroundColor: '#0A0A0A',
     border: '1px solid var(--crt-phosphor-dim)',
     borderRadius: '2px',
