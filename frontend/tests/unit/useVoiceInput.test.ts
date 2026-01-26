@@ -6,6 +6,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 
+// Polyfill Blob.prototype.arrayBuffer for jsdom
+if (!Blob.prototype.arrayBuffer) {
+  Blob.prototype.arrayBuffer = function () {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.readAsArrayBuffer(this);
+    });
+  };
+}
+
 // Mock the API
 vi.mock("../../src/services/api", () => ({
   api: {
@@ -25,7 +36,8 @@ const mockMediaRecorder = {
   state: "inactive" as "inactive" | "recording" | "paused",
 };
 
-const MockMediaRecorder = vi.fn(() => mockMediaRecorder);
+const MockMediaRecorder = vi.fn(() => mockMediaRecorder) as unknown as typeof MediaRecorder & { isTypeSupported: ReturnType<typeof vi.fn> };
+MockMediaRecorder.isTypeSupported = vi.fn(() => true);
 vi.stubGlobal("MediaRecorder", MockMediaRecorder);
 
 // Mock navigator.mediaDevices
@@ -206,6 +218,8 @@ describe("useVoiceInput", () => {
       await act(async () => {
         mockMediaRecorder.ondataavailable?.({ data: audioBlob });
         mockMediaRecorder.onstop?.();
+        // Wait for async chain: arrayBuffer() + transcribe()
+        await new Promise((r) => setTimeout(r, 0));
         await Promise.resolve();
       });
 
@@ -224,8 +238,11 @@ describe("useVoiceInput", () => {
 
       mockMediaRecorder.state = "recording";
 
-      act(() => {
+      await act(async () => {
         result.current.cancelRecording();
+        // Trigger onstop manually (mock stop() doesn't auto-trigger it)
+        mockMediaRecorder.onstop?.();
+        await Promise.resolve();
       });
 
       expect(mockMediaRecorder.stop).toHaveBeenCalled();
@@ -255,6 +272,8 @@ describe("useVoiceInput", () => {
           data: new Blob(["data"], { type: "audio/webm" }),
         });
         mockMediaRecorder.onstop?.();
+        // Wait for async chain: arrayBuffer() + transcribe()
+        await new Promise((r) => setTimeout(r, 0));
         await Promise.resolve();
       });
 
