@@ -1,318 +1,441 @@
 #!/usr/bin/env python3
 """
-Generate SC2 Adjutant-inspired iOS app icon.
+Generate SC2 Adjutant-inspired iOS app icon v3.
 
-Design: Stylized humanoid android face with:
-- Dark background (#0A0A0A, #1A1A1A)
-- Glowing green eyes (CRT phosphor green #00FF00, #00FF88)
-- Purple accent highlights (#8B5CF6, #A855F7)
-- Geometric, angular features
-- Subtle circuit board pattern
+Professional quality design with:
+- Sleek chrome/metallic face with realistic sheen
+- Luminous glowing cyan/green eyes with bloom effect
+- Circuit-trace patterns
+- Clean, geometric cybernetic aesthetic
 """
 
 import os
-import sys
 import math
 import json
 
 from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
 
-# Color palette
-BLACK_PRIMARY = (10, 10, 10)        # #0A0A0A
-BLACK_SECONDARY = (26, 26, 26)      # #1A1A1A
-DARK_GRAY = (40, 40, 45)            # Face plates
-MID_GRAY = (60, 60, 70)             # Face highlights
-GREEN_PRIMARY = (0, 255, 0)         # #00FF00 - CRT phosphor
-GREEN_SECONDARY = (0, 255, 136)     # #00FF88 - Softer green
-GREEN_GLOW = (0, 200, 50)           # Glow effect
-GREEN_DIM = (0, 80, 30)             # Dim green for circuits
-PURPLE_PRIMARY = (139, 92, 246)     # #8B5CF6
-PURPLE_SECONDARY = (168, 85, 247)   # #A855F7
+# Color palette (from requirements)
+BLACK_PRIMARY = (10, 10, 10)           # #0A0A0A
+BLACK_SECONDARY = (26, 26, 26)         # #1A1A1A
+DARK_GRAY = (35, 38, 45)               # Face base
+MID_GRAY = (55, 60, 70)                # Face mid-tone
+LIGHT_GRAY = (85, 90, 100)             # Highlights
+CHROME_HIGHLIGHT = (140, 150, 170)     # Chrome specular
+
+# CRT phosphor greens
+GREEN_BRIGHT = (0, 255, 65)            # #00FF41
+GREEN_NEON = (57, 255, 20)             # #39FF14
+GREEN_GLOW = (0, 220, 60)              # Glow color
+GREEN_DIM = (0, 60, 25)                # Circuit traces
+
+# Electric purple
+PURPLE_PRIMARY = (139, 92, 246)        # #8B5CF6
+PURPLE_SECONDARY = (168, 85, 247)      # #A855F7
+PURPLE_GLOW = (120, 70, 220)
 
 
-def draw_circuit_pattern(draw, size, density=0.015):
-    """Draw subtle circuit board pattern on background."""
-    import random
-    random.seed(42)  # Consistent pattern
+def create_radial_gradient(size, center, inner_color, outer_color, radius):
+    """Create a radial gradient image."""
+    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    cx, cy = center
 
-    # Horizontal and vertical traces
-    for _ in range(int(size * density)):
-        x = random.randint(0, size)
-        y = random.randint(0, size)
-
-        # Draw trace
-        length = random.randint(size // 20, size // 5)
-        direction = random.choice(['h', 'v'])
-
-        if direction == 'h':
-            draw.line([(x, y), (x + length, y)], fill=GREEN_DIM, width=1)
-        else:
-            draw.line([(x, y), (x, y + length)], fill=GREEN_DIM, width=1)
-
-        # Small node at start
-        if random.random() > 0.5:
-            node_size = 2
-            draw.ellipse([x - node_size, y - node_size, x + node_size, y + node_size],
-                        fill=GREEN_DIM)
-
-
-def draw_android_face(img, size):
-    """Draw stylized android face."""
-    draw = ImageDraw.Draw(img)
-    center_x = size // 2
-    center_y = size // 2
-
-    # Face dimensions (relative to size)
-    face_width = int(size * 0.65)
-    face_height = int(size * 0.75)
-
-    # Draw angular face shape - hexagonal/diamond inspired
-    face_top = center_y - face_height // 2 + int(size * 0.05)
-    face_bottom = center_y + face_height // 2
-    face_left = center_x - face_width // 2
-    face_right = center_x + face_width // 2
-
-    # Angular face polygon (stylized helmet/face plate)
-    chin_y = face_bottom - int(size * 0.05)
-    chin_width = int(face_width * 0.25)
-    forehead_y = face_top + int(size * 0.12)
-
-    face_points = [
-        (center_x, face_top),  # Top center
-        (face_right - int(size * 0.05), forehead_y),  # Top right
-        (face_right, center_y - int(size * 0.05)),  # Right upper
-        (face_right - int(size * 0.03), center_y + int(size * 0.15)),  # Right lower
-        (center_x + chin_width, chin_y),  # Chin right
-        (center_x, face_bottom),  # Chin bottom
-        (center_x - chin_width, chin_y),  # Chin left
-        (face_left + int(size * 0.03), center_y + int(size * 0.15)),  # Left lower
-        (face_left, center_y - int(size * 0.05)),  # Left upper
-        (face_left + int(size * 0.05), forehead_y),  # Top left
-    ]
-
-    # Draw face with gradient effect (darker edges, lighter center)
-    draw.polygon(face_points, fill=DARK_GRAY)
-
-    # Inner face plate (lighter)
-    inner_scale = 0.85
-    inner_points = []
-    for px, py in face_points:
-        dx = px - center_x
-        dy = py - center_y
-        inner_points.append((center_x + dx * inner_scale, center_y + dy * inner_scale))
-    draw.polygon(inner_points, fill=MID_GRAY)
-
-    # Central face line (vertical divider)
-    line_y_start = face_top + int(size * 0.15)
-    line_y_end = chin_y - int(size * 0.05)
-    draw.line([(center_x, line_y_start), (center_x, line_y_end)],
-              fill=(80, 80, 90), width=max(2, size // 200))
-
-    # Forehead accent (purple gem/indicator)
-    gem_y = face_top + int(size * 0.18)
-    gem_size = int(size * 0.045)
-    gem_points = [
-        (center_x, gem_y - gem_size),  # Top
-        (center_x + gem_size, gem_y),  # Right
-        (center_x, gem_y + gem_size),  # Bottom
-        (center_x - gem_size, gem_y),  # Left
-    ]
-    draw.polygon(gem_points, fill=PURPLE_PRIMARY)
-
-    # Gem highlight
-    gem_highlight_size = gem_size * 0.6
-    gem_highlight = [
-        (center_x, gem_y - gem_highlight_size),
-        (center_x + gem_highlight_size * 0.6, gem_y - gem_highlight_size * 0.3),
-        (center_x, gem_y),
-        (center_x - gem_highlight_size * 0.6, gem_y - gem_highlight_size * 0.3),
-    ]
-    draw.polygon(gem_highlight, fill=PURPLE_SECONDARY)
-
-    return draw
-
-
-def draw_glowing_eyes(img, size):
-    """Draw the signature glowing green eyes."""
-    draw = ImageDraw.Draw(img)
-    center_x = size // 2
-    center_y = size // 2
-
-    # Eye positions
-    eye_y = center_y - int(size * 0.02)
-    eye_spacing = int(size * 0.16)
-    eye_width = int(size * 0.12)
-    eye_height = int(size * 0.035)
-
-    for eye_x in [center_x - eye_spacing, center_x + eye_spacing]:
-        # Eye socket (dark recess)
-        socket_margin = int(size * 0.015)
-        draw.ellipse([
-            eye_x - eye_width - socket_margin,
-            eye_y - eye_height - socket_margin,
-            eye_x + eye_width + socket_margin,
-            eye_y + eye_height + socket_margin
-        ], fill=(15, 15, 15))
-
-        # Main eye shape (angular/almond)
-        eye_points = [
-            (eye_x - eye_width, eye_y),  # Left point
-            (eye_x - eye_width * 0.5, eye_y - eye_height),  # Top left
-            (eye_x + eye_width * 0.5, eye_y - eye_height),  # Top right
-            (eye_x + eye_width, eye_y),  # Right point
-            (eye_x + eye_width * 0.5, eye_y + eye_height),  # Bottom right
-            (eye_x - eye_width * 0.5, eye_y + eye_height),  # Bottom left
-        ]
-        draw.polygon(eye_points, fill=GREEN_PRIMARY)
-
-        # Bright center
-        inner_width = eye_width * 0.5
-        inner_height = eye_height * 0.6
-        draw.ellipse([
-            eye_x - inner_width,
-            eye_y - inner_height,
-            eye_x + inner_width,
-            eye_y + inner_height
-        ], fill=(200, 255, 200))
+    for y in range(size):
+        for x in range(size):
+            dist = math.sqrt((x - cx) ** 2 + (y - cy) ** 2)
+            if dist <= radius:
+                t = dist / radius
+                r = int(inner_color[0] * (1 - t) + outer_color[0] * t)
+                g = int(inner_color[1] * (1 - t) + outer_color[1] * t)
+                b = int(inner_color[2] * (1 - t) + outer_color[2] * t)
+                a = int(inner_color[3] * (1 - t) + outer_color[3] * t) if len(inner_color) > 3 else 255
+                img.putpixel((x, y), (r, g, b, a))
 
     return img
 
 
-def add_glow_effect(img, size):
-    """Add glow effect around the eyes."""
-    # Create a glow layer
+def draw_circuit_pattern(draw, size, density=0.012):
+    """Draw subtle circuit board pattern on background."""
+    import random
+    random.seed(42)
+
+    # Horizontal and vertical traces
+    num_traces = int(size * density)
+
+    for _ in range(num_traces):
+        x = random.randint(0, size)
+        y = random.randint(0, size)
+        length = random.randint(size // 25, size // 8)
+        direction = random.choice(['h', 'v'])
+
+        # Trace with slight glow effect
+        trace_color = (0, 50, 20, 80)
+        if direction == 'h':
+            draw.line([(x, y), (min(x + length, size), y)], fill=trace_color, width=1)
+        else:
+            draw.line([(x, y), (x, min(y + length, size))], fill=trace_color, width=1)
+
+        # Node at intersections
+        if random.random() > 0.6:
+            node_size = random.randint(2, 3)
+            draw.ellipse([x - node_size, y - node_size, x + node_size, y + node_size],
+                        fill=(0, 70, 30, 100))
+
+    # Add some brighter circuit nodes
+    for _ in range(int(size * 0.003)):
+        x = random.randint(int(size * 0.1), int(size * 0.9))
+        y = random.randint(int(size * 0.1), int(size * 0.9))
+        node_size = random.randint(1, 2)
+        draw.ellipse([x - node_size, y - node_size, x + node_size, y + node_size],
+                    fill=(0, 100, 40, 150))
+
+
+def draw_metallic_face(img, size):
+    """Draw the stylized android face with metallic finish."""
+    draw = ImageDraw.Draw(img, 'RGBA')
+    cx = size // 2
+    cy = size // 2
+
+    # Face dimensions
+    face_width = int(size * 0.62)
+    face_height = int(size * 0.72)
+
+    # Key Y positions
+    face_top = cy - face_height // 2 + int(size * 0.06)
+    face_bottom = cy + face_height // 2 - int(size * 0.02)
+    forehead_y = face_top + int(size * 0.14)
+    chin_y = face_bottom - int(size * 0.06)
+    chin_width = int(face_width * 0.22)
+
+    # Face left/right
+    face_left = cx - face_width // 2
+    face_right = cx + face_width // 2
+
+    # Angular face polygon (more refined shape)
+    face_points = [
+        (cx, face_top),                                          # Crown
+        (face_right - int(size * 0.04), forehead_y),             # Top right temple
+        (face_right, cy - int(size * 0.06)),                     # Right upper cheek
+        (face_right - int(size * 0.02), cy + int(size * 0.12)),  # Right lower cheek
+        (cx + chin_width + int(size * 0.04), chin_y),            # Jaw right
+        (cx, face_bottom),                                        # Chin point
+        (cx - chin_width - int(size * 0.04), chin_y),            # Jaw left
+        (face_left + int(size * 0.02), cy + int(size * 0.12)),   # Left lower cheek
+        (face_left, cy - int(size * 0.06)),                      # Left upper cheek
+        (face_left + int(size * 0.04), forehead_y),              # Top left temple
+    ]
+
+    # Draw base face (dark)
+    draw.polygon(face_points, fill=DARK_GRAY)
+
+    # Inner face panel (slightly lighter) with offset for depth
+    inner_scale = 0.88
+    inner_offset_y = int(size * 0.008)
+    inner_points = []
+    for px, py in face_points:
+        dx = (px - cx) * inner_scale
+        dy = (py - cy) * inner_scale
+        inner_points.append((cx + dx, cy + dy + inner_offset_y))
+    draw.polygon(inner_points, fill=MID_GRAY)
+
+    # Add subtle metallic sheen (gradient on upper face)
+    highlight_y = cy - int(size * 0.10)
+    highlight_width = int(size * 0.28)
+    highlight_height = int(size * 0.025)
+    for i in range(highlight_height):
+        progress = i / highlight_height
+        # Fade from center outward
+        alpha = int(25 * (1 - progress * 0.8))
+        y = highlight_y - highlight_height // 2 + i
+        # Tapered width
+        w = highlight_width * (1 - progress * 0.5)
+        draw.line([
+            (cx - w, y),
+            (cx + w, y)
+        ], fill=(*LIGHT_GRAY[:3], alpha), width=1)
+
+    # Central vertical line (face divider)
+    line_y_start = face_top + int(size * 0.16)
+    line_y_end = chin_y - int(size * 0.03)
+    draw.line([(cx, line_y_start), (cx, line_y_end)],
+              fill=(70, 75, 85), width=max(2, size // 180))
+
+    # Add subtle edge highlights (left edge catch light)
+    for i, (px, py) in enumerate(face_points[7:10]):  # Left side
+        next_idx = (i + 1) % 3 + 7
+        if next_idx < len(face_points):
+            npx, npy = face_points[next_idx]
+            draw.line([(px + 2, py), (npx + 2, npy)],
+                     fill=(*LIGHT_GRAY[:3], 60), width=1)
+
+    return draw
+
+
+def draw_forehead_gem(img, size):
+    """Draw the purple accent gem on forehead."""
+    draw = ImageDraw.Draw(img, 'RGBA')
+    cx = size // 2
+    cy = size // 2
+
+    # Position gem higher on forehead, above the eye level
+    face_top = cy - int(size * 0.36) + int(size * 0.06)
+    gem_y = face_top + int(size * 0.16)
+    gem_size = int(size * 0.038)
+
+    # Subtle gem glow (small)
+    for i in range(5, 0, -1):
+        radius = gem_size * 1.2 * (i / 5)
+        alpha = int(20 * (i / 5))
+        draw.ellipse([
+            cx - radius, gem_y - radius,
+            cx + radius, gem_y + radius
+        ], fill=(*PURPLE_GLOW[:3], alpha))
+
+    # Main gem shape (diamond)
+    gem_points = [
+        (cx, gem_y - gem_size),       # Top
+        (cx + gem_size, gem_y),       # Right
+        (cx, gem_y + gem_size),       # Bottom
+        (cx - gem_size, gem_y),       # Left
+    ]
+    draw.polygon(gem_points, fill=PURPLE_PRIMARY)
+
+    # Gem inner highlight (upper portion)
+    highlight_size = gem_size * 0.55
+    highlight_points = [
+        (cx, gem_y - gem_size + 2),
+        (cx + highlight_size * 0.7, gem_y - highlight_size * 0.2),
+        (cx, gem_y + highlight_size * 0.3),
+        (cx - highlight_size * 0.7, gem_y - highlight_size * 0.2),
+    ]
+    draw.polygon(highlight_points, fill=PURPLE_SECONDARY)
+
+    # Bright specular dot
+    spec_size = int(gem_size * 0.18)
+    spec_y = gem_y - gem_size * 0.35
+    draw.ellipse([
+        cx - spec_size, spec_y - spec_size,
+        cx + spec_size, spec_y + spec_size
+    ], fill=(220, 200, 255, 180))
+
+
+def draw_luminous_eyes(img, size):
+    """Draw the signature glowing eyes with bloom effect."""
+    draw = ImageDraw.Draw(img, 'RGBA')
+    cx = size // 2
+    cy = size // 2
+
+    eye_y = cy - int(size * 0.015)
+    eye_spacing = int(size * 0.155)
+    eye_width = int(size * 0.115)
+    eye_height = int(size * 0.038)
+
+    for eye_x in [cx - eye_spacing, cx + eye_spacing]:
+        # Eye socket (dark recessed area)
+        socket_w = eye_width + int(size * 0.015)
+        socket_h = eye_height + int(size * 0.015)
+        draw.ellipse([
+            eye_x - socket_w, eye_y - socket_h,
+            eye_x + socket_w, eye_y + socket_h
+        ], fill=(8, 8, 10))
+
+        # Main eye shape (angular almond)
+        eye_points = [
+            (eye_x - eye_width, eye_y),                    # Left tip
+            (eye_x - eye_width * 0.55, eye_y - eye_height),  # Top left
+            (eye_x + eye_width * 0.55, eye_y - eye_height),  # Top right
+            (eye_x + eye_width, eye_y),                    # Right tip
+            (eye_x + eye_width * 0.55, eye_y + eye_height),  # Bottom right
+            (eye_x - eye_width * 0.55, eye_y + eye_height),  # Bottom left
+        ]
+        draw.polygon(eye_points, fill=GREEN_BRIGHT)
+
+        # Eye gradient layers (brighter toward center)
+        for layer in range(3):
+            scale = 0.85 - layer * 0.15
+            layer_points = []
+            for px, py in eye_points:
+                dx = (px - eye_x) * scale
+                dy = (py - eye_y) * scale
+                layer_points.append((eye_x + dx, eye_y + dy))
+
+            brightness = min(255, GREEN_NEON[1] + layer * 30)
+            layer_color = (min(255, 100 + layer * 50), brightness, min(255, 80 + layer * 40))
+            draw.polygon(layer_points, fill=layer_color)
+
+        # Bright center core
+        core_w = eye_width * 0.35
+        core_h = eye_height * 0.5
+        draw.ellipse([
+            eye_x - core_w, eye_y - core_h,
+            eye_x + core_w, eye_y + core_h
+        ], fill=(220, 255, 220))
+
+        # Hot spot (small bright specular)
+        hot_size = int(size * 0.008)
+        hot_x = eye_x - eye_width * 0.2
+        hot_y = eye_y - eye_height * 0.3
+        draw.ellipse([
+            hot_x - hot_size, hot_y - hot_size,
+            hot_x + hot_size, hot_y + hot_size
+        ], fill=(255, 255, 255, 200))
+
+
+def add_eye_glow(img, size):
+    """Add subtle glow effect around the eyes using screen blending."""
+    cx = size // 2
+    cy = size // 2
+    eye_y = cy - int(size * 0.015)
+    eye_spacing = int(size * 0.155)
+    eye_width = int(size * 0.115)
+
+    # Create glow layer
     glow = Image.new('RGBA', (size, size), (0, 0, 0, 0))
     glow_draw = ImageDraw.Draw(glow)
 
-    center_x = size // 2
-    center_y = size // 2
-    eye_y = center_y - int(size * 0.02)
-    eye_spacing = int(size * 0.16)
+    # Draw bright eye shapes on the glow layer
+    for eye_x in [cx - eye_spacing, cx + eye_spacing]:
+        # Draw solid bright ellipse
+        glow_w = eye_width * 1.2
+        glow_h = int(size * 0.038) * 1.2
+        glow_draw.ellipse([
+            eye_x - glow_w, eye_y - glow_h,
+            eye_x + glow_w, eye_y + glow_h
+        ], fill=(0, 255, 80, 180))
 
-    # Draw large soft circles for glow
-    glow_radius = int(size * 0.08)
-    for eye_x in [center_x - eye_spacing, center_x + eye_spacing]:
-        for i in range(10, 0, -1):
-            radius = glow_radius + i * (size // 100)
-            alpha = int(30 * (i / 10))
-            glow_draw.ellipse([
-                eye_x - radius, eye_y - radius,
-                eye_x + radius, eye_y + radius
-            ], fill=(0, 255, 50, alpha))
+    # Heavy blur to create glow
+    glow = glow.filter(ImageFilter.GaussianBlur(radius=size // 25))
 
-    # Blur the glow
-    glow = glow.filter(ImageFilter.GaussianBlur(radius=size // 30))
-
-    # Composite glow under the main image
-    result = Image.new('RGBA', (size, size), BLACK_PRIMARY)
-    result.paste(glow, (0, 0), glow)
-
-    # Convert main img to RGBA and composite
+    # Composite using screen-like blend (additive on dark areas)
     if img.mode != 'RGBA':
         img = img.convert('RGBA')
 
-    # Composite - we need to blend properly
-    result = Image.alpha_composite(result, img)
+    # Create result by blending
+    result = img.copy()
+    result = Image.alpha_composite(result, glow)
 
     return result
 
 
-def add_subtle_details(img, size):
-    """Add subtle details like panel lines and accents."""
-    draw = ImageDraw.Draw(img)
-    center_x = size // 2
-    center_y = size // 2
+def add_face_details(img, size):
+    """Add panel lines and status indicators."""
+    draw = ImageDraw.Draw(img, 'RGBA')
+    cx = size // 2
+    cy = size // 2
 
-    # Cheek panel lines
-    line_width = max(1, size // 400)
+    line_width = max(1, size // 350)
 
-    # Left cheek
-    cheek_x = center_x - int(size * 0.22)
-    cheek_y = center_y + int(size * 0.08)
+    # Cheek panel lines (subtle)
+    cheek_offset = int(size * 0.20)
+    cheek_y = cy + int(size * 0.06)
+
+    # Left cheek accent
     draw.line([
-        (cheek_x - int(size * 0.05), cheek_y),
-        (cheek_x + int(size * 0.02), cheek_y + int(size * 0.1))
-    ], fill=(50, 50, 55), width=line_width)
+        (cx - cheek_offset - int(size * 0.04), cheek_y - int(size * 0.02)),
+        (cx - cheek_offset + int(size * 0.01), cheek_y + int(size * 0.08))
+    ], fill=(45, 48, 55, 180), width=line_width)
 
-    # Right cheek (mirrored)
-    cheek_x = center_x + int(size * 0.22)
+    # Right cheek accent (mirrored)
     draw.line([
-        (cheek_x + int(size * 0.05), cheek_y),
-        (cheek_x - int(size * 0.02), cheek_y + int(size * 0.1))
-    ], fill=(50, 50, 55), width=line_width)
+        (cx + cheek_offset + int(size * 0.04), cheek_y - int(size * 0.02)),
+        (cx + cheek_offset - int(size * 0.01), cheek_y + int(size * 0.08))
+    ], fill=(45, 48, 55, 180), width=line_width)
 
-    # Small status indicators below eyes
-    indicator_y = center_y + int(size * 0.12)
-    indicator_size = int(size * 0.012)
+    # Status indicators below eyes
+    indicator_y = cy + int(size * 0.10)
+    indicator_size = int(size * 0.011)
 
-    for x_offset in [-0.08, 0.08]:
-        ix = center_x + int(size * x_offset)
+    for x_offset in [-0.075, 0.075]:
+        ix = cx + int(size * x_offset)
+
+        # Indicator glow
+        for i in range(5, 0, -1):
+            r = indicator_size + i
+            alpha = int(30 * (i / 5))
+            draw.ellipse([ix - r, indicator_y - r, ix + r, indicator_y + r],
+                        fill=(0, 200, 100, alpha))
+
+        # Indicator core
         draw.ellipse([
             ix - indicator_size, indicator_y - indicator_size,
             ix + indicator_size, indicator_y + indicator_size
-        ], fill=GREEN_SECONDARY)
+        ], fill=GREEN_GLOW)
+
+        # Bright center
+        tiny = indicator_size // 2
+        draw.ellipse([ix - tiny, indicator_y - tiny, ix + tiny, indicator_y + tiny],
+                    fill=(200, 255, 200))
 
     return img
 
 
 def generate_icon(size):
     """Generate the complete icon at specified size."""
-    # Create base image with dark background
+    # Create base with dark background
     img = Image.new('RGBA', (size, size), BLACK_PRIMARY)
-    draw = ImageDraw.Draw(img)
+    draw = ImageDraw.Draw(img, 'RGBA')
 
-    # Add subtle radial gradient background
-    for i in range(size // 2, 0, -5):
-        alpha = int(20 * (i / (size // 2)))
-        color = (26, 26, 26, alpha)
+    # Subtle radial vignette (darker edges)
+    vignette_size = int(size * 0.55)
+    for i in range(vignette_size, 0, -3):
+        t = i / vignette_size
+        color = (
+            int(BLACK_SECONDARY[0] * t + BLACK_PRIMARY[0] * (1 - t)),
+            int(BLACK_SECONDARY[1] * t + BLACK_PRIMARY[1] * (1 - t)),
+            int(BLACK_SECONDARY[2] * t + BLACK_PRIMARY[2] * (1 - t)),
+            int(255 * t)
+        )
         draw.ellipse([
             size // 2 - i, size // 2 - i,
             size // 2 + i, size // 2 + i
         ], fill=color)
 
-    # Add circuit pattern (subtle)
+    # Circuit pattern (subtle background detail)
     if size >= 256:
         draw_circuit_pattern(draw, size)
 
-    # Draw the android face
-    draw_android_face(img, size)
+    # Draw main face
+    draw_metallic_face(img, size)
 
-    # Draw glowing eyes
-    draw_glowing_eyes(img, size)
+    # Draw forehead gem
+    draw_forehead_gem(img, size)
 
-    # Add subtle details
-    add_subtle_details(img, size)
+    # Draw luminous eyes
+    draw_luminous_eyes(img, size)
 
-    # Add glow effect
-    img = add_glow_effect(img, size)
+    # Add face details
+    add_face_details(img, size)
 
-    # Apply slight sharpening for crisp edges
+    # Add eye glow effect
+    img = add_eye_glow(img, size)
+
+    # Enhance contrast and sharpness
     if size >= 256:
+        enhancer = ImageEnhance.Contrast(img)
+        img = enhancer.enhance(1.08)
         enhancer = ImageEnhance.Sharpness(img)
-        img = enhancer.enhance(1.2)
+        img = enhancer.enhance(1.15)
 
     return img.convert('RGB')
 
 
 def generate_all_sizes(output_dir):
     """Generate all required iOS icon sizes."""
-    # iOS icon sizes (actual pixel sizes, not points)
     sizes = {
-        'AppIcon-1024.png': 1024,      # App Store
-        'AppIcon-180.png': 180,        # iPhone @3x
-        'AppIcon-120.png': 120,        # iPhone @2x
-        'AppIcon-167.png': 167,        # iPad Pro @2x
-        'AppIcon-152.png': 152,        # iPad @2x
-        'AppIcon-76.png': 76,          # iPad @1x
-        'AppIcon-87.png': 87,          # Spotlight @3x
-        'AppIcon-80.png': 80,          # Spotlight @2x
-        'AppIcon-60.png': 60,          # Notification @3x
-        'AppIcon-40.png': 40,          # Notification @2x
+        'AppIcon-1024.png': 1024,
+        'AppIcon-180.png': 180,
+        'AppIcon-120.png': 120,
+        'AppIcon-167.png': 167,
+        'AppIcon-152.png': 152,
+        'AppIcon-76.png': 76,
+        'AppIcon-87.png': 87,
+        'AppIcon-80.png': 80,
+        'AppIcon-60.png': 60,
+        'AppIcon-40.png': 40,
     }
 
     os.makedirs(output_dir, exist_ok=True)
 
-    # Generate master at 1024x1024
     print("Generating master icon at 1024x1024...")
     master = generate_icon(1024)
 
@@ -321,7 +444,6 @@ def generate_all_sizes(output_dir):
         if size == 1024:
             icon = master
         else:
-            # High-quality downscale from master
             icon = master.resize((size, size), Image.Resampling.LANCZOS)
 
         filepath = os.path.join(output_dir, filename)
@@ -333,9 +455,6 @@ def generate_all_sizes(output_dir):
 
 def generate_contents_json(filenames, output_dir):
     """Generate Contents.json for Xcode asset catalog."""
-    images = []
-
-    # Define the icon specifications
     specs = [
         ('AppIcon-40.png', '20x20', '2x', 'iphone'),
         ('AppIcon-60.png', '20x20', '3x', 'iphone'),
@@ -357,42 +476,31 @@ def generate_contents_json(filenames, output_dir):
         ('AppIcon-1024.png', '1024x1024', '1x', 'ios-marketing'),
     ]
 
-    for filename, size, scale, idiom in specs:
-        images.append({
-            'filename': filename,
-            'idiom': idiom,
-            'scale': scale,
-            'size': size
-        })
+    images = [{'filename': f, 'idiom': idiom, 'scale': scale, 'size': s}
+              for f, s, scale, idiom in specs]
 
     contents = {
         'images': images,
-        'info': {
-            'author': 'xcode',
-            'version': 1
-        }
+        'info': {'author': 'xcode', 'version': 1}
     }
 
     filepath = os.path.join(output_dir, 'Contents.json')
     with open(filepath, 'w') as f:
         json.dump(contents, f, indent=2)
 
-    print(f"Generated Contents.json")
+    print("Generated Contents.json")
 
 
 def main():
-    # Output directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(script_dir)
-    output_dir = os.path.join(project_root, 'ios', 'Adjutant', 'Resources', 'Assets.xcassets', 'AppIcon.appiconset')
+    output_dir = os.path.join(project_root, 'ios', 'Adjutant', 'Resources',
+                              'Assets.xcassets', 'AppIcon.appiconset')
 
-    print(f"Generating SC2 Adjutant-inspired iOS app icons...")
+    print("Generating SC2 Adjutant-inspired iOS app icon v3...")
     print(f"Output directory: {output_dir}\n")
 
-    # Generate all icon sizes
     filenames = generate_all_sizes(output_dir)
-
-    # Generate Contents.json
     generate_contents_json(filenames, output_dir)
 
     print("\nDone! Icon generation complete.")
