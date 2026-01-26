@@ -578,12 +578,13 @@ export async function getBead(
     }
 
     // Execute bd show command with --json flag
-    const shortId = stripBeadPrefix(beadId);
-    const args = ["show", shortId, "--json"];
+    // bd show expects the full ID (e.g., "adj-c2g97"), not stripped
+    const args = ["show", beadId, "--json"];
 
-    const result = await execBd<BeadsIssue>(args, { cwd: workDir, beadsDir });
+    // bd show returns an array of issues
+    const result = await execBd<BeadsIssue[]>(args, { cwd: workDir, beadsDir });
 
-    if (!result.success || !result.data) {
+    if (!result.success || !result.data || result.data.length === 0) {
       return {
         success: false,
         error: {
@@ -593,7 +594,7 @@ export async function getBead(
       };
     }
 
-    const issue = result.data;
+    const issue = result.data[0];
 
     // Transform to BeadDetail
     const detail: BeadDetail = {
