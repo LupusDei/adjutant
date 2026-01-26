@@ -109,7 +109,7 @@ struct KanbanBoardView: View {
             BeadInfo(
                 id: "adj-003",
                 title: "Write tests",
-                status: "backlog",
+                status: "open",
                 priority: 2,
                 type: "task",
                 assignee: nil,
@@ -122,7 +122,7 @@ struct KanbanBoardView: View {
             BeadInfo(
                 id: "adj-004",
                 title: "Code review",
-                status: "testing",
+                status: "blocked",
                 priority: 1,
                 type: "task",
                 assignee: "adjutant/crew/bob",

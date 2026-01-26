@@ -172,7 +172,7 @@ struct KanbanCardView: View {
             bead: BeadInfo(
                 id: "hq-003",
                 title: "Low priority task with a very long title that should wrap to two lines",
-                status: "backlog",
+                status: "open",
                 priority: 4,
                 type: "task",
                 assignee: "adjutant/crew/bob",

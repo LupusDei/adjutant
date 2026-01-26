@@ -46,26 +46,20 @@ public let kanbanColumns: [KanbanColumnDefinition] = [
     KanbanColumnDefinition(id: .closed, title: "CLOSED", color: Color(hex: 0x444444)),
 ]
 
-/// Maps legacy/alternative statuses to Kanban columns.
-/// Used for beads that have statuses not directly matching column IDs.
+/// Maps bead statuses to Kanban columns.
+/// Valid statuses: open, hooked, in_progress, blocked, closed
 public func mapStatusToColumn(_ status: String) -> KanbanColumnId {
     let normalized = status.lowercased()
 
-    // Check for direct match with column IDs
-    if let columnId = KanbanColumnId(rawValue: normalized) {
-        return columnId
-    }
-
-    // Map legacy/alternative statuses to the 3 columns
     switch normalized {
-    case "hooked", "blocked", "testing", "merging":
-        return .inProgress  // All active work goes to in_progress
-    case "complete":
-        return .closed      // Complete maps to closed
-    case "backlog", "deferred":
-        return .open        // Backlog and deferred go to open
+    case "open":
+        return .open
+    case "hooked", "in_progress", "blocked":
+        return .inProgress
+    case "closed":
+        return .closed
     default:
-        return .open        // Unknown statuses default to open
+        return .open  // Unknown statuses default to open
     }
 }
 

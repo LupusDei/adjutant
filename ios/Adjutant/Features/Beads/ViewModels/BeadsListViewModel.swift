@@ -412,14 +412,17 @@ final class BeadsListViewModel: BaseViewModel {
     }
 
     /// Get status type for badge display
+    /// Valid statuses: open, hooked, in_progress, blocked, closed
     func statusType(for bead: BeadInfo) -> BadgeView.Style.StatusType {
         switch bead.status.lowercased() {
         case "closed":
             return .offline
-        case "blocked", "deferred":
+        case "blocked":
             return .warning
         case "hooked", "in_progress":
             return .info
+        case "open":
+            return .success
         default:
             return .success
         }

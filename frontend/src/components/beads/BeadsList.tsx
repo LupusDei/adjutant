@@ -4,7 +4,7 @@ import { fuzzyMatch } from '../../hooks/useFuzzySearch';
 import { api } from '../../services/api';
 import type { BeadInfo } from '../../types';
 
-export type BeadsStatusFilter = 'default' | 'open' | 'hooked' | 'in_progress' | 'blocked' | 'deferred' | 'closed' | 'all';
+export type BeadsStatusFilter = 'default' | 'open' | 'hooked' | 'in_progress' | 'blocked' | 'closed' | 'all';
 
 type ActionType = 'sling' | 'delete';
 
@@ -46,21 +46,19 @@ function getPriorityInfo(priority: number): { label: string; color: string } {
 
 /**
  * Gets status display info with distinct colors for each state.
+ * Valid statuses: open, hooked, in_progress, blocked, closed
  */
 function getStatusInfo(status: string): { label: string; color: string; bgColor?: string } {
   switch (status.toLowerCase()) {
     case 'open':
-    case 'backlog':
       return { label: 'OPEN', color: 'var(--crt-phosphor)' };
-    case 'in_progress':
     case 'hooked':
+      return { label: 'HOOKED', color: '#00FFFF', bgColor: 'rgba(0, 255, 255, 0.1)' }; // Cyan
+    case 'in_progress':
       return { label: 'ACTIVE', color: '#00FF88', bgColor: 'rgba(0, 255, 136, 0.1)' }; // Bright cyan-green
     case 'blocked':
       return { label: 'BLOCKED', color: '#FF6B35', bgColor: 'rgba(255, 107, 53, 0.1)' }; // Warning orange
-    case 'deferred':
-      return { label: 'DEFER', color: '#888888' }; // Dim gray
     case 'closed':
-    case 'complete':
       return { label: 'DONE', color: '#555555' }; // Dark gray
     default:
       return { label: status.toUpperCase(), color: 'var(--crt-phosphor-dim)' };
@@ -441,7 +439,6 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
                     const priorityInfo = getPriorityInfo(bead.priority);
                     const statusInfo = getStatusInfo(bead.status);
                     const isClosed = bead.status.toLowerCase() === 'closed';
-                    const isDeferred = bead.status.toLowerCase() === 'deferred';
                     // Active work states where agent name should be prominently shown
                     const isActiveWork = ['hooked', 'in_progress', 'blocked'].includes(bead.status.toLowerCase());
 
@@ -457,7 +454,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
                         key={bead.id}
                         style={{
                           ...styles.row,
-                          opacity: isClosed || isDeferred ? 0.5 : 1,
+                          opacity: isClosed ? 0.5 : 1,
                           backgroundColor: statusInfo.bgColor ?? 'transparent',
                         }}
                       >

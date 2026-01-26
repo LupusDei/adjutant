@@ -54,14 +54,13 @@ export interface BeadsServiceResult<T> {
 
 /**
  * Valid bead status values for Kanban workflow.
- * Simplified workflow: open -> in_progress -> closed
+ * Workflow: open -> hooked/in_progress/blocked -> closed
  */
 export type BeadStatus =
   | "open"         // Ready to be picked up
-  | "hooked"       // Agent has task on hook (maps to in_progress)
+  | "hooked"       // Agent has task on hook
   | "in_progress"  // Actively being worked
-  | "blocked"      // Blocked on something (maps to in_progress)
-  | "deferred"     // Postponed (maps to open)
+  | "blocked"      // Blocked on something
   | "closed";      // Totally done
 
 // ============================================================================
@@ -193,18 +192,17 @@ function transformBead(issue: BeadsIssue, _dbSource: string): BeadInfo {
 }
 
 /**
- * Default status preset: shows active work (not deferred, closed, or complete).
+ * Default status preset: shows active work (not closed).
  */
 const DEFAULT_STATUSES: BeadStatus[] = [
-  "backlog", "open", "hooked", "in_progress", "blocked", "testing", "merging"
+  "open", "hooked", "in_progress", "blocked"
 ];
 
 /**
  * All valid statuses for filtering.
  */
 const ALL_STATUSES: BeadStatus[] = [
-  "backlog", "open", "hooked", "in_progress", "blocked",
-  "testing", "merging", "complete", "deferred", "closed"
+  "open", "hooked", "in_progress", "blocked", "closed"
 ];
 
 /**

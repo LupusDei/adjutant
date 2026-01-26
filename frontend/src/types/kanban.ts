@@ -33,30 +33,23 @@ export const KANBAN_COLUMNS: Array<{ id: KanbanColumnId; title: string; color: s
 ];
 
 /**
- * Maps legacy/alternative statuses to Kanban columns.
- * Used for beads that have statuses not directly matching column IDs.
+ * Maps bead statuses to Kanban columns.
+ * Valid statuses: open, hooked, in_progress, blocked, closed
  */
 export function mapStatusToColumn(status: string): KanbanColumnId {
   const normalized = status.toLowerCase();
 
-  // Direct matches
-  if (KANBAN_COLUMNS.some(col => col.id === normalized)) {
-    return normalized as KanbanColumnId;
-  }
-
-  // Map legacy/alternative statuses to the 3 columns
   switch (normalized) {
+    case 'open':
+      return 'open';
     case 'hooked':
+    case 'in_progress':
     case 'blocked':
-    case 'testing':
-    case 'merging':
-      return 'in_progress'; // All active work goes to in_progress
-    case 'complete':
-      return 'closed'; // Complete maps to closed
-    case 'backlog':
-    case 'deferred':
+      return 'in_progress';
+    case 'closed':
+      return 'closed';
     default:
-      return 'open'; // Backlog, deferred, and unknown go to open
+      return 'open'; // Unknown statuses default to open
   }
 }
 

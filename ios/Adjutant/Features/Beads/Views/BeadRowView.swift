@@ -105,14 +105,17 @@ struct BeadRowView: View {
 
     // MARK: - Helpers
 
+    /// Valid statuses: open, hooked, in_progress, blocked, closed
     private var statusType: BadgeView.Style.StatusType {
         switch bead.status.lowercased() {
         case "closed":
             return .offline
-        case "blocked", "deferred":
+        case "blocked":
             return .warning
         case "hooked", "in_progress":
             return .info
+        case "open":
+            return .success
         default:
             return .success
         }
