@@ -52,9 +52,20 @@ export interface BeadsServiceResult<T> {
 }
 
 /**
- * Valid bead status values.
+ * Valid bead status values for Kanban workflow.
+ * Workflow: backlog -> open -> in_progress -> testing -> merging -> complete -> closed
  */
-export type BeadStatus = "open" | "hooked" | "in_progress" | "blocked" | "deferred" | "closed";
+export type BeadStatus =
+  | "backlog"      // New tasks start here
+  | "open"         // Ready to be picked up
+  | "hooked"       // Agent has task on hook (legacy compatibility)
+  | "in_progress"  // Actively being worked
+  | "blocked"      // Blocked on something
+  | "testing"      // Running quality gates
+  | "merging"      // In merge queue
+  | "complete"     // Merged but not deployed
+  | "deferred"     // Postponed
+  | "closed";      // Totally done
 
 // ============================================================================
 // Helpers
@@ -185,14 +196,19 @@ function transformBead(issue: BeadsIssue, _dbSource: string): BeadInfo {
 }
 
 /**
- * Default status preset: shows active work (not deferred or closed).
+ * Default status preset: shows active work (not deferred, closed, or complete).
  */
-const DEFAULT_STATUSES: BeadStatus[] = ["blocked", "in_progress", "hooked", "open"];
+const DEFAULT_STATUSES: BeadStatus[] = [
+  "backlog", "open", "hooked", "in_progress", "blocked", "testing", "merging"
+];
 
 /**
  * All valid statuses for filtering.
  */
-const ALL_STATUSES: BeadStatus[] = ["open", "hooked", "in_progress", "blocked", "deferred", "closed"];
+const ALL_STATUSES: BeadStatus[] = [
+  "backlog", "open", "hooked", "in_progress", "blocked",
+  "testing", "merging", "complete", "deferred", "closed"
+];
 
 /**
  * Parses status filter into array of statuses to include.
@@ -386,6 +402,104 @@ export async function listAllBeads(
       error: {
         code: "BEADS_ERROR",
         message: err instanceof Error ? err.message : "Failed to list beads",
+      },
+    };
+  }
+}
+
+/**
+ * Updates a bead's status.
+ * @param beadId Full bead ID (e.g., "hq-vts8" or "gb-53tj")
+ * @param status New status value
+ * @returns Result with success/error info
+ */
+export async function updateBeadStatus(
+  beadId: string,
+  status: BeadStatus
+): Promise<BeadsServiceResult<{ id: string; status: string }>> {
+  try {
+    // Validate status
+    if (!ALL_STATUSES.includes(status)) {
+      return {
+        success: false,
+        error: {
+          code: "INVALID_STATUS",
+          message: `Invalid status: ${status}. Valid values: ${ALL_STATUSES.join(", ")}`,
+        },
+      };
+    }
+
+    // Build prefix map to determine which database to use
+    await ensurePrefixMap();
+
+    // Get the prefix from the bead ID
+    const prefix = beadId.split("-")[0];
+    if (!prefix) {
+      return {
+        success: false,
+        error: {
+          code: "INVALID_BEAD_ID",
+          message: `Invalid bead ID format: ${beadId}`,
+        },
+      };
+    }
+
+    // Determine which database this bead belongs to
+    const map = loadPrefixMap();
+    const source = map.get(prefix);
+
+    let workDir: string;
+    let beadsDir: string;
+
+    if (!source || source === "town") {
+      // Town-level bead (hq-*)
+      const townRoot = resolveTownRoot();
+      workDir = townRoot;
+      beadsDir = resolveBeadsDir(townRoot);
+    } else {
+      // Rig-specific bead - need to find the rig path
+      const beadsDirs = await listAllBeadsDirs();
+      const rigDir = beadsDirs.find((d) => d.rig === source);
+      if (!rigDir) {
+        return {
+          success: false,
+          error: {
+            code: "RIG_NOT_FOUND",
+            message: `Cannot find rig database for prefix: ${prefix}`,
+          },
+        };
+      }
+      workDir = rigDir.workDir;
+      beadsDir = rigDir.path;
+    }
+
+    // Execute bd update command
+    // bd update expects the short ID (without prefix)
+    const shortId = beadId.includes("-") ? beadId.split("-").slice(1).join("-") : beadId;
+    const args = ["update", shortId, "--status", status];
+
+    const result = await execBd<void>(args, { cwd: workDir, beadsDir, parseJson: false });
+
+    if (!result.success) {
+      return {
+        success: false,
+        error: {
+          code: result.error?.code ?? "UPDATE_FAILED",
+          message: result.error?.message ?? "Failed to update bead status",
+        },
+      };
+    }
+
+    return {
+      success: true,
+      data: { id: beadId, status },
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: {
+        code: "UPDATE_ERROR",
+        message: err instanceof Error ? err.message : "Failed to update bead status",
       },
     };
   }

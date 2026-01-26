@@ -263,6 +263,18 @@ export const api = {
       const query = searchParams.toString();
       return apiFetch(`/beads${query ? `?${query}` : ''}`);
     },
+
+    /**
+     * Update a bead's status (for Kanban drag-and-drop).
+     * @param id Full bead ID (e.g., "hq-vts8", "gb-53tj")
+     * @param status New status value
+     */
+    async update(id: string, status: string): Promise<{ id: string; status: string }> {
+      return apiFetch(`/beads/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: { status },
+      });
+    },
   },
 
   /**

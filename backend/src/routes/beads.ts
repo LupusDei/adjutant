@@ -6,9 +6,9 @@
  */
 
 import { Router } from "express";
-import { listBeads, listAllBeads } from "../services/beads-service.js";
+import { listBeads, listAllBeads, updateBeadStatus, type BeadStatus } from "../services/beads-service.js";
 import { resolveTownRoot, resolveRigPath } from "../services/gastown-workspace.js";
-import { success, internalError } from "../utils/responses.js";
+import { success, internalError, badRequest } from "../utils/responses.js";
 
 export const beadsRouter = Router();
 
@@ -80,6 +80,45 @@ beadsRouter.get("/", async (req, res) => {
   if (!result.success) {
     return res.status(500).json(
       internalError(result.error?.message ?? "Failed to list beads")
+    );
+  }
+
+  return res.json(success(result.data));
+});
+
+/**
+ * PATCH /api/beads/:id
+ * Updates a bead's status.
+ *
+ * Path params:
+ * - id: Full bead ID (e.g., "hq-vts8", "gb-53tj")
+ *
+ * Request body:
+ * - status: New status value (backlog, open, in_progress, testing, merging, complete, closed, etc.)
+ *
+ * Response:
+ * - { success: true, data: { id: string, status: string } }
+ */
+beadsRouter.patch("/:id", async (req, res) => {
+  const beadId = req.params["id"];
+  const { status } = req.body as { status?: string };
+
+  if (!beadId) {
+    return res.status(400).json(badRequest("Bead ID is required"));
+  }
+
+  if (!status) {
+    return res.status(400).json(badRequest("Status is required in request body"));
+  }
+
+  const result = await updateBeadStatus(beadId, status as BeadStatus);
+
+  if (!result.success) {
+    const statusCode = result.error?.code === "INVALID_STATUS" ? 400 : 500;
+    return res.status(statusCode).json(
+      statusCode === 400
+        ? badRequest(result.error?.message ?? "Invalid request")
+        : internalError(result.error?.message ?? "Failed to update bead")
     );
   }
 

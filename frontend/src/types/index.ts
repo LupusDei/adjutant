@@ -248,3 +248,4 @@ export type PowerResponse = ApiResponse<{
 export type AgentsResponse = ApiResponse<CrewMember[]>;
 
 export * from './convoys';
+export * from './kanban';
