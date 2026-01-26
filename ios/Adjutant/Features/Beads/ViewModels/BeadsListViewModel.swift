@@ -27,6 +27,14 @@ final class BeadsListViewModel: BaseViewModel {
     /// Whether search is active
     @Published var isSearching: Bool = false
 
+    /// Current sort selection (persisted to UserDefaults)
+    @Published var currentSort: BeadSort = .lastUpdated {
+        didSet {
+            UserDefaults.standard.set(currentSort.rawValue, forKey: "beads_sort_preference")
+            applyFilter()
+        }
+    }
+
     /// Currently selected rig filter (synced from AppState)
     private var selectedRig: String? {
         AppState.shared.selectedRig
@@ -62,6 +70,39 @@ final class BeadsListViewModel: BaseViewModel {
         }
     }
 
+    // MARK: - Sort Types
+
+    /// Available bead sort options
+    enum BeadSort: String, CaseIterable, Identifiable {
+        case lastUpdated
+        case priority
+        case createdDate
+        case alphabetical
+        case assignee
+
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .lastUpdated: return "LAST UPDATED"
+            case .priority: return "PRIORITY"
+            case .createdDate: return "CREATED"
+            case .alphabetical: return "A-Z"
+            case .assignee: return "ASSIGNEE"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .lastUpdated: return "clock.arrow.circlepath"
+            case .priority: return "exclamationmark.triangle"
+            case .createdDate: return "calendar"
+            case .alphabetical: return "textformat.abc"
+            case .assignee: return "person.fill"
+            }
+        }
+    }
+
     // MARK: - Configuration
 
     /// Polling interval for auto-refresh
@@ -80,8 +121,17 @@ final class BeadsListViewModel: BaseViewModel {
     init(apiClient: APIClient? = nil) {
         self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
+        loadSortPreference()
         setupRigFilterObserver()
         loadFromCache()
+    }
+
+    /// Loads the saved sort preference from UserDefaults
+    private func loadSortPreference() {
+        if let savedSort = UserDefaults.standard.string(forKey: "beads_sort_preference"),
+           let sort = BeadSort(rawValue: savedSort) {
+            currentSort = sort
+        }
     }
 
     /// Loads cached beads for immediate display
@@ -235,7 +285,59 @@ final class BeadsListViewModel: BaseViewModel {
             }
         }
 
+        // Apply sort
+        result = sortBeads(result)
+
         filteredBeads = result
+    }
+
+    /// Sorts beads according to the current sort selection
+    private func sortBeads(_ beads: [BeadInfo]) -> [BeadInfo] {
+        beads.sorted { a, b in
+            switch currentSort {
+            case .lastUpdated:
+                // Most recent first (updatedAt or createdAt)
+                let dateA = a.updatedDate ?? a.createdDate ?? Date.distantPast
+                let dateB = b.updatedDate ?? b.createdDate ?? Date.distantPast
+                return dateA > dateB
+
+            case .priority:
+                // Lower priority number = higher priority (P0 first)
+                if a.priority != b.priority {
+                    return a.priority < b.priority
+                }
+                // Tie-break by last updated
+                let dateA = a.updatedDate ?? a.createdDate ?? Date.distantPast
+                let dateB = b.updatedDate ?? b.createdDate ?? Date.distantPast
+                return dateA > dateB
+
+            case .createdDate:
+                // Newest first
+                let dateA = a.createdDate ?? Date.distantPast
+                let dateB = b.createdDate ?? Date.distantPast
+                return dateA > dateB
+
+            case .alphabetical:
+                // Case-insensitive alphabetical by title
+                return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
+
+            case .assignee:
+                // Group by assignee, unassigned last, then alphabetical within groups
+                let assigneeA = a.assignee ?? ""
+                let assigneeB = b.assignee ?? ""
+                if assigneeA.isEmpty && !assigneeB.isEmpty {
+                    return false // Unassigned sorts last
+                }
+                if !assigneeA.isEmpty && assigneeB.isEmpty {
+                    return true // Assigned sorts first
+                }
+                if assigneeA != assigneeB {
+                    return assigneeA.localizedCaseInsensitiveCompare(assigneeB) == .orderedAscending
+                }
+                // Same assignee: sort by priority
+                return a.priority < b.priority
+            }
+        }
     }
 
     /// Checks if a bead is related to a specific rig

@@ -63,8 +63,8 @@ struct BeadsListView: View {
 
             Spacer()
 
-            // Rig filter dropdown
-            RigFilterDropdown(availableRigs: viewModel.rigOptions)
+            // Sort dropdown
+            SortDropdown(currentSort: $viewModel.currentSort)
 
             // Count badge
             if viewModel.openCount > 0 {

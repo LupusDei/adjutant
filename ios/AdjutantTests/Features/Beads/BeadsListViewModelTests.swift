@@ -225,4 +225,89 @@ final class BeadsListViewModelTests: XCTestCase {
         // All beads should be shown when rig filter is nil
         XCTAssertEqual(viewModel.filteredBeads.count, viewModel.beads.count, "All beads should be shown")
     }
+
+    // MARK: - Sort Tests
+
+    func testDefaultSortIsLastUpdated() async {
+        // Clear any saved preference
+        UserDefaults.standard.removeObject(forKey: "beads_sort_preference")
+        let freshVM = BeadsListViewModel()
+        XCTAssertEqual(freshVM.currentSort, .lastUpdated)
+    }
+
+    func testSortDisplayNames() {
+        XCTAssertEqual(BeadsListViewModel.BeadSort.lastUpdated.displayName, "LAST UPDATED")
+        XCTAssertEqual(BeadsListViewModel.BeadSort.priority.displayName, "PRIORITY")
+        XCTAssertEqual(BeadsListViewModel.BeadSort.createdDate.displayName, "CREATED")
+        XCTAssertEqual(BeadsListViewModel.BeadSort.alphabetical.displayName, "A-Z")
+        XCTAssertEqual(BeadsListViewModel.BeadSort.assignee.displayName, "ASSIGNEE")
+    }
+
+    func testSortSystemImages() {
+        XCTAssertEqual(BeadsListViewModel.BeadSort.lastUpdated.systemImage, "clock.arrow.circlepath")
+        XCTAssertEqual(BeadsListViewModel.BeadSort.priority.systemImage, "exclamationmark.triangle")
+        XCTAssertEqual(BeadsListViewModel.BeadSort.createdDate.systemImage, "calendar")
+        XCTAssertEqual(BeadsListViewModel.BeadSort.alphabetical.systemImage, "textformat.abc")
+        XCTAssertEqual(BeadsListViewModel.BeadSort.assignee.systemImage, "person.fill")
+    }
+
+    func testSortByPriority() async {
+        viewModel.currentFilter = .all
+        viewModel.currentSort = .priority
+
+        let beads = viewModel.filteredBeads
+        // Verify beads are sorted by priority (ascending - P0 first)
+        for i in 0..<(beads.count - 1) {
+            XCTAssertLessThanOrEqual(beads[i].priority, beads[i + 1].priority,
+                "Beads should be sorted by priority (P0 first)")
+        }
+    }
+
+    func testSortByAlphabetical() async {
+        viewModel.currentFilter = .all
+        viewModel.currentSort = .alphabetical
+
+        let beads = viewModel.filteredBeads
+        // Verify beads are sorted alphabetically by title
+        for i in 0..<(beads.count - 1) {
+            let comparison = beads[i].title.localizedCaseInsensitiveCompare(beads[i + 1].title)
+            XCTAssertTrue(comparison == .orderedAscending || comparison == .orderedSame,
+                "Beads should be sorted alphabetically")
+        }
+    }
+
+    func testSortByAssignee() async {
+        viewModel.currentFilter = .all
+        viewModel.currentSort = .assignee
+
+        let beads = viewModel.filteredBeads
+        // Verify assigned beads come before unassigned
+        var foundUnassigned = false
+        for bead in beads {
+            if bead.assignee == nil || bead.assignee!.isEmpty {
+                foundUnassigned = true
+            } else if foundUnassigned {
+                XCTFail("Assigned beads should come before unassigned beads")
+            }
+        }
+    }
+
+    func testSortPersistsToUserDefaults() async {
+        viewModel.currentSort = .alphabetical
+
+        let savedSort = UserDefaults.standard.string(forKey: "beads_sort_preference")
+        XCTAssertEqual(savedSort, BeadsListViewModel.BeadSort.alphabetical.rawValue)
+    }
+
+    func testSortLoadsFromUserDefaults() async {
+        // Save a preference
+        UserDefaults.standard.set(BeadsListViewModel.BeadSort.priority.rawValue, forKey: "beads_sort_preference")
+
+        // Create a new view model (should load the preference)
+        let freshVM = BeadsListViewModel()
+        XCTAssertEqual(freshVM.currentSort, .priority)
+
+        // Clean up
+        UserDefaults.standard.removeObject(forKey: "beads_sort_preference")
+    }
 }
