@@ -6,11 +6,13 @@ import type { BeadInfo } from './index';
 
 /**
  * Valid Kanban column IDs matching bead status values.
- * Simplified workflow: open -> in_progress -> closed
+ * Workflow: open -> hooked -> in_progress -> blocked -> closed
  */
 export type KanbanColumnId =
   | 'open'
+  | 'hooked'
   | 'in_progress'
+  | 'blocked'
   | 'closed';
 
 /**
@@ -28,13 +30,15 @@ export interface KanbanColumn {
  */
 export const KANBAN_COLUMNS: Array<{ id: KanbanColumnId; title: string; color: string }> = [
   { id: 'open', title: 'OPEN', color: '#00FF00' },
+  { id: 'hooked', title: 'HOOKED', color: '#00FFFF' },
   { id: 'in_progress', title: 'IN PROGRESS', color: '#00FF88' },
+  { id: 'blocked', title: 'BLOCKED', color: '#FF6B35' },
   { id: 'closed', title: 'CLOSED', color: '#444444' },
 ];
 
 /**
  * Maps bead statuses to Kanban columns.
- * Valid statuses: open, hooked, in_progress, blocked, closed
+ * Each status maps directly to its column.
  */
 export function mapStatusToColumn(status: string): KanbanColumnId {
   const normalized = status.toLowerCase();
@@ -43,9 +47,11 @@ export function mapStatusToColumn(status: string): KanbanColumnId {
     case 'open':
       return 'open';
     case 'hooked':
+      return 'hooked';
     case 'in_progress':
-    case 'blocked':
       return 'in_progress';
+    case 'blocked':
+      return 'blocked';
     case 'closed':
       return 'closed';
     default:
