@@ -3,7 +3,7 @@ import Combine
 import AdjutantKit
 import ActivityKit
 
-/// ViewModel for the Dashboard view, coordinating Beads, Mail, and Crew data.
+/// ViewModel for the Dashboard view, coordinating Beads, Crew, and Mail data.
 @MainActor
 final class DashboardViewModel: BaseViewModel {
     // MARK: - Published Properties
@@ -20,15 +20,14 @@ final class DashboardViewModel: BaseViewModel {
     /// Crew members with their statuses
     @Published private(set) var crewMembers: [CrewMember] = []
 
-    /// Active convoys
-    @Published private(set) var convoys: [Convoy] = []
+    /// Beads that are in progress
+    @Published private(set) var inProgressBeads: [BeadInfo] = []
 
-    /// Beads in progress count
-    @Published private(set) var beadsInProgress: Int = 0
+    /// Beads that are hooked
+    @Published private(set) var hookedBeads: [BeadInfo] = []
 
-    /// Beads hooked count
-    @Published private(set) var beadsHooked: Int = 0
-
+    /// Recently closed beads
+    @Published private(set) var recentClosedBeads: [BeadInfo] = []
 
     /// Whether the dashboard is currently refreshing (includes background polling)
     @Published private(set) var isRefreshing = false
@@ -96,26 +95,21 @@ final class DashboardViewModel: BaseViewModel {
     override func refresh() async {
         isRefreshing = true
 
+        // Get current rig filter from AppState
+        let selectedRig = AppState.shared.selectedRig
+
         // Fetch all data concurrently
-        async let beadsResult = fetchBeads()
         async let mailResult = fetchMail()
         async let crewResult = fetchCrew()
-        async let convoysResult = fetchConvoys()
-        async let beadsInProgressResult = fetchBeads(status: .inProgress)
-        async let beadsHookedResult = fetchBeads(status: .hooked)
+        async let inProgressResult = fetchBeads(status: .inProgress, rig: selectedRig)
+        async let hookedResult = fetchBeads(status: .hooked, rig: selectedRig)
+        async let closedResult = fetchBeads(status: .closed, rig: selectedRig)
         async let _ : () = AppState.shared.fetchAvailableRigs()
 
         // Await all results
-        let (beads, mail, crew, convoys, inProgressBeads, hookedBeads) = await (
-            beadsResult, mailResult, crewResult, convoysResult, beadsInProgressResult, beadsHookedResult
+        let (mail, crew, inProgress, hooked, closed) = await (
+            mailResult, crewResult, inProgressResult, hookedResult, closedResult
         )
-
-        // Update state
-        if let beads = beads {
-            self.recentBeads = sortBeadsByRecency(beads)
-            // Update cache for next navigation
-            ResponseCache.shared.updateBeads(beads)
-        }
 
         if let mail = mail {
             self.recentMail = Array(mail.items.prefix(maxRecentMail))
@@ -130,19 +124,25 @@ final class DashboardViewModel: BaseViewModel {
             self.crewMembers = crew
         }
 
-        if let convoys = convoys {
-            self.convoys = convoys.filter { !$0.isComplete }
+        if let inProgress = inProgress {
+            self.inProgressBeads = Array(inProgress.prefix(maxBeadsPerColumn))
         }
 
-        // Update beads counts
-        self.beadsInProgress = inProgressBeads?.count ?? 0
-        self.beadsHooked = hookedBeads?.count ?? 0
+        if let hooked = hooked {
+            self.hookedBeads = Array(hooked.prefix(maxBeadsPerColumn))
+        }
+
+        if let closed = closed {
+            // Sort by updated date descending for recent closed
+            let sorted = closed.sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
+            self.recentClosedBeads = Array(sorted.prefix(maxBeadsPerColumn))
+        }
 
         // Update cache for next navigation
         ResponseCache.shared.updateDashboard(
             mail: self.recentMail,
             crew: self.crewMembers,
-            convoys: []
+            convoys: []  // Convoys removed from dashboard
         )
 
         // Update Live Activity with current state
@@ -214,14 +214,6 @@ final class DashboardViewModel: BaseViewModel {
 
     // MARK: - Private Fetch Methods
 
-    private func fetchBeads() async -> [BeadInfo]? {
-        await performAsync(showLoading: false) {
-            // Fetch beads scoped to selected rig (or all if none selected)
-            let rigParam = AppState.shared.selectedRig ?? "all"
-            return try await self.apiClient.getBeads(rig: rigParam, status: .all)
-        }
-    }
-
     private func fetchMail() async -> PaginatedResponse<Message>? {
         await performAsync(showLoading: false) {
             try await self.apiClient.getMail(filter: .user)
@@ -234,15 +226,13 @@ final class DashboardViewModel: BaseViewModel {
         }
     }
 
-    private func fetchConvoys() async -> [Convoy]? {
+    private func fetchBeads(status: APIClient.BeadStatusFilter, rig: String?) async -> [BeadInfo]? {
         await performAsync(showLoading: false) {
-            try await self.apiClient.getConvoys()
-        }
-    }
-
-    private func fetchBeads(status: APIClient.BeadStatusFilter) async -> [BeadInfo]? {
-        await performAsync(showLoading: false) {
-            try await self.apiClient.getBeads(status: status)
+            try await self.apiClient.getBeads(
+                rig: rig,
+                status: status,
+                limit: self.maxBeadsPerColumn
+            )
         }
     }
 
@@ -258,74 +248,19 @@ final class DashboardViewModel: BaseViewModel {
         crewMembers.filter { $0.status == .stuck || $0.status == .blocked }.count
     }
 
-    /// Beads grouped by Kanban column status for display.
-    /// Applies OVERSEER filtering by default to show only user-facing work items.
-    var beadsByColumn: [KanbanColumnId: [BeadInfo]] {
-        var result: [KanbanColumnId: [BeadInfo]] = [:]
-        for column in KanbanColumnId.allCases {
-            result[column] = []
-        }
-        // Filter beads using OVERSEER scope before grouping
-        let filteredBeads = filterForOverseerScope(recentBeads)
-        for bead in filteredBeads {
-            let column = mapStatusToColumn(bead.status)
-            result[column, default: []].append(bead)
-        }
-        // Limit beads per column
-        for column in KanbanColumnId.allCases {
-            if result[column]?.count ?? 0 > maxBeadsPerColumn {
-                result[column] = Array(result[column]!.prefix(maxBeadsPerColumn))
-            }
-        }
-        return result
-    }
-
-    /// Filters beads to OVERSEER scope, excluding infrastructure and system beads.
-    /// Dashboard preview always shows user-facing work items only.
-    private func filterForOverseerScope(_ beads: [BeadInfo]) -> [BeadInfo] {
-        let excludedTypes = ["message", "epic", "convoy", "agent", "role", "witness", "wisp", "infrastructure", "coordination", "sync"]
-        let excludedPatterns = ["witness", "wisp", "internal", "sync", "coordination", "mail delivery", "polecat", "crew assignment", "rig status", "heartbeat", "health check", "mol-"]
-
-        return beads.filter { bead in
-            let typeLower = bead.type.lowercased()
-            let titleLower = bead.title.lowercased()
-            let idLower = bead.id.lowercased()
-            let assigneeLower = (bead.assignee ?? "").lowercased()
-
-            // Exclude wisp-related beads (including mol-* molecules)
-            if typeLower.contains("wisp") || titleLower.contains("wisp") ||
-                idLower.contains("wisp") || idLower.hasPrefix("mol-") ||
-                assigneeLower.contains("wisp") {
-                return false
-            }
-
-            // Exclude operational types
-            if excludedTypes.contains(typeLower) {
-                return false
-            }
-
-            // Exclude by title patterns
-            if excludedPatterns.contains(where: { titleLower.contains($0) }) {
-                return false
-            }
-
-            // Exclude merge beads
-            if titleLower.hasPrefix("merge:") {
-                return false
-            }
-
-            return true
-        }
-    }
-
-    /// Count of open beads (not closed) using OVERSEER scope
-    var openBeadsCount: Int {
-        filterForOverseerScope(recentBeads).filter { $0.status != "closed" }.count
-    }
-
-    /// Count of beads currently hooked or in progress using OVERSEER scope
+    /// Total count of active beads (in progress + hooked)
     var activeBeadsCount: Int {
-        filterForOverseerScope(recentBeads).filter { $0.status == "hooked" || $0.status == "in_progress" }.count
+        inProgressBeads.count + hookedBeads.count
+    }
+
+    /// Count of beads in progress (for Live Activity)
+    var beadsInProgress: Int {
+        inProgressBeads.count
+    }
+
+    /// Count of beads hooked (for Live Activity)
+    var beadsHooked: Int {
+        hookedBeads.count
     }
 
     // MARK: - Private Helpers

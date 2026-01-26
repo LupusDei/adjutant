@@ -20,7 +20,9 @@ final class DashboardViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.recentMail.isEmpty)
         XCTAssertEqual(viewModel.unreadCount, 0)
         XCTAssertTrue(viewModel.crewMembers.isEmpty)
-        XCTAssertTrue(viewModel.recentBeads.isEmpty)
+        XCTAssertTrue(viewModel.inProgressBeads.isEmpty)
+        XCTAssertTrue(viewModel.hookedBeads.isEmpty)
+        XCTAssertTrue(viewModel.recentClosedBeads.isEmpty)
         XCTAssertFalse(viewModel.isRefreshing)
         XCTAssertFalse(viewModel.isLoading)
     }
@@ -102,40 +104,6 @@ final class DashboardViewModelTests: XCTestCase {
 
     // MARK: - Beads Tests
 
-    func testOpenBeadsCount() {
-        // Test that open beads count correctly filters out closed beads
-        let openBead = BeadInfo(
-            id: "adj-001",
-            title: "Open bead",
-            status: "open",
-            priority: 1,
-            type: "task",
-            assignee: nil,
-            rig: "adjutant",
-            source: "adjutant",
-            labels: [],
-            createdAt: "2026-01-25T10:00:00Z",
-            updatedAt: nil
-        )
-        let closedBead = BeadInfo(
-            id: "adj-002",
-            title: "Closed bead",
-            status: "closed",
-            priority: 1,
-            type: "task",
-            assignee: nil,
-            rig: "adjutant",
-            source: "adjutant",
-            labels: [],
-            createdAt: "2026-01-25T10:00:00Z",
-            updatedAt: nil
-        )
-
-        let beads = [openBead, closedBead]
-        let openCount = beads.filter { $0.status != "closed" }.count
-        XCTAssertEqual(openCount, 1)
-    }
-
     func testActiveBeadsCount() {
         // Test that active beads count filters for hooked and in_progress
         let hookedBead = BeadInfo(
@@ -183,8 +151,8 @@ final class DashboardViewModelTests: XCTestCase {
         XCTAssertEqual(activeCount, 2)
     }
 
-    func testBeadsByColumnGrouping() {
-        // Test that beads are correctly grouped by status into Kanban columns
+    func testBeadsByStatusGrouping() {
+        // Test that beads are correctly grouped by status
         let openBead = BeadInfo(
             id: "adj-001",
             title: "Open bead",
