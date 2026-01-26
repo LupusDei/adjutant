@@ -63,6 +63,9 @@ struct BeadsListView: View {
 
             Spacer()
 
+            // Rig filter dropdown
+            RigFilterDropdown(availableRigs: viewModel.rigOptions)
+
             // Count badge
             if viewModel.openCount > 0 {
                 BadgeView("\(viewModel.openCount) OPEN", style: .status(.success))

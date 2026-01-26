@@ -165,4 +165,64 @@ final class BeadsListViewModelTests: XCTestCase {
         XCTAssertEqual(BeadsListViewModel.BeadFilter.assigned.systemImage, "person.fill")
         XCTAssertEqual(BeadsListViewModel.BeadFilter.priority.systemImage, "exclamationmark.triangle")
     }
+
+    // MARK: - Rig Options Tests
+
+    func testRigOptionsExtractsUniqueRigs() async {
+        // Mock beads have "adjutant" and "town" sources
+        // rigOptions should include "adjutant" but not "town" or "unknown"
+        let rigOptions = viewModel.rigOptions
+        XCTAssertTrue(rigOptions.contains("adjutant"), "Should contain adjutant rig")
+        XCTAssertFalse(rigOptions.contains("town"), "Should not contain town")
+        XCTAssertFalse(rigOptions.contains("unknown"), "Should not contain unknown")
+    }
+
+    func testRigOptionsAreSorted() async {
+        let rigOptions = viewModel.rigOptions
+        XCTAssertEqual(rigOptions, rigOptions.sorted(), "Rig options should be sorted alphabetically")
+    }
+
+    // MARK: - Rig Filter Tests
+
+    func testRigFilterTownFiltersOnlyTownSource() async {
+        // Set rig filter to town via AppState
+        AppState.shared.selectedRig = "town"
+        viewModel.currentFilter = .all
+
+        // Wait for filter to apply
+        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+
+        let filtered = viewModel.filteredBeads
+        XCTAssertTrue(filtered.allSatisfy { $0.source == "town" }, "All beads should have 'town' source")
+
+        // Clean up
+        AppState.shared.selectedRig = nil
+    }
+
+    func testRigFilterSpecificRigFiltersCorrectly() async {
+        // Set rig filter to adjutant via AppState
+        AppState.shared.selectedRig = "adjutant"
+        viewModel.currentFilter = .all
+
+        // Wait for filter to apply
+        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+
+        let filtered = viewModel.filteredBeads
+        XCTAssertTrue(filtered.allSatisfy { $0.source == "adjutant" }, "All beads should have 'adjutant' source")
+
+        // Clean up
+        AppState.shared.selectedRig = nil
+    }
+
+    func testRigFilterNilShowsAllBeads() async {
+        // Ensure rig filter is nil (ALL)
+        AppState.shared.selectedRig = nil
+        viewModel.currentFilter = .all
+
+        // Wait for filter to apply
+        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+
+        // All beads should be shown when rig filter is nil
+        XCTAssertEqual(viewModel.filteredBeads.count, viewModel.beads.count, "All beads should be shown")
+    }
 }

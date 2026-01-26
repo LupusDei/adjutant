@@ -1,7 +1,11 @@
 import SwiftUI
 
+/// Special value for town-level beads filter
+private let townFilterValue = "town"
+
 /// A dropdown menu for filtering content by rig.
-/// Shows "All Rigs" option plus available rigs from the system status.
+/// Shows "All" option, "Town" option, plus available rigs from the system status.
+/// Matches the frontend BeadsView.tsx rig filter behavior.
 struct RigFilterDropdown: View {
     @Environment(\.crtTheme) private var theme
     @ObservedObject private var appState = AppState.shared
@@ -12,17 +16,42 @@ struct RigFilterDropdown: View {
     /// Whether the dropdown is expanded
     @State private var isExpanded = false
 
+    /// Check if TOWN filter is selected
+    private var isTownSelected: Bool {
+        appState.selectedRig == townFilterValue
+    }
+
+    /// Check if a specific rig (not ALL or TOWN) is selected
+    private func isRigSelected(_ rig: String) -> Bool {
+        guard let selected = appState.selectedRig else { return false }
+        return selected != townFilterValue && selected == rig
+    }
+
     var body: some View {
         Menu {
-            // All Rigs option
+            // ALL option
             Button {
                 withAnimation(.easeInOut(duration: CRTTheme.Animation.fast)) {
                     appState.selectedRig = nil
                 }
             } label: {
                 HStack {
-                    Text("ALL RIGS")
+                    Text("ALL")
                     if appState.selectedRig == nil {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+
+            // TOWN option (for town-sourced beads)
+            Button {
+                withAnimation(.easeInOut(duration: CRTTheme.Animation.fast)) {
+                    appState.selectedRig = townFilterValue
+                }
+            } label: {
+                HStack {
+                    Text("TOWN")
+                    if isTownSelected {
                         Image(systemName: "checkmark")
                     }
                 }
@@ -40,7 +69,7 @@ struct RigFilterDropdown: View {
                     } label: {
                         HStack {
                             Text(rig.uppercased())
-                            if appState.selectedRig == rig {
+                            if isRigSelected(rig) {
                                 Image(systemName: "checkmark")
                             }
                         }
@@ -52,7 +81,7 @@ struct RigFilterDropdown: View {
         }
         .menuStyle(.borderlessButton)
         .accessibilityLabel("Rig filter")
-        .accessibilityValue(appState.selectedRig?.uppercased() ?? "All rigs")
+        .accessibilityValue(displayText)
     }
 
     private var dropdownButton: some View {
@@ -84,10 +113,13 @@ struct RigFilterDropdown: View {
     }
 
     private var displayText: String {
-        if let rig = appState.selectedRig {
-            return rig.uppercased()
+        guard let rig = appState.selectedRig else {
+            return "ALL"
         }
-        return "ALL RIGS"
+        if rig == townFilterValue {
+            return "TOWN"
+        }
+        return rig.uppercased()
     }
 }
 

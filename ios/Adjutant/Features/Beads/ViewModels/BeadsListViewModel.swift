@@ -193,14 +193,22 @@ final class BeadsListViewModel: BaseViewModel {
 
     // MARK: - Private Helpers
 
+    /// Special value for town-level beads filter
+    private static let townFilterValue = "town"
+
     /// Applies the current filter and search to beads
     private func applyFilter() {
         var result = beads
 
-        // Apply rig filter
-        if let rig = selectedRig {
-            result = result.filter { bead in
-                beadMatchesRig(bead, rig: rig)
+        // Apply rig filter (matches frontend BeadsView.tsx behavior)
+        // nil = ALL (no filter), "town" = TOWN (source === "town"), other = specific rig
+        if let rigFilter = selectedRig {
+            if rigFilter == Self.townFilterValue {
+                // TOWN: filter to beads with source === "town"
+                result = result.filter { $0.source == "town" }
+            } else {
+                // Specific rig: filter by source field
+                result = result.filter { $0.source == rigFilter }
             }
         }
 
@@ -265,7 +273,21 @@ final class BeadsListViewModel: BaseViewModel {
         applyFilter()
     }
 
+
     // MARK: - Computed Properties
+
+    /// Unique rig names extracted from bead sources (excludes "town" and "unknown")
+    /// Matches frontend BeadsView.tsx rigOptions logic
+    var rigOptions: [String] {
+        var rigs = Set<String>()
+        for bead in beads {
+            let source = bead.source
+            if !source.isEmpty && source != "town" && source != "unknown" {
+                rigs.insert(source)
+            }
+        }
+        return Array(rigs).sorted()
+    }
 
     /// Count of open beads
     var openCount: Int {
