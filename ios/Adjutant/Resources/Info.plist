@@ -2,9 +2,20 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.jmm.Adjutant.refresh</string>
+		<string>com.jmm.Adjutant.processing</string>
+	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Adjutant needs microphone access to enable voice input for sending messages to the Mayor.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Adjutant uses speech recognition to convert your voice into text messages.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>
