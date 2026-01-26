@@ -62,6 +62,8 @@
 		A012345700000000000000W2 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		A012345700000000000000W3 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		A012345700000000000000W4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A012345700000000000000W5 /* AdjutantWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AdjutantWidgets.entitlements; sourceTree = "<group>"; };
+		A01234570000000000000050 /* Adjutant.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Adjutant.entitlements; sourceTree = "<group>"; };
 		A012345B0000000000000001 /* Adjutant.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Adjutant.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A012345B0000000000000010 /* AdjutantTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AdjutantTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A012345B0000000000000020 /* AdjutantUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AdjutantUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -119,6 +121,7 @@
 		A012345D00000000000000W1 /* AdjutantWidgets */ = {
 			isa = PBXGroup;
 			children = (
+				A012345700000000000000W5 /* AdjutantWidgets.entitlements */,
 				A012345700000000000000W1 /* AdjutantWidgets.swift */,
 				A012345700000000000000W4 /* Info.plist */,
 			);
@@ -137,6 +140,7 @@
 		A012345D0000000000000002 /* Adjutant */ = {
 			isa = PBXGroup;
 			children = (
+				A01234570000000000000050 /* Adjutant.entitlements */,
 				A012345D0000000000000003 /* App */,
 				A012345D0000000000000004 /* Features */,
 				A012345D0000000000000005 /* Core */,
@@ -613,6 +617,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Adjutant/Adjutant.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Adjutant/Preview Content\"";
@@ -642,6 +647,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Adjutant/Adjutant.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Adjutant/Preview Content\"";
@@ -739,6 +745,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = AdjutantWidgets/AdjutantWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 2BRYAM5Q52;
@@ -766,6 +773,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = AdjutantWidgets/AdjutantWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 2BRYAM5Q52;
