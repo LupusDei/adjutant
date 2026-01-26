@@ -14,6 +14,17 @@ export interface BeadsViewProps {
 /** Rig options for filtering */
 type RigFilter = 'ALL' | 'TOWN' | string;
 
+/** Sort options matching iOS app */
+type BeadSort = 'lastUpdated' | 'priority' | 'createdDate' | 'alphabetical' | 'assignee';
+
+const SORT_OPTIONS: { value: BeadSort; label: string }[] = [
+  { value: 'lastUpdated', label: 'LAST UPDATED' },
+  { value: 'priority', label: 'PRIORITY' },
+  { value: 'createdDate', label: 'CREATED' },
+  { value: 'alphabetical', label: 'A-Z' },
+  { value: 'assignee', label: 'ASSIGNEE' },
+];
+
 /** Excluded types (always filtered) */
 const EXCLUDED_TYPES = ['message', 'epic', 'convoy', 'agent'];
 
@@ -32,6 +43,9 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
     return localStorage.getItem('beads-rig-filter') ?? 'TOWN';
   });
   const [rigOptions, setRigOptions] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState<BeadSort>(() => {
+    return (localStorage.getItem('beads-sort') as BeadSort) ?? 'priority';
+  });
   const [overseerView, setOverseerView] = useState(false);
   const [beads, setBeads] = useState<BeadInfo[]>([]);
 
@@ -77,6 +91,11 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
   useEffect(() => {
     localStorage.setItem('beads-rig-filter', rigFilter);
   }, [rigFilter]);
+
+  // Persist sort preference to localStorage
+  useEffect(() => {
+    localStorage.setItem('beads-sort', sortBy);
+  }, [sortBy]);
 
   // Filter beads based on search and overseer view
   // Note: Rig filtering is now done server-side via API parameter
@@ -124,8 +143,49 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
       });
     }
 
+    // Apply sorting
+    result = [...result].sort((a, b) => {
+      switch (sortBy) {
+        case 'lastUpdated': {
+          const dateA = new Date(a.updatedAt ?? a.createdAt ?? 0).getTime();
+          const dateB = new Date(b.updatedAt ?? b.createdAt ?? 0).getTime();
+          return dateB - dateA; // Most recent first
+        }
+        case 'priority': {
+          if (a.priority !== b.priority) {
+            return a.priority - b.priority; // Lower number = higher priority
+          }
+          // Tie-break by last updated
+          const dateA = new Date(a.updatedAt ?? a.createdAt ?? 0).getTime();
+          const dateB = new Date(b.updatedAt ?? b.createdAt ?? 0).getTime();
+          return dateB - dateA;
+        }
+        case 'createdDate': {
+          const dateA = new Date(a.createdAt ?? 0).getTime();
+          const dateB = new Date(b.createdAt ?? 0).getTime();
+          return dateB - dateA; // Newest first
+        }
+        case 'alphabetical':
+          return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+        case 'assignee': {
+          const assigneeA = a.assignee ?? '';
+          const assigneeB = b.assignee ?? '';
+          // Unassigned sorts last
+          if (!assigneeA && assigneeB) return 1;
+          if (assigneeA && !assigneeB) return -1;
+          if (assigneeA !== assigneeB) {
+            return assigneeA.localeCompare(assigneeB, undefined, { sensitivity: 'base' });
+          }
+          // Same assignee: sort by priority
+          return a.priority - b.priority;
+        }
+        default:
+          return 0;
+      }
+    });
+
     return result;
-  }, [beads, overseerView, searchInput]);
+  }, [beads, overseerView, searchInput, sortBy]);
 
   const handleOverseerToggle = useCallback((enabled: boolean) => {
     setOverseerView(enabled);
@@ -206,6 +266,20 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
             {rigOptions.map((rig) => (
               <option key={rig} value={rig}>
                 {rig.toUpperCase().replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
+
+          {/* Sort Dropdown */}
+          <span style={styles.filterLabel}>SORT:</span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as BeadSort)}
+            style={styles.select}
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
               </option>
             ))}
           </select>
