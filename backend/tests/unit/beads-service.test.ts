@@ -222,7 +222,7 @@ describe("beads-service", () => {
 
       vi.mocked(execBd).mockResolvedValue({
         success: true,
-        data: mockIssue,
+        data: [mockIssue],
         exitCode: 0,
       });
 
@@ -252,7 +252,7 @@ describe("beads-service", () => {
 
       vi.mocked(execBd).mockResolvedValue({
         success: true,
-        data: mockIssue,
+        data: [mockIssue],
         exitCode: 0,
       });
 
@@ -308,7 +308,7 @@ describe("beads-service", () => {
 
       vi.mocked(execBd).mockResolvedValue({
         success: true,
-        data: mockIssue,
+        data: [mockIssue],
         exitCode: 0,
       });
 
@@ -353,7 +353,7 @@ describe("beads-service", () => {
 
       vi.mocked(execBd).mockResolvedValue({
         success: true,
-        data: minimalIssue,
+        data: [minimalIssue],
         exitCode: 0,
       });
 
@@ -376,7 +376,7 @@ describe("beads-service", () => {
     it("should call execBd with correct args (show with --json)", async () => {
       vi.mocked(execBd).mockResolvedValue({
         success: true,
-        data: createBead({ id: "hq-test" }),
+        data: [createBead({ id: "hq-test" })],
         exitCode: 0,
       });
 
@@ -384,22 +384,22 @@ describe("beads-service", () => {
 
       const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
       expect(args).toContain("show");
-      expect(args).toContain("test"); // short ID without prefix
+      expect(args).toContain("hq-test"); // full ID (bd show accepts full IDs)
       expect(args).toContain("--json");
     });
 
-    it("should strip prefix correctly for multi-part IDs", async () => {
+    it("should pass full ID for multi-part IDs", async () => {
       vi.mocked(execBd).mockResolvedValue({
         success: true,
-        data: createBead({ id: "hq-cv-hfove" }),
+        data: [createBead({ id: "hq-cv-hfove" })],
         exitCode: 0,
       });
 
       await getBead("hq-cv-hfove");
 
       const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
-      // Should strip "hq-" and keep "cv-hfove"
-      expect(args).toContain("cv-hfove");
+      // bd show accepts full IDs - no prefix stripping needed
+      expect(args).toContain("hq-cv-hfove");
     });
 
     it("should try town database for unknown prefix and handle not found", async () => {
