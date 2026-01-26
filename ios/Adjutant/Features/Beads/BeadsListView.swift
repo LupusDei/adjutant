@@ -369,9 +369,21 @@ struct BeadsListView: View {
         }
     }
 
-    /// Beads filtered for Kanban display with overseer mode applied
+    /// Beads filtered for Kanban display with search and overseer mode applied.
+    /// Uses all beads (not status-filtered) since Kanban shows all columns.
     private var filteredBeadsForKanban: [BeadInfo] {
-        var result = viewModel.filteredBeads
+        var result = viewModel.beads
+
+        // Apply search filter
+        if !viewModel.searchText.isEmpty {
+            let query = viewModel.searchText.lowercased()
+            result = result.filter { bead in
+                bead.title.lowercased().contains(query) ||
+                bead.id.lowercased().contains(query) ||
+                (bead.assignee?.lowercased().contains(query) ?? false) ||
+                bead.labels.contains { $0.lowercased().contains(query) }
+            }
+        }
 
         // Apply overseer mode filtering
         if appState.isOverseerMode {
