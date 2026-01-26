@@ -54,18 +54,14 @@ export interface BeadsServiceResult<T> {
 
 /**
  * Valid bead status values for Kanban workflow.
- * Workflow: backlog -> open -> in_progress -> testing -> merging -> complete -> closed
+ * Simplified workflow: open -> in_progress -> closed
  */
 export type BeadStatus =
-  | "backlog"      // New tasks start here
   | "open"         // Ready to be picked up
-  | "hooked"       // Agent has task on hook (legacy compatibility)
+  | "hooked"       // Agent has task on hook (maps to in_progress)
   | "in_progress"  // Actively being worked
-  | "blocked"      // Blocked on something
-  | "testing"      // Running quality gates
-  | "merging"      // In merge queue
-  | "complete"     // Merged but not deployed
-  | "deferred"     // Postponed
+  | "blocked"      // Blocked on something (maps to in_progress)
+  | "deferred"     // Postponed (maps to open)
   | "closed";      // Totally done
 
 // ============================================================================

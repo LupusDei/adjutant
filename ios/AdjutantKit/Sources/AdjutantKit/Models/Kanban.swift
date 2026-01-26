@@ -2,14 +2,10 @@ import Foundation
 import SwiftUI
 
 /// Kanban column identifiers matching bead status values.
-/// Workflow: backlog -> open -> in_progress -> testing -> merging -> complete -> closed
+/// Simplified workflow: open -> in_progress -> closed
 public enum KanbanColumnId: String, Codable, CaseIterable, Identifiable {
-    case backlog
     case open
     case inProgress = "in_progress"
-    case testing
-    case merging
-    case complete
     case closed
 
     public var id: String { rawValue }
@@ -45,12 +41,8 @@ public struct KanbanColumnDefinition {
 
 /// Column definitions in workflow order with Pip-Boy theme colors.
 public let kanbanColumns: [KanbanColumnDefinition] = [
-    KanbanColumnDefinition(id: .backlog, title: "BACKLOG", color: Color(hex: 0x666666)),
     KanbanColumnDefinition(id: .open, title: "OPEN", color: Color(hex: 0x00FF00)),
     KanbanColumnDefinition(id: .inProgress, title: "IN PROGRESS", color: Color(hex: 0x00FF88)),
-    KanbanColumnDefinition(id: .testing, title: "TESTING", color: Color(hex: 0xFFB000)),
-    KanbanColumnDefinition(id: .merging, title: "MERGING", color: Color(hex: 0x00BFFF)),
-    KanbanColumnDefinition(id: .complete, title: "COMPLETE", color: Color(hex: 0x88FF88)),
     KanbanColumnDefinition(id: .closed, title: "CLOSED", color: Color(hex: 0x444444)),
 ]
 
@@ -64,16 +56,16 @@ public func mapStatusToColumn(_ status: String) -> KanbanColumnId {
         return columnId
     }
 
-    // Map legacy/alternative statuses
+    // Map legacy/alternative statuses to the 3 columns
     switch normalized {
-    case "hooked":
-        return .inProgress
-    case "blocked":
-        return .inProgress  // Blocked items stay visible in in_progress
-    case "deferred":
-        return .backlog     // Deferred goes back to backlog
+    case "hooked", "blocked", "testing", "merging":
+        return .inProgress  // All active work goes to in_progress
+    case "complete":
+        return .closed      // Complete maps to closed
+    case "backlog", "deferred":
+        return .open        // Backlog and deferred go to open
     default:
-        return .backlog     // Unknown statuses default to backlog
+        return .open        // Unknown statuses default to open
     }
 }
 
