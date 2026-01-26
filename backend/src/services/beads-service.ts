@@ -6,7 +6,8 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { execBd, resolveBeadsDir, type BeadsIssue } from "./bd-client.js";
-import { listAllBeadsDirs, resolveTownRoot, type BeadsDirInfo } from "./gastown-workspace.js";
+import { listAllBeadsDirs, resolveTownRoot } from "./gastown-workspace.js";
+import { logInfo } from "../utils/index.js";
 
 // ============================================================================
 // Types
@@ -99,13 +100,6 @@ function extractRig(assignee: string | null | undefined): string | null {
 let prefixToSourceMap: Map<string, string> | null = null;
 
 /**
- * Cached beads directories with TTL to avoid repeated filesystem scans.
- */
-let cachedBeadsDirs: BeadsDirInfo[] | null = null;
-let beadsDirsCacheTime = 0;
-const BEADS_DIRS_CACHE_TTL = 30000; // 30 seconds
-
-/**
  * Reads the issue prefix from a .beads/config.yaml file.
  * Returns null if not found or unreadable.
  */
@@ -122,36 +116,28 @@ function readPrefixFromConfig(beadsDir: string): string | null {
 }
 
 /**
- * Gets all beads directories with caching to avoid repeated filesystem scans.
- */
-async function getCachedBeadsDirs(): Promise<BeadsDirInfo[]> {
-  const now = Date.now();
-  if (cachedBeadsDirs && (now - beadsDirsCacheTime) < BEADS_DIRS_CACHE_TTL) {
-    return cachedBeadsDirs;
-  }
-  cachedBeadsDirs = await listAllBeadsDirs();
-  beadsDirsCacheTime = now;
-  return cachedBeadsDirs;
-}
-
-/**
  * Builds prefix-to-source mapping dynamically from discovered beads directories.
  * Reads the prefix from each rig's .beads/config.yaml file.
- * @param beadsDirs Optional pre-fetched beads directories to avoid duplicate call
  */
-function buildPrefixMapFromDirs(beadsDirs: BeadsDirInfo[]): Map<string, string> {
+async function buildPrefixMap(): Promise<Map<string, string>> {
   const map = new Map<string, string>();
 
   // Town beads always use "hq" prefix
   map.set("hq", "town");
 
-  for (const dirInfo of beadsDirs) {
-    if (!dirInfo.rig) continue; // Skip town-level (already added)
+  try {
+    const beadsDirs = await listAllBeadsDirs();
 
-    const prefix = readPrefixFromConfig(dirInfo.path);
-    if (prefix) {
-      map.set(prefix, dirInfo.rig);
+    for (const dirInfo of beadsDirs) {
+      if (!dirInfo.rig) continue; // Skip town-level (already added)
+
+      const prefix = readPrefixFromConfig(dirInfo.path);
+      if (prefix) {
+        map.set(prefix, dirInfo.rig);
+      }
     }
+  } catch {
+    // If discovery fails, map will just have the "hq" → "town" default
   }
 
   return map;
@@ -170,12 +156,11 @@ function loadPrefixMap(): Map<string, string> {
 }
 
 /**
- * Ensures prefix map is built from the given beads directories.
- * @param beadsDirs Pre-fetched beads directories
+ * Ensures prefix map is built (call this before using prefixToSource).
  */
-function ensurePrefixMapFromDirs(beadsDirs: BeadsDirInfo[]): void {
+async function ensurePrefixMap(): Promise<void> {
   if (!prefixToSourceMap || prefixToSourceMap.size <= 1) {
-    prefixToSourceMap = buildPrefixMapFromDirs(beadsDirs);
+    prefixToSourceMap = await buildPrefixMap();
   }
 }
 
@@ -302,9 +287,8 @@ export async function listBeads(
   options: ListBeadsOptions = {}
 ): Promise<BeadsServiceResult<BeadInfo[]>> {
   try {
-    // Build prefix map for source mapping in transformBead (uses cached beads dirs)
-    const beadsDirs = await getCachedBeadsDirs();
-    ensurePrefixMapFromDirs(beadsDirs);
+    // Build prefix map for source mapping in transformBead
+    await ensurePrefixMap();
 
     const townRoot = resolveTownRoot();
     const workDir = options.rigPath ?? townRoot;
@@ -352,14 +336,13 @@ export async function listBeads(
 export async function listAllBeads(
   options: Omit<ListBeadsOptions, "rig" | "rigPath"> = {}
 ): Promise<BeadsServiceResult<BeadInfo[]>> {
+  const perfStart = Date.now();
   try {
+    // Build prefix map from discovered rigs (for source mapping in transformBead)
+    await ensurePrefixMap();
+
     const townRoot = resolveTownRoot();
-
-    // Get cached beads directories (single call instead of duplicate)
-    const beadsDirs = await getCachedBeadsDirs();
-
-    // Build prefix map from the same beads directories (avoids second listAllBeadsDirs call)
-    ensurePrefixMapFromDirs(beadsDirs);
+    const beadsDirs = await listAllBeadsDirs();
 
     // Include town beads (hq-*) - this is the primary source
     const townBeadsDir = join(townRoot, ".beads");
@@ -378,9 +361,9 @@ export async function listAllBeads(
     }
 
     // Fetch from all databases in parallel (town + rigs)
-    const fetchPromises = databasesToQuery.map((db) =>
-      fetchBeadsFromDatabase(db.workDir, db.beadsDir, db.source, options)
-    );
+    const fetchPromises = databasesToQuery.map(async (db) => {
+      return fetchBeadsFromDatabase(db.workDir, db.beadsDir, db.source, options);
+    });
 
     const results = await Promise.all(fetchPromises);
     let allBeads = results.flat();
@@ -414,8 +397,10 @@ export async function listAllBeads(
       allBeads = allBeads.slice(0, options.limit);
     }
 
+    logInfo("listAllBeads complete", { durationMs: Date.now() - perfStart, beadCount: allBeads.length });
     return { success: true, data: allBeads };
   } catch (err) {
+    logInfo("listAllBeads error", { durationMs: Date.now() - perfStart, error: err instanceof Error ? err.message : String(err) });
     return {
       success: false,
       error: {
@@ -448,6 +433,9 @@ export async function updateBeadStatus(
       };
     }
 
+    // Build prefix map to determine which database to use
+    await ensurePrefixMap();
+
     // Get the prefix from the bead ID
     const prefix = beadId.split("-")[0];
     if (!prefix) {
@@ -459,10 +447,6 @@ export async function updateBeadStatus(
         },
       };
     }
-
-    // Build prefix map to determine which database to use (uses cached beads dirs)
-    const beadsDirs = await getCachedBeadsDirs();
-    ensurePrefixMapFromDirs(beadsDirs);
 
     // Determine which database this bead belongs to
     const map = loadPrefixMap();
@@ -477,7 +461,8 @@ export async function updateBeadStatus(
       workDir = townRoot;
       beadsDir = resolveBeadsDir(townRoot);
     } else {
-      // Rig-specific bead - find from cached beads dirs
+      // Rig-specific bead - need to find the rig path
+      const beadsDirs = await listAllBeadsDirs();
       const rigDir = beadsDirs.find((d) => d.rig === source);
       if (!rigDir) {
         return {
