@@ -145,6 +145,8 @@ public final class LiveActivityService: ObservableObject {
             powerState: .stopped,
             unreadMailCount: 0,
             activeAgents: 0,
+            beadsInProgress: 0,
+            beadsHooked: 0,
             lastUpdated: Date()
         )
 
@@ -216,16 +218,22 @@ public final class LiveActivityService: ObservableObject {
     ///   - powerState: Current power state
     ///   - unreadMailCount: Number of unread mail messages
     ///   - activeAgents: Number of active agents
+    ///   - beadsInProgress: Number of beads currently in progress
+    ///   - beadsHooked: Number of beads currently hooked
     /// - Returns: A ContentState populated with current values
     static func createState(
         powerState: AdjutantKit.PowerState,
         unreadMailCount: Int,
-        activeAgents: Int
+        activeAgents: Int,
+        beadsInProgress: Int = 0,
+        beadsHooked: Int = 0
     ) -> GastownActivityAttributes.ContentState {
         return GastownActivityAttributes.ContentState(
             powerState: powerState,
             unreadMailCount: unreadMailCount,
             activeAgents: activeAgents,
+            beadsInProgress: beadsInProgress,
+            beadsHooked: beadsHooked,
             lastUpdated: Date()
         )
     }

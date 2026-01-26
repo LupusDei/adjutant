@@ -69,9 +69,15 @@ private struct LockScreenView: View {
                 // Status summary
                 HStack(spacing: 12) {
                     StatusBadge(
-                        icon: "envelope.fill",
-                        value: context.state.unreadMailCount,
-                        label: "mail"
+                        icon: "circle.fill",
+                        value: context.state.beadsInProgress,
+                        label: "active"
+                    )
+
+                    StatusBadge(
+                        icon: "pin.fill",
+                        value: context.state.beadsHooked,
+                        label: "hooked"
                     )
 
                     StatusBadge(
@@ -153,13 +159,22 @@ private struct ExpandedBottomView: View {
     let context: ActivityViewContext<GastownActivityAttributes>
 
     var body: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 16) {
             HStack(spacing: 4) {
-                Image(systemName: "envelope.fill")
+                Image(systemName: "circle.fill")
                     .foregroundStyle(.blue)
-                Text("\(context.state.unreadMailCount)")
+                Text("\(context.state.beadsInProgress)")
                     .fontWeight(.medium)
-                Text("mail")
+                Text("active")
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 4) {
+                Image(systemName: "pin.fill")
+                    .foregroundStyle(.orange)
+                Text("\(context.state.beadsHooked)")
+                    .fontWeight(.medium)
+                Text("hooked")
                     .foregroundStyle(.secondary)
             }
 
@@ -194,19 +209,13 @@ private struct CompactTrailingView: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            if context.state.unreadMailCount > 0 {
-                Image(systemName: "envelope.fill")
-                    .font(.caption2)
-                Text("\(context.state.unreadMailCount)")
-                    .font(.caption)
-                    .monospacedDigit()
-            } else {
-                Image(systemName: "person.2.fill")
-                    .font(.caption2)
-                Text("\(context.state.activeAgents)")
-                    .font(.caption)
-                    .monospacedDigit()
-            }
+            // Show beads in progress count (most important metric)
+            Image(systemName: "circle.fill")
+                .font(.caption2)
+                .foregroundStyle(.blue)
+            Text("\(context.state.beadsInProgress)")
+                .font(.caption)
+                .monospacedDigit()
         }
     }
 }
@@ -296,12 +305,16 @@ private func powerStateColor(for powerState: PowerState) -> Color {
         powerState: .running,
         unreadMailCount: 3,
         activeAgents: 5,
+        beadsInProgress: 4,
+        beadsHooked: 2,
         lastUpdated: Date()
     )
     GastownActivityAttributes.ContentState(
         powerState: .stopped,
         unreadMailCount: 0,
         activeAgents: 0,
+        beadsInProgress: 0,
+        beadsHooked: 0,
         lastUpdated: Date()
     )
 }
@@ -313,6 +326,8 @@ private func powerStateColor(for powerState: PowerState) -> Color {
         powerState: .running,
         unreadMailCount: 3,
         activeAgents: 5,
+        beadsInProgress: 4,
+        beadsHooked: 2,
         lastUpdated: Date()
     )
 }
@@ -324,6 +339,8 @@ private func powerStateColor(for powerState: PowerState) -> Color {
         powerState: .running,
         unreadMailCount: 3,
         activeAgents: 5,
+        beadsInProgress: 4,
+        beadsHooked: 2,
         lastUpdated: Date()
     )
 }
@@ -335,6 +352,8 @@ private func powerStateColor(for powerState: PowerState) -> Color {
         powerState: .running,
         unreadMailCount: 3,
         activeAgents: 5,
+        beadsInProgress: 4,
+        beadsHooked: 2,
         lastUpdated: Date()
     )
 }

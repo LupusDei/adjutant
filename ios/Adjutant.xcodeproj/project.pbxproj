@@ -24,6 +24,7 @@
 		A012345600000000000000W4 /* AdjutantWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A012345B00000000000000W1 /* AdjutantWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A012345600000000000000W6 /* AdjutantLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A012345700000000000000W6 /* AdjutantLiveActivity.swift */; };
 		A012345600000000000000W7 /* AdjutantKit in Frameworks */ = {isa = PBXBuildFile; productRef = A012347100000000000000W7 /* AdjutantKit */; };
+		A012345600000000000000W8 /* GastownWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A012345700000000000000W8 /* GastownWidget.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -83,6 +84,7 @@
 		A012345700000000000000W4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A012345700000000000000W5 /* AdjutantWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AdjutantWidgets.entitlements; sourceTree = "<group>"; };
 		A012345700000000000000W6 /* AdjutantLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjutantLiveActivity.swift; sourceTree = "<group>"; };
+		A012345700000000000000W8 /* GastownWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GastownWidget.swift; sourceTree = "<group>"; };
 		A012345B0000000000000001 /* Adjutant.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Adjutant.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A012345B0000000000000010 /* AdjutantTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AdjutantTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A012345B0000000000000020 /* AdjutantUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AdjutantUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -259,6 +261,7 @@
 			children = (
 				A012345700000000000000W1 /* AdjutantWidgets.swift */,
 				A012345700000000000000W6 /* AdjutantLiveActivity.swift */,
+				A012345700000000000000W8 /* GastownWidget.swift */,
 				A012345700000000000000W5 /* AdjutantWidgets.entitlements */,
 				A012345700000000000000W4 /* Info.plist */,
 			);
@@ -498,6 +501,7 @@
 			files = (
 				A012345600000000000000W1 /* AdjutantWidgets.swift in Sources */,
 				A012345600000000000000W6 /* AdjutantLiveActivity.swift in Sources */,
+				A012345600000000000000W8 /* GastownWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

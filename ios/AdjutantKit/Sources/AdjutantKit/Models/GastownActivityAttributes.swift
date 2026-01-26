@@ -26,6 +26,12 @@ public struct GastownActivityAttributes: ActivityAttributes {
         /// Number of currently active agents across all rigs
         public let activeAgents: Int
 
+        /// Number of beads currently in progress
+        public let beadsInProgress: Int
+
+        /// Number of beads currently hooked (assigned to workers)
+        public let beadsHooked: Int
+
         /// Timestamp of the last status update
         public let lastUpdated: Date
 
@@ -33,11 +39,15 @@ public struct GastownActivityAttributes: ActivityAttributes {
             powerState: PowerState,
             unreadMailCount: Int,
             activeAgents: Int,
+            beadsInProgress: Int = 0,
+            beadsHooked: Int = 0,
             lastUpdated: Date
         ) {
             self.powerState = powerState
             self.unreadMailCount = unreadMailCount
             self.activeAgents = activeAgents
+            self.beadsInProgress = beadsInProgress
+            self.beadsHooked = beadsHooked
             self.lastUpdated = lastUpdated
         }
     }

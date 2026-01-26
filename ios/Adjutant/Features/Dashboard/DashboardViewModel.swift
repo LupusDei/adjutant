@@ -20,6 +20,16 @@ final class DashboardViewModel: BaseViewModel {
     /// Crew members with their statuses
     @Published private(set) var crewMembers: [CrewMember] = []
 
+    /// Active convoys
+    @Published private(set) var convoys: [Convoy] = []
+
+    /// Beads in progress count
+    @Published private(set) var beadsInProgress: Int = 0
+
+    /// Beads hooked count
+    @Published private(set) var beadsHooked: Int = 0
+
+
     /// Whether the dashboard is currently refreshing (includes background polling)
     @Published private(set) var isRefreshing = false
 
@@ -90,10 +100,15 @@ final class DashboardViewModel: BaseViewModel {
         async let beadsResult = fetchBeads()
         async let mailResult = fetchMail()
         async let crewResult = fetchCrew()
+        async let convoysResult = fetchConvoys()
+        async let beadsInProgressResult = fetchBeads(status: .inProgress)
+        async let beadsHookedResult = fetchBeads(status: .hooked)
         async let _ : () = AppState.shared.fetchAvailableRigs()
 
         // Await all results
-        let (beads, mail, crew) = await (beadsResult, mailResult, crewResult)
+        let (beads, mail, crew, convoys, inProgressBeads, hookedBeads) = await (
+            beadsResult, mailResult, crewResult, convoysResult, beadsInProgressResult, beadsHookedResult
+        )
 
         // Update state
         if let beads = beads {
@@ -114,6 +129,14 @@ final class DashboardViewModel: BaseViewModel {
         if let crew = crew {
             self.crewMembers = crew
         }
+
+        if let convoys = convoys {
+            self.convoys = convoys.filter { !$0.isComplete }
+        }
+
+        // Update beads counts
+        self.beadsInProgress = inProgressBeads?.count ?? 0
+        self.beadsHooked = hookedBeads?.count ?? 0
 
         // Update cache for next navigation
         ResponseCache.shared.updateDashboard(
@@ -154,7 +177,9 @@ final class DashboardViewModel: BaseViewModel {
         let state = LiveActivityService.createState(
             powerState: powerState,
             unreadMailCount: unreadCount,
-            activeAgents: activeAgentCount
+            activeAgents: activeAgentCount,
+            beadsInProgress: beadsInProgress,
+            beadsHooked: beadsHooked
         )
 
         await LiveActivityService.shared.syncActivity(
@@ -206,6 +231,18 @@ final class DashboardViewModel: BaseViewModel {
     private func fetchCrew() async -> [CrewMember]? {
         await performAsync(showLoading: false) {
             try await self.apiClient.getAgents()
+        }
+    }
+
+    private func fetchConvoys() async -> [Convoy]? {
+        await performAsync(showLoading: false) {
+            try await self.apiClient.getConvoys()
+        }
+    }
+
+    private func fetchBeads(status: APIClient.BeadStatusFilter) async -> [BeadInfo]? {
+        await performAsync(showLoading: false) {
+            try await self.apiClient.getBeads(status: status)
         }
     }
 
