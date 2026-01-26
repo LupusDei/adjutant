@@ -5,7 +5,7 @@
 
 import { readFileSync } from "fs";
 import { join } from "path";
-import { execBd, resolveBeadsDir, type BeadsIssue } from "./bd-client.js";
+import { execBd, resolveBeadsDir, stripBeadPrefix, type BeadsIssue } from "./bd-client.js";
 import { listAllBeadsDirs, resolveTownRoot } from "./gastown-workspace.js";
 import { logInfo } from "../utils/index.js";
 
@@ -33,22 +33,24 @@ export interface BeadInfo {
 }
 
 /**
- * Extended bead info with full details for the detail view.
+ * Detailed bead info for the detail view.
+ * Includes description and relationship info.
  */
 export interface BeadDetail extends BeadInfo {
   description: string;
   closedAt: string | null;
-  hookBead: string | null;
-  roleBead: string | null;
+  /** Agent state if assigned (working, idle, stuck, stale) */
   agentState: string | null;
-  pinned: boolean;
-  dependencies: BeadDependency[];
-}
-
-export interface BeadDependency {
-  issueId: string;
-  dependsOnId: string;
-  type: string;
+  /** Dependencies this bead has */
+  dependencies: Array<{
+    issueId: string;
+    dependsOnId: string;
+    type: string;
+  }>;
+  /** Whether this is a wisp (transient work unit) */
+  isWisp: boolean;
+  /** Whether this is pinned */
+  isPinned: boolean;
 }
 
 export interface ListBeadsOptions {
@@ -207,26 +209,6 @@ function transformBead(issue: BeadsIssue, _dbSource: string): BeadInfo {
     labels: issue.labels ?? [],
     createdAt: issue.created_at,
     updatedAt: issue.updated_at ?? null,
-  };
-}
-
-/**
- * Transform raw BeadsIssue to BeadDetail for the detail view.
- */
-function transformBeadDetail(issue: BeadsIssue, _dbSource: string): BeadDetail {
-  return {
-    ...transformBead(issue, _dbSource),
-    description: issue.description ?? "",
-    closedAt: issue.closed_at ?? null,
-    hookBead: issue.hook_bead ?? null,
-    roleBead: issue.role_bead ?? null,
-    agentState: issue.agent_state ?? null,
-    pinned: issue.pinned ?? false,
-    dependencies: (issue.dependencies ?? []).map((d) => ({
-      issueId: d.issue_id,
-      dependsOnId: d.depends_on_id,
-      type: d.type,
-    })),
   };
 }
 
@@ -543,15 +525,15 @@ export async function updateBeadStatus(
 }
 
 /**
- * Gets a single bead by ID with full details.
- * @param beadId Full bead ID (e.g., "hq-vts8" or "adj-53tj")
- * @returns Result with BeadDetail or error
+ * Gets detailed information about a single bead.
+ * @param beadId Full bead ID (e.g., "hq-vts8" or "adj-67tta")
+ * @returns Result with bead details or error
  */
 export async function getBead(
   beadId: string
 ): Promise<BeadsServiceResult<BeadDetail>> {
   try {
-    // Build prefix map for source resolution
+    // Build prefix map to determine which database to use
     await ensurePrefixMap();
 
     // Get the prefix from the bead ID
@@ -568,18 +550,18 @@ export async function getBead(
 
     // Determine which database this bead belongs to
     const map = loadPrefixMap();
-    const source = map.get(prefix);
+    const source = map.get(prefix) ?? "unknown";
 
     let workDir: string;
     let beadsDir: string;
 
-    if (!source || source === "town") {
-      // Town-level bead (hq-*)
+    if (!source || source === "town" || source === "unknown") {
+      // Town-level bead (hq-*) or unknown prefix - try town first
       const townRoot = resolveTownRoot();
       workDir = townRoot;
       beadsDir = resolveBeadsDir(townRoot);
     } else {
-      // Rig-specific bead - need to find the rig path
+      // Rig-specific bead - find the rig path
       const beadsDirs = await listAllBeadsDirs();
       const rigDir = beadsDirs.find((d) => d.rig === source);
       if (!rigDir) {
@@ -596,8 +578,7 @@ export async function getBead(
     }
 
     // Execute bd show command with --json flag
-    // bd show expects the short ID (without prefix)
-    const shortId = beadId.includes("-") ? beadId.split("-").slice(1).join("-") : beadId;
+    const shortId = stripBeadPrefix(beadId);
     const args = ["show", shortId, "--json"];
 
     const result = await execBd<BeadsIssue>(args, { cwd: workDir, beadsDir });
@@ -606,21 +587,45 @@ export async function getBead(
       return {
         success: false,
         error: {
-          code: result.error?.code ?? "NOT_FOUND",
+          code: result.error?.code ?? "BEAD_NOT_FOUND",
           message: result.error?.message ?? `Bead not found: ${beadId}`,
         },
       };
     }
 
-    return {
-      success: true,
-      data: transformBeadDetail(result.data, source ?? "unknown"),
+    const issue = result.data;
+
+    // Transform to BeadDetail
+    const detail: BeadDetail = {
+      id: issue.id,
+      title: issue.title,
+      description: issue.description ?? "",
+      status: issue.status,
+      priority: issue.priority,
+      type: issue.issue_type,
+      assignee: issue.assignee ?? null,
+      rig: extractRig(issue.assignee),
+      source: prefixToSource(issue.id),
+      labels: issue.labels ?? [],
+      createdAt: issue.created_at,
+      updatedAt: issue.updated_at ?? null,
+      closedAt: issue.closed_at ?? null,
+      agentState: issue.agent_state ?? null,
+      dependencies: (issue.dependencies ?? []).map((d) => ({
+        issueId: d.issue_id,
+        dependsOnId: d.depends_on_id,
+        type: d.type,
+      })),
+      isWisp: issue.wisp ?? false,
+      isPinned: issue.pinned ?? false,
     };
+
+    return { success: true, data: detail };
   } catch (err) {
     return {
       success: false,
       error: {
-        code: "GET_ERROR",
+        code: "GET_BEAD_ERROR",
         message: err instanceof Error ? err.message : "Failed to get bead",
       },
     };

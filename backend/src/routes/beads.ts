@@ -3,12 +3,14 @@
  *
  * Endpoints:
  * - GET /api/beads - List beads for the rig
+ * - GET /api/beads/:id - Get detailed info for a single bead
+ * - PATCH /api/beads/:id - Update a bead's status
  */
 
 import { Router } from "express";
 import { listBeads, listAllBeads, updateBeadStatus, getBead, type BeadStatus } from "../services/beads-service.js";
 import { resolveTownRoot, resolveRigPath } from "../services/gastown-workspace.js";
-import { success, internalError, badRequest, notFound } from "../utils/responses.js";
+import { success, internalError, badRequest } from "../utils/responses.js";
 
 export const beadsRouter = Router();
 
@@ -44,8 +46,7 @@ beadsRouter.get("/", async (req, res) => {
   const status = statusParam ?? "default";
 
   // Normalize rig parameter: undefined/empty defaults to "town"
-  const trimmed = rigParam?.trim();
-  const rig = trimmed && trimmed.length > 0 ? trimmed : "town";
+  const rig = rigParam?.trim() || "town";
 
   // rig=all: Query ALL beads databases (town + all rigs)
   if (rig === "all") {
@@ -92,16 +93,16 @@ beadsRouter.get("/", async (req, res) => {
 
 /**
  * GET /api/beads/:id
- * Gets a single bead by ID with full details.
+ * Returns detailed information about a single bead.
  *
  * Path params:
- * - id: Full bead ID (e.g., "hq-vts8", "adj-53tj")
+ * - id: Full bead ID (e.g., "hq-vts8", "adj-67tta")
  *
  * Response:
  * - { success: true, data: BeadDetail }
  */
 beadsRouter.get("/:id", async (req, res) => {
-  const beadId = req.params.id;
+  const beadId = req.params["id"];
 
   if (!beadId) {
     return res.status(400).json(badRequest("Bead ID is required"));
@@ -110,10 +111,10 @@ beadsRouter.get("/:id", async (req, res) => {
   const result = await getBead(beadId);
 
   if (!result.success) {
-    const statusCode = result.error?.code === "NOT_FOUND" ? 404 : 500;
+    const statusCode = result.error?.code === "BEAD_NOT_FOUND" ? 404 : 500;
     return res.status(statusCode).json(
       statusCode === 404
-        ? notFound("Bead", beadId)
+        ? badRequest(result.error?.message ?? "Bead not found")
         : internalError(result.error?.message ?? "Failed to get bead")
     );
   }
@@ -135,7 +136,7 @@ beadsRouter.get("/:id", async (req, res) => {
  * - { success: true, data: { id: string, status: string } }
  */
 beadsRouter.patch("/:id", async (req, res) => {
-  const beadId = req.params.id;
+  const beadId = req.params["id"];
   const { status } = req.body as { status?: string };
 
   if (!beadId) {
