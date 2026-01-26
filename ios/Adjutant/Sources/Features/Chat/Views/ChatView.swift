@@ -170,7 +170,7 @@ struct ChatView: View {
                 .padding(.vertical, CRTTheme.Spacing.sm)
             }
             .refreshable {
-                await viewModel.loadMoreHistory()
+                await viewModel.refresh()
             }
             .onAppear {
                 scrollProxy = proxy
