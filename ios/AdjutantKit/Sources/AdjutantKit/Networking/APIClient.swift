@@ -53,10 +53,10 @@ public actor APIClient {
     private let encoder: JSONEncoder
     private let retryExecutor: RetryExecutor
 
-    public init(configuration: APIClientConfiguration) {
+    public init(configuration: APIClientConfiguration, urlSessionConfiguration: URLSessionConfiguration? = nil) {
         self.configuration = configuration
 
-        let sessionConfig = URLSessionConfiguration.default
+        let sessionConfig = urlSessionConfiguration ?? URLSessionConfiguration.default
         sessionConfig.timeoutIntervalForRequest = configuration.defaultTimeout
         sessionConfig.timeoutIntervalForResource = configuration.defaultTimeout * 2
         self.session = URLSession(configuration: sessionConfig)

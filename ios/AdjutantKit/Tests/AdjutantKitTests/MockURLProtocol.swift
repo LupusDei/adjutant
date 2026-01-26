@@ -106,4 +106,29 @@ extension MockURLProtocol {
             throw URLError(error)
         }
     }
+
+    /// Helper to get request body data from either httpBody or httpBodyStream
+    static func getBodyData(from request: URLRequest) -> Data? {
+        if let body = request.httpBody {
+            return body
+        }
+        if let stream = request.httpBodyStream {
+            stream.open()
+            defer { stream.close() }
+            var data = Data()
+            let bufferSize = 1024
+            let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+            defer { buffer.deallocate() }
+            while stream.hasBytesAvailable {
+                let bytesRead = stream.read(buffer, maxLength: bufferSize)
+                if bytesRead > 0 {
+                    data.append(buffer, count: bytesRead)
+                } else {
+                    break
+                }
+            }
+            return data.isEmpty ? nil : data
+        }
+        return nil
+    }
 }

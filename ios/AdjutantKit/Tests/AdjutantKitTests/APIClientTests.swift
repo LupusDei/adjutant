@@ -6,8 +6,8 @@ final class APIClientTests: XCTestCase {
 
     override func setUp() async throws {
         // Configure URLSession with mock protocol
-        let config = URLSessionConfiguration.ephemeral
-        config.protocolClasses = [MockURLProtocol.self]
+        let sessionConfig = URLSessionConfiguration.ephemeral
+        sessionConfig.protocolClasses = [MockURLProtocol.self]
 
         // Create client with custom configuration
         let clientConfig = APIClientConfiguration(
@@ -15,7 +15,7 @@ final class APIClientTests: XCTestCase {
             retryPolicy: .none // Disable retries for tests
         )
 
-        client = APIClient(configuration: clientConfig)
+        client = APIClient(configuration: clientConfig, urlSessionConfiguration: sessionConfig)
     }
 
     override func tearDown() async throws {
@@ -292,9 +292,12 @@ final class APIClientTests: XCTestCase {
 
     func testPostRequestBodyEncoding() async throws {
         var capturedRequest: URLRequest?
+        var capturedBody: Data?
 
         MockURLProtocol.mockHandler = { request in
             capturedRequest = request
+            // Capture body inside handler - may be in httpBody or httpBodyStream
+            capturedBody = MockURLProtocol.getBodyData(from: request)
             let envelope: [String: Any] = [
                 "success": true,
                 "data": ["sent": true],
@@ -322,8 +325,8 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(capturedRequest!.httpMethod, "POST")
         XCTAssertEqual(capturedRequest!.value(forHTTPHeaderField: "Content-Type"), "application/json")
 
-        let bodyData = capturedRequest!.httpBody!
-        let bodyJSON = try JSONSerialization.jsonObject(with: bodyData) as! [String: Any]
+        XCTAssertNotNil(capturedBody, "Request body should have been captured")
+        let bodyJSON = try JSONSerialization.jsonObject(with: capturedBody!) as! [String: Any]
         XCTAssertEqual(bodyJSON["to"] as? String, "mayor/")
         XCTAssertEqual(bodyJSON["subject"] as? String, "Test")
         XCTAssertEqual(bodyJSON["priority"] as? Int, 1)
