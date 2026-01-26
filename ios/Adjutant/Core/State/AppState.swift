@@ -144,7 +144,8 @@ final class AppState: ObservableObject {
 
         isOverseerMode = UserDefaults.standard.bool(forKey: "isOverseerMode")
         isVoiceMuted = UserDefaults.standard.bool(forKey: "isVoiceMuted")
-        selectedRig = UserDefaults.standard.string(forKey: "selectedRig")
+        // Default to "town" rig if no value persisted (not "all")
+        selectedRig = UserDefaults.standard.string(forKey: "selectedRig") ?? "town"
 
         if let urlString = UserDefaults.standard.string(forKey: "apiBaseURL"),
            let url = URL(string: urlString) {

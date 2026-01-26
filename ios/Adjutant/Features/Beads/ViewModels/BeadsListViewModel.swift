@@ -146,9 +146,13 @@ final class BeadsListViewModel: BaseViewModel {
     /// Sets up observation of rig filter changes from AppState
     private func setupRigFilterObserver() {
         AppState.shared.$selectedRig
+            .dropFirst() // Skip initial value to avoid double-fetch on init
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.applyFilter()
+                // Rig changed - need to refetch from server with new rig parameter
+                Task { @MainActor [weak self] in
+                    await self?.loadBeads()
+                }
             }
             .store(in: &cancellables)
     }
@@ -188,7 +192,12 @@ final class BeadsListViewModel: BaseViewModel {
 
         await performAsync { [weak self] in
             guard let self = self else { return }
-            let response = try await apiClient.getBeads(status: .all)
+            // Pass rig to API for server-side filtering:
+            // - nil (ALL) → "all" to fetch from all databases
+            // - "town" → "town" to fetch from town database
+            // - "<rig>" → "<rig>" to fetch from that rig's database
+            let rigParam = self.selectedRig ?? "all"
+            let response = try await apiClient.getBeads(rig: rigParam, status: .all)
             self.beads = response.sorted {
                 // Sort by priority (lower = higher), then by updated date
                 if $0.priority != $1.priority {
@@ -227,7 +236,9 @@ final class BeadsListViewModel: BaseViewModel {
 
         await performAsync(showLoading: false) { [weak self] in
             guard let self = self else { return }
-            let response = try await apiClient.getBeads(status: .all)
+            // Pass rig to API for server-side filtering
+            let rigParam = self.selectedRig ?? "all"
+            let response = try await apiClient.getBeads(rig: rigParam, status: .all)
             self.beads = response.sorted {
                 if $0.priority != $1.priority {
                     return $0.priority < $1.priority
@@ -243,24 +254,10 @@ final class BeadsListViewModel: BaseViewModel {
 
     // MARK: - Private Helpers
 
-    /// Special value for town-level beads filter
-    private static let townFilterValue = "town"
-
     /// Applies the current filter and search to beads
+    /// Note: Rig filtering is now done server-side via the API rig parameter
     private func applyFilter() {
         var result = beads
-
-        // Apply rig filter (matches frontend BeadsView.tsx behavior)
-        // nil = ALL (no filter), "town" = TOWN (source === "town"), other = specific rig
-        if let rigFilter = selectedRig {
-            if rigFilter == Self.townFilterValue {
-                // TOWN: filter to beads with source === "town"
-                result = result.filter { $0.source == "town" }
-            } else {
-                // Specific rig: filter by source field
-                result = result.filter { $0.source == rigFilter }
-            }
-        }
 
         // Apply status filter
         switch currentFilter {
@@ -338,15 +335,6 @@ final class BeadsListViewModel: BaseViewModel {
                 return a.priority < b.priority
             }
         }
-    }
-
-    /// Checks if a bead is related to a specific rig
-    private func beadMatchesRig(_ bead: BeadInfo, rig: String) -> Bool {
-        let rigLower = rig.lowercased()
-        // Match if bead source, rig, or assignee contains the rig name
-        return bead.source.lowercased() == rigLower ||
-               bead.rig?.lowercased() == rigLower ||
-               (bead.assignee?.lowercased().hasPrefix(rigLower + "/") ?? false)
     }
 
     // MARK: - Status Updates
