@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import Adjutant
 @testable import AdjutantKit
 
@@ -9,17 +10,20 @@ final class MailDetailViewModelTests: XCTestCase {
 
     private var sut: MailDetailViewModel!
     private var mockAPIClient: MockAPIClient!
+    private var mockTTSService: MockTTSPlaybackService!
 
     // MARK: - Setup
 
     override func setUp() async throws {
         try await super.setUp()
         mockAPIClient = MockAPIClient()
+        mockTTSService = MockTTSPlaybackService()
     }
 
     override func tearDown() async throws {
         sut = nil
         mockAPIClient = nil
+        mockTTSService = nil
         try await super.tearDown()
     }
 
@@ -30,7 +34,7 @@ final class MailDetailViewModelTests: XCTestCase {
         let messageId = "test-msg-123"
 
         // When
-        sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient)
+        sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient, ttsService: mockTTSService)
 
         // Then
         XCTAssertNil(sut.message)
@@ -50,7 +54,7 @@ final class MailDetailViewModelTests: XCTestCase {
         mockAPIClient.markReadResult = .success(SuccessResponse(message: "ok"))
         mockAPIClient.getMailResult = .success(PaginatedResponse(items: [], total: 0, hasMore: false))
 
-        sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient)
+        sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient, ttsService: mockTTSService)
 
         // When
         await sut.loadMessage()
@@ -66,7 +70,7 @@ final class MailDetailViewModelTests: XCTestCase {
         let messageId = "test-msg-123"
         mockAPIClient.getMessageResult = .failure(APIClientError.networkError("Connection failed"))
 
-        sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient)
+        sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient, ttsService: mockTTSService)
 
         // When
         await sut.loadMessage()
@@ -84,7 +88,7 @@ final class MailDetailViewModelTests: XCTestCase {
         mockAPIClient.markReadResult = .success(SuccessResponse(message: "ok"))
         mockAPIClient.getMailResult = .success(PaginatedResponse(items: [], total: 0, hasMore: false))
 
-        sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient)
+        sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient, ttsService: mockTTSService)
 
         // When
         await sut.loadMessage()
@@ -111,7 +115,7 @@ final class MailDetailViewModelTests: XCTestCase {
             hasMore: false
         ))
 
-        sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient)
+        sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient, ttsService: mockTTSService)
 
         // When
         await sut.loadMessage()
@@ -137,7 +141,7 @@ final class MailDetailViewModelTests: XCTestCase {
             hasMore: false
         ))
 
-        sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient)
+        sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient, ttsService: mockTTSService)
         await sut.loadMessage()
 
         // Then
@@ -153,7 +157,7 @@ final class MailDetailViewModelTests: XCTestCase {
         mockAPIClient.markReadResult = .success(SuccessResponse(message: "ok"))
         mockAPIClient.getMailResult = .success(PaginatedResponse(items: [testMessage], total: 1, hasMore: false))
 
-        sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient)
+        sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient, ttsService: mockTTSService)
         await sut.loadMessage()
 
         // Then
@@ -170,7 +174,7 @@ final class MailDetailViewModelTests: XCTestCase {
         mockAPIClient.markReadResult = .success(SuccessResponse(message: "ok"))
         mockAPIClient.getMailResult = .success(PaginatedResponse(items: [], total: 0, hasMore: false))
 
-        sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient)
+        sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient, ttsService: mockTTSService)
         await sut.loadMessage()
 
         // Then
@@ -179,7 +183,7 @@ final class MailDetailViewModelTests: XCTestCase {
 
     func testFormattedDate_withoutMessage_returnsEmpty() async {
         // Given
-        sut = MailDetailViewModel(messageId: "test", apiClient: mockAPIClient)
+        sut = MailDetailViewModel(messageId: "test", apiClient: mockAPIClient, ttsService: mockTTSService)
 
         // Then
         XCTAssertTrue(sut.formattedDate.isEmpty)
@@ -202,7 +206,7 @@ final class MailDetailViewModelTests: XCTestCase {
             mockAPIClient.markReadResult = .success(SuccessResponse(message: "ok"))
             mockAPIClient.getMailResult = .success(PaginatedResponse(items: [], total: 0, hasMore: false))
 
-            sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient)
+            sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient, ttsService: mockTTSService)
             await sut.loadMessage()
 
             // Then
@@ -212,14 +216,15 @@ final class MailDetailViewModelTests: XCTestCase {
 
     // MARK: - Audio Tests
 
-    func testStopAudio_resetsPlayingState() async {
+    func testStopAudio_callsTTSServiceStop() async {
         // Given
-        sut = MailDetailViewModel(messageId: "test", apiClient: mockAPIClient)
+        sut = MailDetailViewModel(messageId: "test", apiClient: mockAPIClient, ttsService: mockTTSService)
 
         // When
         sut.stopAudio()
 
         // Then
+        XCTAssertTrue(mockTTSService.stopCalled)
         XCTAssertFalse(sut.isPlayingAudio)
     }
 
@@ -279,4 +284,77 @@ private class MockAPIClient: APIClient {
         }
         return try result.get()
     }
+}
+
+// MARK: - Mock TTS Service
+
+@MainActor
+private class MockTTSPlaybackService: TTSPlaybackServiceProtocol {
+    typealias ServiceError = TTSPlaybackError
+
+    var isAvailable: Bool {
+        get async { true }
+    }
+
+    @Published private(set) var state: PlaybackState = .idle
+    @Published private(set) var queue: [PlaybackItem] = []
+    @Published var volume: Float = 1.0
+
+    var statePublisher: AnyPublisher<PlaybackState, Never> {
+        $state.eraseToAnyPublisher()
+    }
+
+    var queuePublisher: AnyPublisher<[PlaybackItem], Never> {
+        $queue.eraseToAnyPublisher()
+    }
+
+    var volumePublisher: AnyPublisher<Float, Never> {
+        $volume.eraseToAnyPublisher()
+    }
+
+    var currentTime: TimeInterval { 0 }
+    var duration: TimeInterval { 0 }
+
+    // Tracking calls for testing
+    var enqueuedItems: [PlaybackItem] = []
+    var stopCalled = false
+
+    func enqueue(_ item: PlaybackItem) {
+        enqueuedItems.append(item)
+    }
+
+    func enqueue(_ items: [PlaybackItem]) {
+        enqueuedItems.append(contentsOf: items)
+    }
+
+    func enqueue(text: String, response: SynthesizeResponse, priority: PlaybackPriority, metadata: [String: String]) {
+        let item = PlaybackItem(
+            text: text,
+            audioURL: URL(string: response.audioUrl) ?? URL(fileURLWithPath: "/"),
+            duration: response.duration,
+            voiceId: response.voiceId,
+            priority: priority,
+            metadata: metadata
+        )
+        enqueuedItems.append(item)
+    }
+
+    func dequeue(id: UUID) {
+        queue.removeAll { $0.id == id }
+    }
+
+    func clearQueue() {
+        queue.removeAll()
+    }
+
+    func play() {}
+    func pause() {}
+
+    func stop() {
+        stopCalled = true
+        state = .idle
+    }
+
+    func skip() {}
+    func seek(to time: TimeInterval) {}
 }

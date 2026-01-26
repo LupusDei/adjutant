@@ -1,6 +1,5 @@
 import Foundation
 import Combine
-import AVFoundation
 import AdjutantKit
 
 /// ViewModel for the mail detail view.
@@ -25,19 +24,33 @@ final class MailDetailViewModel: BaseViewModel {
 
     private let messageId: String
     private let apiClient: APIClient
-    private var audioPlayer: AVAudioPlayer?
-    private lazy var audioDelegate = AudioPlayerDelegate { [weak self] in
-        Task { @MainActor in
-            self?.isPlayingAudio = false
-        }
-    }
+    private var ttsService: TTSPlaybackServiceProtocol
 
     // MARK: - Initialization
 
-    init(messageId: String, apiClient: APIClient? = nil) {
+    init(messageId: String, apiClient: APIClient? = nil, ttsService: TTSPlaybackServiceProtocol? = nil) {
         self.messageId = messageId
         self.apiClient = apiClient ?? AppState.shared.apiClient
+        self.ttsService = ttsService ?? (DependencyContainer.shared.resolveOptional(TTSPlaybackServiceProtocol.self)
+            ?? TTSPlaybackService(apiClient: apiClient ?? AppState.shared.apiClient, baseURL: AppState.shared.apiBaseURL))
         super.init()
+        setupPlaybackObservers()
+    }
+
+    // MARK: - Setup
+
+    private func setupPlaybackObservers() {
+        // Observe playback state changes
+        ttsService.statePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                self?.isPlayingAudio = state.isPlaying
+            }
+            .store(in: &cancellables)
+
+        // Sync volume from user preferences
+        let savedVolume = UserDefaults.standard.double(forKey: "voiceVolume")
+        ttsService.volume = Float(savedVolume == 0 ? 0.8 : savedVolume)
     }
 
     // MARK: - Lifecycle
@@ -89,17 +102,14 @@ final class MailDetailViewModel: BaseViewModel {
             let request = SynthesizeRequest(text: message.body, messageId: message.id)
             let response = try await apiClient.synthesizeSpeech(request)
 
-            // Extract filename from audioUrl path (e.g., "/voice/audio/file.mp3" -> "file.mp3")
-            let filename = URL(string: response.audioUrl)?.lastPathComponent ?? response.audioUrl
+            // Enqueue to TTS service with message metadata
+            ttsService.enqueue(
+                text: message.body,
+                response: response,
+                priority: .normal,
+                metadata: ["messageId": message.id]
+            )
 
-            // Get the audio data
-            let audioData = try await apiClient.getAudioFile(filename: filename)
-
-            // Play the audio
-            audioPlayer = try AVAudioPlayer(data: audioData)
-            audioPlayer?.delegate = audioDelegate
-            audioPlayer?.play()
-            isPlayingAudio = true
             isSynthesizing = false
         } catch {
             isSynthesizing = false
@@ -109,9 +119,7 @@ final class MailDetailViewModel: BaseViewModel {
 
     /// Stops audio playback
     func stopAudio() {
-        audioPlayer?.stop()
-        audioPlayer = nil
-        isPlayingAudio = false
+        ttsService.stop()
     }
 
     // MARK: - Computed Properties
@@ -140,20 +148,5 @@ final class MailDetailViewModel: BaseViewModel {
     /// Whether this message is part of a thread
     var hasThread: Bool {
         !threadMessages.isEmpty
-    }
-}
-
-// MARK: - Audio Player Delegate
-
-/// Simple delegate to handle audio playback completion
-private class AudioPlayerDelegate: NSObject, AVAudioPlayerDelegate {
-    private let onFinish: () -> Void
-
-    init(onFinish: @escaping () -> Void) {
-        self.onFinish = onFinish
-    }
-
-    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        onFinish()
     }
 }

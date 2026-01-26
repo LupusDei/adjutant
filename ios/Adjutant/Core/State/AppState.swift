@@ -83,6 +83,23 @@ final class AppState: ObservableObject {
 
         loadPersistedState()
         setupNetworkRecoveryObserver()
+        registerDependencies()
+    }
+
+    /// Registers application services in the dependency container
+    private func registerDependencies() {
+        let container = DependencyContainer.shared
+
+        // Register TTSPlaybackService as a lazy singleton
+        container.registerLazySingleton(TTSPlaybackServiceProtocol.self) { [weak self] in
+            guard let self = self else {
+                // Fallback if AppState is somehow deallocated
+                let config = APIClientConfiguration(baseURL: URL(string: "http://localhost:3001/api")!)
+                let apiClient = APIClient(configuration: config)
+                return TTSPlaybackService(apiClient: apiClient, baseURL: URL(string: "http://localhost:3001/api")!)
+            }
+            return TTSPlaybackService(apiClient: self.apiClient, baseURL: self.apiBaseURL)
+        }
     }
 
     /// Sets up observer to re-check voice availability when network recovers
