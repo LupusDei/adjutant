@@ -217,6 +217,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
+    width: '100%',
     backgroundColor: '#0A0A0A',
     border: '1px solid var(--crt-phosphor-dim)',
   },

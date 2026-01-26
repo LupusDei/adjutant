@@ -548,6 +548,7 @@ const styles = {
     flex: 1,
     overflow: 'auto',
     padding: '8px',
+    width: '100%',
   },
   group: {
     marginBottom: '12px',
@@ -617,6 +618,7 @@ const styles = {
   },
   table: {
     width: '100%',
+    tableLayout: 'fixed',
     borderCollapse: 'collapse',
     fontFamily: '"Share Tech Mono", monospace',
     fontSize: '0.8rem',
@@ -661,7 +663,6 @@ const styles = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-    maxWidth: '300px',
   },
   dateCell: {
     padding: '8px 6px',
