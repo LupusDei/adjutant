@@ -60,61 +60,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     // MARK: - Background Tasks
 
     private func registerBackgroundTasks() {
-        BGTaskScheduler.shared.register(
-            forTaskWithIdentifier: "com.adjutant.refresh",
-            using: nil
-        ) { task in
-            self.handleAppRefresh(task: task as! BGAppRefreshTask)
-        }
-
-        BGTaskScheduler.shared.register(
-            forTaskWithIdentifier: "com.adjutant.processing",
-            using: nil
-        ) { task in
-            self.handleBackgroundProcessing(task: task as! BGProcessingTask)
-        }
-    }
-
-    private func handleAppRefresh(task: BGAppRefreshTask) {
-        scheduleAppRefresh()
-
-        task.expirationHandler = {
-            task.setTaskCompleted(success: false)
-        }
-
-        // TODO: Implement refresh logic when BackgroundTaskService is available
-        task.setTaskCompleted(success: true)
-    }
-
-    private func handleBackgroundProcessing(task: BGProcessingTask) {
-        task.expirationHandler = {
-            task.setTaskCompleted(success: false)
-        }
-
-        // TODO: Implement processing logic when BackgroundTaskService is available
-        task.setTaskCompleted(success: true)
+        BackgroundTaskService.shared.registerBackgroundTasks()
     }
 
     func scheduleAppRefresh() {
-        let request = BGAppRefreshTaskRequest(identifier: "com.adjutant.refresh")
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60) // 15 minutes
-
-        do {
-            try BGTaskScheduler.shared.submit(request)
-        } catch {
-            print("[AppDelegate] Could not schedule app refresh: \(error.localizedDescription)")
-        }
+        BackgroundTaskService.shared.scheduleAppRefresh()
     }
 
     func scheduleBackgroundProcessing() {
-        let request = BGProcessingTaskRequest(identifier: "com.adjutant.processing")
-        request.requiresNetworkConnectivity = true
-        request.requiresExternalPower = false
-
-        do {
-            try BGTaskScheduler.shared.submit(request)
-        } catch {
-            print("[AppDelegate] Could not schedule background processing: \(error.localizedDescription)")
-        }
+        BackgroundTaskService.shared.scheduleBackgroundProcessing()
     }
 }
