@@ -42,7 +42,7 @@ final class ChatViewModel: BaseViewModel {
     // MARK: - Dependencies
 
     private let apiClient: APIClient
-    private let speechService: SpeechRecognitionServiceProtocol?
+    private let speechService: (any SpeechRecognitionServiceProtocol)?
 
     // MARK: - Private Properties
 
@@ -56,7 +56,7 @@ final class ChatViewModel: BaseViewModel {
 
     // MARK: - Initialization
 
-    init(apiClient: APIClient? = nil, speechService: SpeechRecognitionServiceProtocol? = nil) {
+    init(apiClient: APIClient? = nil, speechService: (any SpeechRecognitionServiceProtocol)? = nil) {
         self.apiClient = apiClient ?? AppState.shared.apiClient
         self.speechService = speechService
         super.init()

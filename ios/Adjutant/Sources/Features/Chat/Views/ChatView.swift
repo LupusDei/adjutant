@@ -10,7 +10,7 @@ struct ChatView: View {
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showRecipientSelector = false
 
-    init(apiClient: APIClient, speechService: SpeechRecognitionServiceProtocol? = nil) {
+    init(apiClient: APIClient, speechService: (any SpeechRecognitionServiceProtocol)? = nil) {
         let service = speechService ?? SpeechRecognitionService()
         _viewModel = StateObject(wrappedValue: ChatViewModel(apiClient: apiClient, speechService: service))
     }

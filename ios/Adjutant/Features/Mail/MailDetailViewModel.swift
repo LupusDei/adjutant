@@ -24,14 +24,14 @@ final class MailDetailViewModel: BaseViewModel {
 
     private let messageId: String
     private let apiClient: APIClient
-    private var ttsService: TTSPlaybackServiceProtocol
+    private var ttsService: any TTSPlaybackServiceProtocol
 
     // MARK: - Initialization
 
-    init(messageId: String, apiClient: APIClient? = nil, ttsService: TTSPlaybackServiceProtocol? = nil) {
+    init(messageId: String, apiClient: APIClient? = nil, ttsService: (any TTSPlaybackServiceProtocol)? = nil) {
         self.messageId = messageId
         self.apiClient = apiClient ?? AppState.shared.apiClient
-        self.ttsService = ttsService ?? (DependencyContainer.shared.resolveOptional(TTSPlaybackServiceProtocol.self)
+        self.ttsService = ttsService ?? (DependencyContainer.shared.resolveOptional((any TTSPlaybackServiceProtocol).self)
             ?? TTSPlaybackService(apiClient: apiClient ?? AppState.shared.apiClient, baseURL: AppState.shared.apiBaseURL))
         super.init()
         setupPlaybackObservers()

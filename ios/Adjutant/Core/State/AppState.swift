@@ -104,7 +104,7 @@ final class AppState: ObservableObject {
         let container = DependencyContainer.shared
 
         // Register TTSPlaybackService as a lazy singleton
-        container.registerLazySingleton(TTSPlaybackServiceProtocol.self) { [weak self] in
+        container.registerLazySingleton((any TTSPlaybackServiceProtocol).self) { [weak self] in
             guard let self = self else {
                 // Fallback if AppState is somehow deallocated
                 let config = APIClientConfiguration(baseURL: URL(string: "http://localhost:3001/api")!)
