@@ -8,13 +8,13 @@ final class CrewListViewModelTests: XCTestCase {
     // MARK: - Properties
 
     private var sut: CrewListViewModel!
-    private var mockAPIClient: MockAPIClient!
+    private var mockAPIClient: MockCrewAPIClient!
 
     // MARK: - Setup
 
     override func setUp() async throws {
         try await super.setUp()
-        mockAPIClient = MockAPIClient()
+        mockAPIClient = MockCrewAPIClient()
     }
 
     override func tearDown() async throws {
@@ -381,10 +381,10 @@ final class CrewListViewModelTests: XCTestCase {
 
 // MARK: - Mock API Client
 
-private class MockAPIClient: APIClient {
+private final class MockCrewAPIClient: CrewAPIProviding {
     var getAgentsResult: Result<[CrewMember], Error>?
 
-    override func getAgents() async throws -> [CrewMember] {
+    func getAgents() async throws -> [CrewMember] {
         guard let result = getAgentsResult else {
             throw APIClientError.networkError("Not configured")
         }

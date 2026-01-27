@@ -23,16 +23,16 @@ final class MailDetailViewModel: BaseViewModel {
     // MARK: - Private Properties
 
     private let messageId: String
-    private let apiClient: APIClient
+    private let apiClient: any MailAPIProviding
     private var ttsService: any TTSPlaybackServiceProtocol
 
     // MARK: - Initialization
 
-    init(messageId: String, apiClient: APIClient? = nil, ttsService: (any TTSPlaybackServiceProtocol)? = nil) {
+    init(messageId: String, apiClient: (any MailAPIProviding)? = nil, ttsService: (any TTSPlaybackServiceProtocol)? = nil) {
         self.messageId = messageId
         self.apiClient = apiClient ?? AppState.shared.apiClient
         self.ttsService = ttsService ?? (DependencyContainer.shared.resolveOptional((any TTSPlaybackServiceProtocol).self)
-            ?? TTSPlaybackService(apiClient: apiClient ?? AppState.shared.apiClient, baseURL: AppState.shared.apiBaseURL))
+            ?? TTSPlaybackService(apiClient: AppState.shared.apiClient, baseURL: AppState.shared.apiBaseURL))
         super.init()
         setupPlaybackObservers()
     }
@@ -79,7 +79,7 @@ final class MailDetailViewModel: BaseViewModel {
     /// Loads thread messages for conversation history
     private func loadThread(threadId: String) async {
         do {
-            let allMail = try await apiClient.getMail(all: true)
+            let allMail = try await apiClient.getMail(filter: nil, all: true)
             let thread = allMail.items
                 .filter { $0.threadId == threadId }
                 .sorted { ($0.date ?? Date.distantPast) < ($1.date ?? Date.distantPast) }

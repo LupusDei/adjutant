@@ -62,7 +62,7 @@ final class CrewListViewModel: BaseViewModel {
 
     // MARK: - Dependencies
 
-    private let apiClient: APIClient
+    private let apiClient: any CrewAPIProviding
 
     // MARK: - Private Properties
 
@@ -71,7 +71,7 @@ final class CrewListViewModel: BaseViewModel {
 
     // MARK: - Initialization
 
-    init(apiClient: APIClient? = nil) {
+    init(apiClient: (any CrewAPIProviding)? = nil) {
         self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
         loadFromCache()

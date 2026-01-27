@@ -8,14 +8,14 @@ import AdjutantKit
 final class TTSPlaybackServiceTests: XCTestCase {
 
     var sut: TTSPlaybackService!
-    var mockAPIClient: MockAPIClient!
+    var apiClientFactory: TestAPIClientFactory!
     var cancellables: Set<AnyCancellable>!
 
     override func setUp() async throws {
         try await super.setUp()
-        mockAPIClient = MockAPIClient()
+        apiClientFactory = TestAPIClientFactory()
         sut = TTSPlaybackService(
-            apiClient: mockAPIClient.client,
+            apiClient: apiClientFactory.client,
             baseURL: URL(string: "http://localhost:3000")!
         )
         // Disable auto-play so tests can verify queue state before playback
@@ -25,7 +25,7 @@ final class TTSPlaybackServiceTests: XCTestCase {
 
     override func tearDown() async throws {
         sut = nil
-        mockAPIClient = nil
+        apiClientFactory = nil
         cancellables = nil
         try await super.tearDown()
     }
@@ -287,10 +287,10 @@ final class TTSPlaybackServiceTests: XCTestCase {
     }
 }
 
-// MARK: - Mock API Client
+// MARK: - Test API Client Factory
 
-/// Mock wrapper for APIClient used in testing
-final class MockAPIClient {
+/// Factory for creating APIClient instances in tests
+final class TestAPIClientFactory {
     let client: APIClient
 
     init() {

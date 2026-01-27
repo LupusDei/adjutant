@@ -45,7 +45,7 @@ final class ConvoysViewModel: BaseViewModel {
 
     // MARK: - Dependencies
 
-    private let apiClient: APIClient?
+    private let apiClient: (any ConvoysAPIProviding)?
 
     // MARK: - Private Properties
 
@@ -59,7 +59,7 @@ final class ConvoysViewModel: BaseViewModel {
 
     // MARK: - Initialization
 
-    init(apiClient: APIClient? = nil) {
+    init(apiClient: (any ConvoysAPIProviding)? = nil) {
         self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
         setupRigFilterObserver()

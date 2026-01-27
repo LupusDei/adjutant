@@ -9,14 +9,14 @@ final class MailDetailViewModelTests: XCTestCase {
     // MARK: - Properties
 
     private var sut: MailDetailViewModel!
-    private var mockAPIClient: MockAPIClient!
+    private var mockAPIClient: MockMailAPIClient!
     private var mockTTSService: MockTTSPlaybackService!
 
     // MARK: - Setup
 
     override func setUp() async throws {
         try await super.setUp()
-        mockAPIClient = MockAPIClient()
+        mockAPIClient = MockMailAPIClient()
         mockTTSService = MockTTSPlaybackService()
     }
 
@@ -51,7 +51,7 @@ final class MailDetailViewModelTests: XCTestCase {
         let messageId = "test-msg-123"
         let testMessage = createTestMessage(id: messageId)
         mockAPIClient.getMessageResult = .success(testMessage)
-        mockAPIClient.markReadResult = .success(SuccessResponse(message: "ok"))
+        mockAPIClient.markReadResult = .success(SuccessResponse(read: true))
         mockAPIClient.getMailResult = .success(PaginatedResponse(items: [], total: 0, hasMore: false))
 
         sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient, ttsService: mockTTSService)
@@ -85,7 +85,7 @@ final class MailDetailViewModelTests: XCTestCase {
         let messageId = "test-msg-123"
         let testMessage = createTestMessage(id: messageId)
         mockAPIClient.getMessageResult = .success(testMessage)
-        mockAPIClient.markReadResult = .success(SuccessResponse(message: "ok"))
+        mockAPIClient.markReadResult = .success(SuccessResponse(read: true))
         mockAPIClient.getMailResult = .success(PaginatedResponse(items: [], total: 0, hasMore: false))
 
         sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient, ttsService: mockTTSService)
@@ -108,7 +108,7 @@ final class MailDetailViewModelTests: XCTestCase {
         let threadMessage2 = createTestMessage(id: "thread-msg-2", threadId: threadId)
 
         mockAPIClient.getMessageResult = .success(testMessage)
-        mockAPIClient.markReadResult = .success(SuccessResponse(message: "ok"))
+        mockAPIClient.markReadResult = .success(SuccessResponse(read: true))
         mockAPIClient.getMailResult = .success(PaginatedResponse(
             items: [threadMessage1, testMessage, threadMessage2],
             total: 3,
@@ -134,7 +134,7 @@ final class MailDetailViewModelTests: XCTestCase {
         let threadMessage = createTestMessage(id: "thread-msg-1", threadId: threadId)
 
         mockAPIClient.getMessageResult = .success(testMessage)
-        mockAPIClient.markReadResult = .success(SuccessResponse(message: "ok"))
+        mockAPIClient.markReadResult = .success(SuccessResponse(read: true))
         mockAPIClient.getMailResult = .success(PaginatedResponse(
             items: [threadMessage, testMessage],
             total: 2,
@@ -154,7 +154,7 @@ final class MailDetailViewModelTests: XCTestCase {
         let testMessage = createTestMessage(id: messageId)
 
         mockAPIClient.getMessageResult = .success(testMessage)
-        mockAPIClient.markReadResult = .success(SuccessResponse(message: "ok"))
+        mockAPIClient.markReadResult = .success(SuccessResponse(read: true))
         mockAPIClient.getMailResult = .success(PaginatedResponse(items: [testMessage], total: 1, hasMore: false))
 
         sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient, ttsService: mockTTSService)
@@ -171,7 +171,7 @@ final class MailDetailViewModelTests: XCTestCase {
         let messageId = "test-msg-123"
         let testMessage = createTestMessage(id: messageId)
         mockAPIClient.getMessageResult = .success(testMessage)
-        mockAPIClient.markReadResult = .success(SuccessResponse(message: "ok"))
+        mockAPIClient.markReadResult = .success(SuccessResponse(read: true))
         mockAPIClient.getMailResult = .success(PaginatedResponse(items: [], total: 0, hasMore: false))
 
         sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient, ttsService: mockTTSService)
@@ -203,7 +203,7 @@ final class MailDetailViewModelTests: XCTestCase {
             let messageId = "test-msg-\(priority.rawValue)"
             let testMessage = createTestMessage(id: messageId, priority: priority)
             mockAPIClient.getMessageResult = .success(testMessage)
-            mockAPIClient.markReadResult = .success(SuccessResponse(message: "ok"))
+            mockAPIClient.markReadResult = .success(SuccessResponse(read: true))
             mockAPIClient.getMailResult = .success(PaginatedResponse(items: [], total: 0, hasMore: false))
 
             sut = MailDetailViewModel(messageId: messageId, apiClient: mockAPIClient, ttsService: mockTTSService)
@@ -256,21 +256,22 @@ final class MailDetailViewModelTests: XCTestCase {
 
 // MARK: - Mock API Client
 
-private class MockAPIClient: APIClient {
+private final class MockMailAPIClient: MailAPIProviding {
     var getMessageResult: Result<Message, Error>?
     var markReadResult: Result<SuccessResponse, Error>?
     var getMailResult: Result<PaginatedResponse<Message>, Error>?
+    var synthesizeSpeechResult: Result<SynthesizeResponse, Error>?
 
     var markReadCalledWithId: String?
 
-    override func getMessage(id: String) async throws -> Message {
+    func getMessage(id: String) async throws -> Message {
         guard let result = getMessageResult else {
             throw APIClientError.networkError("Not configured")
         }
         return try result.get()
     }
 
-    override func markMessageAsRead(id: String) async throws -> SuccessResponse {
+    func markMessageAsRead(id: String) async throws -> SuccessResponse {
         markReadCalledWithId = id
         guard let result = markReadResult else {
             throw APIClientError.networkError("Not configured")
@@ -278,8 +279,15 @@ private class MockAPIClient: APIClient {
         return try result.get()
     }
 
-    override func getMail(filter: MailFilter? = nil, all: Bool = false) async throws -> PaginatedResponse<Message> {
+    func getMail(filter: APIClient.MailFilter? = nil, all: Bool = false) async throws -> PaginatedResponse<Message> {
         guard let result = getMailResult else {
+            throw APIClientError.networkError("Not configured")
+        }
+        return try result.get()
+    }
+
+    func synthesizeSpeech(_ request: SynthesizeRequest) async throws -> SynthesizeResponse {
+        guard let result = synthesizeSpeechResult else {
             throw APIClientError.networkError("Not configured")
         }
         return try result.get()
