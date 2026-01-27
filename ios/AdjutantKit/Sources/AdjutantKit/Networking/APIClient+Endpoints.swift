@@ -242,6 +242,24 @@ extension APIClient {
         )
     }
 
+    /// Get a single bead by ID
+    ///
+    /// Fetches detailed information about a specific bead.
+    ///
+    /// ## Example
+    /// ```swift
+    /// let bead = try await client.getBead(id: "hq-vts8")
+    /// print("Bead: \(bead.title) - \(bead.status)")
+    /// ```
+    ///
+    /// - Parameter id: Full bead ID (e.g., "hq-vts8", "adj-67tta")
+    /// - Returns: A ``BeadInfo`` with the bead details.
+    /// - Throws: ``APIClientError`` if the request fails or bead is not found.
+    public func getBead(id: String) async throws -> BeadInfo {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        return try await requestWithEnvelope(.get, path: "/beads/\(encodedId)")
+    }
+
     /// Update a bead's status (e.g., for Kanban drag-and-drop)
     ///
     /// Updates the status of a bead in its source database.

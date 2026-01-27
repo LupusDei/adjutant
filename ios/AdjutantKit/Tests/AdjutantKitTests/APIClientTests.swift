@@ -259,6 +259,52 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(bead.labels, ["frontend", "high-priority"])
     }
 
+    func testGetBeadById() async throws {
+        MockURLProtocol.mockHandler = MockURLProtocol.mockResponse(json: [
+            "success": true,
+            "data": [
+                "id": "adj-67tta",
+                "title": "Fix navigation bug",
+                "status": "open",
+                "priority": 2,
+                "type": "bug",
+                "assignee": nil,
+                "rig": "adjutant",
+                "source": "adjutant",
+                "labels": ["ios"],
+                "createdAt": "2024-01-10T08:00:00.000Z",
+                "updatedAt": "2024-01-15T09:30:00.000Z"
+            ],
+            "timestamp": "2024-01-15T10:30:00.000Z"
+        ])
+
+        let bead = try await client.getBead(id: "adj-67tta")
+
+        XCTAssertEqual(bead.id, "adj-67tta")
+        XCTAssertEqual(bead.title, "Fix navigation bug")
+        XCTAssertEqual(bead.status, "open")
+        XCTAssertEqual(bead.type, "bug")
+    }
+
+    func testGetBeadByIdNotFound() async throws {
+        MockURLProtocol.mockHandler = MockURLProtocol.mockError(
+            statusCode: 404,
+            code: "BEAD_NOT_FOUND",
+            message: "Bead not found"
+        )
+
+        do {
+            _ = try await client.getBead(id: "nonexistent")
+            XCTFail("Expected error to be thrown")
+        } catch let error as APIClientError {
+            guard case .serverError(let apiError) = error else {
+                XCTFail("Expected serverError, got \(error)")
+                return
+            }
+            XCTAssertEqual(apiError.code, "BEAD_NOT_FOUND")
+        }
+    }
+
     // MARK: - Request Building Tests
 
     func testQueryParametersEncoding() async throws {
