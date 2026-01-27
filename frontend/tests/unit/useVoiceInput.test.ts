@@ -4,14 +4,21 @@
 // ============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 
-// Polyfill Blob.prototype.arrayBuffer for jsdom
-if (!Blob.prototype.arrayBuffer) {
-  Blob.prototype.arrayBuffer = function () {
-    return new Promise((resolve) => {
+// Polyfill Blob.arrayBuffer for jsdom using FileReader
+if (typeof Blob.prototype.arrayBuffer !== 'function') {
+  Blob.prototype.arrayBuffer = function(): Promise<ArrayBuffer> {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.onloadend = () => {
+        if (reader.result instanceof ArrayBuffer) {
+          resolve(reader.result);
+        } else {
+          reject(new Error('Failed to read blob as ArrayBuffer'));
+        }
+      };
+      reader.onerror = () => reject(reader.error);
       reader.readAsArrayBuffer(this);
     });
   };
@@ -26,18 +33,39 @@ vi.mock("../../src/services/api", () => ({
   },
 }));
 
-// Mock MediaRecorder
-const mockMediaRecorder = {
-  start: vi.fn(),
-  stop: vi.fn(),
-  ondataavailable: null as ((event: { data: Blob }) => void) | null,
-  onstop: null as (() => void) | null,
-  onerror: null as ((event: { error: Error }) => void) | null,
-  state: "inactive" as "inactive" | "recording" | "paused",
+// Mock MediaRecorder - create fresh instance per test via factory
+const createMockMediaRecorder = () => {
+  const recorder: {
+    start: ReturnType<typeof vi.fn>;
+    stop: ReturnType<typeof vi.fn>;
+    ondataavailable: ((event: { data: Blob }) => void) | null;
+    onstop: (() => void) | null;
+    onerror: ((event: { error: Error }) => void) | null;
+    state: "inactive" | "recording" | "paused";
+    mimeType: string;
+  } = {
+    start: vi.fn(),
+    stop: vi.fn(),
+    ondataavailable: null,
+    onstop: null,
+    onerror: null,
+    state: "inactive",
+    mimeType: "audio/webm",
+  };
+
+  return recorder;
 };
 
-const MockMediaRecorder = vi.fn(() => mockMediaRecorder) as unknown as typeof MediaRecorder & { isTypeSupported: ReturnType<typeof vi.fn> };
-MockMediaRecorder.isTypeSupported = vi.fn(() => true);
+type MockMediaRecorderType = ReturnType<typeof createMockMediaRecorder>;
+let mockMediaRecorder: MockMediaRecorderType;
+
+const MockMediaRecorder = vi.fn(() => {
+  return mockMediaRecorder;
+}) as unknown as {
+  new (stream: MediaStream, options?: MediaRecorderOptions): MockMediaRecorderType;
+  isTypeSupported: ReturnType<typeof vi.fn>;
+};
+MockMediaRecorder.isTypeSupported = vi.fn().mockReturnValue(true);
 vi.stubGlobal("MediaRecorder", MockMediaRecorder);
 
 // Mock navigator.mediaDevices
@@ -54,10 +82,11 @@ import { api } from "../../src/services/api";
 describe("useVoiceInput", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockMediaRecorder.state = "inactive";
-    mockMediaRecorder.ondataavailable = null;
-    mockMediaRecorder.onstop = null;
-    mockMediaRecorder.onerror = null;
+    // Create fresh mock instance for each test
+    mockMediaRecorder = createMockMediaRecorder();
+
+    // Reset API mock
+    vi.mocked(api.voice.transcribe).mockReset();
 
     // Mock successful getUserMedia
     mockGetUserMedia.mockResolvedValue({
@@ -132,7 +161,6 @@ describe("useVoiceInput", () => {
         await result.current.startRecording();
       });
 
-      // Simulate recording
       mockMediaRecorder.state = "recording";
 
       await act(async () => {
@@ -141,19 +169,18 @@ describe("useVoiceInput", () => {
 
       expect(mockMediaRecorder.stop).toHaveBeenCalled();
 
-      // Simulate data available
+      // Simulate MediaRecorder events
       const audioBlob = new Blob(["audio-data"], { type: "audio/webm" });
       await act(async () => {
         mockMediaRecorder.ondataavailable?.({ data: audioBlob });
         mockMediaRecorder.onstop?.();
       });
 
-      // Wait for transcription
-      await act(async () => {
-        await Promise.resolve();
+      // Wait for async transcription to complete
+      await waitFor(() => {
+        expect(result.current.state).toBe("idle");
       });
 
-      expect(result.current.state).toBe("idle");
       expect(result.current.transcript).toBe("Hello world");
     });
 
@@ -178,21 +205,29 @@ describe("useVoiceInput", () => {
         result.current.stopRecording();
       });
 
-      // Simulate data and stop
+      // Simulate MediaRecorder events
       const audioBlob = new Blob(["data"], { type: "audio/webm" });
       await act(async () => {
         mockMediaRecorder.ondataavailable?.({ data: audioBlob });
         mockMediaRecorder.onstop?.();
       });
 
-      expect(result.current.state).toBe("processing");
+      // Wait for processing state
+      await waitFor(() => {
+        expect(result.current.state).toBe("processing");
+      });
 
+      // Now resolve the transcription
       await act(async () => {
         resolveTranscribe!({
           success: true,
           data: { text: "Test", confidence: 0.9 },
         });
-        await transcribePromise;
+      });
+
+      // Wait for completion
+      await waitFor(() => {
+        expect(result.current.state).toBe("idle");
       });
     });
 
@@ -218,12 +253,13 @@ describe("useVoiceInput", () => {
       await act(async () => {
         mockMediaRecorder.ondataavailable?.({ data: audioBlob });
         mockMediaRecorder.onstop?.();
-        // Wait for async chain: arrayBuffer() + transcribe()
-        await new Promise((r) => setTimeout(r, 0));
-        await Promise.resolve();
       });
 
-      expect(result.current.state).toBe("error");
+      // Wait for error state
+      await waitFor(() => {
+        expect(result.current.state).toBe("error");
+      });
+
       expect(result.current.error).toBe("API error");
     });
   });
@@ -240,9 +276,8 @@ describe("useVoiceInput", () => {
 
       await act(async () => {
         result.current.cancelRecording();
-        // Trigger onstop manually (mock stop() doesn't auto-trigger it)
+        // Trigger onstop - the hook will check isCancelledRef and skip transcription
         mockMediaRecorder.onstop?.();
-        await Promise.resolve();
       });
 
       expect(mockMediaRecorder.stop).toHaveBeenCalled();
@@ -272,12 +307,12 @@ describe("useVoiceInput", () => {
           data: new Blob(["data"], { type: "audio/webm" }),
         });
         mockMediaRecorder.onstop?.();
-        // Wait for async chain: arrayBuffer() + transcribe()
-        await new Promise((r) => setTimeout(r, 0));
-        await Promise.resolve();
       });
 
-      expect(result.current.transcript).toBe("Some text");
+      // Wait for transcription to complete
+      await waitFor(() => {
+        expect(result.current.transcript).toBe("Some text");
+      });
 
       act(() => {
         result.current.clearTranscript();
