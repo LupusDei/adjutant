@@ -106,30 +106,25 @@ struct MailListView: View {
                 appState.isOverseerMode.toggle()
             }
         } label: {
-            HStack(spacing: CRTTheme.Spacing.xxs) {
-                Image(systemName: appState.isOverseerMode ? "eye" : "eye.slash")
-                    .font(.system(size: 12))
-
-                Text("OVERSEER")
-                    .font(CRTTheme.Typography.font(size: 11, weight: .medium))
-                    .tracking(0.5)
-            }
-            .foregroundColor(appState.isOverseerMode ? theme.primary : theme.dim)
-            .padding(.horizontal, CRTTheme.Spacing.sm)
-            .padding(.vertical, CRTTheme.Spacing.xxs)
-            .background(
-                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                    .fill(appState.isOverseerMode ? theme.primary.opacity(0.15) : Color.clear)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                    .stroke(
-                        appState.isOverseerMode ? theme.primary : theme.primary.opacity(0.3),
-                        lineWidth: 1
-                    )
-            )
+            Image(systemName: appState.isOverseerMode ? "eye" : "eye.slash")
+                .font(.system(size: 14))
+                .foregroundColor(appState.isOverseerMode ? theme.primary : theme.dim)
+                .frame(width: 32, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                        .fill(appState.isOverseerMode ? theme.primary.opacity(0.15) : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                        .stroke(
+                            appState.isOverseerMode ? theme.primary : theme.primary.opacity(0.3),
+                            lineWidth: 1
+                        )
+                )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(appState.isOverseerMode ? "Hide infrastructure messages" : "Show all messages")
+        .accessibilityHint("Toggle overseer mode")
     }
 
     // MARK: - Search Bar
@@ -175,22 +170,18 @@ struct MailListView: View {
                 await viewModel.markAllAsRead()
             }
         } label: {
-            HStack(spacing: CRTTheme.Spacing.xxs) {
-                Image(systemName: "envelope.open")
-                    .font(.system(size: 12))
-                Text("MARK ALL READ")
-                    .font(CRTTheme.Typography.font(size: 11, weight: .medium))
-                    .tracking(0.5)
-            }
-            .foregroundColor(theme.primary)
-            .padding(.horizontal, CRTTheme.Spacing.sm)
-            .padding(.vertical, CRTTheme.Spacing.xxs)
-            .overlay(
-                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                    .stroke(theme.primary.opacity(0.3), lineWidth: 1)
-            )
+            Image(systemName: "envelope.open")
+                .font(.system(size: 14))
+                .foregroundColor(theme.primary)
+                .frame(width: 32, height: 28)
+                .overlay(
+                    RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                        .stroke(theme.primary.opacity(0.3), lineWidth: 1)
+                )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Mark all as read")
+        .accessibilityHint("Mark all messages as read")
     }
 
     private var searchButton: some View {
@@ -204,8 +195,10 @@ struct MailListView: View {
         } label: {
             Image(systemName: viewModel.isSearching ? "xmark" : "magnifyingglass")
                 .foregroundColor(theme.primary)
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 14, weight: .medium))
+                .frame(width: 32, height: 28)
         }
+        .accessibilityLabel(viewModel.isSearching ? "Close search" : "Search messages")
     }
 
     // MARK: - Message List
