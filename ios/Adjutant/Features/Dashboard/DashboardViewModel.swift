@@ -258,13 +258,16 @@ final class DashboardViewModel: BaseViewModel {
         crewMembers.filter { $0.status == .stuck || $0.status == .blocked }.count
     }
 
-    /// Beads grouped by Kanban column status for display
+    /// Beads grouped by Kanban column status for display.
+    /// Applies OVERSEER filtering by default to show only user-facing work items.
     var beadsByColumn: [KanbanColumnId: [BeadInfo]] {
         var result: [KanbanColumnId: [BeadInfo]] = [:]
         for column in KanbanColumnId.allCases {
             result[column] = []
         }
-        for bead in recentBeads {
+        // Filter beads using OVERSEER scope before grouping
+        let filteredBeads = filterForOverseerScope(recentBeads)
+        for bead in filteredBeads {
             let column = mapStatusToColumn(bead.status)
             result[column, default: []].append(bead)
         }
@@ -277,14 +280,52 @@ final class DashboardViewModel: BaseViewModel {
         return result
     }
 
-    /// Count of open beads (not closed)
-    var openBeadsCount: Int {
-        recentBeads.filter { $0.status != "closed" }.count
+    /// Filters beads to OVERSEER scope, excluding infrastructure and system beads.
+    /// Dashboard preview always shows user-facing work items only.
+    private func filterForOverseerScope(_ beads: [BeadInfo]) -> [BeadInfo] {
+        let excludedTypes = ["message", "epic", "convoy", "agent", "role", "witness", "wisp", "infrastructure", "coordination", "sync"]
+        let excludedPatterns = ["witness", "wisp", "internal", "sync", "coordination", "mail delivery", "polecat", "crew assignment", "rig status", "heartbeat", "health check", "mol-"]
+
+        return beads.filter { bead in
+            let typeLower = bead.type.lowercased()
+            let titleLower = bead.title.lowercased()
+            let idLower = bead.id.lowercased()
+            let assigneeLower = (bead.assignee ?? "").lowercased()
+
+            // Exclude wisp-related beads (including mol-* molecules)
+            if typeLower.contains("wisp") || titleLower.contains("wisp") ||
+                idLower.contains("wisp") || idLower.hasPrefix("mol-") ||
+                assigneeLower.contains("wisp") {
+                return false
+            }
+
+            // Exclude operational types
+            if excludedTypes.contains(typeLower) {
+                return false
+            }
+
+            // Exclude by title patterns
+            if excludedPatterns.contains(where: { titleLower.contains($0) }) {
+                return false
+            }
+
+            // Exclude merge beads
+            if titleLower.hasPrefix("merge:") {
+                return false
+            }
+
+            return true
+        }
     }
 
-    /// Count of beads currently hooked or in progress
+    /// Count of open beads (not closed) using OVERSEER scope
+    var openBeadsCount: Int {
+        filterForOverseerScope(recentBeads).filter { $0.status != "closed" }.count
+    }
+
+    /// Count of beads currently hooked or in progress using OVERSEER scope
     var activeBeadsCount: Int {
-        recentBeads.filter { $0.status == "hooked" || $0.status == "in_progress" }.count
+        filterForOverseerScope(recentBeads).filter { $0.status == "hooked" || $0.status == "in_progress" }.count
     }
 
     // MARK: - Private Helpers
