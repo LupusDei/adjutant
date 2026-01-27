@@ -12,6 +12,7 @@ import { gt } from "./gt-executor.js";
 import { resolveTownRoot } from "./gastown-workspace.js";
 import { addressToIdentity, beadsIssueToMessage, parseMessageLabels } from "./gastown-utils.js";
 import { listMailIssues } from "./mail-data.js";
+import { sendNewMailNotification } from "./apns-service.js";
 import type { Message, SendMessageRequest, MessagePriority } from "../types/mail.js";
 
 // ============================================================================
@@ -344,11 +345,17 @@ export async function sendMail(
               ["update", msg.id, "-d", updatedBody],
               { cwd: townRoot, beadsDir, parseJson: false }
             );
+
+            // Send push notification for new mail
+            void sendNewMailNotification(from, request.subject, msg.id);
           }
         } catch (err) {
           // Non-fatal - message was sent, just couldn't add reply instructions
           console.warn("Failed to add reply instructions:", err);
         }
+      } else {
+        // Send push notification (fire and forget, don't block on it)
+        void sendNewMailNotification(from, request.subject, "");
       }
       return { success: true };
     }
@@ -406,6 +413,9 @@ export async function sendMail(
 
   // Send tmux notification since we bypassed gt mail send
   sendTmuxNotification(to, fromIdentity, request.subject);
+
+  // Send push notification (fire and forget)
+  void sendNewMailNotification(fromIdentity, request.subject, "");
 
   return { success: true };
 }

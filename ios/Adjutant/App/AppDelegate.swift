@@ -60,7 +60,29 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     ) {
         let token = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
         print("[AppDelegate] Device token: \(token)")
-        // TODO: Send token to backend when NotificationService is implemented
+
+        // Register token with backend
+        Task {
+            await registerDeviceTokenWithBackend(token)
+        }
+    }
+
+    /// Registers the device token with the backend for push notifications.
+    private func registerDeviceTokenWithBackend(_ token: String) async {
+        do {
+            let apiClient = APIClient()
+            let request = RegisterDeviceTokenRequest(
+                token: token,
+                platform: .ios,
+                agentId: nil,
+                bundleId: Bundle.main.bundleIdentifier
+            )
+
+            let response = try await apiClient.registerDeviceToken(request)
+            print("[AppDelegate] Device token registered: \(response.isNew ? "new" : "updated")")
+        } catch {
+            print("[AppDelegate] Failed to register device token: \(error.localizedDescription)")
+        }
     }
 
     func application(
