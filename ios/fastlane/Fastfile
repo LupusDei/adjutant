@@ -30,6 +30,24 @@ platform :ios do
     sync_certs
     bump_build
 
+    # Update code signing to use Match profiles
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "Adjutant.xcodeproj",
+      team_id: ENV["TEAM_ID"] || "2BRYAM5Q52",
+      profile_name: "match AppStore com.jmm.adjutant",
+      code_sign_identity: "iPhone Distribution",
+      targets: ["Adjutant"]
+    )
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "Adjutant.xcodeproj",
+      team_id: ENV["TEAM_ID"] || "2BRYAM5Q52",
+      profile_name: "match AppStore com.jmm.adjutant.widgets",
+      code_sign_identity: "iPhone Distribution",
+      targets: ["AdjutantWidgets"]
+    )
+
     build_app(
       scheme: "Adjutant",
       configuration: "Release",
