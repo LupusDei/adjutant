@@ -47,28 +47,39 @@ function mapAgentType(role: string): AgentType {
 
 /**
  * Maps raw state string to CrewMemberStatus.
+ * @param running Whether the agent's tmux session is running
+ * @param state Explicit agent state (idle, working, blocked, stuck, etc.)
+ * @param hasHookedWork Whether the agent has work hooked (bead assigned)
  */
-function mapStatus(running: boolean, state?: string): CrewMemberStatus {
+function mapStatus(running: boolean, state?: string, hasHookedWork?: boolean): CrewMemberStatus {
   if (!running) return "offline";
-  if (!state) return "idle";
 
-  const stateMap: Record<string, CrewMemberStatus> = {
-    idle: "idle",
-    working: "working",
-    blocked: "blocked",
-    stuck: "stuck",
-    "awaiting-gate": "blocked",
-  };
-  return stateMap[state.toLowerCase()] ?? "idle";
+  // If there's an explicit state, use it
+  if (state) {
+    const stateMap: Record<string, CrewMemberStatus> = {
+      idle: "idle",
+      working: "working",
+      blocked: "blocked",
+      stuck: "stuck",
+      "awaiting-gate": "blocked",
+    };
+    return stateMap[state.toLowerCase()] ?? "idle";
+  }
+
+  // If no explicit state but has hooked work, they're working
+  if (hasHookedWork) return "working";
+
+  return "idle";
 }
 
 function transformAgent(agent: AgentRuntimeInfo): CrewMember {
+  const hasHookedWork = Boolean(agent.hookBead);
   const result: CrewMember = {
     id: agent.address,
     name: agent.name,
     type: mapAgentType(agent.role),
     rig: agent.rig,
-    status: mapStatus(agent.running, agent.state),
+    status: mapStatus(agent.running, agent.state, hasHookedWork),
     unreadMail: agent.unreadMail,
   };
   // Mail preview - first unread subject and sender

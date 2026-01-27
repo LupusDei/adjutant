@@ -127,6 +127,41 @@ describe("agents-service", () => {
       expect(result.data?.find((a) => a.name === "offline")?.status).toBe("offline");
     });
 
+    it("should show working status when agent has hooked work but no explicit state", async () => {
+      vi.mocked(collectAgentSnapshot).mockResolvedValue({
+        agents: [
+          // Agent with hookBead but no state -> should be working
+          createAgentInfo({
+            name: "with-hook",
+            running: true,
+            state: undefined,
+            hookBead: "adj-abc123",
+          }),
+          // Agent without hookBead and no state -> should be idle
+          createAgentInfo({
+            name: "no-hook",
+            running: true,
+            state: undefined,
+          }),
+          // Agent with hookBead but explicit idle state -> state takes precedence
+          createAgentInfo({
+            name: "hook-but-idle",
+            running: true,
+            state: "idle",
+            hookBead: "adj-def456",
+          }),
+        ],
+        polecats: [],
+      });
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      expect(result.data?.find((a) => a.name === "with-hook")?.status).toBe("working");
+      expect(result.data?.find((a) => a.name === "no-hook")?.status).toBe("idle");
+      expect(result.data?.find((a) => a.name === "hook-but-idle")?.status).toBe("idle");
+    });
+
     it("should include optional fields when present", async () => {
       vi.mocked(collectAgentSnapshot).mockResolvedValue({
         agents: [
