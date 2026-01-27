@@ -100,6 +100,42 @@ struct GastownWidgetProvider: TimelineProvider {
         return URL(string: "http://localhost:3001/api")!
     }
 
+    /// Filter beads to OVERSEER scope (exclude wisp/internal operational beads)
+    private func filterToOverseerScope(_ beads: [BeadInfo]) -> [BeadInfo] {
+        let excludedTypes = ["message", "epic", "convoy", "agent", "role", "witness", "wisp", "infrastructure", "coordination", "sync"]
+        let excludedPatterns = ["witness", "wisp", "internal", "sync", "coordination", "mail delivery", "polecat", "crew assignment", "rig status", "heartbeat", "health check"]
+
+        return beads.filter { bead in
+            let typeLower = bead.type.lowercased()
+            let titleLower = bead.title.lowercased()
+            let idLower = bead.id.lowercased()
+            let assigneeLower = (bead.assignee ?? "").lowercased()
+
+            // Exclude wisp-related beads
+            if typeLower.contains("wisp") || titleLower.contains("wisp") ||
+                idLower.contains("wisp") || assigneeLower.contains("wisp") {
+                return false
+            }
+
+            // Exclude operational types
+            if excludedTypes.contains(typeLower) {
+                return false
+            }
+
+            // Exclude by title patterns
+            if excludedPatterns.contains(where: { titleLower.contains($0) }) {
+                return false
+            }
+
+            // Exclude merge beads
+            if titleLower.hasPrefix("merge:") {
+                return false
+            }
+
+            return true
+        }
+    }
+
     /// Fetch current Gas Town status data
     private func fetchWidgetData() async -> GastownWidgetEntry {
         do {
@@ -128,8 +164,12 @@ struct GastownWidgetProvider: TimelineProvider {
                 totalCrew += rig.crew.count
             }
 
+            // Filter beads to OVERSEER scope (exclude wisp/internal beads)
+            let allBeads = inProgressBeads + hookedBeads
+            let filteredBeads = filterToOverseerScope(allBeads)
+
             // Get recent beads for display
-            let recentBeads = (inProgressBeads + hookedBeads).prefix(4).map { bead in
+            let recentBeads = filteredBeads.prefix(4).map { bead in
                 GastownWidgetEntry.RecentBead(
                     id: bead.id,
                     title: bead.title,
