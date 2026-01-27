@@ -12,7 +12,7 @@ storage_mode("git")
 type("appstore")
 
 # The bundle identifier(s) of your app
-app_identifier(ENV["APP_IDENTIFIER"] || "com.jmm.adjutant")
+app_identifier(["com.jmm.adjutant", "com.jmm.adjutant.widgets"])
 
 # Your Apple Developer Portal username
 username(ENV["APPLE_ID"])

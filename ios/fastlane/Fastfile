@@ -36,7 +36,8 @@ platform :ios do
       export_method: "app-store",
       export_options: {
         provisioningProfiles: {
-          ENV["APP_IDENTIFIER"] || "com.jmm.adjutant" => ENV["PROVISIONING_PROFILE_NAME"] || "match AppStore com.jmm.adjutant"
+          "com.jmm.adjutant" => "match AppStore com.jmm.adjutant",
+          "com.jmm.adjutant.widgets" => "match AppStore com.jmm.adjutant.widgets"
         }
       },
       output_directory: "./build",
