@@ -57,8 +57,10 @@ public final class NetworkMonitor: ObservableObject {
         guard !isMonitoring else { return }
 
         monitor.pathUpdateHandler = { [weak self] path in
+            // Capture self strongly before entering Task to avoid concurrent access to captured var
+            guard let strongSelf = self else { return }
             Task { @MainActor in
-                self?.handlePathUpdate(path)
+                strongSelf.handlePathUpdate(path)
             }
         }
 

@@ -103,41 +103,43 @@ struct ChatBubble: View {
 
 // MARK: - Preview
 
-#Preview("ChatBubble") {
-    let incomingMessage = Message(
-        id: "test-1",
-        from: "mayor/",
-        to: "user",
-        subject: "",
-        body: "Welcome to Gas Town. How can I help you today?",
-        timestamp: ISO8601DateFormatter().string(from: Date()),
-        read: true,
-        priority: .normal,
-        type: .notification,
-        threadId: "thread-1",
-        pinned: false,
-        isInfrastructure: false
-    )
+struct ChatBubble_Previews: PreviewProvider {
+    static var previews: some View {
+        let incomingMessage = Message(
+            id: "test-1",
+            from: "mayor/",
+            to: "user",
+            subject: "",
+            body: "Welcome to Gas Town. How can I help you today?",
+            timestamp: ISO8601DateFormatter().string(from: Date()),
+            read: true,
+            priority: .normal,
+            type: .notification,
+            threadId: "thread-1",
+            pinned: false,
+            isInfrastructure: false
+        )
 
-    let outgoingMessage = Message(
-        id: "test-2",
-        from: "user",
-        to: "mayor/",
-        subject: "",
-        body: "I need to check the status of my convoy.",
-        timestamp: ISO8601DateFormatter().string(from: Date()),
-        read: true,
-        priority: .normal,
-        type: .task,
-        threadId: "thread-1",
-        pinned: false,
-        isInfrastructure: false
-    )
+        let outgoingMessage = Message(
+            id: "test-2",
+            from: "user",
+            to: "mayor/",
+            subject: "",
+            body: "I need to check the status of my convoy.",
+            timestamp: ISO8601DateFormatter().string(from: Date()),
+            read: true,
+            priority: .normal,
+            type: .task,
+            threadId: "thread-1",
+            pinned: false,
+            isInfrastructure: false
+        )
 
-    VStack(spacing: 16) {
-        ChatBubble(message: incomingMessage, isOutgoing: false)
-        ChatBubble(message: outgoingMessage, isOutgoing: true)
+        VStack(spacing: 16) {
+            ChatBubble(message: incomingMessage, isOutgoing: false)
+            ChatBubble(message: outgoingMessage, isOutgoing: true)
+        }
+        .padding()
+        .background(CRTTheme.Background.screen)
     }
-    .padding()
-    .background(CRTTheme.Background.screen)
 }

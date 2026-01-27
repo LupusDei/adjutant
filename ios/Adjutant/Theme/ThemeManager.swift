@@ -46,6 +46,7 @@ public final class ThemeManager: ObservableObject {
 
 extension View {
     /// Apply the current theme from ThemeManager to the view hierarchy
+    @MainActor
     public func withThemeManager(_ themeManager: ThemeManager) -> some View {
         self.environment(\.crtTheme, themeManager.currentTheme)
     }
