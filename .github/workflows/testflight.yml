@@ -73,7 +73,13 @@ jobs:
           SSH_KEY_BASE64: ${{ secrets.SSH_KEY_BASE64 }}
         run: |
           mkdir -p ~/.ssh
+          echo "Base64 length: ${#SSH_KEY_BASE64}"
           printf '%s' "$SSH_KEY_BASE64" | base64 -D > ~/.ssh/match_key
+          echo "Decoded key info:"
+          wc -c ~/.ssh/match_key
+          head -1 ~/.ssh/match_key
+          tail -1 ~/.ssh/match_key
+          file ~/.ssh/match_key
           chmod 600 ~/.ssh/match_key
           eval "$(ssh-agent -s)"
           ssh-add ~/.ssh/match_key
