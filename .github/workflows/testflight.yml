@@ -22,7 +22,7 @@ jobs:
 
     env:
       # App configuration
-      APP_IDENTIFIER: com.jmm.Adjutant
+      APP_IDENTIFIER: com.jmm.adjutant
       TEAM_ID: 2BRYAM5Q52
 
     steps:

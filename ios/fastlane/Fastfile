@@ -17,7 +17,7 @@ platform :ios do
   lane :bump_build do
     # Use the latest TestFlight build number + 1
     latest_build = latest_testflight_build_number(
-      app_identifier: ENV["APP_IDENTIFIER"] || "com.jmm.Adjutant"
+      app_identifier: ENV["APP_IDENTIFIER"] || "com.jmm.adjutant"
     )
     increment_build_number(
       build_number: latest_build + 1,
@@ -36,7 +36,7 @@ platform :ios do
       export_method: "app-store",
       export_options: {
         provisioningProfiles: {
-          ENV["APP_IDENTIFIER"] || "com.jmm.Adjutant" => ENV["PROVISIONING_PROFILE_NAME"] || "match AppStore com.jmm.Adjutant"
+          ENV["APP_IDENTIFIER"] || "com.jmm.adjutant" => ENV["PROVISIONING_PROFILE_NAME"] || "match AppStore com.jmm.adjutant"
         }
       },
       output_directory: "./build",

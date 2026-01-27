@@ -2,7 +2,7 @@
 # See: https://docs.fastlane.tools/advanced/Appfile/
 
 # The bundle identifier of the app
-app_identifier ENV["APP_IDENTIFIER"] || "com.jmm.Adjutant"
+app_identifier ENV["APP_IDENTIFIER"] || "com.jmm.adjutant"
 
 # Your Apple Developer Portal username
 apple_id ENV["APPLE_ID"]
