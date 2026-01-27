@@ -69,9 +69,15 @@ jobs:
           EOF
 
       - name: Setup SSH for Match
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_KEY }}
+        env:
+          SSH_KEY_BASE64: ${{ secrets.SSH_KEY_BASE64 }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY_BASE64" | base64 --decode > ~/.ssh/match_key
+          chmod 600 ~/.ssh/match_key
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/match_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
 
       - name: Build and Upload to TestFlight
         run: bundle exec fastlane beta
