@@ -80,6 +80,11 @@ struct MailListView: View {
 
             Spacer()
 
+            // Mark all as read button
+            if viewModel.unreadCount > 0 {
+                markAllReadButton
+            }
+
             searchButton
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
@@ -162,6 +167,30 @@ struct MailListView: View {
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.xs)
         .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
+    private var markAllReadButton: some View {
+        Button {
+            Task {
+                await viewModel.markAllAsRead()
+            }
+        } label: {
+            HStack(spacing: CRTTheme.Spacing.xxs) {
+                Image(systemName: "envelope.open")
+                    .font(.system(size: 12))
+                Text("MARK ALL READ")
+                    .font(CRTTheme.Typography.font(size: 11, weight: .medium))
+                    .tracking(0.5)
+            }
+            .foregroundColor(theme.primary)
+            .padding(.horizontal, CRTTheme.Spacing.sm)
+            .padding(.vertical, CRTTheme.Spacing.xxs)
+            .overlay(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                    .stroke(theme.primary.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var searchButton: some View {
