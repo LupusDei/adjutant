@@ -28,22 +28,17 @@ function log(color, message) {
 function installDeps(dir, name) {
   const fullPath = join(PROJECT_ROOT, dir);
   const packageJson = join(fullPath, 'package.json');
-  const nodeModules = join(fullPath, 'node_modules');
 
   if (!existsSync(packageJson)) {
     log(COLORS.yellow, `Skipping ${name} - no package.json found`);
     return;
   }
 
-  if (existsSync(nodeModules)) {
-    log(COLORS.blue, `${name} dependencies already installed`);
-    return;
-  }
-
   log(COLORS.green, `Installing ${name} dependencies...`);
   try {
-    // Using execSync with hardcoded command - no user input, safe from injection
-    execSync('npm install --omit=dev', {
+    // Always run npm install to pick up new dependencies
+    // npm install is fast and idempotent when nothing changed
+    execSync('npm install', {
       cwd: fullPath,
       stdio: 'inherit',
     });
