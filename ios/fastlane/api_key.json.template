@@ -1,0 +1,6 @@
+{
+  "key_id": "YOUR_KEY_ID_HERE",
+  "issuer_id": "YOUR_ISSUER_ID_HERE",
+  "key_filepath": "./fastlane/AuthKey.p8",
+  "in_house": false
+}

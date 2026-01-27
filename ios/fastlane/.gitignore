@@ -1,0 +1,12 @@
+# Secrets - never commit these
+.env
+api_key.json
+AuthKey*.p8
+*.p8
+
+# Fastlane reports
+report.xml
+Preview.html
+
+# Build artifacts
+build/

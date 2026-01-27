@@ -21,7 +21,8 @@ username(ENV["APPLE_ID"])
 team_id(ENV["TEAM_ID"] || "2BRYAM5Q52")
 
 # Readonly mode for CI (won't create new certs if they don't exist)
-readonly(is_ci)
+# Set MATCH_READONLY=true in CI, or leave unset for local dev
+readonly(ENV["MATCH_READONLY"] == "true" || ENV["CI"] == "true")
 
 # Clone using shallow clone for faster CI
 shallow_clone(true)
