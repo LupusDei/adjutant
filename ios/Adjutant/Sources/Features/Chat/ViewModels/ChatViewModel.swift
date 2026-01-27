@@ -51,6 +51,8 @@ final class ChatViewModel: BaseViewModel {
     private let pollingInterval: TimeInterval = 30.0
     private var lastMessageId: String?
     private var speechCancellables = Set<AnyCancellable>()
+    /// Pending optimistic messages that haven't been confirmed by the server yet
+    private var pendingLocalMessages: [Message] = []
 
     // MARK: - Initialization
 
@@ -96,14 +98,39 @@ final class ChatViewModel: BaseViewModel {
     override func refresh() async {
         await performAsyncAction(showLoading: messages.isEmpty) {
             let response = try await self.apiClient.getMail(filter: .user, all: false)
-            self.messages = self.filterRecipientMessages(response.items).sorted { msg1, msg2 in
+            var serverMessages = self.filterRecipientMessages(response.items).sorted { msg1, msg2 in
                 // Sort by timestamp, oldest first (for chat display)
                 (msg1.date ?? Date.distantPast) < (msg2.date ?? Date.distantPast)
             }
-            self.lastMessageId = self.messages.last?.id
+
+            // Remove pending local messages that have been confirmed by server
+            self.pendingLocalMessages.removeAll { localMsg in
+                serverMessages.contains { serverMsg in
+                    self.isConfirmedMessage(local: localMsg, server: serverMsg)
+                }
+            }
+
+            // Merge remaining pending local messages with server messages
+            if !self.pendingLocalMessages.isEmpty {
+                serverMessages.append(contentsOf: self.pendingLocalMessages)
+                serverMessages.sort { msg1, msg2 in
+                    (msg1.date ?? Date.distantPast) < (msg2.date ?? Date.distantPast)
+                }
+            }
+
+            self.messages = serverMessages
+            self.lastMessageId = serverMessages.filter { !$0.id.hasPrefix("local-") }.last?.id
             // Update cache for next navigation
             ResponseCache.shared.updateChatMessages(self.messages)
         }
+    }
+
+    /// Check if a server message confirms a pending local message
+    private func isConfirmedMessage(local: Message, server: Message) -> Bool {
+        // Match by body content and recipient - server message confirms the local one
+        return local.body == server.body &&
+               local.to == server.to &&
+               server.to == selectedRecipient
     }
 
     /// Loads available recipients from the API
@@ -119,6 +146,7 @@ final class ChatViewModel: BaseViewModel {
         guard recipient != selectedRecipient else { return }
         selectedRecipient = recipient
         messages = [] // Clear messages while loading
+        pendingLocalMessages = [] // Clear pending messages for old recipient
         await refresh()
     }
 
@@ -132,12 +160,28 @@ final class ChatViewModel: BaseViewModel {
         await performAsyncAction(showLoading: false) {
             // For now, load all messages - pagination could be added later
             let response = try await self.apiClient.getMail(filter: .user, all: true)
-            let allRecipientMessages = self.filterRecipientMessages(response.items).sorted { msg1, msg2 in
+            var allRecipientMessages = self.filterRecipientMessages(response.items).sorted { msg1, msg2 in
                 (msg1.date ?? Date.distantPast) < (msg2.date ?? Date.distantPast)
             }
 
-            // If we got the same count, there's no more history
-            if allRecipientMessages.count <= self.messages.count {
+            // Remove pending local messages that have been confirmed by server
+            self.pendingLocalMessages.removeAll { localMsg in
+                allRecipientMessages.contains { serverMsg in
+                    self.isConfirmedMessage(local: localMsg, server: serverMsg)
+                }
+            }
+
+            // Merge remaining pending local messages
+            if !self.pendingLocalMessages.isEmpty {
+                allRecipientMessages.append(contentsOf: self.pendingLocalMessages)
+                allRecipientMessages.sort { msg1, msg2 in
+                    (msg1.date ?? Date.distantPast) < (msg2.date ?? Date.distantPast)
+                }
+            }
+
+            // If we got the same count (excluding local), there's no more history
+            let serverOnlyCount = allRecipientMessages.filter { !$0.id.hasPrefix("local-") }.count
+            if serverOnlyCount <= self.messages.filter({ !$0.id.hasPrefix("local-") }).count {
                 self.hasMoreHistory = false
             } else {
                 self.messages = allRecipientMessages
@@ -176,6 +220,8 @@ final class ChatViewModel: BaseViewModel {
 
         // Add to messages immediately (optimistic update)
         messages.append(optimisticMessage)
+        // Track as pending so it survives refresh until server confirms
+        pendingLocalMessages.append(optimisticMessage)
 
         await performAsyncAction(showLoading: false) {
             let request = SendMessageRequest(
