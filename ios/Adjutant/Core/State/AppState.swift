@@ -238,6 +238,14 @@ final class AppState: ObservableObject {
 
     // MARK: - Persistence
 
+    /// App Group identifier for sharing data with widgets
+    static let appGroupIdentifier = "group.com.jmm.adjutant"
+
+    /// Shared UserDefaults for widget access
+    private static var sharedDefaults: UserDefaults? {
+        UserDefaults(suiteName: appGroupIdentifier)
+    }
+
     private func loadPersistedState() {
         if let themeRaw = UserDefaults.standard.string(forKey: "selectedTheme"),
            let theme = ThemeIdentifier(rawValue: themeRaw) {
@@ -253,6 +261,8 @@ final class AppState: ObservableObject {
            let url = URL(string: urlString) {
             apiBaseURL = url
             recreateAPIClient()
+            // Also sync to shared defaults for widgets
+            Self.sharedDefaults?.set(url.absoluteString, forKey: "apiBaseURL")
         }
 
         // Set up persistence observers
@@ -288,6 +298,8 @@ final class AppState: ObservableObject {
             .dropFirst()
             .sink { [weak self] url in
                 UserDefaults.standard.set(url.absoluteString, forKey: "apiBaseURL")
+                // Also sync to shared defaults for widgets
+                Self.sharedDefaults?.set(url.absoluteString, forKey: "apiBaseURL")
                 self?.recreateAPIClient()
             }
             .store(in: &cancellables)

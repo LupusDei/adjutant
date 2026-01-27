@@ -61,6 +61,8 @@ struct GastownWidgetEntry: TimelineEntry {
 
 /// Provides timeline entries for the Gas Town widget.
 struct GastownWidgetProvider: TimelineProvider {
+    /// App Group identifier for sharing data with the main app
+    private static let appGroupIdentifier = "group.com.jmm.adjutant"
 
     func placeholder(in context: Context) -> GastownWidgetEntry {
         .placeholder
@@ -87,12 +89,24 @@ struct GastownWidgetProvider: TimelineProvider {
         }
     }
 
+    /// Get the API base URL from shared App Groups UserDefaults
+    private func getSharedAPIBaseURL() -> URL {
+        let sharedDefaults = UserDefaults(suiteName: Self.appGroupIdentifier)
+        if let urlString = sharedDefaults?.string(forKey: "apiBaseURL"),
+           let url = URL(string: urlString) {
+            return url
+        }
+        // Fall back to localhost if no URL configured
+        return URL(string: "http://localhost:3001/api")!
+    }
+
     /// Fetch current Gas Town status data
     private func fetchWidgetData() async -> GastownWidgetEntry {
         do {
-            // Create client - widgets can't access AppState, so use development config
-            // TODO: Use App Groups to share the configured URL with the main app
-            let client = APIClient()
+            // Create client using the shared API URL from App Groups
+            let baseURL = getSharedAPIBaseURL()
+            let config = APIClientConfiguration(baseURL: baseURL)
+            let client = APIClient(configuration: config)
 
             // Fetch status and beads in parallel
             async let statusTask = client.getStatus()
