@@ -660,6 +660,7 @@
 				INFOPLIST_FILE = Adjutant/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Adjutant;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -688,6 +689,7 @@
 				INFOPLIST_FILE = Adjutant/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Adjutant;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -782,6 +784,7 @@
 				INFOPLIST_FILE = AdjutantWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Adjutant Widgets";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -810,6 +813,7 @@
 				INFOPLIST_FILE = AdjutantWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Adjutant Widgets";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
