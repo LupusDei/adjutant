@@ -46,9 +46,19 @@ jobs:
       - name: Setup App Store Connect API Key
         env:
           APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
         run: |
           mkdir -p fastlane
           echo "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > fastlane/AuthKey.p8
+          cat > fastlane/api_key.json << EOF
+          {
+            "key_id": "$APP_STORE_CONNECT_API_KEY_ID",
+            "issuer_id": "$APP_STORE_CONNECT_API_ISSUER_ID",
+            "key": "$(cat fastlane/AuthKey.p8 | sed ':a;N;$!ba;s/\n/\\n/g')",
+            "in_house": false
+          }
+          EOF
 
       - name: Configure Fastlane Environment
         env:
@@ -60,7 +70,7 @@ jobs:
           cat > fastlane/.env << EOF
           APP_STORE_CONNECT_API_KEY_ID=$APP_STORE_CONNECT_API_KEY_ID
           APP_STORE_CONNECT_API_ISSUER_ID=$APP_STORE_CONNECT_API_ISSUER_ID
-          APP_STORE_CONNECT_API_KEY_PATH=./AuthKey.p8
+          APP_STORE_CONNECT_API_KEY_PATH=./fastlane/api_key.json
           APP_IDENTIFIER=$APP_IDENTIFIER
           TEAM_ID=$TEAM_ID
           MATCH_GIT_URL=$MATCH_GIT_URL
@@ -80,4 +90,5 @@ jobs:
         if: always()
         run: |
           rm -f fastlane/AuthKey.p8
+          rm -f fastlane/api_key.json
           rm -f fastlane/.env
