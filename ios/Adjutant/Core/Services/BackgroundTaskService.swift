@@ -11,6 +11,7 @@ import AdjutantKit
 
 #if os(iOS)
 import BackgroundTasks
+import WidgetKit
 #endif
 
 /// Manages background task scheduling and execution for app refresh and mail checking.
@@ -280,7 +281,13 @@ extension BackgroundTaskService {
         switch phase {
         case .background:
             scheduleAppRefresh()
+            // Reload widget timelines so home screen shows latest data
+            #if os(iOS)
+            WidgetCenter.shared.reloadAllTimelines()
+            print("[BackgroundTaskService] App entered background - scheduled refresh and reloaded widgets")
+            #else
             print("[BackgroundTaskService] App entered background - scheduled refresh")
+            #endif
         case .active:
             // Cancel pending tasks when becoming active (we'll refresh immediately)
             // Keep scheduled tasks in case user backgrounds quickly
