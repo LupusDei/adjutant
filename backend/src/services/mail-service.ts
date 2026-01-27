@@ -85,6 +85,8 @@ function matchesIdentity(issue: RawMessage, identity: string): boolean {
   const assignee = issue.assignee ?? "";
   if (variants.has(assignee)) return true;
   const labels = parseMessageLabels(issue.labels);
+  // Also match messages SENT BY this identity (for chat view)
+  if (labels.sender && variants.has(labels.sender)) return true;
   return labels.cc.some((cc) => variants.has(cc));
 }
 

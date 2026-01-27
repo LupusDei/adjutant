@@ -67,6 +67,33 @@ describe("mail-service", () => {
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe("LIST_MAIL_ERROR");
     });
+
+    it("returns both received and sent messages for chat view", async () => {
+      // Message FROM mayor TO overseer (received by overseer)
+      const received = createBeadsMessage({
+        id: "msg-received",
+        assignee: "overseer",
+        labels: ["from:mayor/"],
+        created_at: "2026-01-10T12:00:00Z",
+      });
+      // Message FROM overseer TO mayor (sent by overseer)
+      const sent = createBeadsMessage({
+        id: "msg-sent",
+        assignee: "mayor/",
+        labels: ["from:overseer"],
+        created_at: "2026-01-11T12:00:00Z",
+      });
+      vi.mocked(listMailIssues).mockResolvedValue([received, sent]);
+
+      // Default identity is "overseer" - should get both received AND sent
+      const result = await listMail();
+
+      expect(result.success).toBe(true);
+      expect(result.data).toHaveLength(2);
+      const ids = result.data?.map((m) => m.id);
+      expect(ids).toContain("msg-received");
+      expect(ids).toContain("msg-sent");
+    });
   });
 
   describe("getMessage", () => {
