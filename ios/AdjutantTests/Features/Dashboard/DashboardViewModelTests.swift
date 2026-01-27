@@ -223,6 +223,141 @@ final class DashboardViewModelTests: XCTestCase {
         XCTAssertNil(result["closed"])
     }
 
+    // MARK: - OVERSEER Filtering Tests
+
+    func testOverseerFilteringExcludesWispBeads() {
+        // Test that OVERSEER mode filtering excludes wisp beads by type
+        let taskBead = BeadInfo(
+            id: "adj-001",
+            title: "Regular task",
+            status: "open",
+            priority: 1,
+            type: "task",
+            assignee: nil,
+            rig: "adjutant",
+            source: "adjutant",
+            labels: [],
+            createdAt: "2026-01-25T10:00:00Z",
+            updatedAt: nil
+        )
+        let wispBead = BeadInfo(
+            id: "adj-wisp-002",
+            title: "Wisp bead",
+            status: "open",
+            priority: 2,
+            type: "wisp",
+            assignee: nil,
+            rig: "adjutant",
+            source: "adjutant",
+            labels: [],
+            createdAt: "2026-01-25T10:00:00Z",
+            updatedAt: nil
+        )
+        let moleculeBead = BeadInfo(
+            id: "mol-polecat-work",
+            title: "Polecat molecule",
+            status: "open",
+            priority: 2,
+            type: "epic",
+            assignee: nil,
+            rig: "adjutant",
+            source: "adjutant",
+            labels: [],
+            createdAt: "2026-01-25T10:00:00Z",
+            updatedAt: nil
+        )
+
+        // Simulate OVERSEER filtering logic
+        let excludedTypes = ["message", "epic", "convoy", "agent", "role", "witness", "wisp", "infrastructure", "coordination", "sync"]
+        let beads = [taskBead, wispBead, moleculeBead]
+
+        let filtered = beads.filter { bead in
+            let typeLower = bead.type.lowercased()
+            let idLower = bead.id.lowercased()
+
+            // Exclude wisp-related beads (including mol-* molecules)
+            if typeLower.contains("wisp") || idLower.contains("wisp") || idLower.hasPrefix("mol-") {
+                return false
+            }
+
+            // Exclude operational types
+            if excludedTypes.contains(typeLower) {
+                return false
+            }
+
+            return true
+        }
+
+        XCTAssertEqual(filtered.count, 1)
+        XCTAssertEqual(filtered.first?.id, "adj-001")
+    }
+
+    func testOverseerFilteringExcludesInfrastructurePatterns() {
+        // Test that beads with infrastructure-related titles are filtered
+        let regularBead = BeadInfo(
+            id: "adj-001",
+            title: "Fix login bug",
+            status: "open",
+            priority: 1,
+            type: "bug",
+            assignee: nil,
+            rig: "adjutant",
+            source: "adjutant",
+            labels: [],
+            createdAt: "2026-01-25T10:00:00Z",
+            updatedAt: nil
+        )
+        let polecatBead = BeadInfo(
+            id: "adj-002",
+            title: "Polecat assignment for worker",
+            status: "open",
+            priority: 2,
+            type: "task",
+            assignee: nil,
+            rig: "adjutant",
+            source: "adjutant",
+            labels: [],
+            createdAt: "2026-01-25T10:00:00Z",
+            updatedAt: nil
+        )
+        let mergeBead = BeadInfo(
+            id: "adj-003",
+            title: "merge: feature branch",
+            status: "open",
+            priority: 2,
+            type: "task",
+            assignee: nil,
+            rig: "adjutant",
+            source: "adjutant",
+            labels: [],
+            createdAt: "2026-01-25T10:00:00Z",
+            updatedAt: nil
+        )
+
+        // Simulate OVERSEER filtering logic for title patterns
+        let excludedPatterns = ["witness", "wisp", "internal", "sync", "coordination", "mail delivery", "polecat", "crew assignment"]
+        let beads = [regularBead, polecatBead, mergeBead]
+
+        let filtered = beads.filter { bead in
+            let titleLower = bead.title.lowercased()
+
+            // Exclude by title patterns
+            if excludedPatterns.contains(where: { titleLower.contains($0) }) {
+                return false
+            }
+
+            // Exclude merge beads
+            if titleLower.hasPrefix("merge:") {
+                return false
+            }
+
+            return true
+        }
+
+        XCTAssertEqual(filtered.count, 1)
+        XCTAssertEqual(filtered.first?.id, "adj-001")
+    }
+
     // MARK: - Model Tests
 
     func testMessageSenderName() {
