@@ -39,6 +39,11 @@ struct MainTabView: View {
 private struct TabContent: View {
     let selectedTab: AppTab
     @ObservedObject var coordinator: AppCoordinator
+    @Environment(\.scenePhase) private var scenePhase
+
+    /// Used to force TabView to reset its internal paging state when app returns from background.
+    /// Without this, the page-style TabView can get stuck in an intermediate position between tabs.
+    @State private var tabViewId = UUID()
 
     var body: some View {
         TabView(selection: Binding(
@@ -58,6 +63,15 @@ private struct TabContent: View {
         #if os(iOS)
         .tabViewStyle(.page(indexDisplayMode: .never))
         #endif
+        .id(tabViewId)
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                // Reset TabView ID to force a clean layout and snap to current tab.
+                // This fixes the stuck UI state that can occur when the app is
+                // backgrounded during a page swipe gesture.
+                tabViewId = UUID()
+            }
+        }
     }
 
     @ViewBuilder
