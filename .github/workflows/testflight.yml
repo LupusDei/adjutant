@@ -51,14 +51,8 @@ jobs:
         run: |
           mkdir -p fastlane
           echo "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > fastlane/AuthKey.p8
-          cat > fastlane/api_key.json << EOF
-          {
-            "key_id": "$APP_STORE_CONNECT_API_KEY_ID",
-            "issuer_id": "$APP_STORE_CONNECT_API_ISSUER_ID",
-            "key": "$(cat fastlane/AuthKey.p8 | sed ':a;N;$!ba;s/\n/\\n/g')",
-            "in_house": false
-          }
-          EOF
+          KEY_CONTENT=$(awk 'NF {sub(/\r/, ""); printf "%s\\n",$0;}' fastlane/AuthKey.p8)
+          printf '{"key_id":"%s","issuer_id":"%s","key":"%s","in_house":false}' "$APP_STORE_CONNECT_API_KEY_ID" "$APP_STORE_CONNECT_API_ISSUER_ID" "$KEY_CONTENT" > fastlane/api_key.json
 
       - name: Configure Fastlane Environment
         env:
