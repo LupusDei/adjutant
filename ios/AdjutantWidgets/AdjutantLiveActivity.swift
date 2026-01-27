@@ -298,7 +298,7 @@ private func powerStateColor(for powerState: PowerState) -> Color {
 
 // MARK: - Previews
 
-#Preview("Lock Screen", as: .content, using: GastownActivityAttributes(townName: "Gastown")) {
+#Preview("Lock Screen", as: .content, using: GastownActivityAttributes(townName: "Adjutant")) {
     AdjutantLiveActivity()
 } contentStates: {
     GastownActivityAttributes.ContentState(
@@ -319,7 +319,7 @@ private func powerStateColor(for powerState: PowerState) -> Color {
     )
 }
 
-#Preview("Dynamic Island Expanded", as: .dynamicIsland(.expanded), using: GastownActivityAttributes(townName: "Gastown")) {
+#Preview("Dynamic Island Expanded", as: .dynamicIsland(.expanded), using: GastownActivityAttributes(townName: "Adjutant")) {
     AdjutantLiveActivity()
 } contentStates: {
     GastownActivityAttributes.ContentState(
@@ -332,7 +332,7 @@ private func powerStateColor(for powerState: PowerState) -> Color {
     )
 }
 
-#Preview("Dynamic Island Compact", as: .dynamicIsland(.compact), using: GastownActivityAttributes(townName: "Gastown")) {
+#Preview("Dynamic Island Compact", as: .dynamicIsland(.compact), using: GastownActivityAttributes(townName: "Adjutant")) {
     AdjutantLiveActivity()
 } contentStates: {
     GastownActivityAttributes.ContentState(
@@ -345,7 +345,7 @@ private func powerStateColor(for powerState: PowerState) -> Color {
     )
 }
 
-#Preview("Dynamic Island Minimal", as: .dynamicIsland(.minimal), using: GastownActivityAttributes(townName: "Gastown")) {
+#Preview("Dynamic Island Minimal", as: .dynamicIsland(.minimal), using: GastownActivityAttributes(townName: "Adjutant")) {
     AdjutantLiveActivity()
 } contentStates: {
     GastownActivityAttributes.ContentState(

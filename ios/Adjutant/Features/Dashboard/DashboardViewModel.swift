@@ -44,8 +44,8 @@ final class DashboardViewModel: BaseViewModel {
     /// Maximum number of recent mail messages to display
     private let maxRecentMail = 3
 
-    /// Town name for Live Activity (default: "Gastown")
-    private let townName = "Gastown"
+    /// Town name for Live Activity
+    private let townName = "Adjutant"
 
     // MARK: - Private Properties
 
