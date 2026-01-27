@@ -279,11 +279,11 @@ final class CrewDetailViewModelTests: XCTestCase {
 
 // MARK: - Mock API Client
 
-private class MockTerminalAPIClient: APIClient {
+private final class MockTerminalAPIClient: TerminalAPIProviding, @unchecked Sendable {
     var terminalResult: Result<TerminalCapture, Error>?
     var getTerminalCalled = false
 
-    override func getPolecatTerminal(rig: String, polecat: String) async throws -> TerminalCapture {
+    func getPolecatTerminal(rig: String, polecat: String) async throws -> TerminalCapture {
         getTerminalCalled = true
         guard let result = terminalResult else {
             throw APIClientError.networkError("Not configured")

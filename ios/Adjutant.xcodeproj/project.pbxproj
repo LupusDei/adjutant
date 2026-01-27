@@ -13,6 +13,7 @@
 		A01234560000000000000004 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000004 /* Preview Assets.xcassets */; };
 		A01234560000000000000010 /* AdjutantTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000010 /* AdjutantTests.swift */; };
 		A01234560000000000000011 /* TTSPlaybackServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000011 /* TTSPlaybackServiceTests.swift */; };
+		A01234560000000000000012 /* CrewDetailViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000012 /* CrewDetailViewModelTests.swift */; };
 		A01234560000000000000020 /* AdjutantUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000020 /* AdjutantUITests.swift */; };
 		A01234560000000000000021 /* AdjutantUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000021 /* AdjutantUITestsLaunchTests.swift */; };
 		A01234560000000000000040 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000040 /* AppDelegate.swift */; };
@@ -70,6 +71,7 @@
 		A01234570000000000000004 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		A01234570000000000000010 /* AdjutantTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjutantTests.swift; sourceTree = "<group>"; };
 		A01234570000000000000011 /* TTSPlaybackServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSPlaybackServiceTests.swift; sourceTree = "<group>"; };
+		A01234570000000000000012 /* CrewDetailViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrewDetailViewModelTests.swift; sourceTree = "<group>"; };
 		A01234570000000000000020 /* AdjutantUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjutantUITests.swift; sourceTree = "<group>"; };
 		A01234570000000000000021 /* AdjutantUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjutantUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		A01234570000000000000030 /* TTSPlaybackService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSPlaybackService.swift; sourceTree = "<group>"; };
@@ -203,6 +205,7 @@
 			children = (
 				A01234570000000000000010 /* AdjutantTests.swift */,
 				A012345D0000000000000012 /* Core */,
+				A012345D0000000000000013 /* Features */,
 			);
 			path = AdjutantTests;
 			sourceTree = "<group>";
@@ -213,6 +216,22 @@
 				A01234570000000000000011 /* TTSPlaybackServiceTests.swift */,
 			);
 			path = Core;
+			sourceTree = "<group>";
+		};
+		A012345D0000000000000013 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				A012345D0000000000000014 /* Crew */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		A012345D0000000000000014 /* Crew */ = {
+			isa = PBXGroup;
+			children = (
+				A01234570000000000000012 /* CrewDetailViewModelTests.swift */,
+			);
+			path = Crew;
 			sourceTree = "<group>";
 		};
 		A012345D0000000000000020 /* AdjutantUITests */ = {
@@ -460,6 +479,7 @@
 			files = (
 				A01234560000000000000010 /* AdjutantTests.swift in Sources */,
 				A01234560000000000000011 /* TTSPlaybackServiceTests.swift in Sources */,
+				A01234560000000000000012 /* CrewDetailViewModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

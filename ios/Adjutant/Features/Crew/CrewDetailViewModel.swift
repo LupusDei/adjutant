@@ -34,13 +34,13 @@ final class CrewDetailViewModel: BaseViewModel {
 
     // MARK: - Private Properties
 
-    private let apiClient: APIClient
+    private let apiClient: any TerminalAPIProviding
     private var pollingTask: Task<Void, Never>?
     private let pollingInterval: TimeInterval = 5.0
 
     // MARK: - Initialization
 
-    init(member: CrewMember, apiClient: APIClient? = nil) {
+    init(member: CrewMember, apiClient: (any TerminalAPIProviding)? = nil) {
         self.member = member
         self.apiClient = apiClient ?? APIClient()
         super.init()
