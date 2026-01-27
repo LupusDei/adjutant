@@ -40,8 +40,10 @@ struct AppHeaderView: View {
             // Title section
             VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxs) {
                 CRTText(title, style: .header)
+                    .lineLimit(1)
                 if let subtitle = subtitle {
                     CRTText(subtitle, style: .caption, color: theme.dim)
+                        .lineLimit(1)
                 }
             }
 
