@@ -175,6 +175,30 @@ final class MailListViewModelTests: XCTestCase {
         XCTAssertEqual(updatedMessage?.read, !initialReadStatus)
     }
 
+    func testMarkAllAsRead() async {
+        await viewModel.loadMessages()
+        let initialUnreadCount = viewModel.unreadCount
+        XCTAssertGreaterThan(initialUnreadCount, 0, "Test requires unread messages")
+
+        await viewModel.markAllAsRead()
+
+        XCTAssertEqual(viewModel.unreadCount, 0)
+        XCTAssertTrue(viewModel.messages.allSatisfy { $0.read })
+        XCTAssertEqual(AppState.shared.unreadMailCount, 0)
+    }
+
+    func testMarkAllAsReadWithNoUnreadMessages() async {
+        await viewModel.loadMessages()
+
+        // Mark all as read first
+        await viewModel.markAllAsRead()
+        XCTAssertEqual(viewModel.unreadCount, 0)
+
+        // Call again - should be a no-op without errors
+        await viewModel.markAllAsRead()
+        XCTAssertEqual(viewModel.unreadCount, 0)
+    }
+
     // MARK: - Delete Tests
 
     func testDeleteMessage() async {

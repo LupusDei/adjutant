@@ -80,6 +80,10 @@ struct MailListView: View {
 
             Spacer()
 
+            if viewModel.unreadCount > 0 {
+                markAllReadButton
+            }
+
             searchButton
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
@@ -91,6 +95,21 @@ struct MailListView: View {
                 .foregroundColor(theme.primary.opacity(0.2)),
             alignment: .bottom
         )
+    }
+
+    // MARK: - Mark All Read Button
+
+    private var markAllReadButton: some View {
+        Button {
+            Task {
+                await viewModel.markAllAsRead()
+            }
+        } label: {
+            Image(systemName: "envelope.open")
+                .foregroundColor(theme.primary)
+                .font(.system(size: 16, weight: .medium))
+        }
+        .accessibilityLabel("Mark all as read")
     }
 
     // MARK: - Overseer Toggle

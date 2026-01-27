@@ -230,6 +230,29 @@ final class MailListViewModel: BaseViewModel {
         }
     }
 
+    /// Marks all unread messages as read
+    func markAllAsRead() async {
+        let unreadMessages = messages.filter { !$0.read }
+        guard !unreadMessages.isEmpty else { return }
+
+        guard let apiClient = apiClient else {
+            // Mock mode: update all locally
+            for message in unreadMessages {
+                updateMessageReadStatus(message, read: true)
+            }
+            return
+        }
+
+        await performAsyncAction(showLoading: false) { [weak self] in
+            guard let self = self else { return }
+            // Mark each unread message as read
+            for message in unreadMessages {
+                _ = try await apiClient.markMessageAsRead(id: message.id)
+                self.updateMessageReadStatus(message, read: true)
+            }
+        }
+    }
+
     /// Deletes a message
     func deleteMessage(_ message: Message) async {
         guard let apiClient = apiClient else {
