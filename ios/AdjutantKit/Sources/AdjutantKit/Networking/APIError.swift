@@ -18,6 +18,8 @@ public enum APIClientError: Error, Equatable {
     case httpError(statusCode: Int, message: String)
     /// Rate limited - should retry after delay
     case rateLimited(retryAfter: TimeInterval?)
+    /// Unauthorized - invalid or missing API key (401)
+    case unauthorized
 
     public var isRetryable: Bool {
         switch self {
@@ -28,7 +30,7 @@ public enum APIClientError: Error, Equatable {
                    apiError.code == ApiErrorCode.timeout.rawValue
         case .httpError(let statusCode, _):
             return statusCode >= 500 || statusCode == 429
-        case .decodingError, .invalidRequest, .cancelled:
+        case .decodingError, .invalidRequest, .cancelled, .unauthorized:
             return false
         }
     }
@@ -54,6 +56,8 @@ public enum APIClientError: Error, Equatable {
                 return "Rate limited. Retry after \(Int(delay)) seconds"
             }
             return "Rate limited"
+        case .unauthorized:
+            return "Unauthorized. Check your API key."
         }
     }
 }
