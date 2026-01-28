@@ -32,21 +32,23 @@ struct DashboardView: View {
                 )
                 .padding(.horizontal, CRTTheme.Spacing.md)
 
-                // Bottom Row: Crew and Mail side by side
-                HStack(spacing: CRTTheme.Spacing.md) {
-                    // Crew Widget (compact)
-                    CrewWidgetCompact(
-                        activeCount: viewModel.activeCrewMembers.count,
-                        issueCount: viewModel.crewWithIssues,
-                        onTap: { coordinator.navigate(to: .crew) }
-                    )
+                // Mail Widget with recent messages (full width)
+                MailWidget(
+                    recentMail: viewModel.recentMail,
+                    unreadCount: viewModel.unreadCount,
+                    onTap: { coordinator.navigate(to: .mail) },
+                    onMessageTap: { message in
+                        coordinator.navigate(to: .mailDetail(id: message.id))
+                    }
+                )
+                .padding(.horizontal, CRTTheme.Spacing.md)
 
-                    // Mail Widget (compact, moved from top)
-                    MailWidgetCompact(
-                        unreadCount: viewModel.unreadCount,
-                        onTap: { coordinator.navigate(to: .mail) }
-                    )
-                }
+                // Crew Widget (full width)
+                CrewWidgetCompact(
+                    activeCount: viewModel.activeCrewMembers.count,
+                    issueCount: viewModel.crewWithIssues,
+                    onTap: { coordinator.navigate(to: .crew) }
+                )
                 .padding(.horizontal, CRTTheme.Spacing.md)
             }
             .padding(.vertical, CRTTheme.Spacing.md)
@@ -313,6 +315,152 @@ private struct MailWidgetCompact: View {
             }
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Mail Widget with Recent Messages
+
+private struct MailWidget: View {
+    @Environment(\.crtTheme) private var theme
+
+    let recentMail: [Message]
+    let unreadCount: Int
+    let onTap: () -> Void
+    let onMessageTap: (Message) -> Void
+
+    var body: some View {
+        CRTCard(style: .standard) {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+                // Header
+                Button(action: onTap) {
+                    HStack {
+                        Image(systemName: "envelope.fill")
+                            .foregroundColor(theme.primary)
+                        CRTText("MAIL", style: .subheader)
+
+                        Spacer()
+
+                        if unreadCount > 0 {
+                            BadgeView("\(unreadCount) UNREAD", style: .status(.warning))
+                        }
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(theme.dim)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                Divider()
+                    .background(theme.dim.opacity(0.3))
+
+                // Recent messages
+                if recentMail.isEmpty {
+                    EmptyStateView(
+                        title: "NO RECENT MAIL",
+                        icon: "envelope"
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, CRTTheme.Spacing.sm)
+                } else {
+                    VStack(spacing: CRTTheme.Spacing.xs) {
+                        ForEach(recentMail) { message in
+                            Button(action: { onMessageTap(message) }) {
+                                MailPreviewRow(message: message)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct MailPreviewRow: View {
+    @Environment(\.crtTheme) private var theme
+    let message: Message
+
+    var body: some View {
+        HStack(alignment: .top, spacing: CRTTheme.Spacing.sm) {
+            // Unread indicator
+            Circle()
+                .fill(message.read ? Color.clear : theme.bright)
+                .frame(width: 6, height: 6)
+                .padding(.top, 5)
+
+            VStack(alignment: .leading, spacing: 2) {
+                // Top row: Sender and time
+                HStack {
+                    CRTText(
+                        message.senderName.uppercased(),
+                        style: .caption,
+                        color: message.read ? theme.primary : theme.bright
+                    )
+                    .lineLimit(1)
+
+                    Spacer()
+
+                    CRTText(formattedDate, style: .caption, color: theme.dim)
+                }
+
+                // Subject
+                CRTText(
+                    message.subject,
+                    style: .caption,
+                    color: message.read ? theme.primary.opacity(0.8) : theme.primary
+                )
+                .lineLimit(1)
+            }
+
+            // Priority indicator
+            if message.priority.rawValue <= MessagePriority.high.rawValue {
+                priorityIndicator
+            }
+        }
+        .padding(CRTTheme.Spacing.xs)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(message.read ? theme.dim.opacity(0.05) : theme.dim.opacity(0.1))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(
+                    message.read ? theme.dim.opacity(0.2) : theme.primary.opacity(0.3),
+                    lineWidth: 1
+                )
+        )
+    }
+
+    private var formattedDate: String {
+        guard let date = message.date else { return "" }
+
+        let calendar = Calendar.current
+        let now = Date()
+
+        if calendar.isDateInToday(date) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "HH:mm"
+            return formatter.string(from: date)
+        } else if calendar.isDateInYesterday(date) {
+            return "YEST"
+        } else if calendar.isDate(date, equalTo: now, toGranularity: .weekOfYear) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "EEE"
+            return formatter.string(from: date).uppercased()
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "M/d"
+            return formatter.string(from: date)
+        }
+    }
+
+    @ViewBuilder
+    private var priorityIndicator: some View {
+        let color: Color = message.priority == .urgent ? .red : .orange
+        Circle()
+            .fill(color)
+            .frame(width: 6, height: 6)
     }
 }
 
