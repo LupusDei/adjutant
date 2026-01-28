@@ -94,13 +94,10 @@ public actor APIClient {
 
         // Set headers
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let apiKey = configuration.apiKey, !apiKey.isEmpty {
-            request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
-        }
 
-        // Add API key header if configured
+        // Add Authorization header if API key is configured
         if let apiKey = configuration.apiKey, !apiKey.isEmpty {
-            request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
 
         // Encode body if provided
@@ -192,13 +189,10 @@ public actor APIClient {
         if let contentType {
             request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         }
-        if let apiKey = configuration.apiKey, !apiKey.isEmpty {
-            request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
-        }
 
-        // Add API key header if configured
+        // Add Authorization header if API key is configured
         if let apiKey = configuration.apiKey, !apiKey.isEmpty {
-            request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
 
         if let body {
