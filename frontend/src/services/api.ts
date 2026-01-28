@@ -30,6 +30,40 @@ import type {
 // Set VITE_API_URL only when you need to hit a different backend (e.g., production)
 const API_BASE_URL = (import.meta.env['VITE_API_URL'] as string | undefined) ?? '/api';
 const DEFAULT_TIMEOUT = 30000;
+const API_KEY_STORAGE_KEY = 'adjutant-api-key';
+
+// =============================================================================
+// API Key Management
+// =============================================================================
+
+/**
+ * Get the stored API key from session storage.
+ */
+export function getApiKey(): string | null {
+  return sessionStorage.getItem(API_KEY_STORAGE_KEY);
+}
+
+/**
+ * Set the API key in session storage.
+ */
+export function setApiKey(key: string): void {
+  sessionStorage.setItem(API_KEY_STORAGE_KEY, key);
+}
+
+/**
+ * Clear the API key from session storage.
+ */
+export function clearApiKey(): void {
+  sessionStorage.removeItem(API_KEY_STORAGE_KEY);
+}
+
+/**
+ * Check if an API key is configured.
+ */
+export function hasApiKey(): boolean {
+  const key = getApiKey();
+  return key !== null && key.length > 0;
+}
 
 // =============================================================================
 // Error Types
@@ -75,6 +109,13 @@ async function apiFetch<T>(
   const baseHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
   };
+
+  // Add API key authorization header if configured
+  const apiKey = getApiKey();
+  if (apiKey) {
+    baseHeaders['Authorization'] = `Bearer ${apiKey}`;
+  }
+
   // Merge additional headers if provided (assumes Record-style headers)
   const headers: HeadersInit = fetchOptions.headers
     ? { ...baseHeaders, ...(fetchOptions.headers as Record<string, string>) }
@@ -331,11 +372,19 @@ export const api = {
       mimeType: string
     ): Promise<ApiResponse<TranscribeResponse>> {
       const url = `${API_BASE_URL}/voice/transcribe`;
+      const headers: Record<string, string> = {
+        'Content-Type': mimeType,
+      };
+
+      // Add API key authorization header if configured
+      const apiKey = getApiKey();
+      if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      }
+
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': mimeType,
-        },
+        headers,
         body: audioData,
       });
 
