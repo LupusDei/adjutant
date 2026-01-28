@@ -2,6 +2,7 @@ import "dotenv/config";
 import cors from "cors";
 import express from "express";
 import { agentsRouter, beadsRouter, convoysRouter, devicesRouter, mailRouter, powerRouter, statusRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
 
@@ -24,6 +25,7 @@ app.use((req, res, next) => {
   });
   next();
 });
+app.use(apiKeyAuth);
 
 // Routes
 app.use("/api/beads", beadsRouter);

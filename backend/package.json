@@ -15,7 +15,11 @@
     "lint": "eslint src tests",
     "lint:fix": "eslint src tests --fix",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\""
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "api-key": "tsx src/cli/api-keys.ts",
+    "api-key:generate": "tsx src/cli/api-keys.ts generate",
+    "api-key:list": "tsx src/cli/api-keys.ts list",
+    "api-key:revoke": "tsx src/cli/api-keys.ts revoke"
   },
   "keywords": [
     "gastown",
