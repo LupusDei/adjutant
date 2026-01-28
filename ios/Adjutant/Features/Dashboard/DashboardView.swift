@@ -135,9 +135,9 @@ private struct BeadsKanbanPreviewWidget: View {
                                 onBeadTap: onBeadTap
                             )
 
-                            // Recent Closed column
+                            // Closed column
                             KanbanColumnPreview(
-                                title: "RECENT",
+                                title: "CLOSED",
                                 beads: recentClosedBeads,
                                 color: CRTTheme.State.offline,
                                 onBeadTap: onBeadTap
