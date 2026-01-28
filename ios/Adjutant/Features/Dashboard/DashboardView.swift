@@ -32,21 +32,22 @@ struct DashboardView: View {
                 )
                 .padding(.horizontal, CRTTheme.Spacing.md)
 
-                // Bottom Row: Crew and Mail side by side
-                HStack(spacing: CRTTheme.Spacing.md) {
-                    // Crew Widget (compact)
-                    CrewWidgetCompact(
-                        activeCount: viewModel.activeCrewMembers.count,
-                        issueCount: viewModel.crewWithIssues,
-                        onTap: { coordinator.navigate(to: .crew) }
-                    )
+                // Crew Widget (full width with member list)
+                CrewWidget(
+                    crewMembers: viewModel.activeCrewMembers,
+                    issueCount: viewModel.crewWithIssues,
+                    onTap: { coordinator.navigate(to: .crew) },
+                    onMemberTap: { member in
+                        coordinator.navigate(to: .agentDetail(member: member))
+                    }
+                )
+                .padding(.horizontal, CRTTheme.Spacing.md)
 
-                    // Mail Widget (compact, moved from top)
-                    MailWidgetCompact(
-                        unreadCount: viewModel.unreadCount,
-                        onTap: { coordinator.navigate(to: .mail) }
-                    )
-                }
+                // Mail Widget (compact)
+                MailWidgetCompact(
+                    unreadCount: viewModel.unreadCount,
+                    onTap: { coordinator.navigate(to: .mail) }
+                )
                 .padding(.horizontal, CRTTheme.Spacing.md)
             }
             .padding(.vertical, CRTTheme.Spacing.md)
@@ -230,48 +231,179 @@ private struct BeadCardPreview: View {
     }
 }
 
-// MARK: - Compact Widgets
+// MARK: - Crew Widget
 
-private struct CrewWidgetCompact: View {
+private struct CrewWidget: View {
     @Environment(\.crtTheme) private var theme
 
-    let activeCount: Int
+    let crewMembers: [CrewMember]
     let issueCount: Int
     let onTap: () -> Void
+    let onMemberTap: (CrewMember) -> Void
 
     var body: some View {
-        Button(action: onTap) {
-            CRTCard(style: .standard) {
-                VStack(spacing: CRTTheme.Spacing.xs) {
+        CRTCard(style: .standard) {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+                // Header
+                Button(action: onTap) {
                     HStack {
                         Image(systemName: "person.3.fill")
                             .foregroundColor(theme.primary)
-                        CRTText("CREW", style: .caption)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(theme.dim)
-                    }
-
-                    HStack {
-                        VStack(alignment: .leading) {
-                            CRTText("\(activeCount)", style: .header, glowIntensity: .subtle)
-                            CRTText("ACTIVE", style: .caption, color: theme.dim)
-                        }
+                        CRTText("CREW", style: .subheader)
 
                         Spacer()
 
                         if issueCount > 0 {
-                            VStack(alignment: .trailing) {
-                                CRTText("\(issueCount)", style: .header, color: .orange)
-                                CRTText("ISSUES", style: .caption, color: theme.dim)
+                            BadgeView("\(issueCount) ISSUES", style: .status(.warning))
+                        }
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(theme.dim)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                Divider()
+                    .background(theme.dim.opacity(0.3))
+
+                // Crew status summary
+                if crewMembers.isEmpty {
+                    EmptyStateView(
+                        title: "NO ACTIVE CREW",
+                        icon: "person.crop.circle.badge.questionmark"
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, CRTTheme.Spacing.sm)
+                } else {
+                    // Status counts
+                    HStack(spacing: CRTTheme.Spacing.md) {
+                        StatusCount(
+                            status: .success,
+                            label: "WORKING",
+                            count: crewMembers.filter { $0.status == .working }.count
+                        )
+                        StatusCount(
+                            status: .info,
+                            label: "IDLE",
+                            count: crewMembers.filter { $0.status == .idle }.count
+                        )
+                        StatusCount(
+                            status: .warning,
+                            label: "BLOCKED",
+                            count: crewMembers.filter { $0.status == .blocked }.count
+                        )
+                        StatusCount(
+                            status: .error,
+                            label: "STUCK",
+                            count: crewMembers.filter { $0.status == .stuck }.count
+                        )
+                    }
+                    .padding(.vertical, CRTTheme.Spacing.xs)
+
+                    Divider()
+                        .background(theme.dim.opacity(0.3))
+
+                    // Individual crew members (first few)
+                    ForEach(crewMembers.prefix(4)) { member in
+                        Button(action: { onMemberTap(member) }) {
+                            CrewMemberRow(member: member)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if crewMembers.count > 4 {
+                        Button(action: onTap) {
+                            HStack {
+                                Spacer()
+                                CRTText("VIEW ALL (\(crewMembers.count))", style: .caption, color: theme.primary)
+                                Image(systemName: "arrow.right")
+                                    .font(.caption)
+                                    .foregroundColor(theme.primary)
+                                Spacer()
                             }
                         }
+                        .buttonStyle(.plain)
+                        .padding(.top, CRTTheme.Spacing.xxs)
                     }
                 }
             }
         }
-        .buttonStyle(.plain)
+    }
+}
+
+private struct StatusCount: View {
+    @Environment(\.crtTheme) private var theme
+
+    let status: BadgeView.Style.StatusType
+    let label: String
+    let count: Int
+
+    var body: some View {
+        VStack(spacing: CRTTheme.Spacing.xxs) {
+            HStack(spacing: CRTTheme.Spacing.xxs) {
+                StatusDot(status, size: 6)
+                CRTText("\(count)", style: .body, color: status.color)
+            }
+            CRTText(label, style: .caption, color: theme.dim)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct CrewMemberRow: View {
+    @Environment(\.crtTheme) private var theme
+    let member: CrewMember
+
+    var body: some View {
+        HStack(spacing: CRTTheme.Spacing.sm) {
+            // Status indicator
+            StatusDot(statusType, size: 8, pulse: member.status == .working)
+
+            // Name and task
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: CRTTheme.Spacing.xs) {
+                    CRTText(member.name, style: .body, color: theme.primary)
+                    if let rig = member.rig {
+                        CRTText("[\(rig)]", style: .caption, color: theme.dim)
+                    }
+                }
+                if let task = member.currentTask {
+                    CRTText(task, style: .caption, color: theme.dim)
+                        .lineLimit(1)
+                } else {
+                    CRTText(statusText, style: .caption, color: statusType.color)
+                }
+            }
+
+            Spacer()
+
+            // Unread mail indicator
+            if member.unreadMail > 0 {
+                BadgeView("\(member.unreadMail)", style: .count)
+            }
+        }
+        .padding(.vertical, CRTTheme.Spacing.xxs)
+    }
+
+    private var statusType: BadgeView.Style.StatusType {
+        switch member.status {
+        case .idle: return .info
+        case .working: return .success
+        case .blocked: return .warning
+        case .stuck: return .error
+        case .offline: return .offline
+        }
+    }
+
+    private var statusText: String {
+        switch member.status {
+        case .idle: return "IDLE"
+        case .working: return "WORKING"
+        case .blocked: return "BLOCKED"
+        case .stuck: return "STUCK"
+        case .offline: return "OFFLINE"
+        }
     }
 }
 
