@@ -262,7 +262,7 @@ final class SettingsViewModel: BaseViewModel {
         powerState = AppState.shared.powerState
         isVoiceAvailable = AppState.shared.isVoiceAvailable
         serverURL = AppState.shared.apiBaseURL.absoluteString
-        apiKey = AppState.shared.apiKey
+        apiKey = AppState.shared.apiKey ?? ""
     }
 
     private func fetchAvailableRigs() async {
