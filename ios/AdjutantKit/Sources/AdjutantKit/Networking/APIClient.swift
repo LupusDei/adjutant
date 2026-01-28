@@ -13,6 +13,8 @@ public enum HTTPMethod: String, Sendable {
 public struct APIClientConfiguration: Sendable {
     /// Base URL for API requests (e.g., "http://localhost:3001/api")
     public let baseURL: URL
+    /// API key for authentication (optional)
+    public let apiKey: String?
     /// Default timeout for requests
     public let defaultTimeout: TimeInterval
     /// Timeout for terminal polling (shorter)
@@ -24,12 +26,14 @@ public struct APIClientConfiguration: Sendable {
 
     public init(
         baseURL: URL,
+        apiKey: String? = nil,
         defaultTimeout: TimeInterval = 30.0,
         terminalTimeout: TimeInterval = 10.0,
         voiceTimeout: TimeInterval = 60.0,
         retryPolicy: RetryPolicy = .default
     ) {
         self.baseURL = baseURL
+        self.apiKey = apiKey
         self.defaultTimeout = defaultTimeout
         self.terminalTimeout = terminalTimeout
         self.voiceTimeout = voiceTimeout
@@ -90,6 +94,11 @@ public actor APIClient {
 
         // Set headers
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        // Add API key header if configured
+        if let apiKey = configuration.apiKey, !apiKey.isEmpty {
+            request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        }
 
         // Encode body if provided
         if let body {
@@ -181,6 +190,11 @@ public actor APIClient {
             request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         }
 
+        // Add API key header if configured
+        if let apiKey = configuration.apiKey, !apiKey.isEmpty {
+            request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        }
+
         if let body {
             request.httpBody = body
         }
@@ -207,6 +221,11 @@ public actor APIClient {
             body: nil, // Don't log binary data
             duration: duration
         )
+
+        // Check for unauthorized
+        if httpResponse.statusCode == 401 {
+            throw APIClientError.unauthorized
+        }
 
         guard (200...299).contains(httpResponse.statusCode) else {
             throw APIClientError.httpError(
@@ -261,6 +280,11 @@ public actor APIClient {
     private func handleResponse<T: Decodable>(data: Data, response: URLResponse) throws -> T {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidRequest("Invalid response type")
+        }
+
+        // Check for unauthorized
+        if httpResponse.statusCode == 401 {
+            throw APIClientError.unauthorized
         }
 
         // Check for rate limiting
