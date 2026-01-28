@@ -46,6 +46,9 @@ final class AppState: ObservableObject {
     /// Current API base URL
     @Published var apiBaseURL: URL = URL(string: "http://localhost:3001/api")!
 
+    /// API key for authentication (optional)
+    @Published var apiKey: String?
+
     // MARK: - Notification State
 
     /// Current notification permission status
@@ -85,13 +88,20 @@ final class AppState: ObservableObject {
         return URL(string: "http://localhost:3001/api")!
     }
 
+    /// Returns the persisted API key from UserDefaults, or nil if not set
+    private static func loadPersistedAPIKey() -> String? {
+        UserDefaults.standard.string(forKey: "apiKey")
+    }
+
     private init() {
-        // IMPORTANT: Load persisted URL FIRST before creating APIClient
+        // IMPORTANT: Load persisted URL and API key FIRST before creating APIClient
         // This prevents early API calls from going to localhost when a saved URL exists
         let persistedURL = Self.loadPersistedBaseURL()
+        let persistedAPIKey = Self.loadPersistedAPIKey()
         self.apiBaseURL = persistedURL
+        self.apiKey = persistedAPIKey
 
-        let config = APIClientConfiguration(baseURL: persistedURL)
+        let config = APIClientConfiguration(baseURL: persistedURL, apiKey: persistedAPIKey)
         self.apiClient = APIClient(configuration: config)
 
         loadPersistedState()
@@ -129,9 +139,9 @@ final class AppState: ObservableObject {
             .store(in: &cancellables)
     }
 
-    /// Recreates the API client with the current base URL
+    /// Recreates the API client with the current base URL and API key
     private func recreateAPIClient() {
-        let config = APIClientConfiguration(baseURL: apiBaseURL)
+        let config = APIClientConfiguration(baseURL: apiBaseURL, apiKey: apiKey)
         apiClient = APIClient(configuration: config)
     }
 
@@ -300,6 +310,18 @@ final class AppState: ObservableObject {
                 UserDefaults.standard.set(url.absoluteString, forKey: "apiBaseURL")
                 // Also sync to shared defaults for widgets
                 Self.sharedDefaults?.set(url.absoluteString, forKey: "apiBaseURL")
+                self?.recreateAPIClient()
+            }
+            .store(in: &cancellables)
+
+        $apiKey
+            .dropFirst()
+            .sink { [weak self] key in
+                if let key = key {
+                    UserDefaults.standard.set(key, forKey: "apiKey")
+                } else {
+                    UserDefaults.standard.removeObject(forKey: "apiKey")
+                }
                 self?.recreateAPIClient()
             }
             .store(in: &cancellables)
