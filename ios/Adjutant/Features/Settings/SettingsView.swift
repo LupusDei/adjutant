@@ -23,6 +23,9 @@ struct SettingsView: View {
                 // Server URL Section
                 serverSection
 
+                // API Key Section
+                apiKeySection
+
                 // Notifications Section
                 notificationsSection
 
@@ -263,6 +266,75 @@ struct SettingsView: View {
                 // Help text
                 CRTText(
                     "Enter your ngrok tunnel URL. The app will reconnect to the new server.",
+                    style: .caption,
+                    color: theme.dim
+                )
+            }
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
+    }
+
+    // MARK: - API Key Section
+
+    private var apiKeySection: some View {
+        CRTCard(header: "API KEY") {
+            VStack(spacing: CRTTheme.Spacing.md) {
+                // API key input
+                VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
+                    CRTText("AUTHENTICATION KEY", style: .caption, color: theme.dim)
+
+                    HStack {
+                        Image(systemName: "key.fill")
+                            .foregroundColor(theme.dim)
+                            .font(.system(size: 14))
+
+                        SecureField("Enter API key", text: $viewModel.apiKey)
+                            .textFieldStyle(.plain)
+                            .font(.crt(CRTTypography.sizeBase))
+                            .foregroundColor(theme.primary)
+                            #if os(iOS)
+                            .autocapitalization(.none)
+                            .textContentType(.password)
+                            #endif
+                            .autocorrectionDisabled()
+                    }
+                    .padding(CRTTheme.Spacing.sm)
+                    .background(
+                        RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
+                            .fill(CRTTheme.Background.panel)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
+                            .stroke(theme.dim.opacity(0.5), lineWidth: 1)
+                    )
+                }
+
+                // Buttons
+                HStack(spacing: CRTTheme.Spacing.md) {
+                    CRTButton(
+                        viewModel.isSavingAPIKey ? "SAVING..." : "SAVE",
+                        variant: .primary,
+                        size: .medium
+                    ) {
+                        Task {
+                            await viewModel.saveAPIKey()
+                        }
+                    }
+                    .disabled(viewModel.apiKey.isEmpty || viewModel.isSavingAPIKey)
+
+                    CRTButton(
+                        "CLEAR",
+                        variant: .ghost,
+                        size: .medium
+                    ) {
+                        viewModel.clearAPIKey()
+                    }
+                    .disabled(viewModel.apiKey.isEmpty || viewModel.isSavingAPIKey)
+                }
+
+                // Help text
+                CRTText(
+                    "API key is sent with all requests for authentication.",
                     style: .caption,
                     color: theme.dim
                 )

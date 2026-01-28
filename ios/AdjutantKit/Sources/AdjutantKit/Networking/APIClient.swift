@@ -98,6 +98,11 @@ public actor APIClient {
             request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
         }
 
+        // Add API key header if configured
+        if let apiKey = configuration.apiKey, !apiKey.isEmpty {
+            request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        }
+
         // Encode body if provided
         if let body {
             request.httpBody = try encoder.encode(body)
@@ -191,6 +196,11 @@ public actor APIClient {
             request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
         }
 
+        // Add API key header if configured
+        if let apiKey = configuration.apiKey, !apiKey.isEmpty {
+            request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        }
+
         if let body {
             request.httpBody = body
         }
@@ -217,6 +227,11 @@ public actor APIClient {
             body: nil, // Don't log binary data
             duration: duration
         )
+
+        // Check for unauthorized
+        if httpResponse.statusCode == 401 {
+            throw APIClientError.unauthorized
+        }
 
         guard (200...299).contains(httpResponse.statusCode) else {
             throw APIClientError.httpError(
@@ -271,6 +286,11 @@ public actor APIClient {
     private func handleResponse<T: Decodable>(data: Data, response: URLResponse) throws -> T {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidRequest("Invalid response type")
+        }
+
+        // Check for unauthorized
+        if httpResponse.statusCode == 401 {
+            throw APIClientError.unauthorized
         }
 
         // Check for rate limiting

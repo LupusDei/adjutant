@@ -61,6 +61,12 @@ final class SettingsViewModel: BaseViewModel {
     /// Server validation error message
     @Published var serverErrorMessage: String?
 
+    /// API key for authentication
+    @Published var apiKey: String = ""
+
+    /// Whether API key is being saved
+    @Published private(set) var isSavingAPIKey: Bool = false
+
     // MARK: - App Info
 
     /// App version string
@@ -256,11 +262,37 @@ final class SettingsViewModel: BaseViewModel {
         powerState = AppState.shared.powerState
         isVoiceAvailable = AppState.shared.isVoiceAvailable
         serverURL = AppState.shared.apiBaseURL.absoluteString
+        apiKey = AppState.shared.apiKey
     }
 
     private func fetchAvailableRigs() async {
         // Fetch rigs from AppState which calls the API
         await AppState.shared.fetchAvailableRigs()
         availableRigs = AppState.shared.availableRigs
+    }
+
+    // MARK: - API Key
+
+    /// Saves the API key
+    func saveAPIKey() async {
+        isSavingAPIKey = true
+
+        // Clean up whitespace
+        let cleanKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        apiKey = cleanKey
+
+        // Save to AppState (which persists and recreates APIClient)
+        AppState.shared.apiKey = cleanKey
+
+        // Brief delay to show saving state
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        isSavingAPIKey = false
+    }
+
+    /// Clears the API key
+    func clearAPIKey() {
+        apiKey = ""
+        AppState.shared.apiKey = ""
     }
 }
