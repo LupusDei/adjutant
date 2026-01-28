@@ -57,9 +57,9 @@ function App() {
   );
   const isSmallScreen = useIsSmallScreen();
 
-  // Apply theme to body globally
+  // Apply theme to document element (html) globally for proper CSS variable cascade
   useEffect(() => {
-    document.body.setAttribute('data-theme', theme);
+    document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('gt-theme', theme);
   }, [theme]);
 

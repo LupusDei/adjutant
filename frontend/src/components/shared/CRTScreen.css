@@ -15,6 +15,14 @@
   --theme-glow: rgba(var(--theme-primary-rgb), 0.6);
   --theme-bloom: rgba(var(--theme-primary-rgb), 0.2);
 
+  /* Dynamic mapping - on :root so @theme and all descendants can access */
+  --crt-phosphor-rgb: var(--theme-primary-rgb);
+  --crt-phosphor: var(--theme-primary);
+  --crt-phosphor-bright: var(--theme-bright);
+  --crt-phosphor-dim: var(--theme-dim);
+  --crt-phosphor-glow: var(--theme-glow);
+  --crt-phosphor-bloom: var(--theme-bloom);
+
   /* Amber variant for warnings */
   --crt-amber: #FFB000;
   --crt-amber-glow: rgba(255, 176, 0, 0.5);
@@ -27,16 +35,6 @@
   --crt-bezel: #1a1a18;
   --crt-bezel-highlight: #2a2a26;
   --crt-bezel-shadow: #0a0a08;
-}
-
-body {
-  /* Dynamic mapping - ensures theme overrides are picked up */
-  --crt-phosphor-rgb: var(--theme-primary-rgb);
-  --crt-phosphor: var(--theme-primary);
-  --crt-phosphor-bright: var(--theme-bright);
-  --crt-phosphor-dim: var(--theme-dim);
-  --crt-phosphor-glow: var(--theme-glow);
-  --crt-phosphor-bloom: var(--theme-bloom);
 }
 
 [data-theme='red'] {
