@@ -7,7 +7,7 @@ import { logInfo } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
 
 const app = express();
-const PORT = process.env["PORT"] ?? 3001;
+const PORT = process.env["PORT"] ?? 4201;
 
 // Middleware
 app.use(cors());

@@ -26,7 +26,7 @@ Or add it to your `Package.swift`:
 
 ### Development Configuration
 
-For local development, use the default configuration which connects to `localhost:3001`:
+For local development, use the default configuration which connects to `localhost:4201`:
 
 ```swift
 import AdjutantKit
@@ -51,7 +51,7 @@ let client = APIClient(configuration: config)
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `baseURL` | `http://localhost:3001/api` | Backend API base URL |
+| `baseURL` | `http://localhost:4201/api` | Backend API base URL |
 | `defaultTimeout` | 30s | Default request timeout |
 | `terminalTimeout` | 10s | Timeout for terminal polling |
 | `voiceTimeout` | 60s | Timeout for voice synthesis |

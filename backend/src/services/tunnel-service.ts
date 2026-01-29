@@ -38,6 +38,9 @@ interface NgrokApiResponse {
   tunnels: NgrokTunnel[];
 }
 
+// Default port to tunnel (frontend dev server)
+const NGROK_PORT = process.env["NGROK_PORT"] ?? "4200";
+
 // ============================================================================
 // State
 // ============================================================================
@@ -192,7 +195,7 @@ export async function startTunnel(): Promise<TunnelServiceResult<TunnelStatus>> 
     lastError = null;
 
     // Spawn ngrok process
-    ngrokProcess = spawn("ngrok", ["http", "3000"], {
+    ngrokProcess = spawn("ngrok", ["http", NGROK_PORT], {
       detached: false,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -281,8 +284,8 @@ export async function stopTunnel(): Promise<TunnelServiceResult<TunnelStatus>> {
 
   // Also try to kill any ngrok processes we didn't start
   try {
-    // Use pkill to stop any ngrok http 3000 processes
-    const pkill = spawn("pkill", ["-f", "ngrok http 3000"]);
+    // Use pkill to stop any ngrok http processes on our port
+    const pkill = spawn("pkill", ["-f", `ngrok http ${NGROK_PORT}`]);
     await new Promise((resolve) => pkill.on("close", resolve));
   } catch {
     // Ignore errors from pkill

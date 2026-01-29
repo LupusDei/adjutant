@@ -18,8 +18,8 @@ program
   .version(pkg.version)
   .argument('[gt-dir]', 'Path to Gastown town directory', '~/gt')
   .option('--no-tunnel', 'Disable ngrok tunnel')
-  .option('--port <port>', 'Frontend port', '3000')
-  .option('--api-port <port>', 'Backend API port', '3001')
+  .option('--port <port>', 'Frontend port', '4200')
+  .option('--api-port <port>', 'Backend API port', '4201')
   .action(async (gtDir, options) => {
     try {
       await startDev({

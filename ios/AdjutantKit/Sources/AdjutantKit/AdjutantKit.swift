@@ -8,7 +8,7 @@
 /// ```swift
 /// import AdjutantKit
 ///
-/// // Create client with default configuration (localhost:3001)
+/// // Create client with default configuration (localhost:4201)
 /// let client = APIClient()
 ///
 /// // Or with custom configuration

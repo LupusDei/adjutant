@@ -11,7 +11,7 @@ public enum HTTPMethod: String, Sendable {
 
 /// Configuration for the API client
 public struct APIClientConfiguration: Sendable {
-    /// Base URL for API requests (e.g., "http://localhost:3001/api")
+    /// Base URL for API requests (e.g., "http://localhost:4201/api")
     public let baseURL: URL
     /// API key for authentication (optional)
     public let apiKey: String?
@@ -43,7 +43,7 @@ public struct APIClientConfiguration: Sendable {
     /// Development configuration
     public static var development: APIClientConfiguration {
         APIClientConfiguration(
-            baseURL: URL(string: "http://localhost:3001/api")!
+            baseURL: URL(string: "http://localhost:4201/api")!
         )
     }
 }

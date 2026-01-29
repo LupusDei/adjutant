@@ -233,7 +233,7 @@ final class SettingsViewModel: BaseViewModel {
 
     /// Resets the server URL to show onboarding again
     func resetServerURL() {
-        AppState.shared.apiBaseURL = URL(string: "http://localhost:3001/api")!
+        AppState.shared.apiBaseURL = URL(string: "http://localhost:4201/api")!
         serverURL = ""
     }
 

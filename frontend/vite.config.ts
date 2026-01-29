@@ -3,15 +3,19 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+// Port configuration with environment variable overrides
+const FRONTEND_PORT = parseInt(process.env["VITE_PORT"] ?? "4200", 10);
+const API_PORT = process.env["VITE_API_PORT"] ?? "4201";
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    port: 3000,
+    port: FRONTEND_PORT,
     // Allow ngrok and other tunneling services
     allowedHosts: true,
     proxy: {
       "/api": {
-        target: "http://localhost:3001",
+        target: `http://localhost:${API_PORT}`,
         changeOrigin: true,
       },
       "/ngrok-api": {

@@ -97,7 +97,7 @@ struct GastownWidgetProvider: TimelineProvider {
             return url
         }
         // Fall back to localhost if no URL configured
-        return URL(string: "http://localhost:3001/api")!
+        return URL(string: "http://localhost:4201/api")!
     }
 
     /// Filter beads to OVERSEER scope (exclude wisp/internal operational beads)

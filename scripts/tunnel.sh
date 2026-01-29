@@ -13,11 +13,11 @@
 #
 # Environment variables (set in backend/.env):
 #   NGROK_DOMAIN - Permanent domain (e.g., your-domain.ngrok.io)
-#   NGROK_PORT   - Port to tunnel (default: 3000)
+#   NGROK_PORT   - Port to tunnel (default: 4200)
 #   NGROK_AUTH   - Basic auth credentials (format: user:password)
 #
 # How it works:
-#   - Tunnels the frontend (port 3000) which proxies /api to backend
+#   - Tunnels the frontend (port 4200) which proxies /api to backend
 #   - If NGROK_DOMAIN is set, uses permanent domain
 #   - Otherwise, generates a random ngrok URL
 
@@ -29,7 +29,7 @@ if [ -f "$SCRIPT_DIR/../backend/.env" ]; then
     export $(grep -v '^#' "$SCRIPT_DIR/../backend/.env" | grep -v '^$' | xargs)
 fi
 
-PORT="${NGROK_PORT:-3000}"
+PORT="${NGROK_PORT:-4200}"
 NGROK_CMD="ngrok"
 NO_WAIT=false
 
@@ -97,8 +97,10 @@ echo ""
 NGROK_ARGS=""
 
 if [ -n "$NGROK_DOMAIN" ]; then
-    NGROK_ARGS="$NGROK_ARGS --url=https://$NGROK_DOMAIN"
-    echo "Using permanent domain: $NGROK_DOMAIN"
+    # Strip https:// or http:// prefix and trailing slash if present
+    CLEAN_DOMAIN=$(echo "$NGROK_DOMAIN" | sed 's|^https://||' | sed 's|^http://||' | sed 's|/$||')
+    NGROK_ARGS="$NGROK_ARGS --url=https://$CLEAN_DOMAIN"
+    echo "Using permanent domain: $CLEAN_DOMAIN"
 else
     echo "No NGROK_DOMAIN set - using random URL"
     echo "Set NGROK_DOMAIN in backend/.env for a permanent URL"

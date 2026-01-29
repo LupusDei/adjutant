@@ -44,7 +44,7 @@ final class AppState: ObservableObject {
     @Published private(set) var isNetworkAvailable = true
 
     /// Current API base URL
-    @Published var apiBaseURL: URL = URL(string: "http://localhost:3001/api")!
+    @Published var apiBaseURL: URL = URL(string: "http://localhost:4201/api")!
 
     /// API key for authentication (optional)
     @Published var apiKey: String?
@@ -85,7 +85,7 @@ final class AppState: ObservableObject {
            let url = URL(string: urlString) {
             return url
         }
-        return URL(string: "http://localhost:3001/api")!
+        return URL(string: "http://localhost:4201/api")!
     }
 
     /// Returns the persisted API key from UserDefaults, or nil if not set
@@ -117,9 +117,9 @@ final class AppState: ObservableObject {
         container.registerLazySingleton((any TTSPlaybackServiceProtocol).self) { [weak self] in
             guard let self = self else {
                 // Fallback if AppState is somehow deallocated
-                let config = APIClientConfiguration(baseURL: URL(string: "http://localhost:3001/api")!)
+                let config = APIClientConfiguration(baseURL: URL(string: "http://localhost:4201/api")!)
                 let apiClient = APIClient(configuration: config)
-                return TTSPlaybackService(apiClient: apiClient, baseURL: URL(string: "http://localhost:3001/api")!)
+                return TTSPlaybackService(apiClient: apiClient, baseURL: URL(string: "http://localhost:4201/api")!)
             }
             return TTSPlaybackService(apiClient: self.apiClient, baseURL: self.apiBaseURL)
         }

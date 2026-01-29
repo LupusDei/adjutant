@@ -464,7 +464,7 @@ final class APIErrorTests: XCTestCase {
 final class APIClientConfigurationTests: XCTestCase {
     func testDevelopmentConfiguration() {
         let config = APIClientConfiguration.development
-        XCTAssertEqual(config.baseURL.absoluteString, "http://localhost:3001/api")
+        XCTAssertEqual(config.baseURL.absoluteString, "http://localhost:4201/api")
         XCTAssertEqual(config.defaultTimeout, 30.0)
         XCTAssertEqual(config.terminalTimeout, 10.0)
         XCTAssertEqual(config.voiceTimeout, 60.0)

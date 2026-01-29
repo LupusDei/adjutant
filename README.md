@@ -39,7 +39,7 @@ npm install -g adjutant
 adjutant
 ```
 
-That's it! The UI opens at `http://localhost:3000`.
+That's it! The UI opens at `http://localhost:4200`.
 
 **Options:**
 
@@ -47,8 +47,8 @@ That's it! The UI opens at `http://localhost:3000`.
 adjutant                    # Uses ~/gt, starts ngrok if installed
 adjutant /path/to/town      # Custom Gastown directory
 adjutant --no-tunnel        # Disable ngrok tunnel
-adjutant --port 8080        # Custom frontend port (default: 3000)
-adjutant --api-port 8081    # Custom backend port (default: 3001)
+adjutant --port 8080        # Custom frontend port (default: 4200)
+adjutant --api-port 8081    # Custom backend port (default: 4201)
 adjutant --help             # Show all options
 ```
 
@@ -103,15 +103,24 @@ npx adjutant
 
 ## Configuration
 
+### Port Configuration
+
+By default, Adjutant runs:
+- **Frontend** on port `4200`
+- **Backend API** on port `4201`
+
+Override via environment variables or CLI flags.
+
 ### Backend Environment Variables
 
 Create `backend/.env` (all optional):
 
 ```env
-PORT=3001                          # API server port
+PORT=4201                          # API server port (default: 4201)
+NGROK_PORT=4200                    # Port to tunnel (default: 4200)
 GT_TOWN_ROOT=~/gt                  # Gastown town root (set by npm run dev)
 GT_MAIL_IDENTITY=overseer          # Mailbox identity for the UI
-CORS_ORIGIN=http://localhost:5173  # Allowed CORS origin
+CORS_ORIGIN=http://localhost:4200  # Allowed CORS origin
 ```
 
 ### Frontend Environment Variables
@@ -119,6 +128,8 @@ CORS_ORIGIN=http://localhost:5173  # Allowed CORS origin
 Create `frontend/.env` (all optional):
 
 ```env
+VITE_PORT=4200                        # Frontend dev server port (default: 4200)
+VITE_API_PORT=4201                    # Backend API port for proxy (default: 4201)
 VITE_API_URL=https://api.example.com  # Only for non-local backend
 ```
 
@@ -161,8 +172,8 @@ adjutant/
 ## Remote Access
 
 `npm run dev` automatically starts an ngrok tunnel. You'll see three services:
-- **Backend** (blue) - port 3001
-- **Frontend** (green) - port 3000
+- **Backend** (blue) - port 4201
+- **Frontend** (green) - port 4200
 - **ngrok** (magenta) - public URL like `https://abc123.ngrok-free.app`
 
 You can also control the tunnel from the **Settings** tab (toggle, QR code, copy URL).
@@ -179,7 +190,7 @@ You can also control the tunnel from the **Settings** tab (toggle, QR code, copy
 
 **Messages not loading** - Verify Gastown is running: `gt status` or `gt up`
 
-**Frontend can't reach backend** - Check backend is running on port 3001
+**Frontend can't reach backend** - Check backend is running on port 4201
 
 ## Contributing
 
@@ -203,7 +214,7 @@ cd frontend && npm test && npm run build
 
 **Other commands:**
 ```bash
-npm run kill          # Kill processes on ports 3000/3001
+npm run kill          # Kill processes on ports 4200/4201
 npm run build         # Build for production
 ```
 

@@ -148,7 +148,7 @@ The app follows **MVVM + Coordinator** architecture with a clean separation of c
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Adjutant Backend Server                       │
-│  (Node.js server at localhost:3001)                              │
+│  (Node.js server at localhost:4201)                              │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
