@@ -46,6 +46,7 @@ interface ConvoyDetail {
   issue_type: string;
   updated_at?: string;
   dependencies?: TrackedDep[];
+  dependents?: TrackedDep[];
 }
 
 function createConvoyBead(overrides: Partial<ConvoyBead> = {}): ConvoyBead {
@@ -166,6 +167,70 @@ describe("convoys-service", () => {
       expect(result.success).toBe(true);
       expect(result.data?.[0].trackedIssues).toHaveLength(1);
       expect(result.data?.[0].trackedIssues[0].id).toBe("hq-t001");
+    });
+
+    it("should include children via parent-child dependents", async () => {
+      vi.mocked(execBd)
+        .mockResolvedValueOnce({
+          success: true,
+          data: [createConvoyBead()],
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          data: [
+            {
+              ...createConvoyDetail(),
+              dependencies: [],
+              dependents: [
+                createTrackedDep({ id: "hq-child1", status: "closed", dependency_type: "parent-child" }),
+                createTrackedDep({ id: "hq-child2", status: "open", dependency_type: "parent-child" }),
+                createTrackedDep({ id: "hq-blocker", status: "open", dependency_type: "blocks" }),
+              ],
+            },
+          ],
+          exitCode: 0,
+        });
+
+      const result = await listConvoys();
+
+      expect(result.success).toBe(true);
+      expect(result.data?.[0].trackedIssues).toHaveLength(2);
+      expect(result.data?.[0].trackedIssues.map(i => i.id)).toContain("hq-child1");
+      expect(result.data?.[0].trackedIssues.map(i => i.id)).toContain("hq-child2");
+      expect(result.data?.[0].progress.completed).toBe(1);
+      expect(result.data?.[0].progress.total).toBe(2);
+    });
+
+    it("should combine tracks dependencies and parent-child dependents", async () => {
+      vi.mocked(execBd)
+        .mockResolvedValueOnce({
+          success: true,
+          data: [createConvoyBead()],
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          data: [
+            {
+              ...createConvoyDetail(),
+              dependencies: [
+                createTrackedDep({ id: "hq-tracked1", status: "closed", dependency_type: "tracks" }),
+              ],
+              dependents: [
+                createTrackedDep({ id: "hq-child1", status: "open", dependency_type: "parent-child" }),
+              ],
+            },
+          ],
+          exitCode: 0,
+        });
+
+      const result = await listConvoys();
+
+      expect(result.success).toBe(true);
+      expect(result.data?.[0].trackedIssues).toHaveLength(2);
+      expect(result.data?.[0].progress.completed).toBe(1);
+      expect(result.data?.[0].progress.total).toBe(2);
     });
 
     it("should determine rig from most common assignee", async () => {
