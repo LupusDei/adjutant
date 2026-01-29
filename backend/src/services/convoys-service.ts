@@ -42,6 +42,8 @@ interface ConvoyDetail {
   issue_type: string;
   updated_at?: string;
   dependencies?: TrackedDep[];
+  /** Issues that depend on this convoy (including children via parent-child) */
+  dependents?: TrackedDep[];
 }
 
 /**
@@ -98,9 +100,14 @@ export async function listConvoys(): Promise<ConvoysServiceResult<Convoy[]>> {
     for (const bead of convoyBeads) {
       const detail = convoyDetails.get(bead.id);
       const deps = detail?.dependencies ?? [];
+      const dependents = detail?.dependents ?? [];
 
-      // Filter to only "tracks" dependencies (the tracked issues)
-      const trackedDeps = deps.filter(d => d.dependency_type === "tracks");
+      // Collect tracked issues from two sources:
+      // 1. "tracks" dependencies (convoy depends on issues with type "tracks")
+      // 2. "parent-child" dependents (issues that are children of this convoy)
+      const trackedFromDeps = deps.filter(d => d.dependency_type === "tracks");
+      const trackedFromChildren = dependents.filter(d => d.dependency_type === "parent-child");
+      const trackedDeps = [...trackedFromDeps, ...trackedFromChildren];
 
       // Determine rig from tracked issues' assignees
       const rigCounts = new Map<string, number>();
