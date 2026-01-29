@@ -75,8 +75,13 @@ public struct Convoy: Codable, Identifiable, Equatable, Hashable {
         self.trackedIssues = trackedIssues
     }
 
-    /// Check if convoy is complete
+    /// Check if convoy is complete (only true if there are tasks AND all are complete)
     public var isComplete: Bool {
-        progress.completed >= progress.total
+        progress.total > 0 && progress.completed >= progress.total
+    }
+
+    /// Check if convoy has no tracked tasks
+    public var hasNoTasks: Bool {
+        progress.total == 0
     }
 }

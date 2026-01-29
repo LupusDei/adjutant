@@ -141,7 +141,9 @@ struct ConvoyRowView: View {
     }
 
     private var statusText: String {
-        if convoy.isComplete {
+        if convoy.hasNoTasks {
+            return "NO TASKS"
+        } else if convoy.isComplete {
             return "COMPLETE"
         } else if convoy.progress.completed == 0 {
             return "NOT STARTED"
@@ -151,7 +153,9 @@ struct ConvoyRowView: View {
     }
 
     private var statusType: BadgeView.Style.StatusType {
-        if convoy.isComplete {
+        if convoy.hasNoTasks {
+            return .offline
+        } else if convoy.isComplete {
             return .success
         } else if convoy.progress.completed == 0 {
             return .offline

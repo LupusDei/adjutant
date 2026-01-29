@@ -286,6 +286,35 @@ final class ModelTests: XCTestCase {
         XCTAssertEqual(half.percentage, 0.5)
     }
 
+    func testConvoyIsComplete() {
+        // Complete convoy (all tasks done)
+        let completeConvoy = Convoy(
+            id: "c1", title: "Complete", status: "open", rig: nil,
+            progress: ConvoyProgress(completed: 5, total: 5),
+            trackedIssues: []
+        )
+        XCTAssertTrue(completeConvoy.isComplete)
+        XCTAssertFalse(completeConvoy.hasNoTasks)
+
+        // Incomplete convoy
+        let incompleteConvoy = Convoy(
+            id: "c2", title: "Incomplete", status: "open", rig: nil,
+            progress: ConvoyProgress(completed: 3, total: 5),
+            trackedIssues: []
+        )
+        XCTAssertFalse(incompleteConvoy.isComplete)
+        XCTAssertFalse(incompleteConvoy.hasNoTasks)
+
+        // Empty convoy (0/0) should NOT be considered complete
+        let emptyConvoy = Convoy(
+            id: "c3", title: "Empty", status: "open", rig: nil,
+            progress: ConvoyProgress(completed: 0, total: 0),
+            trackedIssues: []
+        )
+        XCTAssertFalse(emptyConvoy.isComplete, "Convoy with 0/0 tasks should not be complete")
+        XCTAssertTrue(emptyConvoy.hasNoTasks, "Convoy with 0 total tasks should have hasNoTasks=true")
+    }
+
     // MARK: - BeadInfo Tests
 
     func testBeadInfoDecoding() throws {
