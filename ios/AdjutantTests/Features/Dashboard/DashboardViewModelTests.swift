@@ -362,4 +362,65 @@ final class DashboardViewModelTests: XCTestCase {
         XCTAssertEqual(message2.senderName, "greenplace/Toast")
     }
 
+    // MARK: - OVERSEER Mail Filtering Tests
+
+    func testOverseerFilteringExcludesWispAndDeaconMail() {
+        // Test that OVERSEER mode filtering excludes wisp and deacon mail sources
+        let regularMail = Message(
+            id: "msg-1",
+            from: "mayor/",
+            to: "overseer",
+            subject: "Important update",
+            body: "System update ready",
+            timestamp: "2026-01-25T12:00:00.000Z",
+            read: false,
+            priority: .normal,
+            type: .notification,
+            threadId: "thread-1",
+            pinned: false,
+            isInfrastructure: false
+        )
+        let wispMail = Message(
+            id: "msg-2",
+            from: "wisp/status",
+            to: "overseer",
+            subject: "Wisp status",
+            body: "Ephemeral task complete",
+            timestamp: "2026-01-25T11:00:00.000Z",
+            read: true,
+            priority: .low,
+            type: .notification,
+            threadId: "thread-2",
+            pinned: false,
+            isInfrastructure: true
+        )
+        let deaconMail = Message(
+            id: "msg-3",
+            from: "deacon/dispatch",
+            to: "overseer",
+            subject: "Task assignment",
+            body: "New task assigned",
+            timestamp: "2026-01-25T10:00:00.000Z",
+            read: false,
+            priority: .high,
+            type: .task,
+            threadId: "thread-3",
+            pinned: false,
+            isInfrastructure: false
+        )
+
+        let messages = [regularMail, wispMail, deaconMail]
+
+        // Simulate the OVERSEER filtering logic used in DashboardViewModel
+        let filtered = messages.filter { message in
+            let fromLower = message.from.lowercased()
+            return !fromLower.hasPrefix("wisp/") && !fromLower.hasPrefix("deacon/")
+        }
+
+        XCTAssertEqual(filtered.count, 1)
+        XCTAssertEqual(filtered.first?.id, "msg-1")
+        XCTAssertFalse(filtered.contains { $0.from.lowercased().hasPrefix("wisp/") })
+        XCTAssertFalse(filtered.contains { $0.from.lowercased().hasPrefix("deacon/") })
+    }
+
 }

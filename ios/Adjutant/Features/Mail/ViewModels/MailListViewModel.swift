@@ -275,9 +275,20 @@ final class MailListViewModel: BaseViewModel {
             }
         }
 
-        // Apply overseer mode filter (hide infrastructure messages)
+        // Apply overseer mode filter (hide infrastructure messages and Wisp/Deacon sources)
         if AppState.shared.isOverseerMode {
-            result = result.filter { !$0.isInfrastructure }
+            result = result.filter { message in
+                // Filter out infrastructure messages
+                guard !message.isInfrastructure else { return false }
+
+                // Filter out Wisp and Deacon sources
+                let fromLower = message.from.lowercased()
+                if fromLower.hasPrefix("wisp/") || fromLower.hasPrefix("deacon/") {
+                    return false
+                }
+
+                return true
+            }
         }
 
         // Apply status filter
@@ -448,6 +459,20 @@ extension MailListViewModel {
             replyTo: "msg-001",
             pinned: false,
             isInfrastructure: false
+        ),
+        Message(
+            id: "msg-006",
+            from: "wisp/status",
+            to: "adjutant/quartz",
+            subject: "Status update",
+            body: "Wisp status check complete. All ephemeral tasks processed.",
+            timestamp: "2026-01-24T15:00:00Z",
+            read: true,
+            priority: .low,
+            type: .notification,
+            threadId: "thread-006",
+            pinned: false,
+            isInfrastructure: true
         )
     ]
 }

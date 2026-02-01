@@ -291,6 +291,44 @@ final class MailListViewModelTests: XCTestCase {
         AppState.shared.selectedRig = nil
     }
 
+    // MARK: - OVERSEER Mode Tests
+
+    func testOverseerModeFiltersWispAndDeaconMail() async {
+        await viewModel.loadMessages()
+        let initialCount = viewModel.filteredMessages.count
+
+        // Enable OVERSEER mode
+        AppState.shared.isOverseerMode = true
+
+        // Should filter out wisp and deacon messages
+        XCTAssertLessThan(viewModel.filteredMessages.count, initialCount)
+
+        // Verify no wisp or deacon messages remain
+        XCTAssertTrue(viewModel.filteredMessages.allSatisfy { message in
+            let fromLower = message.from.lowercased()
+            return !fromLower.hasPrefix("wisp/") && !fromLower.hasPrefix("deacon/")
+        })
+
+        // Verify infrastructure messages are also filtered
+        XCTAssertTrue(viewModel.filteredMessages.allSatisfy { !$0.isInfrastructure })
+
+        // Clean up
+        AppState.shared.isOverseerMode = false
+    }
+
+    func testOverseerModeDisabledShowsAllMail() async {
+        await viewModel.loadMessages()
+
+        // Disable OVERSEER mode
+        AppState.shared.isOverseerMode = false
+
+        // Should include wisp and deacon messages
+        let hasWisp = viewModel.filteredMessages.contains { $0.from.lowercased().hasPrefix("wisp/") }
+        let hasDeacon = viewModel.filteredMessages.contains { $0.from.lowercased().hasPrefix("deacon/") }
+
+        XCTAssertTrue(hasWisp || hasDeacon, "When OVERSEER mode is disabled, wisp/deacon mail should be visible")
+    }
+
     // MARK: - Lifecycle Tests
 
     func testOnAppearStartsPollingAndOnDisappearStops() async {

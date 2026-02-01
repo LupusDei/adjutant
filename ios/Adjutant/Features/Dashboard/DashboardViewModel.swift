@@ -63,7 +63,12 @@ final class DashboardViewModel: BaseViewModel {
     private func loadFromCache() {
         let cache = ResponseCache.shared
         if cache.hasCache(for: .dashboard) {
-            recentMail = cache.dashboardMail
+            // Filter out Wisp and Deacon sources for OVERSEER view
+            let cachedMail = cache.dashboardMail.filter { message in
+                let fromLower = message.from.lowercased()
+                return !fromLower.hasPrefix("wisp/") && !fromLower.hasPrefix("deacon/")
+            }
+            recentMail = cachedMail
             crewMembers = cache.dashboardCrew
             unreadCount = recentMail.filter { !$0.read }.count
         }
@@ -112,8 +117,13 @@ final class DashboardViewModel: BaseViewModel {
         )
 
         if let mail = mail {
-            self.recentMail = Array(mail.items.prefix(maxRecentMail))
-            self.unreadCount = mail.items.filter { !$0.read }.count
+            // Filter out Wisp and Deacon sources for OVERSEER view
+            let filteredMail = mail.items.filter { message in
+                let fromLower = message.from.lowercased()
+                return !fromLower.hasPrefix("wisp/") && !fromLower.hasPrefix("deacon/")
+            }
+            self.recentMail = Array(filteredMail.prefix(maxRecentMail))
+            self.unreadCount = filteredMail.filter { !$0.read }.count
             AppState.shared.updateUnreadMailCount(self.unreadCount)
 
             // Process new messages for notifications
