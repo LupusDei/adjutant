@@ -88,8 +88,8 @@ final class AppCoordinator: Coordinator, ObservableObject {
             selectTab(.mail)
         case .chat:
             selectTab(.chat)
-        case .convoys:
-            selectTab(.convoys)
+        case .epics:
+            selectTab(.epics)
         case .crew:
             selectTab(.crew)
         case .beads:
@@ -98,7 +98,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
             selectTab(.settings)
 
         // Detail routes - push onto current tab's stack
-        case .mailDetail, .convoyDetail, .agentDetail, .beadDetail, .polecatTerminal:
+        case .mailDetail, .epicDetail, .agentDetail, .beadDetail, .polecatTerminal:
             path.append(route)
 
         // Modal routes - present as sheet

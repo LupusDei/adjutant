@@ -24,8 +24,11 @@ final class ResponseCache {
     /// Cached crew members
     private(set) var crewMembers: [CrewMember] = []
 
-    /// Cached convoys
+    /// Cached convoys (deprecated, use epics)
     private(set) var convoys: [Convoy] = []
+
+    /// Cached epics
+    private(set) var epics: [BeadInfo] = []
 
     /// Cached beads
     private(set) var beads: [BeadInfo] = []
@@ -47,6 +50,7 @@ final class ResponseCache {
         case messages
         case crew
         case convoys
+        case epics
         case beads
         case chat
         case dashboard
@@ -74,6 +78,12 @@ final class ResponseCache {
     func updateConvoys(_ convoys: [Convoy]) {
         self.convoys = convoys
         lastUpdated[.convoys] = Date()
+    }
+
+    /// Updates the cached epics
+    func updateEpics(_ epics: [BeadInfo]) {
+        self.epics = epics
+        lastUpdated[.epics] = Date()
     }
 
     /// Updates the cached beads
@@ -104,6 +114,7 @@ final class ResponseCache {
         case .messages: return !messages.isEmpty
         case .crew: return !crewMembers.isEmpty
         case .convoys: return !convoys.isEmpty
+        case .epics: return !epics.isEmpty
         case .beads: return !beads.isEmpty
         case .chat: return !chatMessages.isEmpty
         case .dashboard: return !dashboardMail.isEmpty || !dashboardCrew.isEmpty
@@ -121,6 +132,7 @@ final class ResponseCache {
         messages = []
         crewMembers = []
         convoys = []
+        epics = []
         beads = []
         chatMessages = []
         dashboardMail = []
@@ -138,6 +150,8 @@ final class ResponseCache {
             crewMembers = []
         case .convoys:
             convoys = []
+        case .epics:
+            epics = []
         case .beads:
             beads = []
         case .chat:

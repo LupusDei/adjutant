@@ -84,8 +84,8 @@ private struct TabContent: View {
             MailListView()
         case .chat:
             ChatView(apiClient: AppState.shared.apiClient)
-        case .convoys:
-            ConvoysListView()
+        case .epics:
+            EpicsListView()
         case .crew:
             CrewListView(apiClient: AppState.shared.apiClient) { member in
                 coordinator.navigate(to: .agentDetail(member: member))
@@ -102,8 +102,8 @@ private struct TabContent: View {
         switch route {
         case .mailDetail(let id):
             MailDetailView(messageId: id)
-        case .convoyDetail(let id):
-            ConvoyDetailPlaceholder(id: id)
+        case .epicDetail(let id):
+            EpicDetailView(epicId: id)
         case .agentDetail(let member):
             CrewDetailView(member: member)
         case .beadDetail(let id):
@@ -211,23 +211,6 @@ private struct CRTTabBarItem: View {
 
 /// Beads tab view - uses BeadsListView from Features/Beads.
 typealias BeadsView = BeadsListView
-
-// MARK: - Detail Placeholders
-
-private struct ConvoyDetailPlaceholder: View {
-    let id: String
-    @Environment(\.crtTheme) private var theme
-
-    var body: some View {
-        VStack {
-            CRTText("CONVOY DETAIL", style: .header)
-            CRTText("ID: \(id)", style: .mono, color: theme.dim)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(CRTTheme.Background.screen)
-    }
-}
-
 
 // MARK: - Preview
 

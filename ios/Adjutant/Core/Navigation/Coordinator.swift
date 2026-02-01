@@ -42,7 +42,7 @@ enum AppRoute: Hashable {
     case dashboard
     case mail
     case chat
-    case convoys
+    case epics
     case crew
     case beads
     case settings
@@ -50,7 +50,7 @@ enum AppRoute: Hashable {
     // Detail routes
     case mailDetail(id: String)
     case mailCompose(replyTo: String? = nil)
-    case convoyDetail(id: String)
+    case epicDetail(id: String)
     case agentDetail(member: CrewMember)
     case beadDetail(id: String)
     case polecatTerminal(rig: String, polecat: String)
@@ -68,7 +68,7 @@ enum AppTab: Int, CaseIterable, Identifiable {
     case dashboard
     case mail
     case chat
-    case convoys
+    case epics
     case crew
     case beads
     case settings
@@ -80,7 +80,7 @@ enum AppTab: Int, CaseIterable, Identifiable {
         case .dashboard: return "OVERVIEW"
         case .mail: return "MAIL"
         case .chat: return "CHAT"
-        case .convoys: return "CONVOYS"
+        case .epics: return "EPICS"
         case .crew: return "CREW"
         case .beads: return "BEADS"
         case .settings: return "SETTINGS"
@@ -92,7 +92,7 @@ enum AppTab: Int, CaseIterable, Identifiable {
         case .dashboard: return "square.grid.2x2"
         case .mail: return "envelope"
         case .chat: return "message"
-        case .convoys: return "shippingbox"
+        case .epics: return "list.bullet.clipboard"
         case .crew: return "person.3"
         case .beads: return "circle.grid.3x3"
         case .settings: return "gearshape"
