@@ -157,7 +157,7 @@ struct AppHeaderView: View {
 #Preview("App Header - Running") {
     VStack {
         AppHeaderView(
-            title: "DASHBOARD",
+            title: "ADJUTANT",
             subtitle: "SYSTEM OVERVIEW",
             availableRigs: ["adjutant", "beads", "gastown"]
         )

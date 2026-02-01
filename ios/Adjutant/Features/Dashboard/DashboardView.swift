@@ -13,7 +13,7 @@ struct DashboardView: View {
             VStack(spacing: CRTTheme.Spacing.md) {
                 // Header with rig filter and power status
                 AppHeaderView(
-                    title: "DASHBOARD",
+                    title: "ADJUTANT",
                     subtitle: "SYSTEM OVERVIEW",
                     availableRigs: appState.availableRigs,
                     isLoading: viewModel.isRefreshing,
