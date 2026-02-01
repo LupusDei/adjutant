@@ -17,6 +17,18 @@ public struct ContentView: View {
         _showOnboarding = State(initialValue: !AppState.shared.isOnboardingComplete)
     }
 
+    /// Converts ThemeIdentifier to the corresponding CRT theme primary color
+    private var themeColor: Color {
+        switch appState.currentTheme {
+        case .green: return CRTTheme.ColorTheme.green.primary
+        case .red: return CRTTheme.ColorTheme.red.primary
+        case .blue: return CRTTheme.ColorTheme.blue.primary
+        case .tan: return CRTTheme.ColorTheme.tan.primary
+        case .pink: return CRTTheme.ColorTheme.pink.primary
+        case .purple: return CRTTheme.ColorTheme.purple.primary
+        }
+    }
+
     public var body: some View {
         Group {
             if showOnboarding {
@@ -30,6 +42,7 @@ public struct ContentView: View {
                     .environmentObject(dependencyContainer)
             }
         }
+        .tint(themeColor) // Apply theme color to navigation back buttons and other tinted elements
         .preferredColorScheme(.dark)
         .task {
             await AppState.shared.checkVoiceAvailability()
