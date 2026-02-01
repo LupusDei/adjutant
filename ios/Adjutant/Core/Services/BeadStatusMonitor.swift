@@ -151,10 +151,8 @@ public final class BeadStatusMonitor: ObservableObject {
         let changeType: ChangeType
 
         enum ChangeType {
-            case hooked       // Bead was just hooked
             case inProgress   // Bead moved to in_progress
             case completed    // Bead was closed/completed
-            case newBead      // First time seeing this bead
         }
     }
 
@@ -162,6 +160,11 @@ public final class BeadStatusMonitor: ObservableObject {
         var changes: [BeadChange] = []
 
         for bead in beads {
+            // Skip wisp beads entirely - they are internal workflow items
+            if bead.id.contains("wisp") {
+                continue
+            }
+
             let previousStatus = knownBeadStates[bead.id]
 
             // Skip if status hasn't changed
@@ -170,26 +173,23 @@ public final class BeadStatusMonitor: ObservableObject {
             }
 
             // Determine change type
+            // Note: We skip "hooked" announcements - only announce in_progress and completed
             let changeType: BeadChange.ChangeType
 
             if previousStatus == nil {
-                // First time seeing this bead - only announce if it's in an active state
-                if bead.status == "hooked" {
-                    changeType = .hooked
-                } else if bead.status == "in_progress" {
+                // First time seeing this bead - only announce if moving to in_progress
+                if bead.status == "in_progress" {
                     changeType = .inProgress
                 } else {
-                    // Don't announce new beads in other states
+                    // Don't announce new beads in other states (including hooked)
                     continue
                 }
-            } else if bead.status == "hooked" {
-                changeType = .hooked
             } else if bead.status == "in_progress" {
                 changeType = .inProgress
             } else if bead.status == "closed" {
                 changeType = .completed
             } else {
-                // Other status changes (blocked, deferred, etc.) - don't announce
+                // Other status changes (hooked, blocked, deferred, etc.) - don't announce
                 continue
             }
 
@@ -280,10 +280,8 @@ extension BeadStatusMonitor.BeadChange {
     var announcementText: String {
         let newStatus: String
         switch changeType {
-        case .hooked: newStatus = "hooked"
         case .inProgress: newStatus = "in_progress"
         case .completed: newStatus = "closed"
-        case .newBead: newStatus = "open"
         }
         return AnnouncementTextFormatter.formatStatusChange(
             title: bead.title,
