@@ -124,15 +124,7 @@ private struct BeadsKanbanPreviewWidget: View {
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(alignment: .top, spacing: CRTTheme.Spacing.md) {
-                            // In Progress column
-                            KanbanColumnPreview(
-                                title: "IN PROGRESS",
-                                beads: inProgressBeads,
-                                color: CRTTheme.State.success,
-                                onBeadTap: onBeadTap
-                            )
-
-                            // Hooked column
+                            // Hooked column (first - work to start)
                             KanbanColumnPreview(
                                 title: "HOOKED",
                                 beads: hookedBeads,
@@ -140,9 +132,17 @@ private struct BeadsKanbanPreviewWidget: View {
                                 onBeadTap: onBeadTap
                             )
 
-                            // Recent Closed column
+                            // In Progress column (second - active work)
                             KanbanColumnPreview(
-                                title: "RECENT",
+                                title: "IN PROGRESS",
+                                beads: inProgressBeads,
+                                color: CRTTheme.State.success,
+                                onBeadTap: onBeadTap
+                            )
+
+                            // Closed column (third - completed work)
+                            KanbanColumnPreview(
+                                title: "CLOSED",
                                 beads: recentClosedBeads,
                                 color: CRTTheme.State.offline,
                                 onBeadTap: onBeadTap

@@ -125,16 +125,23 @@ final class DashboardViewModel: BaseViewModel {
         }
 
         if let inProgress = inProgress {
-            self.inProgressBeads = Array(inProgress.prefix(maxBeadsPerColumn))
+            // Filter out wisps (scope to Overseer view), sort by updated date descending
+            let filtered = inProgress.filter { $0.type != "wisp" }
+            let sorted = filtered.sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
+            self.inProgressBeads = Array(sorted.prefix(maxBeadsPerColumn))
         }
 
         if let hooked = hooked {
-            self.hookedBeads = Array(hooked.prefix(maxBeadsPerColumn))
+            // Filter out wisps (scope to Overseer view), sort by updated date descending
+            let filtered = hooked.filter { $0.type != "wisp" }
+            let sorted = filtered.sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
+            self.hookedBeads = Array(sorted.prefix(maxBeadsPerColumn))
         }
 
         if let closed = closed {
-            // Sort by updated date descending for recent closed
-            let sorted = closed.sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
+            // Filter out wisps (scope to Overseer view), sort by updated date descending
+            let filtered = closed.filter { $0.type != "wisp" }
+            let sorted = filtered.sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
             self.recentClosedBeads = Array(sorted.prefix(maxBeadsPerColumn))
         }
 
