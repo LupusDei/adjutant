@@ -134,7 +134,17 @@ struct ChatView: View {
                     ForEach(viewModel.messages) { message in
                         ChatBubble(
                             message: message,
-                            isOutgoing: viewModel.isOutgoing(message)
+                            isOutgoing: viewModel.isOutgoing(message),
+                            isPlaying: viewModel.isPlaying(message: message),
+                            isSynthesizing: viewModel.isSynthesizing(message: message),
+                            onPlay: {
+                                Task {
+                                    await viewModel.playAudio(for: message)
+                                }
+                            },
+                            onStop: {
+                                viewModel.stopAudio()
+                            }
                         )
                         .id(message.id)
                     }

@@ -8,6 +8,18 @@ struct ChatBubble: View {
     let message: Message
     let isOutgoing: Bool
 
+    /// Whether this message is currently playing audio
+    var isPlaying: Bool = false
+
+    /// Whether this message is currently synthesizing audio
+    var isSynthesizing: Bool = false
+
+    /// Callback when play button is tapped
+    var onPlay: (() -> Void)?
+
+    /// Callback when stop button is tapped
+    var onStop: (() -> Void)?
+
     /// Bubble alignment based on message direction
     private var alignment: HorizontalAlignment {
         isOutgoing ? .trailing : .leading
@@ -44,25 +56,52 @@ struct ChatBubble: View {
                         .foregroundColor(theme.dim)
                 }
 
-                // Message content
-                Text(message.body)
-                    .font(CRTTheme.Typography.font(size: 14))
-                    .foregroundColor(theme.primary)
-                    .padding(.horizontal, CRTTheme.Spacing.sm)
-                    .padding(.vertical, CRTTheme.Spacing.xs)
-                    .background(
-                        RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.lg)
-                            .fill(bubbleColor)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.lg)
-                            .stroke(borderColor, lineWidth: 1)
-                    )
-                    .crtGlow(
-                        color: isOutgoing ? theme.primary : theme.dim,
-                        radius: 4,
-                        intensity: 0.2
-                    )
+                // Message content with optional play button
+                HStack(alignment: .bottom, spacing: CRTTheme.Spacing.xs) {
+                    // Message bubble
+                    Text(message.body)
+                        .font(CRTTheme.Typography.font(size: 14))
+                        .foregroundColor(theme.primary)
+                        .padding(.horizontal, CRTTheme.Spacing.sm)
+                        .padding(.vertical, CRTTheme.Spacing.xs)
+                        .background(
+                            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.lg)
+                                .fill(bubbleColor)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.lg)
+                                .stroke(borderColor, lineWidth: 1)
+                        )
+                        .crtGlow(
+                            color: isOutgoing ? theme.primary : theme.dim,
+                            radius: 4,
+                            intensity: 0.2
+                        )
+
+                    // Play/Stop button for incoming messages
+                    if !isOutgoing, let onPlay = onPlay, let onStop = onStop {
+                        Button {
+                            if isPlaying {
+                                onStop()
+                            } else {
+                                onPlay()
+                            }
+                        } label: {
+                            if isSynthesizing {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: theme.dim))
+                                    .frame(width: 24, height: 24)
+                            } else {
+                                Image(systemName: isPlaying ? "stop.fill" : "speaker.wave.2.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(isPlaying ? CRTTheme.State.error : theme.dim)
+                                    .frame(width: 24, height: 24)
+                            }
+                        }
+                        .disabled(isSynthesizing)
+                        .accessibilityLabel(isPlaying ? "Stop audio" : "Play audio")
+                    }
+                }
 
                 // Timestamp
                 if let date = message.date {

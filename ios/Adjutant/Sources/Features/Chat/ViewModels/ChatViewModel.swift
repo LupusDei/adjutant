@@ -39,10 +39,20 @@ final class ChatViewModel: BaseViewModel {
     /// Speech recognition error message
     @Published private(set) var speechError: String?
 
+    /// Whether audio is currently playing
+    @Published private(set) var isPlayingAudio = false
+
+    /// Whether audio is being synthesized
+    @Published private(set) var isSynthesizing = false
+
+    /// ID of the message currently being played
+    @Published private(set) var playingMessageId: String?
+
     // MARK: - Dependencies
 
     private let apiClient: APIClient
     private let speechService: (any SpeechRecognitionServiceProtocol)?
+    private var ttsService: any TTSPlaybackServiceProtocol
 
     // MARK: - Private Properties
 
@@ -56,12 +66,36 @@ final class ChatViewModel: BaseViewModel {
 
     // MARK: - Initialization
 
-    init(apiClient: APIClient? = nil, speechService: (any SpeechRecognitionServiceProtocol)? = nil) {
-        self.apiClient = apiClient ?? AppState.shared.apiClient
+    init(apiClient: APIClient? = nil, speechService: (any SpeechRecognitionServiceProtocol)? = nil, ttsService: (any TTSPlaybackServiceProtocol)? = nil) {
+        let client = apiClient ?? AppState.shared.apiClient
+        self.apiClient = client
         self.speechService = speechService
+        self.ttsService = ttsService ?? (DependencyContainer.shared.resolveOptional((any TTSPlaybackServiceProtocol).self)
+            ?? TTSPlaybackService(apiClient: client, baseURL: AppState.shared.apiBaseURL))
         super.init()
         setupSpeechBindings()
+        setupPlaybackObservers()
         loadFromCache()
+    }
+
+    // MARK: - TTS Setup
+
+    private func setupPlaybackObservers() {
+        // Observe playback state changes
+        ttsService.statePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                self?.isPlayingAudio = state.isPlaying
+                // Clear playingMessageId when playback stops
+                if !state.isPlaying {
+                    self?.playingMessageId = nil
+                }
+            }
+            .store(in: &cancellables)
+
+        // Sync volume from user preferences
+        let savedVolume = UserDefaults.standard.double(forKey: "voiceVolume")
+        ttsService.volume = Float(savedVolume == 0 ? 0.8 : savedVolume)
     }
 
     /// Loads cached chat messages for immediate display
@@ -343,6 +377,51 @@ final class ChatViewModel: BaseViewModel {
     /// Clear speech error
     func clearSpeechError() {
         speechError = nil
+    }
+
+    // MARK: - TTS Playback
+
+    /// Synthesizes and plays TTS audio for a message
+    func playAudio(for message: Message) async {
+        guard !isSynthesizing else { return }
+
+        isSynthesizing = true
+        playingMessageId = message.id
+
+        do {
+            let request = SynthesizeRequest(text: message.body, messageId: message.id)
+            let response = try await apiClient.synthesizeSpeech(request)
+
+            // Enqueue to TTS service with message metadata
+            ttsService.enqueue(
+                text: message.body,
+                response: response,
+                priority: .normal,
+                metadata: ["messageId": message.id]
+            )
+
+            isSynthesizing = false
+        } catch {
+            isSynthesizing = false
+            playingMessageId = nil
+            handleError(error)
+        }
+    }
+
+    /// Stops audio playback
+    func stopAudio() {
+        ttsService.stop()
+        playingMessageId = nil
+    }
+
+    /// Check if a specific message is currently playing
+    func isPlaying(message: Message) -> Bool {
+        playingMessageId == message.id && isPlayingAudio
+    }
+
+    /// Check if a specific message is currently synthesizing
+    func isSynthesizing(message: Message) -> Bool {
+        playingMessageId == message.id && isSynthesizing
     }
 
     // MARK: - Private Methods
