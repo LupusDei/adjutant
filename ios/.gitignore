@@ -5,6 +5,7 @@ Package.resolved
 
 # Xcode
 *.xcodeproj/
+!*.xcodeproj/project.pbxproj
 *.xcworkspace/
 xcuserdata/
 DerivedData/
