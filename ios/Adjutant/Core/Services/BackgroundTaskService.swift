@@ -184,7 +184,8 @@ public final class BackgroundTaskService: ObservableObject {
 
     // MARK: - Refresh Operations
 
-    /// Performs a quick refresh: checks mail and updates unread count.
+    /// Performs a quick refresh: checks mail, beads, and updates unread count.
+    /// Also triggers voice announcements for any status changes.
     /// - Returns: True if refresh completed successfully
     private func performRefresh() async -> Bool {
         guard NetworkMonitor.shared.isConnected else {
@@ -196,6 +197,9 @@ public final class BackgroundTaskService: ObservableObject {
             // Check mail and update unread count
             let unreadCount = try await checkMail()
             AppState.shared.updateUnreadMailCount(unreadCount)
+
+            // Poll beads for status changes (triggers voice announcements)
+            await BeadStatusMonitor.shared.pollNow()
 
             // Record successful refresh
             lastRefreshDate = Date()

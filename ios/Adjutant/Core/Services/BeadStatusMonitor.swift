@@ -295,13 +295,15 @@ extension BeadStatusMonitor.BeadChange {
 
 extension BeadStatusMonitor {
     /// Call this when the app's scene phase changes.
-    /// Starts monitoring when active, stops when backgrounded.
+    /// Starts monitoring when active and continues in background for audio announcements.
     public func handleScenePhaseChange(to phase: ScenePhase) {
         switch phase {
         case .active:
             startMonitoring()
         case .background:
-            stopMonitoring()
+            // Keep monitoring in background to enable audio announcements
+            // The "audio" background mode in Info.plist allows this
+            print("[BeadStatusMonitor] Continuing monitoring in background")
         case .inactive:
             // Keep monitoring during brief inactive periods
             break
