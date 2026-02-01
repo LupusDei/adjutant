@@ -222,7 +222,7 @@ public final class BeadStatusMonitor: ObservableObject {
         }
 
         for change in changes {
-            let text = AnnouncementTextFormatter.format(change: change)
+            let text = change.announcementText
             await synthesizeAndEnqueue(text: text, ttsService: ttsService)
         }
     }
@@ -273,57 +273,23 @@ public final class BeadStatusMonitor: ObservableObject {
     }
 }
 
-// MARK: - AnnouncementTextFormatter
+// MARK: - BeadChange Text Formatting
 
-/// Formats bead status changes into human-readable announcement text.
-enum AnnouncementTextFormatter {
-    /// Formats a bead change into announcement text.
-    static func format(change: BeadStatusMonitor.BeadChange) -> String {
-        let title = humanizeTitle(change.bead.title)
-
-        switch change.changeType {
-        case .hooked:
-            return "New task hooked: \(title)"
-        case .inProgress:
-            return "Starting work on: \(title)"
-        case .completed:
-            return "Task completed: \(title)"
-        case .newBead:
-            return "New bead: \(title)"
+extension BeadStatusMonitor.BeadChange {
+    /// Formats this bead change into announcement text using the shared formatter.
+    var announcementText: String {
+        let newStatus: String
+        switch changeType {
+        case .hooked: newStatus = "hooked"
+        case .inProgress: newStatus = "in_progress"
+        case .completed: newStatus = "closed"
+        case .newBead: newStatus = "open"
         }
-    }
-
-    /// Humanizes a bead title for speech.
-    /// - Removes technical prefixes and IDs
-    /// - Converts camelCase and snake_case to spaces
-    /// - Truncates overly long titles
-    static func humanizeTitle(_ title: String) -> String {
-        var humanized = title
-
-        // Remove common prefixes like "feat:", "fix:", "chore:", etc.
-        let prefixPattern = #"^(feat|fix|chore|docs|refactor|test|style|perf|ci|build|revert)(\([^)]*\))?:\s*"#
-        if let regex = try? NSRegularExpression(pattern: prefixPattern, options: .caseInsensitive) {
-            let range = NSRange(humanized.startIndex..., in: humanized)
-            humanized = regex.stringByReplacingMatches(in: humanized, range: range, withTemplate: "")
-        }
-
-        // Remove bead IDs like (hq-abc123) or [adj-xyz]
-        let idPattern = #"[\(\[](hq|adj|gb)-[a-z0-9]+[\)\]]"#
-        if let regex = try? NSRegularExpression(pattern: idPattern, options: .caseInsensitive) {
-            let range = NSRange(humanized.startIndex..., in: humanized)
-            humanized = regex.stringByReplacingMatches(in: humanized, range: range, withTemplate: "")
-        }
-
-        // Trim whitespace
-        humanized = humanized.trimmingCharacters(in: .whitespaces)
-
-        // Truncate if too long (keep first ~100 chars for reasonable speech length)
-        if humanized.count > 100 {
-            let index = humanized.index(humanized.startIndex, offsetBy: 100)
-            humanized = String(humanized[..<index]) + "..."
-        }
-
-        return humanized
+        return AnnouncementTextFormatter.formatStatusChange(
+            title: bead.title,
+            oldStatus: previousStatus,
+            newStatus: newStatus
+        )
     }
 }
 
