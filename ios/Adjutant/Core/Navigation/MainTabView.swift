@@ -63,6 +63,7 @@ private struct TabContent: View {
         #if os(iOS)
         .tabViewStyle(.page(indexDisplayMode: .never))
         #endif
+        .animation(nil, value: selectedTab)
         .id(tabViewId)
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
@@ -131,9 +132,7 @@ struct CRTTabBar: View {
                     isSelected: selectedTab == tab,
                     badgeCount: tab == .mail ? unreadCount : 0
                 ) {
-                    withAnimation(.easeInOut(duration: CRTTheme.Animation.fast)) {
-                        selectedTab = tab
-                    }
+                    selectedTab = tab
                 }
             }
         }
