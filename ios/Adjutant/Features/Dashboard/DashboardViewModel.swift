@@ -118,6 +118,9 @@ final class DashboardViewModel: BaseViewModel {
 
             // Process new messages for notifications
             await NotificationService.shared.processNewMessages(mail.items)
+
+            // Announce overseer-directed mail via voice
+            await OverseerMailAnnouncer.shared.processMessages(mail.items)
         }
 
         if let crew = crew {
