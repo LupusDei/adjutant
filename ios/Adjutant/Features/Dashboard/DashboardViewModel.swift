@@ -138,22 +138,22 @@ final class DashboardViewModel: BaseViewModel {
         }
 
         if let inProgress = inProgress {
-            // Filter out wisps (scope to Overseer view), sort by updated date descending
-            let filtered = inProgress.filter { $0.type != "wisp" }
+            // Filter to OVERSEER view (exclude internal workflow types), sort by updated date descending
+            let filtered = inProgress.filter { isOverseerRelevant($0) }
             let sorted = filtered.sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
             self.inProgressBeads = Array(sorted.prefix(maxBeadsPerColumn))
         }
 
         if let hooked = hooked {
-            // Filter out wisps (scope to Overseer view), sort by updated date descending
-            let filtered = hooked.filter { $0.type != "wisp" }
+            // Filter to OVERSEER view (exclude internal workflow types), sort by updated date descending
+            let filtered = hooked.filter { isOverseerRelevant($0) }
             let sorted = filtered.sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
             self.hookedBeads = Array(sorted.prefix(maxBeadsPerColumn))
         }
 
         if let closed = closed {
-            // Filter out wisps (scope to Overseer view), sort by updated date descending
-            let filtered = closed.filter { $0.type != "wisp" }
+            // Filter to OVERSEER view (exclude internal workflow types), sort by updated date descending
+            let filtered = closed.filter { isOverseerRelevant($0) }
             let sorted = filtered.sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
             self.recentClosedBeads = Array(sorted.prefix(maxBeadsPerColumn))
         }
@@ -292,5 +292,29 @@ final class DashboardViewModel: BaseViewModel {
             let dateB = b.updatedDate ?? b.createdDate ?? Date.distantPast
             return dateA > dateB
         }
+    }
+
+    /// Filters beads to only those relevant for OVERSEER view.
+    /// Excludes internal workflow types like wisps, molecules, convoys, etc.
+    private func isOverseerRelevant(_ bead: BeadInfo) -> Bool {
+        // Types to exclude from OVERSEER view (internal workflow items)
+        let excludedTypes = ["message", "epic", "convoy", "agent", "role", "witness", "wisp", "infrastructure", "coordination", "sync"]
+
+        let typeLower = bead.type.lowercased()
+        let idLower = bead.id.lowercased()
+        let titleLower = bead.title.lowercased()
+
+        // Exclude by type
+        if excludedTypes.contains(typeLower) {
+            return false
+        }
+
+        // Exclude if type/title/id contains "wisp" or ID starts with "mol-"
+        if typeLower.contains("wisp") || titleLower.contains("wisp") ||
+           idLower.contains("wisp") || idLower.hasPrefix("mol-") {
+            return false
+        }
+
+        return true
     }
 }
