@@ -6,10 +6,10 @@
  */
 
 import { readFile, writeFile, mkdir } from "fs/promises";
-import { existsSync } from "fs";
+import { existsSync, watch, type FSWatcher } from "fs";
 import { dirname, join } from "path";
 import { resolveTownRoot } from "./gastown-workspace.js";
-import { logInfo, logError, logWarn } from "../utils/index.js";
+import { logInfo, logError, logWarn, logDebug } from "../utils/index.js";
 import type {
   DeviceToken,
   RegisterDeviceTokenRequest,
@@ -54,13 +54,74 @@ function resolveTokensPath(): string {
 }
 
 // ============================================================================
+// In-Memory Cache
+// ============================================================================
+
+let cachedStore: DeviceTokenStore | null = null;
+let fileWatcher: FSWatcher | null = null;
+let isWriting = false;
+
+/**
+ * Invalidate the cache, forcing next read to load from disk.
+ */
+function invalidateCache(): void {
+  cachedStore = null;
+  logDebug("Device token cache invalidated");
+}
+
+/**
+ * Set up file watcher for cache invalidation on external changes.
+ */
+function setupFileWatcher(): void {
+  if (fileWatcher) return;
+
+  const tokensPath = resolveTokensPath();
+  if (!existsSync(tokensPath)) return;
+
+  try {
+    fileWatcher = watch(tokensPath, (eventType) => {
+      if (eventType === "change" && !isWriting) {
+        invalidateCache();
+      }
+    });
+    fileWatcher.on("error", () => {
+      fileWatcher?.close();
+      fileWatcher = null;
+    });
+  } catch {
+    // File watching not available, cache will still work but won't detect external changes
+  }
+}
+
+/**
+ * Get the cached token store, loading from disk if needed.
+ */
+async function getTokenStore(): Promise<DeviceTokenStore> {
+  if (cachedStore) {
+    return cachedStore;
+  }
+
+  cachedStore = await loadTokensFromDisk();
+  setupFileWatcher();
+  return cachedStore;
+}
+
+/**
+ * Update the cache and persist to disk asynchronously.
+ */
+async function updateTokenStore(store: DeviceTokenStore): Promise<void> {
+  cachedStore = store;
+  await persistToDisk(store);
+}
+
+// ============================================================================
 // Storage Operations
 // ============================================================================
 
 /**
- * Load device tokens from storage.
+ * Load device tokens from disk (bypasses cache).
  */
-async function loadTokens(): Promise<DeviceTokenStore> {
+async function loadTokensFromDisk(): Promise<DeviceTokenStore> {
   const tokensPath = resolveTokensPath();
 
   if (!existsSync(tokensPath)) {
@@ -70,6 +131,7 @@ async function loadTokens(): Promise<DeviceTokenStore> {
   try {
     const content = await readFile(tokensPath, "utf-8");
     const store = JSON.parse(content) as DeviceTokenStore;
+    logDebug("Device tokens loaded from disk", { count: store.tokens.length });
     return store;
   } catch (err) {
     logWarn("Failed to load device tokens, starting fresh", {
@@ -80,9 +142,9 @@ async function loadTokens(): Promise<DeviceTokenStore> {
 }
 
 /**
- * Save device tokens to storage.
+ * Persist device tokens to disk.
  */
-async function saveTokens(store: DeviceTokenStore): Promise<void> {
+async function persistToDisk(store: DeviceTokenStore): Promise<void> {
   const tokensPath = resolveTokensPath();
   const dir = dirname(tokensPath);
 
@@ -91,7 +153,13 @@ async function saveTokens(store: DeviceTokenStore): Promise<void> {
     await mkdir(dir, { recursive: true });
   }
 
-  await writeFile(tokensPath, JSON.stringify(store, null, 2), "utf-8");
+  isWriting = true;
+  try {
+    await writeFile(tokensPath, JSON.stringify(store, null, 2), "utf-8");
+    setupFileWatcher();
+  } finally {
+    isWriting = false;
+  }
 }
 
 // ============================================================================
@@ -117,7 +185,7 @@ export async function registerDeviceToken(
       };
     }
 
-    const store = await loadTokens();
+    const store = await getTokenStore();
     const now = new Date().toISOString();
     const bundleId = request.bundleId ?? process.env["APNS_BUNDLE_ID"] ?? "com.gastown.adjutant";
 
@@ -150,7 +218,7 @@ export async function registerDeviceToken(
       });
     }
 
-    await saveTokens(store);
+    await updateTokenStore(store);
 
     return {
       success: true,
@@ -180,7 +248,7 @@ export async function unregisterDeviceToken(
   token: string
 ): Promise<DeviceTokenServiceResult<void>> {
   try {
-    const store = await loadTokens();
+    const store = await getTokenStore();
     const initialCount = store.tokens.length;
 
     store.tokens = store.tokens.filter((t) => t.token !== token);
@@ -195,7 +263,7 @@ export async function unregisterDeviceToken(
       };
     }
 
-    await saveTokens(store);
+    await updateTokenStore(store);
 
     logInfo("Device token unregistered", {
       tokenPrefix: token.substring(0, 8),
@@ -223,7 +291,7 @@ export async function getAllDeviceTokens(): Promise<
   DeviceTokenServiceResult<DeviceToken[]>
 > {
   try {
-    const store = await loadTokens();
+    const store = await getTokenStore();
     return { success: true, data: store.tokens };
   } catch (err) {
     logError("Failed to get device tokens", {
@@ -246,7 +314,7 @@ export async function getDeviceTokensByPlatform(
   platform: DevicePlatform
 ): Promise<DeviceTokenServiceResult<DeviceToken[]>> {
   try {
-    const store = await loadTokens();
+    const store = await getTokenStore();
     const filtered = store.tokens.filter((t) => t.platform === platform);
     return { success: true, data: filtered };
   } catch (err) {
@@ -267,7 +335,7 @@ export async function getDeviceTokensByAgent(
   agentId: string
 ): Promise<DeviceTokenServiceResult<DeviceToken[]>> {
   try {
-    const store = await loadTokens();
+    const store = await getTokenStore();
     const filtered = store.tokens.filter((t) => t.agentId === agentId);
     return { success: true, data: filtered };
   } catch (err) {
@@ -288,7 +356,7 @@ export async function cleanupStaleTokens(
   maxAgeDays: number = 30
 ): Promise<DeviceTokenServiceResult<{ removed: number }>> {
   try {
-    const store = await loadTokens();
+    const store = await getTokenStore();
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - maxAgeDays);
 
@@ -301,7 +369,7 @@ export async function cleanupStaleTokens(
     const removed = initialCount - store.tokens.length;
 
     if (removed > 0) {
-      await saveTokens(store);
+      await updateTokenStore(store);
       logInfo("Cleaned up stale device tokens", { removed, maxAgeDays });
     }
 
