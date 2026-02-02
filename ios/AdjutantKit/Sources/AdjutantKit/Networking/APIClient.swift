@@ -48,6 +48,12 @@ public struct APIClientConfiguration: Sendable {
     }
 }
 
+/// Cached response with ETag for conditional requests
+private struct CachedResponse: Sendable {
+    let etag: String
+    let data: Data
+}
+
 /// Main API client for communicating with the Adjutant backend
 public actor APIClient {
     /// Client configuration (internal for extension access)
@@ -56,6 +62,9 @@ public actor APIClient {
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
     private let retryExecutor: RetryExecutor
+
+    /// ETag cache for conditional requests (keyed by URL string)
+    private var etagCache: [String: CachedResponse] = [:]
 
     public init(configuration: APIClientConfiguration, urlSessionConfiguration: URLSessionConfiguration? = nil) {
         self.configuration = configuration
@@ -74,6 +83,20 @@ public actor APIClient {
     /// Initializer for development
     public init() {
         self.init(configuration: .development)
+    }
+
+    // MARK: - Cache Management
+
+    /// Clear all cached ETags (e.g., on logout or when forcing fresh data)
+    public func clearETagCache() {
+        etagCache.removeAll()
+    }
+
+    /// Invalidate cached ETag for a specific path
+    public func invalidateETag(for path: String) {
+        if let url = try? buildURL(path: path, queryItems: nil) {
+            etagCache.removeValue(forKey: url.absoluteString)
+        }
     }
 
     // MARK: - Core Request Methods
@@ -98,6 +121,12 @@ public actor APIClient {
         // Add Authorization header if API key is configured
         if let apiKey = configuration.apiKey, !apiKey.isEmpty {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+
+        // Add If-None-Match header for conditional GET requests
+        let cacheKey = url.absoluteString
+        if method == .get, let cached = etagCache[cacheKey] {
+            request.setValue(cached.etag, forHTTPHeaderField: "If-None-Match")
         }
 
         // Encode body if provided
@@ -132,6 +161,7 @@ public actor APIClient {
         let (data, response) = try await performRequest(request)
 
         let duration = Date().timeIntervalSince(startTime)
+        let cacheKey = url.absoluteString
 
         // Log response
         if let httpResponse = response as? HTTPURLResponse {
@@ -142,6 +172,19 @@ public actor APIClient {
                 body: data,
                 duration: duration
             )
+
+            // Handle 304 Not Modified - return cached data
+            if httpResponse.statusCode == 304, let cached = etagCache[cacheKey] {
+                APILogger.shared.log(.info, "Using cached response for \(url.path)")
+                return try decoder.decode(T.self, from: cached.data)
+            }
+
+            // Cache successful GET responses with ETag
+            if request.httpMethod == HTTPMethod.get.rawValue,
+               (200...299).contains(httpResponse.statusCode),
+               let etag = httpResponse.value(forHTTPHeaderField: "ETag") {
+                etagCache[cacheKey] = CachedResponse(etag: etag, data: data)
+            }
         }
 
         return try handleResponse(data: data, response: response)
