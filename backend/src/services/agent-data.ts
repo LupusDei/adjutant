@@ -1,4 +1,5 @@
-import { execFileSync } from "child_process";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { existsSync } from "fs";
 import { join } from "path";
 import { execBd, stripBeadPrefix, type BeadsIssue } from "./bd-client.js";
@@ -8,6 +9,8 @@ import {
   resolveBeadsDirFromId,
   resolveTownRoot,
 } from "./gastown-workspace.js";
+
+const execFileAsync = promisify(execFile);
 import {
   addressToIdentity,
   parseAgentBeadId,
@@ -67,7 +70,7 @@ function buildAgentAddress(role: string, rig: string | null, name: string | null
  * Gets the current git branch for a polecat from their worktree.
  * Returns undefined if the worktree doesn't exist or git fails.
  */
-function getPolecatBranch(rig: string, polecatName: string): string | undefined {
+async function getPolecatBranch(rig: string, polecatName: string): Promise<string | undefined> {
   try {
     const townRoot = resolveTownRoot();
     // Polecat worktrees are at: {townRoot}/{rig}/polecats/{name}/{rig}/
@@ -77,13 +80,12 @@ function getPolecatBranch(rig: string, polecatName: string): string | undefined 
       return undefined;
     }
 
-    const branch = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+    const { stdout } = await execFileAsync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
       cwd: worktreePath,
-      encoding: "utf-8",
       timeout: 5000,
-    }).trim();
+    });
 
-    return branch || undefined;
+    return stdout.trim() || undefined;
   } catch {
     return undefined;
   }
@@ -294,6 +296,18 @@ export async function collectAgentSnapshot(
   // Fetch hook bead titles, routing each to the correct beads database by prefix
   const hookBeadTitles = await fetchBeadTitles(uniqueHookBeadIds, townRoot);
 
+  // Fetch branches for polecats in parallel
+  const polecatAgents = baseAgents.filter((a) => a.role === "polecat" && a.rig);
+  const branchResults = await Promise.all(
+    polecatAgents.map(async (agent) => ({
+      address: agent.address,
+      branch: await getPolecatBranch(agent.rig!, agent.name),
+    }))
+  );
+  const branchMap = new Map(
+    branchResults.filter((r) => r.branch).map((r) => [r.address, r.branch!])
+  );
+
   const agents: AgentRuntimeInfo[] = baseAgents.map((agent) => {
     const mailInfo = mailIndex.get(addressToIdentity(agent.address));
     const result: AgentRuntimeInfo = {
@@ -308,11 +322,9 @@ export async function collectAgentSnapshot(
       if (title) result.hookBeadTitle = title;
     }
 
-    // Get branch for polecats
-    if (agent.role === "polecat" && agent.rig) {
-      const branch = getPolecatBranch(agent.rig, agent.name);
-      if (branch) result.branch = branch;
-    }
+    // Add branch for polecats
+    const branch = branchMap.get(agent.address);
+    if (branch) result.branch = branch;
 
     return result;
   });
