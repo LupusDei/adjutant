@@ -25,6 +25,9 @@
 		A012345600000000000000W6 /* AdjutantLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A012345700000000000000W6 /* AdjutantLiveActivity.swift */; };
 		A012345600000000000000W7 /* AdjutantKit in Frameworks */ = {isa = PBXBuildFile; productRef = A012347100000000000000W7 /* AdjutantKit */; };
 		A012345600000000000000W8 /* GastownWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A012345700000000000000W8 /* GastownWidget.swift */; };
+		A012345600000000000000S1 /* mail.caf in Resources */ = {isa = PBXBuildFile; fileRef = A012345700000000000000S1 /* mail.caf */; };
+		A012345600000000000000S2 /* task_complete.caf in Resources */ = {isa = PBXBuildFile; fileRef = A012345700000000000000S2 /* task_complete.caf */; };
+		A012345600000000000000S3 /* alert.caf in Resources */ = {isa = PBXBuildFile; fileRef = A012345700000000000000S3 /* alert.caf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -85,6 +88,9 @@
 		A012345700000000000000W5 /* AdjutantWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AdjutantWidgets.entitlements; sourceTree = "<group>"; };
 		A012345700000000000000W6 /* AdjutantLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjutantLiveActivity.swift; sourceTree = "<group>"; };
 		A012345700000000000000W8 /* GastownWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GastownWidget.swift; sourceTree = "<group>"; };
+		A012345700000000000000S1 /* mail.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = mail.caf; sourceTree = "<group>"; };
+		A012345700000000000000S2 /* task_complete.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = task_complete.caf; sourceTree = "<group>"; };
+		A012345700000000000000S3 /* alert.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = alert.caf; sourceTree = "<group>"; };
 		A012345B0000000000000001 /* Adjutant.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Adjutant.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A012345B0000000000000010 /* AdjutantTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AdjutantTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A012345B0000000000000020 /* AdjutantUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AdjutantUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -190,8 +196,19 @@
 			isa = PBXGroup;
 			children = (
 				A01234570000000000000003 /* Assets.xcassets */,
+				A012345D00000000000000S1 /* Sounds */,
 			);
 			path = Resources;
+			sourceTree = "<group>";
+		};
+		A012345D00000000000000S1 /* Sounds */ = {
+			isa = PBXGroup;
+			children = (
+				A012345700000000000000S3 /* alert.caf */,
+				A012345700000000000000S1 /* mail.caf */,
+				A012345700000000000000S2 /* task_complete.caf */,
+			);
+			path = Sounds;
 			sourceTree = "<group>";
 		};
 		A012345D0000000000000008 /* Preview Content */ = {
@@ -418,6 +435,9 @@
 			files = (
 				A01234560000000000000004 /* Preview Assets.xcassets in Resources */,
 				A01234560000000000000003 /* Assets.xcassets in Resources */,
+				A012345600000000000000S1 /* mail.caf in Resources */,
+				A012345600000000000000S2 /* task_complete.caf in Resources */,
+				A012345600000000000000S3 /* alert.caf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
