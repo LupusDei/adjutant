@@ -150,43 +150,19 @@ export async function buildMailIndexForIdentities(
   townRoot: string,
   identities: string[]
 ): Promise<Map<string, MailIndexEntry>> {
-  const uniqueIdentities = Array.from(new Set(identities));
-  const result = new Map<string, MailIndexEntry>();
-
-  await Promise.all(
-    uniqueIdentities.map(async (identity) => {
-      try {
-        const issues = await listMailIssuesForIdentity(townRoot, identity);
-        let unread = 0;
-        let latestTimestamp = 0;
-        let firstSubject: string | undefined;
-        let firstFrom: string | undefined;
-
-        for (const issue of issues) {
-          if (!isUnread(issue)) continue;
-          unread += 1;
-          const timestamp = toTimestamp(issue.created_at);
-          if (timestamp >= latestTimestamp) {
-            latestTimestamp = timestamp;
-            firstSubject = issue.title;
-            const labels = parseMessageLabels(issue.labels);
-            firstFrom = labels.sender;
-          }
-        }
-
-        const entry: MailIndexEntry = { unread };
-        if (firstSubject) entry.firstSubject = firstSubject;
-        if (firstFrom) entry.firstFrom = firstFrom;
-        result.set(identity, entry);
-      } catch (err) {
-        logWarn("mail index query failed", {
-          identity,
-          message: err instanceof Error ? err.message : "Unknown error",
-        });
-        result.set(identity, { unread: 0 });
-      }
-    })
-  );
-
-  return result;
+  try {
+    // Single query for all identities, then use buildMailIndex for filtering
+    const issues = await listMailIssues(townRoot);
+    return buildMailIndex(issues, identities);
+  } catch (err) {
+    logWarn("mail index query failed", {
+      message: err instanceof Error ? err.message : "Unknown error",
+    });
+    // Return empty entries for all identities on failure
+    const result = new Map<string, MailIndexEntry>();
+    for (const identity of identities) {
+      result.set(identity, { unread: 0 });
+    }
+    return result;
+  }
 }
