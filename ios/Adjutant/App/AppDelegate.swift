@@ -102,56 +102,108 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     ) {
         print("[AppDelegate] Received remote notification: \(userInfo)")
 
-        // Extract notification type from payload
-        let notificationType = userInfo["type"] as? String ?? "unknown"
-
         Task {
-            await handleRemoteNotification(type: notificationType, userInfo: userInfo)
-            completionHandler(.newData)
+            let result = await handleRemoteNotification(userInfo: userInfo)
+            completionHandler(result)
         }
     }
 
-    /// Processes remote notification based on type and triggers appropriate voice services.
+    /// Handles a remote notification and triggers appropriate voice announcements.
+    ///
+    /// - Parameter userInfo: The notification payload
+    /// - Returns: The background fetch result
     @MainActor
-    private func handleRemoteNotification(type: String, userInfo: [AnyHashable: Any]) async {
-        // Ensure audio session is active for background playback
+    private func handleRemoteNotification(userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
+        // Ensure audio session is activated for background playback
         activateAudioSessionForBackground()
+
+        // Get notification type from payload
+        guard let type = userInfo["type"] as? String else {
+            print("[AppDelegate] Remote notification missing 'type' field")
+            return .noData
+        }
 
         switch type {
         case "mail", "new_mail":
-            await handleMailNotification(userInfo: userInfo)
-        case "bead_update", "bead_status":
-            await handleBeadUpdateNotification(userInfo: userInfo)
+            return await handleMailNotification(userInfo: userInfo)
+
+        case "task", "bead_update", "bead_status":
+            return await handleTaskNotification(userInfo: userInfo)
+
+        case "system":
+            return await handleSystemNotification(userInfo: userInfo)
+
         default:
             print("[AppDelegate] Unknown notification type: \(type)")
+            return .noData
         }
     }
 
-    /// Handles mail notifications by fetching new messages and announcing them.
+    /// Handles mail notifications by fetching new messages and triggering announcements.
     @MainActor
-    private func handleMailNotification(userInfo: [AnyHashable: Any]) async {
-        print("[AppDelegate] Processing mail notification")
-
+    private func handleMailNotification(userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
         do {
-            // Fetch recent messages (filter: .user excludes infrastructure messages)
             let apiClient = APIClient()
-            let response = try await apiClient.getMail(filter: .user)
+            let mailResponse = try await apiClient.getMail()
+            let messages = mailResponse.items
 
-            // Process through the mail announcer (it filters for overseer + unread)
-            let announcedCount = await OverseerMailAnnouncer.shared.processMessages(response.items)
-            print("[AppDelegate] Announced \(announcedCount) new mail messages")
+            let announcedCount = await OverseerMailAnnouncer.shared.processMessages(messages)
+
+            if announcedCount > 0 {
+                print("[AppDelegate] Announced \(announcedCount) mail message(s)")
+                return .newData
+            } else {
+                return .noData
+            }
         } catch {
-            print("[AppDelegate] Failed to fetch mail for notification: \(error.localizedDescription)")
+            print("[AppDelegate] Failed to handle mail notification: \(error.localizedDescription)")
+            return .failed
         }
     }
 
-    /// Handles bead update notifications by polling for status changes.
+    /// Handles task/bead notifications by triggering a status poll.
     @MainActor
-    private func handleBeadUpdateNotification(userInfo: [AnyHashable: Any]) async {
-        print("[AppDelegate] Processing bead update notification")
-
-        // Trigger immediate poll of bead status
+    private func handleTaskNotification(userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
         await BeadStatusMonitor.shared.pollNow()
+
+        if BeadStatusMonitor.shared.changesDetectedCount > 0 {
+            return .newData
+        } else {
+            return .noData
+        }
+    }
+
+    /// Handles system notifications by processing alert announcements.
+    ///
+    /// System alerts are announced through the TTS service when voice is enabled.
+    @MainActor
+    private func handleSystemNotification(userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
+        guard let message = userInfo["message"] as? String else {
+            print("[AppDelegate] System notification missing 'message' field")
+            return .noData
+        }
+
+        print("[AppDelegate] System notification: \(message)")
+
+        // Create a synthetic message to process through OverseerMailAnnouncer's TTS pipeline
+        let messageId = "system-\(UUID().uuidString)"
+        let syntheticMessage = Message(
+            id: messageId,
+            from: "system",
+            to: "overseer",
+            subject: message,
+            body: message,
+            timestamp: ISO8601DateFormatter().string(from: Date()),
+            read: false,
+            priority: .high,
+            type: .notification,
+            threadId: messageId,
+            pinned: false,
+            isInfrastructure: true
+        )
+
+        let announcedCount = await OverseerMailAnnouncer.shared.processMessages([syntheticMessage])
+        return announcedCount > 0 ? .newData : .noData
     }
 
     /// Activates the audio session for background playback.
