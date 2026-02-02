@@ -41,12 +41,12 @@ final class ResponseCache {
     private(set) var dashboardCrew: [CrewMember] = []
     private(set) var dashboardConvoys: [Convoy] = []
 
-    // MARK: - Timestamps
+    // MARK: - Timestamps & TTL
 
     /// Last update time for each cache type
     private var lastUpdated: [CacheType: Date] = [:]
 
-    enum CacheType {
+    enum CacheType: CaseIterable {
         case messages
         case crew
         case convoys
@@ -55,6 +55,18 @@ final class ResponseCache {
         case chat
         case dashboard
     }
+
+    /// Default TTL (time-to-live) in seconds for each cache type.
+    /// Shorter TTLs for frequently-changing data, longer for stable data.
+    private let defaultTTL: [CacheType: TimeInterval] = [
+        .messages: 60,      // Mail changes frequently
+        .crew: 300,         // Crew relatively stable (5 min)
+        .convoys: 120,      // Convoys update moderately
+        .epics: 120,        // Epics update moderately
+        .beads: 60,         // Beads change frequently
+        .chat: 30,          // Chat needs freshness
+        .dashboard: 60      // Dashboard moderate refresh
+    ]
 
     // MARK: - Initialization
 
@@ -125,6 +137,30 @@ final class ResponseCache {
     func cacheAge(for type: CacheType) -> TimeInterval? {
         guard let updated = lastUpdated[type] else { return nil }
         return Date().timeIntervalSince(updated)
+    }
+
+    /// Returns whether cache exists AND is still valid (not expired).
+    /// This is the primary method callers should use to check cache validity.
+    func isValid(for type: CacheType) -> Bool {
+        guard hasCache(for: type) else { return false }
+        guard let age = cacheAge(for: type) else { return false }
+        let ttl = defaultTTL[type] ?? 60
+        return age < ttl
+    }
+
+    /// Returns the TTL for a cache type in seconds
+    func ttl(for type: CacheType) -> TimeInterval {
+        defaultTTL[type] ?? 60
+    }
+
+    /// Invalidates expired cache entries.
+    /// Call this periodically or before accessing cache to auto-clean stale data.
+    func invalidateExpired() {
+        for type in CacheType.allCases {
+            if let age = cacheAge(for: type), age >= (defaultTTL[type] ?? 60) {
+                clear(type)
+            }
+        }
     }
 
     /// Clears all cached data
