@@ -18,9 +18,6 @@ import AdjutantKit
 public final class BeadStatusMonitor: ObservableObject {
     // MARK: - Constants
 
-    /// Polling interval in seconds (30 seconds)
-    private static let pollInterval: TimeInterval = 30
-
     /// UserDefaults key for storing known bead states
     private static let knownStatesKey = "BeadStatusMonitor.knownStates"
 
@@ -47,8 +44,8 @@ public final class BeadStatusMonitor: ObservableObject {
     /// Known bead states from previous poll (id -> status)
     private var knownBeadStates: [String: String] = [:]
 
-    /// Timer for periodic polling
-    private var pollTimer: Timer?
+    /// Reference to centralized data sync service
+    private let dataSync = DataSyncService.shared
 
     /// Cancellables for Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
@@ -65,7 +62,7 @@ public final class BeadStatusMonitor: ObservableObject {
     // MARK: - Monitoring Control
 
     /// Starts monitoring bead status changes.
-    /// Immediately polls for current state, then continues at regular intervals.
+    /// Subscribes to DataSyncService for bead updates.
     public func startMonitoring() {
         guard !isMonitoring else { return }
 
@@ -75,32 +72,34 @@ public final class BeadStatusMonitor: ObservableObject {
         // Resolve TTS service from DI container
         ttsService = DependencyContainer.shared.resolveOptional((any TTSPlaybackServiceProtocol).self)
 
-        // Poll immediately
-        Task {
-            await pollBeads()
-        }
-
-        // Schedule periodic polling
-        pollTimer = Timer.scheduledTimer(withTimeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                await self?.pollBeads()
+        // Subscribe to DataSyncService beads updates
+        dataSync.$beads
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] beads in
+                guard let self = self, !beads.isEmpty else { return }
+                Task { @MainActor in
+                    await self.processBeadsUpdate(beads)
+                }
             }
-        }
+            .store(in: &cancellables)
 
-        print("[BeadStatusMonitor] Started monitoring (interval: \(Self.pollInterval)s)")
+        // Subscribe to beads polling
+        dataSync.subscribeBeads()
+
+        print("[BeadStatusMonitor] Started monitoring via DataSyncService")
     }
 
     /// Stops monitoring bead status changes.
     public func stopMonitoring() {
-        pollTimer?.invalidate()
-        pollTimer = nil
+        dataSync.unsubscribeBeads()
+        cancellables.removeAll()
         isMonitoring = false
         print("[BeadStatusMonitor] Stopped monitoring")
     }
 
-    /// Manually triggers a poll (useful for pull-to-refresh scenarios).
+    /// Manually triggers a refresh (useful for pull-to-refresh scenarios).
     public func pollNow() async {
-        await pollBeads()
+        await dataSync.refreshBeads()
     }
 
     // MARK: - Push Notification Handling
@@ -214,43 +213,23 @@ public final class BeadStatusMonitor: ObservableObject {
         }
     }
 
-    // MARK: - Polling
+    // MARK: - Data Processing
 
-    private func pollBeads() async {
-        guard NetworkMonitor.shared.isConnected else {
-            print("[BeadStatusMonitor] Skipping poll - no network")
-            return
+    /// Processes beads update from DataSyncService
+    private func processBeadsUpdate(_ beads: [BeadInfo]) async {
+        lastPollDate = Date()
+        lastError = nil
+
+        // Detect changes
+        let changes = detectChanges(in: beads)
+
+        // Announce changes if not muted
+        if !AppState.shared.isVoiceMuted {
+            await announceChanges(changes)
         }
 
-        do {
-            let apiClient = AppState.shared.apiClient
-
-            // Fetch beads with overseer-relevant statuses
-            // We want to track hooked, in_progress, and recently closed beads
-            let beads = try await apiClient.getBeads(
-                rig: AppState.shared.isOverseerMode ? AppState.shared.selectedRig : nil,
-                status: nil, // Get all statuses to detect transitions
-                limit: 100
-            )
-
-            lastPollDate = Date()
-            lastError = nil
-
-            // Detect changes
-            let changes = detectChanges(in: beads)
-
-            // Announce changes if not muted
-            if !AppState.shared.isVoiceMuted {
-                await announceChanges(changes)
-            }
-
-            // Update known states
-            updateKnownStates(from: beads)
-
-        } catch {
-            print("[BeadStatusMonitor] Poll failed: \(error.localizedDescription)")
-            lastError = error
-        }
+        // Update known states
+        updateKnownStates(from: beads)
     }
 
     // MARK: - Change Detection

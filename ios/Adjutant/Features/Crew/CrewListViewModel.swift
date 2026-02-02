@@ -63,17 +63,14 @@ final class CrewListViewModel: BaseViewModel {
     // MARK: - Dependencies
 
     private let apiClient: APIClient
-
-    // MARK: - Private Properties
-
-    private var pollingTask: Task<Void, Never>?
-    private let pollingInterval: TimeInterval = 10.0
+    private let dataSync = DataSyncService.shared
 
     // MARK: - Initialization
 
     init(apiClient: APIClient? = nil) {
         self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
+        setupDataSyncObserver()
         loadFromCache()
     }
 
@@ -87,33 +84,40 @@ final class CrewListViewModel: BaseViewModel {
         }
     }
 
+    /// Sets up observation of DataSyncService crew updates
+    private func setupDataSyncObserver() {
+        dataSync.$crew
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newCrew in
+                guard let self = self, !newCrew.isEmpty else { return }
+                self.allCrewMembers = newCrew
+                self.updateAvailableRigs()
+                self.applyFilters()
+            }
+            .store(in: &cancellables)
+    }
+
     deinit {
-        pollingTask?.cancel()
+        // Cleanup handled by cancellables
     }
 
     // MARK: - Lifecycle
 
     override func onAppear() {
         super.onAppear()
-        startPolling()
+        dataSync.subscribeCrew()
     }
 
     override func onDisappear() {
         super.onDisappear()
-        pollingTask?.cancel()
-        pollingTask = nil
+        dataSync.unsubscribeCrew()
     }
 
     // MARK: - Data Loading
 
     override func refresh() async {
-        await performAsyncAction(showLoading: allCrewMembers.isEmpty) {
-            let agents = try await self.apiClient.getAgents()
-            self.allCrewMembers = agents
-            // Update cache for next navigation
-            ResponseCache.shared.updateCrewMembers(agents)
-            self.updateAvailableRigs()
-            self.applyFilters()
+        await performAsync(showLoading: allCrewMembers.isEmpty) {
+            await self.dataSync.refreshCrew()
         }
     }
 
@@ -159,19 +163,6 @@ final class CrewListViewModel: BaseViewModel {
     func clearFilters() {
         searchText = ""
         selectedRig = nil
-    }
-
-    // MARK: - Polling
-
-    private func startPolling() {
-        pollingTask?.cancel()
-        pollingTask = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(pollingInterval * 1_000_000_000))
-                guard !Task.isCancelled else { break }
-                await refresh()
-            }
-        }
     }
 
     // MARK: - Computed Properties

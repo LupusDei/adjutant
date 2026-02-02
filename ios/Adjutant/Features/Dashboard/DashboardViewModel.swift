@@ -34,9 +34,6 @@ final class DashboardViewModel: BaseViewModel {
 
     // MARK: - Configuration
 
-    /// Polling interval for auto-refresh (in seconds)
-    var pollingInterval: TimeInterval = 30.0
-
     /// Maximum number of recent beads to display per column
     private let maxBeadsPerColumn = 5
 
@@ -49,13 +46,14 @@ final class DashboardViewModel: BaseViewModel {
     // MARK: - Private Properties
 
     private let apiClient: APIClient
-    private var pollingTask: Task<Void, Never>?
+    private let dataSync = DataSyncService.shared
 
     // MARK: - Initialization
 
     init(apiClient: APIClient? = nil) {
         self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
+        setupDataSyncObservers()
         loadFromCache()
     }
 
@@ -79,20 +77,100 @@ final class DashboardViewModel: BaseViewModel {
         }
     }
 
+    /// Sets up observation of DataSyncService updates
+    private func setupDataSyncObservers() {
+        // Observe mail updates
+        dataSync.$mail
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newMail in
+                self?.handleMailUpdate(newMail)
+            }
+            .store(in: &cancellables)
+
+        // Observe crew updates
+        dataSync.$crew
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newCrew in
+                guard let self = self, !newCrew.isEmpty else { return }
+                self.crewMembers = newCrew
+            }
+            .store(in: &cancellables)
+
+        // Observe beads updates
+        dataSync.$beads
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newBeads in
+                self?.handleBeadsUpdate(newBeads)
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Handles mail updates from DataSyncService
+    private func handleMailUpdate(_ newMail: [Message]) {
+        guard !newMail.isEmpty else { return }
+
+        // Filter out Wisp and Deacon sources for OVERSEER view
+        let filteredMail = newMail.filter { message in
+            let fromLower = message.from.lowercased()
+            return !fromLower.hasPrefix("wisp/") && !fromLower.hasPrefix("deacon/")
+        }
+        self.recentMail = Array(filteredMail.prefix(maxRecentMail))
+        self.unreadCount = filteredMail.filter { !$0.read }.count
+        AppState.shared.updateUnreadMailCount(self.unreadCount)
+
+        // Update cache
+        ResponseCache.shared.updateDashboard(
+            mail: self.recentMail,
+            crew: self.crewMembers,
+            convoys: []
+        )
+    }
+
+    /// Handles beads updates from DataSyncService
+    private func handleBeadsUpdate(_ newBeads: [BeadInfo]) {
+        guard !newBeads.isEmpty else { return }
+
+        let selectedRig = AppState.shared.selectedRig
+
+        // Filter and sort beads by status
+        let filtered = newBeads.filter { isOverseerRelevant($0) }
+
+        let inProgress = filtered.filter { $0.status == "in_progress" }
+            .sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
+        self.inProgressBeads = Array(inProgress.prefix(maxBeadsPerColumn))
+
+        let hooked = filtered.filter { $0.status == "hooked" }
+            .sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
+        self.hookedBeads = Array(hooked.prefix(maxBeadsPerColumn))
+
+        let closed = filtered.filter { $0.status == "closed" }
+            .sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
+        self.recentClosedBeads = Array(closed.prefix(maxBeadsPerColumn))
+
+        self.recentBeads = sortBeadsByRecency(filtered)
+
+        // Sync Live Activity
+        Task { await self.syncLiveActivity() }
+    }
+
     deinit {
-        pollingTask?.cancel()
+        // Cleanup handled by cancellables
     }
 
     // MARK: - Lifecycle
 
     override func onAppear() {
         super.onAppear()
-        startPolling()
+        dataSync.subscribeMail()
+        dataSync.subscribeCrew()
+        dataSync.subscribeBeads()
     }
 
     override func onDisappear() {
         super.onDisappear()
-        stopPolling()
+        dataSync.unsubscribeMail()
+        dataSync.unsubscribeCrew()
+        dataSync.unsubscribeBeads()
     }
 
     // MARK: - Data Loading
@@ -100,73 +178,11 @@ final class DashboardViewModel: BaseViewModel {
     override func refresh() async {
         isRefreshing = true
 
-        // Get current rig filter from AppState
-        let selectedRig = AppState.shared.selectedRig
+        // Refresh all data via centralized service
+        await dataSync.refreshAll()
 
-        // Fetch all data concurrently
-        async let mailResult = fetchMail()
-        async let crewResult = fetchCrew()
-        async let inProgressResult = fetchBeads(status: .inProgress, rig: selectedRig)
-        async let hookedResult = fetchBeads(status: .hooked, rig: selectedRig)
-        async let closedResult = fetchBeads(status: .closed, rig: selectedRig)
-        async let _ : () = AppState.shared.fetchAvailableRigs()
-
-        // Await all results
-        let (mail, crew, inProgress, hooked, closed) = await (
-            mailResult, crewResult, inProgressResult, hookedResult, closedResult
-        )
-
-        if let mail = mail {
-            // Filter out Wisp and Deacon sources for OVERSEER view
-            let filteredMail = mail.items.filter { message in
-                let fromLower = message.from.lowercased()
-                return !fromLower.hasPrefix("wisp/") && !fromLower.hasPrefix("deacon/")
-            }
-            self.recentMail = Array(filteredMail.prefix(maxRecentMail))
-            self.unreadCount = filteredMail.filter { !$0.read }.count
-            AppState.shared.updateUnreadMailCount(self.unreadCount)
-
-            // Process new messages for notifications
-            await NotificationService.shared.processNewMessages(mail.items)
-
-            // Announce overseer-directed mail via voice
-            await OverseerMailAnnouncer.shared.processMessages(mail.items)
-        }
-
-        if let crew = crew {
-            self.crewMembers = crew
-        }
-
-        if let inProgress = inProgress {
-            // Filter to OVERSEER view (exclude internal workflow types), sort by updated date descending
-            let filtered = inProgress.filter { isOverseerRelevant($0) }
-            let sorted = filtered.sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
-            self.inProgressBeads = Array(sorted.prefix(maxBeadsPerColumn))
-        }
-
-        if let hooked = hooked {
-            // Filter to OVERSEER view (exclude internal workflow types), sort by updated date descending
-            let filtered = hooked.filter { isOverseerRelevant($0) }
-            let sorted = filtered.sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
-            self.hookedBeads = Array(sorted.prefix(maxBeadsPerColumn))
-        }
-
-        if let closed = closed {
-            // Filter to OVERSEER view (exclude internal workflow types), sort by updated date descending
-            let filtered = closed.filter { isOverseerRelevant($0) }
-            let sorted = filtered.sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
-            self.recentClosedBeads = Array(sorted.prefix(maxBeadsPerColumn))
-        }
-
-        // Update cache for next navigation
-        ResponseCache.shared.updateDashboard(
-            mail: self.recentMail,
-            crew: self.crewMembers,
-            convoys: []  // Convoys removed from dashboard
-        )
-
-        // Update Live Activity with current state
-        await syncLiveActivity()
+        // Also fetch available rigs
+        await AppState.shared.fetchAvailableRigs()
 
         isRefreshing = false
     }
@@ -212,48 +228,6 @@ final class DashboardViewModel: BaseViewModel {
     /// Silently refresh data in the background (no loading indicator)
     func refreshSilently() async {
         await refresh()
-    }
-
-    // MARK: - Polling
-
-    private func startPolling() {
-        stopPolling()
-        pollingTask = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(pollingInterval * 1_000_000_000))
-                guard !Task.isCancelled else { break }
-                await refreshSilently()
-            }
-        }
-    }
-
-    private func stopPolling() {
-        pollingTask?.cancel()
-        pollingTask = nil
-    }
-
-    // MARK: - Private Fetch Methods
-
-    private func fetchMail() async -> PaginatedResponse<Message>? {
-        await performAsync(showLoading: false) {
-            try await self.apiClient.getMail(filter: .user)
-        }
-    }
-
-    private func fetchCrew() async -> [CrewMember]? {
-        await performAsync(showLoading: false) {
-            try await self.apiClient.getAgents()
-        }
-    }
-
-    private func fetchBeads(status: APIClient.BeadStatusFilter, rig: String?) async -> [BeadInfo]? {
-        await performAsync(showLoading: false) {
-            try await self.apiClient.getBeads(
-                rig: rig,
-                status: status,
-                limit: self.maxBeadsPerColumn
-            )
-        }
     }
 
     // MARK: - Computed Properties

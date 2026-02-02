@@ -103,18 +103,10 @@ final class BeadsListViewModel: BaseViewModel {
         }
     }
 
-    // MARK: - Configuration
-
-    /// Polling interval for auto-refresh
-    private let pollingInterval: TimeInterval = 30.0
-
     // MARK: - Dependencies
 
     private let apiClient: APIClient?
-
-    // MARK: - Private Properties
-
-    private var pollingTask: Task<Void, Never>?
+    private let dataSync = DataSyncService.shared
 
     // MARK: - Initialization
 
@@ -122,6 +114,7 @@ final class BeadsListViewModel: BaseViewModel {
         self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
         loadSortPreference()
+        setupDataSyncObserver()
         setupRigFilterObserver()
         loadFromCache()
     }
@@ -143,34 +136,57 @@ final class BeadsListViewModel: BaseViewModel {
         }
     }
 
+    /// Sets up observation of DataSyncService beads updates
+    private func setupDataSyncObserver() {
+        dataSync.$beads
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newBeads in
+                guard let self = self, !newBeads.isEmpty else { return }
+                // Apply rig filter client-side
+                let rig = self.selectedRig
+                if let rig = rig {
+                    self.beads = newBeads.filter { $0.source == rig }
+                } else {
+                    self.beads = newBeads
+                }
+                self.applyFilter()
+            }
+            .store(in: &cancellables)
+    }
+
     /// Sets up observation of rig filter changes from AppState
     private func setupRigFilterObserver() {
         AppState.shared.$selectedRig
             .dropFirst() // Skip initial value to avoid double-fetch on init
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                // Rig changed - need to refetch from server with new rig parameter
-                Task { @MainActor [weak self] in
-                    await self?.loadBeads()
+            .sink { [weak self] newRig in
+                guard let self = self else { return }
+                // Rig changed - re-filter from DataSyncService data
+                let allBeads = self.dataSync.beads
+                if let rig = newRig {
+                    self.beads = allBeads.filter { $0.source == rig }
+                } else {
+                    self.beads = allBeads
                 }
+                self.applyFilter()
             }
             .store(in: &cancellables)
     }
 
     deinit {
-        pollingTask?.cancel()
+        // Cleanup handled by cancellables
     }
 
     // MARK: - Lifecycle
 
     override func onAppear() {
         super.onAppear()
-        startPolling()
+        dataSync.subscribeBeads()
     }
 
     override func onDisappear() {
         super.onDisappear()
-        stopPolling()
+        dataSync.unsubscribeBeads()
     }
 
     // MARK: - Data Loading
@@ -179,9 +195,9 @@ final class BeadsListViewModel: BaseViewModel {
         await loadBeads()
     }
 
-    /// Loads beads from the API
+    /// Loads beads from the API via DataSyncService
     func loadBeads() async {
-        guard let apiClient = apiClient else {
+        guard apiClient != nil else {
             // Use mock data for preview/testing
             await performAsync {
                 self.beads = Self.mockBeads
@@ -190,65 +206,8 @@ final class BeadsListViewModel: BaseViewModel {
             return
         }
 
-        await performAsync { [weak self] in
-            guard let self = self else { return }
-            // Pass rig to API for server-side filtering:
-            // - nil (ALL) → "all" to fetch from all databases
-            // - "town" → "town" to fetch from town database
-            // - "<rig>" → "<rig>" to fetch from that rig's database
-            let rigParam = self.selectedRig ?? "all"
-            let response = try await apiClient.getBeads(rig: rigParam, status: .all)
-            self.beads = response.sorted {
-                // Sort by priority (lower = higher), then by updated date
-                if $0.priority != $1.priority {
-                    return $0.priority < $1.priority
-                }
-                return ($0.updatedDate ?? $0.createdDate ?? Date.distantPast) >
-                       ($1.updatedDate ?? $1.createdDate ?? Date.distantPast)
-            }
-            // Update cache for next navigation
-            ResponseCache.shared.updateBeads(self.beads)
-            self.applyFilter()
-        }
-    }
-
-    // MARK: - Polling
-
-    private func startPolling() {
-        stopPolling()
-        pollingTask = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(pollingInterval * 1_000_000_000))
-                guard !Task.isCancelled else { break }
-                await refreshSilently()
-            }
-        }
-    }
-
-    private func stopPolling() {
-        pollingTask?.cancel()
-        pollingTask = nil
-    }
-
-    /// Silently refresh data in the background (no loading indicator)
-    private func refreshSilently() async {
-        guard let apiClient = apiClient else { return }
-
-        await performAsync(showLoading: false) { [weak self] in
-            guard let self = self else { return }
-            // Pass rig to API for server-side filtering
-            let rigParam = self.selectedRig ?? "all"
-            let response = try await apiClient.getBeads(rig: rigParam, status: .all)
-            self.beads = response.sorted {
-                if $0.priority != $1.priority {
-                    return $0.priority < $1.priority
-                }
-                return ($0.updatedDate ?? $0.createdDate ?? Date.distantPast) >
-                       ($1.updatedDate ?? $1.createdDate ?? Date.distantPast)
-            }
-            // Update cache for next navigation
-            ResponseCache.shared.updateBeads(self.beads)
-            self.applyFilter()
+        await performAsync(showLoading: beads.isEmpty) {
+            await self.dataSync.refreshBeads()
         }
     }
 

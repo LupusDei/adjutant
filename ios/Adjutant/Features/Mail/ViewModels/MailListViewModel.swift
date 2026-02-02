@@ -51,24 +51,17 @@ final class MailListViewModel: BaseViewModel {
         }
     }
 
-    // MARK: - Configuration
-
-    /// Polling interval for auto-refresh (30 seconds per spec)
-    private let pollingInterval: TimeInterval = 30.0
-
     // MARK: - Dependencies
 
     private let apiClient: APIClient?
-
-    // MARK: - Private Properties
-
-    private var pollingTask: Task<Void, Never>?
+    private let dataSync = DataSyncService.shared
 
     // MARK: - Initialization
 
     init(apiClient: APIClient? = nil) {
         self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
+        setupDataSyncObserver()
         setupRigFilterObserver()
         setupOverseerModeObserver()
         loadFromCache()
@@ -81,6 +74,19 @@ final class MailListViewModel: BaseViewModel {
             messages = cached
             applyFilter()
         }
+    }
+
+    /// Sets up observation of DataSyncService mail updates
+    private func setupDataSyncObserver() {
+        dataSync.$mail
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newMail in
+                guard let self = self, !newMail.isEmpty else { return }
+                self.messages = newMail
+                self.applyFilter()
+                self.updateUnreadBadge()
+            }
+            .store(in: &cancellables)
     }
 
     /// Sets up observation of rig filter changes from AppState
@@ -104,19 +110,19 @@ final class MailListViewModel: BaseViewModel {
     }
 
     deinit {
-        pollingTask?.cancel()
+        // Cleanup handled by cancellables
     }
 
     // MARK: - Lifecycle
 
     override func onAppear() {
         super.onAppear()
-        startPolling()
+        dataSync.subscribeMail()
     }
 
     override func onDisappear() {
         super.onDisappear()
-        stopPolling()
+        dataSync.unsubscribeMail()
     }
 
     // MARK: - Data Loading
@@ -125,9 +131,9 @@ final class MailListViewModel: BaseViewModel {
         await loadMessages()
     }
 
-    /// Loads messages from the API
+    /// Loads messages from the API via DataSyncService
     func loadMessages() async {
-        guard let apiClient = apiClient else {
+        guard apiClient != nil else {
             // Use mock data for preview/testing
             await performAsync {
                 self.messages = Self.mockMessages
@@ -136,53 +142,8 @@ final class MailListViewModel: BaseViewModel {
             return
         }
 
-        await performAsync { [weak self] in
-            guard let self = self else { return }
-            let response = try await apiClient.getMail(all: true)
-            self.messages = response.items.sorted {
-                // Sort by date descending (newest first)
-                ($0.date ?? Date.distantPast) > ($1.date ?? Date.distantPast)
-            }
-            // Update cache for next navigation
-            ResponseCache.shared.updateMessages(self.messages)
-            self.applyFilter()
-            // Update global unread count for badge
-            self.updateUnreadBadge()
-        }
-    }
-
-    // MARK: - Polling
-
-    private func startPolling() {
-        stopPolling()
-        pollingTask = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(pollingInterval * 1_000_000_000))
-                guard !Task.isCancelled else { break }
-                await refreshSilently()
-            }
-        }
-    }
-
-    private func stopPolling() {
-        pollingTask?.cancel()
-        pollingTask = nil
-    }
-
-    /// Silently refresh data in the background (no loading indicator)
-    private func refreshSilently() async {
-        guard let apiClient = apiClient else { return }
-
-        await performAsync(showLoading: false) { [weak self] in
-            guard let self = self else { return }
-            let response = try await apiClient.getMail(all: true)
-            self.messages = response.items.sorted {
-                ($0.date ?? Date.distantPast) > ($1.date ?? Date.distantPast)
-            }
-            // Update cache for next navigation
-            ResponseCache.shared.updateMessages(self.messages)
-            self.applyFilter()
-            self.updateUnreadBadge()
+        await performAsync(showLoading: messages.isEmpty) {
+            await self.dataSync.refreshMail()
         }
     }
 
