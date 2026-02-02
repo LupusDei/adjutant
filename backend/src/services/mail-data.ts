@@ -53,73 +53,24 @@ export async function listMailIssuesForIdentity(
   townRoot: string,
   identity: string
 ): Promise<BeadsIssue[]> {
-  const beadsDir = resolveBeadsDir(townRoot);
-  const seen = new Set<string>();
-  const deduped: BeadsIssue[] = [];
-  const errors: string[] = [];
-  let anySucceeded = false;
+  // Fetch all mail once, filter client-side for this identity
+  const allMail = await listMailIssues(townRoot);
+  const variants = new Set(identityVariants(identity));
 
-  const addIssues = (issues: BeadsIssue[]) => {
-    for (const issue of issues) {
-      if (seen.has(issue.id)) continue;
-      seen.add(issue.id);
-      deduped.push(issue);
+  return allMail.filter((issue) => {
+    // Check assignee match
+    if (issue.assignee && variants.has(issue.assignee)) {
+      return true;
     }
-  };
-
-  const runQuery = async (args: string[]) => {
-    const result = await execBd<BeadsIssue[]>(args, { cwd: townRoot, beadsDir });
-    if (result.success) {
-      anySucceeded = true;
-      addIssues(result.data ?? []);
-      return;
+    // Check cc labels
+    const labels = parseMessageLabels(issue.labels);
+    for (const cc of labels.cc) {
+      if (variants.has(cc)) {
+        return true;
+      }
     }
-    if (result.error?.message) {
-      errors.push(result.error.message);
-    }
-  };
-
-  const identities = identityVariants(identity);
-
-  // Build all queries upfront, then run in parallel
-  const queries: string[][] = [];
-
-  for (const variant of identities) {
-    for (const status of ["open", "hooked"]) {
-      queries.push([
-        "list",
-        "--type",
-        "message",
-        "--assignee",
-        variant,
-        "--status",
-        status,
-        "--json",
-      ]);
-    }
-  }
-
-  for (const variant of identities) {
-    queries.push([
-      "list",
-      "--type",
-      "message",
-      "--label",
-      `cc:${variant}`,
-      "--status",
-      "open",
-      "--json",
-    ]);
-  }
-
-  // Run all queries in parallel
-  await Promise.all(queries.map(runQuery));
-
-  if (!anySucceeded && errors.length > 0) {
-    throw new Error(errors[0]);
-  }
-
-  return deduped;
+    return false;
+  });
 }
 
 export function buildMailIndex(
@@ -182,42 +133,20 @@ export async function buildMailIndexForIdentities(
   identities: string[]
 ): Promise<Map<string, MailIndexEntry>> {
   const uniqueIdentities = Array.from(new Set(identities));
-  const result = new Map<string, MailIndexEntry>();
 
-  await Promise.all(
-    uniqueIdentities.map(async (identity) => {
-      try {
-        const issues = await listMailIssuesForIdentity(townRoot, identity);
-        let unread = 0;
-        let latestTimestamp = 0;
-        let firstSubject: string | undefined;
-        let firstFrom: string | undefined;
-
-        for (const issue of issues) {
-          if (!isUnread(issue)) continue;
-          unread += 1;
-          const timestamp = toTimestamp(issue.created_at);
-          if (timestamp >= latestTimestamp) {
-            latestTimestamp = timestamp;
-            firstSubject = issue.title;
-            const labels = parseMessageLabels(issue.labels);
-            firstFrom = labels.sender;
-          }
-        }
-
-        const entry: MailIndexEntry = { unread };
-        if (firstSubject) entry.firstSubject = firstSubject;
-        if (firstFrom) entry.firstFrom = firstFrom;
-        result.set(identity, entry);
-      } catch (err) {
-        logWarn("mail index query failed", {
-          identity,
-          message: err instanceof Error ? err.message : "Unknown error",
-        });
-        result.set(identity, { unread: 0 });
-      }
-    })
-  );
-
-  return result;
+  try {
+    // Single fetch for all mail, then use buildMailIndex for client-side filtering
+    const allMail = await listMailIssues(townRoot);
+    return buildMailIndex(allMail, uniqueIdentities);
+  } catch (err) {
+    logWarn("mail index query failed", {
+      message: err instanceof Error ? err.message : "Unknown error",
+    });
+    // Return empty entries for all identities on failure
+    const result = new Map<string, MailIndexEntry>();
+    for (const identity of uniqueIdentities) {
+      result.set(identity, { unread: 0 });
+    }
+    return result;
+  }
 }
