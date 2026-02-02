@@ -67,7 +67,7 @@ final class CrewListViewModel: BaseViewModel {
     // MARK: - Private Properties
 
     private var pollingTask: Task<Void, Never>?
-    private let pollingInterval: TimeInterval = 10.0
+    private let pollingInterval: TimeInterval = 30.0
 
     // MARK: - Initialization
 
