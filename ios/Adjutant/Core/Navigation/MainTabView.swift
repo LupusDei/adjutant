@@ -51,7 +51,7 @@ private struct TabContent: View {
             set: { coordinator.selectTab($0) }
         )) {
             ForEach(AppTab.allCases) { tab in
-                NavigationStack(path: $coordinator.path) {
+                NavigationStack(path: coordinator.pathBinding(for: tab)) {
                     tabView(for: tab)
                         .navigationDestination(for: AppRoute.self) { route in
                             destinationView(for: route)

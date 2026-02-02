@@ -8,22 +8,23 @@ import Combine
 final class AppCoordinator: Coordinator, ObservableObject {
     // MARK: - Published Properties
 
-    /// Current navigation path for the active tab
-    @Published var path = NavigationPath()
+    /// Navigation paths for each tab (each tab has independent navigation)
+    @Published var tabPaths: [AppTab: NavigationPath] = [:]
 
     /// Currently selected tab
     @Published var selectedTab: AppTab = .dashboard
+
+    /// Navigation path for the current tab (required by Coordinator protocol)
+    var path: NavigationPath {
+        get { tabPaths[selectedTab] ?? NavigationPath() }
+        set { tabPaths[selectedTab] = newValue }
+    }
 
     /// Sheet presentation state
     @Published var presentedSheet: SheetDestination?
 
     /// Alert presentation state
     @Published var presentedAlert: AlertDestination?
-
-    // MARK: - Private Properties
-
-    /// Navigation paths for each tab (preserved during tab switches)
-    private var tabPaths: [AppTab: NavigationPath] = [:]
 
     /// Cancellables for notification observers
     private var cancellables = Set<AnyCancellable>()
@@ -38,6 +39,19 @@ final class AppCoordinator: Coordinator, ObservableObject {
 
         // Set up notification deep linking observers
         setupNotificationObservers()
+    }
+
+    // MARK: - Tab Navigation Paths
+
+    /// Returns a binding to the navigation path for a specific tab.
+    /// Each tab has its own independent navigation stack.
+    func pathBinding(for tab: AppTab) -> Binding<NavigationPath> {
+        Binding(
+            get: { self.tabPaths[tab] ?? NavigationPath() },
+            set: { newPath in
+                self.tabPaths[tab] = newPath
+            }
+        )
     }
 
     // MARK: - Notification Deep Linking
@@ -99,7 +113,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
 
         // Detail routes - push onto current tab's stack
         case .mailDetail, .epicDetail, .agentDetail, .beadDetail, .polecatTerminal:
-            path.append(route)
+            tabPaths[selectedTab, default: NavigationPath()].append(route)
 
         // Modal routes - present as sheet
         case .mailCompose:
@@ -107,26 +121,18 @@ final class AppCoordinator: Coordinator, ObservableObject {
 
         // Settings sub-routes
         case .themeSettings, .voiceSettings, .tunnelSettings:
-            path.append(route)
+            tabPaths[selectedTab, default: NavigationPath()].append(route)
         }
     }
 
-    /// Selects a tab and restores its navigation path
+    /// Selects a tab (each tab maintains its own navigation path independently)
     func selectTab(_ tab: AppTab) {
-        // Save current tab's path
-        tabPaths[selectedTab] = path
-
-        // Switch to new tab
         selectedTab = tab
-
-        // Restore new tab's path
-        path = tabPaths[tab] ?? NavigationPath()
     }
 
     /// Pops to the root of the current tab's navigation stack
     func popToRoot() {
-        path = NavigationPath()
-        tabPaths[selectedTab] = path
+        tabPaths[selectedTab] = NavigationPath()
     }
 
     // MARK: - Sheet Presentation
