@@ -54,72 +54,41 @@ export async function listMailIssuesForIdentity(
   identity: string
 ): Promise<BeadsIssue[]> {
   const beadsDir = resolveBeadsDir(townRoot);
-  const seen = new Set<string>();
-  const deduped: BeadsIssue[] = [];
-  const errors: string[] = [];
-  let anySucceeded = false;
 
-  const addIssues = (issues: BeadsIssue[]) => {
-    for (const issue of issues) {
-      if (seen.has(issue.id)) continue;
-      seen.add(issue.id);
-      deduped.push(issue);
-    }
-  };
+  // Single query with --all, filter client-side (reduces 5-6 parallel queries to 1)
+  const result = await execBd<BeadsIssue[]>(
+    ["list", "--type", "message", "--all", "--json"],
+    { cwd: townRoot, beadsDir }
+  );
 
-  const runQuery = async (args: string[]) => {
-    const result = await execBd<BeadsIssue[]>(args, { cwd: townRoot, beadsDir });
-    if (result.success) {
-      anySucceeded = true;
-      addIssues(result.data ?? []);
-      return;
-    }
-    if (result.error?.message) {
-      errors.push(result.error.message);
-    }
-  };
-
-  const identities = identityVariants(identity);
-
-  // Build all queries upfront, then run in parallel
-  const queries: string[][] = [];
-
-  for (const variant of identities) {
-    for (const status of ["open", "hooked"]) {
-      queries.push([
-        "list",
-        "--type",
-        "message",
-        "--assignee",
-        variant,
-        "--status",
-        status,
-        "--json",
-      ]);
-    }
+  if (!result.success) {
+    throw new Error(result.error?.message ?? "Failed to list mail issues");
   }
 
-  for (const variant of identities) {
-    queries.push([
-      "list",
-      "--type",
-      "message",
-      "--label",
-      `cc:${variant}`,
-      "--status",
-      "open",
-      "--json",
-    ]);
-  }
+  const variants = new Set(identityVariants(identity));
+  const activeStatuses = new Set(["open", "hooked"]);
 
-  // Run all queries in parallel
-  await Promise.all(queries.map(runQuery));
+  return (result.data ?? []).filter((issue) => {
+    // Must have active status
+    if (!activeStatuses.has(issue.status?.toLowerCase() ?? "")) {
+      return false;
+    }
 
-  if (!anySucceeded && errors.length > 0) {
-    throw new Error(errors[0]);
-  }
+    // Check if assignee matches any identity variant
+    if (issue.assignee && variants.has(issue.assignee)) {
+      return true;
+    }
 
-  return deduped;
+    // Check if any cc label matches identity variants
+    const labels = parseMessageLabels(issue.labels);
+    for (const cc of labels.cc) {
+      if (variants.has(cc)) {
+        return true;
+      }
+    }
+
+    return false;
+  });
 }
 
 export function buildMailIndex(
