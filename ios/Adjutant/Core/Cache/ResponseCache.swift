@@ -54,6 +54,19 @@ final class ResponseCache {
         case beads
         case chat
         case dashboard
+
+        /// Default TTL in seconds for each cache type
+        var ttl: TimeInterval {
+            switch self {
+            case .messages: return 60
+            case .crew: return 120
+            case .convoys: return 60
+            case .epics: return 60
+            case .beads: return 30
+            case .chat: return 30
+            case .dashboard: return 60
+            }
+        }
     }
 
     // MARK: - Initialization
@@ -127,6 +140,81 @@ final class ResponseCache {
         return Date().timeIntervalSince(updated)
     }
 
+    /// Returns whether cache for a given type is still valid (not expired)
+    func isValid(for type: CacheType) -> Bool {
+        guard let age = cacheAge(for: type) else { return false }
+        return age < type.ttl
+    }
+
+    /// Returns cached messages if valid, nil if expired or empty
+    func validMessages() -> [Message]? {
+        guard isValid(for: .messages), !messages.isEmpty else {
+            invalidateIfExpired(.messages)
+            return nil
+        }
+        return messages
+    }
+
+    /// Returns cached crew members if valid, nil if expired or empty
+    func validCrewMembers() -> [CrewMember]? {
+        guard isValid(for: .crew), !crewMembers.isEmpty else {
+            invalidateIfExpired(.crew)
+            return nil
+        }
+        return crewMembers
+    }
+
+    /// Returns cached convoys if valid, nil if expired or empty
+    func validConvoys() -> [Convoy]? {
+        guard isValid(for: .convoys), !convoys.isEmpty else {
+            invalidateIfExpired(.convoys)
+            return nil
+        }
+        return convoys
+    }
+
+    /// Returns cached epics if valid, nil if expired or empty
+    func validEpics() -> [BeadInfo]? {
+        guard isValid(for: .epics), !epics.isEmpty else {
+            invalidateIfExpired(.epics)
+            return nil
+        }
+        return epics
+    }
+
+    /// Returns cached beads if valid, nil if expired or empty
+    func validBeads() -> [BeadInfo]? {
+        guard isValid(for: .beads), !beads.isEmpty else {
+            invalidateIfExpired(.beads)
+            return nil
+        }
+        return beads
+    }
+
+    /// Returns cached chat messages if valid, nil if expired or empty
+    func validChatMessages() -> [Message]? {
+        guard isValid(for: .chat), !chatMessages.isEmpty else {
+            invalidateIfExpired(.chat)
+            return nil
+        }
+        return chatMessages
+    }
+
+    /// Returns cached dashboard data if valid, nil if expired
+    func validDashboard() -> (mail: [Message], crew: [CrewMember], convoys: [Convoy])? {
+        guard isValid(for: .dashboard) else {
+            invalidateIfExpired(.dashboard)
+            return nil
+        }
+        return (dashboardMail, dashboardCrew, dashboardConvoys)
+    }
+
+    /// Invalidates cache if it has expired
+    private func invalidateIfExpired(_ type: CacheType) {
+        guard let age = cacheAge(for: type), age >= type.ttl else { return }
+        clear(type)
+    }
+
     /// Clears all cached data
     func clearAll() {
         messages = []
@@ -139,6 +227,16 @@ final class ResponseCache {
         dashboardCrew = []
         dashboardConvoys = []
         lastUpdated = [:]
+    }
+
+    /// Invalidates cache for a specific type (alias for clear, use for user-triggered refreshes)
+    func invalidate(_ type: CacheType) {
+        clear(type)
+    }
+
+    /// Invalidates all caches (alias for clearAll, use for user-triggered refreshes)
+    func invalidateAll() {
+        clearAll()
     }
 
     /// Clears cache for a specific type
