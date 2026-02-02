@@ -46,6 +46,16 @@ public final class DataSyncService: ObservableObject {
 
     public var pollingIntervals = PollingIntervals()
 
+    /// TTL (time-to-live) for cached data (in seconds).
+    /// API calls are skipped if cached data is newer than TTL.
+    public struct CacheTTL {
+        public var mail: TimeInterval = 25.0
+        public var crew: TimeInterval = 25.0
+        public var beads: TimeInterval = 25.0
+    }
+
+    public var cacheTTL = CacheTTL()
+
     // MARK: - Private Properties
 
     private var apiClient: APIClient { AppState.shared.apiClient }
@@ -136,6 +146,26 @@ public final class DataSyncService: ObservableObject {
         }
     }
 
+    // MARK: - Cache Freshness
+
+    /// Returns true if mail cache is still fresh (within TTL)
+    private func isMailCacheFresh() -> Bool {
+        guard let lastUpdate = lastMailUpdate else { return false }
+        return Date().timeIntervalSince(lastUpdate) < cacheTTL.mail
+    }
+
+    /// Returns true if crew cache is still fresh (within TTL)
+    private func isCrewCacheFresh() -> Bool {
+        guard let lastUpdate = lastCrewUpdate else { return false }
+        return Date().timeIntervalSince(lastUpdate) < cacheTTL.crew
+    }
+
+    /// Returns true if beads cache is still fresh (within TTL)
+    private func isBeadsCacheFresh() -> Bool {
+        guard let lastUpdate = lastBeadsUpdate else { return false }
+        return Date().timeIntervalSince(lastUpdate) < cacheTTL.beads
+    }
+
     // MARK: - Manual Refresh
 
     /// Manually triggers a mail refresh. Safe to call multiple times (deduplicates).
@@ -153,12 +183,31 @@ public final class DataSyncService: ObservableObject {
         await fetchBeads()
     }
 
-    /// Refreshes all endpoints
+    /// Refreshes all endpoints, skipping those with fresh cache data.
+    /// This reduces concurrent API calls by only fetching stale data.
     public func refreshAll() async {
-        async let mailTask: () = fetchMail()
-        async let crewTask: () = fetchCrew()
-        async let beadsTask: () = fetchBeads()
+        async let mailTask: () = refreshMailIfStale()
+        async let crewTask: () = refreshCrewIfStale()
+        async let beadsTask: () = refreshBeadsIfStale()
         _ = await (mailTask, crewTask, beadsTask)
+    }
+
+    /// Fetches mail only if cache is stale
+    private func refreshMailIfStale() async {
+        guard !isMailCacheFresh() else { return }
+        await fetchMail()
+    }
+
+    /// Fetches crew only if cache is stale
+    private func refreshCrewIfStale() async {
+        guard !isCrewCacheFresh() else { return }
+        await fetchCrew()
+    }
+
+    /// Fetches beads only if cache is stale
+    private func refreshBeadsIfStale() async {
+        guard !isBeadsCacheFresh() else { return }
+        await fetchBeads()
     }
 
     // MARK: - Polling Control

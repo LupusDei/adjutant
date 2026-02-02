@@ -77,6 +77,12 @@ final class AppState: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
 
+    /// Last time rigs were fetched (for TTL caching)
+    private var lastRigsFetchDate: Date?
+
+    /// TTL for rigs cache (25 seconds, slightly less than poll interval)
+    private let rigsCacheTTL: TimeInterval = 25.0
+
     // MARK: - Initialization
 
     /// Returns the persisted API base URL from UserDefaults, or localhost as fallback
@@ -215,13 +221,21 @@ final class AppState: ObservableObject {
     }
 
     /// Fetches available rigs from the API
-    /// Call this on app startup and when refreshing status
+    /// Call this on app startup and when refreshing status.
+    /// Skips fetch if cached data is still fresh (within TTL).
     func fetchAvailableRigs() async {
+        // Skip if cache is still fresh
+        if let lastFetch = lastRigsFetchDate,
+           Date().timeIntervalSince(lastFetch) < rigsCacheTTL {
+            return
+        }
+
         let client = apiClient
         do {
             let status = try await client.getStatus()
             let rigNames = status.rigs.map { $0.name }
             availableRigs = rigNames.sorted()
+            lastRigsFetchDate = Date()
 
             // Also update power state from status
             // Convert from AdjutantKit.PowerState to local PowerState
