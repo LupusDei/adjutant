@@ -6,10 +6,10 @@ import AdjutantKit
 /// Global application state container.
 /// Manages app-wide state that needs to be shared across multiple views and ViewModels.
 @MainActor
-final class AppState: ObservableObject {
+public final class AppState: ObservableObject {
     // MARK: - Singleton
 
-    static let shared = AppState()
+    public static let shared = AppState()
 
     // MARK: - Published Properties
 
@@ -156,7 +156,7 @@ final class AppState: ObservableObject {
 
     /// Updates the unread mail count
     /// - Parameter count: The new unread count
-    func updateUnreadMailCount(_ count: Int) {
+    public func updateUnreadMailCount(_ count: Int) {
         unreadMailCount = count
     }
 
