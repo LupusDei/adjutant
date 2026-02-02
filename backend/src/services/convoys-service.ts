@@ -19,6 +19,8 @@ interface ConvoyBead {
   priority: number;
   issue_type: string;
   updated_at?: string;
+  dependency_count: number;
+  dependent_count: number;
 }
 
 /** Tracked issue from bd show dependencies */
@@ -79,18 +81,24 @@ export async function listConvoys(): Promise<ConvoysServiceResult<Convoy[]>> {
       return { success: true, data: [] };
     }
 
-    // 2. Fetch full details for each convoy (to get dependencies/tracked issues)
-    // Note: bd show expects short IDs (without prefix), so we strip the prefix
-    const shortIds = convoyBeads.map(c => stripBeadPrefix(c.id));
-    const showResult = await execBd<ConvoyDetail[]>(
-      ["show", ...shortIds, "-q", "--json"],
-      { cwd: townRoot, beadsDir }
+    // 2. Only fetch full details for convoys that have dependencies or dependents
+    // This avoids fetching complete bead details when only summary data is needed
+    const beadsNeedingDetails = convoyBeads.filter(
+      c => c.dependency_count > 0 || c.dependent_count > 0
     );
 
     const convoyDetails = new Map<string, ConvoyDetail>();
-    if (showResult.success && showResult.data) {
-      for (const detail of showResult.data) {
-        convoyDetails.set(detail.id, detail);
+    if (beadsNeedingDetails.length > 0) {
+      const shortIds = beadsNeedingDetails.map(c => stripBeadPrefix(c.id));
+      const showResult = await execBd<ConvoyDetail[]>(
+        ["show", ...shortIds, "-q", "--json"],
+        { cwd: townRoot, beadsDir }
+      );
+
+      if (showResult.success && showResult.data) {
+        for (const detail of showResult.data) {
+          convoyDetails.set(detail.id, detail);
+        }
       }
     }
 

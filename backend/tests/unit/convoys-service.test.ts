@@ -25,6 +25,8 @@ interface ConvoyBead {
   priority: number;
   issue_type: string;
   updated_at?: string;
+  dependency_count: number;
+  dependent_count: number;
 }
 
 interface TrackedDep {
@@ -56,6 +58,8 @@ function createConvoyBead(overrides: Partial<ConvoyBead> = {}): ConvoyBead {
     status: "open",
     priority: 2,
     issue_type: "convoy",
+    dependency_count: 1,
+    dependent_count: 0,
     ...overrides,
   };
 }
