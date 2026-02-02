@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 import AdjutantKit
 
 /// A simple in-memory cache for API responses.
@@ -15,6 +16,12 @@ final class ResponseCache {
     // MARK: - Singleton
 
     static let shared = ResponseCache()
+
+    // MARK: - Publishers
+
+    /// Publisher that emits when beads are updated
+    /// Subscribers receive the updated beads array
+    let beadsUpdated = PassthroughSubject<[BeadInfo], Never>()
 
     // MARK: - Cached Data
 
@@ -86,10 +93,11 @@ final class ResponseCache {
         lastUpdated[.epics] = Date()
     }
 
-    /// Updates the cached beads
+    /// Updates the cached beads and notifies subscribers
     func updateBeads(_ beads: [BeadInfo]) {
         self.beads = beads
         lastUpdated[.beads] = Date()
+        beadsUpdated.send(beads)
     }
 
     /// Updates the cached chat messages

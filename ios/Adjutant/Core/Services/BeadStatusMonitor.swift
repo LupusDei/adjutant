@@ -47,11 +47,14 @@ public final class BeadStatusMonitor: ObservableObject {
     /// Known bead states from previous poll (id -> status)
     private var knownBeadStates: [String: String] = [:]
 
-    /// Timer for periodic polling
-    private var pollTimer: Timer?
+    /// Timer for fallback polling (only when cache is stale)
+    private var fallbackTimer: Timer?
 
     /// Cancellables for Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
+
+    /// Threshold for considering cache stale (slightly less than poll interval to avoid gaps)
+    private static let cacheStaleThreshold: TimeInterval = 25
 
     /// Reference to TTS service for announcements
     private var ttsService: (any TTSPlaybackServiceProtocol)?
@@ -65,7 +68,7 @@ public final class BeadStatusMonitor: ObservableObject {
     // MARK: - Monitoring Control
 
     /// Starts monitoring bead status changes.
-    /// Immediately polls for current state, then continues at regular intervals.
+    /// Subscribes to ResponseCache updates and uses fallback polling only when cache is stale.
     public func startMonitoring() {
         guard !isMonitoring else { return }
 
@@ -75,25 +78,39 @@ public final class BeadStatusMonitor: ObservableObject {
         // Resolve TTS service from DI container
         ttsService = DependencyContainer.shared.resolveOptional((any TTSPlaybackServiceProtocol).self)
 
-        // Poll immediately
-        Task {
-            await pollBeads()
-        }
+        // Subscribe to ResponseCache beads updates (fed by BeadsListViewModel polling)
+        ResponseCache.shared.beadsUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] beads in
+                Task { @MainActor [weak self] in
+                    await self?.handleBeadsUpdate(beads)
+                }
+            }
+            .store(in: &cancellables)
 
-        // Schedule periodic polling
-        pollTimer = Timer.scheduledTimer(withTimeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                await self?.pollBeads()
+        // Process current cache if available
+        let cachedBeads = ResponseCache.shared.beads
+        if !cachedBeads.isEmpty {
+            Task {
+                await handleBeadsUpdate(cachedBeads)
             }
         }
 
-        print("[BeadStatusMonitor] Started monitoring (interval: \(Self.pollInterval)s)")
+        // Fallback timer: only poll if cache is stale (BeadsListViewModel not active)
+        fallbackTimer = Timer.scheduledTimer(withTimeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.pollIfCacheStale()
+            }
+        }
+
+        print("[BeadStatusMonitor] Started monitoring (subscribing to cache, fallback interval: \(Self.pollInterval)s)")
     }
 
     /// Stops monitoring bead status changes.
     public func stopMonitoring() {
-        pollTimer?.invalidate()
-        pollTimer = nil
+        fallbackTimer?.invalidate()
+        fallbackTimer = nil
+        cancellables.removeAll()
         isMonitoring = false
         print("[BeadStatusMonitor] Stopped monitoring")
     }
@@ -214,7 +231,41 @@ public final class BeadStatusMonitor: ObservableObject {
         }
     }
 
-    // MARK: - Polling
+    // MARK: - Cache Integration
+
+    /// Handles beads update from ResponseCache (fed by BeadsListViewModel)
+    private func handleBeadsUpdate(_ beads: [BeadInfo]) async {
+        lastPollDate = Date()
+        lastError = nil
+
+        // Detect changes
+        let changes = detectChanges(in: beads)
+
+        // Announce changes if not muted
+        if !AppState.shared.isVoiceMuted {
+            await announceChanges(changes)
+        }
+
+        // Update known states
+        updateKnownStates(from: beads)
+    }
+
+    /// Polls only if the cache is stale (BeadsListViewModel not actively updating)
+    private func pollIfCacheStale() async {
+        guard let cacheAge = ResponseCache.shared.cacheAge(for: .beads) else {
+            // No cache exists, need to poll
+            await pollBeads()
+            return
+        }
+
+        if cacheAge > Self.cacheStaleThreshold {
+            print("[BeadStatusMonitor] Cache stale (\(Int(cacheAge))s), polling directly")
+            await pollBeads()
+        }
+        // Otherwise, we rely on ResponseCache subscription for updates
+    }
+
+    // MARK: - Direct Polling
 
     private func pollBeads() async {
         guard NetworkMonitor.shared.isConnected else {
@@ -235,6 +286,10 @@ public final class BeadStatusMonitor: ObservableObject {
 
             lastPollDate = Date()
             lastError = nil
+
+            // Update shared cache (this will also trigger our subscription,
+            // but we handle that gracefully since known states won't change)
+            ResponseCache.shared.updateBeads(beads)
 
             // Detect changes
             let changes = detectChanges(in: beads)
