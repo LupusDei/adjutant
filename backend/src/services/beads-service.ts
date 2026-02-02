@@ -355,7 +355,15 @@ async function fetchBeadsFromDatabase(
     return [];
   }
 
-  let beads = result.data.map((issue) => transformBead(issue, source));
+  // Filter out wisps (transient work units) - they clutter the UI
+  const nonWispIssues = result.data.filter((issue) => {
+    // Check explicit wisp flag or wisp in ID pattern
+    if (issue.wisp) return false;
+    if (issue.id.includes("-wisp-")) return false;
+    return true;
+  });
+
+  let beads = nonWispIssues.map((issue) => transformBead(issue, source));
 
   if (needsClientSideFilter && statusesToInclude) {
     beads = beads.filter((b) =>
