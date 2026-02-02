@@ -139,10 +139,14 @@ final class EpicsListViewModel: BaseViewModel {
 
         for epic in epics {
             // Find subtasks that belong to this epic
-            // Subtasks have a label like "parent:epic-id" or the epic ID in their labels
+            // Children are identified by hierarchical ID pattern: parent.X where X is numeric
+            let epicIdPrefix = epic.id + "."
             let subtasks = allBeads.filter { bead in
-                bead.labels.contains("parent:\(epic.id)") ||
-                bead.labels.contains(epic.id)
+                // Check hierarchical ID: child ID starts with parent ID followed by a dot
+                guard bead.id.hasPrefix(epicIdPrefix) else { return false }
+                let suffix = String(bead.id.dropFirst(epicIdPrefix.count))
+                // Direct children have a numeric prefix (e.g., "1", "1.2", "12")
+                return !suffix.isEmpty && suffix.first?.isNumber == true
             }
 
             let completedCount = subtasks.filter { $0.status == "closed" }.count
