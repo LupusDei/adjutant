@@ -103,18 +103,17 @@ final class DashboardViewModel: BaseViewModel {
         // Get current rig filter from AppState
         let selectedRig = AppState.shared.selectedRig
 
-        // Fetch all data concurrently
+        // Batch 1: Fetch mail, crew, and rigs concurrently (different endpoints)
         async let mailResult = fetchMail()
         async let crewResult = fetchCrew()
-        async let inProgressResult = fetchBeads(status: .inProgress, rig: selectedRig)
-        async let hookedResult = fetchBeads(status: .hooked, rig: selectedRig)
-        async let closedResult = fetchBeads(status: .closed, rig: selectedRig)
         async let _ : () = AppState.shared.fetchAvailableRigs()
 
-        // Await all results
-        let (mail, crew, inProgress, hooked, closed) = await (
-            mailResult, crewResult, inProgressResult, hookedResult, closedResult
-        )
+        let (mail, crew) = await (mailResult, crewResult)
+
+        // Batch 2: Fetch beads sequentially (same /beads endpoint, reduces concurrent load)
+        let inProgress = await fetchBeads(status: .inProgress, rig: selectedRig)
+        let hooked = await fetchBeads(status: .hooked, rig: selectedRig)
+        let closed = await fetchBeads(status: .closed, rig: selectedRig)
 
         if let mail = mail {
             // Filter out Wisp and Deacon sources for OVERSEER view
