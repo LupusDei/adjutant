@@ -103,6 +103,117 @@ public final class BeadStatusMonitor: ObservableObject {
         await pollBeads()
     }
 
+    // MARK: - Push Notification Handling
+
+    /// Handles a push notification for bead updates, bypassing polling delay.
+    ///
+    /// Call this from `application(_:didReceiveRemoteNotification:fetchCompletionHandler:)`
+    /// when receiving a bead update push notification.
+    ///
+    /// - Parameter payload: The parsed push notification payload
+    /// - Returns: `true` if the notification was handled successfully
+    @discardableResult
+    public func handlePushNotification(_ payload: PushNotificationPayload) async -> Bool {
+        // Only handle bead-related notifications
+        guard payload.type == .beadUpdate || payload.type == .beadHooked || payload.type == .beadCompleted else {
+            print("[BeadStatusMonitor] Ignoring non-bead notification type: \(payload.type)")
+            return false
+        }
+
+        guard let beadData = payload.beadData else {
+            print("[BeadStatusMonitor] Failed to parse bead notification data")
+            return false
+        }
+
+        // Skip wisp beads - internal workflow items
+        guard !beadData.beadId.contains("wisp") else {
+            print("[BeadStatusMonitor] Skipping wisp bead notification")
+            return false
+        }
+
+        guard !AppState.shared.isVoiceMuted else {
+            print("[BeadStatusMonitor] Voice is muted, skipping push announcement")
+            // Still update known state even if muted
+            knownBeadStates[beadData.beadId] = beadData.currentStatus
+            saveKnownStates()
+            return false
+        }
+
+        guard AppState.shared.isVoiceAvailable else {
+            print("[BeadStatusMonitor] Voice not available, skipping push announcement")
+            knownBeadStates[beadData.beadId] = beadData.currentStatus
+            saveKnownStates()
+            return false
+        }
+
+        // Determine if we should announce based on status transition
+        let shouldAnnounce: Bool
+        switch payload.type {
+        case .beadCompleted:
+            shouldAnnounce = true
+        case .beadUpdate where beadData.currentStatus == "in_progress":
+            shouldAnnounce = true
+        case .beadUpdate where beadData.currentStatus == "closed":
+            shouldAnnounce = true
+        default:
+            // Don't announce hooked or other status changes
+            shouldAnnounce = false
+        }
+
+        if shouldAnnounce {
+            print("[BeadStatusMonitor] Handling push notification for bead \(beadData.beadId)")
+            await announceBeadFromPush(beadData, notificationType: payload.type)
+        }
+
+        // Update known state
+        knownBeadStates[beadData.beadId] = beadData.currentStatus
+        saveKnownStates()
+        changesDetectedCount += 1
+
+        return shouldAnnounce
+    }
+
+    /// Announces a bead update from push notification
+    private func announceBeadFromPush(_ beadData: BeadNotificationData, notificationType: PushNotificationType) async {
+        let tts = ttsService ?? DependencyContainer.shared.resolveOptional((any TTSPlaybackServiceProtocol).self)
+        guard let ttsService = tts else {
+            print("[BeadStatusMonitor] TTS service not available for push announcement")
+            return
+        }
+
+        let text = AnnouncementTextFormatter.formatStatusChange(
+            title: beadData.title,
+            oldStatus: beadData.previousStatus,
+            newStatus: beadData.currentStatus
+        )
+
+        do {
+            let apiClient = AppState.shared.apiClient
+            let request = SynthesizeRequest(text: text)
+            let response = try await apiClient.synthesizeSpeech(request)
+
+            // Activate audio session for background playback
+            VoiceAnnouncementService.shared.activateForBackgroundPlayback()
+
+            ttsService.enqueue(
+                text: text,
+                response: response,
+                priority: .high,
+                metadata: [
+                    "source": "BeadStatusMonitor",
+                    "beadId": beadData.beadId,
+                    "trigger": "push"
+                ]
+            )
+
+            // Start playback immediately
+            ttsService.play()
+
+        } catch {
+            print("[BeadStatusMonitor] Failed to synthesize push announcement: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Polling
 
     private func pollBeads() async {

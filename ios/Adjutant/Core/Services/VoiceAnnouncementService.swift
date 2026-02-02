@@ -160,6 +160,50 @@ public final class VoiceAnnouncementService: ObservableObject {
         ttsService?.clearQueue()
     }
 
+    // MARK: - Background Audio Support
+
+    /// Activates the audio session for background playback.
+    ///
+    /// Call this before enqueuing audio when handling push notifications in the background.
+    /// This ensures the audio session is properly activated and can play audio even when
+    /// the app is backgrounded.
+    ///
+    /// The app must have the "audio" background mode enabled in Info.plist.
+    public func activateForBackgroundPlayback() {
+        #if os(iOS)
+        do {
+            // Ensure category is set for background playback
+            try audioSession.setCategory(
+                .playback,
+                mode: .spokenAudio,
+                options: [.duckOthers]
+            )
+
+            // Activate the session
+            try audioSession.setActive(true, options: [])
+
+            print("[VoiceAnnouncementService] Audio session activated for background playback")
+        } catch {
+            print("[VoiceAnnouncementService] Failed to activate audio session for background: \(error)")
+        }
+        #endif
+    }
+
+    /// Deactivates the audio session when playback is complete.
+    ///
+    /// Call this after all queued audio has finished playing to allow other apps
+    /// to resume audio playback.
+    public func deactivateAudioSession() {
+        #if os(iOS)
+        do {
+            try audioSession.setActive(false, options: [.notifyOthersOnDeactivation])
+            print("[VoiceAnnouncementService] Audio session deactivated")
+        } catch {
+            print("[VoiceAnnouncementService] Failed to deactivate audio session: \(error)")
+        }
+        #endif
+    }
+
     // MARK: - Private Methods
 
     private func setupAudioSession() {

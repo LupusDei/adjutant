@@ -50,6 +50,61 @@ public final class OverseerMailAnnouncer: ObservableObject {
 
     // MARK: - Public Methods
 
+    /// Handles a push notification for new mail, bypassing polling delay.
+    ///
+    /// Call this from `application(_:didReceiveRemoteNotification:fetchCompletionHandler:)`
+    /// when receiving a mail push notification.
+    ///
+    /// - Parameter payload: The parsed push notification payload
+    /// - Returns: `true` if the notification was handled successfully
+    @discardableResult
+    public func handlePushNotification(_ payload: PushNotificationPayload) async -> Bool {
+        guard payload.type == .mail else {
+            print("[OverseerMailAnnouncer] Ignoring non-mail notification type: \(payload.type)")
+            return false
+        }
+
+        guard let mailData = payload.mailData else {
+            print("[OverseerMailAnnouncer] Failed to parse mail notification data")
+            return false
+        }
+
+        // Only announce overseer mail
+        guard mailData.isOverseerMail else {
+            print("[OverseerMailAnnouncer] Skipping non-overseer mail notification")
+            return false
+        }
+
+        // Skip if already announced
+        guard !announcedMailIds.contains(mailData.messageId) else {
+            print("[OverseerMailAnnouncer] Mail \(mailData.messageId) already announced")
+            return false
+        }
+
+        guard !AppState.shared.isVoiceMuted else {
+            print("[OverseerMailAnnouncer] Voice is muted, skipping push announcement")
+            return false
+        }
+
+        guard AppState.shared.isVoiceAvailable else {
+            print("[OverseerMailAnnouncer] Voice not available, skipping push announcement")
+            return false
+        }
+
+        print("[OverseerMailAnnouncer] Handling push notification for mail \(mailData.messageId)")
+
+        do {
+            try await announceMailFromPush(mailData)
+            announcedMailIds.insert(mailData.messageId)
+            saveAnnouncedMailIds()
+            return true
+        } catch {
+            print("[OverseerMailAnnouncer] Failed to announce push notification: \(error.localizedDescription)")
+            lastError = error.localizedDescription
+            return false
+        }
+    }
+
     /// Processes messages and announces any new unread mail directed to overseer.
     ///
     /// - Parameter messages: Array of messages to process
@@ -112,6 +167,45 @@ public final class OverseerMailAnnouncer: ObservableObject {
         message.to.lowercased().contains("overseer")
     }
 
+    /// Announces mail from a push notification payload
+    private func announceMailFromPush(_ mailData: MailNotificationData) async throws {
+        let announcementText = formatAnnouncementTextFromPush(mailData)
+
+        print("[OverseerMailAnnouncer] Announcing from push: \(announcementText)")
+
+        // Synthesize the announcement
+        let request = SynthesizeRequest(
+            text: announcementText,
+            agentId: mailData.from,
+            messageId: "announcement-\(mailData.messageId)"
+        )
+
+        let response = try await apiClient.synthesizeSpeech(request)
+
+        // Get the TTS playback service and enqueue the audio
+        guard let ttsService = DependencyContainer.shared.resolveOptional((any TTSPlaybackServiceProtocol).self) else {
+            throw OverseerMailAnnouncerError.ttsServiceUnavailable
+        }
+
+        // Activate audio session for background playback
+        VoiceAnnouncementService.shared.activateForBackgroundPlayback()
+
+        ttsService.enqueue(
+            text: announcementText,
+            response: response,
+            priority: priorityForPushMail(mailData),
+            metadata: [
+                "type": "mail_announcement",
+                "mailId": mailData.messageId,
+                "from": mailData.from,
+                "source": "push"
+            ]
+        )
+
+        // Start playback immediately
+        ttsService.play()
+    }
+
     /// Announces a single message via voice synthesis
     private func announceMessage(_ message: Message) async throws {
         let announcementText = formatAnnouncementText(message)
@@ -158,6 +252,18 @@ public final class OverseerMailAnnouncer: ObservableObject {
         return "New mail from \(message.senderName): \(subject)"
     }
 
+    /// Formats the announcement text from push notification data
+    private func formatAnnouncementTextFromPush(_ mailData: MailNotificationData) -> String {
+        let maxSubjectLength = 100
+        var subject = mailData.subject
+
+        if subject.count > maxSubjectLength {
+            subject = String(subject.prefix(maxSubjectLength)) + "..."
+        }
+
+        return "New mail from \(mailData.senderName): \(subject)"
+    }
+
     /// Determines playback priority based on message priority
     private func priorityForMessage(_ message: Message) -> PlaybackPriority {
         switch message.priority {
@@ -168,6 +274,20 @@ public final class OverseerMailAnnouncer: ObservableObject {
         case .normal:
             return .normal
         case .low, .lowest:
+            return .low
+        }
+    }
+
+    /// Determines playback priority from push notification priority value
+    private func priorityForPushMail(_ mailData: MailNotificationData) -> PlaybackPriority {
+        switch mailData.priority {
+        case 0:
+            return .urgent
+        case 1:
+            return .high
+        case 2:
+            return .normal
+        default:
             return .low
         }
     }
