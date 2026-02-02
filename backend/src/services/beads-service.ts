@@ -116,6 +116,13 @@ function extractRig(assignee: string | null | undefined): string | null {
 let prefixToSourceMap: Map<string, string> | null = null;
 
 /**
+ * Default prefix map refresh interval: 5 minutes
+ */
+const DEFAULT_PREFIX_MAP_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+
+let prefixMapRefreshIntervalId: ReturnType<typeof setInterval> | null = null;
+
+/**
  * Reads the issue prefix from a .beads/config.yaml file.
  * Returns null if not found or unreadable.
  */
@@ -177,6 +184,70 @@ function loadPrefixMap(): Map<string, string> {
 async function ensurePrefixMap(): Promise<void> {
   if (!prefixToSourceMap || prefixToSourceMap.size <= 1) {
     prefixToSourceMap = await buildPrefixMap();
+  }
+}
+
+/**
+ * Force refresh the prefix map. Call this when rigs are added/removed.
+ */
+export async function refreshPrefixMap(): Promise<void> {
+  prefixToSourceMap = await buildPrefixMap();
+  logInfo("prefix map refreshed", { prefixCount: prefixToSourceMap.size });
+}
+
+/**
+ * Start the prefix map refresh scheduler.
+ * Runs refresh periodically to pick up new rigs.
+ * @param intervalMs - Interval in milliseconds (default: 5 minutes)
+ */
+export function startPrefixMapRefreshScheduler(
+  intervalMs: number = DEFAULT_PREFIX_MAP_REFRESH_INTERVAL_MS
+): void {
+  if (prefixMapRefreshIntervalId !== null) {
+    return;
+  }
+
+  // Build map immediately on start
+  buildPrefixMap()
+    .then((map) => {
+      prefixToSourceMap = map;
+      logInfo("prefix map initialized", { prefixCount: map.size });
+    })
+    .catch((err) => {
+      console.error("[BeadsService] Initial prefix map build failed:", err);
+    });
+
+  // Schedule periodic refresh
+  prefixMapRefreshIntervalId = setInterval(() => {
+    buildPrefixMap()
+      .then((map) => {
+        const oldSize = prefixToSourceMap?.size ?? 0;
+        prefixToSourceMap = map;
+        if (map.size !== oldSize) {
+          logInfo("prefix map refreshed", {
+            oldPrefixCount: oldSize,
+            newPrefixCount: map.size,
+          });
+        }
+      })
+      .catch((err) => {
+        console.error("[BeadsService] Prefix map refresh failed:", err);
+      });
+  }, intervalMs);
+
+  logInfo("prefix map refresh scheduler started", {
+    intervalMin: Math.round(intervalMs / 60000),
+  });
+}
+
+/**
+ * Stop the prefix map refresh scheduler.
+ */
+export function stopPrefixMapRefreshScheduler(): void {
+  if (prefixMapRefreshIntervalId !== null) {
+    clearInterval(prefixMapRefreshIntervalId);
+    prefixMapRefreshIntervalId = null;
+    logInfo("prefix map refresh scheduler stopped");
   }
 }
 

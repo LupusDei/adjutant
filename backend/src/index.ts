@@ -5,6 +5,7 @@ import { agentsRouter, beadsRouter, convoysRouter, devicesRouter, mailRouter, po
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
+import { startPrefixMapRefreshScheduler } from "./services/beads-service.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
@@ -47,4 +48,7 @@ app.listen(PORT, () => {
 
   // Start audio cache cleanup scheduler (T056)
   startCacheCleanupScheduler();
+
+  // Start prefix map refresh scheduler (adj-sha0s)
+  startPrefixMapRefreshScheduler();
 });
