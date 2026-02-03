@@ -8,9 +8,6 @@ import Combine
 final class AppCoordinator: Coordinator, ObservableObject {
     // MARK: - Published Properties
 
-    /// Current navigation path for the active tab
-    @Published var path = NavigationPath()
-
     /// Currently selected tab
     @Published var selectedTab: AppTab = .dashboard
 
@@ -20,10 +17,59 @@ final class AppCoordinator: Coordinator, ObservableObject {
     /// Alert presentation state
     @Published var presentedAlert: AlertDestination?
 
-    // MARK: - Private Properties
+    // MARK: - Per-Tab Navigation Paths
 
-    /// Navigation paths for each tab (preserved during tab switches)
-    private var tabPaths: [AppTab: NavigationPath] = [:]
+    /// Navigation paths for each tab (each tab has its own independent path)
+    @Published var dashboardPath = NavigationPath()
+    @Published var mailPath = NavigationPath()
+    @Published var chatPath = NavigationPath()
+    @Published var epicsPath = NavigationPath()
+    @Published var crewPath = NavigationPath()
+    @Published var beadsPath = NavigationPath()
+    @Published var settingsPath = NavigationPath()
+
+    /// Current tab's path (required by Coordinator protocol)
+    /// This is a computed property that proxies to the selected tab's path
+    var path: NavigationPath {
+        get { getPath(for: selectedTab) }
+        set { setPath(newValue, for: selectedTab) }
+    }
+
+    /// Returns the navigation path for a specific tab
+    private func getPath(for tab: AppTab) -> NavigationPath {
+        switch tab {
+        case .dashboard: return dashboardPath
+        case .mail: return mailPath
+        case .chat: return chatPath
+        case .epics: return epicsPath
+        case .crew: return crewPath
+        case .beads: return beadsPath
+        case .settings: return settingsPath
+        }
+    }
+
+    /// Sets the path for a specific tab
+    private func setPath(_ newPath: NavigationPath, for tab: AppTab) {
+        switch tab {
+        case .dashboard: dashboardPath = newPath
+        case .mail: mailPath = newPath
+        case .chat: chatPath = newPath
+        case .epics: epicsPath = newPath
+        case .crew: crewPath = newPath
+        case .beads: beadsPath = newPath
+        case .settings: settingsPath = newPath
+        }
+    }
+
+    /// Returns binding to the navigation path for a specific tab
+    func pathBinding(for tab: AppTab) -> Binding<NavigationPath> {
+        Binding(
+            get: { [weak self] in self?.getPath(for: tab) ?? NavigationPath() },
+            set: { [weak self] in self?.setPath($0, for: tab) }
+        )
+    }
+
+    // MARK: - Private Properties
 
     /// Cancellables for notification observers
     private var cancellables = Set<AnyCancellable>()
@@ -31,11 +77,6 @@ final class AppCoordinator: Coordinator, ObservableObject {
     // MARK: - Initialization
 
     init() {
-        // Initialize paths for all tabs
-        for tab in AppTab.allCases {
-            tabPaths[tab] = NavigationPath()
-        }
-
         // Set up notification deep linking observers
         setupNotificationObservers()
     }
@@ -99,7 +140,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
 
         // Detail routes - push onto current tab's stack
         case .mailDetail, .epicDetail, .agentDetail, .beadDetail, .polecatTerminal:
-            path.append(route)
+            appendToCurrentPath(route)
 
         // Modal routes - present as sheet
         case .mailCompose:
@@ -107,26 +148,31 @@ final class AppCoordinator: Coordinator, ObservableObject {
 
         // Settings sub-routes
         case .themeSettings, .voiceSettings, .tunnelSettings:
-            path.append(route)
+            appendToCurrentPath(route)
         }
     }
 
-    /// Selects a tab and restores its navigation path
+    /// Appends a route to the current tab's navigation path
+    private func appendToCurrentPath(_ route: AppRoute) {
+        switch selectedTab {
+        case .dashboard: dashboardPath.append(route)
+        case .mail: mailPath.append(route)
+        case .chat: chatPath.append(route)
+        case .epics: epicsPath.append(route)
+        case .crew: crewPath.append(route)
+        case .beads: beadsPath.append(route)
+        case .settings: settingsPath.append(route)
+        }
+    }
+
+    /// Selects a tab (each tab maintains its own navigation path)
     func selectTab(_ tab: AppTab) {
-        // Save current tab's path
-        tabPaths[selectedTab] = path
-
-        // Switch to new tab
         selectedTab = tab
-
-        // Restore new tab's path
-        path = tabPaths[tab] ?? NavigationPath()
     }
 
     /// Pops to the root of the current tab's navigation stack
     func popToRoot() {
-        path = NavigationPath()
-        tabPaths[selectedTab] = path
+        setPath(NavigationPath(), for: selectedTab)
     }
 
     // MARK: - Sheet Presentation
