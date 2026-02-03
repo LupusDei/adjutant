@@ -26,8 +26,13 @@ struct CrewDetailView: View {
         .background(CRTTheme.Background.screen)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         #endif
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                CRTBackButton()
+            }
+
             ToolbarItem(placement: .principal) {
                 CRTText(viewModel.member.name.uppercased(), style: .subheader, glowIntensity: .subtle)
             }

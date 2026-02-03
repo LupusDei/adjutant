@@ -40,8 +40,12 @@ struct MailDetailView: View {
         .background(CRTTheme.Background.screen)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         #endif
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                CRTBackButton()
+            }
             ToolbarItem(placement: .principal) {
                 CRTText("MESSAGE", style: .subheader, glowIntensity: .subtle)
             }

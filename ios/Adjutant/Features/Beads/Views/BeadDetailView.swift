@@ -50,8 +50,12 @@ struct BeadDetailView: View {
         .background(CRTTheme.Background.screen)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         #endif
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                CRTBackButton()
+            }
             ToolbarItem(placement: .principal) {
                 CRTText("BEAD DETAIL", style: .subheader, glowIntensity: .subtle)
             }

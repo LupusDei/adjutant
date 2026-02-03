@@ -61,7 +61,11 @@ struct EpicDetailView: View {
         }
         .background(CRTTheme.Background.screen)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                CRTBackButton()
+            }
             ToolbarItem(placement: .principal) {
                 CRTText("EPIC DETAIL", style: .subheader, glowIntensity: .subtle)
             }
