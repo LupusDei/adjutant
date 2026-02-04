@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useEffect } from 'react';
 import { usePolling } from './usePolling';
 import { api } from '../services/api';
 import type { BeadInfo } from '../types';
@@ -211,6 +211,13 @@ export function useEpicDetail(
     interval: 30000,
     enabled: enabled && epicId !== null,
   });
+
+  // Force refresh when epicId changes to ensure we fetch new data immediately
+  useEffect(() => {
+    if (epicId && enabled) {
+      void refresh();
+    }
+  }, [epicId, enabled, refresh]);
 
   const result = useMemo(() => {
     if (!data?.epic) {
