@@ -10,7 +10,6 @@ import type {
   SendMessageRequest,
   PaginatedResponse,
   PowerState,
-  Convoy,
   BeadInfo,
   BeadDetail,
 } from '../types';
@@ -267,15 +266,6 @@ export const api = {
       timestamp: string;
     }> {
       return apiFetch(`/agents/${encodeURIComponent(rig)}/${encodeURIComponent(polecat)}/terminal`);
-    },
-  },
-
-  /**
-   * Convoy operations.
-   */
-  convoys: {
-    async list(): Promise<Convoy[]> {
-      return apiFetch('/convoys');
     },
   },
 
