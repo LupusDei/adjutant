@@ -21,6 +21,8 @@ export interface UseEpicsResult {
 
 /**
  * Fetch epics and all beads, then compute progress for each epic.
+ * Note: allBeads must use rig='all' to query ALL databases,
+ * otherwise backend defaults to 'town' and misses subtasks in rig databases.
  */
 async function fetchEpicsData(rig?: string): Promise<{
   epics: BeadInfo[];
@@ -28,7 +30,9 @@ async function fetchEpicsData(rig?: string): Promise<{
 }> {
   const [epics, allBeads] = await Promise.all([
     api.epics.list(rig ? { rig } : undefined),
-    api.beads.list({ status: 'all' }),
+    // Must use rig='all' to get beads from all databases (town + rigs)
+    // Otherwise subtasks in rig databases (e.g., adj-*) won't be found
+    api.beads.list({ status: 'all', rig: 'all' }),
   ]);
   return { epics, allBeads };
 }
@@ -174,6 +178,7 @@ export interface UseEpicDetailResult {
 
 /**
  * Fetch a single epic and all beads to find its subtasks.
+ * Note: allBeads must use rig='all' to query ALL databases.
  */
 async function fetchEpicDetailData(epicId: string): Promise<{
   epic: BeadInfo | null;
@@ -181,7 +186,8 @@ async function fetchEpicDetailData(epicId: string): Promise<{
 }> {
   const [epicResult, allBeads] = await Promise.all([
     api.epics.get(epicId),
-    api.beads.list({ status: 'all' }),
+    // Must use rig='all' to get beads from all databases (town + rigs)
+    api.beads.list({ status: 'all', rig: 'all' }),
   ]);
   return { epic: epicResult, allBeads };
 }
