@@ -276,4 +276,5 @@ export type PowerResponse = ApiResponse<{
 export type AgentsResponse = ApiResponse<CrewMember[]>;
 
 export * from './convoys';
+export * from './epics';
 export * from './kanban';
