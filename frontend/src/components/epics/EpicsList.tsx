@@ -11,9 +11,18 @@ interface EpicsListProps {
   isActive?: boolean;
   /** Optional rig filter */
   rig?: string;
+  /** Whether to apply overseer filtering */
+  overseerView?: boolean;
   /** Callback when an epic is clicked */
   onEpicClick?: (epicId: string) => void;
 }
+
+/** Title patterns for overseer filtering - filter out operational/internal items */
+const OVERSEER_EXCLUDED_PATTERNS = [
+  'witness', 'wisp', 'internal', 'sync', 'coordination',
+  'mail delivery', 'polecat', 'crew assignment', 'rig status',
+  'heartbeat', 'health check', 'merge:',
+];
 
 function sortEpics(epics: EpicWithProgress[], sortBy: EpicSortOption): EpicWithProgress[] {
   return [...epics].sort((a, b) => {
@@ -37,11 +46,38 @@ function sortEpics(epics: EpicWithProgress[], sortBy: EpicSortOption): EpicWithP
   });
 }
 
-export function EpicsList({ sortBy, isActive = true, rig, onEpicClick }: EpicsListProps) {
+export function EpicsList({ sortBy, isActive = true, rig, overseerView = false, onEpicClick }: EpicsListProps) {
   const { openEpics, completedEpics, loading, error } = useEpics({ enabled: isActive, rig });
 
-  const sortedOpen = useMemo(() => sortEpics(openEpics, sortBy), [openEpics, sortBy]);
-  const sortedCompleted = useMemo(() => sortEpics(completedEpics, sortBy), [completedEpics, sortBy]);
+  // Apply overseer filtering if enabled
+  const filteredOpen = useMemo(() => {
+    if (!overseerView) return openEpics;
+    return openEpics.filter((ewp) => {
+      const titleLower = ewp.epic.title.toLowerCase();
+      const idLower = ewp.epic.id.toLowerCase();
+      // Exclude wisp beads
+      if (idLower.includes('wisp') || titleLower.includes('wisp')) return false;
+      // Exclude by title patterns
+      if (OVERSEER_EXCLUDED_PATTERNS.some((p) => titleLower.includes(p))) return false;
+      return true;
+    });
+  }, [openEpics, overseerView]);
+
+  const filteredCompleted = useMemo(() => {
+    if (!overseerView) return completedEpics;
+    return completedEpics.filter((ewp) => {
+      const titleLower = ewp.epic.title.toLowerCase();
+      const idLower = ewp.epic.id.toLowerCase();
+      // Exclude wisp beads
+      if (idLower.includes('wisp') || titleLower.includes('wisp')) return false;
+      // Exclude by title patterns
+      if (OVERSEER_EXCLUDED_PATTERNS.some((p) => titleLower.includes(p))) return false;
+      return true;
+    });
+  }, [completedEpics, overseerView]);
+
+  const sortedOpen = useMemo(() => sortEpics(filteredOpen, sortBy), [filteredOpen, sortBy]);
+  const sortedCompleted = useMemo(() => sortEpics(filteredCompleted, sortBy), [filteredCompleted, sortBy]);
 
   const isEmpty = sortedOpen.length === 0 && sortedCompleted.length === 0;
 

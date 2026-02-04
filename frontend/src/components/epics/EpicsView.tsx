@@ -1,25 +1,57 @@
-import { useState, type CSSProperties } from 'react';
-import { useRigFilter } from '../../contexts/RigContext';
+import { useState, useCallback, useEffect, type CSSProperties } from 'react';
+import { OverseerToggle } from '../shared/OverseerToggle';
 import { EpicsList, type EpicSortOption } from './EpicsList';
 import { EpicDetailView } from './EpicDetailView';
+import { api } from '../../services/api';
 
 export interface EpicsViewProps {
   /** Whether this tab is currently active */
   isActive?: boolean;
 }
 
+/** Rig options for filtering */
+type RigFilter = 'ALL' | string;
+
 export function EpicsView({ isActive = true }: EpicsViewProps) {
   const [sortBy, setSortBy] = useState<EpicSortOption>('ACTIVITY');
   const [selectedEpicId, setSelectedEpicId] = useState<string | null>(null);
-  const { selectedRig, availableRigs, setSelectedRig } = useRigFilter();
+  const [overseerView, setOverseerView] = useState(false);
+  const [rigFilter, setRigFilter] = useState<RigFilter>(() => {
+    return localStorage.getItem('epics-rig-filter') ?? 'ALL';
+  });
+  const [rigOptions, setRigOptions] = useState<string[]>([]);
 
-  const handleEpicClick = (epicId: string) => {
+  // Fetch rig options on mount from status endpoint
+  useEffect(() => {
+    void api.getStatus().then((status) => {
+      if (status.rigs && status.rigs.length > 0) {
+        const rigNames = status.rigs.map((r) => r.name).sort();
+        setRigOptions(rigNames);
+      }
+    }).catch(() => {
+      // Silently ignore - dropdown will just show ALL
+    });
+  }, []);
+
+  // Persist rig filter to localStorage
+  useEffect(() => {
+    localStorage.setItem('epics-rig-filter', rigFilter);
+  }, [rigFilter]);
+
+  const handleEpicClick = useCallback((epicId: string) => {
     setSelectedEpicId(epicId);
-  };
+  }, []);
 
-  const handleCloseDetail = () => {
+  const handleCloseDetail = useCallback(() => {
     setSelectedEpicId(null);
-  };
+  }, []);
+
+  const handleOverseerToggle = useCallback((enabled: boolean) => {
+    setOverseerView(enabled);
+  }, []);
+
+  // Convert UI rig filter to API parameter
+  const apiRig = rigFilter === 'ALL' ? undefined : rigFilter;
 
   return (
     <div style={styles.container}>
@@ -30,45 +62,46 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
         </div>
 
         <div style={styles.controls}>
+          {/* Overseer Toggle */}
+          <OverseerToggle
+            storageKey="epics-overseer-view"
+            onChange={handleOverseerToggle}
+          />
+
           {/* Rig Filter */}
-          {availableRigs.length > 0 && (
-            <div style={styles.filterGroup}>
-              <span style={styles.filterLabel}>RIG:</span>
-              <select
-                value={selectedRig ?? ''}
-                onChange={(e) => setSelectedRig(e.target.value || null)}
-                style={styles.select}
-              >
-                <option value="">ALL RIGS</option>
-                {availableRigs.map((rig) => (
-                  <option key={rig} value={rig}>
-                    {rig.toUpperCase()}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <span style={styles.filterLabel}>RIG:</span>
+          <select
+            value={rigFilter}
+            onChange={(e) => setRigFilter(e.target.value as RigFilter)}
+            style={styles.select}
+          >
+            <option value="ALL">ALL RIGS</option>
+            {rigOptions.map((rig) => (
+              <option key={rig} value={rig}>
+                {rig.toUpperCase().replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
 
           {/* Sort Control */}
-          <div style={styles.filterGroup}>
-            <span style={styles.filterLabel}>SORT:</span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as EpicSortOption)}
-              style={styles.select}
-            >
-              <option value="ACTIVITY">LATEST ACTIVITY</option>
-              <option value="PROGRESS">LEAST COMPLETE</option>
-              <option value="ID">EPIC ID</option>
-            </select>
-          </div>
+          <span style={styles.filterLabel}>SORT:</span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as EpicSortOption)}
+            style={styles.select}
+          >
+            <option value="ACTIVITY">LATEST ACTIVITY</option>
+            <option value="PROGRESS">LEAST COMPLETE</option>
+            <option value="ID">EPIC ID</option>
+          </select>
         </div>
       </header>
 
       <EpicsList
         sortBy={sortBy}
         isActive={isActive}
-        rig={selectedRig ?? undefined}
+        rig={apiRig}
+        overseerView={overseerView}
         onEpicClick={handleEpicClick}
       />
 
@@ -118,13 +151,8 @@ const styles = {
   controls: {
     display: 'flex',
     alignItems: 'center',
-    gap: '16px',
+    gap: '10px',
     flexWrap: 'wrap',
-  },
-  filterGroup: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
   },
   filterLabel: {
     fontSize: '0.7rem',
