@@ -328,6 +328,38 @@ export const api = {
   },
 
   /**
+   * Epics operations.
+   */
+  epics: {
+    /**
+     * List epics with optional rig filter.
+     */
+    async list(params?: { rig?: string }): Promise<BeadInfo[]> {
+      const query = new URLSearchParams();
+      if (params?.rig) query.set('rig', params.rig);
+      query.set('type', 'epic');
+      return apiFetch(`/beads?${query}`);
+    },
+
+    /**
+     * Get a single epic by ID.
+     */
+    async get(id: string): Promise<BeadInfo> {
+      return apiFetch(`/beads/${encodeURIComponent(id)}`);
+    },
+
+    /**
+     * Get subtasks for an epic.
+     */
+    async getSubtasks(epicId: string): Promise<BeadInfo[]> {
+      const all = await apiFetch<BeadInfo[]>('/beads?status=all');
+      return all.filter(
+        (b) => b.labels?.some((l) => l.includes(epicId) || l.includes(`parent:${epicId}`))
+      );
+    },
+  },
+
+  /**
    * Voice operations - T020
    */
   voice: {
