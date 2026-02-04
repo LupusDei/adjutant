@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { BeadsView } from "./components/beads/BeadsView";
 import { MayorChat } from "./components/chat/MayorChat";
-import { EpicsView } from "./components/epics";
+import { EpicsView } from "./components/epics/EpicsView";
 import { CrewStats } from "./components/crew/CrewStats";
 import { MailView } from "./components/mail/MailView";
 import { OverseerNotificationStatus } from "./components/notifications";
@@ -27,7 +27,7 @@ const TABS: Tab[] = [
   { id: "dashboard", label: "OVERVIEW", icon: "📊" },
   { id: "mail", label: "MAIL", icon: "📧" },
   { id: "chat", label: "CHAT", icon: "💬" },
-  { id: "epics", label: "EPICS", icon: "🎯" },
+  { id: "epics", label: "EPICS", icon: "📋" },
   { id: "crew", label: "CREW", icon: "👥" },
   { id: "beads", label: "BEADS", icon: "📿" },
   { id: "settings", label: "SETTINGS", icon: "⚙️" },
