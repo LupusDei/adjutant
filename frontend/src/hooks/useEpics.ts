@@ -34,14 +34,33 @@ async function fetchEpicsData(rig?: string): Promise<{
 }
 
 /**
- * Find subtasks for an epic by checking labels for parent:{epicId} or epicId.
+ * Find subtasks for an epic using hierarchical ID pattern.
+ * Children are identified by: parent.X where X starts with a number.
+ * Example: epic "adj-xyz123" has children "adj-xyz123.1", "adj-xyz123.2", etc.
+ * Also checks labels as fallback for backwards compatibility.
  */
 function findSubtasks(epicId: string, allBeads: BeadInfo[]): BeadInfo[] {
-  return allBeads.filter(
-    (bead) =>
-      bead.id !== epicId &&
-      bead.labels.some((label) => label.includes(epicId) || label.includes(`parent:${epicId}`))
-  );
+  const epicIdPrefix = epicId + '.';
+
+  return allBeads.filter((bead) => {
+    if (bead.id === epicId) return false;
+
+    // Primary: Check hierarchical ID pattern (matching iOS)
+    if (bead.id.startsWith(epicIdPrefix)) {
+      const suffix = bead.id.slice(epicIdPrefix.length);
+      // Direct children have a numeric prefix (e.g., "1", "1.2", "12")
+      if (suffix.length > 0 && /^\d/.test(suffix)) {
+        return true;
+      }
+    }
+
+    // Fallback: Check labels for parent:{epicId} pattern
+    if (bead.labels?.some((label) => label === `parent:${epicId}` || label.includes(epicId))) {
+      return true;
+    }
+
+    return false;
+  });
 }
 
 /**
