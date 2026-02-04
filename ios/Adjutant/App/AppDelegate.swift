@@ -139,9 +139,20 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
     }
 
-    /// Handles mail notifications by fetching new messages and triggering announcements.
+    /// Handles mail notifications by triggering voice announcements directly from push payload.
+    /// Falls back to fetching messages if push data is incomplete.
     @MainActor
     private func handleMailNotification(userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
+        // Try direct push handling first (bypasses polling delay)
+        if let payload = PushNotificationPayload(userInfo: userInfo) {
+            let handled = await OverseerMailAnnouncer.shared.handlePushNotification(payload)
+            if handled {
+                print("[AppDelegate] Announced mail directly from push notification")
+                return .newData
+            }
+        }
+
+        // Fallback: fetch all mail and process (for incomplete push payloads)
         do {
             let apiClient = APIClient()
             let mailResponse = try await apiClient.getMail()
@@ -150,7 +161,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             let announcedCount = await OverseerMailAnnouncer.shared.processMessages(messages)
 
             if announcedCount > 0 {
-                print("[AppDelegate] Announced \(announcedCount) mail message(s)")
+                print("[AppDelegate] Announced \(announcedCount) mail message(s) via fetch fallback")
                 return .newData
             } else {
                 return .noData
@@ -161,12 +172,24 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
     }
 
-    /// Handles task/bead notifications by triggering a status poll.
+    /// Handles task/bead notifications by triggering voice announcements directly from push payload.
+    /// Falls back to polling if push data is incomplete.
     @MainActor
     private func handleTaskNotification(userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
+        // Try direct push handling first (bypasses polling delay)
+        if let payload = PushNotificationPayload(userInfo: userInfo) {
+            let handled = await BeadStatusMonitor.shared.handlePushNotification(payload)
+            if handled {
+                print("[AppDelegate] Announced bead status directly from push notification")
+                return .newData
+            }
+        }
+
+        // Fallback: poll for all bead changes (for incomplete push payloads)
         await BeadStatusMonitor.shared.pollNow()
 
         if BeadStatusMonitor.shared.changesDetectedCount > 0 {
+            print("[AppDelegate] Detected bead changes via poll fallback")
             return .newData
         } else {
             return .noData
