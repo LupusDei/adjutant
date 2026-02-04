@@ -314,6 +314,21 @@
 }
 
 /* ============================================
+   Epic Card Styles
+   ============================================ */
+.epic-card-clickable:hover {
+  border-color: var(--crt-phosphor);
+  background-color: rgba(0, 255, 0, 0.06);
+  box-shadow: 0 0 10px var(--crt-phosphor-glow);
+}
+
+.epic-card-clickable:focus {
+  outline: none;
+  border-color: var(--crt-phosphor);
+  box-shadow: 0 0 10px var(--crt-phosphor-glow);
+}
+
+/* ============================================
    Utility Classes
    ============================================ */
 .text-dim { color: var(--pipboy-text-dim); }

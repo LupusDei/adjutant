@@ -9,6 +9,10 @@ interface EpicsListProps {
   sortBy: EpicSortOption;
   /** Whether this tab is currently active */
   isActive?: boolean;
+  /** Optional rig filter */
+  rig?: string;
+  /** Callback when an epic is clicked */
+  onEpicClick?: (epicId: string) => void;
 }
 
 function sortEpics(epics: EpicWithProgress[], sortBy: EpicSortOption): EpicWithProgress[] {
@@ -33,8 +37,8 @@ function sortEpics(epics: EpicWithProgress[], sortBy: EpicSortOption): EpicWithP
   });
 }
 
-export function EpicsList({ sortBy, isActive = true }: EpicsListProps) {
-  const { openEpics, completedEpics, loading, error } = useEpics({ enabled: isActive });
+export function EpicsList({ sortBy, isActive = true, rig, onEpicClick }: EpicsListProps) {
+  const { openEpics, completedEpics, loading, error } = useEpics({ enabled: isActive, rig });
 
   const sortedOpen = useMemo(() => sortEpics(openEpics, sortBy), [openEpics, sortBy]);
   const sortedCompleted = useMemo(() => sortEpics(completedEpics, sortBy), [completedEpics, sortBy]);
@@ -64,7 +68,11 @@ export function EpicsList({ sortBy, isActive = true }: EpicsListProps) {
           </div>
           <div style={styles.cardList}>
             {sortedOpen.map((epic) => (
-              <EpicCard key={epic.epic.id} epic={epic} />
+              <EpicCard
+                key={epic.epic.id}
+                epic={epic}
+                onClick={onEpicClick ? () => onEpicClick(epic.epic.id) : undefined}
+              />
             ))}
           </div>
         </div>
@@ -79,7 +87,11 @@ export function EpicsList({ sortBy, isActive = true }: EpicsListProps) {
           </div>
           <div style={styles.cardList}>
             {sortedCompleted.map((epic) => (
-              <EpicCard key={epic.epic.id} epic={epic} />
+              <EpicCard
+                key={epic.epic.id}
+                epic={epic}
+                onClick={onEpicClick ? () => onEpicClick(epic.epic.id) : undefined}
+              />
             ))}
           </div>
         </div>
