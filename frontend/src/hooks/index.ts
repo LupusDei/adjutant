@@ -38,5 +38,5 @@ export type { CrewMessageRequest, UseCrewMessagingOptions, UseCrewMessagingResul
 export { useCrewNotifications } from "./useCrewNotifications";
 export type { CrewNotificationInfo, UseCrewNotificationsOptions, UseCrewNotificationsReturn } from "./useCrewNotifications";
 
-export { useEpics } from "./useEpics";
-export type { UseEpicsOptions, UseEpicsResult } from "./useEpics";
+export { useEpics, useEpicDetail } from "./useEpics";
+export type { UseEpicsOptions, UseEpicsResult, UseEpicDetailOptions, UseEpicDetailResult } from "./useEpics";

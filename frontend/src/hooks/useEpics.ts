@@ -40,7 +40,7 @@ function findSubtasks(epicId: string, allBeads: BeadInfo[]): BeadInfo[] {
   return allBeads.filter(
     (bead) =>
       bead.id !== epicId &&
-      bead.labels?.some((label) => label.includes(epicId) || label.includes(`parent:${epicId}`))
+      bead.labels.some((label) => label.includes(epicId) || label.includes(`parent:${epicId}`))
   );
 }
 
@@ -115,6 +115,125 @@ export function useEpics(options: UseEpicsOptions = {}): UseEpicsResult {
   return {
     openEpics,
     completedEpics,
+    loading,
+    error: error?.message ?? null,
+    refresh,
+  };
+}
+
+// =============================================================================
+// useEpicDetail - Single Epic with Subtasks
+// =============================================================================
+
+export interface UseEpicDetailOptions {
+  /** Whether this hook is active */
+  enabled?: boolean;
+}
+
+export interface UseEpicDetailResult {
+  /** The epic being displayed */
+  epic: BeadInfo | null;
+  /** All subtasks */
+  subtasks: BeadInfo[];
+  /** Open subtasks (in_progress, hooked, open) */
+  openSubtasks: BeadInfo[];
+  /** Closed subtasks */
+  closedSubtasks: BeadInfo[];
+  /** Progress as a decimal (0-1) */
+  progress: number;
+  /** Human-readable progress text (e.g., "3/5") */
+  progressText: string;
+  /** Whether all subtasks are complete */
+  isComplete: boolean;
+  /** Whether data is loading */
+  loading: boolean;
+  /** Error message if any */
+  error: string | null;
+  /** Manually trigger a refresh */
+  refresh: () => Promise<void>;
+}
+
+/**
+ * Fetch a single epic and all beads to find its subtasks.
+ */
+async function fetchEpicDetailData(epicId: string): Promise<{
+  epic: BeadInfo | null;
+  allBeads: BeadInfo[];
+}> {
+  const [epicResult, allBeads] = await Promise.all([
+    api.epics.get(epicId),
+    api.beads.list({ status: 'all' }),
+  ]);
+  return { epic: epicResult, allBeads };
+}
+
+/**
+ * Hook for fetching a single epic and its subtasks.
+ * Polls every 30 seconds (matching iOS).
+ */
+export function useEpicDetail(
+  epicId: string | null,
+  options: UseEpicDetailOptions = {}
+): UseEpicDetailResult {
+  const { enabled = true } = options;
+
+  const fetchFn = useCallback(
+    () => (epicId ? fetchEpicDetailData(epicId) : Promise.resolve({ epic: null, allBeads: [] })),
+    [epicId]
+  );
+
+  const { data, loading, error, refresh } = usePolling(fetchFn, {
+    interval: 30000,
+    enabled: enabled && epicId !== null,
+  });
+
+  const result = useMemo(() => {
+    if (!data?.epic) {
+      return {
+        epic: null,
+        subtasks: [],
+        openSubtasks: [],
+        closedSubtasks: [],
+        progress: 0,
+        progressText: '0/0',
+        isComplete: false,
+      };
+    }
+
+    const { epic, allBeads } = data;
+    const subtasks = findSubtasks(epic.id, allBeads);
+
+    // Sort by priority then by updatedAt
+    const sorted = [...subtasks].sort((a, b) => {
+      if (a.priority !== b.priority) {
+        return a.priority - b.priority;
+      }
+      const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    const openSubtasks = sorted.filter((s) => s.status !== 'closed');
+    const closedSubtasks = sorted.filter((s) => s.status === 'closed');
+
+    const totalCount = sorted.length;
+    const completedCount = closedSubtasks.length;
+    const progress = totalCount > 0 ? completedCount / totalCount : 0;
+    const isComplete = totalCount > 0 && completedCount === totalCount;
+
+    return {
+      epic,
+      subtasks: sorted,
+      openSubtasks,
+      closedSubtasks,
+      progress,
+      progressText: `${completedCount}/${totalCount}`,
+      isComplete,
+    };
+  }, [data]);
+
+  return {
+    ...result,
     loading,
     error: error?.message ?? null,
     refresh,
