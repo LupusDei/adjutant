@@ -1,7 +1,7 @@
 {
   "name": "adjutant",
-  "version": "0.2.3",
-  "description": "Retro terminal UI for Gastown multi-agent orchestration",
+  "version": "0.3.0",
+  "description": "Retro terminal UI for Gastown multi-agent orchestration with iOS companion app",
   "type": "module",
   "bin": {
     "adjutant": "./bin/cli.js"
@@ -36,18 +36,20 @@
     "terminal",
     "ui",
     "multi-agent",
-    "orchestration"
+    "orchestration",
+    "remote",
+    "ios"
   ],
-  "author": "wsaults",
+  "author": "lupusdei",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wsaults/adjutant.git"
+    "url": "git+https://github.com/lupusdei/adjutant.git"
   },
   "bugs": {
-    "url": "https://github.com/wsaults/adjutant/issues"
+    "url": "https://github.com/lupusdei/adjutant/issues"
   },
-  "homepage": "https://github.com/wsaults/adjutant#readme",
+  "homepage": "https://github.com/lupusdei/adjutant#readme",
   "dependencies": {
     "commander": "^12.1.0"
   },
