@@ -2,15 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { DashboardView } from '../../../../src/components/dashboard/OverviewDashboard';
 import { useDashboardMail } from '../../../../src/hooks/useDashboardMail';
-import { useDashboardConvoys } from '../../../../src/hooks/useDashboardConvoys';
+import { useDashboardEpics } from '../../../../src/hooks/useDashboardEpics';
 import { useDashboardCrew } from '../../../../src/hooks/useDashboardCrew';
 
 // Mock the custom hooks
 vi.mock('../../../../src/hooks/useDashboardMail', () => ({
   useDashboardMail: vi.fn(),
 }));
-vi.mock('../../../../src/hooks/useDashboardConvoys', () => ({
-  useDashboardConvoys: vi.fn(),
+vi.mock('../../../../src/hooks/useDashboardEpics', () => ({
+  useDashboardEpics: vi.fn(),
 }));
 vi.mock('../../../../src/hooks/useDashboardCrew', () => ({
   useDashboardCrew: vi.fn(),
@@ -27,8 +27,11 @@ describe('DashboardView', () => {
       loading: false,
       error: null,
     });
-    (useDashboardConvoys as ReturnType<typeof vi.fn>).mockReturnValue({
-      recentConvoys: [],
+    (useDashboardEpics as ReturnType<typeof vi.fn>).mockReturnValue({
+      recentEpics: [],
+      totalCount: 0,
+      activeCount: 0,
+      completedCount: 0,
       loading: false,
       error: null,
     });
@@ -46,6 +49,6 @@ describe('DashboardView', () => {
     render(<DashboardView />);
     expect(screen.getByText('MAIL')).toBeInTheDocument();
     expect(screen.getByText('CREW & POLECATS')).toBeInTheDocument();
-    expect(screen.getByText('UNFINISHED CONVOYS')).toBeInTheDocument();
+    expect(screen.getByText('ACTIVE EPICS')).toBeInTheDocument();
   });
 });

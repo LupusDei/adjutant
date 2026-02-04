@@ -1,8 +1,8 @@
 import React from 'react';
 import { useDashboardMail } from '../../hooks/useDashboardMail';
-import { useDashboardConvoys } from '../../hooks/useDashboardConvoys';
+import { useDashboardEpics } from '../../hooks/useDashboardEpics';
 import { useDashboardCrew } from '../../hooks/useDashboardCrew';
-import { ConvoyCard } from '../convoys/ConvoyCard';
+import { EpicCard } from '../epics/EpicCard';
 import './DashboardView.css';
 
 // Simple widget wrapper for dashboard sections
@@ -44,7 +44,7 @@ function formatRelativeTime(timestamp: string): string {
 
 export function DashboardView() {
   const { recentMessages, totalCount: mailTotal, unreadCount, loading: mailLoading, error: mailError } = useDashboardMail();
-  const { recentConvoys, loading: convoysLoading, error: convoysError } = useDashboardConvoys();
+  const { recentEpics, loading: epicsLoading, error: epicsError } = useDashboardEpics();
   const { totalCrew, activeCrew, recentCrew, crewAlerts, loading: crewLoading, error: crewError } = useDashboardCrew();
 
 
@@ -157,20 +157,20 @@ export function DashboardView() {
           )}
         </DashboardWidget>
 
-        {/* Convoys Widget */}
-        <DashboardWidget title="UNFINISHED CONVOYS" className="dashboard-widget-full-width">
-          {convoysLoading && <p>Loading convoys...</p>}
-          {convoysError && <p className="dashboard-view-error-text">Error: {convoysError}</p>}
-          {!convoysLoading && !convoysError && (
+        {/* Epics Widget */}
+        <DashboardWidget title="ACTIVE EPICS" className="dashboard-widget-full-width">
+          {epicsLoading && <p>Loading epics...</p>}
+          {epicsError && <p className="dashboard-view-error-text">Error: {epicsError}</p>}
+          {!epicsLoading && !epicsError && (
             <>
-              {recentConvoys.length > 0 ? (
+              {recentEpics.length > 0 ? (
                 <div className="dashboard-convoy-list">
-                  {recentConvoys.map((convoy) => (
-                    <ConvoyCard key={convoy.id} convoy={convoy} />
+                  {recentEpics.map((epic) => (
+                    <EpicCard key={epic.epic.id} epic={epic} />
                   ))}
                 </div>
               ) : (
-                <p className="dashboard-empty-text">No active convoys</p>
+                <p className="dashboard-empty-text">No active epics</p>
               )}
             </>
           )}
