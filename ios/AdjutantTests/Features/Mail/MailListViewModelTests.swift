@@ -263,12 +263,18 @@ final class MailListViewModelTests: XCTestCase {
         await viewModel.loadMessages()
         let initialCount = viewModel.filteredMessages.count
 
-        // Set a rig filter that won't match any mock messages
-        // (mock messages use "mayor/", "witness/", etc. which are town-level)
+        // Set a rig filter that won't match any rig-specific mock messages
         AppState.shared.selectedRig = "testrig"
 
-        // Since none of the mock messages are from "testrig/", filtered should be empty
-        XCTAssertTrue(viewModel.filteredMessages.isEmpty)
+        // Only town-level messages (overseer<->mayor) should remain visible
+        // The mock data has one town-level message (msg-007: overseer -> mayor/)
+        XCTAssertEqual(viewModel.filteredMessages.count, 1)
+        XCTAssertTrue(viewModel.filteredMessages.allSatisfy { msg in
+            // Town-level messages have both from/to as overseer or mayor/
+            let isTownLevel = (msg.from == "overseer" || msg.from == "mayor/") &&
+                              (msg.to == "overseer" || msg.to == "mayor/")
+            return isTownLevel
+        })
 
         // Clear rig filter
         AppState.shared.selectedRig = nil
@@ -286,6 +292,25 @@ final class MailListViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.filteredMessages.allSatisfy {
             $0.from.lowercased().hasPrefix("crew/") || $0.to.lowercased().hasPrefix("crew/")
         })
+
+        // Clean up
+        AppState.shared.selectedRig = nil
+    }
+
+    func testRigFilterAlwaysIncludesTownLevelMessages() async {
+        // Town-level messages (overseer<->mayor) should always be visible
+        // regardless of which rig is selected
+        await viewModel.loadMessages()
+
+        // Set a rig filter that doesn't match any rig-specific messages
+        AppState.shared.selectedRig = "nonexistent"
+
+        // Town-level messages (msg-007: overseer -> mayor/) should still be visible
+        XCTAssertFalse(viewModel.filteredMessages.isEmpty)
+        XCTAssertTrue(viewModel.filteredMessages.contains { $0.id == "msg-007" })
+
+        // Verify only the town-level message is shown (no rig messages match)
+        XCTAssertEqual(viewModel.filteredMessages.count, 1)
 
         // Clean up
         AppState.shared.selectedRig = nil

@@ -277,12 +277,27 @@ final class MailListViewModel: BaseViewModel {
 
     /// Checks if a message is related to a specific rig
     /// Messages are considered related if the from or to address starts with the rig name
+    /// Town-level messages (overseer<->mayor) are always included regardless of rig filter
     private func messageMatchesRig(_ message: Message, rig: String) -> Bool {
         let rigPrefix = rig.lowercased() + "/"
         let fromLower = message.from.lowercased()
         let toLower = message.to.lowercased()
 
+        // Always include town-level messages (overseer<->mayor communications)
+        if isTownLevelMessage(from: fromLower, to: toLower) {
+            return true
+        }
+
         return fromLower.hasPrefix(rigPrefix) || toLower.hasPrefix(rigPrefix)
+    }
+
+    /// Checks if a message is a town-level communication (overseer<->mayor)
+    /// These messages should always be visible regardless of rig filter
+    private func isTownLevelMessage(from: String, to: String) -> Bool {
+        let townAddresses = ["overseer", "mayor/"]
+        let isFromTown = townAddresses.contains(from)
+        let isToTown = townAddresses.contains(to)
+        return isFromTown && isToTown
     }
 
     /// Updates the read status of a message locally
@@ -434,6 +449,20 @@ extension MailListViewModel {
             threadId: "thread-006",
             pinned: false,
             isInfrastructure: true
+        ),
+        Message(
+            id: "msg-007",
+            from: "overseer",
+            to: "mayor/",
+            subject: "Check on rig status",
+            body: "How are the rigs doing today?",
+            timestamp: "2026-01-25T12:00:00Z",
+            read: false,
+            priority: .normal,
+            type: .task,
+            threadId: "thread-007",
+            pinned: false,
+            isInfrastructure: false
         )
     ]
 }
