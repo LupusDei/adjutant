@@ -21,14 +21,27 @@ export type CrewMemberStatus =
   | "stuck"
   | "offline";
 
-/** Agent types in gastown. */
+/**
+ * Agent types in the system.
+ *
+ * Gas Town roles: mayor, deacon, witness, refinery, crew, polecat
+ * Standalone roles: user, agent
+ * Extensible via string for custom deployments.
+ */
 export type AgentType =
+  // Gas Town infrastructure roles
   | "mayor"
   | "deacon"
   | "witness"
   | "refinery"
+  // Gas Town worker roles
   | "crew"
-  | "polecat";
+  | "polecat"
+  // Standalone/swarm mode roles
+  | "user"
+  | "agent"
+  // Extensibility for custom deployments
+  | (string & {});
 
 // ============================================================================
 // Message Types
@@ -255,13 +268,22 @@ export const CrewMemberStatusSchema = z.enum([
   "offline",
 ]);
 
-export const AgentTypeSchema = z.enum([
-  "mayor",
-  "deacon",
-  "witness",
-  "refinery",
-  "crew",
-  "polecat",
+export const AgentTypeSchema = z.union([
+  z.enum([
+    // Gas Town infrastructure
+    "mayor",
+    "deacon",
+    "witness",
+    "refinery",
+    // Gas Town workers
+    "crew",
+    "polecat",
+    // Standalone/swarm mode
+    "user",
+    "agent",
+  ]),
+  // Allow any string for extensibility
+  z.string(),
 ]);
 
 export const MessageSchema = z.object({

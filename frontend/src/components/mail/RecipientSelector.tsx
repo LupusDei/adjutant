@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type CSSProperties } from 'react';
 import { api } from '../../services/api';
+import { useDeploymentMode } from '../../hooks/useDeploymentMode';
 import type { CrewMember } from '../../types';
 
 /**
@@ -34,6 +35,9 @@ export function RecipientSelector({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Get deployment mode for coordinator selection
+  const { isGasTown } = useDeploymentMode();
+
   // Fetch agents on mount
   useEffect(() => {
     let mounted = true;
@@ -42,25 +46,36 @@ export function RecipientSelector({
       try {
         const data = await api.agents.list();
         if (mounted) {
-          // Add special entries for common recipients
-          const specialRecipients: CrewMember[] = [
-            {
-              id: 'mayor/',
-              name: 'Mayor',
-              type: 'mayor',
-              rig: null,
-              status: 'idle',
-              unreadMail: 0,
-            },
-            {
-              id: '--human',
-              name: 'Overseer (Human)',
-              type: 'crew',
-              rig: null,
-              status: 'idle',
-              unreadMail: 0,
-            },
-          ];
+          // Add special entries based on deployment mode
+          const specialRecipients: CrewMember[] = isGasTown
+            ? [
+                {
+                  id: 'mayor/',
+                  name: 'Mayor',
+                  type: 'mayor',
+                  rig: null,
+                  status: 'idle',
+                  unreadMail: 0,
+                },
+                {
+                  id: 'overseer',
+                  name: 'Overseer (Human)',
+                  type: 'crew',
+                  rig: null,
+                  status: 'idle',
+                  unreadMail: 0,
+                },
+              ]
+            : [
+                {
+                  id: 'user',
+                  name: 'User',
+                  type: 'user',
+                  rig: null,
+                  status: 'idle',
+                  unreadMail: 0,
+                },
+              ];
           setAgents([...specialRecipients, ...data]);
           setLoading(false);
         }
@@ -74,7 +89,7 @@ export function RecipientSelector({
 
     void fetchAgents();
     return () => { mounted = false; };
-  }, []);
+  }, [isGasTown]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -131,12 +146,16 @@ export function RecipientSelector({
   // Get icon for agent type
   const getAgentIcon = (type: CrewMember['type']): string => {
     switch (type) {
+      // Gas Town roles
       case 'mayor': return '👑';
       case 'deacon': return '⚙';
       case 'witness': return '👁';
       case 'refinery': return '🔧';
       case 'crew': return '👤';
       case 'polecat': return '🐾';
+      // Standalone roles
+      case 'user': return '👤';
+      case 'agent': return '🤖';
       default: return '•';
     }
   };

@@ -1,6 +1,8 @@
-/* Mayor Chat Styles - SMS-like conversation UI */
+/* Command Chat Styles - SMS-like conversation UI */
+/* Works for both Gas Town (Mayor) and standalone (Command) modes */
 
-.mayor-chat {
+.mayor-chat,
+.command-chat {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -123,7 +125,8 @@
   border: 1px solid var(--crt-phosphor, #00ff00);
 }
 
-.chat-bubble-mayor {
+.chat-bubble-mayor,
+.chat-bubble-command {
   align-self: flex-start;
   background-color: #111;
   border: 1px solid var(--crt-phosphor-dim, #00aa00);

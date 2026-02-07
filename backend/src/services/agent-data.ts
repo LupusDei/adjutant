@@ -9,13 +9,13 @@ import {
   resolveWorkspaceRoot,
 } from "./workspace/index.js";
 import { extractBeadPrefix } from "./gastown-workspace.js";
+import { getTopology } from "./topology/index.js";
 
 const execFileAsync = promisify(execFile);
 import {
   addressToIdentity,
   parseAgentBeadId,
   parseAgentFields,
-  sessionNameForAgent,
 } from "./gastown-utils.js";
 import { listTmuxSessions } from "./tmux.js";
 import { buildMailIndex, listMailIssues, type MailIndexEntry } from "./mail-data.js";
@@ -42,29 +42,6 @@ export interface AgentSnapshot {
   mailIndex: Map<string, MailIndexEntry>;
 }
 
-function normalizeRole(role: string): string {
-  const lower = role.toLowerCase();
-  if (lower === "coordinator") return "mayor";
-  if (lower === "health-check") return "deacon";
-  return lower;
-}
-
-function buildAgentAddress(role: string, rig: string | null, name: string | null): string | null {
-  switch (role) {
-    case "mayor":
-    case "deacon":
-      return `${role}/`;
-    case "witness":
-    case "refinery":
-      return rig ? `${rig}/${role}` : null;
-    case "crew":
-      return rig && name ? `${rig}/crew/${name}` : null;
-    case "polecat":
-      return rig && name ? `${rig}/${name}` : null;
-    default:
-      return null;
-  }
-}
 
 /**
  * Gets the current git branch for a polecat from their worktree.
@@ -167,6 +144,7 @@ export async function collectAgentSnapshot(
   townRoot: string,
   extraIdentities: string[] = []
 ): Promise<AgentSnapshot> {
+  const topology = getTopology();
   const sessions = await listTmuxSessions();
   const foundIssues: { issue: BeadsIssue; sourceRig: string | null }[] = [];
   const beadsDirs = await listAllBeadsDirs();
@@ -186,16 +164,16 @@ export async function collectAgentSnapshot(
   for (const { issue, sourceRig } of foundIssues) {
     const parsed = parseAgentBeadId(issue.id, sourceRig);
     const fields = parseAgentFields(issue.description);
-    const role = normalizeRole(fields.roleType ?? parsed?.role ?? "");
+    const role = topology.normalizeRole(fields.roleType ?? parsed?.role ?? "");
     if (!role) continue;
 
     const rig = fields.rig ?? parsed?.rig ?? null;
     const name =
       parsed?.name ??
-      (role === "mayor" || role === "deacon" || role === "witness" || role === "refinery"
+      (topology.isInfrastructure(role)
         ? role
         : issue.title || role);
-    const address = buildAgentAddress(role, rig, name);
+    const address = topology.buildAddress(role, rig, name);
     if (!address) continue;
 
     const identity = addressToIdentity(address);
@@ -203,7 +181,8 @@ export async function collectAgentSnapshot(
     if (identities.has(identity)) continue;
     identities.add(identity);
 
-    const sessionName = sessionNameForAgent(role, rig, name);
+    const sessionInfo = topology.getSessionInfo(role, rig, name);
+    const sessionName = sessionInfo?.name ?? null;
     const running = sessionName ? sessions.has(sessionName) : false;
     const state = issue.agent_state ?? fields.agentState;
     const hookBead = issue.hook_bead ?? fields.hookBead;
@@ -223,6 +202,8 @@ export async function collectAgentSnapshot(
   }
 
   // Synthesize agents from running tmux sessions if not found in beads
+  // This section handles Gas Town session patterns - in standalone mode,
+  // agents are discovered purely through beads, not tmux sessions
   for (const sessionName of sessions) {
     let rig: string | null = null;
     let role: string | null = null;
@@ -243,7 +224,7 @@ export async function collectAgentSnapshot(
       if (parts.length >= 3 && parts[1] && parts[2]) {
         rig = parts[1];
         const typeOrName = parts[2];
-        
+
         if (typeOrName === "witness") {
           role = "witness";
           name = "witness";
@@ -259,10 +240,14 @@ export async function collectAgentSnapshot(
           name = parts.slice(2).join("-");
         }
       }
+    } else if (sessionName.startsWith("agent-")) {
+      // Standalone mode: agent-{name} sessions
+      role = "agent";
+      name = sessionName.slice("agent-".length);
     }
 
     if (role && name) {
-      const address = buildAgentAddress(role, rig, name);
+      const address = topology.buildAddress(role, rig, name);
       if (address) {
         const identity = addressToIdentity(address);
         // Check if already found via beads
