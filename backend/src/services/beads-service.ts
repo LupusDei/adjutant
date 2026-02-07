@@ -6,7 +6,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { execBd, resolveBeadsDir, stripBeadPrefix, type BeadsIssue } from "./bd-client.js";
-import { listAllBeadsDirs, resolveTownRoot } from "./gastown-workspace.js";
+import { listAllBeadsDirs, resolveWorkspaceRoot } from "./workspace/index.js";
 import { logInfo } from "../utils/index.js";
 
 // ============================================================================
@@ -384,7 +384,7 @@ export async function listBeads(
     // Build prefix map for source mapping in transformBead
     await ensurePrefixMap();
 
-    const townRoot = resolveTownRoot();
+    const townRoot = resolveWorkspaceRoot();
     const workDir = options.rigPath ?? townRoot;
     const beadsDir = resolveBeadsDir(workDir);
     const source = options.rig ?? "town";
@@ -435,7 +435,7 @@ export async function listAllBeads(
     // Build prefix map from discovered rigs (for source mapping in transformBead)
     await ensurePrefixMap();
 
-    const townRoot = resolveTownRoot();
+    const townRoot = resolveWorkspaceRoot();
     const beadsDirs = await listAllBeadsDirs();
 
     // Include town beads (hq-*) - this is the primary source
@@ -551,7 +551,7 @@ export async function updateBeadStatus(
 
     if (!source || source === "town") {
       // Town-level bead (hq-*)
-      const townRoot = resolveTownRoot();
+      const townRoot = resolveWorkspaceRoot();
       workDir = townRoot;
       beadsDir = resolveBeadsDir(townRoot);
     } else {
@@ -636,7 +636,7 @@ export async function getBead(
 
     if (!source || source === "town" || source === "unknown") {
       // Town-level bead (hq-*) or unknown prefix - try town first
-      const townRoot = resolveTownRoot();
+      const townRoot = resolveWorkspaceRoot();
       workDir = townRoot;
       beadsDir = resolveBeadsDir(townRoot);
     } else {

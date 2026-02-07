@@ -2,7 +2,8 @@ import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { resolveTownRoot, resolveGtBinary } from './gastown-workspace.js';
+import { resolveWorkspaceRoot } from './workspace/index.js';
+import { resolveGtBinary } from './gastown-workspace.js';
 
 /**
  * Result of executing a GT command.
@@ -60,7 +61,7 @@ function findRigRoot(startDir?: string): string | null {
 
 // Resolve rig root for mail operations
 function resolveRigRoot(): string {
-  const townRoot = resolveTownRoot();
+  const townRoot = resolveWorkspaceRoot();
 
   // Try to find rig root from current directory
   const discovered = findRigRoot();
@@ -85,7 +86,7 @@ let _gtRigRoot: string | null = null;
 let _gtBin: string | null = null;
 
 function getGtTownRoot(): string {
-  if (!_gtTownRoot) _gtTownRoot = resolveTownRoot();
+  if (!_gtTownRoot) _gtTownRoot = resolveWorkspaceRoot();
   return _gtTownRoot;
 }
 

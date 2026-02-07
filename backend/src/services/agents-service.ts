@@ -6,7 +6,7 @@
  */
 
 import { collectAgentSnapshot, type AgentRuntimeInfo } from "./agent-data.js";
-import { resolveTownRoot } from "./gastown-workspace.js";
+import { resolveWorkspaceRoot } from "./workspace/index.js";
 import type { CrewMember, CrewMemberStatus, AgentType } from "../types/index.js";
 
 // ============================================================================
@@ -109,7 +109,7 @@ function transformAgent(agent: AgentRuntimeInfo): CrewMember {
  */
 export async function getAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
   try {
-    const townRoot = resolveTownRoot();
+    const townRoot = resolveWorkspaceRoot();
     const { agents } = await collectAgentSnapshot(townRoot);
     const crewMembers = agents.map(transformAgent);
     crewMembers.sort((a, b) => a.name.localeCompare(b.name));

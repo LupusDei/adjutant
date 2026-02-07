@@ -8,7 +8,7 @@
 import { readFile, writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import { dirname, join } from "path";
-import { resolveTownRoot } from "./gastown-workspace.js";
+import { resolveWorkspaceRoot } from "./workspace/index.js";
 import { logInfo, logError, logWarn } from "../utils/index.js";
 import type {
   DeviceToken,
@@ -49,7 +49,7 @@ interface DeviceTokenStore {
  * Resolve the path to the device tokens file.
  */
 function resolveTokensPath(): string {
-  const townRoot = resolveTownRoot();
+  const townRoot = resolveWorkspaceRoot();
   return join(townRoot, ".gastown", "device-tokens.json");
 }
 

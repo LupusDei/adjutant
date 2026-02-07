@@ -9,7 +9,7 @@ import { randomBytes } from "crypto";
 import { spawn } from "child_process";
 import { execBd, resolveBeadsDir, type BeadsIssue } from "./bd-client.js";
 import { gt } from "./gt-executor.js";
-import { resolveTownRoot } from "./gastown-workspace.js";
+import { resolveWorkspaceRoot } from "./workspace/index.js";
 import { addressToIdentity, beadsIssueToMessage, parseMessageLabels } from "./gastown-utils.js";
 import { listMailIssues } from "./mail-data.js";
 import { sendNewMailNotification } from "./apns-service.js";
@@ -178,7 +178,7 @@ function sendTmuxNotification(to: string, from: string, subject: string): void {
 export async function listMail(
   filterIdentity?: string | null
 ): Promise<MailServiceResult<Message[]>> {
-  const townRoot = resolveTownRoot();
+  const townRoot = resolveWorkspaceRoot();
   const identity =
     filterIdentity === undefined
       ? addressToIdentity(resolveMailIdentity())
@@ -234,7 +234,7 @@ export async function getMessage(
     };
   }
 
-  const townRoot = resolveTownRoot();
+  const townRoot = resolveWorkspaceRoot();
   const beadsDir = resolveBeadsDir(townRoot);
   const result = await execBd<RawMessage[]>(["show", messageId, "--json"], {
     cwd: townRoot,
@@ -328,7 +328,7 @@ export async function sendMail(
       // If reply instructions requested, find the message and append them
       if (request.includeReplyInstructions) {
         try {
-          const townRoot = resolveTownRoot();
+          const townRoot = resolveWorkspaceRoot();
           const beadsDir = resolveBeadsDir(townRoot);
           const fromIdentity = addressToIdentity(from);
 
@@ -369,7 +369,7 @@ export async function sendMail(
   }
 
   // Fallback: bd create
-  const townRoot = resolveTownRoot();
+  const townRoot = resolveWorkspaceRoot();
   const beadsDir = resolveBeadsDir(townRoot);
   const toIdentity = addressToIdentity(to);
   const fromIdentity = addressToIdentity(from);
@@ -438,7 +438,7 @@ export async function markRead(
     };
   }
 
-  const townRoot = resolveTownRoot();
+  const townRoot = resolveWorkspaceRoot();
   const beadsDir = resolveBeadsDir(townRoot);
   const result = await execBd<string>(["label", "add", messageId, "read"], {
     cwd: townRoot,

@@ -4,11 +4,11 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { execBd, stripBeadPrefix, type BeadsIssue } from "./bd-client.js";
 import {
-  extractBeadPrefix,
   listAllBeadsDirs,
   resolveBeadsDirFromId,
-  resolveTownRoot,
-} from "./gastown-workspace.js";
+  resolveWorkspaceRoot,
+} from "./workspace/index.js";
+import { extractBeadPrefix } from "./gastown-workspace.js";
 
 const execFileAsync = promisify(execFile);
 import {
@@ -72,7 +72,7 @@ function buildAgentAddress(role: string, rig: string | null, name: string | null
  */
 async function getPolecatBranch(rig: string, polecatName: string): Promise<string | undefined> {
   try {
-    const townRoot = resolveTownRoot();
+    const townRoot = resolveWorkspaceRoot();
     // Polecat worktrees are at: {townRoot}/{rig}/polecats/{name}/{rig}/
     const worktreePath = join(townRoot, rig, "polecats", polecatName, rig);
 
@@ -115,8 +115,7 @@ async function fetchAgents(cwd: string, beadsDir: string): Promise<BeadsIssue[]>
  * Returns a map of beadId -> title.
  */
 async function fetchBeadTitles(
-  beadIds: string[],
-  townRoot: string
+  beadIds: string[]
 ): Promise<Map<string, string>> {
   const titles = new Map<string, string>();
   if (beadIds.length === 0) return titles;
@@ -138,7 +137,7 @@ async function fetchBeadTitles(
     const firstId = ids[0];
     if (!firstId) continue;
 
-    const dirInfo = resolveBeadsDirFromId(firstId, townRoot);
+    const dirInfo = await resolveBeadsDirFromId(firstId);
     if (!dirInfo) continue;
 
     const { workDir, beadsDir } = dirInfo;
@@ -294,7 +293,7 @@ export async function collectAgentSnapshot(
   const uniqueHookBeadIds = [...new Set(hookBeadIds)];
 
   // Fetch hook bead titles, routing each to the correct beads database by prefix
-  const hookBeadTitles = await fetchBeadTitles(uniqueHookBeadIds, townRoot);
+  const hookBeadTitles = await fetchBeadTitles(uniqueHookBeadIds);
 
   // Fetch branches for polecats in parallel
   const polecatAgents = baseAgents.filter((a) => a.role === "polecat" && a.rig);

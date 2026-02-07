@@ -1,5 +1,5 @@
-import { execBd, stripBeadPrefix } from "./bd-client.js";
-import { resolveTownRoot, resolveBeadsDir } from "./gastown-workspace.js";
+import { execBd, stripBeadPrefix, resolveBeadsDir } from "./bd-client.js";
+import { resolveWorkspaceRoot } from "./workspace/index.js";
 import type { Convoy, TrackedIssue } from "../types/convoys.js";
 
 export interface ConvoysServiceResult<T> {
@@ -61,7 +61,7 @@ function extractRigFromAssignee(assignee: string | undefined): string | null {
 
 export async function listConvoys(): Promise<ConvoysServiceResult<Convoy[]>> {
   try {
-    const townRoot = resolveTownRoot();
+    const townRoot = resolveWorkspaceRoot();
     const beadsDir = resolveBeadsDir(townRoot);
 
     // 1. List all open convoy-type beads from town level
