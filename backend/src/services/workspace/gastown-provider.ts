@@ -75,7 +75,7 @@ function resolveBeadsDir(workDir: string): string {
 }
 
 function extractBeadPrefix(beadId: string): string | null {
-  const match = beadId.match(/^([a-z]{2,3})-/i);
+  const match = beadId.match(/^([a-z0-9]{2,5})-/i);
   return match?.[1]?.toLowerCase() ?? null;
 }
 

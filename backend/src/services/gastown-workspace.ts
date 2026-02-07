@@ -213,10 +213,10 @@ export function resolveRigPath(rigName: string, townRoot: string): string | null
 
 /**
  * Extracts the prefix from a bead ID.
- * E.g., "hq-abc123" → "hq", "gb-xyz" → "gb"
+ * E.g., "hq-abc123" → "hq", "zt20-xlzm" → "zt20"
  */
 export function extractBeadPrefix(beadId: string): string | null {
-  const match = beadId.match(/^([a-z]{2,3})-/i);
+  const match = beadId.match(/^([a-z0-9]{2,5})-/i);
   return match?.[1]?.toLowerCase() ?? null;
 }
 

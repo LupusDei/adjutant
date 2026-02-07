@@ -52,9 +52,9 @@ const REDIRECT_DEPTH = 3;
  * @returns Short ID like "vts8" or "cv-hfove"
  */
 export function stripBeadPrefix(fullId: string): string {
-  // Known prefixes are typically 2-3 chars followed by hyphen (hq-, gt-, gb-, etc.)
-  // Pattern: <prefix>-<rest> where prefix is 2-3 alphanumeric chars
-  const match = fullId.match(/^[a-z]{2,3}-(.+)$/i);
+  // Known prefixes are 2-5 alphanumeric chars followed by hyphen (hq-, gt-, zt20-, etc.)
+  // Pattern: <prefix>-<rest> where prefix is 2-5 alphanumeric chars
+  const match = fullId.match(/^[a-z0-9]{2,5}-(.+)$/i);
   return match?.[1] ?? fullId;
 }
 
