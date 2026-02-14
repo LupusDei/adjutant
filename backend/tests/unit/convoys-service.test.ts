@@ -4,11 +4,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../src/services/bd-client.js", () => ({
   execBd: vi.fn(),
   stripBeadPrefix: vi.fn((id: string) => id.replace(/^[a-z]+-/, "")),
+  resolveBeadsDir: vi.fn((dir: string) => `${dir}/.beads`),
 }));
 
-vi.mock("../../src/services/gastown-workspace.js", () => ({
-  resolveTownRoot: vi.fn(() => "/tmp/town"),
-  resolveBeadsDir: vi.fn((dir) => `${dir}/.beads`),
+vi.mock("../../src/services/workspace/index.js", () => ({
+  resolveWorkspaceRoot: vi.fn(() => "/tmp/town"),
 }));
 
 import { execBd } from "../../src/services/bd-client.js";

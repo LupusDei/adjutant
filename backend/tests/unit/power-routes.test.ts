@@ -2,15 +2,22 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
 
-// Mock the power-service before importing the router
-vi.mock("../../src/services/power-service.js", () => ({
+// Create mock provider
+const mockProvider = {
+  name: "mock",
   getStatus: vi.fn(),
+  getPowerCapabilities: vi.fn(),
+  hasPowerControl: vi.fn(() => true),
   powerUp: vi.fn(),
   powerDown: vi.fn(),
+};
+
+// Mock the status provider before importing the router
+vi.mock("../../src/services/status/index.js", () => ({
+  getStatusProvider: vi.fn(() => mockProvider),
 }));
 
 import { powerRouter } from "../../src/routes/power.js";
-import { getStatus, powerUp, powerDown } from "../../src/services/power-service.js";
 
 /**
  * Creates a test Express app with the power router mounted.
@@ -28,6 +35,7 @@ describe("power routes", () => {
   beforeEach(() => {
     app = createTestApp();
     vi.clearAllMocks();
+    mockProvider.hasPowerControl.mockReturnValue(true);
   });
 
   // ===========================================================================
@@ -36,7 +44,7 @@ describe("power routes", () => {
 
   describe("GET /api/power/status", () => {
     it("should return current gastown status", async () => {
-      vi.mocked(getStatus).mockResolvedValue({
+      mockProvider.getStatus.mockResolvedValue({
         success: true,
         data: {
           powerState: "running",
@@ -53,7 +61,7 @@ describe("power routes", () => {
     });
 
     it("should return stopped status", async () => {
-      vi.mocked(getStatus).mockResolvedValue({
+      mockProvider.getStatus.mockResolvedValue({
         success: true,
         data: {
           powerState: "stopped",
@@ -67,7 +75,7 @@ describe("power routes", () => {
     });
 
     it("should return 500 on service error", async () => {
-      vi.mocked(getStatus).mockResolvedValue({
+      mockProvider.getStatus.mockResolvedValue({
         success: false,
         error: { code: "STATUS_ERROR", message: "Could not read status" },
       });
@@ -80,7 +88,7 @@ describe("power routes", () => {
     });
 
     it("should return 500 with default message on unknown error", async () => {
-      vi.mocked(getStatus).mockResolvedValue({
+      mockProvider.getStatus.mockResolvedValue({
         success: false,
         error: undefined,
       });
@@ -98,7 +106,7 @@ describe("power routes", () => {
 
   describe("POST /api/power/up", () => {
     it("should start gastown successfully", async () => {
-      vi.mocked(powerUp).mockResolvedValue({
+      mockProvider.powerUp.mockResolvedValue({
         success: true,
         data: {
           previousState: "stopped",
@@ -115,7 +123,7 @@ describe("power routes", () => {
     });
 
     it("should return 409 when already running", async () => {
-      vi.mocked(powerUp).mockResolvedValue({
+      mockProvider.powerUp.mockResolvedValue({
         success: false,
         error: { code: "ALREADY_RUNNING", message: "Gastown is already running" },
       });
@@ -129,7 +137,7 @@ describe("power routes", () => {
     });
 
     it("should return 500 on other errors", async () => {
-      vi.mocked(powerUp).mockResolvedValue({
+      mockProvider.powerUp.mockResolvedValue({
         success: false,
         error: { code: "START_ERROR", message: "Failed to spawn tmux session" },
       });
@@ -142,7 +150,7 @@ describe("power routes", () => {
     });
 
     it("should return 500 with default message on unknown error", async () => {
-      vi.mocked(powerUp).mockResolvedValue({
+      mockProvider.powerUp.mockResolvedValue({
         success: false,
         error: undefined,
       });
@@ -150,7 +158,17 @@ describe("power routes", () => {
       const response = await request(app).post("/api/power/up");
 
       expect(response.status).toBe(500);
-      expect(response.body.error.message).toBe("Failed to start gastown");
+      expect(response.body.error.message).toBe("Failed to start system");
+    });
+
+    it("should return 400 when power control not available", async () => {
+      mockProvider.hasPowerControl.mockReturnValue(false);
+
+      const response = await request(app).post("/api/power/up");
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error.message).toBe("Power control is not available in this deployment mode");
     });
   });
 
@@ -160,7 +178,7 @@ describe("power routes", () => {
 
   describe("POST /api/power/down", () => {
     it("should stop gastown successfully", async () => {
-      vi.mocked(powerDown).mockResolvedValue({
+      mockProvider.powerDown.mockResolvedValue({
         success: true,
         data: {
           previousState: "running",
@@ -177,7 +195,7 @@ describe("power routes", () => {
     });
 
     it("should return 409 when already stopped", async () => {
-      vi.mocked(powerDown).mockResolvedValue({
+      mockProvider.powerDown.mockResolvedValue({
         success: false,
         error: { code: "ALREADY_STOPPED", message: "Gastown is already stopped" },
       });
@@ -191,7 +209,7 @@ describe("power routes", () => {
     });
 
     it("should return 500 on other errors", async () => {
-      vi.mocked(powerDown).mockResolvedValue({
+      mockProvider.powerDown.mockResolvedValue({
         success: false,
         error: { code: "STOP_ERROR", message: "Failed to kill tmux session" },
       });
@@ -204,7 +222,7 @@ describe("power routes", () => {
     });
 
     it("should return 500 with default message on unknown error", async () => {
-      vi.mocked(powerDown).mockResolvedValue({
+      mockProvider.powerDown.mockResolvedValue({
         success: false,
         error: undefined,
       });
@@ -212,7 +230,17 @@ describe("power routes", () => {
       const response = await request(app).post("/api/power/down");
 
       expect(response.status).toBe(500);
-      expect(response.body.error.message).toBe("Failed to stop gastown");
+      expect(response.body.error.message).toBe("Failed to stop system");
+    });
+
+    it("should return 400 when power control not available", async () => {
+      mockProvider.hasPowerControl.mockReturnValue(false);
+
+      const response = await request(app).post("/api/power/down");
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error.message).toBe("Power control is not available in this deployment mode");
     });
   });
 });
