@@ -52,8 +52,14 @@ final class AppState: ObservableObject {
     /// Communication priority level (affects polling intervals)
     @Published var communicationPriority: CommunicationPriority = .efficient
 
-    /// Current deployment mode (determines visible tabs and UI behavior)
-    @Published var deploymentMode: DeploymentMode = .gasTown
+    /// Current deployment mode (gastown, standalone, swarm)
+    @Published var deploymentMode: DeploymentMode = .gastown
+
+    /// Available modes and their transition availability
+    @Published var availableModes: [AvailableMode] = []
+
+    /// Whether mode info has been fetched
+    @Published private(set) var isModeLoaded = false
 
     // MARK: - Notification State
 
@@ -254,6 +260,28 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Fetches current deployment mode from the backend
+    func fetchDeploymentMode() async {
+        let client = apiClient
+        do {
+            let modeInfo: ModeInfoResponse = try await client.getMode()
+            deploymentMode = modeInfo.mode
+            availableModes = modeInfo.availableModes ?? []
+            isModeLoaded = true
+        } catch {
+            // Default to gastown if endpoint not available
+            if !isModeLoaded {
+                deploymentMode = .gastown
+                isModeLoaded = true
+            }
+        }
+    }
+
+    /// Updates the deployment mode from an SSE event
+    func updateDeploymentMode(_ mode: DeploymentMode) {
+        deploymentMode = mode
+    }
+
     /// Checks if voice service is available from the API
     /// Call this on app startup and when network recovers
     func checkVoiceAvailability() async {
@@ -397,60 +425,6 @@ enum ThemeIdentifier: String, CaseIterable, Identifiable {
     }
 }
 
-/// Deployment modes determining agent topology and visible UI
-enum DeploymentMode: String, CaseIterable, Identifiable {
-    case gasTown = "gastown"
-    case singleAgent = "standalone"
-    case swarm = "swarm"
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .gasTown: return "GAS TOWN"
-        case .singleAgent: return "SINGLE AGENT"
-        case .swarm: return "SWARM"
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .gasTown: return "Full multi-agent infrastructure with Mayor, Witness, Refinery, and Polecats"
-        case .singleAgent: return "One agent, one project. Direct chat, minimal UI"
-        case .swarm: return "Multiple peer agents coordinating without formal hierarchy"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .gasTown: return "building.2"
-        case .singleAgent: return "person"
-        case .swarm: return "person.3.sequence"
-        }
-    }
-
-    /// Tabs visible in this deployment mode
-    var visibleTabs: [AppTab] {
-        switch self {
-        case .gasTown:
-            return AppTab.allCases // All 7 tabs
-        case .singleAgent:
-            return [.chat, .beads, .settings]
-        case .swarm:
-            return [.chat, .crew, .beads, .settings]
-        }
-    }
-
-    /// Default tab when switching to this mode
-    var defaultTab: AppTab {
-        switch self {
-        case .gasTown: return .dashboard
-        case .singleAgent: return .chat
-        case .swarm: return .chat
-        }
-    }
-}
-
 /// Communication priority levels for data sync
 enum CommunicationPriority: String, CaseIterable, Identifiable {
     case realTime = "realTime"
@@ -485,5 +459,95 @@ enum PowerState: String {
 
     var isTransitioning: Bool {
         self == .starting || self == .stopping
+    }
+}
+
+/// Deployment modes for the Adjutant system
+enum DeploymentMode: String, CaseIterable, Identifiable, Codable {
+    case gastown = "gastown"
+    case standalone = "standalone"
+    case swarm = "swarm"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .gastown: return "GAS TOWN"
+        case .standalone: return "SINGLE AGENT"
+        case .swarm: return "SWARM"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .gastown: return "building.2"
+        case .standalone: return "person"
+        case .swarm: return "ant"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .gastown: return "Full multi-agent infrastructure with Mayor, Witness, Refinery"
+        case .standalone: return "One agent, one project. Direct chat interface"
+        case .swarm: return "Multiple peer agents without formal hierarchy"
+        }
+    }
+
+    var systemImage: String { icon }
+
+    /// Tabs visible in this mode
+    var visibleTabs: Set<AppTab> {
+        switch self {
+        case .gastown:
+            return Set(AppTab.allCases)
+        case .standalone:
+            return [.chat, .beads, .settings]
+        case .swarm:
+            return [.chat, .crew, .beads, .settings]
+        }
+    }
+
+    /// Default tab when switching to this mode
+    var defaultTab: AppTab {
+        switch self {
+        case .gastown: return .dashboard
+        case .standalone: return .chat
+        case .swarm: return .chat
+        }
+    }
+}
+
+/// Available mode info from the backend
+struct AvailableMode: Codable, Equatable {
+    let mode: DeploymentMode
+    let available: Bool
+    let reason: String?
+}
+
+/// Response from GET /api/mode
+struct ModeInfoResponse: Codable {
+    let mode: DeploymentMode
+    let features: [String]
+    let availableModes: [AvailableMode]?
+}
+
+/// Request body for POST /api/mode
+struct SwitchModeRequest: Encodable {
+    let mode: DeploymentMode
+}
+
+// MARK: - APIClient Mode Extension
+
+extension APIClient {
+    /// Get current deployment mode
+    func getMode() async throws -> ModeInfoResponse {
+        try await requestWithEnvelope(.get, path: "/mode")
+    }
+
+    /// Switch to a different deployment mode
+    func switchMode(to mode: DeploymentMode) async throws -> ModeInfoResponse {
+        let request = SwitchModeRequest(mode: mode)
+        return try await requestWithEnvelope(.post, path: "/mode", body: request)
     }
 }

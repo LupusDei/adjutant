@@ -81,6 +81,18 @@ final class SettingsViewModel: BaseViewModel {
     /// Whether API key is being saved
     @Published private(set) var isSavingAPIKey: Bool = false
 
+    /// Current deployment mode
+    @Published private(set) var currentMode: DeploymentMode = .gastown
+
+    /// Available modes and their transition availability
+    @Published private(set) var availableModes: [AvailableMode] = []
+
+    /// Whether a mode switch is in progress
+    @Published private(set) var isModeSwitching: Bool = false
+
+    /// Error message from mode switch attempt
+    @Published var modeErrorMessage: String?
+
     // MARK: - App Info
 
     /// App version string
@@ -152,6 +164,7 @@ final class SettingsViewModel: BaseViewModel {
 
     override func refresh() async {
         await fetchAvailableRigs()
+        await AppState.shared.fetchDeploymentMode()
     }
 
     // MARK: - Theme
@@ -254,6 +267,28 @@ final class SettingsViewModel: BaseViewModel {
         serverURL = ""
     }
 
+    // MARK: - Mode Switching
+
+    /// Switches to a different deployment mode
+    func switchMode(to mode: DeploymentMode) async {
+        guard mode != currentMode, !isModeSwitching else { return }
+
+        isModeSwitching = true
+        modeErrorMessage = nil
+
+        do {
+            let result = try await apiClient.switchMode(to: mode)
+            AppState.shared.deploymentMode = result.mode
+            if let modes = result.availableModes {
+                AppState.shared.availableModes = modes
+            }
+        } catch {
+            modeErrorMessage = "Failed to switch mode"
+        }
+
+        isModeSwitching = false
+    }
+
     // MARK: - Private Methods
 
     private func setupBindings() {
@@ -272,6 +307,22 @@ final class SettingsViewModel: BaseViewModel {
                 self?.isVoiceAvailable = available
             }
             .store(in: &cancellables)
+
+        // Observe deployment mode changes (from SSE events)
+        AppState.shared.$deploymentMode
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] mode in
+                self?.currentMode = mode
+            }
+            .store(in: &cancellables)
+
+        // Observe available modes
+        AppState.shared.$availableModes
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] modes in
+                self?.availableModes = modes
+            }
+            .store(in: &cancellables)
     }
 
     private func syncWithAppState() {
@@ -282,6 +333,8 @@ final class SettingsViewModel: BaseViewModel {
         apiKey = AppState.shared.apiKey ?? ""
         communicationPriority = AppState.shared.communicationPriority
         deploymentMode = AppState.shared.deploymentMode
+        currentMode = AppState.shared.deploymentMode
+        availableModes = AppState.shared.availableModes
     }
 
     private func fetchAvailableRigs() async {
