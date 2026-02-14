@@ -28,8 +28,83 @@ vi.mock("../../../../src/contexts/ModeContext", () => ({
 }));
 
 // =============================================================================
+// Mock WebSocket + EventSource for CommunicationProvider
+// =============================================================================
+
+class MockWebSocket {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
+
+  readyState = MockWebSocket.CONNECTING;
+  onmessage: ((event: { data: string }) => void) | null = null;
+  onclose: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+
+  constructor(_url: string) {
+    queueMicrotask(() => {
+      this.readyState = MockWebSocket.OPEN;
+      this.onmessage?.({ data: JSON.stringify({ type: "auth_challenge" }) });
+    });
+  }
+
+  send(data: string) {
+    const msg = JSON.parse(data);
+    if (msg.type === "auth_response") {
+      queueMicrotask(() => {
+        this.onmessage?.({
+          data: JSON.stringify({
+            type: "connected",
+            sessionId: "test",
+            lastSeq: 0,
+            serverTime: new Date().toISOString(),
+          }),
+        });
+      });
+    }
+  }
+
+  close() {
+    this.readyState = MockWebSocket.CLOSED;
+  }
+}
+
+class MockEventSource {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSED = 2;
+
+  readyState = MockEventSource.CONNECTING;
+  onerror: (() => void) | null = null;
+  private listeners: Record<string, Array<(event: { data: string }) => void>> = {};
+
+  constructor(_url: string) {
+    queueMicrotask(() => {
+      this.readyState = MockEventSource.OPEN;
+      const handlers = this.listeners["connected"] ?? [];
+      for (const h of handlers) {
+        h({ data: JSON.stringify({ seq: 0, serverTime: new Date().toISOString() }) });
+      }
+    });
+  }
+
+  addEventListener(type: string, handler: (event: { data: string }) => void) {
+    if (!this.listeners[type]) this.listeners[type] = [];
+    this.listeners[type]!.push(handler);
+  }
+
+  close() {
+    this.readyState = MockEventSource.CLOSED;
+  }
+}
+
+// =============================================================================
 // Helpers
 // =============================================================================
+
+let originalWebSocket: typeof WebSocket;
+let originalEventSource: typeof EventSource;
 
 function renderSettings(props?: { theme?: 'green'; isActive?: boolean }) {
   const setTheme = vi.fn();
@@ -51,6 +126,13 @@ function renderSettings(props?: { theme?: 'green'; isActive?: boolean }) {
 describe("Communication Settings", () => {
   beforeEach(() => {
     localStorage.clear();
+    originalWebSocket = globalThis.WebSocket;
+    originalEventSource = globalThis.EventSource;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    globalThis.WebSocket = MockWebSocket as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    globalThis.EventSource = MockEventSource as any;
+
     // Mock fetch for tunnel and mode API calls
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
       if (typeof url === "string" && url.includes("/api/mode")) {
@@ -81,6 +163,8 @@ describe("Communication Settings", () => {
   });
 
   afterEach(() => {
+    globalThis.WebSocket = originalWebSocket;
+    globalThis.EventSource = originalEventSource;
     vi.restoreAllMocks();
   });
 
@@ -102,10 +186,12 @@ describe("Communication Settings", () => {
       expect(screen.getByText("POLLING")).toBeTruthy();
     });
 
-    it("should show connection indicator for default real-time", () => {
+    it("should show connection indicator for default real-time", async () => {
       renderSettings();
-      // WebSocket indicator for real-time default
-      expect(screen.getByText("◉ WS")).toBeTruthy();
+      // WebSocket indicator appears after async auth handshake
+      await waitFor(() => {
+        expect(screen.getByText("◉ WS")).toBeTruthy();
+      });
     });
   });
 
