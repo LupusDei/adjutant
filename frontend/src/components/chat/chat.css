@@ -29,10 +29,50 @@
   text-shadow: 0 0 10px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.4));
 }
 
+.chat-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .chat-status {
   font-size: 0.75rem;
   color: var(--crt-phosphor-dim, #00aa00);
   letter-spacing: 0.1em;
+}
+
+/* Communication status indicator */
+.comm-indicator {
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  padding: 2px 6px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+}
+
+.comm-indicator-ws {
+  color: var(--crt-phosphor, #00ff00);
+  text-shadow: 0 0 6px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.4));
+}
+
+.comm-indicator-sse {
+  color: #00ccff;
+  text-shadow: 0 0 6px rgba(0, 204, 255, 0.4);
+}
+
+.comm-indicator-polling {
+  color: #ffaa00;
+  text-shadow: 0 0 6px rgba(255, 170, 0, 0.4);
+}
+
+.comm-indicator-reconnecting {
+  color: #ffaa00;
+  animation: pulse-glow 1s ease-in-out infinite;
+}
+
+.comm-indicator-disconnected {
+  color: #ff4444;
+  opacity: 0.8;
 }
 
 /* Error banner */
@@ -329,4 +369,70 @@
 
 .chat-messages::-webkit-scrollbar-thumb:hover {
   background: var(--crt-phosphor, #00ff00);
+}
+
+/* Optimistic message (sending state) */
+.chat-bubble-sending {
+  opacity: 0.7;
+}
+
+/* Delivery status */
+.chat-delivery-status {
+  font-size: 0.55rem;
+  letter-spacing: 0.08em;
+  opacity: 0.8;
+}
+
+.chat-delivery-confirmed {
+  color: var(--crt-phosphor, #00ff00);
+}
+
+.chat-bubble-user .chat-delivery-confirmed {
+  color: #0a0a0a;
+}
+
+/* Streaming message */
+.chat-bubble-streaming {
+  border-style: dashed;
+}
+
+.chat-streaming-indicator {
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  color: #00ccff;
+  animation: pulse-glow 1s ease-in-out infinite;
+}
+
+.chat-cursor {
+  animation: blink 0.8s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Typing indicator */
+.chat-typing-indicator {
+  font-size: 0.75rem;
+  color: var(--crt-phosphor-dim, #00aa00);
+  opacity: 0.8;
+  padding: 4px 0;
+}
+
+.chat-typing-dots span {
+  animation: typing-dot 1.4s infinite;
+}
+
+.chat-typing-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.chat-typing-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing-dot {
+  0%, 60%, 100% { opacity: 0.3; }
+  30% { opacity: 1; }
 }
