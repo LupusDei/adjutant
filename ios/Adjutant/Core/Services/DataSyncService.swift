@@ -2,7 +2,8 @@
 //  DataSyncService.swift
 //  Adjutant
 //
-//  Centralized polling service to reduce duplicate API requests.
+//  Centralized data sync service. Uses SSE (Server-Sent Events) for real-time
+//  updates when connected, with polling as automatic fallback.
 //  ViewModels subscribe to data streams instead of polling independently.
 //
 
@@ -10,8 +11,8 @@ import Foundation
 import Combine
 import AdjutantKit
 
-/// Centralized service for polling API endpoints.
-/// Maintains single polling timers per endpoint and publishes updates via Combine.
+/// Centralized service for syncing data from the backend.
+/// Prefers SSE for real-time push updates; falls back to polling when SSE is disconnected.
 /// ViewModels subscribe to receive data instead of polling independently.
 @MainActor
 public final class DataSyncService: ObservableObject {
@@ -34,6 +35,9 @@ public final class DataSyncService: ObservableObject {
     @Published public private(set) var lastMailUpdate: Date?
     @Published public private(set) var lastCrewUpdate: Date?
     @Published public private(set) var lastBeadsUpdate: Date?
+
+    /// Whether SSE is currently providing real-time updates
+    @Published public private(set) var isStreamConnected = false
 
     // MARK: - Configuration
 
@@ -74,12 +78,17 @@ public final class DataSyncService: ObservableObject {
     private var crewSubscriberCount = 0
     private var beadsSubscriberCount = 0
 
+    /// SSE integration
+    private let eventStream = EventStreamService.shared
+    private var sseSubscriptions = Set<AnyCancellable>()
+
     // MARK: - Initialization
 
     private var priorityCancellable: AnyCancellable?
 
     private init() {
         loadFromCache()
+        setupSSEIntegration()
         observeCommunicationPriority()
     }
 
@@ -111,10 +120,10 @@ public final class DataSyncService: ObservableObject {
             cacheTTL = CacheTTL(mail: 100.0, crew: 100.0, beads: 100.0)
         }
 
-        // Restart active polling tasks with new intervals
-        if mailSubscriberCount > 0 { startMailPolling() }
-        if crewSubscriberCount > 0 { startCrewPolling() }
-        if beadsSubscriberCount > 0 { startBeadsPolling() }
+        // Restart active polling tasks with new intervals (only if SSE is not active)
+        if !isStreamConnected {
+            resumePollingForActiveSubscribers()
+        }
     }
 
     /// Loads cached data for immediate display
@@ -131,14 +140,115 @@ public final class DataSyncService: ObservableObject {
         }
     }
 
+    // MARK: - SSE Integration
+
+    private func setupSSEIntegration() {
+        // Watch SSE connection state to toggle polling
+        eventStream.$state
+            .receive(on: DispatchQueue.main)
+            .removeDuplicates()
+            .sink { [weak self] state in
+                guard let self else { return }
+                let connected = state == .connected
+                let wasConnected = self.isStreamConnected
+                self.isStreamConnected = connected
+
+                if connected && !wasConnected {
+                    self.onSSEConnected()
+                } else if !connected && wasConnected {
+                    self.onSSEDisconnected()
+                }
+            }
+            .store(in: &sseSubscriptions)
+
+        // Subscribe to SSE events and trigger targeted refreshes
+        eventStream.eventSubject
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                self.handleSSEEvent(event)
+            }
+            .store(in: &sseSubscriptions)
+    }
+
+    /// Called when SSE connects - pause polling timers, do initial fetch
+    private func onSSEConnected() {
+        print("[DataSyncService] SSE connected, pausing polling")
+        stopAllPolling()
+        // Fetch all data once to ensure we're in sync
+        Task { await refreshAll() }
+    }
+
+    /// Called when SSE disconnects - resume polling for active subscribers
+    private func onSSEDisconnected() {
+        print("[DataSyncService] SSE disconnected, resuming polling fallback")
+        resumePollingForActiveSubscribers()
+    }
+
+    /// Stop all polling timers (but keep subscriber counts)
+    private func stopAllPolling() {
+        stopMailPolling()
+        stopCrewPolling()
+        stopBeadsPolling()
+    }
+
+    /// Resume polling only for endpoints with active subscribers
+    private func resumePollingForActiveSubscribers() {
+        if mailSubscriberCount > 0 { startMailPolling() }
+        if crewSubscriberCount > 0 { startCrewPolling() }
+        if beadsSubscriberCount > 0 { startBeadsPolling() }
+    }
+
+    /// Route an SSE event to the appropriate fetch
+    private func handleSSEEvent(_ event: ServerSentEvent) {
+        switch event.event {
+        case "bead_update":
+            Task { await fetchBeads() }
+        case "agent_status":
+            Task { await fetchCrew() }
+        case "mail_received", "mail_read":
+            Task { await fetchMail() }
+        case "mode_changed":
+            // Mode changes may affect available features; refresh everything
+            Task { await refreshAll() }
+        case "power_state":
+            // Power state is managed by AppState, but crew/beads may change
+            Task {
+                await fetchCrew()
+                await fetchBeads()
+            }
+        case "connected":
+            // Initial connection event from server, no action needed
+            break
+        default:
+            break
+        }
+    }
+
+    /// Start the SSE stream. Call once at app startup.
+    public func startEventStream() {
+        eventStream.start()
+    }
+
+    /// Stop the SSE stream.
+    public func stopEventStream() {
+        eventStream.stop()
+    }
+
     // MARK: - Subscription Management
 
     /// Call when a ViewModel starts observing mail data.
-    /// Starts polling if this is the first subscriber.
+    /// Starts polling if this is the first subscriber and SSE is not connected.
     public func subscribeMail() {
         mailSubscriberCount += 1
         if mailSubscriberCount == 1 {
-            startMailPolling()
+            if isStreamConnected {
+                // SSE is live; just fetch once, no polling timer needed
+                Task { await fetchMail() }
+            } else {
+                // No SSE; start polling (which fetches immediately)
+                startMailPolling()
+            }
         }
     }
 
@@ -155,7 +265,11 @@ public final class DataSyncService: ObservableObject {
     public func subscribeCrew() {
         crewSubscriberCount += 1
         if crewSubscriberCount == 1 {
-            startCrewPolling()
+            if isStreamConnected {
+                Task { await fetchCrew() }
+            } else {
+                startCrewPolling()
+            }
         }
     }
 
@@ -171,7 +285,11 @@ public final class DataSyncService: ObservableObject {
     public func subscribeBeads() {
         beadsSubscriberCount += 1
         if beadsSubscriberCount == 1 {
-            startBeadsPolling()
+            if isStreamConnected {
+                Task { await fetchBeads() }
+            } else {
+                startBeadsPolling()
+            }
         }
     }
 
@@ -430,11 +548,12 @@ public final class DataSyncService: ObservableObject {
 
     // MARK: - Statistics
 
-    /// Returns the current polling status for debugging
+    /// Returns the current sync status for debugging
     public var pollingStatus: String {
-        let mailStatus = mailPollingTask != nil ? "active (\(mailSubscriberCount) subs)" : "stopped"
-        let crewStatus = crewPollingTask != nil ? "active (\(crewSubscriberCount) subs)" : "stopped"
-        let beadsStatus = beadsPollingTask != nil ? "active (\(beadsSubscriberCount) subs)" : "stopped"
-        return "Mail: \(mailStatus), Crew: \(crewStatus), Beads: \(beadsStatus)"
+        let sseStatus = isStreamConnected ? "SSE connected" : "SSE disconnected"
+        let mailStatus = mailPollingTask != nil ? "polling (\(mailSubscriberCount) subs)" : "idle (\(mailSubscriberCount) subs)"
+        let crewStatus = crewPollingTask != nil ? "polling (\(crewSubscriberCount) subs)" : "idle (\(crewSubscriberCount) subs)"
+        let beadsStatus = beadsPollingTask != nil ? "polling (\(beadsSubscriberCount) subs)" : "idle (\(beadsSubscriberCount) subs)"
+        return "\(sseStatus) | Mail: \(mailStatus), Crew: \(crewStatus), Beads: \(beadsStatus)"
     }
 }
