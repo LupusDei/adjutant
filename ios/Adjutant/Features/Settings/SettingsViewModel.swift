@@ -56,7 +56,10 @@ final class SettingsViewModel: BaseViewModel {
     /// Current deployment mode
     @Published var deploymentMode: DeploymentMode {
         didSet {
-            AppState.shared.deploymentMode = deploymentMode
+            guard deploymentMode != AppState.shared.deploymentMode else { return }
+            Task {
+                await AppState.shared.switchDeploymentMode(to: deploymentMode)
+            }
         }
     }
 
@@ -308,11 +311,13 @@ final class SettingsViewModel: BaseViewModel {
             }
             .store(in: &cancellables)
 
-        // Observe deployment mode changes (from SSE events)
+        // Observe deployment mode changes (e.g., from SSE mode_changed events)
         AppState.shared.$deploymentMode
             .receive(on: DispatchQueue.main)
             .sink { [weak self] mode in
-                self?.currentMode = mode
+                guard let self, self.deploymentMode != mode else { return }
+                self.deploymentMode = mode
+                self.currentMode = mode
             }
             .store(in: &cancellables)
 

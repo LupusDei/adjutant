@@ -312,6 +312,49 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Fetches the current deployment mode from the backend.
+    /// Call this on app startup to sync with the backend's mode state.
+    /// This ensures iOS and Frontend show the same mode after a backend-side switch.
+    func fetchDeploymentMode() async {
+        let client = apiClient
+        do {
+            let modeInfo = try await client.getMode()
+            if let mode = DeploymentMode(rawValue: modeInfo.mode) {
+                deploymentMode = mode
+            }
+        } catch {
+            // On error, keep the persisted mode from UserDefaults
+        }
+    }
+
+    /// Switches the deployment mode via the backend API.
+    /// This ensures the backend emits a mode_changed SSE event so all clients sync.
+    /// - Parameter mode: The target deployment mode
+    /// - Returns: true if the switch succeeded
+    @discardableResult
+    func switchDeploymentMode(to mode: DeploymentMode) async -> Bool {
+        let client = apiClient
+        do {
+            let modeInfo = try await client.switchMode(to: mode.rawValue)
+            if let newMode = DeploymentMode(rawValue: modeInfo.mode) {
+                deploymentMode = newMode
+            }
+            return true
+        } catch {
+            // Fall back to local-only switch
+            deploymentMode = mode
+            return false
+        }
+    }
+
+    /// Updates deployment mode from an SSE mode_changed event.
+    /// Called by DataSyncService when it receives a mode_changed event.
+    func updateDeploymentMode(from event: ModeChangedEvent) {
+        if let mode = DeploymentMode(rawValue: event.mode) {
+            deploymentMode = mode
+        }
+    }
+
     // MARK: - Persistence
 
     /// App Group identifier for sharing data with widgets
