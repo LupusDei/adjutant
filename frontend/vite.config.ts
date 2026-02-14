@@ -18,6 +18,10 @@ export default defineConfig({
         target: `http://localhost:${API_PORT}`,
         changeOrigin: true,
       },
+      "/ws": {
+        target: `http://localhost:${API_PORT}`,
+        ws: true,
+      },
       "/ngrok-api": {
         target: "http://127.0.0.1:4040",
         changeOrigin: true,
