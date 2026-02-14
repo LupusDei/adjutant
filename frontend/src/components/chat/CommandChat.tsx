@@ -5,10 +5,11 @@
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../services/api';
-import type { Message, SendMessageRequest } from '../../types';
+import type { Message } from '../../types';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoicePlayer } from '../../hooks/useVoicePlayer';
 import { useMode } from '../../contexts/ModeContext';
+import { useCommunication, type IncomingChatMessage } from '../../contexts/CommunicationContext';
 import './chat.css';
 
 export interface CommandChatProps {
@@ -20,7 +21,7 @@ export interface CommandChatProps {
  * Check if a message is part of a command/coordinator conversation.
  * Works for both Gas Town (mayor/overseer) and standalone (user/agent) modes.
  */
-function isCommandMessage(msg: Message): boolean {
+function isCommandMessage(msg: { from: string; to: string }): boolean {
   const fromLower = msg.from.toLowerCase();
   const toLower = msg.to.toLowerCase();
   return (
@@ -74,9 +75,29 @@ function formatTimestamp(timestamp: string): string {
   }
 }
 
+/** Convert an incoming real-time message to the Message type used for rendering. */
+function incomingToMessage(msg: IncomingChatMessage): Message {
+  return {
+    id: msg.id,
+    from: msg.from,
+    to: msg.to,
+    subject: msg.body.slice(0, 50),
+    body: msg.body,
+    timestamp: msg.timestamp,
+    read: false,
+    priority: 2,
+    type: 'reply',
+    threadId: msg.id,
+    pinned: false,
+  };
+}
+
 /**
  * CommandChat - SMS-style conversation interface with the coordinator.
  * Adapts to deployment mode (Gas Town: Mayor, Standalone: User).
+ *
+ * Uses WebSocket for real-time messaging when available, with HTTP polling
+ * as fallback. Polling frequency adapts to connection status.
  */
 export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -91,6 +112,9 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
 
   // Get deployment mode for UI labels and recipient adaptation
   const { isGasTown, isSwarm } = useMode();
+
+  // Communication context for real-time messaging
+  const { connectionStatus, sendMessage: ctxSendMessage, subscribe } = useCommunication();
 
   // Determine coordinator name and address based on mode
   // GT Mode: talk to Mayor | Swarm: talk to any agent | Standalone: direct command
@@ -117,7 +141,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
-  // Fetch command-related messages
+  // Fetch command-related messages via HTTP
   const fetchMessages = useCallback(async () => {
     try {
       const response = await api.mail.list({ all: true });
@@ -133,15 +157,34 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
     }
   }, []);
 
-  // Initial fetch and polling
+  // Subscribe to real-time incoming messages
+  useEffect(() => {
+    const unsubscribe = subscribe((incoming) => {
+      if (!isCommandMessage(incoming)) return;
+      const msg = incomingToMessage(incoming);
+      setMessages((prev) => {
+        // Avoid duplicates
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+    });
+    return unsubscribe;
+  }, [subscribe]);
+
+  // Initial fetch + adaptive polling based on connection status
   useEffect(() => {
     if (!isActive) return;
 
     void fetchMessages();
-    const intervalId = setInterval(() => void fetchMessages(), 30000);
 
+    // Poll less often when a real-time connection is active
+    const interval = (connectionStatus === 'websocket' || connectionStatus === 'sse')
+      ? 120_000   // 2 min — real-time handles new messages
+      : 30_000;   // 30s — polling mode
+
+    const intervalId = setInterval(() => void fetchMessages(), interval);
     return () => clearInterval(intervalId);
-  }, [isActive, fetchMessages]);
+  }, [isActive, fetchMessages, connectionStatus]);
 
   // Scroll to bottom when messages update
   useEffect(() => {
@@ -157,17 +200,12 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
     setInputValue('');
 
     try {
-      const request: SendMessageRequest = {
-        from: 'overseer',
-        to: coordinatorAddress,
-        subject: text.slice(0, 50) + (text.length > 50 ? '...' : ''),
-        body: text,
-        priority: 2,
-        type: 'reply',
-      };
+      await ctxSendMessage({ to: coordinatorAddress, body: text });
 
-      await api.mail.send(request);
-      await fetchMessages();
+      // When not on WebSocket, refetch to see the sent message
+      if (connectionStatus !== 'websocket') {
+        await fetchMessages();
+      }
       inputRef.current?.focus();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message');
