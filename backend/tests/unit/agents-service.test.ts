@@ -106,7 +106,7 @@ describe("agents-service", () => {
       expect(result.data?.find((a) => a.name === "witness")?.type).toBe("witness");
       expect(result.data?.find((a) => a.name === "refinery")?.type).toBe("refinery");
       expect(result.data?.find((a) => a.name === "polecat")?.type).toBe("polecat");
-      expect(result.data?.find((a) => a.name === "coordinator")?.type).toBe("mayor");
+      expect(result.data?.find((a) => a.name === "coordinator")?.type).toBe("coordinator");
     });
 
     it("should map status correctly", async () => {
