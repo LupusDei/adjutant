@@ -9,6 +9,8 @@ struct ChatView: View {
     @StateObject private var viewModel: ChatViewModel
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showRecipientSelector = false
+    /// Tracks if user has scrolled up during streaming — suppresses auto-scroll
+    @State private var userHasScrolledUp = false
 
     init(apiClient: APIClient, speechService: (any SpeechRecognitionServiceProtocol)? = nil) {
         let service = speechService ?? SpeechRecognitionService()
@@ -22,6 +24,11 @@ struct ChatView: View {
 
             // Messages area
             messagesArea
+
+            // Streaming state indicator
+            if viewModel.hasActiveStream {
+                streamingIndicator
+            }
 
             // Speech error banner
             if let speechError = viewModel.speechError {
@@ -40,6 +47,7 @@ struct ChatView: View {
                 isRecordingVoice: viewModel.isRecordingVoice,
                 canSend: viewModel.canSend,
                 onSend: {
+                    userHasScrolledUp = false
                     Task {
                         await viewModel.sendMessage()
                         scrollToBottom()
@@ -58,10 +66,16 @@ struct ChatView: View {
             viewModel.onDisappear()
         }
         .onChange(of: viewModel.messages.count) { _, _ in
+            userHasScrolledUp = false
             scrollToBottom()
         }
         .onChange(of: viewModel.isAgentTyping) { _, isTyping in
-            if isTyping {
+            if isTyping && !userHasScrolledUp {
+                scrollToBottom()
+            }
+        }
+        .onChange(of: viewModel.streamUpdateCount) { _, _ in
+            if !userHasScrolledUp {
                 scrollToBottom()
             }
         }
@@ -132,31 +146,36 @@ struct ChatView: View {
 
                     // Messages
                     ForEach(viewModel.messages) { message in
-                        ChatBubble(
-                            message: message,
-                            isOutgoing: viewModel.isOutgoing(message),
-                            deliveryState: viewModel.deliveryState(for: message.id),
-                            isPlaying: viewModel.isPlaying(message: message),
-                            isSynthesizing: viewModel.isSynthesizing(message: message),
-                            onPlay: {
-                                Task {
-                                    await viewModel.playAudio(for: message)
+                        if viewModel.isStreaming(message) {
+                            StreamingMessageBubble(message: message)
+                                .id(message.id)
+                        } else {
+                            ChatBubble(
+                                message: message,
+                                isOutgoing: viewModel.isOutgoing(message),
+                                deliveryState: viewModel.deliveryState(for: message.id),
+                                isPlaying: viewModel.isPlaying(message: message),
+                                isSynthesizing: viewModel.isSynthesizing(message: message),
+                                onPlay: {
+                                    Task {
+                                        await viewModel.playAudio(for: message)
+                                    }
+                                },
+                                onStop: {
+                                    viewModel.stopAudio()
+                                },
+                                onRetry: {
+                                    Task {
+                                        await viewModel.retryMessage(message)
+                                    }
                                 }
-                            },
-                            onStop: {
-                                viewModel.stopAudio()
-                            },
-                            onRetry: {
-                                Task {
-                                    await viewModel.retryMessage(message)
-                                }
-                            }
-                        )
-                        .id(message.id)
+                            )
+                            .id(message.id)
+                        }
                     }
 
-                    // Agent typing indicator bubble
-                    if viewModel.isAgentTyping {
+                    // Agent typing indicator bubble (hidden during active streaming)
+                    if viewModel.isAgentTyping && !viewModel.hasActiveStream {
                         AgentTypingBubble(
                             agentName: viewModel.recipientDisplayName,
                             activity: viewModel.agentActivity
@@ -195,6 +214,14 @@ struct ChatView: View {
                 }
                 .padding(.vertical, CRTTheme.Spacing.sm)
             }
+            .simultaneousGesture(
+                DragGesture().onChanged { value in
+                    // User dragging down = scrolling up through history
+                    if value.translation.height > 10 {
+                        userHasScrolledUp = true
+                    }
+                }
+            )
             .refreshable {
                 await viewModel.refresh()
             }
@@ -238,6 +265,20 @@ struct ChatView: View {
                 .multilineTextAlignment(.center)
         }
         .padding(CRTTheme.Spacing.xl)
+    }
+
+    private var streamingIndicator: some View {
+        HStack(spacing: CRTTheme.Spacing.xs) {
+            ProgressView()
+                .progressViewStyle(CircularProgressViewStyle(tint: theme.dim))
+                .scaleEffect(0.7)
+            CRTText("GENERATING RESPONSE...", style: .caption, glowIntensity: .subtle, color: theme.dim)
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
+        .padding(.vertical, CRTTheme.Spacing.xxs)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(CRTTheme.Background.panel)
+        .transition(.opacity)
     }
 
     // MARK: - Agent Status

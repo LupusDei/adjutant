@@ -107,6 +107,8 @@ final class ChatViewModel: BaseViewModel {
     private var pendingMessageMap: [String: String] = [:]
     /// Currently active streaming message content keyed by streamId
     private var activeStreams: [String: (localId: String, body: String)] = [:]
+    /// Incremented on each stream token, used by ChatView for scroll tracking
+    @Published private(set) var streamUpdateCount: Int = 0
 
     // MARK: - Initialization
 
@@ -308,6 +310,7 @@ final class ChatViewModel: BaseViewModel {
             // Append token to existing stream
             stream.body += token.token
             activeStreams[token.streamId] = stream
+            streamUpdateCount += 1
 
             // Update the message in-place
             if let index = messages.firstIndex(where: { $0.id == stream.localId }) {
@@ -796,6 +799,16 @@ final class ChatViewModel: BaseViewModel {
     }
 
     // MARK: - Computed Properties
+
+    /// Whether a given message is currently being streamed
+    func isStreaming(_ message: Message) -> Bool {
+        activeStreams.values.contains { $0.localId == message.id }
+    }
+
+    /// Whether there's any active stream in progress
+    var hasActiveStream: Bool {
+        !activeStreams.isEmpty
+    }
 
     /// Check if a message is from the user (outgoing)
     func isOutgoing(_ message: Message) -> Bool {
