@@ -6,6 +6,7 @@ import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
 import { startPrefixMapRefreshScheduler } from "./services/beads-service.js";
+import { initWebSocketServer } from "./services/ws-server.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
@@ -44,7 +45,7 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   logInfo("backend server listening", { port: PORT });
 
   // Start audio cache cleanup scheduler (T056)
@@ -52,4 +53,7 @@ app.listen(PORT, () => {
 
   // Start prefix map refresh scheduler (adj-sha0s)
   startPrefixMapRefreshScheduler();
+
+  // Initialize WebSocket server on the same HTTP server
+  initWebSocketServer(server);
 });
