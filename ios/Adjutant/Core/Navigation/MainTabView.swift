@@ -39,18 +39,23 @@ struct MainTabView: View {
 private struct TabContent: View {
     let selectedTab: AppTab
     @ObservedObject var coordinator: AppCoordinator
+    @ObservedObject private var appState = AppState.shared
     @Environment(\.scenePhase) private var scenePhase
 
     /// Used to force TabView to reset its internal paging state when app returns from background.
     /// Without this, the page-style TabView can get stuck in an intermediate position between tabs.
     @State private var tabViewId = UUID()
 
+    private var visibleTabs: [AppTab] {
+        appState.deploymentMode.visibleTabs
+    }
+
     var body: some View {
         TabView(selection: Binding(
             get: { selectedTab },
             set: { coordinator.selectTab($0) }
         )) {
-            ForEach(AppTab.allCases) { tab in
+            ForEach(visibleTabs) { tab in
                 NavigationStack(path: coordinator.pathBinding(for: tab)) {
                     tabView(for: tab)
                         .navigationDestination(for: AppRoute.self) { route in
@@ -67,11 +72,12 @@ private struct TabContent: View {
         .id(tabViewId)
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
-                // Reset TabView ID to force a clean layout and snap to current tab.
-                // This fixes the stuck UI state that can occur when the app is
-                // backgrounded during a page swipe gesture.
                 tabViewId = UUID()
             }
+        }
+        .onChange(of: appState.deploymentMode) { _, _ in
+            // Force TabView rebuild when mode changes
+            tabViewId = UUID()
         }
     }
 
@@ -121,12 +127,17 @@ private struct TabContent: View {
 /// Custom tab bar with CRT phosphor styling and glow effects.
 struct CRTTabBar: View {
     @Environment(\.crtTheme) private var theme
+    @ObservedObject private var appState = AppState.shared
     @Binding var selectedTab: AppTab
     let unreadCount: Int
 
+    private var visibleTabs: [AppTab] {
+        appState.deploymentMode.visibleTabs
+    }
+
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(AppTab.allCases) { tab in
+            ForEach(visibleTabs) { tab in
                 CRTTabBarItem(
                     tab: tab,
                     isSelected: selectedTab == tab,

@@ -52,6 +52,9 @@ final class AppState: ObservableObject {
     /// Communication priority level (affects polling intervals)
     @Published var communicationPriority: CommunicationPriority = .efficient
 
+    /// Current deployment mode (determines visible tabs and UI behavior)
+    @Published var deploymentMode: DeploymentMode = .gasTown
+
     // MARK: - Notification State
 
     /// Current notification permission status
@@ -286,6 +289,11 @@ final class AppState: ObservableObject {
            let priority = CommunicationPriority(rawValue: priorityRaw) {
             communicationPriority = priority
         }
+
+        if let modeRaw = UserDefaults.standard.string(forKey: "deploymentMode"),
+           let mode = DeploymentMode(rawValue: modeRaw) {
+            deploymentMode = mode
+        }
         // Default to "town" rig if no value persisted (not "all")
         selectedRig = UserDefaults.standard.string(forKey: "selectedRig") ?? "town"
 
@@ -354,6 +362,13 @@ final class AppState: ObservableObject {
                 UserDefaults.standard.set(priority.rawValue, forKey: "communicationPriority")
             }
             .store(in: &cancellables)
+
+        $deploymentMode
+            .dropFirst()
+            .sink { mode in
+                UserDefaults.standard.set(mode.rawValue, forKey: "deploymentMode")
+            }
+            .store(in: &cancellables)
     }
 }
 
@@ -378,6 +393,60 @@ enum ThemeIdentifier: String, CaseIterable, Identifiable {
         case .tan: return "WASTELAND"
         case .pink: return "PINK-MIST"
         case .purple: return "RAD-STORM"
+        }
+    }
+}
+
+/// Deployment modes determining agent topology and visible UI
+enum DeploymentMode: String, CaseIterable, Identifiable {
+    case gasTown = "gastown"
+    case singleAgent = "standalone"
+    case swarm = "swarm"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .gasTown: return "GAS TOWN"
+        case .singleAgent: return "SINGLE AGENT"
+        case .swarm: return "SWARM"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .gasTown: return "Full multi-agent infrastructure with Mayor, Witness, Refinery, and Polecats"
+        case .singleAgent: return "One agent, one project. Direct chat, minimal UI"
+        case .swarm: return "Multiple peer agents coordinating without formal hierarchy"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .gasTown: return "building.2"
+        case .singleAgent: return "person"
+        case .swarm: return "person.3.sequence"
+        }
+    }
+
+    /// Tabs visible in this deployment mode
+    var visibleTabs: [AppTab] {
+        switch self {
+        case .gasTown:
+            return AppTab.allCases // All 7 tabs
+        case .singleAgent:
+            return [.chat, .beads, .settings]
+        case .swarm:
+            return [.chat, .crew, .beads, .settings]
+        }
+    }
+
+    /// Default tab when switching to this mode
+    var defaultTab: AppTab {
+        switch self {
+        case .gasTown: return .dashboard
+        case .singleAgent: return .chat
+        case .swarm: return .chat
         }
     }
 }

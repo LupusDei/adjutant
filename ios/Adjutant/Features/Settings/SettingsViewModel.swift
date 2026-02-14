@@ -53,6 +53,13 @@ final class SettingsViewModel: BaseViewModel {
         }
     }
 
+    /// Current deployment mode
+    @Published var deploymentMode: DeploymentMode {
+        didSet {
+            AppState.shared.deploymentMode = deploymentMode
+        }
+    }
+
     /// Available rigs for filtering
     @Published private(set) var availableRigs: [String] = []
 
@@ -129,6 +136,7 @@ final class SettingsViewModel: BaseViewModel {
         self.defaultRigFilter = UserDefaults.standard.string(forKey: "defaultRigFilter")
 
         self.communicationPriority = AppState.shared.communicationPriority
+        self.deploymentMode = AppState.shared.deploymentMode
 
         super.init()
 
@@ -273,6 +281,7 @@ final class SettingsViewModel: BaseViewModel {
         serverURL = AppState.shared.apiBaseURL.absoluteString
         apiKey = AppState.shared.apiKey ?? ""
         communicationPriority = AppState.shared.communicationPriority
+        deploymentMode = AppState.shared.deploymentMode
     }
 
     private func fetchAvailableRigs() async {
