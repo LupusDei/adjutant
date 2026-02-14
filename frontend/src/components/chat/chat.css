@@ -330,3 +330,130 @@
 .chat-messages::-webkit-scrollbar-thumb:hover {
   background: var(--crt-phosphor, #00ff00);
 }
+
+/* ============================================================================
+   Connection Indicator
+   ============================================================================ */
+
+.conn-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.conn-dot {
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.conn-label {
+  font-weight: bold;
+}
+
+.conn-bolt {
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+/* WS - green, pulsing dot */
+.conn-ws {
+  color: var(--crt-phosphor, #00ff00);
+}
+
+.conn-ws .conn-dot {
+  animation: ws-pulse 2s ease-in-out infinite;
+  text-shadow: 0 0 6px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.5));
+}
+
+@keyframes ws-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+/* WS streaming - bolt glow */
+.conn-streaming .conn-bolt {
+  animation: bolt-flash 0.8s ease-in-out infinite;
+  color: #ffdd00;
+  text-shadow: 0 0 8px rgba(255, 221, 0, 0.6);
+}
+
+@keyframes bolt-flash {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* SSE - yellow */
+.conn-sse {
+  color: #ffdd00;
+}
+
+.conn-sse .conn-dot {
+  text-shadow: 0 0 4px rgba(255, 221, 0, 0.4);
+}
+
+/* HTTP - gray */
+.conn-http {
+  color: #888888;
+}
+
+/* Reconnecting - orange, flashing */
+.conn-reconnecting {
+  color: #ff8800;
+  animation: reconnect-flash 1s ease-in-out infinite;
+}
+
+@keyframes reconnect-flash {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* Disconnected */
+.conn-disconnected {
+  color: #666666;
+}
+
+/* Header layout: title + indicator + status */
+.chat-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ============================================================================
+   Streaming Message Bubble
+   ============================================================================ */
+
+.chat-bubble-streaming {
+  align-self: flex-start;
+  background-color: #111;
+  border: 1px solid var(--crt-phosphor-dim, #00aa00);
+  color: var(--crt-phosphor, #00ff00);
+  border-left: 3px solid var(--crt-phosphor, #00ff00);
+}
+
+.chat-streaming-cursor {
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  background-color: var(--crt-phosphor, #00ff00);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: cursor-blink 0.6s step-end infinite;
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.chat-streaming-label {
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  opacity: 0.6;
+  margin-bottom: 4px;
+}

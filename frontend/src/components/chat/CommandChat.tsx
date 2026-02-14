@@ -9,6 +9,8 @@ import type { Message, SendMessageRequest } from '../../types';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoicePlayer } from '../../hooks/useVoicePlayer';
 import { useDeploymentMode } from '../../hooks/useDeploymentMode';
+import { useConnectionManager } from '../../hooks/useConnectionManager';
+import { ConnectionIndicator } from './ConnectionIndicator';
 import './chat.css';
 
 export interface CommandChatProps {
@@ -96,6 +98,9 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
   const coordinatorName = isGasTown ? 'MAYOR' : 'COMMAND';
   const coordinatorAddress = isGasTown ? 'mayor/' : 'user';
 
+  // Connection manager for WS/SSE/HTTP fallback
+  const connection = useConnectionManager(isActive);
+
   // Voice input hook for recording
   const voiceInput = useVoiceInput();
 
@@ -137,15 +142,28 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
     if (!isActive) return;
 
     void fetchMessages();
-    const intervalId = setInterval(() => void fetchMessages(), 30000);
+
+    // Poll less frequently when we have a real-time connection
+    const pollInterval = connection.method === 'http' ? 30000 : 60000;
+    const intervalId = setInterval(() => void fetchMessages(), pollInterval);
 
     return () => clearInterval(intervalId);
-  }, [isActive, fetchMessages]);
+  }, [isActive, fetchMessages, connection.method]);
 
-  // Scroll to bottom when messages update
+  // Refresh messages when real-time connection delivers new data
+  useEffect(() => {
+    const unsubscribe = connection.onMessage((msg) => {
+      if (msg.type === 'message' || msg.type === 'stream_end') {
+        void fetchMessages();
+      }
+    });
+    return unsubscribe;
+  }, [connection, fetchMessages]);
+
+  // Scroll to bottom when messages update or streaming tokens arrive
   useEffect(() => {
     scrollToBottom();
-  }, [messages, scrollToBottom]);
+  }, [messages, connection.streamingMessage?.tokens, scrollToBottom]);
 
   // Handle sending a message
   const handleSend = async () => {
@@ -230,7 +248,14 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
     <div className="command-chat">
       {/* Header */}
       <header className="chat-header">
-        <h2 className="chat-title">{coordinatorName} DIRECT LINE</h2>
+        <div className="chat-header-left">
+          <h2 className="chat-title">{coordinatorName} DIRECT LINE</h2>
+          <ConnectionIndicator
+            method={connection.method}
+            state={connection.state}
+            isStreaming={connection.isStreaming}
+          />
+        </div>
         <span className="chat-status">
           {messages.length} MESSAGES
         </span>
@@ -287,6 +312,18 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
               </div>
             );
           })
+        )}
+        {/* Streaming message (live agent response) */}
+        {connection.streamingMessage && !connection.streamingMessage.done && (
+          <div className="chat-bubble chat-bubble-streaming">
+            <div className="chat-streaming-label">
+              {coordinatorName} STREAMING...
+            </div>
+            <div className="chat-bubble-content">
+              {connection.streamingMessage.tokens}
+              <span className="chat-streaming-cursor" />
+            </div>
+          </div>
         )}
         <div ref={messagesEndRef} />
       </div>
