@@ -152,12 +152,21 @@ final class ConnectionManager: ObservableObject {
         connectionState = .disconnected
     }
 
+    /// Maximum number of messages allowed in the outbound queue
+    private static let maxQueueSize = 500
+
     /// Enqueue a message for sending via WebSocket.
     /// If WebSocket is not connected, the message is queued and sent when connection is established.
     /// If communication priority is `.efficient` or `.pollingOnly`, the message is queued
     /// but the caller should also send via HTTP as a fallback.
     func send(_ message: WSOutboundMessage) {
         let priority = AppState.shared.communicationPriority
+
+        // Enforce queue size limit - drop oldest messages when full
+        if outboundQueue.count >= Self.maxQueueSize {
+            let dropped = outboundQueue.removeFirst()
+            print("[ConnectionManager] Outbound queue full (\(Self.maxQueueSize)), dropped oldest message (type: \(dropped.type))")
+        }
 
         if priority == .realTime, webSocketTask != nil {
             outboundQueue.append(message)
@@ -591,6 +600,16 @@ final class ConnectionManager: ObservableObject {
                 self?.disconnect()
                 self?.lastSSESequence = 0
                 self?.lastWSSequence = 0
+                self?.connect()
+            }
+            .store(in: &cancellables)
+
+        // React to API key changes (need to reconnect with new auth)
+        AppState.shared.$apiKey
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.disconnect()
                 self?.connect()
             }
             .store(in: &cancellables)

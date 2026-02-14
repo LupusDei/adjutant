@@ -11,12 +11,6 @@ import Foundation
 import Combine
 import AdjutantKit
 
-/// SSE payload for mode_changed events
-private struct ModeChangedEvent: Decodable {
-    let mode: DeploymentMode
-    let features: [String]?
-}
-
 /// Centralized service for syncing data from the backend.
 /// Prefers SSE for real-time push updates; falls back to polling when SSE is disconnected.
 /// ViewModels subscribe to receive data instead of polling independently.

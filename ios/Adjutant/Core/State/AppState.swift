@@ -295,11 +295,6 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Updates the deployment mode from an SSE event
-    func updateDeploymentMode(_ mode: DeploymentMode) {
-        deploymentMode = mode
-    }
-
     /// Checks if voice service is available from the API
     /// Call this on app startup and when network recovers
     func checkVoiceAvailability() async {
@@ -309,21 +304,6 @@ final class AppState: ObservableObject {
             updateVoiceAvailability(status.available)
         } catch {
             updateVoiceAvailability(false)
-        }
-    }
-
-    /// Fetches the current deployment mode from the backend.
-    /// Call this on app startup to sync with the backend's mode state.
-    /// This ensures iOS and Frontend show the same mode after a backend-side switch.
-    func fetchDeploymentMode() async {
-        let client = apiClient
-        do {
-            let modeInfo = try await client.getMode()
-            if let mode = DeploymentMode(rawValue: modeInfo.mode) {
-                deploymentMode = mode
-            }
-        } catch {
-            // On error, keep the persisted mode from UserDefaults
         }
     }
 
