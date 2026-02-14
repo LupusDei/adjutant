@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type CSSProperties } from 'react';
 import { api } from '../../services/api';
-import { useDeploymentMode } from '../../hooks/useDeploymentMode';
+import { useMode } from '../../contexts/ModeContext';
 import type { CrewMember } from '../../types';
 
 /**
@@ -36,7 +36,7 @@ export function RecipientSelector({
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Get deployment mode for coordinator selection
-  const { isGasTown } = useDeploymentMode();
+  const { isGasTown } = useMode();
 
   // Fetch agents on mount
   useEffect(() => {

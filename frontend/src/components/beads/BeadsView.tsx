@@ -5,6 +5,7 @@ import { OverseerToggle } from '../shared/OverseerToggle';
 import { usePolling } from '../../hooks/usePolling';
 import { fuzzyMatch } from '../../hooks/useFuzzySearch';
 import { api } from '../../services/api';
+import { useMode } from '../../contexts/ModeContext';
 import type { BeadInfo } from '../../types';
 
 export interface BeadsViewProps {
@@ -39,6 +40,7 @@ const OVERSEER_EXCLUDED_PATTERNS = [
 ];
 
 export function BeadsView({ isActive = true }: BeadsViewProps) {
+  const { isGasTown } = useMode();
   const [searchInput, setSearchInput] = useState('');
   const [rigFilter, setRigFilter] = useState<RigFilter>(() => {
     return localStorage.getItem('beads-rig-filter') ?? 'TOWN';
@@ -235,13 +237,17 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
   return (
     <div style={styles.container}>
       <header style={styles.header}>
-        <h2 style={styles.title} className="crt-glow">WORK BOARD</h2>
+        <h2 style={styles.title} className="crt-glow">
+          {isGasTown ? 'WORK BOARD' : 'TASKS'}
+        </h2>
 
         <div style={styles.controls}>
-          <OverseerToggle
-            storageKey="beads-overseer-view"
-            onChange={handleOverseerToggle}
-          />
+          {isGasTown && (
+            <OverseerToggle
+              storageKey="beads-overseer-view"
+              onChange={handleOverseerToggle}
+            />
+          )}
 
           {/* Search Input */}
           <div style={styles.searchContainer}>
@@ -264,21 +270,25 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
             )}
           </div>
 
-          {/* Rig Filter */}
-          <span style={styles.filterLabel}>RIG:</span>
-          <select
-            value={rigFilter}
-            onChange={(e) => setRigFilter(e.target.value as RigFilter)}
-            style={styles.select}
-          >
-            <option value="ALL">ALL RIGS</option>
-            <option value="TOWN">TOWN</option>
-            {rigOptions.map((rig) => (
-              <option key={rig} value={rig}>
-                {rig.toUpperCase().replace(/_/g, ' ')}
-              </option>
-            ))}
-          </select>
+          {/* Rig Filter - only in GT mode (multi-rig) */}
+          {isGasTown && (
+            <>
+              <span style={styles.filterLabel}>RIG:</span>
+              <select
+                value={rigFilter}
+                onChange={(e) => setRigFilter(e.target.value as RigFilter)}
+                style={styles.select}
+              >
+                <option value="ALL">ALL RIGS</option>
+                <option value="TOWN">TOWN</option>
+                {rigOptions.map((rig) => (
+                  <option key={rig} value={rig}>
+                    {rig.toUpperCase().replace(/_/g, ' ')}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
 
           {/* Sort Dropdown */}
           <span style={styles.filterLabel}>SORT:</span>

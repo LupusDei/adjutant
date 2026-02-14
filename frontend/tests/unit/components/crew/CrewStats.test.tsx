@@ -10,6 +10,22 @@ vi.mock("../../../../src/hooks/usePolling", () => ({
   usePolling: vi.fn(),
 }));
 
+// Mock the ModeContext
+vi.mock("../../../../src/contexts/ModeContext", () => ({
+  useMode: vi.fn(() => ({
+    mode: "gastown",
+    features: [],
+    availableModes: [],
+    loading: false,
+    error: null,
+    isGasTown: true,
+    isStandalone: false,
+    isSwarm: false,
+    hasFeature: () => false,
+    switchMode: vi.fn(),
+  })),
+}));
+
 const mockUsePolling = usePolling as ReturnType<typeof vi.fn>;
 
 // =============================================================================

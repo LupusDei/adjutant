@@ -3,6 +3,7 @@ import { useMemo, useState, useCallback } from 'react';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { usePolling } from '../../hooks/usePolling';
 import { api, ApiError } from '../../services/api';
+import { useMode } from '../../contexts/ModeContext';
 import { TerminalPane } from '../terminal';
 import type { CrewMember } from '../../types';
 
@@ -124,6 +125,7 @@ function groupAgents(agents: CrewMember[]): AgentGroup {
  * Displays agents organized by hierarchy: Town-level → Per-rig sections.
  */
 export function CrewStats({ className = '', isActive = true }: CrewStatsProps) {
+  const { isGasTown, isSwarm } = useMode();
   const {
     data: agents,
     loading,
@@ -159,28 +161,32 @@ export function CrewStats({ className = '', isActive = true }: CrewStatsProps) {
   return (
     <section style={styles.container} className={className}>
       <header style={styles.header}>
-        <h2 style={styles.title} className="crt-glow">CREW MANIFEST</h2>
+        <h2 style={styles.title} className="crt-glow">
+          {isSwarm ? 'SWARM AGENTS' : 'CREW MANIFEST'}
+        </h2>
         <div style={styles.headerControls}>
-          <label style={styles.toggleLabel}>
-            <span
-              style={{
-                ...styles.toggleCheckbox,
-                backgroundColor: showAllPolecats ? colors.primary : 'transparent',
-                borderColor: showAllPolecats ? colors.primary : colors.primaryDim,
-              }}
-              role="checkbox"
-              aria-checked={showAllPolecats}
-            >
-              {showAllPolecats && <span style={styles.toggleCheckmark}>✓</span>}
-            </span>
-            <input
-              type="checkbox"
-              checked={showAllPolecats}
-              onChange={(e) => setShowAllPolecats(e.target.checked)}
-              style={styles.toggleHiddenInput}
-            />
-            <span style={styles.toggleText}>SHOW ALL</span>
-          </label>
+          {isGasTown && (
+            <label style={styles.toggleLabel}>
+              <span
+                style={{
+                  ...styles.toggleCheckbox,
+                  backgroundColor: showAllPolecats ? colors.primary : 'transparent',
+                  borderColor: showAllPolecats ? colors.primary : colors.primaryDim,
+                }}
+                role="checkbox"
+                aria-checked={showAllPolecats}
+              >
+                {showAllPolecats && <span style={styles.toggleCheckmark}>✓</span>}
+              </span>
+              <input
+                type="checkbox"
+                checked={showAllPolecats}
+                onChange={(e) => setShowAllPolecats(e.target.checked)}
+                style={styles.toggleHiddenInput}
+              />
+              <span style={styles.toggleText}>SHOW ALL</span>
+            </label>
+          )}
           <div style={styles.syncStatus}>
             <span style={styles.syncIndicator}>
               {loading ? '◌' : error ? '✕' : '●'}

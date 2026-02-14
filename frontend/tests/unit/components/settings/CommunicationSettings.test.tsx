@@ -8,6 +8,25 @@ vi.mock("qrcode.react", () => ({
   QRCodeSVG: () => null,
 }));
 
+vi.mock("../../../../src/contexts/ModeContext", () => ({
+  useMode: vi.fn(() => ({
+    mode: "gastown",
+    features: ["power_control", "rigs", "websocket", "sse"],
+    availableModes: [
+      { mode: "gastown", available: true },
+      { mode: "standalone", available: true },
+      { mode: "swarm", available: true },
+    ],
+    loading: false,
+    error: null,
+    isGasTown: true,
+    isStandalone: false,
+    isSwarm: false,
+    hasFeature: () => false,
+    switchMode: vi.fn(),
+  })),
+}));
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -127,40 +146,44 @@ describe("Communication Settings", () => {
   });
 
   describe("mode switcher", () => {
-    it("should display current mode after loading", async () => {
+    it("should display deployment mode section", () => {
       renderSettings();
-
-      await waitFor(() => {
-        expect(screen.getByText("MODE:")).toBeTruthy();
-      });
+      expect(screen.getByText("DEPLOYMENT MODE")).toBeTruthy();
     });
 
-    it("should render all three mode options", async () => {
+    it("should render all three mode options", () => {
       renderSettings();
-
-      await waitFor(() => {
-        expect(screen.getByText("GAS TOWN")).toBeTruthy();
-      });
-      expect(screen.getByText("STANDALONE")).toBeTruthy();
+      expect(screen.getByText("GAS TOWN")).toBeTruthy();
+      expect(screen.getByText("SINGLE AGENT")).toBeTruthy();
       expect(screen.getByText("SWARM")).toBeTruthy();
     });
 
-    it("should switch mode when clicking a different mode", async () => {
-      renderSettings();
-
-      await waitFor(() => {
-        expect(screen.getByText("STANDALONE")).toBeTruthy();
+    it("should call switchMode when clicking a different mode", async () => {
+      const { useMode } = await import("../../../../src/contexts/ModeContext");
+      const mockSwitchMode = vi.fn();
+      vi.mocked(useMode).mockReturnValue({
+        mode: "gastown",
+        features: [],
+        availableModes: [
+          { mode: "gastown", available: true },
+          { mode: "standalone", available: true },
+          { mode: "swarm", available: true },
+        ],
+        loading: false,
+        error: null,
+        isGasTown: true,
+        isStandalone: false,
+        isSwarm: false,
+        hasFeature: () => false,
+        switchMode: mockSwitchMode,
       });
 
-      fireEvent.click(screen.getByText("STANDALONE"));
+      renderSettings();
+
+      fireEvent.click(screen.getByText("SINGLE AGENT"));
 
       await waitFor(() => {
-        // The fetch should have been called with mode switch
-        const calls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls;
-        const postCall = calls.find(
-          (c: unknown[]) => typeof c[0] === "string" && c[0].includes("/api/mode") && (c[1] as RequestInit)?.method === "POST"
-        );
-        expect(postCall).toBeTruthy();
+        expect(mockSwitchMode).toHaveBeenCalledWith("standalone");
       });
     });
   });

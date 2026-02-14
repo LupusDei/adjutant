@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { BeadsView } from "./components/beads/BeadsView";
 import { MayorChat } from "./components/chat/MayorChat";
 import { EpicsView } from "./components/epics/EpicsView";
@@ -12,6 +12,7 @@ import { QuickInput } from "./components/shared/QuickInput";
 import { RigFilter } from "./components/shared/RigFilter";
 import { RigProvider } from "./contexts/RigContext";
 import { CommunicationProvider } from "./contexts/CommunicationContext";
+import { ModeProvider, useVisibleTabs } from "./contexts/ModeContext";
 import { DashboardView } from "./components/dashboard/OverviewDashboard";
 
 export type ThemeId = 'green' | 'red' | 'blue' | 'tan' | 'pink' | 'purple';
@@ -51,12 +52,26 @@ function useIsSmallScreen(breakpoint = 768) {
   return isSmall;
 }
 
-function App() {
+function AppContent() {
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
   const [theme, setTheme] = useState<ThemeId>(
     (localStorage.getItem('gt-theme') as ThemeId) || 'green'
   );
   const isSmallScreen = useIsSmallScreen();
+  const visibleTabs = useVisibleTabs();
+
+  // Filter tabs based on current mode
+  const filteredTabs = useMemo(
+    () => TABS.filter((tab) => visibleTabs.has(tab.id)),
+    [visibleTabs]
+  );
+
+  // Redirect to first visible tab if current tab becomes hidden
+  useEffect(() => {
+    if (!visibleTabs.has(activeTab) && filteredTabs.length > 0) {
+      setActiveTab(filteredTabs[0].id);
+    }
+  }, [visibleTabs, activeTab, filteredTabs]);
 
   // Apply theme to document element (html) globally for proper CSS variable cascade
   useEffect(() => {
@@ -65,35 +80,34 @@ function App() {
   }, [theme]);
 
   return (
-    <RigProvider>
-    <CommunicationProvider>
-      <CRTScreen showBootSequence={true} enableFlicker={true} enableScanlines={true} enableNoise={true}>
-        <div className="app-container">
-          <header className="app-header">
-            <h1 className="crt-glow">ADJUTANT</h1>
-            <div className="header-controls">
-              <OverseerNotificationStatus />
-              <RigFilter />
-              <NuclearPowerButton comingSoon={true} />
-            </div>
-          </header>
+    <CRTScreen showBootSequence={true} enableFlicker={true} enableScanlines={true} enableNoise={true}>
+      <div className="app-container">
+        <header className="app-header">
+          <h1 className="crt-glow">ADJUTANT</h1>
+          <div className="header-controls">
+            <OverseerNotificationStatus />
+            <RigFilter />
+            <NuclearPowerButton comingSoon={true} />
+          </div>
+        </header>
 
-          <nav className="app-nav">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                className={`nav-tab ${activeTab === tab.id ? "active" : ""}`}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                }}
-                title={tab.label}
-              >
-                {isSmallScreen && tab.id === "settings" ? tab.icon : tab.label}
-              </button>
-            ))}
-          </nav>
+        <nav className="app-nav">
+          {filteredTabs.map((tab) => (
+            <button
+              key={tab.id}
+              className={`nav-tab ${activeTab === tab.id ? "active" : ""}`}
+              onClick={() => {
+                setActiveTab(tab.id);
+              }}
+              title={tab.label}
+            >
+              {isSmallScreen && tab.id === "settings" ? tab.icon : tab.label}
+            </button>
+          ))}
+        </nav>
 
-          <main className="app-content">
+        <main className="app-content">
+          {visibleTabs.has("dashboard") && (
             <section
               className="tab-view"
               hidden={activeTab !== "dashboard"}
@@ -101,6 +115,8 @@ function App() {
             >
               <DashboardView />
             </section>
+          )}
+          {visibleTabs.has("mail") && (
             <section
               className="tab-view"
               hidden={activeTab !== "mail"}
@@ -108,13 +124,15 @@ function App() {
             >
               <MailView isActive={activeTab === "mail"} />
             </section>
-            <section
-              className="tab-view"
-              hidden={activeTab !== "chat"}
-              aria-hidden={activeTab !== "chat"}
-            >
-              <MayorChat isActive={activeTab === "chat"} />
-            </section>
+          )}
+          <section
+            className="tab-view"
+            hidden={activeTab !== "chat"}
+            aria-hidden={activeTab !== "chat"}
+          >
+            <MayorChat isActive={activeTab === "chat"} />
+          </section>
+          {visibleTabs.has("epics") && (
             <section
               className="tab-view"
               hidden={activeTab !== "epics"}
@@ -122,6 +140,8 @@ function App() {
             >
               <EpicsView isActive={activeTab === "epics"} />
             </section>
+          )}
+          {visibleTabs.has("crew") && (
             <section
               className="tab-view"
               hidden={activeTab !== "crew"}
@@ -129,27 +149,38 @@ function App() {
             >
               <CrewStats isActive={activeTab === "crew"} />
             </section>
-            <section
-              className="tab-view"
-              hidden={activeTab !== "beads"}
-              aria-hidden={activeTab !== "beads"}
-            >
-              <BeadsView isActive={activeTab === "beads"} />
-            </section>
-            <section
-              className="tab-view"
-              hidden={activeTab !== "settings"}
-              aria-hidden={activeTab !== "settings"}
-            >
-              <SettingsView theme={theme} setTheme={setTheme} isActive={activeTab === "settings"} />
-            </section>
-          </main>
+          )}
+          <section
+            className="tab-view"
+            hidden={activeTab !== "beads"}
+            aria-hidden={activeTab !== "beads"}
+          >
+            <BeadsView isActive={activeTab === "beads"} />
+          </section>
+          <section
+            className="tab-view"
+            hidden={activeTab !== "settings"}
+            aria-hidden={activeTab !== "settings"}
+          >
+            <SettingsView theme={theme} setTheme={setTheme} isActive={activeTab === "settings"} />
+          </section>
+        </main>
 
-          <QuickInput />
-        </div>
-      </CRTScreen>
-    </CommunicationProvider>
-    </RigProvider>
+        <QuickInput />
+      </div>
+    </CRTScreen>
+  );
+}
+
+function App() {
+  return (
+    <ModeProvider>
+      <RigProvider>
+        <CommunicationProvider>
+          <AppContent />
+        </CommunicationProvider>
+      </RigProvider>
+    </ModeProvider>
   );
 }
 

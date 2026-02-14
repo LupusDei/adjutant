@@ -8,7 +8,7 @@ import { api } from '../../services/api';
 import type { Message, SendMessageRequest } from '../../types';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoicePlayer } from '../../hooks/useVoicePlayer';
-import { useDeploymentMode } from '../../hooks/useDeploymentMode';
+import { useMode } from '../../contexts/ModeContext';
 import './chat.css';
 
 export interface CommandChatProps {
@@ -89,11 +89,12 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Get deployment mode for UI labels
-  const { isGasTown } = useDeploymentMode();
+  // Get deployment mode for UI labels and recipient adaptation
+  const { isGasTown, isSwarm } = useMode();
 
-  // Determine coordinator name based on mode
-  const coordinatorName = isGasTown ? 'MAYOR' : 'COMMAND';
+  // Determine coordinator name and address based on mode
+  // GT Mode: talk to Mayor | Swarm: talk to any agent | Standalone: direct command
+  const coordinatorName = isGasTown ? 'MAYOR' : isSwarm ? 'SWARM' : 'COMMAND';
   const coordinatorAddress = isGasTown ? 'mayor/' : 'user';
 
   // Voice input hook for recording

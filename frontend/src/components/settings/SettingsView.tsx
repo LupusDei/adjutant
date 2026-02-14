@@ -4,7 +4,8 @@ import { ThemeId } from '../../App';
 import { NotificationSettings, VoiceConfigPanel } from '../voice';
 import { getApiKey, setApiKey, clearApiKey, hasApiKey } from '../../services/api';
 import { useCommunication } from '../../contexts/CommunicationContext';
-import type { CommunicationPriority, DeploymentMode } from '../../types';
+import type { CommunicationPriority } from '../../types';
+import { useMode, type DeploymentMode } from '../../contexts/ModeContext';
 
 interface TunnelStatusData {
   state: 'stopped' | 'starting' | 'running' | 'error';
@@ -63,30 +64,6 @@ const PRIORITIES: PriorityOption[] = [
   },
 ];
 
-interface ModeOption {
-  id: DeploymentMode;
-  label: string;
-  description: string;
-}
-
-const MODES: ModeOption[] = [
-  {
-    id: 'gastown',
-    label: 'GAS TOWN',
-    description: 'Full multi-agent infrastructure',
-  },
-  {
-    id: 'standalone',
-    label: 'STANDALONE',
-    description: 'Single project, no GT infra',
-  },
-  {
-    id: 'swarm',
-    label: 'SWARM',
-    description: 'Multi-agent without GT hierarchy',
-  },
-];
-
 interface SettingsViewProps {
   theme: ThemeId;
   setTheme: (theme: ThemeId) => void;
@@ -97,7 +74,15 @@ interface SettingsViewProps {
  * Settings view component.
  * Displays system settings and connection info including the public URL for remote access.
  */
+const MODE_OPTIONS: Array<{ mode: DeploymentMode; label: string; icon: string; description: string }> = [
+  { mode: 'gastown', label: 'GAS TOWN', icon: '🏭', description: 'Full multi-agent infrastructure with Mayor, Witness, Refinery' },
+  { mode: 'standalone', label: 'SINGLE AGENT', icon: '🤖', description: 'One agent, one project. Direct chat interface' },
+  { mode: 'swarm', label: 'SWARM', icon: '🐝', description: 'Multiple peer agents without formal hierarchy' },
+];
+
 export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
+  const { mode: currentMode, availableModes, switchMode: doSwitchMode } = useMode();
+  const [modeSwitching, setModeSwitching] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [showCoffeeQR, setShowCoffeeQR] = useState(false);
@@ -114,59 +99,6 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
 
   // Communication priority
   const { priority: commPriority, setPriority: setCommPriority, connectionStatus } = useCommunication();
-
-  // Mode switching state
-  const [currentMode, setCurrentMode] = useState<DeploymentMode>('unknown');
-  const [availableModes, setAvailableModes] = useState<Array<{ mode: DeploymentMode; available: boolean; reason?: string }>>([]);
-  const [modeSwitching, setModeSwitching] = useState(false);
-  const [modeError, setModeError] = useState<string | null>(null);
-
-  // Fetch mode info
-  const fetchModeInfo = useCallback(async () => {
-    try {
-      const response = await fetch('/api/mode');
-      if (!response.ok) return;
-      const result = await response.json() as { success: boolean; data?: { mode: DeploymentMode; features: string[]; availableModes: Array<{ mode: DeploymentMode; available: boolean; reason?: string }> } };
-      if (result.success && result.data) {
-        setCurrentMode(result.data.mode);
-        setAvailableModes(result.data.availableModes);
-      }
-    } catch {
-      // Silent fail - mode info is supplementary
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isActive) {
-      fetchModeInfo();
-    }
-  }, [isActive, fetchModeInfo]);
-
-  const handleModeSwitch = useCallback(async (newMode: DeploymentMode) => {
-    if (modeSwitching || newMode === currentMode) return;
-    setModeSwitching(true);
-    setModeError(null);
-
-    try {
-      const response = await fetch('/api/mode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: newMode }),
-      });
-      const result = await response.json() as { success: boolean; data?: { mode: DeploymentMode; features: string[]; availableModes: Array<{ mode: DeploymentMode; available: boolean; reason?: string }> }; error?: { message: string } };
-
-      if (result.success && result.data) {
-        setCurrentMode(result.data.mode);
-        setAvailableModes(result.data.availableModes);
-      } else {
-        setModeError(result.error?.message ?? 'Failed to switch mode');
-      }
-    } catch (err) {
-      setModeError(err instanceof Error ? err.message : 'Failed to switch mode');
-    } finally {
-      setModeSwitching(false);
-    }
-  }, [modeSwitching, currentMode]);
 
   const handleSaveApiKey = useCallback(() => {
     if (apiKeyInput.trim()) {
@@ -452,6 +384,52 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
         </section>
 
         <section style={styles.section}>
+          <h2 style={styles.sectionTitle}>DEPLOYMENT MODE</h2>
+          <div style={styles.modeGrid}>
+            {MODE_OPTIONS.map((opt) => {
+              const isActive = currentMode === opt.mode;
+              const availability = availableModes.find((a) => a.mode === opt.mode);
+              const isAvailable = availability?.available ?? true;
+              return (
+                <button
+                  key={opt.mode}
+                  type="button"
+                  style={{
+                    ...styles.modeCard,
+                    borderColor: isActive ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)',
+                    borderWidth: isActive ? '2px' : '1px',
+                    opacity: isAvailable ? 1 : 0.4,
+                    cursor: isAvailable && !isActive && !modeSwitching ? 'pointer' : 'default',
+                  }}
+                  disabled={!isAvailable || isActive || modeSwitching}
+                  onClick={async () => {
+                    if (!isAvailable || isActive || modeSwitching) return;
+                    setModeSwitching(true);
+                    await doSwitchMode(opt.mode);
+                    setModeSwitching(false);
+                  }}
+                >
+                  <div style={styles.modeCardHeader}>
+                    <span style={styles.modeIcon}>{opt.icon}</span>
+                    <span style={{
+                      ...styles.modeLabel,
+                      color: isActive ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)',
+                    }}>
+                      {opt.label}
+                    </span>
+                    {isActive && <span style={styles.modeActiveBadge}>ACTIVE</span>}
+                  </div>
+                  <div style={styles.modeDescription}>{opt.description}</div>
+                  {!isAvailable && availability?.reason && (
+                    <div style={styles.modeUnavailable}>{availability.reason}</div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section style={styles.section}>
           <h2 style={styles.sectionTitle}>API AUTHENTICATION</h2>
 
           <div style={styles.field}>
@@ -563,62 +541,6 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
               );
             })}
           </div>
-
-          {currentMode !== 'unknown' && (
-            <>
-              <div style={{ ...styles.field, marginTop: '1rem' }}>
-                <span style={styles.label}>MODE:</span>
-                <span style={{
-                  color: colors.primary,
-                  textShadow: `0 0 8px ${colors.primaryGlow}`,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.1em',
-                } as CSSProperties}>
-                  {currentMode}
-                </span>
-              </div>
-
-              <div style={styles.priorityGrid}>
-                {MODES.map((m) => {
-                  const isSelected = currentMode === m.id;
-                  const modeInfo = availableModes.find(am => am.mode === m.id);
-                  const isAvailable = modeInfo?.available ?? false;
-                  const isDisabled = !isAvailable || modeSwitching;
-
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      style={{
-                        ...styles.priorityCard,
-                        borderColor: isSelected ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)',
-                        borderWidth: isSelected ? '2px' : '1px',
-                        padding: isSelected ? '7px' : '8px',
-                        boxShadow: isSelected ? '0 0 8px var(--crt-phosphor-glow)' : 'none',
-                        opacity: isDisabled && !isSelected ? 0.4 : 1,
-                        cursor: isDisabled ? 'not-allowed' : 'pointer',
-                      }}
-                      onClick={() => !isDisabled && handleModeSwitch(m.id)}
-                      disabled={isDisabled}
-                      title={!isAvailable ? modeInfo?.reason : undefined}
-                    >
-                      <span style={{
-                        ...styles.priorityLabel,
-                        color: isSelected ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)',
-                      }}>
-                        {m.label}
-                      </span>
-                      <span style={styles.priorityDesc}>{m.description}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {modeError && (
-                <p style={styles.errorHint}>{modeError}</p>
-              )}
-            </>
-          )}
         </section>
 
         <section style={styles.section}>
@@ -1077,6 +999,63 @@ const styles = {
     transition: 'all 0.1s',
     minHeight: '44px',
   } as CSSProperties,
+
+  modeGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+    gap: '12px',
+  },
+
+  modeCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    padding: '12px',
+    border: '1px solid',
+    borderRadius: '4px',
+    background: 'transparent',
+    fontFamily: 'inherit',
+    color: colors.primary,
+    textAlign: 'left',
+    transition: 'all 0.2s ease',
+  } as CSSProperties,
+
+  modeCardHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+
+  modeIcon: {
+    fontSize: '1.2rem',
+  },
+
+  modeLabel: {
+    fontSize: '0.85rem',
+    fontWeight: 'bold',
+    letterSpacing: '0.1em',
+  },
+
+  modeActiveBadge: {
+    fontSize: '0.6rem',
+    letterSpacing: '0.1em',
+    color: colors.primary,
+    border: `1px solid ${colors.primary}`,
+    padding: '1px 6px',
+    marginLeft: 'auto',
+  },
+
+  modeDescription: {
+    fontSize: '0.7rem',
+    color: colors.primaryDim,
+    lineHeight: 1.4,
+  },
+
+  modeUnavailable: {
+    fontSize: '0.65rem',
+    color: colors.red,
+    fontStyle: 'italic',
+  },
 } satisfies Record<string, CSSProperties>;
 
 export default SettingsView;
