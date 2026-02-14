@@ -1,42 +1,41 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-vi.mock("../../src/services/bd-client.js", () => ({
-  execBd: vi.fn(),
-  resolveBeadsDir: vi.fn(() => "/tmp/town/.beads"),
+import type { MailTransport } from "../../src/services/transport/mail-transport.js";
+import type { Message } from "../../src/types/index.js";
+
+// Create a mock transport that all tests share
+const mockTransport: MailTransport = {
+  name: "mock",
+  listMail: vi.fn(),
+  getMessage: vi.fn(),
+  sendMessage: vi.fn(),
+  markRead: vi.fn(),
+  getSenderIdentity: vi.fn(() => "overseer"),
+};
+
+vi.mock("../../src/services/transport/index.js", () => ({
+  getTransport: vi.fn(() => mockTransport),
 }));
 
-vi.mock("../../src/services/gastown-workspace.js", () => ({
-  resolveTownRoot: vi.fn(() => "/tmp/town"),
-  resolveGtBinary: vi.fn(() => "gt"),
+vi.mock("../../src/services/event-bus.js", () => ({
+  getEventBus: vi.fn(() => ({
+    emit: vi.fn(),
+  })),
 }));
 
-vi.mock("../../src/services/mail-data.js", () => ({
-  listMailIssues: vi.fn(),
-}));
-
-vi.mock("../../src/services/gt-executor.js", () => ({
-  gt: {
-    mail: {
-      send: vi.fn().mockResolvedValue({ success: false, error: { code: "GT_NOT_AVAILABLE", message: "gt not found" } }),
-    },
-  },
-}));
-
-import { execBd } from "../../src/services/bd-client.js";
-import { listMailIssues } from "../../src/services/mail-data.js";
 import { getMessage, listMail, markRead, sendMail } from "../../src/services/mail-service.js";
-import type { BeadsIssue } from "../../src/services/bd-client.js";
 
-function createBeadsMessage(overrides: Partial<BeadsIssue> = {}): BeadsIssue {
+function createMessage(overrides: Partial<Message> = {}): Message {
   return {
     id: "msg-001",
-    title: "Test Subject",
-    description: "Test body",
-    status: "open",
+    from: "mayor/",
+    to: "overseer",
+    subject: "Test Subject",
+    body: "Test body",
+    timestamp: "2026-01-11T12:00:00Z",
+    read: false,
     priority: 2,
-    issue_type: "message",
-    created_at: "2026-01-11T12:00:00Z",
-    assignee: "overseer",
-    labels: ["from:mayor/"],
+    type: "task",
+    threadId: "thread-001",
     ...overrides,
   };
 }
@@ -44,13 +43,17 @@ function createBeadsMessage(overrides: Partial<BeadsIssue> = {}): BeadsIssue {
 describe("mail-service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(mockTransport.getSenderIdentity).mockReturnValue("overseer");
   });
 
   describe("listMail", () => {
     it("returns messages sorted by newest first", async () => {
-      const older = createBeadsMessage({ id: "msg-001", created_at: "2026-01-10T12:00:00Z" });
-      const newer = createBeadsMessage({ id: "msg-002", created_at: "2026-01-11T12:00:00Z" });
-      vi.mocked(listMailIssues).mockResolvedValue([older, newer]);
+      const older = createMessage({ id: "msg-001", timestamp: "2026-01-10T12:00:00Z" });
+      const newer = createMessage({ id: "msg-002", timestamp: "2026-01-11T12:00:00Z" });
+      vi.mocked(mockTransport.listMail).mockResolvedValue({
+        success: true,
+        data: [newer, older],
+      });
 
       const result = await listMail();
 
@@ -60,7 +63,10 @@ describe("mail-service", () => {
     });
 
     it("returns error when list fails", async () => {
-      vi.mocked(listMailIssues).mockRejectedValue(new Error("bd failure"));
+      vi.mocked(mockTransport.listMail).mockResolvedValue({
+        success: false,
+        error: { code: "LIST_MAIL_ERROR", message: "bd failure" },
+      });
 
       const result = await listMail();
 
@@ -69,23 +75,23 @@ describe("mail-service", () => {
     });
 
     it("returns both received and sent messages for chat view", async () => {
-      // Message FROM mayor TO overseer (received by overseer)
-      const received = createBeadsMessage({
+      const received = createMessage({
         id: "msg-received",
-        assignee: "overseer",
-        labels: ["from:mayor/"],
-        created_at: "2026-01-10T12:00:00Z",
+        from: "mayor/",
+        to: "overseer",
+        timestamp: "2026-01-10T12:00:00Z",
       });
-      // Message FROM overseer TO mayor (sent by overseer)
-      const sent = createBeadsMessage({
+      const sent = createMessage({
         id: "msg-sent",
-        assignee: "mayor/",
-        labels: ["from:overseer"],
-        created_at: "2026-01-11T12:00:00Z",
+        from: "overseer",
+        to: "mayor/",
+        timestamp: "2026-01-11T12:00:00Z",
       });
-      vi.mocked(listMailIssues).mockResolvedValue([received, sent]);
+      vi.mocked(mockTransport.listMail).mockResolvedValue({
+        success: true,
+        data: [sent, received],
+      });
 
-      // Default identity is "overseer" - should get both received AND sent
       const result = await listMail();
 
       expect(result.success).toBe(true);
@@ -98,10 +104,9 @@ describe("mail-service", () => {
 
   describe("getMessage", () => {
     it("returns a message by ID", async () => {
-      vi.mocked(execBd).mockResolvedValue({
+      vi.mocked(mockTransport.getMessage).mockResolvedValue({
         success: true,
-        data: [createBeadsMessage({ id: "msg-123" })],
-        exitCode: 0,
+        data: createMessage({ id: "msg-123" }),
       });
 
       const result = await getMessage("msg-123");
@@ -111,10 +116,9 @@ describe("mail-service", () => {
     });
 
     it("returns NOT_FOUND when message missing", async () => {
-      vi.mocked(execBd).mockResolvedValue({
+      vi.mocked(mockTransport.getMessage).mockResolvedValue({
         success: false,
-        error: { code: "COMMAND_FAILED", message: "not found" },
-        exitCode: 1,
+        error: { code: "NOT_FOUND", message: "not found" },
       });
 
       const result = await getMessage("msg-999");
@@ -125,11 +129,10 @@ describe("mail-service", () => {
   });
 
   describe("sendMail", () => {
-    it("sends a message with labels and priority", async () => {
-      vi.mocked(execBd).mockResolvedValue({
+    it("sends a message with priority and type", async () => {
+      vi.mocked(mockTransport.sendMessage).mockResolvedValue({
         success: true,
-        data: "",
-        exitCode: 0,
+        data: { messageId: "new-msg-001" },
       });
 
       const result = await sendMail({
@@ -141,24 +144,22 @@ describe("mail-service", () => {
       });
 
       expect(result.success).toBe(true);
-      const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
-      expect(args).toContain("--assignee");
-      expect(args).toContain("mayor/");
-      expect(args).toContain("--priority");
-      expect(args).toContain("1");
-      const labelIndex = args.indexOf("--labels");
-      const labelValue = labelIndex >= 0 ? (args[labelIndex + 1] ?? "") : "";
-      expect(labelValue).toContain("from:");
-      expect(labelValue).toContain("thread:");
+      expect(mockTransport.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: "mayor/",
+          from: "overseer",
+          subject: "Hello",
+          body: "Body",
+          priority: 1,
+          type: "task",
+        })
+      );
     });
 
-    it("sends message via bd create fallback when gt is unavailable", async () => {
-      // When gt mail send fails (e.g., gt not installed), sendMail falls back to bd create.
-      // The includeReplyInstructions feature only works with gt.mail.send, not the fallback.
-      vi.mocked(execBd).mockResolvedValue({
+    it("passes includeReplyInstructions to transport", async () => {
+      vi.mocked(mockTransport.sendMessage).mockResolvedValue({
         success: true,
-        data: "",
-        exitCode: 0,
+        data: { messageId: "new-msg-002" },
       });
 
       const result = await sendMail({
@@ -166,39 +167,30 @@ describe("mail-service", () => {
         body: "Please check the convoy status",
         to: "mayor/",
         type: "task",
-        includeReplyInstructions: true, // This flag is ignored in fallback path
+        includeReplyInstructions: true,
       });
 
       expect(result.success).toBe(true);
-      const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
-
-      // In fallback mode, basic message fields are still set
-      expect(args).toContain("create");
-      expect(args).toContain("Quick message");
-      expect(args).toContain("-d");
-
-      // The body is passed as-is (no reply instructions appended in fallback)
-      const descIndex = args.indexOf("-d");
-      const bodyValue = descIndex >= 0 ? (args[descIndex + 1] ?? "") : "";
-      expect(bodyValue).toBe("Please check the convoy status");
+      expect(mockTransport.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          subject: "Quick message",
+          body: "Please check the convoy status",
+          includeReplyInstructions: true,
+        })
+      );
     });
   });
 
   describe("markRead", () => {
     it("marks a message as read", async () => {
-      vi.mocked(execBd).mockResolvedValue({
+      vi.mocked(mockTransport.markRead).mockResolvedValue({
         success: true,
-        data: "",
-        exitCode: 0,
       });
 
       const result = await markRead("msg-001");
 
       expect(result.success).toBe(true);
-      expect(vi.mocked(execBd)).toHaveBeenCalledWith(
-        ["label", "add", "msg-001", "read"],
-        expect.any(Object)
-      );
+      expect(mockTransport.markRead).toHaveBeenCalledWith("msg-001");
     });
   });
 });
