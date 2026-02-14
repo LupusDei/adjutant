@@ -52,6 +52,9 @@ final class AppState: ObservableObject {
     /// Communication priority level (affects polling intervals)
     @Published var communicationPriority: CommunicationPriority = .efficient
 
+    /// Current deployment mode (gastown, standalone, swarm)
+    @Published var deploymentMode: AdjutantMode = .gastown
+
     // MARK: - Notification State
 
     /// Current notification permission status
@@ -66,6 +69,15 @@ final class AppState: ObservableObject {
         let host = apiBaseURL.host ?? ""
         return !host.contains("localhost") && !host.contains("127.0.0.1")
     }
+
+    /// Convenience: whether current mode is Gas Town
+    var isGasTown: Bool { deploymentMode == .gastown }
+
+    /// Convenience: whether current mode is standalone (single agent)
+    var isStandalone: Bool { deploymentMode == .standalone }
+
+    /// Convenience: whether current mode is swarm
+    var isSwarm: Bool { deploymentMode == .swarm }
 
     // MARK: - Dependencies
 
@@ -251,6 +263,18 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Fetches the current deployment mode from the API.
+    /// Falls back to gastown if the endpoint is unavailable.
+    func fetchDeploymentMode() async {
+        let client = apiClient
+        do {
+            let response = try await client.getMode()
+            deploymentMode = response.mode
+        } catch {
+            // Endpoint may not exist yet - keep current mode (defaults to gastown)
+        }
+    }
+
     /// Checks if voice service is available from the API
     /// Call this on app startup and when network recovers
     func checkVoiceAvailability() async {
@@ -352,6 +376,18 @@ final class AppState: ObservableObject {
             .dropFirst()
             .sink { priority in
                 UserDefaults.standard.set(priority.rawValue, forKey: "communicationPriority")
+            }
+            .store(in: &cancellables)
+
+        if let modeRaw = UserDefaults.standard.string(forKey: "deploymentMode"),
+           let mode = AdjutantMode(rawValue: modeRaw) {
+            deploymentMode = mode
+        }
+
+        $deploymentMode
+            .dropFirst()
+            .sink { mode in
+                UserDefaults.standard.set(mode.rawValue, forKey: "deploymentMode")
             }
             .store(in: &cancellables)
     }

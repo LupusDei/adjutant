@@ -2,6 +2,26 @@ import Foundation
 import SwiftUI
 import AdjutantKit
 
+// MARK: - Tab Visibility by Mode
+
+extension AppTab {
+    /// Returns the set of visible tabs for a given deployment mode.
+    ///
+    /// - GT Mode: all 7 tabs
+    /// - Single Agent: chat, beads, settings
+    /// - Swarm: chat, crew, beads, settings
+    static func visibleTabs(for mode: AdjutantMode) -> [AppTab] {
+        switch mode {
+        case .standalone:
+            return [.chat, .beads, .settings]
+        case .swarm:
+            return [.chat, .crew, .beads, .settings]
+        case .gastown, .unknown:
+            return AppTab.allCases
+        }
+    }
+}
+
 /// Protocol defining the interface for navigation coordinators.
 /// Coordinators manage navigation flow and decouple navigation logic from views.
 @MainActor

@@ -382,3 +382,14 @@ public struct BeadUpdateResponse: Codable, Equatable {
         self.status = status
     }
 }
+
+/// Response from the /mode endpoint
+public struct ModeResponse: Codable, Equatable {
+    public let mode: AdjutantMode
+    public let features: [String]
+
+    public init(mode: AdjutantMode, features: [String] = []) {
+        self.mode = mode
+        self.features = features
+    }
+}

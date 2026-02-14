@@ -55,9 +55,9 @@ struct BeadsListView: View {
 
     private var headerView: some View {
         HStack(spacing: CRTTheme.Spacing.sm) {
-            // Title
+            // Title adapts to mode
             VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxxs) {
-                CRTText("WORK BOARD", style: .header)
+                CRTText(appState.isGasTown ? "WORK BOARD" : "TASKS", style: .header)
                     .crtGlow(color: theme.primary, radius: 4, intensity: 0.4)
             }
 
@@ -105,15 +105,17 @@ struct BeadsListView: View {
 
     private var filterBar: some View {
         VStack(spacing: CRTTheme.Spacing.xs) {
-            // Top row: Overseer toggle + Rig filter
-            HStack(spacing: CRTTheme.Spacing.sm) {
-                // Overseer toggle
-                overseerToggle
+            // Top row: Overseer toggle + Rig filter (GT mode only)
+            if appState.isGasTown {
+                HStack(spacing: CRTTheme.Spacing.sm) {
+                    // Overseer toggle
+                    overseerToggle
 
-                Spacer()
+                    Spacer()
 
-                // Rig filter dropdown
-                RigFilterDropdown(availableRigs: appState.availableRigs)
+                    // Rig filter dropdown
+                    RigFilterDropdown(availableRigs: appState.availableRigs)
+                }
             }
 
             // Search field
@@ -200,8 +202,10 @@ struct BeadsListView: View {
             errorView(errorMessage)
         } else if viewModel.isEmpty {
             emptyView
-        } else {
+        } else if appState.isGasTown {
             kanbanBoard
+        } else {
+            simpleBeadsList
         }
     }
 
@@ -287,6 +291,70 @@ struct BeadsListView: View {
                 }
             }
         )
+    }
+
+    /// Simple list view for non-GT modes (standalone/swarm).
+    /// Shows beads as a flat scrollable list without Kanban columns.
+    private var simpleBeadsList: some View {
+        ScrollView {
+            LazyVStack(spacing: CRTTheme.Spacing.sm) {
+                ForEach(filteredBeadsForKanban) { bead in
+                    Button {
+                        coordinator.navigate(to: .beadDetail(id: bead.id))
+                    } label: {
+                        HStack(spacing: CRTTheme.Spacing.sm) {
+                            // Status indicator
+                            Circle()
+                                .fill(beadStatusColor(bead.status))
+                                .frame(width: 8, height: 8)
+
+                            // Title and ID
+                            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxs) {
+                                CRTText(bead.title, style: .body)
+                                HStack(spacing: CRTTheme.Spacing.xs) {
+                                    CRTText(bead.id, style: .caption, color: theme.dim)
+                                    if let assignee = bead.assignee {
+                                        CRTText(assignee, style: .caption, color: theme.dim)
+                                    }
+                                }
+                            }
+
+                            Spacer()
+
+                            // Status badge
+                            CRTText(bead.status.uppercased(), style: .caption, color: theme.dim)
+                        }
+                        .padding(.horizontal, CRTTheme.Spacing.md)
+                        .padding(.vertical, CRTTheme.Spacing.sm)
+                        .background(CRTTheme.Background.elevated)
+                        .cornerRadius(CRTTheme.CornerRadius.sm)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                                .stroke(theme.primary.opacity(0.2), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, CRTTheme.Spacing.md)
+            .padding(.vertical, CRTTheme.Spacing.sm)
+        }
+        .refreshable {
+            await viewModel.refresh()
+        }
+    }
+
+    private func beadStatusColor(_ status: String) -> Color {
+        switch status.lowercased() {
+        case "hooked", "in_progress":
+            return CRTTheme.State.warning
+        case "closed", "completed":
+            return CRTTheme.State.success
+        case "open":
+            return theme.primary
+        default:
+            return theme.dim
+        }
     }
 
     // MARK: - Drag & Drop Handling

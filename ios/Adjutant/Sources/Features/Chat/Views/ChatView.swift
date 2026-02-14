@@ -7,6 +7,7 @@ import AdjutantKit
 struct ChatView: View {
     @Environment(\.crtTheme) private var theme
     @StateObject private var viewModel: ChatViewModel
+    @ObservedObject private var appState = AppState.shared
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showRecipientSelector = false
     @State private var showConnectionDetails = false
@@ -95,20 +96,29 @@ struct ChatView: View {
 
     private var chatHeader: some View {
         HStack {
-            Button {
-                showRecipientSelector = true
-            } label: {
+            if appState.isStandalone {
+                // Single agent mode: no recipient selector
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: CRTTheme.Spacing.xs) {
-                        CRTText(viewModel.recipientDisplayName, style: .subheader, glowIntensity: .medium)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(theme.primary)
-                    }
+                    CRTText("COMMAND", style: .subheader, glowIntensity: .medium)
                     CRTText("DIRECT CHANNEL", style: .caption, glowIntensity: .subtle, color: theme.dim)
                 }
+            } else {
+                // GT/Swarm: recipient selector
+                Button {
+                    showRecipientSelector = true
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: CRTTheme.Spacing.xs) {
+                            CRTText(viewModel.recipientDisplayName, style: .subheader, glowIntensity: .medium)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(theme.primary)
+                        }
+                        CRTText("DIRECT CHANNEL", style: .caption, glowIntensity: .subtle, color: theme.dim)
+                    }
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
 
             Spacer()
 
@@ -292,6 +302,7 @@ private struct TypingDots: View {
 private struct RecipientSelectorSheet: View {
     @Environment(\.crtTheme) private var theme
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var appState = AppState.shared
 
     let recipients: [CrewMember]
     let selectedRecipient: String
@@ -320,18 +331,20 @@ private struct RecipientSelectorSheet: View {
                 // Recipients list
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        // Mayor is always first
-                        recipientRow(
-                            id: "mayor/",
-                            name: "Mayor",
-                            type: .mayor,
-                            isSelected: selectedRecipient == "mayor/"
-                        )
+                        // Mayor entry (GT mode only)
+                        if appState.isGasTown {
+                            recipientRow(
+                                id: "mayor/",
+                                name: "Mayor",
+                                type: .mayor,
+                                isSelected: selectedRecipient == "mayor/"
+                            )
 
-                        Divider()
-                            .background(theme.dim.opacity(0.3))
+                            Divider()
+                                .background(theme.dim.opacity(0.3))
+                        }
 
-                        // Other recipients
+                        // Agent list
                         ForEach(filteredRecipients) { crew in
                             recipientRow(
                                 id: crew.id,

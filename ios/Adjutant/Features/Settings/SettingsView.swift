@@ -6,6 +6,7 @@ import AdjutantKit
 struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
     @EnvironmentObject private var coordinator: AppCoordinator
+    @ObservedObject private var appState = AppState.shared
     @Environment(\.crtTheme) private var theme
 
     var body: some View {
@@ -17,8 +18,10 @@ struct SettingsView: View {
                 // Theme Section
                 themeSection
 
-                // Tunnel Section
-                tunnelSection
+                // Tunnel Section (GT mode only)
+                if appState.isGasTown {
+                    tunnelSection
+                }
 
                 // Server URL Section
                 serverSection
@@ -35,8 +38,10 @@ struct SettingsView: View {
                 // Voice Section
                 voiceSection
 
-                // Rig Filter Section
-                rigFilterSection
+                // Rig Filter Section (GT mode only)
+                if appState.isGasTown {
+                    rigFilterSection
+                }
 
                 // About Section
                 aboutSection

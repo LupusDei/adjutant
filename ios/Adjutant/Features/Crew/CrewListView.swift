@@ -6,6 +6,7 @@ import AdjutantKit
 struct CrewListView: View {
     @Environment(\.crtTheme) private var theme
     @StateObject private var viewModel: CrewListViewModel
+    @ObservedObject private var appState = AppState.shared
     @State private var showingRigPicker = false
 
     /// Callback when a crew member is selected
@@ -44,7 +45,7 @@ struct CrewListView: View {
     private var headerView: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                CRTText("CREW", style: .subheader, glowIntensity: .medium)
+                CRTText(appState.isSwarm ? "SWARM AGENTS" : "CREW", style: .subheader, glowIntensity: .medium)
                 CRTText("\(viewModel.displayedCount) AGENTS", style: .caption, glowIntensity: .subtle, color: theme.dim)
             }
 
@@ -118,41 +119,43 @@ struct CrewListView: View {
                     .stroke(theme.primary.opacity(0.3), lineWidth: 1)
             )
 
-            // Rig filter button
-            HStack {
-                Button {
-                    showingRigPicker = true
-                } label: {
-                    HStack(spacing: CRTTheme.Spacing.xxs) {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                            .font(.system(size: 12))
-
-                        if let rig = viewModel.selectedRig {
-                            CRTText(rig.uppercased(), style: .caption, glowIntensity: .subtle)
-                        } else {
-                            CRTText("ALL RIGS", style: .caption, glowIntensity: .subtle, color: theme.dim)
-                        }
-                    }
-                    .foregroundColor(viewModel.selectedRig != nil ? theme.primary : theme.dim)
-                    .padding(.horizontal, CRTTheme.Spacing.sm)
-                    .padding(.vertical, CRTTheme.Spacing.xxs)
-                    .background(
-                        RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                            .fill(viewModel.selectedRig != nil ? theme.primary.opacity(0.15) : Color.clear)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                            .stroke(viewModel.selectedRig != nil ? theme.primary.opacity(0.5) : theme.dim.opacity(0.3), lineWidth: 1)
-                    )
-                }
-
-                Spacer()
-
-                if viewModel.hasActiveFilters {
+            // Rig filter button (GT mode only - other modes have no rigs)
+            if appState.isGasTown {
+                HStack {
                     Button {
-                        viewModel.clearFilters()
+                        showingRigPicker = true
                     } label: {
-                        CRTText("CLEAR", style: .caption, glowIntensity: .subtle, color: theme.dim)
+                        HStack(spacing: CRTTheme.Spacing.xxs) {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                                .font(.system(size: 12))
+
+                            if let rig = viewModel.selectedRig {
+                                CRTText(rig.uppercased(), style: .caption, glowIntensity: .subtle)
+                            } else {
+                                CRTText("ALL RIGS", style: .caption, glowIntensity: .subtle, color: theme.dim)
+                            }
+                        }
+                        .foregroundColor(viewModel.selectedRig != nil ? theme.primary : theme.dim)
+                        .padding(.horizontal, CRTTheme.Spacing.sm)
+                        .padding(.vertical, CRTTheme.Spacing.xxs)
+                        .background(
+                            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                                .fill(viewModel.selectedRig != nil ? theme.primary.opacity(0.15) : Color.clear)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                                .stroke(viewModel.selectedRig != nil ? theme.primary.opacity(0.5) : theme.dim.opacity(0.3), lineWidth: 1)
+                        )
+                    }
+
+                    Spacer()
+
+                    if viewModel.hasActiveFilters {
+                        Button {
+                            viewModel.clearFilters()
+                        } label: {
+                            CRTText("CLEAR", style: .caption, glowIntensity: .subtle, color: theme.dim)
+                        }
                     }
                 }
             }
@@ -219,15 +222,25 @@ struct CrewListView: View {
     private var crewList: some View {
         ScrollView {
             LazyVStack(spacing: CRTTheme.Spacing.md, pinnedViews: .sectionHeaders) {
-                ForEach(viewModel.groupedCrewMembers) { group in
-                    Section {
-                        ForEach(group.members) { member in
-                            CrewRowView(member: member) {
-                                onSelectMember?(member)
+                if appState.isGasTown {
+                    // GT mode: hierarchical view grouped by agent type
+                    ForEach(viewModel.groupedCrewMembers) { group in
+                        Section {
+                            ForEach(group.members) { member in
+                                CrewRowView(member: member) {
+                                    onSelectMember?(member)
+                                }
                             }
+                        } header: {
+                            sectionHeader(for: group)
                         }
-                    } header: {
-                        sectionHeader(for: group)
+                    }
+                } else {
+                    // Swarm mode: flat list of all agents (no hierarchy)
+                    ForEach(viewModel.flatCrewMembers) { member in
+                        CrewRowView(member: member) {
+                            onSelectMember?(member)
+                        }
                     }
                 }
 

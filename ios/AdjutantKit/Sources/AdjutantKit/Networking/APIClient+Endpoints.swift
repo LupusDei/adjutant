@@ -26,6 +26,15 @@ extension APIClient {
     }
 }
 
+// MARK: - Mode Endpoints
+
+extension APIClient {
+    /// Get the current deployment mode (gastown, standalone, swarm).
+    public func getMode() async throws -> ModeResponse {
+        try await requestWithEnvelope(.get, path: "/mode")
+    }
+}
+
 // MARK: - Power Endpoints
 
 extension APIClient {

@@ -209,8 +209,11 @@ public final class DataSyncService: ObservableObject {
         case "mail_received", "mail_read":
             Task { await fetchMail() }
         case "mode_changed":
-            // Mode changes may affect available features; refresh everything
-            Task { await refreshAll() }
+            // Update deployment mode and refresh all data
+            Task {
+                await AppState.shared.fetchDeploymentMode()
+                await refreshAll()
+            }
         case "power_state":
             // Power state is managed by AppState, but crew/beads may change
             Task {

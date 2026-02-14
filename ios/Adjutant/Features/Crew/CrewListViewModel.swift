@@ -176,4 +176,12 @@ final class CrewListViewModel: BaseViewModel {
     var hasActiveFilters: Bool {
         !searchText.isEmpty || selectedRig != nil
     }
+
+    /// Flat list of all displayed crew members (for non-GT modes).
+    /// Sorted alphabetically by name with no hierarchy grouping.
+    var flatCrewMembers: [CrewMember] {
+        groupedCrewMembers
+            .flatMap { $0.members }
+            .sorted { $0.name.lowercased() < $1.name.lowercased() }
+    }
 }

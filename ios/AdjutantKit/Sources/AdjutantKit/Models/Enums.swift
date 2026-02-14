@@ -51,3 +51,22 @@ public enum AgentState: String, Codable, CaseIterable {
     case idle
     case working
 }
+
+/// Deployment mode determining which features and UI elements are available.
+public enum AdjutantMode: String, Codable, CaseIterable, Identifiable {
+    case gastown
+    case standalone
+    case swarm
+    case unknown
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .gastown: return "GAS TOWN"
+        case .standalone: return "SINGLE AGENT"
+        case .swarm: return "SWARM"
+        case .unknown: return "UNKNOWN"
+        }
+    }
+}
