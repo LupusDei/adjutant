@@ -8,6 +8,7 @@
 import { collectAgentSnapshot, type AgentRuntimeInfo } from "./agent-data.js";
 import { resolveWorkspaceRoot } from "./workspace/index.js";
 import { getTopology } from "./topology/index.js";
+import { getEventBus } from "./event-bus.js";
 import type { CrewMember, CrewMemberStatus, AgentType } from "../types/index.js";
 
 // ============================================================================
@@ -90,12 +91,48 @@ function transformAgent(agent: AgentRuntimeInfo): CrewMember {
 }
 
 // ============================================================================
+// Status Change Tracking
+// ============================================================================
+
+/** Previous agent statuses keyed by agent id (address). */
+const previousStatuses = new Map<string, CrewMemberStatus>();
+
+/**
+ * Reset the status tracking cache (for testing).
+ */
+export function resetAgentStatusCache(): void {
+  previousStatuses.clear();
+}
+
+/**
+ * Compares current agent statuses against cached state and emits
+ * agent:status_changed events for any differences.
+ */
+function emitStatusChanges(agents: CrewMember[]): void {
+  const eventBus = getEventBus();
+
+  for (const agent of agents) {
+    const prev = previousStatuses.get(agent.id);
+    if (prev !== undefined && prev !== agent.status) {
+      const event: { agent: string; status: string; activity?: string } = {
+        agent: agent.id,
+        status: agent.status,
+      };
+      if (agent.currentTask) event.activity = agent.currentTask;
+      eventBus.emit("agent:status_changed", event);
+    }
+    previousStatuses.set(agent.id, agent.status);
+  }
+}
+
+// ============================================================================
 // Service Functions
 // ============================================================================
 
 /**
  * Gets all agents as CrewMember list for the dashboard.
  * Uses gt status --json which includes mail counts.
+ * Emits agent:status_changed events when agent statuses change.
  */
 export async function getAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
   try {
@@ -103,6 +140,7 @@ export async function getAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
     const { agents } = await collectAgentSnapshot(townRoot);
     const crewMembers = agents.map(transformAgent);
     crewMembers.sort((a, b) => a.name.localeCompare(b.name));
+    emitStatusChanges(crewMembers);
     return { success: true, data: crewMembers };
   } catch (err) {
     return {
