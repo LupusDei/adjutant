@@ -33,6 +33,8 @@ final class ChatViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isRecordingVoice)
         XCTAssertTrue(viewModel.hasMoreHistory)
         XCTAssertFalse(viewModel.isLoadingHistory)
+        XCTAssertEqual(viewModel.connectionState, .disconnected)
+        XCTAssertNil(viewModel.streamingText)
     }
 
     // MARK: - Connection State Tests
@@ -544,5 +546,267 @@ final class ChatViewModelSpeechTests: XCTestCase {
 
         let apiConfig = APIClientConfiguration(baseURL: URL(string: "http://test.local")!)
         return APIClient(configuration: apiConfig, session: session)
+    }
+}
+
+// MARK: - WebSocket Service Tests
+
+@MainActor
+final class ChatWebSocketServiceTests: XCTestCase {
+    private var service: ChatWebSocketService!
+    private var cancellables: Set<AnyCancellable>!
+
+    override func setUp() async throws {
+        cancellables = Set<AnyCancellable>()
+        service = ChatWebSocketService()
+    }
+
+    override func tearDown() async throws {
+        service.disconnect()
+        service = nil
+        cancellables = nil
+    }
+
+    func testInitialState() {
+        XCTAssertEqual(service.connectionState, .disconnected)
+        XCTAssertFalse(service.isRemoteTyping)
+        XCTAssertNil(service.activeStream)
+        XCTAssertFalse(service.isConnected)
+    }
+
+    func testDisconnectClearsState() {
+        service.disconnect()
+        XCTAssertEqual(service.connectionState, .disconnected)
+        XCTAssertFalse(service.isRemoteTyping)
+        XCTAssertNil(service.activeStream)
+    }
+}
+
+// MARK: - WebSocket Client Tests
+
+final class WebSocketClientTests: XCTestCase {
+    func testClientCreationWithHTTPURL() {
+        let client = WebSocketClient(
+            baseURL: URL(string: "http://localhost:4201/api")!,
+            apiKey: nil
+        )
+        XCTAssertNotNil(client)
+    }
+
+    func testClientCreationWithHTTPSURL() {
+        let client = WebSocketClient(
+            baseURL: URL(string: "https://example.com/api")!,
+            apiKey: "test-key"
+        )
+        XCTAssertNotNil(client)
+    }
+
+    func testInitialConnectionStateIsDisconnected() {
+        let client = WebSocketClient(baseURL: URL(string: "http://localhost:4201/api")!)
+        XCTAssertEqual(client.connectionStateSubject.value, .disconnected)
+    }
+
+    func testDisconnectSetsStateToDisconnected() {
+        let client = WebSocketClient(baseURL: URL(string: "http://localhost:4201/api")!)
+        client.disconnect()
+        XCTAssertEqual(client.connectionStateSubject.value, .disconnected)
+    }
+}
+
+// MARK: - WsServerMessage Decoding Tests
+
+final class WsServerMessageDecodingTests: XCTestCase {
+    private let decoder = JSONDecoder()
+
+    func testDecodeAuthChallenge() throws {
+        let json = "{\"type\":\"auth_challenge\"}".data(using: .utf8)!
+        let msg = try decoder.decode(WsServerMessage.self, from: json)
+        XCTAssertEqual(msg.type, "auth_challenge")
+    }
+
+    func testDecodeConnected() throws {
+        let json = "{\"type\":\"connected\",\"sessionId\":\"abc-123\",\"lastSeq\":42,\"serverTime\":\"2026-02-14T00:00:00Z\"}".data(using: .utf8)!
+        let msg = try decoder.decode(WsServerMessage.self, from: json)
+        XCTAssertEqual(msg.type, "connected")
+        XCTAssertEqual(msg.sessionId, "abc-123")
+        XCTAssertEqual(msg.lastSeq, 42)
+    }
+
+    func testDecodeChatMessage() throws {
+        let json = "{\"type\":\"message\",\"id\":\"msg-1\",\"seq\":5,\"from\":\"mayor/\",\"to\":\"user\",\"body\":\"Hello\",\"timestamp\":\"2026-02-14T00:00:00Z\"}".data(using: .utf8)!
+        let msg = try decoder.decode(WsServerMessage.self, from: json)
+        XCTAssertEqual(msg.type, "message")
+        XCTAssertEqual(msg.id, "msg-1")
+        XCTAssertEqual(msg.seq, 5)
+        XCTAssertEqual(msg.from, "mayor/")
+        XCTAssertEqual(msg.body, "Hello")
+    }
+
+    func testDecodeDelivered() throws {
+        let json = "{\"type\":\"delivered\",\"messageId\":\"server-id\",\"clientId\":\"client-id\",\"timestamp\":\"2026-02-14T00:00:00Z\"}".data(using: .utf8)!
+        let msg = try decoder.decode(WsServerMessage.self, from: json)
+        XCTAssertEqual(msg.type, "delivered")
+        XCTAssertEqual(msg.messageId, "server-id")
+        XCTAssertEqual(msg.clientId, "client-id")
+    }
+
+    func testDecodeTypingIndicator() throws {
+        let json = "{\"type\":\"typing\",\"from\":\"mayor/\",\"state\":\"started\"}".data(using: .utf8)!
+        let msg = try decoder.decode(WsServerMessage.self, from: json)
+        XCTAssertEqual(msg.type, "typing")
+        XCTAssertEqual(msg.from, "mayor/")
+        XCTAssertEqual(msg.state, "started")
+    }
+
+    func testDecodeStreamToken() throws {
+        let json = "{\"type\":\"stream_token\",\"streamId\":\"stream-1\",\"token\":\"Hello \",\"from\":\"mayor/\"}".data(using: .utf8)!
+        let msg = try decoder.decode(WsServerMessage.self, from: json)
+        XCTAssertEqual(msg.type, "stream_token")
+        XCTAssertEqual(msg.streamId, "stream-1")
+        XCTAssertEqual(msg.token, "Hello ")
+    }
+
+    func testDecodeStreamEnd() throws {
+        let json = "{\"type\":\"stream_end\",\"streamId\":\"stream-1\",\"messageId\":\"msg-final\"}".data(using: .utf8)!
+        let msg = try decoder.decode(WsServerMessage.self, from: json)
+        XCTAssertEqual(msg.type, "stream_end")
+        XCTAssertEqual(msg.streamId, "stream-1")
+        XCTAssertEqual(msg.messageId, "msg-final")
+    }
+
+    func testDecodeError() throws {
+        let json = "{\"type\":\"error\",\"code\":\"rate_limited\",\"message\":\"Too many messages\"}".data(using: .utf8)!
+        let msg = try decoder.decode(WsServerMessage.self, from: json)
+        XCTAssertEqual(msg.type, "error")
+        XCTAssertEqual(msg.code, "rate_limited")
+        XCTAssertEqual(msg.message, "Too many messages")
+    }
+
+    func testDecodeSyncResponse() throws {
+        let json = "{\"type\":\"sync_response\",\"missed\":[{\"type\":\"message\",\"id\":\"m1\",\"seq\":1,\"body\":\"hi\"}]}".data(using: .utf8)!
+        let msg = try decoder.decode(WsServerMessage.self, from: json)
+        XCTAssertEqual(msg.type, "sync_response")
+        XCTAssertEqual(msg.missed?.count, 1)
+        XCTAssertEqual(msg.missed?.first?.body, "hi")
+    }
+
+    func testDecodeMinimalMessage() throws {
+        let json = "{\"type\":\"pong\"}".data(using: .utf8)!
+        let msg = try decoder.decode(WsServerMessage.self, from: json)
+        XCTAssertEqual(msg.type, "pong")
+        XCTAssertNil(msg.id)
+        XCTAssertNil(msg.seq)
+    }
+}
+
+// MARK: - WsClientMessage Encoding Tests
+
+final class WsClientMessageEncodingTests: XCTestCase {
+    private let encoder = JSONEncoder()
+
+    func testEncodeAuthResponse() throws {
+        let msg = WsClientMessage(type: "auth_response", apiKey: "test-key")
+        let data = try encoder.encode(msg)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(json["type"] as? String, "auth_response")
+        XCTAssertEqual(json["apiKey"] as? String, "test-key")
+    }
+
+    func testEncodeChatMessage() throws {
+        let msg = WsClientMessage(type: "message", id: "client-1", to: "mayor/", body: "Hello")
+        let data = try encoder.encode(msg)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(json["type"] as? String, "message")
+        XCTAssertEqual(json["id"] as? String, "client-1")
+        XCTAssertEqual(json["to"] as? String, "mayor/")
+        XCTAssertEqual(json["body"] as? String, "Hello")
+    }
+
+    func testEncodeTyping() throws {
+        let msg = WsClientMessage(type: "typing", state: "started")
+        let data = try encoder.encode(msg)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(json["type"] as? String, "typing")
+        XCTAssertEqual(json["state"] as? String, "started")
+    }
+
+    func testEncodeSync() throws {
+        let msg = WsClientMessage(type: "sync", lastSeqSeen: 42)
+        let data = try encoder.encode(msg)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(json["type"] as? String, "sync")
+        XCTAssertEqual(json["lastSeqSeen"] as? Int, 42)
+    }
+
+    func testEncodeAck() throws {
+        let msg = WsClientMessage(type: "ack", seq: 10)
+        let data = try encoder.encode(msg)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(json["type"] as? String, "ack")
+        XCTAssertEqual(json["seq"] as? Int, 10)
+    }
+}
+
+// MARK: - StreamingResponse Tests
+
+@MainActor
+final class StreamingResponseTests: XCTestCase {
+    func testAssembledText() {
+        var stream = StreamingResponse(streamId: "s1", from: "mayor/")
+        stream.tokens = ["Hello", " ", "world"]
+        XCTAssertEqual(stream.assembledText, "Hello world")
+    }
+
+    func testEmptyStream() {
+        let stream = StreamingResponse(streamId: "s1", from: "mayor/")
+        XCTAssertEqual(stream.assembledText, "")
+        XCTAssertFalse(stream.isComplete)
+        XCTAssertNil(stream.messageId)
+    }
+
+    func testStreamCompletion() {
+        var stream = StreamingResponse(streamId: "s1", from: "mayor/")
+        stream.tokens = ["Done"]
+        stream.isComplete = true
+        stream.messageId = "msg-final"
+        XCTAssertTrue(stream.isComplete)
+        XCTAssertEqual(stream.messageId, "msg-final")
+        XCTAssertEqual(stream.assembledText, "Done")
+    }
+}
+
+// MARK: - Subject Generation Tests
+
+@MainActor
+final class SubjectGenerationTests: XCTestCase {
+    func testShortMessage() {
+        XCTAssertEqual(ChatViewModel.generateSubject(from: "Short"), "Short")
+    }
+
+    func testEmptyMessage() {
+        XCTAssertEqual(ChatViewModel.generateSubject(from: ""), "Chat")
+    }
+
+    func testWhitespaceOnly() {
+        XCTAssertEqual(ChatViewModel.generateSubject(from: "   "), "Chat")
+    }
+
+    func testExactly50Chars() {
+        let text = String(repeating: "a", count: 50)
+        XCTAssertEqual(ChatViewModel.generateSubject(from: text), text)
+    }
+
+    func testLongMessageTruncatesAtWordBoundary() {
+        let text = "This is a very long message that should be truncated at word boundary for subject"
+        let subject = ChatViewModel.generateSubject(from: text)
+        XCTAssertTrue(subject.hasSuffix("..."))
+        XCTAssertLessThanOrEqual(subject.count, 53) // 50 + "..."
+    }
+
+    func testLongMessageNoSpacesTruncatesAtCharLimit() {
+        let text = String(repeating: "x", count: 60)
+        let subject = ChatViewModel.generateSubject(from: text)
+        XCTAssertTrue(subject.hasSuffix("..."))
+        XCTAssertEqual(subject.count, 53) // 50 chars + "..."
     }
 }
