@@ -16,6 +16,25 @@ vi.mock('../../../../src/services/api', () => ({
   },
 }));
 
+vi.mock('../../../../src/hooks/useDeploymentMode', () => ({
+  useDeploymentMode: () => ({
+    mode: 'gastown',
+    hasPowerControl: true,
+    autoStart: false,
+    isGasTown: true,
+    loading: false,
+    error: null,
+  }),
+  default: () => ({
+    mode: 'gastown',
+    hasPowerControl: true,
+    autoStart: false,
+    isGasTown: true,
+    loading: false,
+    error: null,
+  }),
+}));
+
 const mockAgentsList = api.agents.list as ReturnType<typeof vi.fn>;
 
 // =============================================================================
