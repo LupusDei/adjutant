@@ -2,9 +2,30 @@ import Foundation
 import Combine
 import AdjutantKit
 
+// MARK: - Message Delivery State
+
+enum MessageDeliveryState: Equatable {
+    case sending
+    case delivered
+    case read
+    case failed(String)
+
+    static func == (lhs: MessageDeliveryState, rhs: MessageDeliveryState) -> Bool {
+        switch (lhs, rhs) {
+        case (.sending, .sending), (.delivered, .delivered), (.read, .read):
+            return true
+        case (.failed(let a), .failed(let b)):
+            return a == b
+        default:
+            return false
+        }
+    }
+}
+
 /// ViewModel for the Chat feature.
 /// Handles loading messages, sending new messages, and managing chat state.
 /// Supports chatting with Mayor or any crew agent.
+/// Uses WebSocket for real-time messaging with REST polling as fallback.
 @MainActor
 final class ChatViewModel: BaseViewModel {
     // MARK: - Published Properties
@@ -15,14 +36,27 @@ final class ChatViewModel: BaseViewModel {
     /// Current input text
     @Published var inputText: String = ""
 
-    /// Currently selected recipient (default: mayor/)
-    @Published private(set) var selectedRecipient: String = "mayor/"
+    /// Default recipient address, configurable per deployment mode.
+    /// Gas Town uses "mayor/", standalone uses "user".
+    static var defaultRecipient: String = "mayor/"
+
+    /// Currently selected recipient
+    @Published private(set) var selectedRecipient: String = ChatViewModel.defaultRecipient
 
     /// All available recipients (agents)
     @Published private(set) var availableRecipients: [CrewMember] = []
 
-    /// Whether the recipient is currently typing (simulated)
+    /// Whether the recipient is currently typing (real from WS or simulated)
     @Published private(set) var isTyping: Bool = false
+
+    /// Agent typing state from WebSocket
+    @Published private(set) var isAgentTyping: Bool = false
+
+    /// Agent activity description (e.g., "Thinking...", "Typing...")
+    @Published private(set) var agentActivity: String = ""
+
+    /// Delivery states for outbound messages
+    @Published private(set) var deliveryStates: [String: MessageDeliveryState] = [:]
 
     /// Whether voice input is active
     @Published private(set) var isRecordingVoice: Bool = false
@@ -51,6 +85,7 @@ final class ChatViewModel: BaseViewModel {
     // MARK: - Dependencies
 
     private let apiClient: APIClient
+    private let connectionManager: ConnectionManager
     private let speechService: (any SpeechRecognitionServiceProtocol)?
     private var ttsService: any TTSPlaybackServiceProtocol
 
@@ -63,18 +98,26 @@ final class ChatViewModel: BaseViewModel {
     private var speechCancellables = Set<AnyCancellable>()
     /// Pending optimistic messages that haven't been confirmed by the server yet
     private var pendingLocalMessages: [Message] = []
+    /// Task for debouncing typing indicator stop
+    private var typingDebounceTask: Task<Void, Never>?
+    /// Maps outbound WS message IDs to local optimistic message IDs
+    private var pendingMessageMap: [String: String] = [:]
+    /// Currently active streaming message content keyed by streamId
+    private var activeStreams: [String: (localId: String, body: String)] = [:]
 
     // MARK: - Initialization
 
-    init(apiClient: APIClient? = nil, speechService: (any SpeechRecognitionServiceProtocol)? = nil, ttsService: (any TTSPlaybackServiceProtocol)? = nil) {
+    init(apiClient: APIClient? = nil, connectionManager: ConnectionManager? = nil, speechService: (any SpeechRecognitionServiceProtocol)? = nil, ttsService: (any TTSPlaybackServiceProtocol)? = nil) {
         let client = apiClient ?? AppState.shared.apiClient
         self.apiClient = client
+        self.connectionManager = connectionManager ?? AppState.shared.connectionManager
         self.speechService = speechService
         self.ttsService = ttsService ?? (DependencyContainer.shared.resolveOptional((any TTSPlaybackServiceProtocol).self)
             ?? TTSPlaybackService(apiClient: client, baseURL: AppState.shared.apiBaseURL))
         super.init()
         setupSpeechBindings()
         setupPlaybackObservers()
+        setupTypingObserver()
         loadFromCache()
     }
 
@@ -109,6 +152,7 @@ final class ChatViewModel: BaseViewModel {
 
     deinit {
         pollingTask?.cancel()
+        typingDebounceTask?.cancel()
     }
 
     // MARK: - Lifecycle
@@ -118,6 +162,7 @@ final class ChatViewModel: BaseViewModel {
         Task {
             await loadRecipients()
         }
+        subscribeToMessages()
         startPolling()
     }
 
@@ -125,6 +170,224 @@ final class ChatViewModel: BaseViewModel {
         super.onDisappear()
         pollingTask?.cancel()
         pollingTask = nil
+        typingDebounceTask?.cancel()
+        typingDebounceTask = nil
+        unsubscribeFromMessages()
+    }
+
+    // MARK: - WebSocket Subscription
+
+    /// Subscribe to WebSocket message events via ConnectionManager
+    private func subscribeToMessages() {
+        connectionManager.onMessage = { [weak self] inbound in
+            Task { @MainActor in
+                self?.handleInboundMessage(inbound)
+            }
+        }
+
+        connectionManager.onTyping = { [weak self] indicator in
+            Task { @MainActor in
+                self?.handleTypingIndicator(indicator)
+            }
+        }
+
+        connectionManager.onStreamToken = { [weak self] token in
+            Task { @MainActor in
+                self?.handleStreamToken(token)
+            }
+        }
+
+        connectionManager.onDelivered = { [weak self] messageId in
+            Task { @MainActor in
+                self?.handleDeliveryConfirmation(messageId)
+            }
+        }
+    }
+
+    /// Remove WebSocket subscriptions
+    private func unsubscribeFromMessages() {
+        connectionManager.onMessage = nil
+        connectionManager.onTyping = nil
+        connectionManager.onStreamToken = nil
+        connectionManager.onDelivered = nil
+    }
+
+    /// Handle an inbound message from WebSocket
+    private func handleInboundMessage(_ inbound: InboundMessage) {
+        // Only show messages for the selected conversation
+        guard inbound.from == selectedRecipient || inbound.to == selectedRecipient else { return }
+
+        // Check for duplicate (already received via polling)
+        guard !messages.contains(where: { $0.id == inbound.id }) else { return }
+
+        let message = Message(
+            id: inbound.id,
+            from: inbound.from,
+            to: inbound.to,
+            subject: "",
+            body: inbound.body,
+            timestamp: ISO8601DateFormatter().string(from: inbound.timestamp),
+            read: true,
+            priority: .normal,
+            type: .task,
+            threadId: inbound.threadId ?? "",
+            pinned: false,
+            isInfrastructure: false
+        )
+
+        messages.append(message)
+        lastMessageId = inbound.id
+        ResponseCache.shared.updateChatMessages(messages)
+
+        // Clear agent typing when a message arrives
+        isAgentTyping = false
+        isTyping = false
+        agentActivity = ""
+    }
+
+    /// Handle typing indicator from WebSocket
+    private func handleTypingIndicator(_ indicator: TypingIndicator) {
+        guard indicator.from == selectedRecipient else { return }
+
+        switch indicator.state {
+        case .started:
+            isAgentTyping = true
+            isTyping = true
+            agentActivity = "Typing..."
+        case .thinking:
+            isAgentTyping = true
+            isTyping = true
+            agentActivity = "Thinking..."
+        case .stopped:
+            isAgentTyping = false
+            isTyping = false
+            agentActivity = ""
+        }
+    }
+
+    /// Handle stream token from WebSocket
+    private func handleStreamToken(_ token: StreamToken) {
+        if token.done {
+            // Stream complete — finalize the message
+            if let stream = activeStreams.removeValue(forKey: token.streamId),
+               let index = messages.firstIndex(where: { $0.id == stream.localId }) {
+                let finalized = Message(
+                    id: stream.localId,
+                    from: selectedRecipient,
+                    to: "user",
+                    subject: "",
+                    body: stream.body,
+                    timestamp: messages[index].timestamp,
+                    read: true,
+                    priority: .normal,
+                    type: .task,
+                    threadId: "",
+                    pinned: false,
+                    isInfrastructure: false
+                )
+                messages[index] = finalized
+                ResponseCache.shared.updateChatMessages(messages)
+            }
+            isAgentTyping = false
+            isTyping = false
+            agentActivity = ""
+            return
+        }
+
+        if var stream = activeStreams[token.streamId] {
+            // Append token to existing stream
+            stream.body += token.token
+            activeStreams[token.streamId] = stream
+
+            // Update the message in-place
+            if let index = messages.firstIndex(where: { $0.id == stream.localId }) {
+                let updated = Message(
+                    id: stream.localId,
+                    from: selectedRecipient,
+                    to: "user",
+                    subject: "",
+                    body: stream.body,
+                    timestamp: messages[index].timestamp,
+                    read: true,
+                    priority: .normal,
+                    type: .task,
+                    threadId: "",
+                    pinned: false,
+                    isInfrastructure: false
+                )
+                messages[index] = updated
+            }
+        } else {
+            // New stream — create a streaming message
+            let localId = "stream-\(token.streamId)"
+            let body = token.token
+            activeStreams[token.streamId] = (localId: localId, body: body)
+
+            let message = Message(
+                id: localId,
+                from: selectedRecipient,
+                to: "user",
+                subject: "",
+                body: body,
+                timestamp: ISO8601DateFormatter().string(from: Date()),
+                read: true,
+                priority: .normal,
+                type: .task,
+                threadId: "",
+                pinned: false,
+                isInfrastructure: false
+            )
+            messages.append(message)
+            isAgentTyping = true
+            isTyping = true
+            agentActivity = "Typing..."
+        }
+    }
+
+    /// Handle delivery confirmation from WebSocket
+    private func handleDeliveryConfirmation(_ messageId: String) {
+        // Map the server message ID back to our local optimistic message ID
+        if let localId = pendingMessageMap.removeValue(forKey: messageId) {
+            deliveryStates[localId] = .delivered
+        } else {
+            deliveryStates[messageId] = .delivered
+        }
+    }
+
+    // MARK: - Typing Indicator Sending
+
+    /// Set up observer to send typing indicators when user types
+    private func setupTypingObserver() {
+        $inputText
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] text in
+                guard let self else { return }
+                if !text.isEmpty {
+                    self.sendTypingStarted()
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Send typing started indicator and schedule debounced stop
+    private func sendTypingStarted() {
+        connectionManager.sendTyping(to: selectedRecipient, state: .started)
+
+        // Cancel existing debounce and schedule a new stop after 3 seconds
+        typingDebounceTask?.cancel()
+        typingDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled else { return }
+            self.sendTypingStopped()
+        }
+    }
+
+    /// Send typing stopped indicator
+    private func sendTypingStopped() {
+        typingDebounceTask?.cancel()
+        typingDebounceTask = nil
+        connectionManager.sendTyping(to: selectedRecipient, state: .stopped)
     }
 
     // MARK: - Data Loading
@@ -181,6 +444,12 @@ final class ChatViewModel: BaseViewModel {
         selectedRecipient = recipient
         messages = [] // Clear messages while loading
         pendingLocalMessages = [] // Clear pending messages for old recipient
+        activeStreams = [:]
+        pendingMessageMap = [:]
+        deliveryStates = [:]
+        isAgentTyping = false
+        isTyping = false
+        agentActivity = ""
         await refresh()
     }
 
@@ -257,22 +526,29 @@ final class ChatViewModel: BaseViewModel {
         // Track as pending so it survives refresh until server confirms
         pendingLocalMessages.append(optimisticMessage)
 
-        await performAsyncAction(showLoading: false) {
-            let request = SendMessageRequest(
-                to: self.selectedRecipient,
-                subject: subject,
-                body: text,
-                type: .task
-            )
-            _ = try await self.apiClient.sendMail(request)
+        // Stop typing indicator on send
+        sendTypingStopped()
 
-            // Simulate typing indicator briefly
-            self.isTyping = true
-            try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
-            self.isTyping = false
+        if connectionManager.wsState == .connected {
+            // Send via WebSocket
+            let outbound = OutboundMessage(to: selectedRecipient, body: text)
+            deliveryStates[optimisticMessage.id] = .sending
+            pendingMessageMap[outbound.id.uuidString] = optimisticMessage.id
+            connectionManager.sendMessage(outbound)
+        } else {
+            // Fall back to REST
+            await performAsyncAction(showLoading: false) {
+                let request = SendMessageRequest(
+                    to: self.selectedRecipient,
+                    subject: subject,
+                    body: text,
+                    type: .task
+                )
+                _ = try await self.apiClient.sendMail(request)
 
-            // Refresh to get the new message and any response
-            await self.refresh()
+                // Refresh to get the new message and any response
+                await self.refresh()
+            }
         }
     }
 
@@ -453,13 +729,16 @@ final class ChatViewModel: BaseViewModel {
         }
     }
 
-    /// Start polling for new messages
+    /// Start polling for new messages (skips polls when WebSocket is connected)
     private func startPolling() {
         pollingTask?.cancel()
         pollingTask = Task {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(pollingInterval * 1_000_000_000))
                 guard !Task.isCancelled else { break }
+
+                // Skip polling when WebSocket is connected
+                if connectionManager.wsState == .connected { continue }
 
                 // Check for new messages
                 if let response = await performAsync(showLoading: false, {

@@ -70,6 +70,9 @@ final class AppState: ObservableObject {
     /// This client is recreated when apiBaseURL changes
     private(set) var apiClient: APIClient
 
+    /// Shared connection manager for WebSocket and SSE
+    let connectionManager = ConnectionManager()
+
     /// Internal reference for status fetching
     private var _statusApiClient: APIClient?
 
