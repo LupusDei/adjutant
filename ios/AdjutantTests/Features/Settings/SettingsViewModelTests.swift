@@ -13,6 +13,7 @@ final class SettingsViewModelTests: XCTestCase {
         defaults.removeObject(forKey: "selectedVoice")
         defaults.removeObject(forKey: "voiceVolume")
         defaults.removeObject(forKey: "defaultRigFilter")
+        defaults.removeObject(forKey: "communicationPriority")
 
         viewModel = SettingsViewModel()
     }
@@ -26,6 +27,7 @@ final class SettingsViewModelTests: XCTestCase {
         defaults.removeObject(forKey: "selectedVoice")
         defaults.removeObject(forKey: "voiceVolume")
         defaults.removeObject(forKey: "defaultRigFilter")
+        defaults.removeObject(forKey: "communicationPriority")
     }
 
     // MARK: - Initial State Tests
@@ -208,6 +210,43 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(ThemeIdentifier.tan.rawValue, "tan")
         XCTAssertEqual(ThemeIdentifier.pink.rawValue, "pink")
         XCTAssertEqual(ThemeIdentifier.purple.rawValue, "purple")
+    }
+
+    // MARK: - Communication Priority Tests
+
+    func testDefaultCommunicationPriority() {
+        XCTAssertEqual(viewModel.communicationPriority, .efficient)
+    }
+
+    func testCommunicationPriorityUpdatesAppState() {
+        viewModel.communicationPriority = .realTime
+        XCTAssertEqual(AppState.shared.communicationPriority, .realTime)
+
+        viewModel.communicationPriority = .pollingOnly
+        XCTAssertEqual(AppState.shared.communicationPriority, .pollingOnly)
+
+        viewModel.communicationPriority = .efficient
+        XCTAssertEqual(AppState.shared.communicationPriority, .efficient)
+    }
+
+    func testAllCommunicationPrioritiesAvailable() {
+        let allPriorities = CommunicationPriority.allCases
+        XCTAssertEqual(allPriorities.count, 3)
+        XCTAssertTrue(allPriorities.contains(.realTime))
+        XCTAssertTrue(allPriorities.contains(.efficient))
+        XCTAssertTrue(allPriorities.contains(.pollingOnly))
+    }
+
+    func testCommunicationPriorityDisplayNames() {
+        XCTAssertEqual(CommunicationPriority.realTime.displayName, "REAL-TIME")
+        XCTAssertEqual(CommunicationPriority.efficient.displayName, "EFFICIENT")
+        XCTAssertEqual(CommunicationPriority.pollingOnly.displayName, "POLLING ONLY")
+    }
+
+    func testCommunicationPriorityRawValues() {
+        XCTAssertEqual(CommunicationPriority.realTime.rawValue, "realTime")
+        XCTAssertEqual(CommunicationPriority.efficient.rawValue, "efficient")
+        XCTAssertEqual(CommunicationPriority.pollingOnly.rawValue, "pollingOnly")
     }
 
     // MARK: - PowerState Tests

@@ -49,6 +49,9 @@ final class AppState: ObservableObject {
     /// API key for authentication (optional)
     @Published var apiKey: String?
 
+    /// Communication priority level (affects polling intervals)
+    @Published var communicationPriority: CommunicationPriority = .efficient
+
     // MARK: - Notification State
 
     /// Current notification permission status
@@ -278,6 +281,11 @@ final class AppState: ObservableObject {
 
         isOverseerMode = UserDefaults.standard.bool(forKey: "isOverseerMode")
         isVoiceMuted = UserDefaults.standard.bool(forKey: "isVoiceMuted")
+
+        if let priorityRaw = UserDefaults.standard.string(forKey: "communicationPriority"),
+           let priority = CommunicationPriority(rawValue: priorityRaw) {
+            communicationPriority = priority
+        }
         // Default to "town" rig if no value persisted (not "all")
         selectedRig = UserDefaults.standard.string(forKey: "selectedRig") ?? "town"
 
@@ -339,6 +347,13 @@ final class AppState: ObservableObject {
                 self?.recreateAPIClient()
             }
             .store(in: &cancellables)
+
+        $communicationPriority
+            .dropFirst()
+            .sink { priority in
+                UserDefaults.standard.set(priority.rawValue, forKey: "communicationPriority")
+            }
+            .store(in: &cancellables)
     }
 }
 
@@ -363,6 +378,31 @@ enum ThemeIdentifier: String, CaseIterable, Identifiable {
         case .tan: return "WASTELAND"
         case .pink: return "PINK-MIST"
         case .purple: return "RAD-STORM"
+        }
+    }
+}
+
+/// Communication priority levels for data sync
+enum CommunicationPriority: String, CaseIterable, Identifiable {
+    case realTime = "realTime"
+    case efficient = "efficient"
+    case pollingOnly = "pollingOnly"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .realTime: return "REAL-TIME"
+        case .efficient: return "EFFICIENT"
+        case .pollingOnly: return "POLLING ONLY"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .realTime: return "Fastest updates, higher battery usage"
+        case .efficient: return "Balanced updates and battery life"
+        case .pollingOnly: return "Lowest battery usage, manual refresh"
         }
     }
 }

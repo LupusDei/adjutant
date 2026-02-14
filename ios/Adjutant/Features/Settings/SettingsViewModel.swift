@@ -46,6 +46,13 @@ final class SettingsViewModel: BaseViewModel {
         }
     }
 
+    /// Communication priority level
+    @Published var communicationPriority: CommunicationPriority {
+        didSet {
+            AppState.shared.communicationPriority = communicationPriority
+        }
+    }
+
     /// Available rigs for filtering
     @Published private(set) var availableRigs: [String] = []
 
@@ -120,6 +127,8 @@ final class SettingsViewModel: BaseViewModel {
         }
 
         self.defaultRigFilter = UserDefaults.standard.string(forKey: "defaultRigFilter")
+
+        self.communicationPriority = AppState.shared.communicationPriority
 
         super.init()
 
@@ -263,6 +272,7 @@ final class SettingsViewModel: BaseViewModel {
         isVoiceAvailable = AppState.shared.isVoiceAvailable
         serverURL = AppState.shared.apiBaseURL.absoluteString
         apiKey = AppState.shared.apiKey ?? ""
+        communicationPriority = AppState.shared.communicationPriority
     }
 
     private func fetchAvailableRigs() async {

@@ -26,6 +26,9 @@ struct SettingsView: View {
                 // API Key Section
                 apiKeySection
 
+                // Communication Section
+                communicationSection
+
                 // Notifications Section
                 notificationsSection
 
@@ -338,6 +341,29 @@ struct SettingsView: View {
                     style: .caption,
                     color: theme.dim
                 )
+            }
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
+    }
+
+    // MARK: - Communication Section
+
+    private var communicationSection: some View {
+        CRTCard(header: "COMMUNICATION", headerBadge: viewModel.communicationPriority.displayName) {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+                CRTText("DATA SYNC PRIORITY", style: .caption, color: theme.dim)
+
+                ForEach(CommunicationPriority.allCases) { priority in
+                    CommunicationPriorityOption(
+                        priority: priority,
+                        isSelected: viewModel.communicationPriority == priority,
+                        onTap: {
+                            withAnimation(.easeInOut(duration: CRTTheme.Animation.fast)) {
+                                viewModel.communicationPriority = priority
+                            }
+                        }
+                    )
+                }
             }
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
@@ -692,6 +718,49 @@ private struct RigFilterOption: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+// MARK: - Communication Priority Option
+
+private struct CommunicationPriorityOption: View {
+    @Environment(\.crtTheme) private var theme
+
+    let priority: CommunicationPriority
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack {
+                // Radio indicator
+                Circle()
+                    .fill(isSelected ? theme.primary : Color.clear)
+                    .frame(width: 12, height: 12)
+                    .overlay(
+                        Circle()
+                            .stroke(isSelected ? theme.primary : theme.dim, lineWidth: 1)
+                    )
+                    .crtGlow(color: isSelected ? theme.primary : .clear, radius: 3, intensity: 0.4)
+
+                VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxs) {
+                    CRTText(priority.displayName, style: .body, color: isSelected ? theme.primary : theme.dim)
+                    CRTText(priority.description, style: .caption, color: theme.dim)
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(theme.primary)
+                }
+            }
+            .padding(.vertical, CRTTheme.Spacing.xs)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(priority.displayName): \(priority.description)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

@@ -76,8 +76,45 @@ public final class DataSyncService: ObservableObject {
 
     // MARK: - Initialization
 
+    private var priorityCancellable: AnyCancellable?
+
     private init() {
         loadFromCache()
+        observeCommunicationPriority()
+    }
+
+    /// Observes AppState communication priority changes and adjusts polling intervals
+    private func observeCommunicationPriority() {
+        // Apply initial priority
+        applyPollingIntervals(for: AppState.shared.communicationPriority)
+
+        // Observe changes
+        priorityCancellable = AppState.shared.$communicationPriority
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] priority in
+                self?.applyPollingIntervals(for: priority)
+            }
+    }
+
+    /// Adjusts polling intervals based on communication priority
+    private func applyPollingIntervals(for priority: CommunicationPriority) {
+        switch priority {
+        case .realTime:
+            pollingIntervals = PollingIntervals(mail: 10.0, crew: 10.0, beads: 10.0)
+            cacheTTL = CacheTTL(mail: 8.0, crew: 8.0, beads: 8.0)
+        case .efficient:
+            pollingIntervals = PollingIntervals(mail: 30.0, crew: 30.0, beads: 30.0)
+            cacheTTL = CacheTTL(mail: 25.0, crew: 25.0, beads: 25.0)
+        case .pollingOnly:
+            pollingIntervals = PollingIntervals(mail: 120.0, crew: 120.0, beads: 120.0)
+            cacheTTL = CacheTTL(mail: 100.0, crew: 100.0, beads: 100.0)
+        }
+
+        // Restart active polling tasks with new intervals
+        if mailSubscriberCount > 0 { startMailPolling() }
+        if crewSubscriberCount > 0 { startCrewPolling() }
+        if beadsSubscriberCount > 0 { startBeadsPolling() }
     }
 
     /// Loads cached data for immediate display
