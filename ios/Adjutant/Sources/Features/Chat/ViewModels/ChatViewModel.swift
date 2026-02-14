@@ -3,8 +3,9 @@ import Combine
 import AdjutantKit
 
 /// ViewModel for the Chat feature.
-/// Handles loading messages, sending new messages, and managing chat state.
-/// Supports chatting with Mayor or any crew agent.
+/// Uses WebSocket for real-time messaging with HTTP polling fallback.
+/// Supports optimistic UI with delivery confirmation, real typing indicators,
+/// and token-by-token streaming responses.
 @MainActor
 final class ChatViewModel: BaseViewModel {
     // MARK: - Published Properties
@@ -21,7 +22,7 @@ final class ChatViewModel: BaseViewModel {
     /// All available recipients (agents)
     @Published private(set) var availableRecipients: [CrewMember] = []
 
-    /// Whether the recipient is currently typing (simulated)
+    /// Whether the recipient is currently typing
     @Published private(set) var isTyping: Bool = false
 
     /// Whether voice input is active
@@ -51,7 +52,7 @@ final class ChatViewModel: BaseViewModel {
     /// Current communication method (HTTP polling, SSE, or WebSocket)
     @Published private(set) var communicationMethod: CommunicationMethod = .http
 
-    /// Current connection state
+    /// Current connection state for UI display
     @Published private(set) var connectionState: ConnectionState = .connecting
 
     /// Whether a stream is currently active
@@ -60,33 +61,49 @@ final class ChatViewModel: BaseViewModel {
     /// Timestamp of the last successful poll/data fetch
     @Published private(set) var lastPollTime: Date?
 
+    /// Text being streamed token-by-token (nil when no active stream)
+    @Published private(set) var streamingText: String?
+
     // MARK: - Dependencies
 
     private let apiClient: APIClient
     private let speechService: (any SpeechRecognitionServiceProtocol)?
     private var ttsService: any TTSPlaybackServiceProtocol
+    private let wsService: ChatWebSocketService
 
     // MARK: - Private Properties
 
     private var pollingTask: Task<Void, Never>?
-    /// Polling interval for chat (30 seconds per spec)
+    /// Polling interval for fallback (30 seconds)
     private let pollingInterval: TimeInterval = 30.0
     private var lastMessageId: String?
     private var speechCancellables = Set<AnyCancellable>()
-    /// Pending optimistic messages that haven't been confirmed by the server yet
-    private var pendingLocalMessages: [Message] = []
+    /// Pending optimistic messages: clientId -> Message
+    private var pendingLocalMessages: [String: Message] = [:]
+    /// Track which client IDs have been confirmed by server
+    private var confirmedClientIds: Set<String> = []
+    /// Typing debounce timer
+    private var typingDebounceTask: Task<Void, Never>?
+    private var lastTypingSentAt: Date = .distantPast
 
     // MARK: - Initialization
 
-    init(apiClient: APIClient? = nil, speechService: (any SpeechRecognitionServiceProtocol)? = nil, ttsService: (any TTSPlaybackServiceProtocol)? = nil) {
+    init(
+        apiClient: APIClient? = nil,
+        speechService: (any SpeechRecognitionServiceProtocol)? = nil,
+        ttsService: (any TTSPlaybackServiceProtocol)? = nil,
+        wsService: ChatWebSocketService? = nil
+    ) {
         let client = apiClient ?? AppState.shared.apiClient
         self.apiClient = client
         self.speechService = speechService
         self.ttsService = ttsService ?? (DependencyContainer.shared.resolveOptional((any TTSPlaybackServiceProtocol).self)
             ?? TTSPlaybackService(apiClient: client, baseURL: AppState.shared.apiBaseURL))
+        self.wsService = wsService ?? ChatWebSocketService()
         super.init()
         setupSpeechBindings()
         setupPlaybackObservers()
+        setupWebSocketBindings()
         loadFromCache()
     }
 
@@ -123,6 +140,59 @@ final class ChatViewModel: BaseViewModel {
         pollingTask?.cancel()
     }
 
+    // MARK: - WebSocket Setup
+
+    private func setupWebSocketBindings() {
+        // Connection state — map WebSocket states to UI ConnectionState/CommunicationMethod
+        wsService.$connectionState
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] wsState in
+                self?.handleWebSocketStateChange(wsState)
+            }
+            .store(in: &cancellables)
+
+        // Real typing indicators from remote agents
+        wsService.$isRemoteTyping
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$isTyping)
+
+        // Incoming messages from WebSocket
+        wsService.incomingMessage
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] message in
+                self?.handleIncomingMessage(message)
+            }
+            .store(in: &cancellables)
+
+        // Delivery confirmations for optimistic messages
+        wsService.deliveryConfirmation
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] confirmation in
+                self?.handleDeliveryConfirmation(confirmation)
+            }
+            .store(in: &cancellables)
+
+        // Stream tokens for live streaming
+        wsService.streamToken
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.streamingText = self?.wsService.activeStream?.assembledText
+                self?.isStreamActive = true
+                if self?.communicationMethod == .websocket {
+                    self?.connectionState = .streaming
+                }
+            }
+            .store(in: &cancellables)
+
+        // Stream completion
+        wsService.streamEnd
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] result in
+                self?.handleStreamEnd(result)
+            }
+            .store(in: &cancellables)
+    }
+
     // MARK: - Lifecycle
 
     override func onAppear() {
@@ -131,14 +201,53 @@ final class ChatViewModel: BaseViewModel {
         Task {
             await loadRecipients()
         }
-        startPolling()
+        connectWebSocket()
         observeNetworkChanges()
     }
 
     override func onDisappear() {
         super.onDisappear()
+        wsService.disconnect()
         pollingTask?.cancel()
         pollingTask = nil
+    }
+
+    // MARK: - Connection Management
+
+    private func connectWebSocket() {
+        let baseURL = AppState.shared.apiBaseURL
+        let apiKey = AppState.shared.apiKey
+        wsService.connect(baseURL: baseURL, apiKey: apiKey)
+    }
+
+    private func handleWebSocketStateChange(_ wsState: WebSocketConnectionState) {
+        switch wsState {
+        case .connected:
+            // WebSocket connected — update UI and stop polling fallback
+            communicationMethod = .websocket
+            connectionState = .connected
+            pollingTask?.cancel()
+            pollingTask = nil
+            // Do an initial refresh to seed messages from server
+            Task { await refresh() }
+
+        case .connecting, .authenticating:
+            connectionState = .connecting
+
+        case .reconnecting:
+            // Fall back to HTTP while reconnecting
+            communicationMethod = .http
+            connectionState = .connecting
+            if pollingTask == nil {
+                startPolling()
+            }
+
+        case .disconnected:
+            // WebSocket failed — fall back to HTTP polling
+            communicationMethod = .http
+            connectionState = .disconnected
+            startPolling()
+        }
     }
 
     // MARK: - Data Loading
@@ -149,20 +258,24 @@ final class ChatViewModel: BaseViewModel {
             self.markConnectionSuccess()
 
             var serverMessages = self.filterRecipientMessages(response.items).sorted { msg1, msg2 in
-                // Sort by timestamp, oldest first (for chat display)
                 (msg1.date ?? Date.distantPast) < (msg2.date ?? Date.distantPast)
             }
 
             // Remove pending local messages that have been confirmed by server
-            self.pendingLocalMessages.removeAll { localMsg in
-                serverMessages.contains { serverMsg in
-                    self.isConfirmedMessage(local: localMsg, server: serverMsg)
+            let confirmedIds = self.confirmedClientIds
+            let pending = self.pendingLocalMessages
+            for (clientId, localMsg) in pending {
+                if confirmedIds.contains(clientId) {
+                    self.pendingLocalMessages.removeValue(forKey: clientId)
+                } else if serverMessages.contains(where: { self.isConfirmedMessage(local: localMsg, server: $0) }) {
+                    self.pendingLocalMessages.removeValue(forKey: clientId)
                 }
             }
 
             // Merge remaining pending local messages with server messages
-            if !self.pendingLocalMessages.isEmpty {
-                serverMessages.append(contentsOf: self.pendingLocalMessages)
+            let remainingPending = Array(self.pendingLocalMessages.values)
+            if !remainingPending.isEmpty {
+                serverMessages.append(contentsOf: remainingPending)
                 serverMessages.sort { msg1, msg2 in
                     (msg1.date ?? Date.distantPast) < (msg2.date ?? Date.distantPast)
                 }
@@ -170,14 +283,12 @@ final class ChatViewModel: BaseViewModel {
 
             self.messages = serverMessages
             self.lastMessageId = serverMessages.filter { !$0.id.hasPrefix("local-") }.last?.id
-            // Update cache for next navigation
             ResponseCache.shared.updateChatMessages(self.messages)
         }
     }
 
     /// Check if a server message confirms a pending local message
     private func isConfirmedMessage(local: Message, server: Message) -> Bool {
-        // Match by body content and recipient - server message confirms the local one
         return local.body == server.body &&
                local.to == server.to &&
                server.to == selectedRecipient
@@ -195,8 +306,10 @@ final class ChatViewModel: BaseViewModel {
     func setRecipient(_ recipient: String) async {
         guard recipient != selectedRecipient else { return }
         selectedRecipient = recipient
-        messages = [] // Clear messages while loading
-        pendingLocalMessages = [] // Clear pending messages for old recipient
+        messages = []
+        pendingLocalMessages = [:]
+        confirmedClientIds = []
+        streamingText = nil
         await refresh()
     }
 
@@ -208,34 +321,85 @@ final class ChatViewModel: BaseViewModel {
         defer { isLoadingHistory = false }
 
         await performAsyncAction(showLoading: false) {
-            // For now, load all messages - pagination could be added later
             let response = try await self.apiClient.getMail(filter: .user, all: true)
             var allRecipientMessages = self.filterRecipientMessages(response.items).sorted { msg1, msg2 in
                 (msg1.date ?? Date.distantPast) < (msg2.date ?? Date.distantPast)
             }
 
-            // Remove pending local messages that have been confirmed by server
-            self.pendingLocalMessages.removeAll { localMsg in
-                allRecipientMessages.contains { serverMsg in
-                    self.isConfirmedMessage(local: localMsg, server: serverMsg)
+            // Remove confirmed pending messages
+            let confirmedIds = self.confirmedClientIds
+            let pending = self.pendingLocalMessages
+            for (clientId, localMsg) in pending {
+                if confirmedIds.contains(clientId) {
+                    self.pendingLocalMessages.removeValue(forKey: clientId)
+                } else if allRecipientMessages.contains(where: { self.isConfirmedMessage(local: localMsg, server: $0) }) {
+                    self.pendingLocalMessages.removeValue(forKey: clientId)
                 }
             }
 
-            // Merge remaining pending local messages
-            if !self.pendingLocalMessages.isEmpty {
-                allRecipientMessages.append(contentsOf: self.pendingLocalMessages)
+            let remainingPending = Array(self.pendingLocalMessages.values)
+            if !remainingPending.isEmpty {
+                allRecipientMessages.append(contentsOf: remainingPending)
                 allRecipientMessages.sort { msg1, msg2 in
                     (msg1.date ?? Date.distantPast) < (msg2.date ?? Date.distantPast)
                 }
             }
 
-            // If we got the same count (excluding local), there's no more history
             let serverOnlyCount = allRecipientMessages.filter { !$0.id.hasPrefix("local-") }.count
             if serverOnlyCount <= self.messages.filter({ !$0.id.hasPrefix("local-") }).count {
                 self.hasMoreHistory = false
             } else {
                 self.messages = allRecipientMessages
             }
+        }
+    }
+
+    // MARK: - WebSocket Message Handling
+
+    private func handleIncomingMessage(_ message: Message) {
+        // Only show messages for the current recipient conversation
+        guard message.from == selectedRecipient || message.to == selectedRecipient else { return }
+
+        // Avoid duplicates
+        guard !messages.contains(where: { $0.id == message.id }) else { return }
+
+        messages.append(message)
+        messages.sort { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
+        ResponseCache.shared.updateChatMessages(messages)
+    }
+
+    private func handleDeliveryConfirmation(_ confirmation: (clientId: String, serverId: String, timestamp: String)) {
+        confirmedClientIds.insert(confirmation.clientId)
+
+        // Replace the local-* message with confirmed server ID
+        let localId = "local-\(confirmation.clientId)"
+        if let index = messages.firstIndex(where: { $0.id == localId }) {
+            let original = messages[index]
+            let confirmed = Message(
+                id: confirmation.serverId,
+                from: original.from,
+                to: original.to,
+                subject: original.subject,
+                body: original.body,
+                timestamp: confirmation.timestamp,
+                read: original.read,
+                priority: original.priority,
+                type: original.type,
+                threadId: original.threadId,
+                pinned: original.pinned,
+                isInfrastructure: original.isInfrastructure
+            )
+            messages[index] = confirmed
+            pendingLocalMessages.removeValue(forKey: confirmation.clientId)
+            ResponseCache.shared.updateChatMessages(messages)
+        }
+    }
+
+    private func handleStreamEnd(_ result: (streamId: String, messageId: String?)) {
+        streamingText = nil
+        isStreamActive = false
+        if communicationMethod == .websocket {
+            connectionState = .connected
         }
     }
 
@@ -249,12 +413,12 @@ final class ChatViewModel: BaseViewModel {
         // Clear input immediately for responsive feel
         inputText = ""
 
-        // Generate subject from message body (first ~50 chars, truncated at word boundary)
         let subject = Self.generateSubject(from: text)
+        let clientId = UUID().uuidString
 
         // Create optimistic local message for immediate display
         let optimisticMessage = Message(
-            id: "local-\(UUID().uuidString)",
+            id: "local-\(clientId)",
             from: "user",
             to: selectedRecipient,
             subject: subject,
@@ -270,25 +434,23 @@ final class ChatViewModel: BaseViewModel {
 
         // Add to messages immediately (optimistic update)
         messages.append(optimisticMessage)
-        // Track as pending so it survives refresh until server confirms
-        pendingLocalMessages.append(optimisticMessage)
+        pendingLocalMessages[clientId] = optimisticMessage
 
-        await performAsyncAction(showLoading: false) {
-            let request = SendMessageRequest(
-                to: self.selectedRecipient,
-                subject: subject,
-                body: text,
-                type: .task
-            )
-            _ = try await self.apiClient.sendMail(request)
-
-            // Simulate typing indicator briefly
-            self.isTyping = true
-            try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
-            self.isTyping = false
-
-            // Refresh to get the new message and any response
-            await self.refresh()
+        if wsService.isConnected {
+            // Send via WebSocket — delivery confirmation comes back async
+            wsService.sendMessage(to: selectedRecipient, body: text, clientId: clientId)
+        } else {
+            // Fallback: send via HTTP
+            await performAsyncAction(showLoading: false) {
+                let request = SendMessageRequest(
+                    to: self.selectedRecipient,
+                    subject: subject,
+                    body: text,
+                    type: .task
+                )
+                _ = try await self.apiClient.sendMail(request)
+                await self.refresh()
+            }
         }
     }
 
@@ -296,6 +458,28 @@ final class ChatViewModel: BaseViewModel {
     func sendVoiceTranscription(_ text: String) async {
         inputText = text
         await sendMessage()
+    }
+
+    // MARK: - Typing Indicators (Outbound)
+
+    /// Called when the user is typing. Sends typing indicator over WebSocket.
+    func userDidType() {
+        guard wsService.isConnected else { return }
+
+        // Debounce: don't send more than once every 3 seconds
+        let now = Date()
+        guard now.timeIntervalSince(lastTypingSentAt) > 3.0 else { return }
+        lastTypingSentAt = now
+
+        wsService.sendTypingStarted()
+
+        // Auto-send "stopped" after 4 seconds of no typing
+        typingDebounceTask?.cancel()
+        typingDebounceTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.wsService.sendTypingStopped()
+        }
     }
 
     // MARK: - Voice Input
@@ -318,7 +502,6 @@ final class ChatViewModel: BaseViewModel {
     private func startVoiceRecording() {
         guard let service = speechService else { return }
 
-        // Check if already authorized
         if service.authorizationStatus == .authorized {
             do {
                 try service.startRecording()
@@ -326,7 +509,6 @@ final class ChatViewModel: BaseViewModel {
                 speechError = error.localizedDescription
             }
         } else {
-            // Request authorization first
             Task {
                 let status = await service.requestAuthorization()
                 if status == .authorized {
@@ -346,13 +528,11 @@ final class ChatViewModel: BaseViewModel {
     private func setupSpeechBindings() {
         guard let service = speechService else { return }
 
-        // Bind recording state
         service.statePublisher
             .receive(on: DispatchQueue.main)
             .map { $0.isRecording }
             .assign(to: &$isRecordingVoice)
 
-        // Bind transcription to input text while recording
         service.transcriptionPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] text in
@@ -361,7 +541,6 @@ final class ChatViewModel: BaseViewModel {
             }
             .store(in: &speechCancellables)
 
-        // Handle final transcription - auto-send if non-empty
         service.finalTranscriptionPublisher
             .receive(on: DispatchQueue.main)
             .compactMap { $0 }
@@ -374,12 +553,10 @@ final class ChatViewModel: BaseViewModel {
             }
             .store(in: &speechCancellables)
 
-        // Bind authorization status
         service.authorizationStatusPublisher
             .receive(on: DispatchQueue.main)
             .assign(to: &$speechAuthorizationStatus)
 
-        // Handle errors from state
         service.statePublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
@@ -408,7 +585,6 @@ final class ChatViewModel: BaseViewModel {
             let request = SynthesizeRequest(text: message.body, messageId: message.id)
             let response = try await apiClient.synthesizeSpeech(request)
 
-            // Enqueue to TTS service with message metadata
             ttsService.enqueue(
                 text: message.body,
                 response: response,
@@ -443,18 +619,14 @@ final class ChatViewModel: BaseViewModel {
     // MARK: - Private Methods
 
     /// Generate a subject line from the message body
-    /// - Parameter body: The full message body text
-    /// - Returns: First ~50 characters truncated at word boundary, or "Chat" if empty
-    private static func generateSubject(from body: String) -> String {
+    static func generateSubject(from body: String) -> String {
         let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "Chat" }
 
-        // If short enough, use as-is
         if trimmed.count <= 50 {
             return trimmed
         }
 
-        // Truncate at word boundary
         let prefix = String(trimmed.prefix(50))
         if let lastSpace = prefix.lastIndex(of: " ") {
             return String(prefix[..<lastSpace]) + "..."
@@ -469,7 +641,7 @@ final class ChatViewModel: BaseViewModel {
         }
     }
 
-    /// Start polling for new messages
+    /// Start polling for new messages (HTTP fallback when WebSocket is down)
     private func startPolling() {
         pollingTask?.cancel()
         pollingTask = Task {
@@ -477,7 +649,6 @@ final class ChatViewModel: BaseViewModel {
                 try? await Task.sleep(nanoseconds: UInt64(pollingInterval * 1_000_000_000))
                 guard !Task.isCancelled else { break }
 
-                // Check for new messages
                 if let response = await performAsync(showLoading: false, {
                     try await self.apiClient.getMail(filter: .user, all: false)
                 }) {
@@ -507,11 +678,9 @@ final class ChatViewModel: BaseViewModel {
 
     /// Display name for the selected recipient
     var recipientDisplayName: String {
-        // Check if we have this recipient in our list
         if let crew = availableRecipients.first(where: { $0.id == selectedRecipient }) {
             return crew.name.uppercased()
         }
-        // Fallback: format the ID (e.g., "mayor/" -> "MAYOR")
         return selectedRecipient
             .replacingOccurrences(of: "/", with: "")
             .uppercased()
