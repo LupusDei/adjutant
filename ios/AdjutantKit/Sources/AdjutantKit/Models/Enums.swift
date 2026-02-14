@@ -17,6 +17,14 @@ public enum MessageType: String, Codable, CaseIterable {
     case reply
 }
 
+/// Deployment mode for the Adjutant app.
+/// Determines which features and tabs are available.
+public enum DeploymentMode: String, Codable, CaseIterable {
+    case gastown
+    case standalone
+    case swarm
+}
+
 /// Possible states for the gastown system.
 public enum PowerState: String, Codable, CaseIterable {
     case stopped

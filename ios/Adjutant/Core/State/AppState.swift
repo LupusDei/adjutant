@@ -61,6 +61,18 @@ final class AppState: ObservableObject {
     /// Whether mode info has been fetched
     @Published private(set) var isModeLoaded = false
 
+    /// Tabs visible in the current deployment mode
+    var visibleTabs: Set<AppTab> {
+        switch deploymentMode {
+        case .gastown:
+            return Set(AppTab.allCases)
+        case .standalone:
+            return [.chat, .beads, .settings]
+        case .swarm:
+            return [.chat, .crew, .beads, .settings]
+        }
+    }
+
     // MARK: - Notification State
 
     /// Current notification permission status
@@ -188,6 +200,12 @@ final class AppState: ObservableObject {
     /// - Parameter available: Whether network is available
     func updateNetworkAvailability(_ available: Bool) {
         isNetworkAvailable = available
+    }
+
+    /// Updates the deployment mode
+    /// - Parameter mode: The new deployment mode
+    func updateDeploymentMode(_ mode: DeploymentMode) {
+        deploymentMode = mode
     }
 
     // MARK: - Notification State Updates
