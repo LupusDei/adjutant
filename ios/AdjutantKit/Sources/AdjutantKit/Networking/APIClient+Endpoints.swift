@@ -284,6 +284,40 @@ extension APIClient {
     }
 }
 
+// MARK: - Mode Endpoints
+
+extension APIClient {
+    /// Get current deployment mode info including features and available transitions.
+    ///
+    /// ## Example
+    /// ```swift
+    /// let modeInfo = try await client.getMode()
+    /// print("Mode: \(modeInfo.mode)")
+    /// print("Features: \(modeInfo.features)")
+    /// ```
+    ///
+    /// - Returns: A ``ModeInfo`` containing the current mode, features, and available modes.
+    /// - Throws: ``APIClientError`` if the request fails.
+    public func getMode() async throws -> ModeInfo {
+        try await requestWithEnvelope(.get, path: "/mode")
+    }
+
+    /// Switch deployment mode at runtime.
+    ///
+    /// ## Example
+    /// ```swift
+    /// let result = try await client.switchMode(to: "standalone")
+    /// print("Switched to: \(result.mode)")
+    /// ```
+    ///
+    /// - Parameter mode: The target mode ("gastown", "standalone", or "swarm").
+    /// - Returns: A ``ModeInfo`` containing the new mode state.
+    /// - Throws: ``APIClientError`` if the request fails or mode is unavailable.
+    public func switchMode(to mode: String) async throws -> ModeInfo {
+        try await requestWithEnvelope(.post, path: "/mode", body: SwitchModeRequest(mode: mode))
+    }
+}
+
 // MARK: - Voice Endpoints
 
 extension APIClient {

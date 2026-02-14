@@ -209,6 +209,11 @@ public final class DataSyncService: ObservableObject {
         case "mail_received", "mail_read":
             Task { await fetchMail() }
         case "mode_changed":
+            // Parse the mode_changed event and update AppState
+            if let data = event.data.data(using: .utf8),
+               let modeEvent = try? JSONDecoder().decode(ModeChangedEvent.self, from: data) {
+                AppState.shared.updateDeploymentMode(from: modeEvent)
+            }
             // Mode changes may affect available features; refresh everything
             Task { await refreshAll() }
         case "power_state":

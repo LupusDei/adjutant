@@ -45,7 +45,9 @@ public struct ContentView: View {
         .tint(themeColor) // Apply theme color to navigation back buttons and other tinted elements
         .preferredColorScheme(.dark)
         .task {
-            await AppState.shared.checkVoiceAvailability()
+            async let voiceCheck: () = AppState.shared.checkVoiceAvailability()
+            async let modeSync: () = AppState.shared.fetchDeploymentMode()
+            _ = await (voiceCheck, modeSync)
         }
     }
 }
