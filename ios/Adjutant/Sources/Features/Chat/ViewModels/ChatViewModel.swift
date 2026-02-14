@@ -55,6 +55,9 @@ final class ChatViewModel: BaseViewModel {
     /// Agent activity description (e.g., "Thinking...", "Typing...")
     @Published private(set) var agentActivity: String = ""
 
+    /// Agent status from SSE events (e.g., "Running", "Idle")
+    @Published private(set) var agentStatus: String = ""
+
     /// Delivery states for outbound messages
     @Published private(set) var deliveryStates: [String: MessageDeliveryState] = [:]
 
@@ -202,6 +205,12 @@ final class ChatViewModel: BaseViewModel {
                 self?.handleDeliveryConfirmation(messageId)
             }
         }
+
+        connectionManager.onEvent = { [weak self] event in
+            Task { @MainActor in
+                self?.handleServerEvent(event)
+            }
+        }
     }
 
     /// Remove WebSocket subscriptions
@@ -210,6 +219,7 @@ final class ChatViewModel: BaseViewModel {
         connectionManager.onTyping = nil
         connectionManager.onStreamToken = nil
         connectionManager.onDelivered = nil
+        connectionManager.onEvent = nil
     }
 
     /// Handle an inbound message from WebSocket
@@ -354,6 +364,37 @@ final class ChatViewModel: BaseViewModel {
         }
     }
 
+    /// Handle SSE server events (agent status, etc.)
+    private func handleServerEvent(_ event: ServerEvent) {
+        switch event.type {
+        case "agent_status":
+            if let agentId = event.data["agentId"] as? String,
+               let status = event.data["status"] as? String,
+               agentId == selectedRecipient {
+                agentStatus = status
+            }
+        default:
+            break
+        }
+    }
+
+    /// Delivery state for a specific message
+    func deliveryState(for messageId: String) -> MessageDeliveryState? {
+        deliveryStates[messageId]
+    }
+
+    /// Retry sending a failed message
+    func retryMessage(_ message: Message) async {
+        // Remove the failed message
+        messages.removeAll { $0.id == message.id }
+        pendingLocalMessages.removeAll { $0.id == message.id }
+        deliveryStates.removeValue(forKey: message.id)
+
+        // Re-send via inputText
+        inputText = message.body
+        await sendMessage()
+    }
+
     // MARK: - Typing Indicator Sending
 
     /// Set up observer to send typing indicators when user types
@@ -450,6 +491,7 @@ final class ChatViewModel: BaseViewModel {
         isAgentTyping = false
         isTyping = false
         agentActivity = ""
+        agentStatus = ""
         await refresh()
     }
 

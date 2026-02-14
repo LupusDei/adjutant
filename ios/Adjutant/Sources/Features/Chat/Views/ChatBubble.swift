@@ -8,6 +8,9 @@ struct ChatBubble: View {
     let message: Message
     let isOutgoing: Bool
 
+    /// Delivery state for outbound messages
+    var deliveryState: MessageDeliveryState?
+
     /// Whether this message is currently playing audio
     var isPlaying: Bool = false
 
@@ -19,6 +22,9 @@ struct ChatBubble: View {
 
     /// Callback when stop button is tapped
     var onStop: (() -> Void)?
+
+    /// Callback when retry is tapped on a failed message
+    var onRetry: (() -> Void)?
 
     /// Bubble alignment based on message direction
     private var alignment: HorizontalAlignment {
@@ -103,14 +109,20 @@ struct ChatBubble: View {
                     }
                 }
 
-                // Timestamp
-                if let date = message.date {
-                    CRTText(
-                        formatTimestamp(date),
-                        style: .caption,
-                        glowIntensity: .none,
-                        color: theme.dim.opacity(0.6)
-                    )
+                // Timestamp and delivery state
+                HStack(spacing: CRTTheme.Spacing.xxs) {
+                    if let date = message.date {
+                        CRTText(
+                            formatTimestamp(date),
+                            style: .caption,
+                            glowIntensity: .none,
+                            color: theme.dim.opacity(0.6)
+                        )
+                    }
+
+                    if isOutgoing, let state = deliveryState {
+                        deliveryStateView(state)
+                    }
                 }
             }
 
@@ -121,6 +133,43 @@ struct ChatBubble: View {
         .padding(.horizontal, CRTTheme.Spacing.sm)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(isOutgoing ? "You" : message.senderName): \(message.body)")
+    }
+
+    /// Delivery state indicator for outbound messages
+    @ViewBuilder
+    private func deliveryStateView(_ state: MessageDeliveryState) -> some View {
+        switch state {
+        case .sending:
+            InlineLoadingIndicator()
+                .accessibilityLabel("Sending")
+        case .delivered:
+            Image(systemName: "checkmark")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(theme.dim.opacity(0.6))
+                .accessibilityLabel("Delivered")
+        case .read:
+            HStack(spacing: -3) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            .foregroundColor(theme.primary)
+            .accessibilityLabel("Read")
+        case .failed:
+            Button {
+                onRetry?()
+            } label: {
+                HStack(spacing: 2) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(size: 10))
+                    CRTText("TAP TO RETRY", style: .caption, glowIntensity: .none)
+                }
+                .foregroundColor(CRTTheme.State.error)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Failed to send. Tap to retry.")
+        }
     }
 
     /// Format the message timestamp for display

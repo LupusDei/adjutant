@@ -23,11 +23,6 @@ struct ChatView: View {
             // Messages area
             messagesArea
 
-            // Typing indicator
-            if viewModel.isTyping {
-                typingIndicator
-            }
-
             // Speech error banner
             if let speechError = viewModel.speechError {
                 ErrorBanner(
@@ -65,6 +60,11 @@ struct ChatView: View {
         .onChange(of: viewModel.messages.count) { _, _ in
             scrollToBottom()
         }
+        .onChange(of: viewModel.isAgentTyping) { _, isTyping in
+            if isTyping {
+                scrollToBottom()
+            }
+        }
         .sheet(isPresented: $showRecipientSelector) {
             RecipientSelectorSheet(
                 recipients: viewModel.availableRecipients,
@@ -98,12 +98,12 @@ struct ChatView: View {
 
                 Spacer()
 
-                // Status indicator
+                // Agent status indicator
                 HStack(spacing: CRTTheme.Spacing.xxs) {
                     Circle()
-                        .fill(CRTTheme.State.success)
+                        .fill(agentStatusColor)
                         .frame(width: 8, height: 8)
-                    CRTText("ONLINE", style: .caption, glowIntensity: .subtle, color: CRTTheme.State.success)
+                    CRTText(agentStatusText, style: .caption, glowIntensity: .subtle, color: agentStatusColor)
                 }
             }
         }
@@ -135,6 +135,7 @@ struct ChatView: View {
                         ChatBubble(
                             message: message,
                             isOutgoing: viewModel.isOutgoing(message),
+                            deliveryState: viewModel.deliveryState(for: message.id),
                             isPlaying: viewModel.isPlaying(message: message),
                             isSynthesizing: viewModel.isSynthesizing(message: message),
                             onPlay: {
@@ -144,9 +145,24 @@ struct ChatView: View {
                             },
                             onStop: {
                                 viewModel.stopAudio()
+                            },
+                            onRetry: {
+                                Task {
+                                    await viewModel.retryMessage(message)
+                                }
                             }
                         )
                         .id(message.id)
+                    }
+
+                    // Agent typing indicator bubble
+                    if viewModel.isAgentTyping {
+                        AgentTypingBubble(
+                            agentName: viewModel.recipientDisplayName,
+                            activity: viewModel.agentActivity
+                        )
+                        .id("typing-indicator")
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
 
                     // Empty state
@@ -224,14 +240,32 @@ struct ChatView: View {
         .padding(CRTTheme.Spacing.xl)
     }
 
-    private var typingIndicator: some View {
-        HStack(spacing: CRTTheme.Spacing.xs) {
-            CRTText("\(viewModel.recipientDisplayName) IS TYPING", style: .caption, glowIntensity: .subtle, color: theme.dim)
-            TypingDots()
+    // MARK: - Agent Status
+
+    private var agentStatusText: String {
+        if viewModel.isAgentTyping {
+            return viewModel.agentActivity.uppercased()
         }
-        .padding(.horizontal, CRTTheme.Spacing.md)
-        .padding(.vertical, CRTTheme.Spacing.xs)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        if !viewModel.agentStatus.isEmpty {
+            return viewModel.agentStatus.uppercased()
+        }
+        return "ONLINE"
+    }
+
+    private var agentStatusColor: Color {
+        if viewModel.isAgentTyping {
+            return theme.primary
+        }
+        switch viewModel.agentStatus.lowercased() {
+        case "running":
+            return CRTTheme.State.success
+        case "idle":
+            return theme.dim
+        case "error", "stopped":
+            return CRTTheme.State.error
+        default:
+            return CRTTheme.State.success
+        }
     }
 
     // MARK: - Private Methods
@@ -271,6 +305,49 @@ private struct TypingDots: View {
             timer?.invalidate()
             timer = nil
         }
+    }
+}
+
+// MARK: - Agent Typing Bubble
+
+/// Animated bubble showing when the agent is typing or thinking
+private struct AgentTypingBubble: View {
+    @Environment(\.crtTheme) private var theme
+
+    let agentName: String
+    let activity: String
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxs) {
+                CRTText(agentName, style: .caption, glowIntensity: .subtle)
+                    .foregroundColor(theme.dim)
+
+                HStack(spacing: CRTTheme.Spacing.xs) {
+                    CRTText(
+                        activity.isEmpty ? "TYPING..." : activity.uppercased(),
+                        style: .caption,
+                        glowIntensity: .subtle,
+                        color: theme.dim
+                    )
+                    TypingDots()
+                }
+                .padding(.horizontal, CRTTheme.Spacing.sm)
+                .padding(.vertical, CRTTheme.Spacing.xs)
+                .background(
+                    RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.lg)
+                        .fill(CRTTheme.Background.elevated)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.lg)
+                        .stroke(theme.dim.opacity(0.6), lineWidth: 1)
+                )
+            }
+
+            Spacer(minLength: 60)
+        }
+        .padding(.horizontal, CRTTheme.Spacing.sm)
+        .animation(.easeInOut(duration: 0.2), value: activity)
     }
 }
 
