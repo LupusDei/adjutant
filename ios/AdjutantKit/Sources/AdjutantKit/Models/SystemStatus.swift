@@ -86,8 +86,8 @@ public struct InfrastructureStatus: Codable, Equatable, Hashable {
     }
 }
 
-/// Complete gastown system status
-public struct GastownStatus: Codable, Equatable {
+/// Complete system status
+public struct SystemStatus: Codable, Equatable {
     /// Current power state
     public let powerState: PowerState
     /// Town metadata
@@ -117,6 +117,9 @@ public struct GastownStatus: Codable, Equatable {
         self.fetchedAt = fetchedAt
     }
 }
+
+/// Backward-compatible typealias
+public typealias GastownStatus = SystemStatus
 
 /// Response for power state changes
 public struct PowerStateChange: Codable, Equatable {

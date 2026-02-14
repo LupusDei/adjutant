@@ -1,8 +1,8 @@
 //
-//  GastownWidget.swift
+//  AdjutantWidget.swift
 //  AdjutantWidgets
 //
-//  Home screen widget for displaying Gas Town status information.
+//  Home screen widget for displaying Adjutant status information.
 //  Supports small, medium, and large widget sizes.
 //
 
@@ -12,8 +12,8 @@ import AdjutantKit
 
 // MARK: - Widget Data Model
 
-/// Timeline entry containing Gas Town status data for the widget.
-struct GastownWidgetEntry: TimelineEntry {
+/// Timeline entry containing Adjutant status data for the widget.
+struct AdjutantWidgetEntry: TimelineEntry {
     let date: Date
     let powerState: PowerState
     let unreadMailCount: Int
@@ -39,8 +39,8 @@ struct GastownWidgetEntry: TimelineEntry {
         let assignee: String?
     }
 
-    static var placeholder: GastownWidgetEntry {
-        GastownWidgetEntry(
+    static var placeholder: AdjutantWidgetEntry {
+        AdjutantWidgetEntry(
             date: Date(),
             powerState: .running,
             unreadMailCount: 3,
@@ -59,16 +59,16 @@ struct GastownWidgetEntry: TimelineEntry {
 
 // MARK: - Timeline Provider
 
-/// Provides timeline entries for the Gas Town widget.
-struct GastownWidgetProvider: TimelineProvider {
+/// Provides timeline entries for the Adjutant widget.
+struct AdjutantWidgetProvider: TimelineProvider {
     /// App Group identifier for sharing data with the main app
     private static let appGroupIdentifier = "group.com.jmm.adjutant"
 
-    func placeholder(in context: Context) -> GastownWidgetEntry {
+    func placeholder(in context: Context) -> AdjutantWidgetEntry {
         .placeholder
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (GastownWidgetEntry) -> Void) {
+    func getSnapshot(in context: Context, completion: @escaping (AdjutantWidgetEntry) -> Void) {
         if context.isPreview {
             completion(.placeholder)
         } else {
@@ -79,7 +79,7 @@ struct GastownWidgetProvider: TimelineProvider {
         }
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<GastownWidgetEntry>) -> Void) {
+    func getTimeline(in context: Context, completion: @escaping (Timeline<AdjutantWidgetEntry>) -> Void) {
         Task {
             let entry = await fetchWidgetData()
             // Refresh every 5 minutes
@@ -136,8 +136,8 @@ struct GastownWidgetProvider: TimelineProvider {
         }
     }
 
-    /// Fetch current Gas Town status data
-    private func fetchWidgetData() async -> GastownWidgetEntry {
+    /// Fetch current status data
+    private func fetchWidgetData() async -> AdjutantWidgetEntry {
         do {
             // Create client using the shared API URL from App Groups
             let baseURL = getSharedAPIBaseURL()
@@ -170,7 +170,7 @@ struct GastownWidgetProvider: TimelineProvider {
 
             // Get recent beads for display
             let recentBeads = filteredBeads.prefix(4).map { bead in
-                GastownWidgetEntry.RecentBead(
+                AdjutantWidgetEntry.RecentBead(
                     id: bead.id,
                     title: bead.title,
                     status: bead.status,
@@ -178,7 +178,7 @@ struct GastownWidgetProvider: TimelineProvider {
                 )
             }
 
-            return GastownWidgetEntry(
+            return AdjutantWidgetEntry(
                 date: Date(),
                 powerState: status.powerState,
                 unreadMailCount: status.operator.unreadMail,
@@ -186,7 +186,7 @@ struct GastownWidgetProvider: TimelineProvider {
                 beadsInProgress: inProgressBeads.count,
                 beadsHooked: hookedBeads.count,
                 recentBeads: Array(recentBeads),
-                workerSummary: GastownWidgetEntry.WorkerSummary(
+                workerSummary: AdjutantWidgetEntry.WorkerSummary(
                     totalPolecats: totalPolecats,
                     workingPolecats: workingPolecats,
                     totalCrew: totalCrew
@@ -195,7 +195,7 @@ struct GastownWidgetProvider: TimelineProvider {
             )
         } catch {
             // Return placeholder data on error
-            return GastownWidgetEntry(
+            return AdjutantWidgetEntry(
                 date: Date(),
                 powerState: .stopped,
                 unreadMailCount: 0,
@@ -203,7 +203,7 @@ struct GastownWidgetProvider: TimelineProvider {
                 beadsInProgress: 0,
                 beadsHooked: 0,
                 recentBeads: [],
-                workerSummary: GastownWidgetEntry.WorkerSummary(
+                workerSummary: AdjutantWidgetEntry.WorkerSummary(
                     totalPolecats: 0,
                     workingPolecats: 0,
                     totalCrew: 0
@@ -216,16 +216,16 @@ struct GastownWidgetProvider: TimelineProvider {
 
 // MARK: - Widget Configuration
 
-/// Home screen widget for Gas Town status.
-struct GastownWidget: Widget {
-    let kind: String = "GastownWidget"
+/// Home screen widget for Adjutant status.
+struct AdjutantWidget: Widget {
+    let kind: String = "AdjutantWidget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: GastownWidgetProvider()) { entry in
-            GastownWidgetView(entry: entry)
+        StaticConfiguration(kind: kind, provider: AdjutantWidgetProvider()) { entry in
+            AdjutantWidgetView(entry: entry)
         }
-        .configurationDisplayName("Gas Town Status")
-        .description("Monitor Gas Town workers and beads at a glance.")
+        .configurationDisplayName("Adjutant Status")
+        .description("Monitor workers and beads at a glance.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
@@ -233,9 +233,9 @@ struct GastownWidget: Widget {
 // MARK: - Widget Views
 
 /// Main widget view that adapts to different sizes.
-struct GastownWidgetView: View {
+struct AdjutantWidgetView: View {
     @Environment(\.widgetFamily) var family
-    var entry: GastownWidgetEntry
+    var entry: AdjutantWidgetEntry
 
     var body: some View {
         switch family {
@@ -255,7 +255,7 @@ struct GastownWidgetView: View {
 
 /// Compact view showing power state and key counts.
 private struct SmallWidgetView: View {
-    let entry: GastownWidgetEntry
+    let entry: AdjutantWidgetEntry
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -287,7 +287,7 @@ private struct SmallWidgetView: View {
 
 /// Medium view with recent activity and worker breakdown.
 private struct MediumWidgetView: View {
-    let entry: GastownWidgetEntry
+    let entry: AdjutantWidgetEntry
 
     var body: some View {
         HStack(spacing: 16) {
@@ -362,7 +362,7 @@ private struct MediumWidgetView: View {
 
 /// Full dashboard with all stats and active beads list.
 private struct LargeWidgetView: View {
-    let entry: GastownWidgetEntry
+    let entry: AdjutantWidgetEntry
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -370,7 +370,7 @@ private struct LargeWidgetView: View {
             HStack {
                 HStack(spacing: 8) {
                     PowerIndicator(powerState: entry.powerState)
-                    Text("Gas Town")
+                    Text("Adjutant")
                         .font(.headline)
                         .fontWeight(.semibold)
                 }
@@ -566,7 +566,7 @@ private struct StatCard: View {
 
 /// Compact bead row for medium widget.
 private struct CompactBeadRow: View {
-    let bead: GastownWidgetEntry.RecentBead
+    let bead: AdjutantWidgetEntry.RecentBead
 
     var body: some View {
         HStack(spacing: 4) {
@@ -590,7 +590,7 @@ private struct CompactBeadRow: View {
 
 /// Full bead row for large widget.
 private struct BeadRow: View {
-    let bead: GastownWidgetEntry.RecentBead
+    let bead: AdjutantWidgetEntry.RecentBead
 
     var body: some View {
         HStack(spacing: 8) {
@@ -681,19 +681,19 @@ private func backgroundGradient(for powerState: PowerState) -> some ShapeStyle {
 // MARK: - Previews
 
 #Preview("Small", as: .systemSmall) {
-    GastownWidget()
+    AdjutantWidget()
 } timeline: {
-    GastownWidgetEntry.placeholder
+    AdjutantWidgetEntry.placeholder
 }
 
 #Preview("Medium", as: .systemMedium) {
-    GastownWidget()
+    AdjutantWidget()
 } timeline: {
-    GastownWidgetEntry.placeholder
+    AdjutantWidgetEntry.placeholder
 }
 
 #Preview("Large", as: .systemLarge) {
-    GastownWidget()
+    AdjutantWidget()
 } timeline: {
-    GastownWidgetEntry.placeholder
+    AdjutantWidgetEntry.placeholder
 }

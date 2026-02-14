@@ -308,12 +308,12 @@ private struct RecipientSelectorSheet: View {
                 // Recipients list
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        // Mayor is always first
+                        // Default coordinator is always first
                         recipientRow(
-                            id: "mayor/",
-                            name: "Mayor",
+                            id: ChatViewModel.defaultRecipient,
+                            name: ChatViewModel.defaultRecipient == "mayor/" ? "Mayor" : "Command",
                             type: .mayor,
-                            isSelected: selectedRecipient == "mayor/"
+                            isSelected: selectedRecipient == ChatViewModel.defaultRecipient
                         )
 
                         Divider()

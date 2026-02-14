@@ -2,7 +2,7 @@
 //  AdjutantLiveActivity.swift
 //  AdjutantWidgets
 //
-//  Live Activity widget for displaying Gas Town status on Lock Screen
+//  Live Activity widget for displaying system status on Lock Screen
 //  and Dynamic Island.
 //
 
@@ -13,10 +13,10 @@ import AdjutantKit
 
 // MARK: - Live Activity Widget
 
-/// Live Activity configuration for Gas Town status display.
+/// Live Activity configuration for system status display.
 struct AdjutantLiveActivity: Widget {
     var body: some WidgetConfiguration {
-        ActivityConfiguration(for: GastownActivityAttributes.self) { context in
+        ActivityConfiguration(for: AdjutantActivityAttributes.self) { context in
             // Lock Screen / Banner view
             LockScreenView(context: context)
         } dynamicIsland: { context in
@@ -51,9 +51,9 @@ struct AdjutantLiveActivity: Widget {
 // MARK: - Lock Screen View
 
 /// Main Lock Screen presentation for the Live Activity.
-/// Shows comprehensive Gas Town status information.
+/// Shows comprehensive system status information.
 private struct LockScreenView: View {
-    let context: ActivityViewContext<GastownActivityAttributes>
+    let context: ActivityViewContext<AdjutantActivityAttributes>
 
     var body: some View {
         HStack(spacing: 16) {
@@ -122,7 +122,7 @@ private struct LockScreenView: View {
 
 /// Leading region of expanded Dynamic Island.
 private struct ExpandedLeadingView: View {
-    let context: ActivityViewContext<GastownActivityAttributes>
+    let context: ActivityViewContext<AdjutantActivityAttributes>
 
     var body: some View {
         PowerStateView(powerState: context.state.powerState)
@@ -132,7 +132,7 @@ private struct ExpandedLeadingView: View {
 
 /// Trailing region of expanded Dynamic Island.
 private struct ExpandedTrailingView: View {
-    let context: ActivityViewContext<GastownActivityAttributes>
+    let context: ActivityViewContext<AdjutantActivityAttributes>
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 2) {
@@ -145,7 +145,7 @@ private struct ExpandedTrailingView: View {
 
 /// Center region of expanded Dynamic Island.
 private struct ExpandedCenterView: View {
-    let context: ActivityViewContext<GastownActivityAttributes>
+    let context: ActivityViewContext<AdjutantActivityAttributes>
 
     var body: some View {
         Text(context.attributes.townName)
@@ -156,7 +156,7 @@ private struct ExpandedCenterView: View {
 
 /// Bottom region of expanded Dynamic Island.
 private struct ExpandedBottomView: View {
-    let context: ActivityViewContext<GastownActivityAttributes>
+    let context: ActivityViewContext<AdjutantActivityAttributes>
 
     var body: some View {
         HStack(spacing: 16) {
@@ -195,7 +195,7 @@ private struct ExpandedBottomView: View {
 
 /// Compact leading view for collapsed Dynamic Island.
 private struct CompactLeadingView: View {
-    let context: ActivityViewContext<GastownActivityAttributes>
+    let context: ActivityViewContext<AdjutantActivityAttributes>
 
     var body: some View {
         Image(systemName: powerStateIcon(for: context.state.powerState))
@@ -205,7 +205,7 @@ private struct CompactLeadingView: View {
 
 /// Compact trailing view for collapsed Dynamic Island.
 private struct CompactTrailingView: View {
-    let context: ActivityViewContext<GastownActivityAttributes>
+    let context: ActivityViewContext<AdjutantActivityAttributes>
 
     var body: some View {
         HStack(spacing: 4) {
@@ -224,7 +224,7 @@ private struct CompactTrailingView: View {
 
 /// Minimal view for Dynamic Island when multiple activities are present.
 private struct MinimalView: View {
-    let context: ActivityViewContext<GastownActivityAttributes>
+    let context: ActivityViewContext<AdjutantActivityAttributes>
 
     var body: some View {
         Image(systemName: powerStateIcon(for: context.state.powerState))
@@ -298,10 +298,10 @@ private func powerStateColor(for powerState: PowerState) -> Color {
 
 // MARK: - Previews
 
-#Preview("Lock Screen", as: .content, using: GastownActivityAttributes(townName: "Adjutant")) {
+#Preview("Lock Screen", as: .content, using: AdjutantActivityAttributes(townName: "Adjutant")) {
     AdjutantLiveActivity()
 } contentStates: {
-    GastownActivityAttributes.ContentState(
+    AdjutantActivityAttributes.ContentState(
         powerState: .running,
         unreadMailCount: 3,
         activeAgents: 5,
@@ -309,7 +309,7 @@ private func powerStateColor(for powerState: PowerState) -> Color {
         beadsHooked: 2,
         lastUpdated: Date()
     )
-    GastownActivityAttributes.ContentState(
+    AdjutantActivityAttributes.ContentState(
         powerState: .stopped,
         unreadMailCount: 0,
         activeAgents: 0,
@@ -319,10 +319,10 @@ private func powerStateColor(for powerState: PowerState) -> Color {
     )
 }
 
-#Preview("Dynamic Island Expanded", as: .dynamicIsland(.expanded), using: GastownActivityAttributes(townName: "Adjutant")) {
+#Preview("Dynamic Island Expanded", as: .dynamicIsland(.expanded), using: AdjutantActivityAttributes(townName: "Adjutant")) {
     AdjutantLiveActivity()
 } contentStates: {
-    GastownActivityAttributes.ContentState(
+    AdjutantActivityAttributes.ContentState(
         powerState: .running,
         unreadMailCount: 3,
         activeAgents: 5,
@@ -332,10 +332,10 @@ private func powerStateColor(for powerState: PowerState) -> Color {
     )
 }
 
-#Preview("Dynamic Island Compact", as: .dynamicIsland(.compact), using: GastownActivityAttributes(townName: "Adjutant")) {
+#Preview("Dynamic Island Compact", as: .dynamicIsland(.compact), using: AdjutantActivityAttributes(townName: "Adjutant")) {
     AdjutantLiveActivity()
 } contentStates: {
-    GastownActivityAttributes.ContentState(
+    AdjutantActivityAttributes.ContentState(
         powerState: .running,
         unreadMailCount: 3,
         activeAgents: 5,
@@ -345,10 +345,10 @@ private func powerStateColor(for powerState: PowerState) -> Color {
     )
 }
 
-#Preview("Dynamic Island Minimal", as: .dynamicIsland(.minimal), using: GastownActivityAttributes(townName: "Adjutant")) {
+#Preview("Dynamic Island Minimal", as: .dynamicIsland(.minimal), using: AdjutantActivityAttributes(townName: "Adjutant")) {
     AdjutantLiveActivity()
 } contentStates: {
-    GastownActivityAttributes.ContentState(
+    AdjutantActivityAttributes.ContentState(
         powerState: .running,
         unreadMailCount: 3,
         activeAgents: 5,

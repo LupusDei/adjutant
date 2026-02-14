@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { BeadsView } from "./components/beads/BeadsView";
-import { MayorChat } from "./components/chat/MayorChat";
+import { CommandChat } from "./components/chat";
+import { useDeploymentMode } from "./hooks/useDeploymentMode";
 import { EpicsView } from "./components/epics/EpicsView";
 import { CrewStats } from "./components/crew/CrewStats";
 import { MailView } from "./components/mail/MailView";
@@ -56,6 +57,7 @@ function App() {
     (localStorage.getItem('gt-theme') as ThemeId) || 'green'
   );
   const isSmallScreen = useIsSmallScreen();
+  const { isGasTown } = useDeploymentMode();
 
   // Apply theme to document element (html) globally for proper CSS variable cascade
   useEffect(() => {
@@ -71,8 +73,8 @@ function App() {
             <h1 className="crt-glow">ADJUTANT</h1>
             <div className="header-controls">
               <OverseerNotificationStatus />
-              <RigFilter />
-              <NuclearPowerButton comingSoon={true} />
+              {isGasTown && <RigFilter />}
+              {isGasTown && <NuclearPowerButton comingSoon={true} />}
             </div>
           </header>
 
@@ -111,7 +113,7 @@ function App() {
               hidden={activeTab !== "chat"}
               aria-hidden={activeTab !== "chat"}
             >
-              <MayorChat isActive={activeTab === "chat"} />
+              <CommandChat isActive={activeTab === "chat"} />
             </section>
             <section
               className="tab-view"

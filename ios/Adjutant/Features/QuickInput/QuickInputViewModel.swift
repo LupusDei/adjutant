@@ -84,7 +84,7 @@ final class QuickInputViewModel: BaseViewModel {
         sendState = .sending
 
         let request = SendMessageRequest(
-            to: "mayor/",
+            to: ChatViewModel.defaultRecipient,
             subject: "Quick Input Message",
             body: messageBody.trimmingCharacters(in: .whitespacesAndNewlines)
         )

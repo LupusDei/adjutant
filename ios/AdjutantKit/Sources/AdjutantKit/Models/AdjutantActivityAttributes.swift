@@ -4,20 +4,20 @@ import Foundation
 import ActivityKit
 #endif
 
-/// Activity attributes for Gas Town Live Activity on Lock Screen and Dynamic Island.
+/// Activity attributes for Adjutant Live Activity on Lock Screen and Dynamic Island.
 ///
 /// This struct defines the static attributes (unchanging data) and dynamic content state
-/// (data that updates in real-time) for the Gas Town system status Live Activity.
+/// (data that updates in real-time) for the system status Live Activity.
 #if os(iOS)
 @available(iOS 16.1, *)
-public struct GastownActivityAttributes: ActivityAttributes {
+public struct AdjutantActivityAttributes: ActivityAttributes {
 
     /// Dynamic content state that updates during the Live Activity lifecycle.
     ///
     /// ContentState contains the real-time data displayed in the Live Activity,
     /// including power state, unread mail count, and active agent information.
     public struct ContentState: Codable, Hashable {
-        /// Current power state of the Gas Town system
+        /// Current power state of the system
         public let powerState: PowerState
 
         /// Number of unread mail messages for the operator
@@ -53,13 +53,17 @@ public struct GastownActivityAttributes: ActivityAttributes {
     }
 
     /// Static identifier for this Live Activity type
-    public static let activityIdentifier = "com.gastown.adjutant.status"
+    public static let activityIdentifier = "com.adjutant.status"
 
-    /// Name of the Gas Town instance (static, doesn't change during activity)
+    /// Name of the instance (static, doesn't change during activity)
     public let townName: String
 
     public init(townName: String) {
         self.townName = townName
     }
 }
+
+/// Backward-compatible typealias
+@available(iOS 16.1, *)
+public typealias GastownActivityAttributes = AdjutantActivityAttributes
 #endif
