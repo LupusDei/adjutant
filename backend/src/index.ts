@@ -7,6 +7,7 @@ import { logInfo } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
 import { startPrefixMapRefreshScheduler } from "./services/beads-service.js";
 import { initWebSocketServer } from "./services/ws-server.js";
+import { initStreamingBridge } from "./services/streaming-bridge.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
@@ -57,4 +58,7 @@ const server = app.listen(PORT, () => {
 
   // Initialize WebSocket server on the same HTTP server
   initWebSocketServer(server);
+
+  // Initialize streaming bridge (watches .beads/streams/ for agent output)
+  initStreamingBridge();
 });
