@@ -482,3 +482,82 @@ Users can adopt new features incrementally:
 - Enable SSE for real-time events (Phase 2)
 - Enable WebSocket for real-time chat (Phase 2)
 - Switch between modes as needed (Phase 3-4)
+
+---
+
+## Implementation Status (2026-02-14)
+
+### Phase 1: Backend — COMPLETE
+All components implemented, wired in `backend/src/index.ts`, and tested:
+- `POST/GET /api/mode` — Mode switching with validation
+- `EventBus` — Singleton pub/sub, wired to mail, beads, power services
+- `/ws/chat` — WebSocket with auth, ping/pong, rate limiting, replay buffer
+- `GET /api/events` — SSE with Last-Event-ID, 15s heartbeat, event fan-out
+- Streaming bridge — fs.watch on `.beads/streams/`, relay to WS clients
+
+### Phase 2: iOS Communication Layer — COMPLETE
+- `ConnectionManager` — WebSocket + SSE lifecycle with auto-reconnect
+- `ChatWebSocketService` — Typed WS messages, streaming responses
+- `ChatViewModel` — WebSocket primary, HTTP polling fallback
+- `ChatView` — Communication indicator badge (WS/SSE/HTTP + state)
+- Settings: Communication Priority selector (Real-Time/Efficient/Polling)
+- SSE event stream parser integrated into data sync
+
+### Phase 3: iOS Mode-Aware UI — COMPLETE
+- `AppState.deploymentMode` — Fetched from `/api/mode`, updated via SSE
+- `MainTabView` — Tabs show/hide per mode, auto-redirect on mode change
+- `DeploymentMode.visibleTabs` — GT=all 7, Single Agent=3, Swarm=4
+- Settings: Mode switcher with 3-card visual selector
+
+### Phase 4: Frontend Mode-Aware UI — COMPLETE (with known gaps)
+- `ModeProvider` + `useVisibleTabs()` — Wraps app, fetches mode, listens to SSE
+- `App.tsx` — Filters tabs, conditional page rendering, auto-redirect
+- Settings: Mode switcher + communication priority selector
+- Page content adaptation per mode
+
+### Phase 5: Integration Testing — IN PROGRESS
+
+### Known Integration Gaps (bugs filed)
+1. **Frontend CommunicationContext is a stub** (`hq-tlz3y.4`, P1)
+   - `CommunicationProvider` sets status strings but never creates real WS/SSE connections
+   - Must: create WebSocket to `/ws/chat`, EventSource to `/api/events`, handle fallback chain
+2. **Frontend CommandChat still uses HTTP polling** (`hq-tlz3y.5`, P1)
+   - `CommandChat.tsx` line 141: `setInterval(fetchMessages, 30000)` — no WebSocket
+   - Must: use WS from CommunicationContext, add indicator badge, support streaming
+3. **Backend agents-service missing EventBus** (`hq-tlz3y.6`, P2)
+   - `agents-service.ts` never emits `agent:status_changed` events
+   - All other services (mail, beads, power) properly wired
+
+### Running the System
+
+**Backend:**
+```bash
+cd adjutant/backend
+npm install
+npm run dev       # Starts on port 4201 with WS + SSE
+```
+
+**Frontend:**
+```bash
+cd adjutant/frontend
+npm install
+npm run dev       # Starts on port 4200, proxies API to 4201
+```
+
+**iOS:**
+```bash
+open adjutant/ios/Adjutant.xcodeproj
+# Set scheme to Adjutant, target simulator or device
+# Configure server URL in Settings tab
+```
+
+**Mode Configuration:**
+- Auto-detected from workspace (presence of `mayor/town.json` → GT mode)
+- Override: set `ADJUTANT_MODE=gastown|standalone|swarm` env var
+- Runtime: use Settings UI mode switcher or `POST /api/mode`
+
+**Communication Priority:**
+- Configured per-client in Settings (iOS) or Settings page (Frontend)
+- Real-Time: WebSocket + SSE (lowest latency, highest resource use)
+- Efficient: SSE only (good balance)
+- Polling Only: HTTP every 5-60s (most compatible)
