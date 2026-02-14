@@ -24,6 +24,11 @@ struct ChatView: View {
             // Messages area
             messagesArea
 
+            // Streaming response (token-by-token)
+            if let streamText = viewModel.streamingText {
+                streamingBubble(text: streamText)
+            }
+
             // Typing indicator
             if viewModel.isTyping {
                 typingIndicator
@@ -76,6 +81,12 @@ struct ChatView: View {
                 lastPollTime: viewModel.lastPollTime,
                 pollingInterval: 30.0
             )
+        }
+        .onChange(of: viewModel.streamingText) { _, _ in
+            scrollToBottom()
+        }
+        .onChange(of: viewModel.inputText) { _, _ in
+            viewModel.userDidType()
         }
         .sheet(isPresented: $showRecipientSelector) {
             RecipientSelectorSheet(
@@ -246,12 +257,46 @@ struct ChatView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private func streamingBubble(text: String) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxs) {
+                CRTText(viewModel.recipientDisplayName, style: .caption, glowIntensity: .subtle, color: theme.dim)
+                HStack(alignment: .bottom, spacing: 2) {
+                    CRTText(text, style: .body, glowIntensity: .subtle)
+                    StreamingCursor()
+                }
+            }
+            .padding(CRTTheme.Spacing.sm)
+            .background(theme.dim.opacity(0.1))
+            .cornerRadius(12)
+            Spacer(minLength: 60)
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
+    }
+
     // MARK: - Private Methods
 
     private func scrollToBottom() {
         withAnimation(.easeOut(duration: 0.2)) {
             scrollProxy?.scrollTo("bottom", anchor: .bottom)
         }
+    }
+}
+
+// MARK: - Streaming Cursor Animation
+
+/// Blinking cursor shown at the end of streaming text
+private struct StreamingCursor: View {
+    @Environment(\.crtTheme) private var theme
+    @State private var visible = true
+
+    var body: some View {
+        Rectangle()
+            .fill(theme.primary)
+            .frame(width: 2, height: 14)
+            .opacity(visible ? 1.0 : 0.0)
+            .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: visible)
+            .onAppear { visible = false }
     }
 }
 
