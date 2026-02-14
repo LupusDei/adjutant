@@ -14,6 +14,9 @@ struct SettingsView: View {
                 // Header
                 settingsHeader
 
+                // Deployment Mode Section
+                deploymentModeSection
+
                 // Theme Section
                 themeSection
 
@@ -61,6 +64,27 @@ struct SettingsView: View {
                 CRTText("SYSTEM CONFIGURATION", style: .caption, color: theme.dim)
             }
             Spacer()
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
+    }
+
+    // MARK: - Deployment Mode Section
+
+    private var deploymentModeSection: some View {
+        CRTCard(header: "DEPLOYMENT MODE", headerBadge: viewModel.deploymentMode.displayName) {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+                ForEach(DeploymentMode.allCases) { mode in
+                    DeploymentModeOption(
+                        mode: mode,
+                        isSelected: viewModel.deploymentMode == mode,
+                        onTap: {
+                            withAnimation(.easeInOut(duration: CRTTheme.Animation.fast)) {
+                                viewModel.deploymentMode = mode
+                            }
+                        }
+                    )
+                }
+            }
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
     }
@@ -761,6 +785,51 @@ private struct CommunicationPriorityOption: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(priority.displayName): \(priority.description)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+// MARK: - Deployment Mode Option
+
+private struct DeploymentModeOption: View {
+    @Environment(\.crtTheme) private var theme
+
+    let mode: DeploymentMode
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: CRTTheme.Spacing.sm) {
+                // Mode icon
+                Image(systemName: mode.systemImage)
+                    .font(.system(size: 20, weight: isSelected ? .semibold : .regular))
+                    .foregroundColor(isSelected ? theme.primary : theme.dim)
+                    .frame(width: 28)
+                    .crtGlow(
+                        color: theme.primary,
+                        radius: isSelected ? 4 : 0,
+                        intensity: isSelected ? 0.4 : 0
+                    )
+
+                VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxs) {
+                    CRTText(mode.displayName, style: .body, color: isSelected ? theme.primary : theme.dim)
+                    CRTText(mode.description, style: .caption, color: theme.dim)
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(theme.primary)
+                        .crtGlow(color: theme.primary, radius: 3, intensity: 0.4)
+                }
+            }
+            .padding(.vertical, CRTTheme.Spacing.xs)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(mode.displayName): \(mode.description)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

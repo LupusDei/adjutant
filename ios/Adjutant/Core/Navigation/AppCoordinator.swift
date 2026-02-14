@@ -77,11 +77,29 @@ final class AppCoordinator: Coordinator, ObservableObject {
     // MARK: - Initialization
 
     init() {
+        // Set initial tab based on deployment mode
+        self.selectedTab = AppState.shared.deploymentMode.defaultTab
+
         // Set up notification deep linking observers
         setupNotificationObservers()
+        setupModeObserver()
     }
 
     // MARK: - Notification Deep Linking
+
+    /// Observes deployment mode changes and adjusts selected tab if needed
+    private func setupModeObserver() {
+        AppState.shared.$deploymentMode
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] mode in
+                guard let self = self else { return }
+                let visibleTabs = mode.visibleTabs
+                if !visibleTabs.contains(self.selectedTab) {
+                    self.selectedTab = mode.defaultTab
+                }
+            }
+            .store(in: &cancellables)
+    }
 
     /// Sets up observers for notification tap deep linking
     private func setupNotificationObservers() {
