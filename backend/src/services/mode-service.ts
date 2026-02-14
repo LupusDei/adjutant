@@ -9,6 +9,7 @@ import { getWorkspace, resetWorkspace, getDeploymentMode, type DeploymentMode } 
 import { resetTopology } from "./topology/index.js";
 import { resetTransport } from "./transport/index.js";
 import { isGasTownEnvironment } from "./workspace/gastown-provider.js";
+import { getEventBus } from "./event-bus.js";
 import { logInfo } from "../utils/index.js";
 
 // ============================================================================
@@ -152,8 +153,17 @@ export function switchMode(newMode: DeploymentMode): ModeServiceResult<ModeInfo>
 
   logInfo("mode switched", { from: currentMode, to: newMode });
 
+  const modeInfo = getModeInfo();
+
+  // Emit mode:changed event for SSE/WebSocket consumers
+  getEventBus().emit("mode:changed", {
+    mode: newMode,
+    features: modeInfo.features,
+    reason: `Switched from ${currentMode}`,
+  });
+
   return {
     success: true,
-    data: getModeInfo(),
+    data: modeInfo,
   };
 }

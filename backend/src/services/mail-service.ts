@@ -8,6 +8,7 @@
  */
 
 import { getTransport, type TransportResult } from "./transport/index.js";
+import { getEventBus } from "./event-bus.js";
 import type { Message, SendMessageRequest, MessagePriority } from "../types/index.js";
 
 // ============================================================================
@@ -111,6 +112,14 @@ export async function sendMail(
 
   // Convert to void result (drop messageId from data)
   if (result.success) {
+    // Emit mail:received event for SSE/WebSocket consumers
+    getEventBus().emit("mail:received", {
+      id: result.data?.messageId ?? "",
+      from: sendOptions.from ?? "",
+      to: sendOptions.to ?? "",
+      subject: sendOptions.subject,
+      preview: sendOptions.body.slice(0, 120),
+    });
     return { success: true };
   }
   if (result.error) {
@@ -127,5 +136,8 @@ export async function markRead(
 ): Promise<MailServiceResult<void>> {
   const transport = getTransport();
   const result = await transport.markRead(messageId);
+  if (result.success) {
+    getEventBus().emit("mail:read", { id: messageId });
+  }
   return toServiceResult(result);
 }

@@ -8,6 +8,7 @@ import { basename, join } from "path";
 import { collectAgentSnapshot, type AgentRuntimeInfo } from "./agent-data.js";
 import { resolveWorkspaceRoot, loadWorkspaceConfig, listRigNames } from "./workspace/index.js";
 import { execGtControl } from "./gt-control.js";
+import { getEventBus } from "./event-bus.js";
 import type { GastownStatus, PowerState, AgentStatus, RigStatus } from "../types/index.js";
 
 // ============================================================================
@@ -181,6 +182,8 @@ export async function powerUp(): Promise<PowerServiceResult<PowerTransitionResul
     };
   }
 
+  getEventBus().emit("power:state_changed", { state: "starting" });
+
   return {
     success: true,
     data: {
@@ -219,6 +222,8 @@ export async function powerDown(): Promise<PowerServiceResult<PowerTransitionRes
       },
     };
   }
+
+  getEventBus().emit("power:state_changed", { state: "stopping" });
 
   return {
     success: true,

@@ -5,8 +5,9 @@
 
 import { readFileSync } from "fs";
 import { join } from "path";
-import { execBd, resolveBeadsDir, stripBeadPrefix, type BeadsIssue } from "./bd-client.js";
+import { execBd, resolveBeadsDir, type BeadsIssue } from "./bd-client.js";
 import { listAllBeadsDirs, resolveWorkspaceRoot } from "./workspace/index.js";
+import { getEventBus } from "./event-bus.js";
 import { logInfo } from "../utils/index.js";
 
 // ============================================================================
@@ -586,6 +587,23 @@ export async function updateBeadStatus(
           message: result.error?.message ?? "Failed to update bead status",
         },
       };
+    }
+
+    // Emit bead event for SSE/WebSocket consumers
+    const eventType = status === "closed" ? "bead:closed" : "bead:updated";
+    if (eventType === "bead:closed") {
+      getEventBus().emit("bead:closed", {
+        id: beadId,
+        title: "",
+        closedAt: new Date().toISOString(),
+      });
+    } else {
+      getEventBus().emit("bead:updated", {
+        id: beadId,
+        status,
+        title: "",
+        updatedAt: new Date().toISOString(),
+      });
     }
 
     return {
