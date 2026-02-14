@@ -9,8 +9,13 @@ vi.mock("../../src/services/gastown-workspace.js", () => ({
   resolveTownRoot: vi.fn(() => "/tmp/town"),
 }));
 
+const mockEmit = vi.fn();
+vi.mock("../../src/services/event-bus.js", () => ({
+  getEventBus: () => ({ emit: mockEmit }),
+}));
+
 import { collectAgentSnapshot, type AgentRuntimeInfo } from "../../src/services/agent-data.js";
-import { getAgents } from "../../src/services/agents-service.js";
+import { getAgents, resetAgentStatusCache } from "../../src/services/agents-service.js";
 
 // =============================================================================
 // Test Fixtures
@@ -36,6 +41,7 @@ function createAgentInfo(overrides: Partial<AgentRuntimeInfo> = {}): AgentRuntim
 describe("agents-service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetAgentStatusCache();
   });
 
   // ===========================================================================
@@ -191,6 +197,122 @@ describe("agents-service", () => {
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe("AGENTS_ERROR");
       expect(result.error?.message).toBe("Connection failed");
+    });
+  });
+
+  // ===========================================================================
+  // EventBus emissions
+  // ===========================================================================
+
+  describe("agent:status_changed events", () => {
+    it("should not emit events on first call (no previous state)", async () => {
+      vi.mocked(collectAgentSnapshot).mockResolvedValue({
+        agents: [
+          createAgentInfo({ name: "alice", address: "rig/crew/alice", state: "idle" }),
+        ],
+        polecats: [],
+      });
+
+      await getAgents();
+
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it("should emit agent:status_changed when status changes between calls", async () => {
+      // First call: agent is idle
+      vi.mocked(collectAgentSnapshot).mockResolvedValue({
+        agents: [
+          createAgentInfo({ name: "alice", address: "rig/crew/alice", state: "idle" }),
+        ],
+        polecats: [],
+      });
+      await getAgents();
+
+      // Second call: agent is now working
+      vi.mocked(collectAgentSnapshot).mockResolvedValue({
+        agents: [
+          createAgentInfo({ name: "alice", address: "rig/crew/alice", state: "working" }),
+        ],
+        polecats: [],
+      });
+      await getAgents();
+
+      expect(mockEmit).toHaveBeenCalledWith("agent:status_changed", {
+        agent: "rig/crew/alice",
+        status: "working",
+      });
+    });
+
+    it("should not emit when status is unchanged between calls", async () => {
+      vi.mocked(collectAgentSnapshot).mockResolvedValue({
+        agents: [
+          createAgentInfo({ name: "alice", address: "rig/crew/alice", state: "idle" }),
+        ],
+        polecats: [],
+      });
+      await getAgents();
+      await getAgents();
+
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it("should include activity when agent has a current task", async () => {
+      vi.mocked(collectAgentSnapshot).mockResolvedValue({
+        agents: [
+          createAgentInfo({ name: "alice", address: "rig/crew/alice", state: "idle" }),
+        ],
+        polecats: [],
+      });
+      await getAgents();
+
+      vi.mocked(collectAgentSnapshot).mockResolvedValue({
+        agents: [
+          createAgentInfo({
+            name: "alice",
+            address: "rig/crew/alice",
+            state: "working",
+            hookBeadTitle: "Fix bug #42",
+          }),
+        ],
+        polecats: [],
+      });
+      await getAgents();
+
+      expect(mockEmit).toHaveBeenCalledWith("agent:status_changed", {
+        agent: "rig/crew/alice",
+        status: "working",
+        activity: "Fix bug #42",
+      });
+    });
+
+    it("should emit events for multiple agents that changed", async () => {
+      vi.mocked(collectAgentSnapshot).mockResolvedValue({
+        agents: [
+          createAgentInfo({ name: "alice", address: "rig/crew/alice", state: "idle" }),
+          createAgentInfo({ name: "bob", address: "rig/crew/bob", state: "working" }),
+        ],
+        polecats: [],
+      });
+      await getAgents();
+
+      vi.mocked(collectAgentSnapshot).mockResolvedValue({
+        agents: [
+          createAgentInfo({ name: "alice", address: "rig/crew/alice", state: "working" }),
+          createAgentInfo({ name: "bob", address: "rig/crew/bob", running: false }),
+        ],
+        polecats: [],
+      });
+      await getAgents();
+
+      expect(mockEmit).toHaveBeenCalledTimes(2);
+      expect(mockEmit).toHaveBeenCalledWith("agent:status_changed", {
+        agent: "rig/crew/alice",
+        status: "working",
+      });
+      expect(mockEmit).toHaveBeenCalledWith("agent:status_changed", {
+        agent: "rig/crew/bob",
+        status: "offline",
+      });
     });
   });
 });
