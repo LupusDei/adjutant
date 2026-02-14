@@ -6,7 +6,7 @@
 
 import { basename, join } from "path";
 import { collectAgentSnapshot, type AgentRuntimeInfo } from "./agent-data.js";
-import { resolveTownRoot, loadTownConfig, listRigNames } from "./gastown-workspace.js";
+import { resolveWorkspaceRoot, loadWorkspaceConfig, listRigNames } from "./workspace/index.js";
 import { execGtControl } from "./gt-control.js";
 import type { GastownStatus, PowerState, AgentStatus, RigStatus } from "../types/index.js";
 
@@ -105,14 +105,14 @@ function buildRigStatus(rigName: string, townRoot: string, agents: AgentRuntimeI
  */
 export async function getStatus(): Promise<PowerServiceResult<GastownStatus>> {
   try {
-    const townRoot = resolveTownRoot();
-    const townConfig = await loadTownConfig(townRoot);
+    const townRoot = resolveWorkspaceRoot();
+    const townConfig = await loadWorkspaceConfig();
     const { agents, mailIndex } = await collectAgentSnapshot(townRoot, ["overseer"]);
 
     const mayor = agents.find((agent) => agent.role === "mayor");
     const deacon = agents.find((agent) => agent.role === "deacon");
 
-    const rigNames = await listRigNames(townRoot);
+    const rigNames = await listRigNames();
     const agentRigNames = new Set(agents.map((agent) => agent.rig).filter(Boolean) as string[]);
     const rigSet = new Set([...rigNames, ...agentRigNames]);
 
@@ -168,7 +168,7 @@ export async function powerUp(): Promise<PowerServiceResult<PowerTransitionResul
     };
   }
 
-  const townRoot = resolveTownRoot();
+  const townRoot = resolveWorkspaceRoot();
   const upResult = await execGtControl(["up"], { cwd: townRoot });
 
   if (!upResult.success) {
@@ -207,7 +207,7 @@ export async function powerDown(): Promise<PowerServiceResult<PowerTransitionRes
     };
   }
 
-  const townRoot = resolveTownRoot();
+  const townRoot = resolveWorkspaceRoot();
   const downResult = await execGtControl(["down"], { cwd: townRoot });
 
   if (!downResult.success) {

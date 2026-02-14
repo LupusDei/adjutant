@@ -4,18 +4,18 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { execBd, stripBeadPrefix, type BeadsIssue } from "./bd-client.js";
 import {
-  extractBeadPrefix,
   listAllBeadsDirs,
   resolveBeadsDirFromId,
-  resolveTownRoot,
-} from "./gastown-workspace.js";
+  resolveWorkspaceRoot,
+} from "./workspace/index.js";
+import { extractBeadPrefix } from "./gastown-workspace.js";
+import { getTopology } from "./topology/index.js";
 
 const execFileAsync = promisify(execFile);
 import {
   addressToIdentity,
   parseAgentBeadId,
   parseAgentFields,
-  sessionNameForAgent,
 } from "./gastown-utils.js";
 import { listTmuxSessions } from "./tmux.js";
 import { buildMailIndex, listMailIssues, type MailIndexEntry } from "./mail-data.js";
@@ -42,29 +42,6 @@ export interface AgentSnapshot {
   mailIndex: Map<string, MailIndexEntry>;
 }
 
-function normalizeRole(role: string): string {
-  const lower = role.toLowerCase();
-  if (lower === "coordinator") return "mayor";
-  if (lower === "health-check") return "deacon";
-  return lower;
-}
-
-function buildAgentAddress(role: string, rig: string | null, name: string | null): string | null {
-  switch (role) {
-    case "mayor":
-    case "deacon":
-      return `${role}/`;
-    case "witness":
-    case "refinery":
-      return rig ? `${rig}/${role}` : null;
-    case "crew":
-      return rig && name ? `${rig}/crew/${name}` : null;
-    case "polecat":
-      return rig && name ? `${rig}/${name}` : null;
-    default:
-      return null;
-  }
-}
 
 /**
  * Gets the current git branch for a polecat from their worktree.
@@ -72,7 +49,7 @@ function buildAgentAddress(role: string, rig: string | null, name: string | null
  */
 async function getPolecatBranch(rig: string, polecatName: string): Promise<string | undefined> {
   try {
-    const townRoot = resolveTownRoot();
+    const townRoot = resolveWorkspaceRoot();
     // Polecat worktrees are at: {townRoot}/{rig}/polecats/{name}/{rig}/
     const worktreePath = join(townRoot, rig, "polecats", polecatName, rig);
 
@@ -115,8 +92,7 @@ async function fetchAgents(cwd: string, beadsDir: string): Promise<BeadsIssue[]>
  * Returns a map of beadId -> title.
  */
 async function fetchBeadTitles(
-  beadIds: string[],
-  townRoot: string
+  beadIds: string[]
 ): Promise<Map<string, string>> {
   const titles = new Map<string, string>();
   if (beadIds.length === 0) return titles;
@@ -138,7 +114,7 @@ async function fetchBeadTitles(
     const firstId = ids[0];
     if (!firstId) continue;
 
-    const dirInfo = resolveBeadsDirFromId(firstId, townRoot);
+    const dirInfo = await resolveBeadsDirFromId(firstId);
     if (!dirInfo) continue;
 
     const { workDir, beadsDir } = dirInfo;
@@ -168,6 +144,7 @@ export async function collectAgentSnapshot(
   townRoot: string,
   extraIdentities: string[] = []
 ): Promise<AgentSnapshot> {
+  const topology = getTopology();
   const sessions = await listTmuxSessions();
   const foundIssues: { issue: BeadsIssue; sourceRig: string | null }[] = [];
   const beadsDirs = await listAllBeadsDirs();
@@ -187,16 +164,16 @@ export async function collectAgentSnapshot(
   for (const { issue, sourceRig } of foundIssues) {
     const parsed = parseAgentBeadId(issue.id, sourceRig);
     const fields = parseAgentFields(issue.description);
-    const role = normalizeRole(fields.roleType ?? parsed?.role ?? "");
+    const role = topology.normalizeRole(fields.roleType ?? parsed?.role ?? "");
     if (!role) continue;
 
     const rig = fields.rig ?? parsed?.rig ?? null;
     const name =
       parsed?.name ??
-      (role === "mayor" || role === "deacon" || role === "witness" || role === "refinery"
+      (topology.isInfrastructure(role)
         ? role
         : issue.title || role);
-    const address = buildAgentAddress(role, rig, name);
+    const address = topology.buildAddress(role, rig, name);
     if (!address) continue;
 
     const identity = addressToIdentity(address);
@@ -204,7 +181,8 @@ export async function collectAgentSnapshot(
     if (identities.has(identity)) continue;
     identities.add(identity);
 
-    const sessionName = sessionNameForAgent(role, rig, name);
+    const sessionInfo = topology.getSessionInfo(role, rig, name);
+    const sessionName = sessionInfo?.name ?? null;
     const running = sessionName ? sessions.has(sessionName) : false;
     const state = issue.agent_state ?? fields.agentState;
     const hookBead = issue.hook_bead ?? fields.hookBead;
@@ -224,6 +202,8 @@ export async function collectAgentSnapshot(
   }
 
   // Synthesize agents from running tmux sessions if not found in beads
+  // This section handles Gas Town session patterns - in standalone mode,
+  // agents are discovered purely through beads, not tmux sessions
   for (const sessionName of sessions) {
     let rig: string | null = null;
     let role: string | null = null;
@@ -244,7 +224,7 @@ export async function collectAgentSnapshot(
       if (parts.length >= 3 && parts[1] && parts[2]) {
         rig = parts[1];
         const typeOrName = parts[2];
-        
+
         if (typeOrName === "witness") {
           role = "witness";
           name = "witness";
@@ -260,10 +240,14 @@ export async function collectAgentSnapshot(
           name = parts.slice(2).join("-");
         }
       }
+    } else if (sessionName.startsWith("agent-")) {
+      // Standalone mode: agent-{name} sessions
+      role = "agent";
+      name = sessionName.slice("agent-".length);
     }
 
     if (role && name) {
-      const address = buildAgentAddress(role, rig, name);
+      const address = topology.buildAddress(role, rig, name);
       if (address) {
         const identity = addressToIdentity(address);
         // Check if already found via beads
@@ -294,7 +278,7 @@ export async function collectAgentSnapshot(
   const uniqueHookBeadIds = [...new Set(hookBeadIds)];
 
   // Fetch hook bead titles, routing each to the correct beads database by prefix
-  const hookBeadTitles = await fetchBeadTitles(uniqueHookBeadIds, townRoot);
+  const hookBeadTitles = await fetchBeadTitles(uniqueHookBeadIds);
 
   // Fetch branches for polecats in parallel
   const polecatAgents = baseAgents.filter((a) => a.role === "polecat" && a.rig);

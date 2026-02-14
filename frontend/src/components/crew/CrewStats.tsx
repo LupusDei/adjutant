@@ -48,10 +48,12 @@ export interface CrewStatsProps {
  * Grouped agent structure for hierarchical display.
  */
 interface AgentGroup {
-  /** Town-level agents (mayor, deacon) */
+  /** Town-level agents (mayor, deacon) or standalone agents (user, agent) */
   town: CrewMember[];
   /** Per-rig agent groups */
   rigs: Map<string, RigAgents>;
+  /** Standalone agents (no rig) - for non-infrastructure agents in standalone mode */
+  standalone: CrewMember[];
 }
 
 /**
@@ -70,12 +72,18 @@ interface RigAgents {
 function groupAgents(agents: CrewMember[]): AgentGroup {
   const town: CrewMember[] = [];
   const rigs = new Map<string, RigAgents>();
+  const standalone: CrewMember[] = [];
 
   for (const agent of agents) {
-    // Town-level agents have no rig
+    // Town-level/infrastructure agents have no rig
     if (!agent.rig) {
+      // Gas Town infrastructure
       if (agent.type === 'mayor' || agent.type === 'deacon') {
         town.push(agent);
+      }
+      // Standalone mode agents
+      else if (agent.type === 'user' || agent.type === 'agent') {
+        standalone.push(agent);
       }
       continue;
     }
@@ -108,7 +116,7 @@ function groupAgents(agents: CrewMember[]): AgentGroup {
     }
   }
 
-  return { town, rigs };
+  return { town, rigs, standalone };
 }
 
 /**
@@ -203,9 +211,14 @@ export function CrewStats({ className = '', isActive = true }: CrewStatsProps) {
 
         {grouped && (
           <>
-            {/* Town-level agents */}
+            {/* Town-level agents (Gas Town mode) */}
             {grouped.town.length > 0 && (
               <TownSection agents={grouped.town} gridStyle={townGridStyle} />
+            )}
+
+            {/* Standalone agents */}
+            {grouped.standalone.length > 0 && (
+              <StandaloneSection agents={grouped.standalone} gridStyle={agentGridStyle} />
             )}
 
             {/* Per-rig sections */}
@@ -222,7 +235,7 @@ export function CrewStats({ className = '', isActive = true }: CrewStatsProps) {
               />
             ))}
 
-            {grouped.rigs.size === 0 && grouped.town.length === 0 && (
+            {grouped.rigs.size === 0 && grouped.town.length === 0 && grouped.standalone.length === 0 && (
               <div style={styles.emptyState}>NO AGENTS CONFIGURED</div>
             )}
           </>
@@ -278,6 +291,36 @@ function TownSection({ agents, gridStyle }: TownSectionProps) {
       <div style={gridStyle}>
         {mayor && <AgentCard agent={mayor} icon="👑" />}
         {deacon && <AgentCard agent={deacon} icon="📋" />}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Standalone Section - For standalone mode agents
+// =============================================================================
+
+interface StandaloneSectionProps {
+  agents: CrewMember[];
+  gridStyle: CSSProperties;
+}
+
+function StandaloneSection({ agents, gridStyle }: StandaloneSectionProps) {
+  return (
+    <div style={styles.section}>
+      <div style={styles.sectionHeader}>
+        <span style={styles.sectionIcon}>◈</span>
+        <span style={styles.sectionTitle} className="crt-glow">AGENTS</span>
+        <span style={styles.sectionLine} />
+      </div>
+      <div style={gridStyle}>
+        {agents.map((agent) => (
+          <AgentCard
+            key={agent.id}
+            agent={agent}
+            icon={agent.type === 'user' ? '👤' : '🤖'}
+          />
+        ))}
       </div>
     </div>
   );

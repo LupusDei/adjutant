@@ -6,7 +6,8 @@
  */
 
 import { collectAgentSnapshot, type AgentRuntimeInfo } from "./agent-data.js";
-import { resolveTownRoot } from "./gastown-workspace.js";
+import { resolveWorkspaceRoot } from "./workspace/index.js";
+import { getTopology } from "./topology/index.js";
 import type { CrewMember, CrewMemberStatus, AgentType } from "../types/index.js";
 
 // ============================================================================
@@ -26,23 +27,12 @@ export interface AgentsServiceResult<T> {
 }
 
 /**
- * Maps raw agent role string to AgentType enum.
- * Handles both direct type names and role aliases from gt status.
+ * Maps raw agent role string to AgentType using topology provider.
+ * Handles both direct type names and role aliases.
  */
 function mapAgentType(role: string): AgentType {
-  const typeMap: Record<string, AgentType> = {
-    // Direct type names
-    mayor: "mayor",
-    deacon: "deacon",
-    witness: "witness",
-    refinery: "refinery",
-    crew: "crew",
-    polecat: "polecat",
-    // Role aliases from gt status --json
-    coordinator: "mayor",
-    "health-check": "deacon",
-  };
-  return typeMap[role.toLowerCase()] ?? "crew";
+  const topology = getTopology();
+  return topology.normalizeRole(role);
 }
 
 /**
@@ -109,7 +99,7 @@ function transformAgent(agent: AgentRuntimeInfo): CrewMember {
  */
 export async function getAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
   try {
-    const townRoot = resolveTownRoot();
+    const townRoot = resolveWorkspaceRoot();
     const { agents } = await collectAgentSnapshot(townRoot);
     const crewMembers = agents.map(transformAgent);
     crewMembers.sort((a, b) => a.name.localeCompare(b.name));

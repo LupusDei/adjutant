@@ -19,14 +19,24 @@ export type CrewMemberStatus =
   | "stuck"
   | "offline";
 
-/** Agent types in gastown. */
+/**
+ * Agent types in the system.
+ *
+ * Gas Town roles: mayor, deacon, witness, refinery, crew, polecat
+ * Standalone roles: user, agent
+ */
 export type AgentType =
+  // Gas Town infrastructure
   | "mayor"
   | "deacon"
   | "witness"
   | "refinery"
+  // Gas Town workers
   | "crew"
-  | "polecat";
+  | "polecat"
+  // Standalone/swarm mode
+  | "user"
+  | "agent";
 
 // ============================================================================
 // Message Types

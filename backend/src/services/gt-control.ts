@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
 import { logError, logInfo, logWarn } from "../utils/index.js";
-import { resolveTownRoot, resolveGtBinary } from "./gastown-workspace.js";
+import { resolveWorkspaceRoot } from "./workspace/index.js";
+import { resolveGtBinary } from "./gastown-workspace.js";
 
 export interface GtControlResult {
   success: boolean;
@@ -24,7 +25,7 @@ export async function execGtControl(
   args: string[],
   options: GtControlOptions = {}
 ): Promise<GtControlResult> {
-  const { cwd = resolveTownRoot(), timeout = DEFAULT_TIMEOUT, env } = options;
+  const { cwd = resolveWorkspaceRoot(), timeout = DEFAULT_TIMEOUT, env } = options;
   const gtBinary = resolveGtBinary();
   const startedAt = Date.now();
   logInfo("gt exec start", { args, binary: gtBinary });

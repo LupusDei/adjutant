@@ -9,7 +9,7 @@
 
 import { Router } from "express";
 import { listBeads, listAllBeads, updateBeadStatus, getBead, type BeadStatus } from "../services/beads-service.js";
-import { resolveTownRoot, resolveRigPath } from "../services/gastown-workspace.js";
+import { resolveRigPath } from "../services/workspace/index.js";
 import { success, internalError, badRequest } from "../utils/responses.js";
 
 export const beadsRouter = Router();
@@ -68,11 +68,9 @@ beadsRouter.get("/", async (req, res) => {
   }
 
   // rig=town or rig=<specific>: Query single database
-  const townRoot = resolveTownRoot();
-
   // For "town", query the town database directly (no rigPath needed)
   // For other rigs, resolve their path
-  const rigPath = rig === "town" ? undefined : resolveRigPath(rig, townRoot) ?? undefined;
+  const rigPath = rig === "town" ? undefined : resolveRigPath(rig) ?? undefined;
 
   const result = await listBeads({
     // Don't pass rig for filtering - we want all beads from the database
