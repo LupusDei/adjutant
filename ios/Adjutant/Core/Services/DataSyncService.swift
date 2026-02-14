@@ -11,6 +11,12 @@ import Foundation
 import Combine
 import AdjutantKit
 
+/// SSE payload for mode_changed events
+private struct ModeChangedEvent: Decodable {
+    let mode: DeploymentMode
+    let features: [String]?
+}
+
 /// Centralized service for syncing data from the backend.
 /// Prefers SSE for real-time push updates; falls back to polling when SSE is disconnected.
 /// ViewModels subscribe to receive data instead of polling independently.
@@ -209,7 +215,14 @@ public final class DataSyncService: ObservableObject {
         case "mail_received", "mail_read":
             Task { await fetchMail() }
         case "mode_changed":
-            // Mode changes may affect available features; refresh everything
+            // Parse mode from SSE data and update AppState
+            if let data = event.data.data(using: .utf8),
+               let json = try? JSONDecoder().decode(ModeChangedEvent.self, from: data) {
+                Task { @MainActor in
+                    AppState.shared.updateDeploymentMode(json.mode)
+                }
+            }
+            // Refresh everything since available features may change
             Task { await refreshAll() }
         case "power_state":
             // Power state is managed by AppState, but crew/beads may change

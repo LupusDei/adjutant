@@ -9,19 +9,30 @@ struct MainTabView: View {
     @Environment(\.crtTheme) private var theme
     @ObservedObject private var appState = AppState.shared
 
+    /// Tabs visible in the current deployment mode
+    private var visibleTabs: [AppTab] {
+        let visible = appState.deploymentMode.visibleTabs
+        return AppTab.allCases.filter { visible.contains($0) }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Offline indicator (shows when network unavailable)
             OfflineIndicator()
 
             // Main content area with navigation
-            TabContent(selectedTab: coordinator.selectedTab, coordinator: coordinator)
-                .environmentObject(coordinator)
+            TabContent(
+                selectedTab: coordinator.selectedTab,
+                coordinator: coordinator,
+                visibleTabs: visibleTabs
+            )
+            .environmentObject(coordinator)
 
             // Custom tab bar
             CRTTabBar(
                 selectedTab: $coordinator.selectedTab,
-                unreadCount: appState.unreadMailCount
+                unreadCount: appState.unreadMailCount,
+                visibleTabs: visibleTabs
             )
         }
         .background(CRTTheme.Background.screen)
@@ -29,6 +40,14 @@ struct MainTabView: View {
         .onAppear {
             // Start network monitoring
             _ = NetworkMonitor.shared
+        }
+        .onChange(of: appState.deploymentMode) { _, newMode in
+            // If current tab is hidden in new mode, switch to first visible tab
+            if !newMode.visibleTabs.contains(coordinator.selectedTab) {
+                if let firstVisible = AppTab.allCases.first(where: { newMode.visibleTabs.contains($0) }) {
+                    coordinator.selectTab(firstVisible)
+                }
+            }
         }
     }
 }
@@ -39,6 +58,7 @@ struct MainTabView: View {
 private struct TabContent: View {
     let selectedTab: AppTab
     @ObservedObject var coordinator: AppCoordinator
+    let visibleTabs: [AppTab]
     @Environment(\.scenePhase) private var scenePhase
 
     /// Used to force TabView to reset its internal paging state when app returns from background.
@@ -50,7 +70,7 @@ private struct TabContent: View {
             get: { selectedTab },
             set: { coordinator.selectTab($0) }
         )) {
-            ForEach(AppTab.allCases) { tab in
+            ForEach(visibleTabs) { tab in
                 NavigationStack(path: coordinator.pathBinding(for: tab)) {
                     tabView(for: tab)
                         .navigationDestination(for: AppRoute.self) { route in
@@ -123,10 +143,11 @@ struct CRTTabBar: View {
     @Environment(\.crtTheme) private var theme
     @Binding var selectedTab: AppTab
     let unreadCount: Int
+    var visibleTabs: [AppTab] = AppTab.allCases
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(AppTab.allCases) { tab in
+            ForEach(visibleTabs) { tab in
                 CRTTabBarItem(
                     tab: tab,
                     isSelected: selectedTab == tab,

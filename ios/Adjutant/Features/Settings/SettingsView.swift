@@ -29,6 +29,9 @@ struct SettingsView: View {
                 // Communication Section
                 communicationSection
 
+                // Deployment Mode Section
+                modeSection
+
                 // Notifications Section
                 notificationsSection
 
@@ -367,6 +370,52 @@ struct SettingsView: View {
             }
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
+    }
+
+    // MARK: - Mode Section
+
+    private var modeSection: some View {
+        CRTCard(header: "DEPLOYMENT MODE", headerBadge: viewModel.currentMode.displayName) {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+                CRTText("OPERATION MODE", style: .caption, color: theme.dim)
+
+                ForEach(DeploymentMode.allCases) { mode in
+                    ModeCard(
+                        mode: mode,
+                        isActive: viewModel.currentMode == mode,
+                        isAvailable: modeIsAvailable(mode),
+                        unavailableReason: modeUnavailableReason(mode),
+                        isSwitching: viewModel.isModeSwitching,
+                        onTap: {
+                            Task {
+                                await viewModel.switchMode(to: mode)
+                            }
+                        }
+                    )
+                }
+
+                if let error = viewModel.modeErrorMessage {
+                    HStack(spacing: CRTTheme.Spacing.xs) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(CRTTheme.State.error)
+                            .font(.system(size: 12))
+                        CRTText(error, style: .caption, color: CRTTheme.State.error)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
+    }
+
+    private func modeIsAvailable(_ mode: DeploymentMode) -> Bool {
+        guard let available = viewModel.availableModes.first(where: { $0.mode == mode }) else {
+            return true // Default to available if not in the list
+        }
+        return available.available
+    }
+
+    private func modeUnavailableReason(_ mode: DeploymentMode) -> String? {
+        viewModel.availableModes.first(where: { $0.mode == mode && !$0.available })?.reason
     }
 
     // MARK: - Notifications Section
@@ -762,6 +811,85 @@ private struct CommunicationPriorityOption: View {
         .buttonStyle(.plain)
         .accessibilityLabel("\(priority.displayName): \(priority.description)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+// MARK: - Mode Card
+
+private struct ModeCard: View {
+    @Environment(\.crtTheme) private var theme
+
+    let mode: DeploymentMode
+    let isActive: Bool
+    let isAvailable: Bool
+    let unavailableReason: String?
+    let isSwitching: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: CRTTheme.Spacing.md) {
+                // Mode icon
+                Image(systemName: mode.icon)
+                    .font(.system(size: 24))
+                    .foregroundColor(isActive ? theme.primary : theme.dim)
+                    .frame(width: 32)
+                    .crtGlow(color: isActive ? theme.primary : .clear, radius: 6, intensity: 0.5)
+
+                // Mode info
+                VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxs) {
+                    HStack(spacing: CRTTheme.Spacing.xs) {
+                        CRTText(
+                            mode.displayName,
+                            style: .body,
+                            glowIntensity: isActive ? .medium : .none,
+                            color: isActive ? theme.primary : (isAvailable ? theme.dim : theme.dim.opacity(0.4))
+                        )
+
+                        if isActive {
+                            CRTText("ACTIVE", style: .caption, color: CRTTheme.State.success)
+                        }
+                    }
+
+                    CRTText(
+                        mode.description,
+                        style: .caption,
+                        color: theme.dim.opacity(isAvailable ? 0.8 : 0.4)
+                    )
+
+                    if let reason = unavailableReason {
+                        CRTText(reason, style: .caption, color: CRTTheme.State.warning)
+                    }
+                }
+
+                Spacer()
+
+                // Active indicator
+                if isActive {
+                    StatusDot(.success, size: 10, pulse: true)
+                } else if isSwitching {
+                    InlineLoadingIndicator()
+                }
+            }
+            .padding(CRTTheme.Spacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
+                    .fill(isActive ? theme.primary.opacity(0.1) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
+                    .stroke(
+                        isActive ? theme.primary : theme.dim.opacity(0.2),
+                        lineWidth: isActive ? 2 : 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(!isAvailable || isActive || isSwitching)
+        .opacity(isAvailable ? 1.0 : 0.5)
+        .accessibilityLabel("\(mode.displayName): \(mode.description)")
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+        .accessibilityHint(isAvailable ? (isActive ? "Currently active" : "Tap to switch") : (unavailableReason ?? "Unavailable"))
     }
 }
 
