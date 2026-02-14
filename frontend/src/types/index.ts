@@ -11,6 +11,15 @@ export type MessageType = "notification" | "task" | "scavenge" | "reply";
 /** Possible states for the gastown system. */
 export type PowerState = "stopped" | "starting" | "running" | "stopping";
 
+/** Communication priority levels for connection management. */
+export type CommunicationPriority = 'real-time' | 'efficient' | 'polling-only';
+
+/** Deployment mode for the system. */
+export type DeploymentMode = 'gastown' | 'standalone' | 'swarm' | 'unknown';
+
+/** Connection status for the communication indicator. */
+export type ConnectionStatus = 'websocket' | 'sse' | 'polling' | 'reconnecting' | 'disconnected';
+
 /** Possible statuses for a crew member. */
 export type CrewMemberStatus =
   | "idle"

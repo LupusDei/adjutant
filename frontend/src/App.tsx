@@ -11,6 +11,7 @@ import { CRTScreen } from "./components/shared/CRTScreen";
 import { QuickInput } from "./components/shared/QuickInput";
 import { RigFilter } from "./components/shared/RigFilter";
 import { RigProvider } from "./contexts/RigContext";
+import { CommunicationProvider } from "./contexts/CommunicationContext";
 import { DashboardView } from "./components/dashboard/OverviewDashboard";
 
 export type ThemeId = 'green' | 'red' | 'blue' | 'tan' | 'pink' | 'purple';
@@ -65,6 +66,7 @@ function App() {
 
   return (
     <RigProvider>
+    <CommunicationProvider>
       <CRTScreen showBootSequence={true} enableFlicker={true} enableScanlines={true} enableNoise={true}>
         <div className="app-container">
           <header className="app-header">
@@ -146,6 +148,7 @@ function App() {
           <QuickInput />
         </div>
       </CRTScreen>
+    </CommunicationProvider>
     </RigProvider>
   );
 }

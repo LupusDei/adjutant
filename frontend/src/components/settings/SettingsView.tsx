@@ -3,6 +3,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import { ThemeId } from '../../App';
 import { NotificationSettings, VoiceConfigPanel } from '../voice';
 import { getApiKey, setApiKey, clearApiKey, hasApiKey } from '../../services/api';
+import { useCommunication } from '../../contexts/CommunicationContext';
+import type { CommunicationPriority, DeploymentMode } from '../../types';
 
 interface TunnelStatusData {
   state: 'stopped' | 'starting' | 'running' | 'error';
@@ -33,6 +35,58 @@ const THEMES: ThemeOption[] = [
   { id: 'purple', label: 'RAD-STORM', color: '#BF94FF' },
 ];
 
+interface PriorityOption {
+  id: CommunicationPriority;
+  label: string;
+  description: string;
+  indicator: string;
+}
+
+const PRIORITIES: PriorityOption[] = [
+  {
+    id: 'real-time',
+    label: 'REAL-TIME',
+    description: 'WebSocket + SSE. Best for active use and chat.',
+    indicator: '◉ WS',
+  },
+  {
+    id: 'efficient',
+    label: 'EFFICIENT',
+    description: 'SSE only. Lower battery, good for monitoring.',
+    indicator: '◎ SSE',
+  },
+  {
+    id: 'polling-only',
+    label: 'POLLING',
+    description: 'HTTP polling only. For restricted networks.',
+    indicator: '○ HTTP',
+  },
+];
+
+interface ModeOption {
+  id: DeploymentMode;
+  label: string;
+  description: string;
+}
+
+const MODES: ModeOption[] = [
+  {
+    id: 'gastown',
+    label: 'GAS TOWN',
+    description: 'Full multi-agent infrastructure',
+  },
+  {
+    id: 'standalone',
+    label: 'STANDALONE',
+    description: 'Single project, no GT infra',
+  },
+  {
+    id: 'swarm',
+    label: 'SWARM',
+    description: 'Multi-agent without GT hierarchy',
+  },
+];
+
 interface SettingsViewProps {
   theme: ThemeId;
   setTheme: (theme: ThemeId) => void;
@@ -57,6 +111,62 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
   const [apiKeyStatus, setApiKeyStatus] = useState<'none' | 'configured' | 'saved'>(() =>
     hasApiKey() ? 'configured' : 'none'
   );
+
+  // Communication priority
+  const { priority: commPriority, setPriority: setCommPriority, connectionStatus } = useCommunication();
+
+  // Mode switching state
+  const [currentMode, setCurrentMode] = useState<DeploymentMode>('unknown');
+  const [availableModes, setAvailableModes] = useState<Array<{ mode: DeploymentMode; available: boolean; reason?: string }>>([]);
+  const [modeSwitching, setModeSwitching] = useState(false);
+  const [modeError, setModeError] = useState<string | null>(null);
+
+  // Fetch mode info
+  const fetchModeInfo = useCallback(async () => {
+    try {
+      const response = await fetch('/api/mode');
+      if (!response.ok) return;
+      const result = await response.json() as { success: boolean; data?: { mode: DeploymentMode; features: string[]; availableModes: Array<{ mode: DeploymentMode; available: boolean; reason?: string }> } };
+      if (result.success && result.data) {
+        setCurrentMode(result.data.mode);
+        setAvailableModes(result.data.availableModes);
+      }
+    } catch {
+      // Silent fail - mode info is supplementary
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isActive) {
+      fetchModeInfo();
+    }
+  }, [isActive, fetchModeInfo]);
+
+  const handleModeSwitch = useCallback(async (newMode: DeploymentMode) => {
+    if (modeSwitching || newMode === currentMode) return;
+    setModeSwitching(true);
+    setModeError(null);
+
+    try {
+      const response = await fetch('/api/mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: newMode }),
+      });
+      const result = await response.json() as { success: boolean; data?: { mode: DeploymentMode; features: string[]; availableModes: Array<{ mode: DeploymentMode; available: boolean; reason?: string }> }; error?: { message: string } };
+
+      if (result.success && result.data) {
+        setCurrentMode(result.data.mode);
+        setAvailableModes(result.data.availableModes);
+      } else {
+        setModeError(result.error?.message ?? 'Failed to switch mode');
+      }
+    } catch (err) {
+      setModeError(err instanceof Error ? err.message : 'Failed to switch mode');
+    } finally {
+      setModeSwitching(false);
+    }
+  }, [modeSwitching, currentMode]);
 
   const handleSaveApiKey = useCallback(() => {
     if (apiKeyInput.trim()) {
@@ -407,6 +517,111 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
         </section>
 
         <section style={styles.section}>
+          <h2 style={styles.sectionTitle}>COMMUNICATION</h2>
+
+          <div style={styles.field}>
+            <span style={styles.label}>PRIORITY:</span>
+            <span style={{
+              color: connectionStatus === 'websocket' ? '#20C20E' :
+                     connectionStatus === 'sse' ? colors.amber :
+                     colors.primaryDim,
+              textShadow: connectionStatus === 'websocket' ? '0 0 8px #20C20E' :
+                          connectionStatus === 'sse' ? `0 0 8px ${colors.amber}` :
+                          'none',
+            }}>
+              {connectionStatus === 'websocket' ? '◉ WS' :
+               connectionStatus === 'sse' ? '◎ SSE' :
+               connectionStatus === 'reconnecting' ? '⚠ RECONNECTING' :
+               '○ HTTP'}
+            </span>
+          </div>
+
+          <div style={styles.priorityGrid}>
+            {PRIORITIES.map((p) => {
+              const isSelected = commPriority === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  style={{
+                    ...styles.priorityCard,
+                    borderColor: isSelected ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)',
+                    borderWidth: isSelected ? '2px' : '1px',
+                    padding: isSelected ? '7px' : '8px',
+                    boxShadow: isSelected ? '0 0 8px var(--crt-phosphor-glow)' : 'none',
+                  }}
+                  onClick={() => setCommPriority(p.id)}
+                >
+                  <span style={{
+                    ...styles.priorityLabel,
+                    color: isSelected ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)',
+                  }}>
+                    {p.label}
+                  </span>
+                  <span style={styles.priorityDesc}>{p.description}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {currentMode !== 'unknown' && (
+            <>
+              <div style={{ ...styles.field, marginTop: '1rem' }}>
+                <span style={styles.label}>MODE:</span>
+                <span style={{
+                  color: colors.primary,
+                  textShadow: `0 0 8px ${colors.primaryGlow}`,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                } as CSSProperties}>
+                  {currentMode}
+                </span>
+              </div>
+
+              <div style={styles.priorityGrid}>
+                {MODES.map((m) => {
+                  const isSelected = currentMode === m.id;
+                  const modeInfo = availableModes.find(am => am.mode === m.id);
+                  const isAvailable = modeInfo?.available ?? false;
+                  const isDisabled = !isAvailable || modeSwitching;
+
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      style={{
+                        ...styles.priorityCard,
+                        borderColor: isSelected ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)',
+                        borderWidth: isSelected ? '2px' : '1px',
+                        padding: isSelected ? '7px' : '8px',
+                        boxShadow: isSelected ? '0 0 8px var(--crt-phosphor-glow)' : 'none',
+                        opacity: isDisabled && !isSelected ? 0.4 : 1,
+                        cursor: isDisabled ? 'not-allowed' : 'pointer',
+                      }}
+                      onClick={() => !isDisabled && handleModeSwitch(m.id)}
+                      disabled={isDisabled}
+                      title={!isAvailable ? modeInfo?.reason : undefined}
+                    >
+                      <span style={{
+                        ...styles.priorityLabel,
+                        color: isSelected ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)',
+                      }}>
+                        {m.label}
+                      </span>
+                      <span style={styles.priorityDesc}>{m.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {modeError && (
+                <p style={styles.errorHint}>{modeError}</p>
+              )}
+            </>
+          )}
+        </section>
+
+        <section style={styles.section}>
           <h2 style={styles.sectionTitle}>SYSTEM THEME</h2>
           <div style={styles.themeGrid}>
             {THEMES.map((t) => (
@@ -734,6 +949,38 @@ const styles = {
     marginTop: '1rem',
     marginBottom: 0,
     fontStyle: 'italic',
+  },
+
+  priorityGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+    gap: '10px',
+    marginBottom: '0.5rem',
+  },
+
+  priorityCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    padding: '8px',
+    border: '1px solid',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    background: 'transparent',
+    textAlign: 'left',
+  } as CSSProperties,
+
+  priorityLabel: {
+    fontSize: '0.8rem',
+    fontWeight: 'bold',
+    letterSpacing: '0.1em',
+  },
+
+  priorityDesc: {
+    fontSize: '0.65rem',
+    color: colors.primaryDim,
+    lineHeight: 1.3,
   },
 
   themeGrid: {
