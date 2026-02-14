@@ -48,6 +48,18 @@ final class ChatViewModel: BaseViewModel {
     /// ID of the message currently being played
     @Published private(set) var playingMessageId: String?
 
+    /// Current communication method (HTTP polling, SSE, or WebSocket)
+    @Published private(set) var communicationMethod: CommunicationMethod = .http
+
+    /// Current connection state
+    @Published private(set) var connectionState: ConnectionState = .connecting
+
+    /// Whether a stream is currently active
+    @Published private(set) var isStreamActive: Bool = false
+
+    /// Timestamp of the last successful poll/data fetch
+    @Published private(set) var lastPollTime: Date?
+
     // MARK: - Dependencies
 
     private let apiClient: APIClient
@@ -115,10 +127,12 @@ final class ChatViewModel: BaseViewModel {
 
     override func onAppear() {
         super.onAppear()
+        connectionState = .connecting
         Task {
             await loadRecipients()
         }
         startPolling()
+        observeNetworkChanges()
     }
 
     override func onDisappear() {
@@ -132,6 +146,8 @@ final class ChatViewModel: BaseViewModel {
     override func refresh() async {
         await performAsyncAction(showLoading: messages.isEmpty) {
             let response = try await self.apiClient.getMail(filter: .user, all: false)
+            self.markConnectionSuccess()
+
             var serverMessages = self.filterRecipientMessages(response.items).sorted { msg1, msg2 in
                 // Sort by timestamp, oldest first (for chat display)
                 (msg1.date ?? Date.distantPast) < (msg2.date ?? Date.distantPast)
@@ -465,10 +481,13 @@ final class ChatViewModel: BaseViewModel {
                 if let response = await performAsync(showLoading: false, {
                     try await self.apiClient.getMail(filter: .user, all: false)
                 }) {
+                    markConnectionSuccess()
                     let newRecipientMessages = filterRecipientMessages(response.items)
                     if let newest = newRecipientMessages.first, newest.id != lastMessageId {
                         await refresh()
                     }
+                } else {
+                    markConnectionFailure()
                 }
             }
         }
@@ -501,5 +520,44 @@ final class ChatViewModel: BaseViewModel {
     /// Short ID for the recipient (for input placeholder)
     var recipientShortName: String {
         recipientDisplayName
+    }
+
+    /// Server URL for connection details display
+    var serverURL: String {
+        AppState.shared.apiBaseURL.host ?? "localhost"
+    }
+
+    // MARK: - Connection State
+
+    /// Observe network changes to update connection state
+    private func observeNetworkChanges() {
+        NetworkMonitor.shared.$isConnected
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isConnected in
+                guard let self = self else { return }
+                if !isConnected {
+                    self.connectionState = .disconnected
+                } else if self.connectionState == .disconnected {
+                    self.connectionState = .connecting
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Update connection state after a successful API call
+    private func markConnectionSuccess() {
+        lastPollTime = Date()
+        if connectionState == .connecting || connectionState == .disconnected {
+            connectionState = .connected
+        }
+    }
+
+    /// Update connection state after a failed API call
+    private func markConnectionFailure() {
+        if AppState.shared.isNetworkAvailable {
+            connectionState = .connecting
+        } else {
+            connectionState = .disconnected
+        }
     }
 }

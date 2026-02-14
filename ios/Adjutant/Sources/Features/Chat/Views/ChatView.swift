@@ -9,6 +9,7 @@ struct ChatView: View {
     @StateObject private var viewModel: ChatViewModel
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showRecipientSelector = false
+    @State private var showConnectionDetails = false
 
     init(apiClient: APIClient, speechService: (any SpeechRecognitionServiceProtocol)? = nil) {
         let service = speechService ?? SpeechRecognitionService()
@@ -65,6 +66,17 @@ struct ChatView: View {
         .onChange(of: viewModel.messages.count) { _, _ in
             scrollToBottom()
         }
+        .sheet(isPresented: $showConnectionDetails) {
+            ConnectionDetailsSheet(
+                method: viewModel.communicationMethod,
+                state: viewModel.connectionState,
+                isStreaming: viewModel.isStreamActive,
+                networkType: NetworkMonitor.shared.connectionType,
+                serverURL: viewModel.serverURL,
+                lastPollTime: viewModel.lastPollTime,
+                pollingInterval: 30.0
+            )
+        }
         .sheet(isPresented: $showRecipientSelector) {
             RecipientSelectorSheet(
                 recipients: viewModel.availableRecipients,
@@ -82,10 +94,10 @@ struct ChatView: View {
     // MARK: - Subviews
 
     private var chatHeader: some View {
-        Button {
-            showRecipientSelector = true
-        } label: {
-            HStack {
+        HStack {
+            Button {
+                showRecipientSelector = true
+            } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: CRTTheme.Spacing.xs) {
                         CRTText(viewModel.recipientDisplayName, style: .subheader, glowIntensity: .medium)
@@ -95,19 +107,19 @@ struct ChatView: View {
                     }
                     CRTText("DIRECT CHANNEL", style: .caption, glowIntensity: .subtle, color: theme.dim)
                 }
-
-                Spacer()
-
-                // Status indicator
-                HStack(spacing: CRTTheme.Spacing.xxs) {
-                    Circle()
-                        .fill(CRTTheme.State.success)
-                        .frame(width: 8, height: 8)
-                    CRTText("ONLINE", style: .caption, glowIntensity: .subtle, color: CRTTheme.State.success)
-                }
             }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            // Connection status badge
+            ConnectionStatusBadge(
+                method: viewModel.communicationMethod,
+                state: viewModel.connectionState,
+                isStreaming: viewModel.isStreamActive,
+                onTap: { showConnectionDetails = true }
+            )
         }
-        .buttonStyle(.plain)
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
         .background(

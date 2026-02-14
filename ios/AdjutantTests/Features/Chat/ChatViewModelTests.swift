@@ -35,6 +35,33 @@ final class ChatViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isLoadingHistory)
     }
 
+    // MARK: - Connection State Tests
+
+    func testInitialConnectionState() {
+        XCTAssertEqual(viewModel.communicationMethod, .http)
+        XCTAssertEqual(viewModel.connectionState, .connecting)
+        XCTAssertFalse(viewModel.isStreamActive)
+        XCTAssertNil(viewModel.lastPollTime)
+    }
+
+    func testRefreshUpdatesConnectionStateToConnected() async {
+        let testMessages = [
+            createTestMessage(id: "test-1", from: "mayor/", to: "user")
+        ]
+        MockURLProtocol.mockHandler = mockMailResponse(messages: testMessages)
+
+        await viewModel.refresh()
+
+        XCTAssertEqual(viewModel.connectionState, .connected)
+        XCTAssertNotNil(viewModel.lastPollTime)
+    }
+
+    func testServerURLReturnsHost() {
+        // serverURL should return a host string
+        let url = viewModel.serverURL
+        XCTAssertFalse(url.isEmpty)
+    }
+
     // MARK: - Message Loading Tests
 
     func testRefreshLoadsMessages() async {
