@@ -101,6 +101,26 @@ Backend reads the FIFO with `fs.createReadStream()` and:
 **When no client is connected**: Stop pipe-pane to avoid resource waste. Keep a
 small snapshot buffer via periodic `tmux capture-pane` for "reconnect preview."
 
+### Output Buffer
+
+Ring buffer per session, capped at **1000 lines**. When exceeded, oldest lines are
+dropped to make room for new output.
+
+**On reconnect**, the client chooses:
+- **Replay buffer**: Receive all buffered output since disconnect (useful for short
+  disconnections where you want to see what happened)
+- **Skip to present**: Clear the buffer for this session and start streaming from
+  now (useful when session ran for hours and there's a huge backlog)
+
+```
+// Client sends on reconnect:
+{ type: "session_connect", sessionId: "abc", replay: true }   // replay buffer
+{ type: "session_connect", sessionId: "abc", replay: false }  // skip, clear buffer
+```
+
+Default: `replay: false` (skip to present) — protects against overwhelming the
+client with stale output.
+
 ### Output Parser
 
 Converts raw terminal output to structured events. Claude Code has recognizable
@@ -145,9 +165,24 @@ tmux send-keys -t <session>:<pane> "Fix the login bug" Enter
 tmux send-keys -t <session>:<pane> "y" Enter
 ```
 
-**Input safety**: The bridge validates that the session is in a state that accepts
-input (idle/waiting). If the agent is mid-response, the input is queued until the
-agent finishes its current turn.
+**Input queuing**: By default, if the agent is mid-response, user input is queued
+until the agent finishes its current turn. The queue is FIFO — messages are delivered
+in order when the agent becomes idle.
+
+**Interrupt (Ctrl-C)**: The user also has an explicit "halt" action — equivalent to
+pressing Ctrl-C in the terminal. This:
+1. Sends SIGINT to the Claude Code process via `tmux send-keys -t <session> C-c`
+2. Interrupts the current agent turn
+3. Agent stops what it's doing and returns to the prompt
+4. Queued input (if any) is delivered, or the user can type a new prompt
+
+```
+// Client sends interrupt:
+{ type: "session_interrupt", sessionId: "abc" }
+```
+
+The iOS UI should have a visible "Stop" button (like a stop-generation button)
+that appears while the agent is working.
 
 ---
 
@@ -161,9 +196,10 @@ Extended message types for session-based communication:
 session_list        { }                                    // list all sessions
 session_create      { projectPath, mode, name?,            // create new session
                       workspaceType?, cloneUrl? }
-session_connect     { sessionId }                          // start watching a session
+session_connect     { sessionId, replay?: boolean }         // start watching (replay: false = skip buffer)
 session_disconnect  { sessionId }                          // stop watching
 session_input       { sessionId, text }                    // send prompt/message
+session_interrupt   { sessionId }                          // Ctrl-C: halt current work
 session_kill        { sessionId }                          // terminate session
 session_permission  { sessionId, requestId, approved }     // respond to permission prompt
 
@@ -606,22 +642,93 @@ isn't available (e.g., agent not in tmux, or network constraints).
 
 ---
 
-## Open Questions
+## Decisions
 
-1. **Claude Code `--output-format stream-json`**: If Claude Code supports structured
-   JSON output via CLI flag, we could run agents with this flag inside tmux and get
-   structured events without parsing terminal output. Need to verify this works
-   reliably alongside tmux.
+1. **No `stream-json` for now**: Parse raw terminal output directly. `stream-json`
+   can be revisited later if terminal parsing proves too fragile. Terminal parsing
+   is more universal and doesn't require special CLI flags.
 
-2. **Claude Code hooks**: Could a hook fire on every agent turn and write structured
-   events to a sidecar file? This would be cleaner than parsing terminal output.
+2. **No Claude Code hooks for now**: Hooks could write structured events to a
+   sidecar file (clean JSON, no ANSI parsing needed, no breakage if output format
+   changes). However, they add per-session config, may not capture everything
+   (thinking indicators, progress), and couple us to the hook API. Terminal
+   parsing is simpler for V2. Hooks are a candidate for a later optimization pass.
 
-3. **iOS terminal emulator**: SwiftTerm is the main option for iOS. Need to verify
-   it handles the output volume and ANSI sequences Claude Code produces.
+3. **SwiftTerm for iOS terminal**: Use SwiftTerm for the terminal widget on first
+   attempt. Verify it handles Claude Code's output volume and ANSI sequences.
 
-4. **Input queuing**: When the agent is mid-response, should user input be queued
-   or rejected? Claude Code handles this internally (it reads stdin between turns),
-   but we need to communicate the state clearly to the user.
+4. **Input queued by default + interrupt**: User input is queued while agent is
+   working. User has a "Stop" button (Ctrl-C) to interrupt the agent and reclaim
+   the prompt. See Input Router section above.
 
-5. **Cost tracking**: With multiple concurrent Claude Code sessions, API costs can
-   spike. Should Adjutant track/display per-session costs?
+5. **Cost/token tracking included**: See section below.
+
+---
+
+## Cost & Token Tracking
+
+Each Claude Code session consumes API tokens. With multiple concurrent sessions,
+costs can spike fast. Adjutant tracks and displays usage.
+
+### Data Collection
+
+Claude Code outputs cost/token info at the end of each session and periodically
+during long sessions. The output parser captures these:
+
+```
+Raw terminal line                              →  Structured event
+──────────────────────────────────────────────────────────────────
+"Total tokens: 45,231 (input: 30,120...)"     →  { type: "cost_update", tokens: {...} }
+"Cost: $0.42"                                  →  { type: "cost_update", cost: 0.42 }
+```
+
+Additionally, the backend can read Claude Code's cost data from:
+- `~/.claude/usage.json` (if available)
+- Session-level cost files
+- Parsing the session summary output when a session ends
+
+### Storage
+
+```typescript
+interface SessionCost {
+  sessionId: string;
+  projectId: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  estimatedCost: number;       // USD
+  lastUpdated: Date;
+}
+```
+
+Persisted to `~/.adjutant/costs.json`, aggregated per session and per project.
+
+### Display
+
+**Per-session**: Small cost badge next to the session name in the agent switcher.
+```
+◉ agent-1    WORKING    $0.42 | 45K tokens
+```
+
+**Per-project**: Total cost across all sessions in the project view.
+```
+📁 my-app    3 agents    $3.21 today | $14.50 total
+```
+
+**Cost alerts**: Configurable threshold. When a session or project exceeds the
+threshold, show a warning notification on iOS.
+
+### API
+
+```
+GET /api/costs                              // all costs
+GET /api/costs?projectId=xxx                // per project
+GET /api/costs?sessionId=xxx                // per session
+GET /api/sessions/:id/cost                  // single session cost
+```
+
+Cost updates also stream via WebSocket:
+```
+{ type: "session_cost", sessionId: "abc", inputTokens: 30120, outputTokens: 15111, estimatedCost: 0.42 }
+```
