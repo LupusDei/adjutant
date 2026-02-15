@@ -120,7 +120,8 @@ export interface SessionCreatedEvent {
 export interface SessionOutputEvent {
   type: "session_output";
   sessionId: string;
-  data: string;
+  events: import("../services/output-parser.js").OutputEvent[];
+  raw: string;
 }
 
 export interface SessionRawEvent {

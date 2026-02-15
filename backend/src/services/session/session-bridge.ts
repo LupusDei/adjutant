@@ -36,6 +36,7 @@ import type {
   SessionClientMessage,
   SessionServerMessage,
 } from "../../types/session.js";
+import { OutputParser } from "../output-parser.js";
 import { logInfo } from "../../utils/index.js";
 
 // ============================================================================
@@ -47,6 +48,9 @@ const clientSenders = new Map<string, (msg: SessionServerMessage) => void>();
 
 /** Map of WS client IDs to which sessions they're watching */
 const clientSubscriptions = new Map<string, Set<string>>();
+
+/** Per-session output parsers for structured event extraction */
+const sessionParsers = new Map<string, OutputParser>();
 
 let initialized = false;
 
@@ -65,13 +69,38 @@ export async function initSessionBridge(): Promise<void> {
   // Load previously persisted sessions
   await loadFromDisk();
 
-  // Set up output handler to relay to subscribed clients
+  // Set up output handler to relay to subscribed clients.
+  // Dual emission: raw bytes for terminal-mode, structured events for chat-mode.
   setOutputHandler((sessionId, data) => {
+    // Always emit raw bytes
     broadcastToSession(sessionId, {
       type: "session_raw",
       sessionId,
       data,
     });
+
+    // Parse into structured events and emit alongside
+    let parser = sessionParsers.get(sessionId);
+    if (!parser) {
+      parser = new OutputParser();
+      sessionParsers.set(sessionId, parser);
+    }
+
+    const events = [];
+    for (const line of data.split("\n")) {
+      events.push(...parser.parseLine(line));
+    }
+    // Don't flush here — the parser is stateful across chunks.
+    // Partial messages will be emitted on the next chunk boundary.
+
+    if (events.length > 0) {
+      broadcastToSession(sessionId, {
+        type: "session_output",
+        sessionId,
+        events,
+        raw: data,
+      });
+    }
   });
 
   // Discover existing tmux sessions
@@ -93,6 +122,7 @@ export async function initSessionBridge(): Promise<void> {
 export async function shutdownSessionBridge(): Promise<void> {
   stopReconciliation();
   stopAllCaptures();
+  sessionParsers.clear();
   await forceSave();
   initialized = false;
   logInfo("session bridge shut down");
@@ -254,11 +284,31 @@ async function handleConnect(
     if (buffer) {
       const lines = buffer.getAll();
       if (lines.length > 0) {
+        const raw = lines.join("\n");
+
+        // Always send raw
         sender({
           type: "session_raw",
           sessionId: msg.sessionId,
-          data: lines.join("\n"),
+          data: raw,
         });
+
+        // Parse replay into structured events for chat-mode clients
+        const replayParser = new OutputParser();
+        const events = [];
+        for (const line of lines) {
+          events.push(...replayParser.parseLine(line));
+        }
+        events.push(...replayParser.flush());
+
+        if (events.length > 0) {
+          sender({
+            type: "session_output",
+            sessionId: msg.sessionId,
+            events,
+            raw,
+          });
+        }
       }
     }
   }
@@ -296,6 +346,9 @@ async function handleKill(
   msg: { sessionId: string },
 ): Promise<void> {
   await killSession(msg.sessionId);
+
+  // Clean up parser state
+  sessionParsers.delete(msg.sessionId);
 
   // Notify all clients
   broadcastToAll({
