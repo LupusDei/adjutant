@@ -32,5 +32,9 @@ state.json
 backend/.audio-cache/
 
 # Gas Town (added by gt)
-.beads/
+.beads/*.db
+.beads/*.db-*
+.beads/bd.sock*
+.beads/redirect
+.beads/PRIME.md
 .logs/
