@@ -185,6 +185,37 @@ extension APIClient {
     }
 }
 
+// MARK: - Sessions Endpoints
+
+extension APIClient {
+    /// List all managed sessions
+    public func getSessions() async throws -> [ManagedSession] {
+        try await requestWithEnvelope(.get, path: "/sessions")
+    }
+
+    /// Get a single session by ID
+    public func getSession(id: String) async throws -> ManagedSession {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        return try await requestWithEnvelope(.get, path: "/sessions/\(encodedId)")
+    }
+
+    /// Create a new session
+    public func createSession(_ request: CreateSessionRequest) async throws -> ManagedSession {
+        try await requestWithEnvelope(.post, path: "/sessions", body: request)
+    }
+
+    /// Kill a session
+    public func killSession(id: String) async throws -> KillSessionResponse {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        return try await requestWithEnvelope(.delete, path: "/sessions/\(encodedId)")
+    }
+
+    /// Trigger session discovery
+    public func discoverSessions() async throws -> DiscoverSessionsResponse {
+        try await requestWithEnvelope(.post, path: "/sessions/discover")
+    }
+}
+
 // MARK: - Convoys Endpoints
 
 extension APIClient {

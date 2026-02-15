@@ -123,6 +123,9 @@ struct ChatView: View {
 
             Spacer()
 
+            // Session switcher button
+            SessionSwitcherButton()
+
             // Connection status badge
             ConnectionStatusBadge(
                 method: viewModel.communicationMethod,
