@@ -26,7 +26,11 @@ import {
   listSwarms,
   destroySwarm,
   resetSwarmService,
+  getSwarmBranches,
+  mergeAgentBranch,
 } from "../../src/services/swarm-service.js";
+
+import { execFile } from "child_process";
 
 describe("swarm-service", () => {
   beforeEach(() => {
@@ -352,6 +356,121 @@ describe("swarm-service", () => {
       expect(result).toBe(true);
       expect(mockBridge.killSession).toHaveBeenCalledTimes(2);
       expect(listSwarms()).toHaveLength(0);
+    });
+  });
+
+  // ==========================================================================
+  // resetSwarmService
+  // ==========================================================================
+
+  // ==========================================================================
+  // getSwarmBranches
+  // ==========================================================================
+
+  describe("getSwarmBranches", () => {
+    it("should return undefined for unknown swarm", async () => {
+      const result = await getSwarmBranches("nonexistent");
+      expect(result).toBeUndefined();
+    });
+
+    it("should return branch status for agents", async () => {
+      // Setup execFile to return rev-list counts
+      const execFileMock = vi.mocked(execFile);
+      execFileMock.mockImplementation((_cmd: string, args: string[], _opts: unknown, cb: Function) => {
+        if (args && args[0] === "rev-list") {
+          cb(null, "0\t3\n", "");
+        } else if (args && args[0] === "merge-tree") {
+          cb(null, "", "");
+        } else {
+          cb(null, "", "");
+        }
+        return {} as any;
+      });
+
+      mockBridge.createSession.mockResolvedValue({
+        success: true,
+        sessionId: "sess-1",
+      });
+
+      await createSwarm({
+        projectPath: "/tmp/project",
+        agentCount: 2,
+      });
+
+      const branches = await getSwarmBranches("swarm-1");
+      expect(branches).toBeDefined();
+      // Only non-main branches (agent-2)
+      expect(branches!.length).toBe(1);
+      expect(branches![0].agentName).toBe("agent-2");
+      expect(branches![0].aheadOfMain).toBe(3);
+      expect(branches![0].behindMain).toBe(0);
+    });
+
+    it("should skip main branch agent", async () => {
+      mockBridge.createSession.mockResolvedValue({
+        success: true,
+        sessionId: "sess-1",
+      });
+
+      await createSwarm({
+        projectPath: "/tmp/project",
+        agentCount: 1,
+      });
+
+      const branches = await getSwarmBranches("swarm-1");
+      expect(branches).toBeDefined();
+      expect(branches!.length).toBe(0);
+    });
+  });
+
+  // ==========================================================================
+  // mergeAgentBranch
+  // ==========================================================================
+
+  describe("mergeAgentBranch", () => {
+    it("should return error for unknown swarm", async () => {
+      const result = await mergeAgentBranch("nonexistent", "some-branch");
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Swarm not found");
+    });
+
+    it("should return error for unknown branch", async () => {
+      mockBridge.createSession.mockResolvedValue({
+        success: true,
+        sessionId: "sess-1",
+      });
+
+      await createSwarm({
+        projectPath: "/tmp/project",
+        agentCount: 1,
+      });
+
+      const result = await mergeAgentBranch("swarm-1", "nonexistent-branch");
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Branch not found in swarm");
+    });
+
+    it("should merge successfully", async () => {
+      const execFileMock = vi.mocked(execFile);
+      execFileMock.mockImplementation((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
+        cb(null, "", "");
+        return {} as any;
+      });
+
+      mockBridge.createSession.mockResolvedValue({
+        success: true,
+        sessionId: "sess-1",
+      });
+
+      await createSwarm({
+        projectPath: "/tmp/project",
+        agentCount: 2,
+      });
+
+      const branch = `swarm/swarm-1/agent-2`;
+      const result = await mergeAgentBranch("swarm-1", branch);
+      expect(result.success).toBe(true);
+      expect(result.merged).toBe(true);
     });
   });
 

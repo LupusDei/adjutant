@@ -285,6 +285,134 @@ export async function destroySwarm(
   return true;
 }
 
+// ============================================================================
+// Coordinator / Merge Operations
+// ============================================================================
+
+export interface BranchStatus {
+  branch: string;
+  agentName: string;
+  aheadOfMain: number;
+  behindMain: number;
+  hasConflicts: boolean;
+}
+
+export interface MergeResult {
+  success: boolean;
+  branch: string;
+  merged?: boolean;
+  conflicts?: string[];
+  error?: string;
+}
+
+/**
+ * Get branch status for all agents in a swarm (ahead/behind main).
+ */
+export async function getSwarmBranches(swarmId: string): Promise<BranchStatus[] | undefined> {
+  const swarm = swarms.get(swarmId);
+  if (!swarm) return undefined;
+
+  const results: BranchStatus[] = [];
+
+  for (const agent of swarm.agents) {
+    if (agent.branch === "main") continue;
+
+    let aheadOfMain = 0;
+    let behindMain = 0;
+    let hasConflicts = false;
+
+    try {
+      const revList = await execCommand(
+        "git",
+        ["rev-list", "--left-right", "--count", `main...${agent.branch}`],
+        swarm.projectPath
+      );
+      const parts = revList.trim().split(/\s+/);
+      behindMain = parseInt(parts[0] ?? "0", 10);
+      aheadOfMain = parseInt(parts[1] ?? "0", 10);
+    } catch {
+      // Branch may not exist yet or be empty
+    }
+
+    // Check for merge conflicts by dry-running
+    if (aheadOfMain > 0) {
+      try {
+        await execCommand(
+          "git",
+          ["merge-tree", "--write-tree", "main", agent.branch],
+          swarm.projectPath
+        );
+      } catch {
+        hasConflicts = true;
+      }
+    }
+
+    results.push({
+      branch: agent.branch,
+      agentName: agent.name,
+      aheadOfMain,
+      behindMain,
+      hasConflicts,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Merge an agent's branch back into main.
+ * Runs from the project root (coordinator perspective).
+ */
+export async function mergeAgentBranch(
+  swarmId: string,
+  branch: string
+): Promise<MergeResult> {
+  const swarm = swarms.get(swarmId);
+  if (!swarm) {
+    return { success: false, branch, error: "Swarm not found" };
+  }
+
+  const agent = swarm.agents.find((a) => a.branch === branch);
+  if (!agent) {
+    return { success: false, branch, error: "Branch not found in swarm" };
+  }
+
+  try {
+    await execCommand(
+      "git",
+      ["merge", "--no-ff", "-m", `Merge ${branch} (swarm ${swarmId})`, branch],
+      swarm.projectPath
+    );
+
+    logInfo("Branch merged", { swarmId, branch });
+    return { success: true, branch, merged: true };
+  } catch (err) {
+    const errorMsg = String(err);
+
+    // Check if it's a conflict
+    if (errorMsg.includes("CONFLICT") || errorMsg.includes("Merge conflict")) {
+      // Abort the failed merge
+      try {
+        await execCommand("git", ["merge", "--abort"], swarm.projectPath);
+      } catch {
+        // Ignore abort failure
+      }
+
+      // Extract conflicting files
+      const conflicts: string[] = [];
+      const lines = errorMsg.split("\n");
+      for (const line of lines) {
+        const match = line.match(/CONFLICT.*:\s*(.+)/);
+        if (match) conflicts.push(match[1]);
+      }
+
+      return { success: false, branch, conflicts, error: "Merge conflicts detected" };
+    }
+
+    return { success: false, branch, error: errorMsg };
+  }
+}
+
 /**
  * Reset swarm state (for testing).
  */

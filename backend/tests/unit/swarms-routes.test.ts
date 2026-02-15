@@ -9,6 +9,8 @@ const mockRemoveAgentFromSwarm = vi.fn();
 const mockGetSwarmStatus = vi.fn();
 const mockListSwarms = vi.fn();
 const mockDestroySwarm = vi.fn();
+const mockGetSwarmBranches = vi.fn();
+const mockMergeAgentBranch = vi.fn();
 
 vi.mock("../../src/services/swarm-service.js", () => ({
   createSwarm: (...args: unknown[]) => mockCreateSwarm(...args),
@@ -17,6 +19,8 @@ vi.mock("../../src/services/swarm-service.js", () => ({
   getSwarmStatus: (...args: unknown[]) => mockGetSwarmStatus(...args),
   listSwarms: (...args: unknown[]) => mockListSwarms(...args),
   destroySwarm: (...args: unknown[]) => mockDestroySwarm(...args),
+  getSwarmBranches: (...args: unknown[]) => mockGetSwarmBranches(...args),
+  mergeAgentBranch: (...args: unknown[]) => mockMergeAgentBranch(...args),
 }));
 
 import { swarmsRouter } from "../../src/routes/swarms.js";
@@ -225,6 +229,77 @@ describe("swarms routes", () => {
 
       expect(response.status).toBe(400);
       expect(response.body.success).toBe(false);
+    });
+  });
+
+  // ==========================================================================
+  // GET /api/swarms/:id/branches
+  // ==========================================================================
+
+  describe("GET /api/swarms/:id/branches", () => {
+    it("should return branch status", async () => {
+      mockGetSwarmBranches.mockResolvedValue([
+        { branch: "swarm/s1/agent-2", agentName: "agent-2", aheadOfMain: 3, behindMain: 0, hasConflicts: false },
+      ]);
+
+      const response = await request(app).get("/api/swarms/swarm-1/branches");
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data[0].aheadOfMain).toBe(3);
+    });
+
+    it("should return 404 for unknown swarm", async () => {
+      mockGetSwarmBranches.mockResolvedValue(undefined);
+
+      const response = await request(app).get("/api/swarms/unknown/branches");
+      expect(response.status).toBe(404);
+    });
+  });
+
+  // ==========================================================================
+  // POST /api/swarms/:id/merge
+  // ==========================================================================
+
+  describe("POST /api/swarms/:id/merge", () => {
+    it("should merge a branch", async () => {
+      mockMergeAgentBranch.mockResolvedValue({
+        success: true,
+        branch: "swarm/s1/agent-2",
+        merged: true,
+      });
+
+      const response = await request(app)
+        .post("/api/swarms/swarm-1/merge")
+        .send({ branch: "swarm/s1/agent-2" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.merged).toBe(true);
+    });
+
+    it("should return 400 when branch is missing", async () => {
+      const response = await request(app)
+        .post("/api/swarms/swarm-1/merge")
+        .send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+    });
+
+    it("should return 400 when merge fails", async () => {
+      mockMergeAgentBranch.mockResolvedValue({
+        success: false,
+        branch: "swarm/s1/agent-2",
+        error: "Merge conflicts detected",
+        conflicts: ["src/index.ts"],
+      });
+
+      const response = await request(app)
+        .post("/api/swarms/swarm-1/merge")
+        .send({ branch: "swarm/s1/agent-2" });
+
+      expect(response.status).toBe(400);
     });
   });
 

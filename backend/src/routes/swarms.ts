@@ -19,6 +19,8 @@ import {
   getSwarmStatus,
   listSwarms,
   destroySwarm,
+  getSwarmBranches,
+  mergeAgentBranch,
 } from "../services/swarm-service.js";
 import {
   success,
@@ -112,6 +114,39 @@ swarmsRouter.post("/:id/agents", async (req, res) => {
   }
 
   return res.status(201).json(success(result.agent));
+});
+
+/**
+ * GET /api/swarms/:id/branches
+ * Get branch status for all agents (ahead/behind main, conflicts).
+ */
+swarmsRouter.get("/:id/branches", async (req, res) => {
+  const branches = await getSwarmBranches(req.params.id);
+
+  if (!branches) {
+    return res.status(404).json(notFound("Swarm", req.params.id));
+  }
+
+  return res.json(success(branches));
+});
+
+/**
+ * POST /api/swarms/:id/merge
+ * Merge an agent's branch back into main.
+ */
+swarmsRouter.post("/:id/merge", async (req, res) => {
+  const { branch } = req.body ?? {};
+  if (!branch) {
+    return res.status(400).json(badRequest("branch is required"));
+  }
+
+  const result = await mergeAgentBranch(req.params.id, branch);
+
+  if (!result.success) {
+    return res.status(400).json(badRequest(result.error ?? "Merge failed"));
+  }
+
+  return res.json(success(result));
 });
 
 /**
