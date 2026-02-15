@@ -213,10 +213,16 @@ final class BeadsListViewModel: BaseViewModel {
 
     // MARK: - Private Helpers
 
+    /// Types excluded from the beads list (matches frontend EXCLUDED_TYPES)
+    private static let excludedTypes: Set<String> = ["message", "epic", "convoy", "agent", "wisp"]
+
     /// Applies the current filter and search to beads
     /// Note: Rig filtering is now done server-side via the API rig parameter
     private func applyFilter() {
         var result = beads
+
+        // Filter out non-task types (messages, epics, wisps, etc.)
+        result = result.filter { !Self.excludedTypes.contains($0.type.lowercased()) }
 
         // Apply status filter
         switch currentFilter {
