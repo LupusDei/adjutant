@@ -38,3 +38,6 @@ backend/.audio-cache/
 .beads/redirect
 .beads/PRIME.md
 .logs/
+
+# Gas Town (added by gt)
+.beads/
