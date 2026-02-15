@@ -1,7 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, convoysRouter, devicesRouter, eventsRouter, mailRouter, modeRouter, powerRouter, projectsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, convoysRouter, devicesRouter, eventsRouter, mailRouter, modeRouter, permissionsRouter, powerRouter, projectsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
@@ -46,6 +46,7 @@ app.use("/api/tunnel", tunnelRouter);
 app.use("/api/voice", voiceRouter);
 app.use("/api/sessions", sessionsRouter);
 app.use("/api/swarms", swarmsRouter);
+app.use("/api/permissions", permissionsRouter);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
