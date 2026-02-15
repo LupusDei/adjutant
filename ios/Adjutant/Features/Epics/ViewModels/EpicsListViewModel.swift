@@ -111,14 +111,15 @@ final class EpicsListViewModel: BaseViewModel {
             guard let self = self else { return }
 
             // Fetch epics (type: epic)
+            let rigFilter = self.selectedRig ?? "all"
             let epics = try await self.apiClient.getBeads(
-                rig: self.selectedRig,
+                rig: rigFilter,
                 type: "epic"
             )
 
             // Fetch all beads to calculate subtask progress
             let beads = try await self.apiClient.getBeads(
-                rig: self.selectedRig,
+                rig: rigFilter,
                 status: .all
             )
 

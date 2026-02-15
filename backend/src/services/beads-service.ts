@@ -156,7 +156,7 @@ async function buildPrefixMap(): Promise<Map<string, string>> {
       if (!dirInfo.rig) continue; // Skip town-level (already added)
 
       const prefix = readPrefixFromConfig(dirInfo.path);
-      if (prefix) {
+      if (prefix && !map.has(prefix)) {
         map.set(prefix, dirInfo.rig);
       }
     }

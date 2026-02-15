@@ -45,7 +45,7 @@ final class EpicDetailViewModel: BaseViewModel {
             guard let self = self else { return }
 
             // Fetch all beads to find the epic and its children
-            let allBeads = try await self.apiClient.getBeads(status: .all)
+            let allBeads = try await self.apiClient.getBeads(rig: "all", status: .all)
 
             // Find the epic
             guard let epic = allBeads.first(where: { $0.id == self.epicId }) else {

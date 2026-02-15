@@ -117,8 +117,12 @@ export class GasTownProvider implements WorkspaceProvider {
     const homeGtExists = homeGt && existsSync(homeGt);
 
     // 1. Explicit environment variable
-    const envRoot = process.env["GT_TOWN_ROOT"];
+    let envRoot = process.env["GT_TOWN_ROOT"];
     if (envRoot) {
+      // Expand ~ to HOME (dotenv doesn't do shell expansion)
+      if (envRoot.startsWith("~/") && home) {
+        envRoot = join(home, envRoot.slice(2));
+      }
       if (envRoot === home && homeGtIsTown) {
         cachedTownRoot = homeGt!;
         return cachedTownRoot;
@@ -182,6 +186,9 @@ export class GasTownProvider implements WorkspaceProvider {
       const beadsPath = resolveBeadsDir(absPath);
       if (scannedBeadsPaths.has(beadsPath)) return;
 
+      // Skip directories without an actual beads database
+      if (!existsSync(join(beadsPath, "beads.db"))) return;
+
       results.push({
         path: beadsPath,
         rig,
@@ -244,11 +251,12 @@ export class GasTownProvider implements WorkspaceProvider {
       prefixMap.set("hq", { workDir: townDir.workDir, beadsDir: townDir.path });
     }
 
-    // Read prefix from each rig's config
+    // Read prefix from each rig's config (first match wins —
+    // configured rigs take priority over heuristic discoveries)
     for (const dirInfo of beadsDirs) {
       if (!dirInfo.rig) continue;
       const rigPrefix = this.readPrefixFromConfig(dirInfo.path);
-      if (rigPrefix) {
+      if (rigPrefix && !prefixMap.has(rigPrefix)) {
         prefixMap.set(rigPrefix, { workDir: dirInfo.workDir, beadsDir: dirInfo.path });
       }
     }

@@ -146,8 +146,8 @@ struct GastownWidgetProvider: TimelineProvider {
 
             // Fetch status and beads in parallel
             async let statusTask = client.getStatus()
-            async let inProgressTask = client.getBeads(status: .inProgress, limit: 5)
-            async let hookedTask = client.getBeads(status: .hooked, limit: 5)
+            async let inProgressTask = client.getBeads(rig: "all", status: .inProgress, limit: 5)
+            async let hookedTask = client.getBeads(rig: "all", status: .hooked, limit: 5)
 
             let status = try await statusTask
             let inProgressBeads = try await inProgressTask

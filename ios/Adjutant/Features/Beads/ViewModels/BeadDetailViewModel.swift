@@ -40,7 +40,7 @@ final class BeadDetailViewModel: BaseViewModel {
     func loadBead() async {
         await performAsyncAction {
             // Load all beads and find the one we want
-            let allBeads = try await self.apiClient.getBeads(status: .all)
+            let allBeads = try await self.apiClient.getBeads(rig: "all", status: .all)
             self.bead = allBeads.first { $0.id == self.beadId }
 
             if self.bead == nil {
