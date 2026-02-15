@@ -285,6 +285,26 @@ extension APIClient {
     }
 }
 
+// MARK: - Permissions Endpoints
+
+extension APIClient {
+    /// Get current permission configuration
+    public func getPermissionConfig() async throws -> PermissionConfigResponse {
+        try await requestWithEnvelope(.get, path: "/permissions")
+    }
+
+    /// Update permission configuration
+    public func updatePermissionConfig(_ update: PermissionConfigUpdate) async throws -> PermissionConfigResponse {
+        try await requestWithEnvelope(.patch, path: "/permissions", body: update)
+    }
+
+    /// Get effective permission mode for a session
+    public func getSessionPermissionMode(sessionId: String) async throws -> SessionPermissionMode {
+        let encodedId = sessionId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? sessionId
+        return try await requestWithEnvelope(.get, path: "/permissions/\(encodedId)")
+    }
+}
+
 // MARK: - Convoys Endpoints
 
 extension APIClient {
