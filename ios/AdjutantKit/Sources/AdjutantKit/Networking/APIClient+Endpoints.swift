@@ -216,6 +216,75 @@ extension APIClient {
     }
 }
 
+// MARK: - Swarms Endpoints
+
+extension APIClient {
+    /// List all swarms
+    public func getSwarms() async throws -> [SwarmInfo] {
+        try await requestWithEnvelope(.get, path: "/swarms")
+    }
+
+    /// Get swarm status with live agent info
+    public func getSwarm(id: String) async throws -> SwarmInfo {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        return try await requestWithEnvelope(.get, path: "/swarms/\(encodedId)")
+    }
+
+    /// Create a new swarm
+    public func createSwarm(_ request: CreateSwarmRequest) async throws -> SwarmInfo {
+        try await requestWithEnvelope(.post, path: "/swarms", body: request)
+    }
+
+    /// Add an agent to a swarm
+    public func addAgentToSwarm(id: String, name: String? = nil) async throws -> SwarmAgent {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let request = AddSwarmAgentRequest(name: name)
+        return try await requestWithEnvelope(.post, path: "/swarms/\(encodedId)/agents", body: request)
+    }
+
+    /// Remove an agent from a swarm
+    public func removeAgentFromSwarm(id: String, sessionId: String, removeWorktree: Bool = false) async throws -> RemoveAgentResponse {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let encodedSession = sessionId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? sessionId
+        var queryItems: [URLQueryItem] = []
+        if removeWorktree {
+            queryItems.append(URLQueryItem(name: "removeWorktree", value: "true"))
+        }
+        return try await requestWithEnvelope(
+            .delete,
+            path: "/swarms/\(encodedId)/agents/\(encodedSession)",
+            queryItems: queryItems.isEmpty ? nil : queryItems
+        )
+    }
+
+    /// Get branch status for all agents in a swarm
+    public func getSwarmBranches(id: String) async throws -> [BranchStatus] {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        return try await requestWithEnvelope(.get, path: "/swarms/\(encodedId)/branches")
+    }
+
+    /// Merge an agent's branch back into main
+    public func mergeSwarmBranch(id: String, branch: String) async throws -> MergeResult {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let request = MergeBranchRequest(branch: branch)
+        return try await requestWithEnvelope(.post, path: "/swarms/\(encodedId)/merge", body: request)
+    }
+
+    /// Destroy a swarm
+    public func destroySwarm(id: String, removeWorktrees: Bool = true) async throws -> DestroySwarmResponse {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        var queryItems: [URLQueryItem] = []
+        if !removeWorktrees {
+            queryItems.append(URLQueryItem(name: "removeWorktrees", value: "false"))
+        }
+        return try await requestWithEnvelope(
+            .delete,
+            path: "/swarms/\(encodedId)",
+            queryItems: queryItems.isEmpty ? nil : queryItems
+        )
+    }
+}
+
 // MARK: - Convoys Endpoints
 
 extension APIClient {
