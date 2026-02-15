@@ -157,7 +157,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
             selectTab(.settings)
 
         // Detail routes - push onto current tab's stack
-        case .mailDetail, .epicDetail, .agentDetail, .beadDetail, .polecatTerminal:
+        case .mailDetail, .epicDetail, .agentDetail, .beadDetail, .polecatTerminal, .projectDetail:
             appendToCurrentPath(route)
 
         // Modal routes - present as sheet

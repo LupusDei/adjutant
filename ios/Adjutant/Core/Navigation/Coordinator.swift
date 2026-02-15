@@ -55,6 +55,9 @@ enum AppRoute: Hashable {
     case beadDetail(id: String)
     case polecatTerminal(rig: String, polecat: String)
 
+    // Project routes
+    case projectDetail(rig: RigStatus)
+
     // Settings sub-routes
     case themeSettings
     case voiceSettings

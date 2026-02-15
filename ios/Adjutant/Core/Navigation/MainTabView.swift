@@ -130,6 +130,8 @@ private struct TabContent: View {
             CrewDetailView(member: member)
         case .beadDetail(let id):
             BeadDetailView(beadId: id)
+        case .projectDetail(let rig):
+            ProjectDetailView(rig: rig)
         case .themeSettings, .voiceSettings, .tunnelSettings:
             SettingsView()
         default:

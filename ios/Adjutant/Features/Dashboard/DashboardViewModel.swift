@@ -29,6 +29,9 @@ final class DashboardViewModel: BaseViewModel {
     /// Recently closed beads
     @Published private(set) var recentClosedBeads: [BeadInfo] = []
 
+    /// Rig statuses from the status API
+    @Published private(set) var rigStatuses: [RigStatus] = []
+
     /// Whether the dashboard is currently refreshing (includes background polling)
     @Published private(set) var isRefreshing = false
 
@@ -181,10 +184,23 @@ final class DashboardViewModel: BaseViewModel {
         // Refresh all data via centralized service
         await dataSync.refreshAll()
 
-        // Also fetch available rigs
+        // Also fetch available rigs and rig statuses
         await AppState.shared.fetchAvailableRigs()
+        await fetchRigStatuses()
 
         isRefreshing = false
+    }
+
+    // MARK: - Rig Statuses
+
+    /// Fetches rig statuses from the status API
+    private func fetchRigStatuses() async {
+        do {
+            let status = try await apiClient.getStatus()
+            rigStatuses = status.rigs.sorted { $0.name.lowercased() < $1.name.lowercased() }
+        } catch {
+            // Keep existing data on error
+        }
     }
 
     // MARK: - Live Activity

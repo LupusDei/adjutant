@@ -32,6 +32,15 @@ struct DashboardView: View {
                 )
                 .padding(.horizontal, CRTTheme.Spacing.md)
 
+                // Projects Widget (full width)
+                ProjectsWidget(
+                    rigs: viewModel.rigStatuses,
+                    onTap: { rig in
+                        coordinator.navigate(to: .projectDetail(rig: rig))
+                    }
+                )
+                .padding(.horizontal, CRTTheme.Spacing.md)
+
                 // Mail Widget with recent messages (full width)
                 MailWidget(
                     recentMail: viewModel.recentMail,
@@ -387,6 +396,127 @@ private struct CrewPreviewRow: View {
 
     private var shouldPulse: Bool {
         member.status == .working || member.status == .stuck
+    }
+}
+
+// MARK: - Projects Widget
+
+private struct ProjectsWidget: View {
+    @Environment(\.crtTheme) private var theme
+
+    let rigs: [RigStatus]
+    let onTap: (RigStatus) -> Void
+
+    var body: some View {
+        CRTCard(style: .standard) {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+                // Header
+                HStack {
+                    Image(systemName: "folder.fill")
+                        .foregroundColor(theme.primary)
+                    CRTText("PROJECTS", style: .subheader)
+
+                    Spacer()
+
+                    if !rigs.isEmpty {
+                        BadgeView("\(rigs.count) RIGS", style: .status(.info))
+                    }
+                }
+
+                Divider()
+                    .background(theme.dim.opacity(0.3))
+
+                // Project list
+                if rigs.isEmpty {
+                    EmptyStateView(
+                        title: "NO PROJECTS",
+                        icon: "folder"
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, CRTTheme.Spacing.sm)
+                } else {
+                    VStack(spacing: CRTTheme.Spacing.xs) {
+                        ForEach(rigs.prefix(4), id: \.name) { rig in
+                            Button(action: { onTap(rig) }) {
+                                ProjectPreviewRow(rig: rig)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        if rigs.count > 4 {
+                            CRTText("+\(rigs.count - 4) more", style: .caption, color: theme.dim)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.top, CRTTheme.Spacing.xxs)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct ProjectPreviewRow: View {
+    @Environment(\.crtTheme) private var theme
+    let rig: RigStatus
+
+    var body: some View {
+        HStack(spacing: CRTTheme.Spacing.sm) {
+            // Status dot
+            StatusDot(hasRunning ? .success : .offline, size: 8, pulse: hasRunning)
+
+            // Name
+            CRTText(rig.name.uppercased(), style: .caption, color: theme.primary)
+                .lineLimit(1)
+
+            Spacer()
+
+            // Agent count
+            CRTText("\(runningCount)/\(totalCount)", style: .caption, color: theme.dim)
+
+            // Merge queue indicator
+            if mergeQueueTotal > 0 {
+                HStack(spacing: 2) {
+                    Image(systemName: "arrow.triangle.merge")
+                        .font(.system(size: 9))
+                        .foregroundColor(theme.dim)
+                    CRTText("\(mergeQueueTotal)", style: .caption, color: theme.dim)
+                }
+            }
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10))
+                .foregroundColor(theme.dim)
+        }
+        .padding(CRTTheme.Spacing.xs)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(theme.dim.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(hasRunning ? theme.primary.opacity(0.2) : theme.dim.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    private var runningCount: Int {
+        var count = 0
+        if rig.witness.running { count += 1 }
+        if rig.refinery.running { count += 1 }
+        count += rig.crew.filter { $0.running }.count
+        count += rig.polecats.filter { $0.running }.count
+        return count
+    }
+
+    private var totalCount: Int {
+        2 + rig.crew.count + rig.polecats.count
+    }
+
+    private var hasRunning: Bool {
+        runningCount > 0
+    }
+
+    private var mergeQueueTotal: Int {
+        rig.mergeQueue.pending + rig.mergeQueue.inFlight + rig.mergeQueue.blocked
     }
 }
 
