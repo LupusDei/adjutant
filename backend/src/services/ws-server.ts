@@ -15,7 +15,8 @@ import type { Server as HttpServer } from "http";
 import { randomUUID } from "crypto";
 import { getEventBus } from "./event-bus.js";
 import { hasApiKeys, validateApiKey } from "./api-key-service.js";
-import { logInfo } from "../utils/index.js";
+import { sendMail } from "./mail-service.js";
+import { logInfo, logWarn } from "../utils/index.js";
 
 // ============================================================================
 // Types
@@ -27,6 +28,7 @@ interface WsClientMessage {
   id?: string;
   to?: string;
   body?: string;
+  subject?: string;
   replyTo?: string;
   metadata?: Record<string, unknown>;
   state?: "started" | "stopped";
@@ -227,13 +229,15 @@ function handleMessage(client: WsClient, msg: WsClientMessage): void {
   // Broadcast to all authenticated clients
   broadcast(serverMsg);
 
-  // Emit to EventBus so other services can react
-  getEventBus().emit("mail:received", {
-    id: serverMsg.id!,
-    from: serverMsg.from!,
-    to: serverMsg.to!,
-    subject: "(WebSocket message)",
-    preview: (serverMsg.body ?? "").slice(0, 120),
+  // Persist the message via mail transport so agents can read it
+  sendMail({
+    to: serverMsg.to ?? "mayor/",
+    from: serverMsg.from ?? "overseer",
+    subject: msg.subject ?? "(WebSocket message)",
+    body: serverMsg.body ?? "",
+    replyTo: msg.replyTo,
+  }).catch((err) => {
+    logWarn("Failed to persist WebSocket message via mail transport", { error: String(err) });
   });
 }
 
