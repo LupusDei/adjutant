@@ -1,13 +1,14 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, convoysRouter, devicesRouter, eventsRouter, mailRouter, modeRouter, powerRouter, statusRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, convoysRouter, devicesRouter, eventsRouter, mailRouter, modeRouter, powerRouter, sessionsRouter, statusRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
 import { startPrefixMapRefreshScheduler } from "./services/beads-service.js";
 import { initWebSocketServer } from "./services/ws-server.js";
 import { initStreamingBridge } from "./services/streaming-bridge.js";
+import { initSessionBridge } from "./services/session/session-bridge.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
@@ -42,6 +43,7 @@ app.use("/api/power", powerRouter);
 app.use("/api/status", statusRouter);
 app.use("/api/tunnel", tunnelRouter);
 app.use("/api/voice", voiceRouter);
+app.use("/api/sessions", sessionsRouter);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
@@ -61,4 +63,9 @@ const server = app.listen(PORT, () => {
 
   // Initialize streaming bridge (watches .beads/streams/ for agent output)
   initStreamingBridge();
+
+  // Initialize Session Bridge v2 (tmux session management)
+  initSessionBridge().catch((err) => {
+    logInfo("session bridge init failed (non-fatal)", { error: String(err) });
+  });
 });
