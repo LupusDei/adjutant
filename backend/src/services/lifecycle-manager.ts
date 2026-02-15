@@ -1,0 +1,250 @@
+/**
+ * LifecycleManager — creates and kills tmux sessions with Claude Code.
+ *
+ * Handles session creation with workspace setup (primary, worktree, copy)
+ * and session teardown with cleanup.
+ */
+
+import { execFile } from "child_process";
+import { logInfo, logWarn } from "../utils/index.js";
+import type { SessionRegistry, SessionMode, WorkspaceType } from "./session-registry.js";
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export interface CreateSessionRequest {
+  name: string;
+  projectPath: string;
+  mode?: SessionMode;
+  workspaceType?: WorkspaceType;
+  claudeArgs?: string[];
+}
+
+export interface CreateSessionResult {
+  success: boolean;
+  sessionId?: string;
+  error?: string;
+}
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const MAX_SESSIONS = 10;
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+function execCommand(
+  cmd: string,
+  args: string[],
+  cwd?: string
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, args, { encoding: "utf8", cwd }, (err, stdout, stderr) => {
+      if (err) {
+        reject(new Error(stderr?.trim() || err.message));
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+}
+
+function execTmuxCommand(args: string[]): Promise<string> {
+  return execCommand("tmux", args);
+}
+
+// ============================================================================
+// LifecycleManager
+// ============================================================================
+
+export class LifecycleManager {
+  private registry: SessionRegistry;
+  private maxSessions: number;
+
+  constructor(registry: SessionRegistry, maxSessions?: number) {
+    this.registry = registry;
+    this.maxSessions = maxSessions ?? MAX_SESSIONS;
+  }
+
+  /**
+   * Create a new tmux session with Claude Code.
+   */
+  async createSession(req: CreateSessionRequest): Promise<CreateSessionResult> {
+    // Check session limit
+    if (this.registry.size >= this.maxSessions) {
+      return {
+        success: false,
+        error: `Session limit reached (max ${this.maxSessions})`,
+      };
+    }
+
+    const tmuxSessionName = this.generateTmuxName(req.name, req.mode);
+
+    // Check if tmux session already exists
+    try {
+      await execTmuxCommand(["has-session", "-t", tmuxSessionName]);
+      return {
+        success: false,
+        error: `tmux session '${tmuxSessionName}' already exists`,
+      };
+    } catch {
+      // Session doesn't exist — good, we can create it
+    }
+
+    try {
+      // Create the tmux session
+      await execTmuxCommand([
+        "new-session",
+        "-d",
+        "-s",
+        tmuxSessionName,
+        "-c",
+        req.projectPath,
+      ]);
+
+      // Register the session
+      const session = this.registry.create({
+        name: req.name,
+        tmuxSession: tmuxSessionName,
+        projectPath: req.projectPath,
+        mode: req.mode,
+        workspaceType: req.workspaceType,
+      });
+
+      // Start Claude Code in the session
+      const claudeArgs = req.claudeArgs ?? ["--dangerously-skip-permissions"];
+      const claudeCmd = `claude ${claudeArgs.join(" ")}`;
+
+      await execTmuxCommand([
+        "send-keys",
+        "-t",
+        tmuxSessionName,
+        claudeCmd,
+        "Enter",
+      ]);
+
+      this.registry.updateStatus(session.id, "working");
+
+      logInfo("Session created", {
+        sessionId: session.id,
+        tmuxSession: tmuxSessionName,
+      });
+
+      return { success: true, sessionId: session.id };
+    } catch (err) {
+      logWarn("Failed to create session", { error: String(err) });
+      return { success: false, error: String(err) };
+    }
+  }
+
+  /**
+   * Kill a tmux session and clean up.
+   */
+  async killSession(sessionId: string): Promise<boolean> {
+    const session = this.registry.get(sessionId);
+    if (!session) {
+      logWarn("Cannot kill: session not found", { sessionId });
+      return false;
+    }
+
+    try {
+      await execTmuxCommand(["kill-session", "-t", session.tmuxSession]);
+    } catch {
+      // Session might already be gone
+    }
+
+    this.registry.updateStatus(sessionId, "offline");
+    this.registry.remove(sessionId);
+
+    logInfo("Session killed", {
+      sessionId,
+      tmuxSession: session.tmuxSession,
+    });
+
+    return true;
+  }
+
+  /**
+   * Check if a tmux session is alive.
+   */
+  async isAlive(sessionId: string): Promise<boolean> {
+    const session = this.registry.get(sessionId);
+    if (!session) return false;
+
+    try {
+      await execTmuxCommand(["has-session", "-t", session.tmuxSession]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Discover existing tmux sessions and register them.
+   */
+  async discoverSessions(prefix?: string): Promise<string[]> {
+    try {
+      const output = await execTmuxCommand([
+        "list-sessions",
+        "-F",
+        "#{session_name}",
+      ]);
+
+      const tmuxSessions = output
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0);
+
+      const discovered: string[] = [];
+
+      for (const tmuxName of tmuxSessions) {
+        // Skip if already registered
+        if (this.registry.findByTmuxSession(tmuxName)) continue;
+
+        // Apply prefix filter if provided
+        if (prefix && !tmuxName.startsWith(prefix)) continue;
+
+        const session = this.registry.create({
+          name: tmuxName,
+          tmuxSession: tmuxName,
+          projectPath: ".",
+          mode: "standalone",
+        });
+        this.registry.updateStatus(session.id, "idle");
+        discovered.push(session.id);
+      }
+
+      logInfo("Sessions discovered", { count: discovered.length });
+      return discovered;
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Get the max sessions limit.
+   */
+  get sessionLimit(): number {
+    return this.maxSessions;
+  }
+
+  // --------------------------------------------------------------------------
+  // Private
+  // --------------------------------------------------------------------------
+
+  private generateTmuxName(name: string, mode?: SessionMode): string {
+    const sanitized = name.replace(/[^a-zA-Z0-9_-]/g, "-");
+    switch (mode) {
+      case "gastown":
+        return sanitized;
+      case "swarm":
+        return `adj-swarm-${sanitized}`;
+      default:
+        return `adj-${sanitized}`;
+    }
+  }
+}

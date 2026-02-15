@@ -1,0 +1,279 @@
+/**
+ * SessionBridge — main orchestrator for the Session Bridge system.
+ *
+ * Singleton that wires together SessionRegistry, SessionConnector,
+ * InputRouter, and LifecycleManager. Provides the public API for
+ * session management operations.
+ */
+
+import { logInfo, logWarn } from "../utils/index.js";
+import { getEventBus } from "./event-bus.js";
+import {
+  SessionRegistry,
+  getSessionRegistry,
+  resetSessionRegistry,
+  type ManagedSession,
+  type SessionStatus,
+} from "./session-registry.js";
+import { SessionConnector } from "./session-connector.js";
+import { InputRouter } from "./input-router.js";
+import { LifecycleManager, type CreateSessionRequest } from "./lifecycle-manager.js";
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export interface SessionBridgeConfig {
+  maxSessions?: number;
+  pipeDir?: string;
+  persistencePath?: string;
+}
+
+export interface SessionInfo {
+  id: string;
+  name: string;
+  tmuxSession: string;
+  projectPath: string;
+  mode: string;
+  status: string;
+  workspaceType: string;
+  connectedClients: number;
+  pipeActive: boolean;
+  createdAt: string;
+  lastActivity: string;
+}
+
+// ============================================================================
+// SessionBridge
+// ============================================================================
+
+export class SessionBridge {
+  readonly registry: SessionRegistry;
+  readonly connector: SessionConnector;
+  readonly inputRouter: InputRouter;
+  readonly lifecycle: LifecycleManager;
+  private initialized = false;
+
+  constructor(config?: SessionBridgeConfig) {
+    this.registry = config?.persistencePath
+      ? new SessionRegistry(config.persistencePath)
+      : getSessionRegistry();
+    this.connector = new SessionConnector(this.registry, config?.pipeDir);
+    this.inputRouter = new InputRouter(this.registry);
+    this.lifecycle = new LifecycleManager(this.registry, config?.maxSessions);
+  }
+
+  /**
+   * Initialize the bridge: load persisted sessions, verify tmux state.
+   */
+  async init(): Promise<void> {
+    if (this.initialized) return;
+
+    const loaded = await this.registry.load();
+    logInfo("SessionBridge initializing", { loadedSessions: loaded });
+
+    // Verify which loaded sessions are still alive in tmux
+    for (const session of this.registry.getAll()) {
+      const alive = await this.lifecycle.isAlive(session.id);
+      if (alive) {
+        this.registry.updateStatus(session.id, "idle");
+      }
+      // sessions that aren't alive stay "offline" (set during load)
+    }
+
+    // Set up output handler to broadcast via event bus
+    this.connector.onOutput((sessionId, line) => {
+      getEventBus().emit("stream:status", {
+        streamId: sessionId,
+        agent: this.registry.get(sessionId)?.name ?? "unknown",
+        state: "token",
+      });
+    });
+
+    this.initialized = true;
+    logInfo("SessionBridge initialized");
+  }
+
+  /**
+   * Create a new session.
+   */
+  async createSession(req: CreateSessionRequest) {
+    const result = await this.lifecycle.createSession(req);
+    if (result.success && result.sessionId) {
+      await this.registry.save();
+    }
+    return result;
+  }
+
+  /**
+   * Connect a WebSocket client to a session (start streaming output).
+   */
+  async connectClient(
+    sessionId: string,
+    clientId: string,
+    replay = false
+  ): Promise<{ success: boolean; buffer?: string[]; error?: string }> {
+    const session = this.registry.get(sessionId);
+    if (!session) {
+      return { success: false, error: "Session not found" };
+    }
+
+    if (session.status === "offline") {
+      return { success: false, error: "Session is offline" };
+    }
+
+    this.registry.addClient(sessionId, clientId);
+
+    // Start pipe if not already attached
+    if (!this.connector.isAttached(sessionId)) {
+      await this.connector.attach(sessionId);
+    }
+
+    let buffer: string[] | undefined;
+    if (replay) {
+      buffer = this.registry.getOutputBuffer(sessionId);
+    } else {
+      this.registry.clearOutputBuffer(sessionId);
+    }
+
+    return { success: true, buffer };
+  }
+
+  /**
+   * Disconnect a WebSocket client from a session.
+   */
+  async disconnectClient(sessionId: string, clientId: string): Promise<void> {
+    this.registry.removeClient(sessionId, clientId);
+
+    const session = this.registry.get(sessionId);
+    if (session && session.connectedClients.size === 0) {
+      // No more clients — detach pipe to save resources
+      await this.connector.detach(sessionId);
+    }
+  }
+
+  /**
+   * Send input to a session.
+   */
+  async sendInput(sessionId: string, text: string): Promise<boolean> {
+    return this.inputRouter.sendInput(sessionId, text);
+  }
+
+  /**
+   * Send interrupt (Ctrl-C) to a session.
+   */
+  async sendInterrupt(sessionId: string): Promise<boolean> {
+    return this.inputRouter.sendInterrupt(sessionId);
+  }
+
+  /**
+   * Send permission response to a session.
+   */
+  async sendPermissionResponse(
+    sessionId: string,
+    approved: boolean
+  ): Promise<boolean> {
+    return this.inputRouter.sendPermissionResponse(sessionId, approved);
+  }
+
+  /**
+   * Kill a session and clean up.
+   */
+  async killSession(sessionId: string): Promise<boolean> {
+    await this.connector.detach(sessionId);
+    this.inputRouter.clearQueue(sessionId);
+    const killed = await this.lifecycle.killSession(sessionId);
+    if (killed) {
+      await this.registry.save();
+    }
+    return killed;
+  }
+
+  /**
+   * List all sessions as serializable info objects.
+   */
+  listSessions(): SessionInfo[] {
+    return this.registry.getAll().map((s) => ({
+      id: s.id,
+      name: s.name,
+      tmuxSession: s.tmuxSession,
+      projectPath: s.projectPath,
+      mode: s.mode,
+      status: s.status,
+      workspaceType: s.workspaceType,
+      connectedClients: s.connectedClients.size,
+      pipeActive: s.pipeActive,
+      createdAt: s.createdAt.toISOString(),
+      lastActivity: s.lastActivity.toISOString(),
+    }));
+  }
+
+  /**
+   * Get a single session's info.
+   */
+  getSession(sessionId: string): SessionInfo | undefined {
+    const s = this.registry.get(sessionId);
+    if (!s) return undefined;
+    return {
+      id: s.id,
+      name: s.name,
+      tmuxSession: s.tmuxSession,
+      projectPath: s.projectPath,
+      mode: s.mode,
+      status: s.status,
+      workspaceType: s.workspaceType,
+      connectedClients: s.connectedClients.size,
+      pipeActive: s.pipeActive,
+      createdAt: s.createdAt.toISOString(),
+      lastActivity: s.lastActivity.toISOString(),
+    };
+  }
+
+  /**
+   * Update a session's status.
+   */
+  updateSessionStatus(sessionId: string, status: SessionStatus): boolean {
+    const updated = this.registry.updateStatus(sessionId, status);
+    if (updated && status === "idle") {
+      // Flush queued input when session becomes idle
+      this.inputRouter.flushQueue(sessionId).catch(() => {});
+    }
+    return updated;
+  }
+
+  /**
+   * Shut down the bridge: detach all pipes, persist sessions.
+   */
+  async shutdown(): Promise<void> {
+    await this.connector.detachAll();
+    this.inputRouter.clearAllQueues();
+    await this.registry.save();
+    this.initialized = false;
+    logInfo("SessionBridge shut down");
+  }
+
+  /**
+   * Whether the bridge has been initialized.
+   */
+  get isInitialized(): boolean {
+    return this.initialized;
+  }
+}
+
+// ============================================================================
+// Singleton
+// ============================================================================
+
+let instance: SessionBridge | null = null;
+
+export function getSessionBridge(config?: SessionBridgeConfig): SessionBridge {
+  if (!instance) {
+    instance = new SessionBridge(config);
+  }
+  return instance;
+}
+
+export function resetSessionBridge(): void {
+  instance = null;
+  resetSessionRegistry();
+}
