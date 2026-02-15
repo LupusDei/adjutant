@@ -24,7 +24,8 @@ import { logInfo, logWarn } from "../utils/index.js";
 
 /** Client → Server message types */
 interface WsClientMessage {
-  type: "auth_response" | "message" | "typing" | "stream_request" | "stream_cancel" | "ack" | "sync";
+  type: "auth_response" | "message" | "typing" | "stream_request" | "stream_cancel" | "ack" | "sync"
+    | "session_connect" | "session_disconnect" | "session_input" | "session_interrupt" | "session_permission_response";
   id?: string;
   to?: string;
   body?: string;
@@ -38,11 +39,17 @@ interface WsClientMessage {
   seq?: number;
   apiKey?: string;
   lastSeqSeen?: number;
+  // Session v2 fields
+  sessionId?: string;
+  text?: string;
+  approved?: boolean;
+  replay?: boolean;
 }
 
 /** Server → Client message types */
 interface WsServerMessage {
-  type: "auth_challenge" | "connected" | "message" | "stream_token" | "stream_end" | "typing" | "delivered" | "error" | "sync_response" | "pong";
+  type: "auth_challenge" | "connected" | "message" | "stream_token" | "stream_end" | "typing" | "delivered" | "error" | "sync_response" | "pong"
+    | "session_connected" | "session_disconnected" | "session_output" | "session_status";
   id?: string | undefined;
   clientId?: string | undefined;
   seq?: number | undefined;
@@ -65,6 +72,11 @@ interface WsServerMessage {
   lastSeq?: number | undefined;
   serverTime?: string | undefined;
   missed?: WsServerMessage[] | undefined;
+  // Session v2 fields
+  output?: string | undefined;
+  buffer?: string[] | undefined;
+  status?: string | undefined;
+  name?: string | undefined;
 }
 
 interface WsClient {
@@ -280,6 +292,166 @@ function handleAck(client: WsClient, msg: WsClientMessage): void {
 }
 
 // ============================================================================
+// Session v2 Handlers
+// ============================================================================
+
+async function handleSessionConnect(client: WsClient, msg: WsClientMessage): Promise<void> {
+  const { sessionId, replay } = msg;
+  if (!sessionId) {
+    send(client, { type: "error", code: "missing_session_id", message: "sessionId required" });
+    return;
+  }
+
+  try {
+    const { getSessionBridge } = await import("./session-bridge.js");
+    const bridge = getSessionBridge();
+    const result = await bridge.connectClient(sessionId, client.sessionId, replay ?? false);
+
+    if (result.success) {
+      send(client, {
+        type: "session_connected",
+        sessionId,
+        buffer: result.buffer,
+      });
+
+      // Set up output forwarding for this client
+      bridge.connector.onOutput((sid, line) => {
+        if (sid === sessionId && client.authenticated) {
+          send(client, {
+            type: "session_output",
+            sessionId: sid,
+            output: line,
+          });
+        }
+      });
+    } else {
+      send(client, {
+        type: "error",
+        code: "session_connect_failed",
+        message: result.error ?? "Failed to connect to session",
+        sessionId,
+      });
+    }
+  } catch (err) {
+    send(client, {
+      type: "error",
+      code: "session_error",
+      message: String(err),
+      sessionId,
+    });
+  }
+}
+
+async function handleSessionDisconnect(client: WsClient, msg: WsClientMessage): Promise<void> {
+  const { sessionId } = msg;
+  if (!sessionId) {
+    send(client, { type: "error", code: "missing_session_id", message: "sessionId required" });
+    return;
+  }
+
+  try {
+    const { getSessionBridge } = await import("./session-bridge.js");
+    const bridge = getSessionBridge();
+    await bridge.disconnectClient(sessionId, client.sessionId);
+    send(client, { type: "session_disconnected", sessionId });
+  } catch (err) {
+    send(client, {
+      type: "error",
+      code: "session_error",
+      message: String(err),
+      sessionId,
+    });
+  }
+}
+
+async function handleSessionInput(client: WsClient, msg: WsClientMessage): Promise<void> {
+  const { sessionId, text } = msg;
+  if (!sessionId || text === undefined) {
+    send(client, { type: "error", code: "missing_params", message: "sessionId and text required" });
+    return;
+  }
+
+  try {
+    const { getSessionBridge } = await import("./session-bridge.js");
+    const bridge = getSessionBridge();
+    const sent = await bridge.sendInput(sessionId, text);
+    if (!sent) {
+      send(client, {
+        type: "error",
+        code: "input_failed",
+        message: "Failed to send input to session",
+        sessionId,
+      });
+    }
+  } catch (err) {
+    send(client, {
+      type: "error",
+      code: "session_error",
+      message: String(err),
+      sessionId,
+    });
+  }
+}
+
+async function handleSessionInterrupt(client: WsClient, msg: WsClientMessage): Promise<void> {
+  const { sessionId } = msg;
+  if (!sessionId) {
+    send(client, { type: "error", code: "missing_session_id", message: "sessionId required" });
+    return;
+  }
+
+  try {
+    const { getSessionBridge } = await import("./session-bridge.js");
+    const bridge = getSessionBridge();
+    const sent = await bridge.sendInterrupt(sessionId);
+    if (!sent) {
+      send(client, {
+        type: "error",
+        code: "interrupt_failed",
+        message: "Failed to send interrupt to session",
+        sessionId,
+      });
+    }
+  } catch (err) {
+    send(client, {
+      type: "error",
+      code: "session_error",
+      message: String(err),
+      sessionId,
+    });
+  }
+}
+
+async function handleSessionPermissionResponse(client: WsClient, msg: WsClientMessage): Promise<void> {
+  const { sessionId, approved } = msg;
+  if (!sessionId || approved === undefined) {
+    send(client, { type: "error", code: "missing_params", message: "sessionId and approved required" });
+    return;
+  }
+
+  try {
+    const { getSessionBridge } = await import("./session-bridge.js");
+    const bridge = getSessionBridge();
+    const sent = await bridge.sendPermissionResponse(sessionId, approved);
+    if (!sent) {
+      send(client, {
+        type: "error",
+        code: "permission_response_failed",
+        message: "Failed to send permission response to session",
+        sessionId,
+      });
+    }
+  } catch (err) {
+    send(client, {
+      type: "error",
+      code: "session_error",
+      message: String(err),
+      sessionId,
+    });
+  }
+}
+
+// ============================================================================
 // Server Setup
 // ============================================================================
 
@@ -366,6 +538,32 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
           break;
         case "stream_cancel":
           // Will be implemented with streaming bridge
+          break;
+        // Session v2 message types
+        case "session_connect":
+          handleSessionConnect(client, msg).catch((err) => {
+            logWarn("session_connect error", { error: String(err) });
+          });
+          break;
+        case "session_disconnect":
+          handleSessionDisconnect(client, msg).catch((err) => {
+            logWarn("session_disconnect error", { error: String(err) });
+          });
+          break;
+        case "session_input":
+          handleSessionInput(client, msg).catch((err) => {
+            logWarn("session_input error", { error: String(err) });
+          });
+          break;
+        case "session_interrupt":
+          handleSessionInterrupt(client, msg).catch((err) => {
+            logWarn("session_interrupt error", { error: String(err) });
+          });
+          break;
+        case "session_permission_response":
+          handleSessionPermissionResponse(client, msg).catch((err) => {
+            logWarn("session_permission_response error", { error: String(err) });
+          });
           break;
         default:
           send(client, { type: "error", code: "unknown_type", message: `Unknown message type: ${msg.type}` });

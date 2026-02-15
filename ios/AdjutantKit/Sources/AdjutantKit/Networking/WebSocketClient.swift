@@ -16,6 +16,11 @@ public struct WsClientMessage: Encodable {
     public var seq: Int?
     public var apiKey: String?
     public var lastSeqSeen: Int?
+    // Session v2 fields
+    public var sessionId: String?
+    public var text: String?
+    public var approved: Bool?
+    public var replay: Bool?
 
     public init(
         type: String,
@@ -28,7 +33,11 @@ public struct WsClientMessage: Encodable {
         streamId: String? = nil,
         seq: Int? = nil,
         apiKey: String? = nil,
-        lastSeqSeen: Int? = nil
+        lastSeqSeen: Int? = nil,
+        sessionId: String? = nil,
+        text: String? = nil,
+        approved: Bool? = nil,
+        replay: Bool? = nil
     ) {
         self.type = type
         self.id = id
@@ -41,6 +50,10 @@ public struct WsClientMessage: Encodable {
         self.seq = seq
         self.apiKey = apiKey
         self.lastSeqSeen = lastSeqSeen
+        self.sessionId = sessionId
+        self.text = text
+        self.approved = approved
+        self.replay = replay
     }
 }
 
@@ -68,6 +81,11 @@ public struct WsServerMessage: Decodable, Equatable {
     public let lastSeq: Int?
     public let serverTime: String?
     public let missed: [WsServerMessage]?
+    // Session v2 fields
+    public let output: String?
+    public let buffer: [String]?
+    public let status: String?
+    public let name: String?
 
     public init(
         type: String,
@@ -91,7 +109,11 @@ public struct WsServerMessage: Decodable, Equatable {
         sessionId: String? = nil,
         lastSeq: Int? = nil,
         serverTime: String? = nil,
-        missed: [WsServerMessage]? = nil
+        missed: [WsServerMessage]? = nil,
+        output: String? = nil,
+        buffer: [String]? = nil,
+        status: String? = nil,
+        name: String? = nil
     ) {
         self.type = type
         self.id = id
@@ -115,6 +137,47 @@ public struct WsServerMessage: Decodable, Equatable {
         self.lastSeq = lastSeq
         self.serverTime = serverTime
         self.missed = missed
+        self.output = output
+        self.buffer = buffer
+        self.status = status
+        self.name = name
+    }
+}
+
+// MARK: - Session Event Types
+
+/// Event emitted when session output arrives
+public struct SessionOutputEvent: Equatable {
+    public let sessionId: String
+    public let output: String
+
+    public init(sessionId: String, output: String) {
+        self.sessionId = sessionId
+        self.output = output
+    }
+}
+
+/// Event emitted when a session connection is confirmed
+public struct SessionConnectedEvent: Equatable {
+    public let sessionId: String
+    public let buffer: [String]
+
+    public init(sessionId: String, buffer: [String]) {
+        self.sessionId = sessionId
+        self.buffer = buffer
+    }
+}
+
+/// Event emitted when a session status changes
+public struct SessionStatusEvent: Equatable {
+    public let sessionId: String
+    public let status: String
+    public let name: String?
+
+    public init(sessionId: String, status: String, name: String? = nil) {
+        self.sessionId = sessionId
+        self.status = status
+        self.name = name
     }
 }
 
@@ -137,6 +200,12 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
 
     public let messageSubject = PassthroughSubject<WsServerMessage, Never>()
     public let connectionStateSubject = CurrentValueSubject<WebSocketConnectionState, Never>(.disconnected)
+
+    // Session v2 publishers
+    public let sessionOutputSubject = PassthroughSubject<SessionOutputEvent, Never>()
+    public let sessionConnectedSubject = PassthroughSubject<SessionConnectedEvent, Never>()
+    public let sessionDisconnectedSubject = PassthroughSubject<String, Never>()
+    public let sessionStatusSubject = PassthroughSubject<SessionStatusEvent, Never>()
 
     // MARK: - Configuration
 
@@ -221,6 +290,45 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
     /// Request missed messages since last known sequence.
     public func requestSync() {
         let msg = WsClientMessage(type: "sync", lastSeqSeen: lastSeqSeen)
+        send(msg)
+    }
+
+    // MARK: - Session v2 API
+
+    /// Connect to a session to start receiving output.
+    /// - Parameters:
+    ///   - sessionId: The session to connect to.
+    ///   - replay: Whether to replay buffered output from before connection.
+    public func sendSessionConnect(sessionId: String, replay: Bool = false) {
+        let msg = WsClientMessage(type: "session_connect", sessionId: sessionId, replay: replay)
+        send(msg)
+    }
+
+    /// Disconnect from a session.
+    public func sendSessionDisconnect(sessionId: String) {
+        let msg = WsClientMessage(type: "session_disconnect", sessionId: sessionId)
+        send(msg)
+    }
+
+    /// Send text input to a session.
+    public func sendSessionInput(sessionId: String, text: String) {
+        let msg = WsClientMessage(type: "session_input", sessionId: sessionId, text: text)
+        send(msg)
+    }
+
+    /// Send interrupt (Ctrl-C) to a session.
+    public func sendSessionInterrupt(sessionId: String) {
+        let msg = WsClientMessage(type: "session_interrupt", sessionId: sessionId)
+        send(msg)
+    }
+
+    /// Send a permission response to a session.
+    public func sendSessionPermissionResponse(sessionId: String, approved: Bool) {
+        let msg = WsClientMessage(
+            type: "session_permission_response",
+            sessionId: sessionId,
+            approved: approved
+        )
         send(msg)
     }
 
@@ -318,6 +426,37 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
                 connectionStateSubject.send(.disconnected)
             }
             messageSubject.send(msg)
+
+        // Session v2 message types
+        case "session_connected":
+            if let sessionId = msg.sessionId {
+                sessionConnectedSubject.send(SessionConnectedEvent(
+                    sessionId: sessionId,
+                    buffer: msg.buffer ?? []
+                ))
+            }
+
+        case "session_disconnected":
+            if let sessionId = msg.sessionId {
+                sessionDisconnectedSubject.send(sessionId)
+            }
+
+        case "session_output":
+            if let sessionId = msg.sessionId, let output = msg.output {
+                sessionOutputSubject.send(SessionOutputEvent(
+                    sessionId: sessionId,
+                    output: output
+                ))
+            }
+
+        case "session_status":
+            if let sessionId = msg.sessionId, let status = msg.status {
+                sessionStatusSubject.send(SessionStatusEvent(
+                    sessionId: sessionId,
+                    status: status,
+                    name: msg.name
+                ))
+            }
 
         default:
             if let seq = msg.seq {
