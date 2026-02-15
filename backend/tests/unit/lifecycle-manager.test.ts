@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { LifecycleManager } from "../../../src/services/session/lifecycle-manager.js";
-import { SessionRegistry } from "../../../src/services/session/session-registry.js";
+import { LifecycleManager } from "../../src/services/lifecycle-manager.js";
+import { SessionRegistry } from "../../src/services/session-registry.js";
 
 // Suppress logging
-vi.mock("../../../src/utils/index.js", () => ({
+vi.mock("../../src/utils/index.js", () => ({
   logInfo: vi.fn(),
   logWarn: vi.fn(),
   logError: vi.fn(),

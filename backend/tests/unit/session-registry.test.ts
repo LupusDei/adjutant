@@ -6,10 +6,10 @@ import {
   SessionRegistry,
   getSessionRegistry,
   resetSessionRegistry,
-} from "../../../src/services/session/session-registry.js";
+} from "../../src/services/session-registry.js";
 
 // Suppress logging
-vi.mock("../../../src/utils/index.js", () => ({
+vi.mock("../../src/utils/index.js", () => ({
   logInfo: vi.fn(),
   logWarn: vi.fn(),
   logError: vi.fn(),

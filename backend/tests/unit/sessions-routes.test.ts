@@ -15,11 +15,11 @@ const mockBridge = {
   killSession: vi.fn(),
 };
 
-vi.mock("../../../src/services/session/session-bridge.js", () => ({
+vi.mock("../../src/services/session-bridge.js", () => ({
   getSessionBridge: () => mockBridge,
 }));
 
-import { sessionsRouter } from "../../../src/routes/sessions.js";
+import { sessionsRouter } from "../../src/routes/sessions.js";
 
 function createTestApp() {
   const app = express();

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { InputRouter } from "../../../src/services/session/input-router.js";
-import { SessionRegistry } from "../../../src/services/session/session-registry.js";
+import { InputRouter } from "../../src/services/input-router.js";
+import { SessionRegistry } from "../../src/services/session-registry.js";
 
 // Suppress logging
-vi.mock("../../../src/utils/index.js", () => ({
+vi.mock("../../src/utils/index.js", () => ({
   logInfo: vi.fn(),
   logWarn: vi.fn(),
   logError: vi.fn(),

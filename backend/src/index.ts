@@ -8,7 +8,7 @@ import { startCacheCleanupScheduler } from "./services/audio-cache.js";
 import { startPrefixMapRefreshScheduler } from "./services/beads-service.js";
 import { initWebSocketServer } from "./services/ws-server.js";
 import { initStreamingBridge } from "./services/streaming-bridge.js";
-import { initSessionBridge } from "./services/session/session-bridge.js";
+import { getSessionBridge } from "./services/session-bridge.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
@@ -66,7 +66,9 @@ const server = app.listen(PORT, () => {
   initStreamingBridge();
 
   // Initialize Session Bridge v2 (tmux session management)
-  initSessionBridge().catch((err) => {
+  try {
+    getSessionBridge();
+  } catch (err) {
     logInfo("session bridge init failed (non-fatal)", { error: String(err) });
-  });
+  }
 });

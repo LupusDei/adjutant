@@ -3,11 +3,11 @@ import {
   SessionBridge,
   getSessionBridge,
   resetSessionBridge,
-} from "../../../src/services/session/session-bridge.js";
-import { resetSessionRegistry } from "../../../src/services/session/session-registry.js";
+} from "../../src/services/session-bridge.js";
+import { resetSessionRegistry } from "../../src/services/session-registry.js";
 
 // Suppress logging
-vi.mock("../../../src/utils/index.js", () => ({
+vi.mock("../../src/utils/index.js", () => ({
   logInfo: vi.fn(),
   logWarn: vi.fn(),
   logError: vi.fn(),
@@ -15,7 +15,7 @@ vi.mock("../../../src/utils/index.js", () => ({
 }));
 
 // Mock event bus
-vi.mock("../../../src/services/event-bus.js", () => ({
+vi.mock("../../src/services/event-bus.js", () => ({
   getEventBus: () => ({ emit: vi.fn(), on: vi.fn(), off: vi.fn() }),
 }));
 

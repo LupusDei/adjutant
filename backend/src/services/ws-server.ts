@@ -17,34 +17,14 @@ import { getEventBus } from "./event-bus.js";
 import { hasApiKeys, validateApiKey } from "./api-key-service.js";
 import { sendMail } from "./mail-service.js";
 import { logInfo, logWarn } from "../utils/index.js";
-import {
-  registerClient,
-  unregisterClient,
-  handleSessionMessage,
-} from "./session/session-bridge.js";
-import type { SessionClientMessage, SessionServerMessage } from "../types/session.js";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-/** Session message type names */
-const SESSION_MESSAGE_TYPES = new Set([
-  "session_list",
-  "session_create",
-  "session_connect",
-  "session_disconnect",
-  "session_input",
-  "session_interrupt",
-  "session_kill",
-  "session_permission",
-]);
-
 /** Client → Server message types */
 interface WsClientMessage {
-  type: "auth_response" | "message" | "typing" | "stream_request" | "stream_cancel" | "ack" | "sync"
-    | "session_list" | "session_create" | "session_connect" | "session_disconnect"
-    | "session_input" | "session_interrupt" | "session_kill" | "session_permission";
+  type: "auth_response" | "message" | "typing" | "stream_request" | "stream_cancel" | "ack" | "sync";
   id?: string;
   to?: string;
   body?: string;
@@ -58,16 +38,6 @@ interface WsClientMessage {
   seq?: number;
   apiKey?: string;
   lastSeqSeen?: number;
-  // Session v2 fields
-  sessionId?: string;
-  text?: string;
-  projectPath?: string;
-  mode?: string;
-  name?: string;
-  workspaceType?: string;
-  replay?: boolean;
-  requestId?: string;
-  approved?: boolean;
 }
 
 /** Server → Client message types */
@@ -334,13 +304,6 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
 
     clients.set(sessionId, client);
 
-    // Register with session bridge so it can send session messages to this client
-    registerClient(sessionId, (msg: SessionServerMessage) => {
-      if (client.ws.readyState === WebSocket.OPEN) {
-        client.ws.send(JSON.stringify(msg));
-      }
-    });
-
     // Send auth challenge
     send(client, { type: "auth_challenge" });
 
@@ -379,19 +342,6 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
         return;
       }
 
-      // Route session_* messages to the Session Bridge
-      if (SESSION_MESSAGE_TYPES.has(msg.type)) {
-        handleSessionMessage(sessionId, msg as unknown as SessionClientMessage).catch((err) => {
-          logWarn("session message handler error", { sessionId, error: String(err) });
-          send(client, {
-            type: "error",
-            code: "session_error",
-            message: String(err instanceof Error ? err.message : err),
-          });
-        });
-        return;
-      }
-
       switch (msg.type) {
         case "message":
           handleMessage(client, msg);
@@ -426,7 +376,6 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
       clearTimeout(authTimeout);
       if (client.pingTimer) clearInterval(client.pingTimer);
       clients.delete(sessionId);
-      unregisterClient(sessionId);
       logInfo("ws client disconnected", { sessionId });
     });
 
