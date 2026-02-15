@@ -1,0 +1,304 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import express from "express";
+import request from "supertest";
+
+// Mock the swarm service
+const mockCreateSwarm = vi.fn();
+const mockAddAgentToSwarm = vi.fn();
+const mockRemoveAgentFromSwarm = vi.fn();
+const mockGetSwarmStatus = vi.fn();
+const mockListSwarms = vi.fn();
+const mockDestroySwarm = vi.fn();
+
+vi.mock("../../src/services/swarm-service.js", () => ({
+  createSwarm: (...args: unknown[]) => mockCreateSwarm(...args),
+  addAgentToSwarm: (...args: unknown[]) => mockAddAgentToSwarm(...args),
+  removeAgentFromSwarm: (...args: unknown[]) => mockRemoveAgentFromSwarm(...args),
+  getSwarmStatus: (...args: unknown[]) => mockGetSwarmStatus(...args),
+  listSwarms: (...args: unknown[]) => mockListSwarms(...args),
+  destroySwarm: (...args: unknown[]) => mockDestroySwarm(...args),
+}));
+
+import { swarmsRouter } from "../../src/routes/swarms.js";
+
+function createTestApp() {
+  const app = express();
+  app.use(express.json());
+  app.use("/api/swarms", swarmsRouter);
+  return app;
+}
+
+describe("swarms routes", () => {
+  let app: express.Express;
+
+  beforeEach(() => {
+    app = createTestApp();
+    vi.clearAllMocks();
+  });
+
+  // ==========================================================================
+  // GET /api/swarms
+  // ==========================================================================
+
+  describe("GET /api/swarms", () => {
+    it("should return empty array when no swarms", async () => {
+      mockListSwarms.mockReturnValue([]);
+
+      const response = await request(app).get("/api/swarms");
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toEqual([]);
+    });
+
+    it("should return list of swarms", async () => {
+      mockListSwarms.mockReturnValue([
+        {
+          id: "swarm-1",
+          projectPath: "/tmp/project",
+          agents: [{ sessionId: "s1", name: "agent-1", branch: "main", status: "working", isCoordinator: false }],
+          createdAt: "2026-02-15T00:00:00Z",
+        },
+      ]);
+
+      const response = await request(app).get("/api/swarms");
+      expect(response.status).toBe(200);
+      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data[0].id).toBe("swarm-1");
+    });
+  });
+
+  // ==========================================================================
+  // GET /api/swarms/:id
+  // ==========================================================================
+
+  describe("GET /api/swarms/:id", () => {
+    it("should return swarm status", async () => {
+      mockGetSwarmStatus.mockReturnValue({
+        id: "swarm-1",
+        projectPath: "/tmp/project",
+        agents: [],
+        createdAt: "2026-02-15T00:00:00Z",
+      });
+
+      const response = await request(app).get("/api/swarms/swarm-1");
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.id).toBe("swarm-1");
+    });
+
+    it("should return 404 for unknown swarm", async () => {
+      mockGetSwarmStatus.mockReturnValue(undefined);
+
+      const response = await request(app).get("/api/swarms/unknown");
+      expect(response.status).toBe(404);
+      expect(response.body.success).toBe(false);
+    });
+  });
+
+  // ==========================================================================
+  // POST /api/swarms
+  // ==========================================================================
+
+  describe("POST /api/swarms", () => {
+    it("should create a new swarm", async () => {
+      mockCreateSwarm.mockResolvedValue({
+        success: true,
+        swarm: {
+          id: "swarm-1",
+          projectPath: "/tmp/project",
+          agents: [{ sessionId: "s1", name: "agent-1", branch: "main", status: "working", isCoordinator: false }],
+          createdAt: "2026-02-15T00:00:00Z",
+        },
+      });
+
+      const response = await request(app)
+        .post("/api/swarms")
+        .send({ projectPath: "/tmp/project", agentCount: 2 });
+
+      expect(response.status).toBe(201);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.id).toBe("swarm-1");
+    });
+
+    it("should return 400 when projectPath is missing", async () => {
+      const response = await request(app)
+        .post("/api/swarms")
+        .send({ agentCount: 2 });
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+    });
+
+    it("should return 400 when agentCount is missing", async () => {
+      const response = await request(app)
+        .post("/api/swarms")
+        .send({ projectPath: "/tmp" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+    });
+
+    it("should return 400 when creation fails", async () => {
+      mockCreateSwarm.mockResolvedValue({
+        success: false,
+        error: "Agent count must be between 1 and 20",
+      });
+
+      const response = await request(app)
+        .post("/api/swarms")
+        .send({ projectPath: "/tmp", agentCount: 2 });
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+    });
+
+    it("should accept optional coordinatorIndex and baseName", async () => {
+      mockCreateSwarm.mockResolvedValue({
+        success: true,
+        swarm: { id: "swarm-1", agents: [] },
+      });
+
+      const response = await request(app)
+        .post("/api/swarms")
+        .send({
+          projectPath: "/tmp",
+          agentCount: 3,
+          coordinatorIndex: 0,
+          baseName: "worker",
+          workspaceType: "worktree",
+        });
+
+      expect(response.status).toBe(201);
+      expect(mockCreateSwarm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          coordinatorIndex: 0,
+          baseName: "worker",
+          workspaceType: "worktree",
+        })
+      );
+    });
+  });
+
+  // ==========================================================================
+  // POST /api/swarms/:id/agents
+  // ==========================================================================
+
+  describe("POST /api/swarms/:id/agents", () => {
+    it("should add an agent to the swarm", async () => {
+      mockAddAgentToSwarm.mockResolvedValue({
+        success: true,
+        agent: { sessionId: "s2", name: "extra", branch: "swarm/swarm-1/extra", status: "working", isCoordinator: false },
+      });
+
+      const response = await request(app)
+        .post("/api/swarms/swarm-1/agents")
+        .send({ name: "extra" });
+
+      expect(response.status).toBe(201);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.name).toBe("extra");
+    });
+
+    it("should add agent without name", async () => {
+      mockAddAgentToSwarm.mockResolvedValue({
+        success: true,
+        agent: { sessionId: "s2", name: "agent-2" },
+      });
+
+      const response = await request(app)
+        .post("/api/swarms/swarm-1/agents")
+        .send({});
+
+      expect(response.status).toBe(201);
+      expect(mockAddAgentToSwarm).toHaveBeenCalledWith("swarm-1", undefined);
+    });
+
+    it("should return 400 when add fails", async () => {
+      mockAddAgentToSwarm.mockResolvedValue({
+        success: false,
+        error: "Swarm not found",
+      });
+
+      const response = await request(app)
+        .post("/api/swarms/nonexistent/agents")
+        .send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+    });
+  });
+
+  // ==========================================================================
+  // DELETE /api/swarms/:id/agents/:sessionId
+  // ==========================================================================
+
+  describe("DELETE /api/swarms/:id/agents/:sessionId", () => {
+    it("should remove agent from swarm", async () => {
+      mockRemoveAgentFromSwarm.mockResolvedValue(true);
+
+      const response = await request(app).delete("/api/swarms/swarm-1/agents/sess-1");
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.removed).toBe(true);
+    });
+
+    it("should pass removeWorktree query param", async () => {
+      mockRemoveAgentFromSwarm.mockResolvedValue(true);
+
+      await request(app).delete("/api/swarms/swarm-1/agents/sess-1?removeWorktree=true");
+
+      expect(mockRemoveAgentFromSwarm).toHaveBeenCalledWith("swarm-1", "sess-1", true);
+    });
+
+    it("should return 404 when agent not found", async () => {
+      mockRemoveAgentFromSwarm.mockResolvedValue(false);
+
+      const response = await request(app).delete("/api/swarms/swarm-1/agents/unknown");
+
+      expect(response.status).toBe(404);
+      expect(response.body.success).toBe(false);
+    });
+  });
+
+  // ==========================================================================
+  // DELETE /api/swarms/:id
+  // ==========================================================================
+
+  describe("DELETE /api/swarms/:id", () => {
+    it("should destroy a swarm", async () => {
+      mockDestroySwarm.mockResolvedValue(true);
+
+      const response = await request(app).delete("/api/swarms/swarm-1");
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.destroyed).toBe(true);
+    });
+
+    it("should pass removeWorktrees=false query param", async () => {
+      mockDestroySwarm.mockResolvedValue(true);
+
+      await request(app).delete("/api/swarms/swarm-1?removeWorktrees=false");
+
+      expect(mockDestroySwarm).toHaveBeenCalledWith("swarm-1", false);
+    });
+
+    it("should default removeWorktrees to true", async () => {
+      mockDestroySwarm.mockResolvedValue(true);
+
+      await request(app).delete("/api/swarms/swarm-1");
+
+      expect(mockDestroySwarm).toHaveBeenCalledWith("swarm-1", true);
+    });
+
+    it("should return 404 when swarm not found", async () => {
+      mockDestroySwarm.mockResolvedValue(false);
+
+      const response = await request(app).delete("/api/swarms/unknown");
+
+      expect(response.status).toBe(404);
+      expect(response.body.success).toBe(false);
+    });
+  });
+});
