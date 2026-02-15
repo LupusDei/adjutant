@@ -232,8 +232,11 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
         let wsURL = buildWebSocketURL()
         let config = URLSessionConfiguration.default
         config.waitsForConnectivity = true
+        config.httpAdditionalHeaders = ["ngrok-skip-browser-warning": "1"]
         session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
-        webSocketTask = session?.webSocketTask(with: wsURL)
+        var request = URLRequest(url: wsURL)
+        request.setValue("1", forHTTPHeaderField: "ngrok-skip-browser-warning")
+        webSocketTask = session?.webSocketTask(with: request)
         webSocketTask?.resume()
         receiveMessage()
     }

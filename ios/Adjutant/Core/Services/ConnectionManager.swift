@@ -112,6 +112,7 @@ final class ConnectionManager: ObservableObject {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 300
+        config.httpAdditionalHeaders = ["ngrok-skip-browser-warning": "1"]
         return URLSession(configuration: config)
     }()
 
@@ -223,6 +224,7 @@ final class ConnectionManager: ObservableObject {
         var request = URLRequest(url: wsURL)
         // Auth via message-based handshake (API key not in URL per security spec)
         request.timeoutInterval = 10
+        request.setValue("1", forHTTPHeaderField: "ngrok-skip-browser-warning")
 
         let task = wsSession.webSocketTask(with: request)
         webSocketTask = task
@@ -468,6 +470,7 @@ final class ConnectionManager: ObservableObject {
         var request = URLRequest(url: sseURL)
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        request.setValue("1", forHTTPHeaderField: "ngrok-skip-browser-warning")
         request.timeoutInterval = 300 // Long-lived connection
 
         if let apiKey = AppState.shared.apiKey, !apiKey.isEmpty {

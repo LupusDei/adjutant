@@ -120,6 +120,7 @@ public final class EventStreamService: ObservableObject {
         var request = URLRequest(url: eventsURL)
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        request.setValue("1", forHTTPHeaderField: "ngrok-skip-browser-warning")
         request.timeoutInterval = 0 // No timeout for streaming
 
         // Gap recovery: send last event ID

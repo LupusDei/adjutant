@@ -94,6 +94,7 @@ public actor APIClient {
 
         // Set headers
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("1", forHTTPHeaderField: "ngrok-skip-browser-warning")
 
         // Add Authorization header if API key is configured
         if let apiKey = configuration.apiKey, !apiKey.isEmpty {
@@ -189,6 +190,7 @@ public actor APIClient {
         if let contentType {
             request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         }
+        request.setValue("1", forHTTPHeaderField: "ngrok-skip-browser-warning")
 
         // Add Authorization header if API key is configured
         if let apiKey = configuration.apiKey, !apiKey.isEmpty {
