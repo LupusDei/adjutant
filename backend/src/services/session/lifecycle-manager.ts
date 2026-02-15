@@ -6,6 +6,9 @@
  */
 
 import { execFile } from "child_process";
+import { cp, rm } from "fs/promises";
+import { join } from "path";
+import { homedir } from "os";
 import {
   createSession,
   getSession,
@@ -35,6 +38,89 @@ function execTmux(args: string[]): Promise<string> {
 }
 
 // ============================================================================
+// Shell Helper
+// ============================================================================
+
+function execCmd(cmd: string, args: string[], cwd?: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, args, { encoding: "utf8", cwd }, (err, stdout, stderr) => {
+      if (err) {
+        reject(new Error((stderr as string)?.trim() || err.message));
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+}
+
+// ============================================================================
+// Workspace Preparation
+// ============================================================================
+
+const WORKSPACES_DIR = join(homedir(), ".adjutant", "workspaces");
+
+/**
+ * Prepare the working directory based on workspace type.
+ *
+ * - "primary": use projectPath as-is
+ * - "worktree": create a git worktree from projectPath
+ * - "copy": shallow-copy the project directory
+ *
+ * Returns the actual working directory path.
+ */
+async function prepareWorkspace(
+  sessionName: string,
+  projectPath: string,
+  workspaceType: WorkspaceType,
+): Promise<string> {
+  if (workspaceType === "primary") {
+    return projectPath;
+  }
+
+  const workDir = join(WORKSPACES_DIR, sessionName);
+
+  if (workspaceType === "worktree") {
+    const ref = (await execCmd("git", ["rev-parse", "HEAD"], projectPath)).trim();
+    await execCmd("git", ["worktree", "add", workDir, ref, "--detach"], projectPath);
+    logInfo("worktree created", { sessionName, workDir, ref });
+    return workDir;
+  }
+
+  if (workspaceType === "copy") {
+    await cp(projectPath, workDir, { recursive: true });
+    logInfo("workspace copied", { sessionName, workDir });
+    return workDir;
+  }
+
+  return projectPath;
+}
+
+/**
+ * Clean up a workspace created by prepareWorkspace.
+ */
+async function cleanupWorkspace(session: ManagedSession): Promise<void> {
+  if (session.workspaceType === "primary") return;
+
+  const workDir = join(WORKSPACES_DIR, session.name);
+
+  try {
+    if (session.workspaceType === "worktree") {
+      await execCmd("git", ["worktree", "remove", workDir, "--force"], session.projectPath);
+      logInfo("worktree removed", { sessionId: session.id, workDir });
+    } else if (session.workspaceType === "copy") {
+      await rm(workDir, { recursive: true, force: true });
+      logInfo("workspace copy removed", { sessionId: session.id, workDir });
+    }
+  } catch (err) {
+    logWarn("workspace cleanup failed (non-fatal)", {
+      sessionId: session.id,
+      workspaceType: session.workspaceType,
+      error: String(err),
+    });
+  }
+}
+
+// ============================================================================
 // Session Creation
 // ============================================================================
 
@@ -56,30 +142,34 @@ export interface LaunchOptions {
  */
 export async function launchSession(opts: LaunchOptions): Promise<ManagedSession> {
   const tmuxName = opts.tmuxSessionName ?? `adj-${opts.name}-${Date.now()}`;
+  const workspaceType = opts.workspaceType ?? "primary";
 
   // Check if tmux session name already taken
   if (await tmuxSessionExists(tmuxName)) {
     throw new Error(`tmux session '${tmuxName}' already exists`);
   }
 
-  // Create tmux session in detached mode
+  // Prepare workspace (worktree, copy, or use primary)
+  const workDir = await prepareWorkspace(opts.name, opts.projectPath, workspaceType);
+
+  // Create tmux session in detached mode, using the prepared workspace
   await execTmux([
     "new-session",
     "-d",
     "-s", tmuxName,
-    "-c", opts.projectPath,
+    "-c", workDir,
   ]);
 
-  logInfo("tmux session created", { tmuxName, projectPath: opts.projectPath });
+  logInfo("tmux session created", { tmuxName, workDir, workspaceType });
 
   // Register in session registry
   const session = createSession({
     name: opts.name,
     tmuxSession: tmuxName,
     tmuxPane: `${tmuxName}:0.0`,
-    projectPath: opts.projectPath,
+    projectPath: workDir,
     mode: opts.mode,
-    workspaceType: opts.workspaceType,
+    workspaceType,
   });
 
   // Optionally launch Claude Code
@@ -196,6 +286,9 @@ export async function killSession(sessionId: string): Promise<void> {
       error: String(err),
     });
   }
+
+  // Clean up workspace (worktree/copy)
+  await cleanupWorkspace(session);
 
   // Remove from registry
   removeSession(sessionId);
