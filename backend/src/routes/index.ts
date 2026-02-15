@@ -12,5 +12,6 @@ export { modeRouter } from "./mode.js";
 export { powerRouter } from "./power.js";
 export { statusRouter } from "./status.js";
 export { tunnelRouter } from "./tunnel.js";
+export { projectsRouter } from "./projects.js";
 export { voiceRouter } from "./voice.js";
 export { sessionsRouter } from "./sessions.js";
