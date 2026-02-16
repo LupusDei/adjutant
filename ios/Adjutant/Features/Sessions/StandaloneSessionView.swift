@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import AdjutantKit
 
 /// Standalone session view for Single Agent mode.
@@ -11,7 +12,10 @@ struct StandaloneSessionView: View {
     var body: some View {
         Group {
             if let session = loader.activeSession, let client = loader.wsClient {
-                SessionChatView(session: session, wsClient: client)
+                VStack(spacing: 0) {
+                    sessionSwitcherBar(current: session)
+                    SessionChatView(session: session, wsClient: client)
+                }
             } else if loader.isLoading {
                 loadingView
             } else {
@@ -21,6 +25,53 @@ struct StandaloneSessionView: View {
         .task {
             await loader.loadIfNeeded()
         }
+        .sheet(isPresented: $loader.showingSessionPicker) {
+            SessionsView { session in
+                loader.switchTo(session)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    // MARK: - Session Switcher Bar
+
+    private func sessionSwitcherBar(current: ManagedSession) -> some View {
+        Button {
+            loader.showingSessionPicker = true
+        } label: {
+            HStack(spacing: CRTTheme.Spacing.sm) {
+                StatusDot(.success, size: 6, pulse: current.status == .working)
+
+                CRTText(current.name.uppercased(), style: .caption, glowIntensity: .subtle, color: theme.primary)
+                    .lineLimit(1)
+
+                Spacer()
+
+                HStack(spacing: CRTTheme.Spacing.xxs) {
+                    Image(systemName: "terminal")
+                        .font(.system(size: 11, weight: .medium))
+                    CRTText(
+                        "SESSIONS (\(loader.sessions.count))",
+                        style: .caption,
+                        glowIntensity: .subtle
+                    )
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                }
+                .foregroundColor(theme.primary)
+            }
+            .padding(.horizontal, CRTTheme.Spacing.md)
+            .padding(.vertical, CRTTheme.Spacing.xs)
+            .background(theme.primary.opacity(0.05))
+            .overlay(
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(theme.primary.opacity(0.2)),
+                alignment: .bottom
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - States
@@ -86,10 +137,25 @@ struct StandaloneSessionView: View {
 private class SessionLoader: ObservableObject {
     @Published var activeSession: ManagedSession?
     @Published var wsClient: WebSocketClient?
+    @Published var sessions: [ManagedSession] = []
+    @Published var showingSessionPicker = false
     @Published var isLoading = true
     @Published var errorMessage: String?
 
     private var loaded = false
+    private var cancellables = Set<AnyCancellable>()
+    private var lastBaseURL: URL?
+
+    init() {
+        // Reconnect when the API base URL changes (e.g. user changes server in settings)
+        AppState.shared.$apiBaseURL
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.reconnectWithNewURL()
+            }
+            .store(in: &cancellables)
+    }
 
     func loadIfNeeded() async {
         guard !loaded else { return }
@@ -102,8 +168,11 @@ private class SessionLoader: ObservableObject {
         errorMessage = nil
 
         do {
-            let sessions = try await AppState.shared.apiClient.getSessions()
-            let active = sessions.first { $0.status != .offline }
+            let allSessions = try await AppState.shared.apiClient.getSessions()
+            sessions = allSessions
+            let active = activeSession.flatMap { current in
+                allSessions.first { $0.id == current.id }
+            } ?? allSessions.first { $0.status != .offline }
 
             if let session = active {
                 // Reuse existing client if still valid, otherwise create new
@@ -128,4 +197,25 @@ private class SessionLoader: ObservableObject {
         isLoading = false
     }
 
+    private func reconnectWithNewURL() {
+        wsClient?.disconnect()
+        wsClient = nil
+        loaded = false
+        Task { await refresh() }
+    }
+
+    func switchTo(_ session: ManagedSession) {
+        showingSessionPicker = false
+        activeSession = session
+
+        // Ensure we have a WS client
+        if wsClient == nil {
+            let client = WebSocketClient(
+                baseURL: AppState.shared.apiBaseURL,
+                apiKey: AppState.shared.apiKey
+            )
+            client.connect()
+            wsClient = client
+        }
+    }
 }

@@ -490,23 +490,29 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
 
         guard !isIntentionalDisconnect else {
             connectionStateSubject.send(.disconnected)
+            isHandlingDisconnect = false
             return
         }
         guard reconnectAttempt < maxReconnectAttempts else {
             connectionStateSubject.send(.disconnected)
+            isHandlingDisconnect = false
             return
         }
 
         reconnectAttempt += 1
         connectionStateSubject.send(.reconnecting(attempt: reconnectAttempt))
 
+        // Clean up old session BEFORE scheduling delayed reconnect.
+        // Mark session as stale so delegate callbacks from invalidation are ignored.
+        let oldSession = session
+        webSocketTask = nil
+        session = nil
+        oldSession?.invalidateAndCancel()
+
         let delay = min(baseReconnectDelay * pow(2.0, Double(reconnectAttempt - 1)), 30.0)
         reconnectTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard !Task.isCancelled else { return }
-            self?.webSocketTask = nil
-            self?.session?.invalidateAndCancel()
-            self?.session = nil
             self?.isHandlingDisconnect = false
             self?.performConnect()
         }
@@ -530,6 +536,8 @@ extension WebSocketClient: URLSessionWebSocketDelegate {
         didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
         reason: Data?
     ) {
+        // Ignore callbacks from stale sessions being invalidated
+        guard session === self.session else { return }
         handleDisconnection()
     }
 
@@ -538,8 +546,8 @@ extension WebSocketClient: URLSessionWebSocketDelegate {
         task: URLSessionTask,
         didCompleteWithError error: (any Error)?
     ) {
-        if error != nil {
-            handleDisconnection()
-        }
+        // Ignore callbacks from stale sessions being invalidated
+        guard error != nil, session === self.session else { return }
+        handleDisconnection()
     }
 }
