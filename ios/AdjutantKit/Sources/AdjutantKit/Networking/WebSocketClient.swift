@@ -83,10 +83,12 @@ public struct WsServerMessage: Decodable, Equatable {
     public let missed: [WsServerMessage]?
     // Session v2 fields
     public let output: String?
+    public let data: String?
     public let buffer: [String]?
     public let status: String?
     public let name: String?
     public let events: [OutputEventDTO]?
+    public let raw: String?
 
     public init(
         type: String,
@@ -112,10 +114,12 @@ public struct WsServerMessage: Decodable, Equatable {
         serverTime: String? = nil,
         missed: [WsServerMessage]? = nil,
         output: String? = nil,
+        data: String? = nil,
         buffer: [String]? = nil,
         status: String? = nil,
         name: String? = nil,
-        events: [OutputEventDTO]? = nil
+        events: [OutputEventDTO]? = nil,
+        raw: String? = nil
     ) {
         self.type = type
         self.id = id
@@ -140,17 +144,18 @@ public struct WsServerMessage: Decodable, Equatable {
         self.serverTime = serverTime
         self.missed = missed
         self.output = output
+        self.data = data
         self.buffer = buffer
         self.status = status
         self.name = name
         self.events = events
+        self.raw = raw
     }
 }
 
 // MARK: - Output Event DTO
 
 /// Flat DTO for structured output events from the backend OutputParser.
-/// Mirrors the backend OutputEvent union type as an optional-field struct for Decodable.
 public struct OutputEventDTO: Decodable, Equatable {
     public let type: String
     public let content: String?
@@ -169,7 +174,7 @@ public struct OutputEventDTO: Decodable, Equatable {
 
 // MARK: - Session Event Types
 
-/// Event emitted when session output arrives
+/// Event emitted when raw session output arrives (terminal view)
 public struct SessionOutputEvent: Equatable {
     public let sessionId: String
     public let output: String
@@ -177,6 +182,17 @@ public struct SessionOutputEvent: Equatable {
     public init(sessionId: String, output: String) {
         self.sessionId = sessionId
         self.output = output
+    }
+}
+
+/// Event emitted when structured output events arrive (chat view)
+public struct SessionEventsEvent: Equatable {
+    public let sessionId: String
+    public let events: [OutputEventDTO]
+
+    public init(sessionId: String, events: [OutputEventDTO]) {
+        self.sessionId = sessionId
+        self.events = events
     }
 }
 
@@ -188,17 +204,6 @@ public struct SessionConnectedEvent: Equatable {
     public init(sessionId: String, buffer: [String]) {
         self.sessionId = sessionId
         self.buffer = buffer
-    }
-}
-
-/// Event emitted when structured output events arrive for a session
-public struct SessionEventsEvent: Equatable {
-    public let sessionId: String
-    public let events: [OutputEventDTO]
-
-    public init(sessionId: String, events: [OutputEventDTO]) {
-        self.sessionId = sessionId
-        self.events = events
     }
 }
 
@@ -333,9 +338,6 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
     // MARK: - Session v2 API
 
     /// Connect to a session to start receiving output.
-    /// - Parameters:
-    ///   - sessionId: The session to connect to.
-    ///   - replay: Whether to replay buffered output from before connection.
     public func sendSessionConnect(sessionId: String, replay: Bool = false) {
         let msg = WsClientMessage(type: "session_connect", sessionId: sessionId, replay: replay)
         send(msg)
@@ -488,7 +490,7 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
             }
 
         case "session_raw":
-            if let sessionId = msg.sessionId, let output = msg.output {
+            if let sessionId = msg.sessionId, let output = msg.data ?? msg.output {
                 sessionOutputSubject.send(SessionOutputEvent(
                     sessionId: sessionId,
                     output: output
@@ -502,6 +504,11 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
                     status: status,
                     name: msg.name
                 ))
+            }
+
+        case "session_ended":
+            if let sessionId = msg.sessionId {
+                sessionDisconnectedSubject.send(sessionId)
             }
 
         default:
