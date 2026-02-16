@@ -167,7 +167,20 @@ export class SessionBridge {
 
     // Start pipe if not already attached
     if (!this.connector.isAttached(sessionId)) {
-      await this.connector.attach(sessionId);
+      const attached = await this.connector.attach(sessionId);
+      if (!attached) {
+        // Pipe failed — check if the tmux session is still alive
+        const alive = await this.lifecycle.isAlive(sessionId);
+        if (!alive) {
+          this.registry.updateStatus(sessionId, "offline");
+          this.registry.removeClient(sessionId, clientId);
+          await this.registry.save();
+          return { success: false, error: "Session is no longer available (tmux pane gone)" };
+        }
+        // Session alive but pipe failed for another reason
+        this.registry.removeClient(sessionId, clientId);
+        return { success: false, error: "Failed to attach output pipe" };
+      }
     }
 
     let buffer: string[] | undefined;
