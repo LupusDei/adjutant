@@ -107,6 +107,7 @@ struct ChatView: View {
                 apiKey: AppState.shared.apiKey
             )
             SessionChatView(session: session, wsClient: wsClient, showDismiss: true)
+                .onAppear { wsClient.connect() }
         }
     }
 

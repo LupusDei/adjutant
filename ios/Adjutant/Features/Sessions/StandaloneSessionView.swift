@@ -95,6 +95,7 @@ struct StandaloneSessionView: View {
                     baseURL: AppState.shared.apiBaseURL,
                     apiKey: AppState.shared.apiKey
                 )
+                client.connect()
                 activeSession = session
                 wsClient = client
             } else {
