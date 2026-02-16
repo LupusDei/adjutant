@@ -48,8 +48,14 @@ export function resetWorkspace(): void {
 
 /**
  * Get the current deployment mode.
+ * Checks ADJUTANT_MODE env var first (set by switchMode()),
+ * then falls back to the workspace provider's mode.
  */
 export function getDeploymentMode(): DeploymentMode {
+  const envMode = process.env["ADJUTANT_MODE"]?.toLowerCase();
+  if (envMode === "gastown" || envMode === "standalone" || envMode === "swarm") {
+    return envMode;
+  }
   return getWorkspace().mode;
 }
 

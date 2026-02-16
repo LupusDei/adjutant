@@ -395,8 +395,11 @@ export function isGasTownEnvironment(): boolean {
  * detect a town at ~/gt or the project root.
  */
 export function isGasTownAvailable(): boolean {
-  // Check GT_TOWN_ROOT env var
-  const gtRoot = process.env["GT_TOWN_ROOT"];
+  // Check GT_TOWN_ROOT env var (expand ~ since dotenv doesn't do shell expansion)
+  let gtRoot = process.env["GT_TOWN_ROOT"];
+  if (gtRoot?.startsWith("~/") && process.env["HOME"]) {
+    gtRoot = join(process.env["HOME"], gtRoot.slice(2));
+  }
   if (gtRoot && existsSync(join(gtRoot, "mayor", "town.json"))) {
     return true;
   }
