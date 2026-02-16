@@ -253,7 +253,7 @@ struct PermissionDialog: View {
                 .foregroundColor(.orange)
 
             // Title
-            CRTText("PERMISSION REQUESTED", style: .subheader, glowIntensity: .high)
+            CRTText("PERMISSION REQUESTED", style: .subheader, glowIntensity: .bright)
 
             // Agent name
             CRTText(sessionName.uppercased(), style: .caption, glowIntensity: .subtle, color: .cyan)
@@ -289,7 +289,7 @@ struct PermissionDialog: View {
                 }
 
                 Button(action: onApprove) {
-                    CRTText("APPROVE", style: .body, glowIntensity: .high, color: .green)
+                    CRTText("APPROVE", style: .body, glowIntensity: .bright, color: .green)
                         .padding(.horizontal, CRTTheme.Spacing.xl)
                         .padding(.vertical, CRTTheme.Spacing.sm)
                         .background(Color.green.opacity(0.15))

@@ -19,7 +19,7 @@ struct SessionRowView: View {
                 // Main content
                 VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxxs) {
                     HStack(spacing: CRTTheme.Spacing.xs) {
-                        CRTText(session.name, style: .body, glowIntensity: isActive ? .strong : .medium)
+                        CRTText(session.name, style: .body, glowIntensity: isActive ? .bright : .medium)
 
                         if isActive {
                             BadgeView("ACTIVE", style: .status(.success))
