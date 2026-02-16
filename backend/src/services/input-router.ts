@@ -176,7 +176,11 @@ export class InputRouter {
 
   private async deliverInput(tmuxPane: string, text: string): Promise<boolean> {
     try {
-      await execTmuxCommand(["send-keys", "-t", tmuxPane, text, "Enter"]);
+      // Strip trailing newlines — we send Enter separately
+      const clean = text.replace(/\n+$/, "");
+      // Use -l for literal text (prevents interpreting spaces/special chars as key names)
+      await execTmuxCommand(["send-keys", "-t", tmuxPane, "-l", clean]);
+      await execTmuxCommand(["send-keys", "-t", tmuxPane, "Enter"]);
       return true;
     } catch (err) {
       logWarn("Failed to deliver input", {

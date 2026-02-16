@@ -6,7 +6,7 @@
  */
 
 import { execFile } from "child_process";
-import { createReadStream, mkdirSync, existsSync, unlinkSync, writeFileSync } from "fs";
+import { mkdirSync, existsSync, unlinkSync, writeFileSync, openSync, readSync, closeSync, statSync, watch, type FSWatcher } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { logInfo, logWarn } from "../utils/index.js";
@@ -24,7 +24,10 @@ interface PipeState {
   sessionId: string;
   pipePath: string;
   active: boolean;
-  abortController?: AbortController;
+  watcher?: FSWatcher;
+  pollTimer?: ReturnType<typeof setInterval>;
+  fd?: number;
+  readOffset: number;
 }
 
 // ============================================================================
@@ -114,6 +117,7 @@ export class SessionConnector {
         sessionId,
         pipePath,
         active: true,
+        readOffset: 0,
       };
       this.pipes.set(sessionId, pipe);
 
@@ -152,7 +156,9 @@ export class SessionConnector {
     }
 
     pipe.active = false;
-    pipe.abortController?.abort();
+    if (pipe.watcher) pipe.watcher.close();
+    if (pipe.pollTimer) clearInterval(pipe.pollTimer);
+    if (pipe.fd !== undefined) { try { closeSync(pipe.fd); } catch {} }
     this.pipes.delete(sessionId);
 
     // Clean up pipe file
@@ -216,18 +222,28 @@ export class SessionConnector {
   // --------------------------------------------------------------------------
 
   private startReading(pipe: PipeState): void {
-    const ac = new AbortController();
-    pipe.abortController = ac;
+    let buffer = "";
 
-    try {
-      const stream = createReadStream(pipe.pipePath, {
-        encoding: "utf8",
-        signal: ac.signal,
-      });
+    const readNewData = () => {
+      if (!pipe.active) return;
 
-      let buffer = "";
+      try {
+        const stat = statSync(pipe.pipePath);
+        if (stat.size <= pipe.readOffset) return;
 
-      stream.on("data", (chunk: string) => {
+        // Open fd on first read, reuse thereafter
+        if (pipe.fd === undefined) {
+          pipe.fd = openSync(pipe.pipePath, "r");
+        }
+
+        const toRead = stat.size - pipe.readOffset;
+        const buf = Buffer.alloc(toRead);
+        const bytesRead = readSync(pipe.fd, buf, 0, toRead, pipe.readOffset);
+        if (bytesRead === 0) return;
+
+        pipe.readOffset += bytesRead;
+        const chunk = buf.toString("utf8", 0, bytesRead);
+
         buffer += chunk;
         const lines = buffer.split("\n");
         // Keep the last incomplete line in the buffer
@@ -236,23 +252,24 @@ export class SessionConnector {
         for (const line of lines) {
           this.emitOutput(pipe.sessionId, line);
         }
-      });
-
-      stream.on("error", (err) => {
-        if ((err as NodeJS.ErrnoException).code === "ABORT_ERR") return;
+      } catch (err) {
+        if (!pipe.active) return;
         logWarn("Pipe read error", {
           sessionId: pipe.sessionId,
           error: String(err),
         });
-      });
+      }
+    };
 
-      stream.on("end", () => {
-        // Flush remaining buffer
-        if (buffer.length > 0) {
-          this.emitOutput(pipe.sessionId, buffer);
-          buffer = "";
-        }
-      });
+    try {
+      // Use fs.watch to get notified when pipe-pane appends data
+      pipe.watcher = watch(pipe.pipePath, () => readNewData());
+
+      // Poll as fallback — fs.watch can miss events on some platforms
+      pipe.pollTimer = setInterval(readNewData, 500);
+
+      // Initial read in case data already exists
+      readNewData();
     } catch (err) {
       logWarn("Failed to start reading pipe", {
         sessionId: pipe.sessionId,
