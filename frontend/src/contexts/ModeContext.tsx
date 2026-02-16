@@ -7,6 +7,7 @@
  */
 
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
+import { getApiKey } from '../services/api';
 
 // ============================================================================
 // Types
@@ -63,6 +64,16 @@ interface ModeApiResponse {
   error?: { code: string; message: string };
 }
 
+/** Build headers with API key auth if configured. */
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = { ...extra };
+  const apiKey = getApiKey();
+  if (apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  }
+  return headers;
+}
+
 export function ModeProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<DeploymentMode>('unknown');
   const [features, setFeatures] = useState<string[]>([]);
@@ -83,10 +94,10 @@ export function ModeProvider({ children }: { children: ReactNode }) {
   // Fetch mode from backend
   const fetchMode = useCallback(async () => {
     try {
-      const response = await fetch('/api/mode');
+      const response = await fetch('/api/mode', { headers: authHeaders() });
       if (!response.ok) {
         // Endpoint doesn't exist - fall back to legacy detection via capabilities
-        const capResponse = await fetch('/api/power/capabilities');
+        const capResponse = await fetch('/api/power/capabilities', { headers: authHeaders() });
         if (capResponse.ok) {
           const capData = await capResponse.json() as { success: boolean; data?: { canControl: boolean; autoStart: boolean } };
           if (capData.success && capData.data) {
@@ -154,7 +165,7 @@ export function ModeProvider({ children }: { children: ReactNode }) {
     try {
       const response = await fetch('/api/mode', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ mode: newMode }),
       });
 
