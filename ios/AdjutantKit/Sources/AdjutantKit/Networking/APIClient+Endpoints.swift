@@ -305,6 +305,38 @@ extension APIClient {
     }
 }
 
+// MARK: - Projects Endpoints
+
+extension APIClient {
+    /// List all registered projects
+    public func getProjects() async throws -> [Project] {
+        try await requestWithEnvelope(.get, path: "/projects")
+    }
+
+    /// Get a single project by ID
+    public func getProject(id: String) async throws -> Project {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        return try await requestWithEnvelope(.get, path: "/projects/\(encodedId)")
+    }
+
+    /// Create a new project (from path, clone URL, or empty)
+    public func createProject(_ request: CreateProjectRequest) async throws -> Project {
+        try await requestWithEnvelope(.post, path: "/projects", body: request)
+    }
+
+    /// Activate a project as the current project
+    public func activateProject(id: String) async throws -> Project {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        return try await requestWithEnvelope(.post, path: "/projects/\(encodedId)/activate")
+    }
+
+    /// Delete a project registration (does not delete files)
+    public func deleteProject(id: String) async throws -> DeleteProjectResponse {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        return try await requestWithEnvelope(.delete, path: "/projects/\(encodedId)")
+    }
+}
+
 // MARK: - Convoys Endpoints
 
 extension APIClient {

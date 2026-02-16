@@ -2,25 +2,42 @@ import Foundation
 import Combine
 import AdjutantKit
 
-/// ViewModel for the Projects List, showing rigs as projects with agent counts.
+/// ViewModel for the Projects List.
+/// Mode-aware: shows rigs in gastown mode, registered projects in standalone/swarm mode.
 @MainActor
 final class ProjectsListViewModel: BaseViewModel {
     // MARK: - Published Properties
 
-    /// All rigs from the status API
+    /// All rigs from the status API (gastown mode)
     @Published private(set) var rigs: [RigStatus] = []
+
+    /// All projects from the projects API (standalone/swarm mode)
+    @Published private(set) var projects: [Project] = []
 
     /// Current search query
     @Published var searchText: String = "" {
         didSet { applyFilters() }
     }
 
-    /// Filtered rigs for display
+    /// Filtered rigs for display (gastown)
     @Published private(set) var filteredRigs: [RigStatus] = []
+
+    /// Filtered projects for display (standalone/swarm)
+    @Published private(set) var filteredProjects: [Project] = []
 
     // MARK: - Dependencies
 
     private let apiClient: APIClient
+
+    /// Current deployment mode
+    var deploymentMode: DeploymentMode {
+        AppState.shared.deploymentMode
+    }
+
+    /// Whether we're in gastown mode (shows rigs)
+    var isGastownMode: Bool {
+        deploymentMode == .gastown
+    }
 
     // MARK: - Initialization
 
@@ -38,6 +55,14 @@ final class ProjectsListViewModel: BaseViewModel {
     // MARK: - Data Loading
 
     override func refresh() async {
+        if isGastownMode {
+            await refreshGastown()
+        } else {
+            await refreshProjects()
+        }
+    }
+
+    private func refreshGastown() async {
         await performAsync(showLoading: rigs.isEmpty) {
             let status = try await self.apiClient.getStatus()
             self.rigs = status.rigs.sorted { $0.name.lowercased() < $1.name.lowercased() }
@@ -45,9 +70,54 @@ final class ProjectsListViewModel: BaseViewModel {
         }
     }
 
+    private func refreshProjects() async {
+        await performAsync(showLoading: projects.isEmpty) {
+            self.projects = try await self.apiClient.getProjects()
+            self.applyFilters()
+        }
+    }
+
+    // MARK: - Project Actions (standalone/swarm)
+
+    /// Create a project from an existing directory path
+    func createFromPath(_ path: String, name: String? = nil) async -> Project? {
+        await performAsync(showLoading: false) {
+            let project = try await self.apiClient.createProject(
+                CreateProjectRequest(path: path, name: name)
+            )
+            await self.refreshProjects()
+            return project
+        }
+    }
+
+    /// Delete a project registration
+    func deleteProject(_ project: Project) async {
+        await performAsyncAction(showLoading: false) {
+            _ = try await self.apiClient.deleteProject(id: project.id)
+            self.projects.removeAll { $0.id == project.id }
+            self.applyFilters()
+        }
+    }
+
+    /// Activate a project
+    func activateProject(_ project: Project) async {
+        await performAsyncAction(showLoading: false) {
+            _ = try await self.apiClient.activateProject(id: project.id)
+            await self.refreshProjects()
+        }
+    }
+
     // MARK: - Filtering
 
     private func applyFilters() {
+        if isGastownMode {
+            applyRigFilters()
+        } else {
+            applyProjectFilters()
+        }
+    }
+
+    private func applyRigFilters() {
         if searchText.isEmpty {
             filteredRigs = rigs
         } else {
@@ -59,12 +129,24 @@ final class ProjectsListViewModel: BaseViewModel {
         }
     }
 
+    private func applyProjectFilters() {
+        if searchText.isEmpty {
+            filteredProjects = projects
+        } else {
+            let query = searchText.lowercased()
+            filteredProjects = projects.filter { project in
+                project.name.lowercased().contains(query) ||
+                project.path.lowercased().contains(query)
+            }
+        }
+    }
+
     /// Clear all filters
     func clearFilters() {
         searchText = ""
     }
 
-    // MARK: - Computed Properties
+    // MARK: - Computed Properties (gastown)
 
     /// Total agent count across all rigs
     var totalAgentCount: Int {
@@ -92,5 +174,41 @@ final class ProjectsListViewModel: BaseViewModel {
         count += rig.crew.filter { $0.running }.count
         count += rig.polecats.filter { $0.running }.count
         return count
+    }
+
+    // MARK: - Computed Properties (standalone/swarm)
+
+    /// Total number of projects
+    var totalProjectCount: Int {
+        projects.count
+    }
+
+    /// Total active sessions across all projects
+    var totalSessionCount: Int {
+        projects.reduce(0) { $0 + $1.sessions.count }
+    }
+
+    /// Subtitle text for the header
+    var headerSubtitle: String {
+        if isGastownMode {
+            return "\(filteredRigs.count) RIGS \u{2022} \(totalAgentCount) AGENTS"
+        } else {
+            return "\(filteredProjects.count) PROJECTS \u{2022} \(totalSessionCount) SESSIONS"
+        }
+    }
+
+    /// Item count for display
+    var itemCount: Int {
+        isGastownMode ? filteredRigs.count : filteredProjects.count
+    }
+
+    /// Whether the list has items
+    var hasItems: Bool {
+        isGastownMode ? !filteredRigs.isEmpty : !filteredProjects.isEmpty
+    }
+
+    /// Whether initial data is empty (not just filtered)
+    var hasNoData: Bool {
+        isGastownMode ? rigs.isEmpty : projects.isEmpty
     }
 }

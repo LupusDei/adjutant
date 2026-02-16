@@ -1,18 +1,26 @@
 import SwiftUI
 import AdjutantKit
 
-/// Top-level view listing all projects (rigs) with agent counts.
-/// Supports search, navigation to project detail, and pull-to-refresh.
+/// Top-level view listing projects.
+/// Mode-aware: shows rigs in gastown mode, registered projects in standalone/swarm mode.
 struct ProjectsListView: View {
     @Environment(\.crtTheme) private var theme
     @StateObject private var viewModel: ProjectsListViewModel
 
-    /// Callback when a rig is selected
+    /// Callback when a rig is selected (gastown mode)
     var onSelectRig: ((RigStatus) -> Void)?
 
-    init(apiClient: APIClient? = nil, onSelectRig: ((RigStatus) -> Void)? = nil) {
+    /// Callback when a project is selected (standalone/swarm mode)
+    var onSelectProject: ((Project) -> Void)?
+
+    init(
+        apiClient: APIClient? = nil,
+        onSelectRig: ((RigStatus) -> Void)? = nil,
+        onSelectProject: ((Project) -> Void)? = nil
+    ) {
         _viewModel = StateObject(wrappedValue: ProjectsListViewModel(apiClient: apiClient))
         self.onSelectRig = onSelectRig
+        self.onSelectProject = onSelectProject
     }
 
     var body: some View {
@@ -42,7 +50,7 @@ struct ProjectsListView: View {
             VStack(alignment: .leading, spacing: 2) {
                 CRTText("PROJECTS", style: .subheader, glowIntensity: .medium)
                 CRTText(
-                    "\(viewModel.filteredRigs.count) RIGS \u{2022} \(viewModel.totalAgentCount) AGENTS",
+                    viewModel.headerSubtitle,
                     style: .caption,
                     glowIntensity: .subtle,
                     color: theme.dim
@@ -123,10 +131,12 @@ struct ProjectsListView: View {
 
     @ViewBuilder
     private var contentView: some View {
-        if viewModel.isLoading && viewModel.rigs.isEmpty {
+        if viewModel.isLoading && viewModel.hasNoData {
             loadingView
-        } else if viewModel.filteredRigs.isEmpty {
+        } else if !viewModel.hasItems {
             emptyView
+        } else if viewModel.isGastownMode {
+            rigList
         } else {
             projectList
         }
@@ -167,15 +177,21 @@ struct ProjectsListView: View {
                 .padding(.top, CRTTheme.Spacing.sm)
             } else {
                 CRTText("NO PROJECTS FOUND", style: .subheader, glowIntensity: .subtle, color: theme.dim)
-                CRTText("No rigs are configured.",
-                        style: .body, glowIntensity: .none, color: theme.dim.opacity(0.6))
+                CRTText(
+                    viewModel.isGastownMode
+                        ? "No rigs are configured."
+                        : "Register a project to get started.",
+                    style: .body, glowIntensity: .none, color: theme.dim.opacity(0.6)
+                )
             }
         }
         .padding(CRTTheme.Spacing.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var projectList: some View {
+    // MARK: - Gastown Rig List
+
+    private var rigList: some View {
         ScrollView {
             LazyVStack(spacing: CRTTheme.Spacing.sm) {
                 ForEach(viewModel.filteredRigs, id: \.name) { rig in
@@ -187,16 +203,7 @@ struct ProjectsListView: View {
                     )
                 }
 
-                // Error banner
-                if let error = viewModel.errorMessage {
-                    ErrorBanner(
-                        message: error,
-                        onRetry: {
-                            Task { await viewModel.refresh() }
-                        },
-                        onDismiss: { viewModel.clearError() }
-                    )
-                }
+                errorBanner
             }
             .padding(.horizontal, CRTTheme.Spacing.md)
             .padding(.vertical, CRTTheme.Spacing.sm)
@@ -205,11 +212,124 @@ struct ProjectsListView: View {
             await viewModel.refresh()
         }
     }
+
+    // MARK: - Standalone/Swarm Project List
+
+    private var projectList: some View {
+        ScrollView {
+            LazyVStack(spacing: CRTTheme.Spacing.sm) {
+                ForEach(viewModel.filteredProjects) { project in
+                    StandaloneProjectRow(
+                        project: project,
+                        onTap: { onSelectProject?(project) }
+                    )
+                }
+
+                errorBanner
+            }
+            .padding(.horizontal, CRTTheme.Spacing.md)
+            .padding(.vertical, CRTTheme.Spacing.sm)
+        }
+        .refreshable {
+            await viewModel.refresh()
+        }
+    }
+
+    @ViewBuilder
+    private var errorBanner: some View {
+        if let error = viewModel.errorMessage {
+            ErrorBanner(
+                message: error,
+                onRetry: {
+                    Task { await viewModel.refresh() }
+                },
+                onDismiss: { viewModel.clearError() }
+            )
+        }
+    }
+}
+
+// MARK: - Standalone Project Row
+
+/// Row view for a standalone/swarm project.
+private struct StandaloneProjectRow: View {
+    @Environment(\.crtTheme) private var theme
+
+    let project: Project
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: CRTTheme.Spacing.sm) {
+                // Project icon
+                Image(systemName: project.active ? "folder.fill" : "folder")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(project.active ? theme.primary : theme.dim)
+                    .frame(width: 28)
+
+                // Main content
+                VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxxs) {
+                    CRTText(project.name.uppercased(), style: .body, glowIntensity: .medium)
+                    CRTText(abbreviatedPath, style: .caption, glowIntensity: .subtle, color: theme.dim)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                // Session count and active badge
+                VStack(alignment: .trailing, spacing: CRTTheme.Spacing.xxxs) {
+                    if !project.sessions.isEmpty {
+                        HStack(spacing: CRTTheme.Spacing.xxs) {
+                            StatusDot(.success, size: 8, pulse: true)
+                            CRTText(
+                                "\(project.sessions.count) SESSIONS",
+                                style: .caption,
+                                glowIntensity: .subtle,
+                                color: theme.primary
+                            )
+                        }
+                    }
+
+                    if project.active {
+                        CRTText("ACTIVE", style: .caption, color: CRTTheme.State.success)
+                    }
+                }
+
+                // Navigation chevron
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(theme.dim)
+            }
+            .padding(.vertical, CRTTheme.Spacing.sm)
+            .padding(.horizontal, CRTTheme.Spacing.md)
+            .background(CRTTheme.Background.panel.opacity(0.3))
+            .overlay(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                    .stroke(
+                        project.active ? theme.primary.opacity(0.3) : theme.primary.opacity(0.2),
+                        lineWidth: 1
+                    )
+            )
+            .cornerRadius(CRTTheme.CornerRadius.sm)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var abbreviatedPath: String {
+        let path = project.path
+        if let homeRange = path.range(of: "/Users/") {
+            let afterUsers = path[homeRange.upperBound...]
+            if let slashIndex = afterUsers.firstIndex(of: "/") {
+                return "~" + String(afterUsers[slashIndex...])
+            }
+        }
+        return path
+    }
 }
 
 // MARK: - Preview
 
-#Preview("ProjectsListView") {
+#Preview("ProjectsListView - Gastown") {
     ProjectsListView { rig in
         print("Selected: \(rig.name)")
     }

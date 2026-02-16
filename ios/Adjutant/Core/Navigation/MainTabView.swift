@@ -117,9 +117,15 @@ private struct TabContent: View {
                 coordinator.navigate(to: .agentDetail(member: member))
             }
         case .projects:
-            ProjectsListView(apiClient: AppState.shared.apiClient) { rig in
-                coordinator.navigate(to: .projectDetail(rig: rig))
-            }
+            ProjectsListView(
+                apiClient: AppState.shared.apiClient,
+                onSelectRig: { rig in
+                    coordinator.navigate(to: .projectDetail(rig: rig))
+                },
+                onSelectProject: { project in
+                    coordinator.navigate(to: .standaloneProjectDetail(project: project))
+                }
+            )
         case .beads:
             BeadsView()
         case .settings:
@@ -140,6 +146,8 @@ private struct TabContent: View {
             BeadDetailView(beadId: id)
         case .projectDetail(let rig):
             ProjectDetailView(rig: rig)
+        case .standaloneProjectDetail(let project):
+            StandaloneProjectDetailView(project: project)
         case .themeSettings, .voiceSettings, .tunnelSettings:
             SettingsView()
         default:

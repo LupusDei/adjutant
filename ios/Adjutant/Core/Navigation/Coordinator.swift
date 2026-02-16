@@ -58,6 +58,7 @@ enum AppRoute: Hashable {
 
     // Project routes
     case projectDetail(rig: RigStatus)
+    case standaloneProjectDetail(project: Project)
 
     // Settings sub-routes
     case themeSettings
