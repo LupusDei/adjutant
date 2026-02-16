@@ -69,9 +69,11 @@ const server = app.listen(PORT, () => {
   initStreamingBridge();
 
   // Initialize Session Bridge v2 (tmux session management)
-  try {
-    getSessionBridge();
-  } catch (err) {
-    logInfo("session bridge init failed (non-fatal)", { error: String(err) });
-  }
+  // init() loads persisted sessions, verifies tmux state, and auto-creates
+  // a Claude Code session if none are alive for the project root.
+  getSessionBridge()
+    .init()
+    .catch((err) => {
+      logInfo("session bridge init failed (non-fatal)", { error: String(err) });
+    });
 });
