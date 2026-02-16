@@ -9,6 +9,17 @@ vi.mock("../../src/services/gastown-workspace.js", () => ({
   resolveTownRoot: vi.fn(() => "/tmp/town"),
 }));
 
+vi.mock("../../src/services/workspace/index.js", () => ({
+  resolveWorkspaceRoot: vi.fn(() => "/tmp/town"),
+  getDeploymentMode: vi.fn(() => "gastown"),
+}));
+
+vi.mock("../../src/services/topology/index.js", () => ({
+  getTopology: () => ({
+    normalizeRole: (role: string) => role as import("../../src/types/index.js").AgentType,
+  }),
+}));
+
 const mockEmit = vi.fn();
 vi.mock("../../src/services/event-bus.js", () => ({
   getEventBus: () => ({ emit: mockEmit }),

@@ -6,7 +6,7 @@
  */
 
 import { collectAgentSnapshot, type AgentRuntimeInfo } from "./agent-data.js";
-import { resolveWorkspaceRoot } from "./workspace/index.js";
+import { resolveWorkspaceRoot, getDeploymentMode } from "./workspace/index.js";
 import { getTopology } from "./topology/index.js";
 import { getEventBus } from "./event-bus.js";
 import type { CrewMember, CrewMemberStatus, AgentType } from "../types/index.js";
@@ -136,6 +136,11 @@ function emitStatusChanges(agents: CrewMember[]): void {
  */
 export async function getAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
   try {
+    // Agents are a Gas Town concept — return empty in standalone/swarm mode
+    if (getDeploymentMode() !== "gastown") {
+      return { success: true, data: [] };
+    }
+
     const townRoot = resolveWorkspaceRoot();
     const { agents } = await collectAgentSnapshot(townRoot);
     const crewMembers = agents.map(transformAgent);

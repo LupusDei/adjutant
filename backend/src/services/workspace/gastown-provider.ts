@@ -186,9 +186,6 @@ export class GasTownProvider implements WorkspaceProvider {
       const beadsPath = resolveBeadsDir(absPath);
       if (scannedBeadsPaths.has(beadsPath)) return;
 
-      // Skip directories without an actual beads database
-      if (!existsSync(join(beadsPath, "beads.db"))) return;
-
       results.push({
         path: beadsPath,
         rig,
