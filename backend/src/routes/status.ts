@@ -2,26 +2,29 @@
  * Status route for the Adjutant API.
  *
  * Endpoints:
- * - GET /api/status - Get current gastown system status
+ * - GET /api/status - Get current system status (mode-aware)
  */
 
 import { Router } from "express";
-import { getStatus } from "../services/power-service.js";
+import { getStatusProvider } from "../services/status/index.js";
 import { success, internalError } from "../utils/responses.js";
 
 export const statusRouter = Router();
 
 /**
  * GET /api/status
- * Returns the current gastown system status including power state,
- * town info, operator info, infrastructure agents, and rig statuses.
+ * Returns the current system status. Uses the appropriate
+ * StatusProvider based on deployment mode:
+ * - gastown: Full infrastructure status with power control
+ * - standalone/swarm: Simple always-on status
  */
 statusRouter.get("/", async (_req, res) => {
-  const result = await getStatus();
+  const provider = getStatusProvider();
+  const result = await provider.getStatus();
 
   if (!result.success) {
     return res.status(500).json(
-      internalError(result.error?.message ?? "Failed to get gastown status")
+      internalError(result.error?.message ?? "Failed to get system status")
     );
   }
 
