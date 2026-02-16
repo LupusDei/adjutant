@@ -90,7 +90,7 @@ const PERMISSION_YN = /(?:yes|no|y\/n|\[Y\/n\]|\(y\/n\))\s*$/;
 // Status indicators
 const THINKING_PATTERN = /(?:thinking|Thinking)\s*\.{0,3}\s*$/;
 const WORKING_PATTERN = /(?:working|processing|generating)\s*\.{0,3}\s*$/i;
-const IDLE_PATTERN = /^\s*>\s*$/; // The idle prompt ">"
+const IDLE_PATTERN = /^\s*[>❯]\s*$/; // The idle prompt ">" or "❯"
 
 // Cost/token patterns
 const COST_PATTERN = /(?:Total\s+)?[Cc]ost:\s*\$?([\d,.]+)/;
@@ -126,10 +126,30 @@ export class OutputParser {
    * Returns zero or more structured events.
    */
   parseLine(line: string): OutputEvent[] {
-    const events: OutputEvent[] = [];
+    // Clean terminal output — may produce multiple sublines from \r splits
+    const cleaned = cleanTerminalOutput(line);
+    if (cleaned === "") return [];
 
-    // Strip ANSI escape codes for pattern matching
-    const clean = stripAnsi(line);
+    // If cleaning produced multiple lines, process each and flush at end
+    const sublines = cleaned.split("\n");
+    if (sublines.length > 1) {
+      const events: OutputEvent[] = [];
+      for (const sub of sublines) {
+        events.push(...this.parseSingleLine(sub));
+      }
+      // Flush any pending state — a complete TUI redraw chunk was received
+      events.push(...this.flushCurrent());
+      return events;
+    }
+
+    return this.parseSingleLine(cleaned);
+  }
+
+  /**
+   * Parse a single cleaned line of output.
+   */
+  private parseSingleLine(clean: string): OutputEvent[] {
+    const events: OutputEvent[] = [];
 
     // Skip empty lines in idle mode
     if (clean.trim() === "" && this.mode === "idle") {
@@ -493,20 +513,58 @@ export class OutputParser {
 }
 
 // ============================================================================
-// ANSI Stripping
+// Terminal Output Cleaning
 // ============================================================================
 
 /**
+ * Clean raw tmux pipe-pane output into parseable text.
+ *
+ * pipe-pane captures VT100 screen rendering data, not a clean text stream.
+ * Claude Code's TUI uses cursor movement for layout:
+ *   - \x1b[nC (cursor forward n) as spacing between words
+ *   - \r (carriage return) within screen redraws
+ *   - \x1b[nA (cursor up) for spinner animation redraws
+ *
+ * This function converts that into clean text the parser can match.
+ */
+export function cleanTerminalOutput(str: string): string {
+  let result = str;
+
+  // 1. Replace cursor-forward (\x1b[nC) with a single space.
+  //    Claude Code's TUI uses this as word spacing.
+  // eslint-disable-next-line no-control-regex
+  result = result.replace(/\x1b\[\d*C/g, " ");
+
+  // 2. Strip all remaining CSI sequences including DEC private modes (\x1b[?...l/h)
+  //    The [?!>] handles private mode prefixes like \x1b[?2026h (kitty keyboard protocol)
+  // eslint-disable-next-line no-control-regex
+  result = result.replace(/\x1b\[[?!>]?[0-9;]*[A-Za-z]/g, "");
+
+  // 3. Strip OSC sequences (title setting, hyperlinks)
+  // eslint-disable-next-line no-control-regex
+  result = result.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "");
+
+  // 4. Strip other ESC sequences (single-char escapes)
+  // eslint-disable-next-line no-control-regex
+  result = result.replace(/\x1b[^[\]]/g, "");
+
+  // 5. Replace \r with \n so we can split into sublines
+  result = result.replace(/\r/g, "\n");
+
+  // 6. Collapse multiple blank lines / trim
+  result = result
+    .split("\n")
+    .map((l) => l.trimEnd())
+    .filter((l) => l.length > 0)
+    .join("\n");
+
+  return result;
+}
+
+/**
  * Strip ANSI escape codes from a string.
- * Handles CSI sequences, OSC sequences, and other common escapes.
+ * Simpler version — replaces cursor-forward with space, strips the rest.
  */
 export function stripAnsi(str: string): string {
-  // ESC[ ... final_byte (CSI sequences: colors, cursor movement, etc.)
-  // ESC] ... ST (OSC sequences: title setting, hyperlinks, etc.)
-  // ESC followed by single character (simple escapes)
-  return str.replace(
-    // eslint-disable-next-line no-control-regex
-    /\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[^[\]]/g,
-    "",
-  );
+  return cleanTerminalOutput(str);
 }

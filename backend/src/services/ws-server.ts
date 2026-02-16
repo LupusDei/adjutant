@@ -298,6 +298,7 @@ function handleAck(client: WsClient, msg: WsClientMessage): void {
 
 async function handleSessionConnect(client: WsClient, msg: WsClientMessage): Promise<void> {
   const { sessionId, replay } = msg;
+  logInfo("handleSessionConnect", { sessionId, replay, clientId: client.sessionId });
   if (!sessionId) {
     send(client, { type: "error", code: "missing_session_id", message: "sessionId required" });
     return;
@@ -306,7 +307,9 @@ async function handleSessionConnect(client: WsClient, msg: WsClientMessage): Pro
   try {
     const { getSessionBridge } = await import("./session-bridge.js");
     const bridge = getSessionBridge();
+    logInfo("session_connect: calling connectClient", { sessionId, sessions: bridge.listSessions().map(s => s.id) });
     const result = await bridge.connectClient(sessionId, client.sessionId, replay ?? false);
+    logInfo("session_connect: connectClient result", { sessionId, success: result.success, error: result.error });
 
     if (result.success) {
       send(client, {

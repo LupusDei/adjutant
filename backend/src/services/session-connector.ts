@@ -11,7 +11,7 @@ import { join, dirname } from "path";
 import { tmpdir } from "os";
 import { logInfo, logWarn } from "../utils/index.js";
 import type { SessionRegistry } from "./session-registry.js";
-import { OutputParser, type OutputEvent } from "./output-parser.js";
+import { OutputParser, cleanTerminalOutput, type OutputEvent } from "./output-parser.js";
 
 // ============================================================================
 // Debug file logger for session pipe output
@@ -23,11 +23,23 @@ const PIPE_LOG_PATH = join(
   "session-pipe.log",
 );
 
+function pipeTrace(msg: string): void {
+  try {
+    const dir = dirname(PIPE_LOG_PATH);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const ts = new Date().toISOString();
+    appendFileSync(PIPE_LOG_PATH, `[${ts}] TRACE ${msg}\n`);
+  } catch {
+    // Never let debug logging break the pipeline
+  }
+}
+
 function pipeLog(sessionId: string, raw: string, events: OutputEvent[]): void {
   try {
     const dir = dirname(PIPE_LOG_PATH);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     const ts = new Date().toISOString();
+    const cleaned = cleanTerminalOutput(raw);
     const evtSummary = events.map((e) => {
       const parts: string[] = [e.type];
       if ("tool" in e) parts.push(`tool=${e.tool}`);
@@ -36,8 +48,14 @@ function pipeLog(sessionId: string, raw: string, events: OutputEvent[]): void {
       if ("message" in e) parts.push(`msg=${(e.message as string).slice(0, 80)}`);
       return `{${parts.join(", ")}}`;
     });
-    const line = `[${ts}] sid=${sessionId} events=${events.length} raw=${JSON.stringify(raw.slice(0, 300))}${evtSummary.length > 0 ? `\n  parsed: [${evtSummary.join(", ")}]` : ""}\n`;
-    appendFileSync(PIPE_LOG_PATH, line);
+    const parts = [`[${ts}] sid=${sessionId} events=${events.length}`];
+    if (cleaned.length > 0) {
+      parts.push(`  clean: ${JSON.stringify(cleaned.slice(0, 300))}`);
+    }
+    if (evtSummary.length > 0) {
+      parts.push(`  parsed: [${evtSummary.join(", ")}]`);
+    }
+    appendFileSync(PIPE_LOG_PATH, parts.join("\n") + "\n");
   } catch {
     // Never let debug logging break the pipeline
   }
@@ -117,18 +135,22 @@ export class SessionConnector {
    * Attach pipe-pane to a session's tmux pane for output capture.
    */
   async attach(sessionId: string): Promise<boolean> {
+    pipeTrace(`attach called sid=${sessionId}`);
     const session = this.registry.get(sessionId);
     if (!session) {
+      pipeTrace(`attach FAIL: session not found sid=${sessionId}`);
       logWarn("Cannot attach: session not found", { sessionId });
       return false;
     }
 
     if (this.pipes.has(sessionId)) {
+      pipeTrace(`attach SKIP: already attached sid=${sessionId}`);
       logWarn("Already attached to session", { sessionId });
       return true;
     }
 
     const pipePath = join(this.pipeDir, `session-${sessionId}.pipe`);
+    pipeTrace(`attach pane=${session.tmuxPane} pipePath=${pipePath}`);
 
     try {
       // Ensure the pipe file exists before pipe-pane starts writing to it.
@@ -146,6 +168,7 @@ export class SessionConnector {
         session.tmuxPane,
         `cat >> ${pipePath}`,
       ]);
+      pipeTrace(`pipe-pane started for pane=${session.tmuxPane}`);
 
       const pipe: PipeState = {
         sessionId,
@@ -274,12 +297,19 @@ export class SessionConnector {
 
   private startReading(pipe: PipeState): void {
     let buffer = "";
+    let pollCount = 0;
+
+    pipeTrace(`startReading sid=${pipe.sessionId} pipePath=${pipe.pipePath}`);
 
     const readNewData = () => {
       if (!pipe.active) return;
 
       try {
         const stat = statSync(pipe.pipePath);
+        // Log every 100th poll (reduce noise)
+        if (pollCount++ % 100 === 0) {
+          pipeTrace(`poll #${pollCount} sid=${pipe.sessionId} fileSize=${stat.size} offset=${pipe.readOffset}`);
+        }
         if (stat.size <= pipe.readOffset) return;
 
         // Open fd on first read, reuse thereafter
@@ -288,6 +318,7 @@ export class SessionConnector {
         }
 
         const toRead = stat.size - pipe.readOffset;
+        pipeTrace(`reading ${toRead} bytes sid=${pipe.sessionId}`);
         const buf = Buffer.alloc(toRead);
         const bytesRead = readSync(pipe.fd, buf, 0, toRead, pipe.readOffset);
         if (bytesRead === 0) return;
@@ -300,11 +331,14 @@ export class SessionConnector {
         // Keep the last incomplete line in the buffer
         buffer = lines.pop() ?? "";
 
+        pipeTrace(`read ${bytesRead} bytes, ${lines.length} lines sid=${pipe.sessionId}`);
+
         for (const line of lines) {
           this.emitOutput(pipe.sessionId, line);
         }
       } catch (err) {
         if (!pipe.active) return;
+        pipeTrace(`read error sid=${pipe.sessionId}: ${String(err)}`);
         logWarn("Pipe read error", {
           sessionId: pipe.sessionId,
           error: String(err),
