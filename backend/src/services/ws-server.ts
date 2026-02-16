@@ -575,6 +575,18 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
       if (client.pingTimer) clearInterval(client.pingTimer);
       clients.delete(sessionId);
       logInfo("ws client disconnected", { sessionId });
+
+      // Clean up any session bridge connections for this client
+      import("./session-bridge.js")
+        .then(({ getSessionBridge }) => {
+          const bridge = getSessionBridge();
+          for (const s of bridge.registry.getAll()) {
+            if (s.connectedClients.has(client.sessionId)) {
+              bridge.disconnectClient(s.id, client.sessionId).catch(() => {});
+            }
+          }
+        })
+        .catch(() => {});
     });
 
     ws.on("error", (err) => {
