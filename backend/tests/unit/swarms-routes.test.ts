@@ -29,6 +29,10 @@ function createTestApp() {
   const app = express();
   app.use(express.json());
   app.use("/api/swarms", swarmsRouter);
+  // Error handler prevents "socket hang up" flakiness in supertest
+  app.use(((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    res.status(500).json({ success: false, error: { message: err.message } });
+  }) as express.ErrorRequestHandler);
   return app;
 }
 
