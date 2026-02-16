@@ -169,14 +169,17 @@ export class LifecycleManager {
   }
 
   /**
-   * Check if a tmux session is alive.
+   * Check if a tmux session is alive (session exists AND target pane is valid).
    */
   async isAlive(sessionId: string): Promise<boolean> {
     const session = this.registry.get(sessionId);
     if (!session) return false;
 
     try {
+      // Verify the session exists
       await execTmuxCommand(["has-session", "-t", session.tmuxSession]);
+      // Verify the target pane is still valid
+      await execTmuxCommand(["display-message", "-t", session.tmuxPane, "-p", ""]);
       return true;
     } catch {
       return false;

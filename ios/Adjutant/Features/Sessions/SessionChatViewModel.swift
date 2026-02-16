@@ -97,9 +97,11 @@ final class SessionChatViewModel: ObservableObject {
 
     private func connectToSession() {
         guard wsClient.connectionStateSubject.value == .connected else {
-            errorMessage = "WebSocket not connected"
+            // Don't set error — the connectionState subscription will
+            // call us again once the WebSocket finishes connecting.
             return
         }
+        errorMessage = nil
         wsClient.sendSessionConnect(sessionId: session.id, replay: true)
     }
 
