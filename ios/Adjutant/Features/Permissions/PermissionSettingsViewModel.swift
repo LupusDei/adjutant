@@ -14,9 +14,7 @@ final class PermissionSettingsViewModel: ObservableObject {
     private let apiClient: APIClient
 
     init(apiClient: APIClient? = nil) {
-        self.apiClient = apiClient ?? APIClient(
-            baseURL: URL(string: "http://localhost:4201/api")!
-        )
+        self.apiClient = apiClient ?? APIClient()
     }
 
     func onAppear() {

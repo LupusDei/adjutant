@@ -27,9 +27,7 @@ final class SwarmViewModel: ObservableObject {
     // MARK: - Init
 
     init(apiClient: APIClient? = nil) {
-        self.apiClient = apiClient ?? APIClient(
-            baseURL: URL(string: "http://localhost:4201/api")!
-        )
+        self.apiClient = apiClient ?? APIClient()
     }
 
     // MARK: - Lifecycle
