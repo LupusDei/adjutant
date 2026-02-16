@@ -14,6 +14,7 @@ vi.mock("../../src/services/transport/index.js", () => ({
 }));
 vi.mock("../../src/services/workspace/gastown-provider.js", () => ({
   isGasTownEnvironment: vi.fn(),
+  isGasTownAvailable: vi.fn(),
 }));
 vi.mock("../../src/services/event-bus.js", () => ({
   getEventBus: vi.fn(() => ({
@@ -28,7 +29,7 @@ import { getModeInfo, switchMode } from "../../src/services/mode-service.js";
 import { getWorkspace, resetWorkspace, getDeploymentMode } from "../../src/services/workspace/index.js";
 import { resetTopology } from "../../src/services/topology/index.js";
 import { resetTransport } from "../../src/services/transport/index.js";
-import { isGasTownEnvironment } from "../../src/services/workspace/gastown-provider.js";
+import { isGasTownEnvironment, isGasTownAvailable } from "../../src/services/workspace/gastown-provider.js";
 import { getEventBus } from "../../src/services/event-bus.js";
 import type { DeploymentMode } from "../../src/services/workspace/index.js";
 
@@ -54,7 +55,7 @@ describe("mode transitions", () => {
     vi.mocked(getDeploymentMode)
       .mockReturnValueOnce(from) // initial check in switchMode
       .mockReturnValue(to); // after switch, for getModeInfo
-    vi.mocked(isGasTownEnvironment).mockReturnValue(gtAvailable);
+    vi.mocked(isGasTownAvailable).mockReturnValue(gtAvailable);
     vi.mocked(getWorkspace).mockReturnValue({} as ReturnType<typeof getWorkspace>);
     vi.mocked(getEventBus).mockReturnValue({ emit: mockEmit } as unknown as ReturnType<typeof getEventBus>);
     return { mockEmit };
@@ -202,7 +203,7 @@ describe("mode transitions", () => {
 
     it("should not emit mode:changed on no-op switch", () => {
       vi.mocked(getDeploymentMode).mockReturnValue("standalone");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(false);
       const mockEmit = vi.fn();
       vi.mocked(getEventBus).mockReturnValue({ emit: mockEmit } as unknown as ReturnType<typeof getEventBus>);
 
@@ -268,7 +269,7 @@ describe("mode transitions", () => {
       for (const mode of ["gastown", "standalone", "swarm"] as DeploymentMode[]) {
         vi.clearAllMocks();
         vi.mocked(getDeploymentMode).mockReturnValue(mode);
-        vi.mocked(isGasTownEnvironment).mockReturnValue(true);
+        vi.mocked(isGasTownAvailable).mockReturnValue(true);
 
         const info = getModeInfo();
 
@@ -281,7 +282,7 @@ describe("mode transitions", () => {
 
     it("should block gastown transition when GT infrastructure is missing", () => {
       vi.mocked(getDeploymentMode).mockReturnValue("standalone");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       const result = switchMode("gastown");
 
@@ -295,7 +296,7 @@ describe("mode transitions", () => {
 
     it("should block gastown transition from swarm when GT infrastructure is missing", () => {
       vi.mocked(getDeploymentMode).mockReturnValue("swarm");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       const result = switchMode("gastown");
 
@@ -305,7 +306,7 @@ describe("mode transitions", () => {
 
     it("should include reason when gastown is unavailable", () => {
       vi.mocked(getDeploymentMode).mockReturnValue("standalone");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       const info = getModeInfo();
 
@@ -343,7 +344,7 @@ describe("mode transitions", () => {
     it("should not modify ADJUTANT_MODE on failed transition", () => {
       process.env["ADJUTANT_MODE"] = "standalone";
       vi.mocked(getDeploymentMode).mockReturnValue("standalone");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       switchMode("gastown"); // fails - GT not available
 
@@ -353,7 +354,7 @@ describe("mode transitions", () => {
     it("should not modify ADJUTANT_MODE on no-op transition", () => {
       process.env["ADJUTANT_MODE"] = "standalone";
       vi.mocked(getDeploymentMode).mockReturnValue("standalone");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       switchMode("standalone"); // no-op
 

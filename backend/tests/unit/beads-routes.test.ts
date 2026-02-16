@@ -7,6 +7,7 @@ vi.mock("../../src/services/beads-service.js", () => ({
   listBeads: vi.fn(),
   listAllBeads: vi.fn(),
   getBead: vi.fn(),
+  listBeadSources: vi.fn(),
 }));
 
 vi.mock("../../src/services/gastown-workspace.js", () => ({
@@ -15,7 +16,7 @@ vi.mock("../../src/services/gastown-workspace.js", () => ({
 }));
 
 import { beadsRouter } from "../../src/routes/beads.js";
-import { listBeads, listAllBeads, getBead } from "../../src/services/beads-service.js";
+import { listBeads, listAllBeads, getBead, listBeadSources } from "../../src/services/beads-service.js";
 import type { BeadInfo, BeadDetail } from "../../src/services/beads-service.js";
 
 /**
@@ -386,6 +387,92 @@ describe("beads routes", () => {
       expect(response.body.data.id).toBe("adj-67tta");
       expect(response.body.data.source).toBe("adjutant");
       expect(getBead).toHaveBeenCalledWith("adj-67tta");
+    });
+  });
+
+  describe("GET /api/beads/sources", () => {
+    it("should return sources and mode", async () => {
+      vi.mocked(listBeadSources).mockResolvedValue({
+        success: true,
+        data: {
+          sources: [
+            { name: "ottodom", path: "/tmp/projects/ottodom", hasBeads: true },
+            { name: "l2rr2l", path: "/tmp/projects/l2rr2l", hasBeads: true },
+          ],
+          mode: "standalone",
+        },
+      });
+
+      const response = await request(app).get("/api/beads/sources");
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.sources).toHaveLength(2);
+      expect(response.body.data.sources[0].name).toBe("ottodom");
+      expect(response.body.data.sources[1].name).toBe("l2rr2l");
+      expect(response.body.data.mode).toBe("standalone");
+    });
+
+    it("should return empty sources when no beads dirs found", async () => {
+      vi.mocked(listBeadSources).mockResolvedValue({
+        success: true,
+        data: {
+          sources: [],
+          mode: "standalone",
+        },
+      });
+
+      const response = await request(app).get("/api/beads/sources");
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.sources).toEqual([]);
+    });
+
+    it("should return gastown mode with rig names", async () => {
+      vi.mocked(listBeadSources).mockResolvedValue({
+        success: true,
+        data: {
+          sources: [
+            { name: "adjutant", path: "/tmp/town/adjutant", hasBeads: true },
+            { name: "gastown_boy", path: "/tmp/town/gastown_boy", hasBeads: true },
+          ],
+          mode: "gastown",
+        },
+      });
+
+      const response = await request(app).get("/api/beads/sources");
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.mode).toBe("gastown");
+      expect(response.body.data.sources).toHaveLength(2);
+    });
+
+    it("should return 500 on service error", async () => {
+      vi.mocked(listBeadSources).mockResolvedValue({
+        success: false,
+        error: { code: "SOURCES_ERROR", message: "Discovery failed" },
+      });
+
+      const response = await request(app).get("/api/beads/sources");
+
+      expect(response.status).toBe(500);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error.message).toBe("Discovery failed");
+    });
+
+    it("should not conflict with GET /api/beads/:id route", async () => {
+      // Ensure "sources" is handled as the /sources route, not as a bead ID
+      vi.mocked(listBeadSources).mockResolvedValue({
+        success: true,
+        data: { sources: [], mode: "standalone" },
+      });
+
+      const response = await request(app).get("/api/beads/sources");
+
+      expect(response.status).toBe(200);
+      expect(listBeadSources).toHaveBeenCalled();
+      expect(getBead).not.toHaveBeenCalled();
     });
   });
 });

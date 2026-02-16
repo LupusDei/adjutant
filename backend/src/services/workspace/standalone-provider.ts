@@ -10,7 +10,7 @@
  * - Testing/development without Gas Town
  */
 
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, readdirSync } from "fs";
 import { readFile } from "fs/promises";
 import { join, resolve, basename } from "path";
 import type {
@@ -105,7 +105,7 @@ export class StandaloneProvider implements WorkspaceProvider {
   async listBeadsDirs(): Promise<BeadsDirInfo[]> {
     const results: BeadsDirInfo[] = [];
 
-    // Only include the local .beads/ directory if it exists
+    // Include the project root's .beads/ directory if it exists
     const beadsPath = resolveBeadsDir(this.projectRoot);
     if (existsSync(join(this.projectRoot, ".beads"))) {
       results.push({
@@ -113,6 +113,29 @@ export class StandaloneProvider implements WorkspaceProvider {
         rig: null,
         workDir: this.projectRoot,
       });
+    }
+
+    // Scan immediate children for sub-projects with .beads/beads.db
+    const skipDirs = new Set(["node_modules", ".git"]);
+    try {
+      const entries = readdirSync(this.projectRoot, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (skipDirs.has(entry.name) || entry.name.startsWith(".")) continue;
+
+        const childDir = join(this.projectRoot, entry.name);
+        const childBeadsDb = join(childDir, ".beads", "beads.db");
+        if (existsSync(childBeadsDb)) {
+          const childBeadsPath = resolveBeadsDir(childDir);
+          results.push({
+            path: childBeadsPath,
+            rig: entry.name,
+            workDir: childDir,
+          });
+        }
+      }
+    } catch {
+      // If readdir fails (permissions, etc.), just return what we have
     }
 
     return results;
@@ -147,12 +170,30 @@ export class StandaloneProvider implements WorkspaceProvider {
   }
 
   async listRigNames(): Promise<string[]> {
-    // No rigs in standalone mode
-    return [];
+    const skipDirs = new Set(["node_modules", ".git"]);
+    const names: string[] = [];
+    try {
+      const entries = readdirSync(this.projectRoot, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (skipDirs.has(entry.name) || entry.name.startsWith(".")) continue;
+
+        const childBeadsDb = join(this.projectRoot, entry.name, ".beads", "beads.db");
+        if (existsSync(childBeadsDb)) {
+          names.push(entry.name);
+        }
+      }
+    } catch {
+      // If readdir fails, return empty
+    }
+    return names;
   }
 
-  resolveRigPath(_rigName: string): string | null {
-    // No rigs in standalone mode
+  resolveRigPath(rigName: string): string | null {
+    const rigPath = join(this.projectRoot, rigName);
+    if (existsSync(join(rigPath, ".beads"))) {
+      return rigPath;
+    }
     return null;
   }
 }

@@ -22,6 +22,7 @@ vi.mock("../../src/services/transport/index.js", () => ({
 }));
 vi.mock("../../src/services/workspace/gastown-provider.js", () => ({
   isGasTownEnvironment: vi.fn(),
+  isGasTownAvailable: vi.fn(),
 }));
 vi.mock("../../src/services/event-bus.js", () => ({
   getEventBus: vi.fn(() => ({
@@ -37,7 +38,7 @@ import {
   getWorkspace,
   getDeploymentMode,
 } from "../../src/services/workspace/index.js";
-import { isGasTownEnvironment } from "../../src/services/workspace/gastown-provider.js";
+import { isGasTownEnvironment, isGasTownAvailable } from "../../src/services/workspace/gastown-provider.js";
 import { getEventBus } from "../../src/services/event-bus.js";
 import type { DeploymentMode } from "../../src/services/workspace/index.js";
 
@@ -95,7 +96,7 @@ describe("cross-platform consistency", () => {
       "should return correct features for %s mode (iOS and Frontend derive tabs from these)",
       (mode) => {
         vi.mocked(getDeploymentMode).mockReturnValue(mode);
-        vi.mocked(isGasTownEnvironment).mockReturnValue(mode === "gastown");
+        vi.mocked(isGasTownAvailable).mockReturnValue(mode === "gastown");
 
         const info = getModeInfo();
 
@@ -106,7 +107,7 @@ describe("cross-platform consistency", () => {
 
     it("gastown mode should include features that map to all 7 tabs", () => {
       vi.mocked(getDeploymentMode).mockReturnValue("gastown");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(true);
+      vi.mocked(isGasTownAvailable).mockReturnValue(true);
 
       const info = getModeInfo();
 
@@ -119,7 +120,7 @@ describe("cross-platform consistency", () => {
 
     it("standalone mode should NOT include dashboard, mail, epics, or crew features", () => {
       vi.mocked(getDeploymentMode).mockReturnValue("standalone");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       const info = getModeInfo();
 
@@ -132,7 +133,7 @@ describe("cross-platform consistency", () => {
 
     it("swarm mode should include crew_flat but NOT dashboard or epics", () => {
       vi.mocked(getDeploymentMode).mockReturnValue("swarm");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       const info = getModeInfo();
 
@@ -153,7 +154,7 @@ describe("cross-platform consistency", () => {
       vi.mocked(getDeploymentMode)
         .mockReturnValueOnce("gastown")
         .mockReturnValue("standalone");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(true);
+      vi.mocked(isGasTownAvailable).mockReturnValue(true);
       vi.mocked(getWorkspace).mockReturnValue(
         {} as ReturnType<typeof getWorkspace>
       );
@@ -176,7 +177,7 @@ describe("cross-platform consistency", () => {
       vi.mocked(getDeploymentMode)
         .mockReturnValueOnce("standalone")
         .mockReturnValue("swarm");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(false);
       vi.mocked(getWorkspace).mockReturnValue(
         {} as ReturnType<typeof getWorkspace>
       );
@@ -195,7 +196,7 @@ describe("cross-platform consistency", () => {
 
     it("should NOT emit mode_changed when switching to the same mode", () => {
       vi.mocked(getDeploymentMode).mockReturnValue("standalone");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       const mockEmit = vi.fn();
       vi.mocked(getEventBus).mockReturnValue({
@@ -215,7 +216,7 @@ describe("cross-platform consistency", () => {
   describe("mode API response matches client expectations", () => {
     it("response should have mode, features, and availableModes fields", () => {
       vi.mocked(getDeploymentMode).mockReturnValue("gastown");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(true);
+      vi.mocked(isGasTownAvailable).mockReturnValue(true);
 
       const info = getModeInfo();
 
@@ -230,7 +231,7 @@ describe("cross-platform consistency", () => {
 
     it("availableModes should have mode, available, and optional reason fields", () => {
       vi.mocked(getDeploymentMode).mockReturnValue("standalone");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       const info = getModeInfo();
 
@@ -247,7 +248,7 @@ describe("cross-platform consistency", () => {
 
     it("availableModes should always include all three modes", () => {
       vi.mocked(getDeploymentMode).mockReturnValue("standalone");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       const info = getModeInfo();
 
@@ -265,7 +266,7 @@ describe("cross-platform consistency", () => {
   describe("mode identifier consistency", () => {
     it('should use "gastown" (not "gas_town" or "GT") as the mode identifier', () => {
       vi.mocked(getDeploymentMode).mockReturnValue("gastown");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(true);
+      vi.mocked(isGasTownAvailable).mockReturnValue(true);
 
       const info = getModeInfo();
       expect(info.mode).toBe("gastown");
@@ -273,7 +274,7 @@ describe("cross-platform consistency", () => {
 
     it('should use "standalone" (not "single_agent" or "single") as the mode identifier', () => {
       vi.mocked(getDeploymentMode).mockReturnValue("standalone");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       const info = getModeInfo();
       expect(info.mode).toBe("standalone");
@@ -281,7 +282,7 @@ describe("cross-platform consistency", () => {
 
     it('should use "swarm" as the mode identifier', () => {
       vi.mocked(getDeploymentMode).mockReturnValue("swarm");
-      vi.mocked(isGasTownEnvironment).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       const info = getModeInfo();
       expect(info.mode).toBe("swarm");

@@ -6,7 +6,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { execBd, resolveBeadsDir, type BeadsIssue } from "./bd-client.js";
-import { listAllBeadsDirs, resolveWorkspaceRoot } from "./workspace/index.js";
+import { listAllBeadsDirs, resolveWorkspaceRoot, getDeploymentMode } from "./workspace/index.js";
 import { getEventBus } from "./event-bus.js";
 import { logInfo } from "../utils/index.js";
 
@@ -725,6 +725,51 @@ export async function getBead(
       error: {
         code: "GET_BEAD_ERROR",
         message: err instanceof Error ? err.message : "Failed to get bead",
+      },
+    };
+  }
+}
+
+// ============================================================================
+// Bead Sources
+// ============================================================================
+
+/**
+ * A bead source represents a project/rig directory that contains beads.
+ */
+export interface BeadSource {
+  /** Display name (rig name or "project") */
+  name: string;
+  /** Absolute path to the working directory */
+  path: string;
+  /** Whether this directory has beads */
+  hasBeads: boolean;
+}
+
+/**
+ * Lists all available bead sources (projects/rigs with beads databases).
+ * Used by the frontend to populate filter dropdowns in any deployment mode.
+ */
+export async function listBeadSources(): Promise<
+  BeadsServiceResult<{ sources: BeadSource[]; mode: string }>
+> {
+  try {
+    const beadsDirs = await listAllBeadsDirs();
+    const mode = getDeploymentMode();
+
+    const sources: BeadSource[] = beadsDirs.map((dirInfo) => ({
+      name: dirInfo.rig ?? "project",
+      path: dirInfo.workDir,
+      hasBeads: true,
+    }));
+
+    return { success: true, data: { sources, mode } };
+  } catch (err) {
+    return {
+      success: false,
+      error: {
+        code: "SOURCES_ERROR",
+        message: err instanceof Error ? err.message : "Failed to list bead sources",
       },
     };
   }

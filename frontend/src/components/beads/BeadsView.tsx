@@ -43,7 +43,7 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
   const { isGasTown } = useMode();
   const [searchInput, setSearchInput] = useState('');
   const [rigFilter, setRigFilter] = useState<RigFilter>(() => {
-    return localStorage.getItem('beads-rig-filter') ?? 'TOWN';
+    return localStorage.getItem('beads-rig-filter') ?? (isGasTown ? 'TOWN' : 'ALL');
   });
   const [rigOptions, setRigOptions] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<BeadSort>(() => {
@@ -53,12 +53,12 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
   const [beads, setBeads] = useState<BeadInfo[]>([]);
   const [selectedBeadId, setSelectedBeadId] = useState<string | null>(null);
 
-  // Fetch rig options on mount from status endpoint
+  // Fetch bead sources on mount for filter options
   useEffect(() => {
-    void api.getStatus().then((status) => {
-      if (status.rigs && status.rigs.length > 0) {
-        const rigNames = status.rigs.map((r) => r.name).sort();
-        setRigOptions(rigNames);
+    void api.beads.sources().then((result) => {
+      if (result.sources && result.sources.length > 0) {
+        const names = result.sources.map((s) => s.name).sort();
+        setRigOptions(names);
       }
     }).catch(() => {
       // Silently ignore - dropdown will just show ALL/TOWN
@@ -270,17 +270,17 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
             )}
           </div>
 
-          {/* Rig Filter - only in GT mode (multi-rig) */}
-          {isGasTown && (
+          {/* Source Filter */}
+          {(isGasTown || rigOptions.length > 0) && (
             <>
-              <span style={styles.filterLabel}>RIG:</span>
+              <span style={styles.filterLabel}>{isGasTown ? 'RIG:' : 'SOURCE:'}</span>
               <select
                 value={rigFilter}
                 onChange={(e) => setRigFilter(e.target.value as RigFilter)}
                 style={styles.select}
               >
-                <option value="ALL">ALL RIGS</option>
-                <option value="TOWN">TOWN</option>
+                <option value="ALL">{isGasTown ? 'ALL RIGS' : 'ALL'}</option>
+                {isGasTown && <option value="TOWN">TOWN</option>}
                 {rigOptions.map((rig) => (
                   <option key={rig} value={rig}>
                     {rig.toUpperCase().replace(/_/g, ' ')}

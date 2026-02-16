@@ -3,6 +3,7 @@ import { OverseerToggle } from '../shared/OverseerToggle';
 import { EpicsList, type EpicSortOption } from './EpicsList';
 import { EpicDetailView } from './EpicDetailView';
 import { api } from '../../services/api';
+import { useMode } from '../../contexts/ModeContext';
 
 export interface EpicsViewProps {
   /** Whether this tab is currently active */
@@ -13,6 +14,7 @@ export interface EpicsViewProps {
 type RigFilter = 'ALL' | string;
 
 export function EpicsView({ isActive = true }: EpicsViewProps) {
+  const { isGasTown } = useMode();
   const [sortBy, setSortBy] = useState<EpicSortOption>('ACTIVITY');
   const [selectedEpicId, setSelectedEpicId] = useState<string | null>(null);
   const [overseerView, setOverseerView] = useState(false);
@@ -21,12 +23,12 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
   });
   const [rigOptions, setRigOptions] = useState<string[]>([]);
 
-  // Fetch rig options on mount from status endpoint
+  // Fetch bead sources on mount for filter options
   useEffect(() => {
-    void api.getStatus().then((status) => {
-      if (status.rigs && status.rigs.length > 0) {
-        const rigNames = status.rigs.map((r) => r.name).sort();
-        setRigOptions(rigNames);
+    void api.beads.sources().then((result) => {
+      if (result.sources && result.sources.length > 0) {
+        const names = result.sources.map((s) => s.name).sort();
+        setRigOptions(names);
       }
     }).catch(() => {
       // Silently ignore - dropdown will just show ALL
@@ -68,14 +70,14 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
             onChange={handleOverseerToggle}
           />
 
-          {/* Rig Filter */}
-          <span style={styles.filterLabel}>RIG:</span>
+          {/* Source Filter */}
+          <span style={styles.filterLabel}>{isGasTown ? 'RIG:' : 'SOURCE:'}</span>
           <select
             value={rigFilter}
             onChange={(e) => setRigFilter(e.target.value as RigFilter)}
             style={styles.select}
           >
-            <option value="ALL">ALL RIGS</option>
+            <option value="ALL">{isGasTown ? 'ALL RIGS' : 'ALL'}</option>
             {rigOptions.map((rig) => (
               <option key={rig} value={rig}>
                 {rig.toUpperCase().replace(/_/g, ' ')}

@@ -8,7 +8,7 @@
 import { getWorkspace, resetWorkspace, getDeploymentMode, type DeploymentMode } from "./workspace/index.js";
 import { resetTopology } from "./topology/index.js";
 import { resetTransport } from "./transport/index.js";
-import { isGasTownEnvironment } from "./workspace/gastown-provider.js";
+import { isGasTownEnvironment, isGasTownAvailable } from "./workspace/gastown-provider.js";
 import { getEventBus } from "./event-bus.js";
 import { logInfo } from "../utils/index.js";
 
@@ -80,7 +80,7 @@ const MODE_FEATURES: Record<DeploymentMode, string[]> = {
  */
 export function getModeInfo(): ModeInfo {
   const currentMode = getDeploymentMode();
-  const gtAvailable = isGasTownEnvironment();
+  const gtAvailable = isGasTownAvailable();
 
   return {
     mode: currentMode,
@@ -119,7 +119,7 @@ export function switchMode(newMode: DeploymentMode): ModeServiceResult<ModeInfo>
   }
 
   // Validate transition
-  if (newMode === "gastown" && !isGasTownEnvironment()) {
+  if (newMode === "gastown" && !isGasTownAvailable()) {
     return {
       success: false,
       error: {

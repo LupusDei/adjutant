@@ -1,17 +1,16 @@
 #!/bin/bash
-# Start Adjutant dev servers + ngrok with optional GT directory
+# Start Adjutant dev servers + ngrok
 #
 # Usage:
-#   ./scripts/dev.sh [GT_DIR]
-#   npm run dev [-- GT_DIR]
+#   ./scripts/dev.sh [--gt-root <path>]
+#   npm run dev [-- --gt-root <path>]
 #
-# Arguments:
-#   GT_DIR  Path to gastown town directory (default: ~/gt)
+# Options:
+#   --gt-root <path>  Path to Gas Town directory (enables mode switching)
 #
 # Examples:
-#   npm run dev                    # Uses ~/gt + ngrok (if installed)
-#   npm run dev -- /path/to/town   # Uses custom path + ngrok
-#   npm run dev -- ~/my-gastown    # Uses ~/my-gastown + ngrok
+#   npm run dev                        # Standalone mode in CWD
+#   npm run dev -- --gt-root ~/gt      # Standalone + Gas Town available
 
 set -e
 
@@ -22,35 +21,45 @@ fi
 
 # Colors
 YELLOW='\033[1;33m'
+GREEN='\033[1;32m'
+BLUE='\033[1;34m'
 NC='\033[0m'
 
-# Get GT directory from GT_TOWN_ROOT env var, argument, or default to ~/gt
-if [ -n "$GT_TOWN_ROOT" ]; then
-    GT_DIR="$GT_TOWN_ROOT"
-    echo "Using GT directory from GT_TOWN_ROOT: $GT_DIR"
-else
-    GT_DIR="${1:-$HOME/gt}"
-    echo "Using GT directory from argument: $GT_DIR"
-fi
+# Project root is always CWD
+export ADJUTANT_PROJECT_ROOT="$PWD"
+echo -e "${GREEN}Project root: $ADJUTANT_PROJECT_ROOT${NC}"
 
+# Parse --gt-root option
+GT_ROOT=""
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --gt-root)
+            GT_ROOT="$2"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+# Set GT_TOWN_ROOT only if --gt-root was provided
+if [ -n "$GT_ROOT" ]; then
     # Expand tilde if present
-    GT_DIR="${GT_DIR/#\~/$HOME}"
+    GT_ROOT="${GT_ROOT/#\~/$HOME}"
 
-# Validate directory exists
-if [ ! -d "$GT_DIR" ]; then
-    echo "Error: GT directory does not exist: $GT_DIR"
-    echo "Usage: npm run dev [-- /path/to/gt]"
-    exit 1
+    if [ ! -d "$GT_ROOT" ]; then
+        echo "Error: Gas Town directory does not exist: $GT_ROOT"
+        exit 1
+    fi
+
+    export GT_TOWN_ROOT="$GT_ROOT"
+    if [ -f "$GT_ROOT/mayor/town.json" ]; then
+        echo -e "${BLUE}Gas Town: $GT_ROOT${NC}"
+    else
+        echo -e "${BLUE}Gas Town: $GT_ROOT (no mayor/town.json)${NC}"
+    fi
 fi
-
-# Check for town.json marker
-if [ ! -f "$GT_DIR/mayor/town.json" ]; then
-    echo "Warning: $GT_DIR does not appear to be a gastown town (missing mayor/town.json)"
-    echo "Continuing anyway..."
-fi
-
-# Export GT_TOWN_ROOT
-export GT_TOWN_ROOT="$GT_DIR"
 
 # Auto-install dependencies if missing
 if [ ! -d "node_modules" ] || [ ! -d "backend/node_modules" ] || [ ! -d "frontend/node_modules" ]; then
@@ -63,7 +72,7 @@ fi
 
 # Check if ngrok is installed
 if command -v ngrok &> /dev/null; then
-    echo "Starting Adjutant with GT_TOWN_ROOT=$GT_DIR + ngrok tunnel"
+    echo -e "${GREEN}Starting Adjutant + ngrok tunnel${NC}"
     echo ""
     npx concurrently -n backend,frontend,ngrok -c blue,green,magenta \
         "cd backend && npm run dev" \
@@ -73,7 +82,7 @@ else
     echo -e "${YELLOW}ngrok not installed - starting without remote access${NC}"
     echo "To enable remote access: brew install ngrok && ngrok config add-authtoken <token>"
     echo ""
-    echo "Starting Adjutant with GT_TOWN_ROOT=$GT_DIR"
+    echo -e "${GREEN}Starting Adjutant${NC}"
     echo ""
     npx concurrently -n backend,frontend -c blue,green \
         "cd backend && npm run dev" \

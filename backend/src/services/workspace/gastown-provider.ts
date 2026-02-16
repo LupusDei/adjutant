@@ -367,25 +367,53 @@ export class GasTownProvider implements WorkspaceProvider {
 }
 
 /**
- * Check if the current environment looks like a Gas Town deployment.
+ * Check if the current environment is actively in Gas Town mode.
+ *
+ * Returns true only if:
+ * - ADJUTANT_MODE=gastown is explicitly set, OR
+ * - The project root itself has mayor/town.json (i.e. we're inside a town)
+ *
+ * The presence of GT_TOWN_ROOT alone means Gas Town is *available*,
+ * not that we're currently *in* Gas Town mode.
  */
 export function isGasTownEnvironment(): boolean {
+  // Explicit mode override
+  if (process.env["ADJUTANT_MODE"] === "gastown") {
+    return true;
+  }
+
+  // Check if the project root itself is a Gas Town
+  const projectRoot = process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd();
+  if (existsSync(join(projectRoot, "mayor", "town.json"))) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Check if Gas Town is available for switching (but not necessarily active).
+ *
+ * Returns true if GT_TOWN_ROOT points to a valid town, or if we can
+ * detect a town at ~/gt or the project root.
+ */
+export function isGasTownAvailable(): boolean {
+  // Check GT_TOWN_ROOT env var
+  const gtRoot = process.env["GT_TOWN_ROOT"];
+  if (gtRoot && existsSync(join(gtRoot, "mayor", "town.json"))) {
+    return true;
+  }
+
+  // Check if project root is a town
+  const projectRoot = process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd();
+  if (existsSync(join(projectRoot, "mayor", "town.json"))) {
+    return true;
+  }
+
+  // Check ~/gt
   const home = process.env["HOME"];
   const homeGt = home ? join(home, "gt") : null;
-
-  // Check env var
-  if (process.env["GT_TOWN_ROOT"]) {
-    return true;
-  }
-
-  // Check ~/gt/mayor/town.json
   if (homeGt && existsSync(join(homeGt, "mayor", "town.json"))) {
-    return true;
-  }
-
-  // Check from CWD
-  const detected = findTownRoot(process.cwd());
-  if (detected && existsSync(join(detected, "mayor", "town.json"))) {
     return true;
   }
 

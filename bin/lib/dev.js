@@ -1,11 +1,11 @@
 import { spawn } from 'child_process';
 import { existsSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { homedir } from 'os';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { checkNgrok } from './tunnel.js';
-import { resolveGtDir } from './utils.js';
+import { expandHome } from './utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -23,25 +23,23 @@ const COLORS = {
  * Start the development servers
  */
 export async function startDev(options) {
-  const { gtDir, tunnel, port, apiPort } = options;
+  const { gtRoot, tunnel, port, apiPort } = options;
 
-  // Resolve GT directory
-  const resolvedGtDir = resolveGtDir(gtDir);
+  // Project root is always CWD
+  const projectRoot = process.cwd();
+  process.env.ADJUTANT_PROJECT_ROOT = projectRoot;
+  console.log(`${COLORS.green}Project root: ${projectRoot}${COLORS.reset}`);
 
-  // Validate directory exists
-  if (!existsSync(resolvedGtDir)) {
-    throw new Error(`GT directory does not exist: ${resolvedGtDir}\nUsage: adjutant [path-to-gt]`);
+  // Gas Town root is optional — only set if explicitly provided
+  if (gtRoot) {
+    const resolvedGtRoot = expandHome(gtRoot);
+    if (!existsSync(resolvedGtRoot)) {
+      throw new Error(`Gas Town directory does not exist: ${resolvedGtRoot}`);
+    }
+    process.env.GT_TOWN_ROOT = resolvedGtRoot;
+    const hasTown = existsSync(join(resolvedGtRoot, 'mayor', 'town.json'));
+    console.log(`${COLORS.blue}Gas Town: ${resolvedGtRoot}${hasTown ? '' : ' (no mayor/town.json)'}${COLORS.reset}`);
   }
-
-  // Check for town.json marker
-  const townJsonPath = join(resolvedGtDir, 'mayor', 'town.json');
-  if (!existsSync(townJsonPath)) {
-    console.log(`${COLORS.yellow}Warning: ${resolvedGtDir} does not appear to be a gastown town (missing mayor/town.json)${COLORS.reset}`);
-    console.log('Continuing anyway...\n');
-  }
-
-  // Set environment
-  process.env.GT_TOWN_ROOT = resolvedGtDir;
 
   // Check if ngrok is available
   const ngrokAvailable = tunnel && (await checkNgrok());
@@ -67,7 +65,7 @@ export async function startDev(options) {
   }
 
   const modeText = tunnel && ngrokAvailable ? ' + ngrok tunnel' : '';
-  console.log(`${COLORS.green}Starting Adjutant with GT_TOWN_ROOT=${resolvedGtDir}${modeText}${COLORS.reset}\n`);
+  console.log(`${COLORS.green}Starting Adjutant${modeText}${COLORS.reset}\n`);
 
   // Start all processes
   const processes = commands.map(({ name, command, args, cwd }) => {
@@ -119,18 +117,24 @@ export async function startDev(options) {
   process.on('SIGINT', cleanup);
   process.on('SIGTERM', cleanup);
 
-  // Wait for any process to exit
-  await Promise.race(
-    processes.map(
-      ({ name, proc }) =>
-        new Promise((resolve) => {
-          proc.on('exit', (code) => {
-            console.log(`[${name}] exited with code ${code}`);
-            resolve({ name, code });
-          });
-        })
-    )
-  );
+  // Track process exits — only shut down if a core process (backend/frontend) dies
+  const coreProcesses = new Set(['backend', 'frontend']);
+
+  await new Promise((resolve) => {
+    for (const { name, proc } of processes) {
+      proc.on('exit', (code) => {
+        if (coreProcesses.has(name)) {
+          console.log(`[${name}] exited with code ${code}`);
+          resolve({ name, code });
+        } else {
+          // Non-core process (ngrok) — log but don't kill everything
+          if (code !== 0) {
+            console.log(`${COLORS.yellow}[${name}] exited with code ${code} (non-fatal)${COLORS.reset}`);
+          }
+        }
+      });
+    }
+  });
 
   // Kill remaining processes
   cleanup();

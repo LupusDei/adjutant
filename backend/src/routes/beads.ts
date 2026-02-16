@@ -8,7 +8,7 @@
  */
 
 import { Router } from "express";
-import { listBeads, listAllBeads, updateBeadStatus, getBead, type BeadStatus } from "../services/beads-service.js";
+import { listBeads, listAllBeads, updateBeadStatus, getBead, listBeadSources, type BeadStatus } from "../services/beads-service.js";
 import { resolveRigPath } from "../services/workspace/index.js";
 import { success, internalError, badRequest } from "../utils/responses.js";
 
@@ -83,6 +83,23 @@ beadsRouter.get("/", async (req, res) => {
   if (!result.success) {
     return res.status(500).json(
       internalError(result.error?.message ?? "Failed to list beads")
+    );
+  }
+
+  return res.json(success(result.data));
+});
+
+/**
+ * GET /api/beads/sources
+ * Returns available bead sources (projects/rigs) and current deployment mode.
+ * Used by the frontend to populate filter dropdowns.
+ */
+beadsRouter.get("/sources", async (_req, res) => {
+  const result = await listBeadSources();
+
+  if (!result.success) {
+    return res.status(500).json(
+      internalError(result.error?.message ?? "Failed to list bead sources")
     );
   }
 

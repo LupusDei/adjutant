@@ -14,16 +14,16 @@ const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8
 
 program
   .name('adjutant')
-  .description('Retro terminal UI for Gastown multi-agent orchestration')
+  .description('Terminal UI for project management and multi-agent orchestration')
   .version(pkg.version)
-  .argument('[gt-dir]', 'Path to Gastown town directory', '~/gt')
+  .option('--gt-root <path>', 'Path to Gas Town directory (enables Gas Town mode switching)')
   .option('--no-tunnel', 'Disable ngrok tunnel')
   .option('--port <port>', 'Frontend port', '4200')
   .option('--api-port <port>', 'Backend API port', '4201')
-  .action(async (gtDir, options) => {
+  .action(async (options) => {
     try {
       await startDev({
-        gtDir,
+        gtRoot: options.gtRoot,
         tunnel: options.tunnel,
         port: parseInt(options.port, 10),
         apiPort: parseInt(options.apiPort, 10),

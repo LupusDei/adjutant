@@ -315,6 +315,14 @@ export const api = {
         body: { status },
       });
     },
+
+    /**
+     * Get available bead sources (projects/rigs) and deployment mode.
+     * Used to populate filter dropdowns in any deployment mode.
+     */
+    async sources(): Promise<{ sources: Array<{ name: string; path: string; hasBeads: boolean }>; mode: string }> {
+      return apiFetch('/beads/sources');
+    },
   },
 
   /**
