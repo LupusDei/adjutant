@@ -56,6 +56,7 @@ export class SessionBridge {
   readonly inputRouter: InputRouter;
   readonly lifecycle: LifecycleManager;
   private initialized = false;
+  private initPromise: Promise<void> | null = null;
 
   constructor(config?: SessionBridgeConfig) {
     this.registry = config?.persistencePath
@@ -71,6 +72,12 @@ export class SessionBridge {
    */
   async init(): Promise<void> {
     if (this.initialized) return;
+    if (this.initPromise) return this.initPromise;
+    this.initPromise = this._init();
+    return this.initPromise;
+  }
+
+  private async _init(): Promise<void> {
 
     const loaded = await this.registry.load();
     logInfo("SessionBridge initializing", { loadedSessions: loaded });
@@ -93,9 +100,10 @@ export class SessionBridge {
       this.registry.remove(id);
     }
     if (deadIds.length > 0) {
-      await this.registry.save();
       logInfo("Pruned dead sessions", { count: deadIds.length, ids: deadIds });
     }
+    // Always save after verification — persists auto-healed pane references
+    await this.registry.save();
 
     // Auto-create a session if none are alive for the project root
     const projectRoot = process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd();
@@ -154,6 +162,11 @@ export class SessionBridge {
     clientId: string,
     replay = false
   ): Promise<{ success: boolean; buffer?: string[]; error?: string }> {
+    // Wait for init to finish (handles race where WS connects before init completes)
+    if (this.initPromise) {
+      await this.initPromise;
+    }
+
     const session = this.registry.get(sessionId);
     if (!session) {
       return { success: false, error: "Session not found" };
@@ -167,9 +180,9 @@ export class SessionBridge {
 
     // Start pipe if not already attached
     if (!this.connector.isAttached(sessionId)) {
-      const attached = await this.connector.attach(sessionId);
+      let attached = await this.connector.attach(sessionId);
       if (!attached) {
-        // Pipe failed — check if the tmux session is still alive
+        // Pipe failed — check if the tmux session is alive (isAlive auto-heals stale pane refs)
         const alive = await this.lifecycle.isAlive(sessionId);
         if (!alive) {
           this.registry.updateStatus(sessionId, "offline");
@@ -177,9 +190,13 @@ export class SessionBridge {
           await this.registry.save();
           return { success: false, error: "Session is no longer available (tmux pane gone)" };
         }
-        // Session alive but pipe failed for another reason
-        this.registry.removeClient(sessionId, clientId);
-        return { success: false, error: "Failed to attach output pipe" };
+        // isAlive auto-healed the pane reference — retry attach with corrected pane
+        await this.registry.save();
+        attached = await this.connector.attach(sessionId);
+        if (!attached) {
+          this.registry.removeClient(sessionId, clientId);
+          return { success: false, error: "Failed to attach output pipe" };
+        }
       }
     }
 
