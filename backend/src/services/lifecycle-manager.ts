@@ -7,7 +7,7 @@
 
 import { execFile } from "child_process";
 import { logInfo, logWarn } from "../utils/index.js";
-import type { SessionRegistry, SessionMode, WorkspaceType } from "./session-registry.js";
+import type { SessionRegistry, ManagedSession, SessionMode, WorkspaceType } from "./session-registry.js";
 
 // ============================================================================
 // Types
@@ -170,18 +170,43 @@ export class LifecycleManager {
 
   /**
    * Check if a tmux session is alive (session exists AND target pane is valid).
+   * If the registered pane is stale but the session has other panes, auto-heal
+   * by updating the registry to the first available pane.
    */
   async isAlive(sessionId: string): Promise<boolean> {
     const session = this.registry.get(sessionId);
     if (!session) return false;
 
     try {
-      // Verify the session exists
       await execTmuxCommand(["has-session", "-t", session.tmuxSession]);
-      // Verify the target pane is still valid
+    } catch {
+      return false;
+    }
+
+    // Check if the registered pane is still valid
+    try {
       await execTmuxCommand(["display-message", "-t", session.tmuxPane, "-p", ""]);
       return true;
     } catch {
+      // Pane is gone — try to find the first available pane in the session
+      try {
+        const paneList = await execTmuxCommand([
+          "list-panes", "-t", session.tmuxSession, "-F", "#{session_name}:#{window_index}.#{pane_index}",
+        ]);
+        const firstPane = paneList.trim().split("\n")[0];
+        if (firstPane) {
+          // Auto-heal: update the registry with the correct pane
+          logInfo("Auto-healed stale pane reference", {
+            sessionId,
+            oldPane: session.tmuxPane,
+            newPane: firstPane,
+          });
+          session.tmuxPane = firstPane;
+          return true;
+        }
+      } catch {
+        // No panes at all
+      }
       return false;
     }
   }
