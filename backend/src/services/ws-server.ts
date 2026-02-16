@@ -323,6 +323,7 @@ async function handleSessionConnect(client: WsClient, msg: WsClientMessage): Pro
         if (sid === sessionId && client.authenticated) {
           // Structured events for chat view
           if (events.length > 0) {
+            logInfo("ws sending session_output", { sessionId: sid, eventCount: events.length, types: events.map(e => e.type) });
             send(client, {
               type: "session_output",
               sessionId: sid,

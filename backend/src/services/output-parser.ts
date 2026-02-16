@@ -20,6 +20,7 @@
 
 export type OutputEvent =
   | { type: "message"; content: string }
+  | { type: "user_input"; content: string }
   | { type: "tool_use"; tool: string; input: Record<string, unknown> }
   | { type: "tool_result"; tool: string; output: string; truncated?: boolean }
   | { type: "status"; state: "thinking" | "working" | "idle" }
@@ -92,6 +93,17 @@ const THINKING_PATTERN = /(?:thinking|Thinking)\s*\.{0,3}\s*$/;
 const WORKING_PATTERN = /(?:working|processing|generating)\s*\.{0,3}\s*$/i;
 const IDLE_PATTERN = /^\s*[>❯]\s*$/; // The idle prompt ">" or "❯"
 
+// Claude Code TUI spinner characters (used during thinking/working)
+const SPINNER_CHARS = new Set(["✳", "✶", "✻", "✽", "✢", "·", "⊹", "⋆", "∗"]);
+
+// Claude Code thinking status phrases (shown with spinner during processing)
+const THINKING_STATUS = /^(?:Baking|Nucleating|Misting|Pollinating|Fermenting|Distilling|Brewing|Steeping|Crystallizing|Simmering|Composting|Germinating|Weaving|Forging|Tempering)…?\.{0,3}$/;
+
+// TUI chrome to filter out
+const SEPARATOR_LINE = /^[─━═╌╍┈┉┄┅]{4,}$/; // horizontal separator lines
+const SHELL_PROMPT = /^\s*~?\/?[\w/.-]*\s+\d+%?\s*❯/; // shell prompt like "~/code/ai 87% ❯❯❯"
+const UI_CHROME = /^\s*⏵⏵?\s/; // UI navigation hints like "⏵⏵ bypass permissions"
+
 // Cost/token patterns
 const COST_PATTERN = /(?:Total\s+)?[Cc]ost:\s*\$?([\d,.]+)/;
 const TOKENS_PATTERN =
@@ -103,6 +115,9 @@ const CACHE_WRITE_TOKENS = /cache[\s_-]?write(?:\s+tokens)?:\s*([\d,]+)/i;
 
 // Agent message: starts with ⏺ but doesn't match a tool pattern
 const AGENT_BULLET = /^⏺\s+/;
+
+// User input: starts with ❯ (from capture-pane clean text)
+const USER_INPUT = /^❯\s+/;
 
 // Error patterns
 const ERROR_PATTERN = /^(?:Error|ERROR|✗|✘|error\[):\s*(.+)/;
@@ -150,9 +165,59 @@ export class OutputParser {
    */
   private parseSingleLine(clean: string): OutputEvent[] {
     const events: OutputEvent[] = [];
+    const trimmed = clean.trim();
 
     // Skip empty lines in idle mode
-    if (clean.trim() === "" && this.mode === "idle") {
+    if (trimmed === "" && this.mode === "idle") {
+      return events;
+    }
+
+    // ── TUI noise filtering ──────────────────────────────────────────────
+    // Filter out Claude Code TUI chrome that isn't meaningful content
+
+    // Separator lines (────────)
+    if (SEPARATOR_LINE.test(trimmed)) {
+      return events;
+    }
+
+    // Shell prompt lines (~/code/ai 87% ❯❯❯ ...)
+    if (SHELL_PROMPT.test(trimmed)) {
+      return events;
+    }
+
+    // UI chrome (⏵⏵ bypass permissions...)
+    if (UI_CHROME.test(trimmed)) {
+      return events;
+    }
+
+    // Solo spinner character (just a spinner frame, no content)
+    if (SPINNER_CHARS.has(trimmed)) {
+      return events;
+    }
+
+    // Spinner + thinking status ("✳ Baking…", "· Nucleating…")
+    // Strip spinner prefix first, then check for status phrase
+    const withoutSpinner = trimmed.replace(/^[✳✶✻✽✢·⊹⋆∗]\s*/, "");
+    if (THINKING_STATUS.test(withoutSpinner)) {
+      // Emit as thinking status, don't accumulate as message
+      events.push(...this.flushCurrent());
+      events.push({ type: "status", state: "thinking" });
+      return events;
+    }
+
+    // Partial streaming frames: very short lines (< 4 chars) that aren't
+    // meaningful on their own (TUI redraws per-token during streaming)
+    if (trimmed.length < 4 && !AGENT_BULLET.test(trimmed) && this.mode === "idle") {
+      return events;
+    }
+
+    // ── End noise filtering ──────────────────────────────────────────────
+
+    // User input line (❯ prompt from capture-pane)
+    if (USER_INPUT.test(trimmed)) {
+      events.push(...this.flushCurrent());
+      events.push({ type: "user_input", content: trimmed.replace(USER_INPUT, "") });
+      this.mode = "idle";
       return events;
     }
 

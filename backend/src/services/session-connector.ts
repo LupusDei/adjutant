@@ -11,7 +11,7 @@ import { join, dirname } from "path";
 import { tmpdir } from "os";
 import { logInfo, logWarn } from "../utils/index.js";
 import type { SessionRegistry } from "./session-registry.js";
-import { OutputParser, cleanTerminalOutput, type OutputEvent } from "./output-parser.js";
+import { OutputParser, type OutputEvent } from "./output-parser.js";
 
 // ============================================================================
 // Debug file logger for session pipe output
@@ -34,32 +34,7 @@ function pipeTrace(msg: string): void {
   }
 }
 
-function pipeLog(sessionId: string, raw: string, events: OutputEvent[]): void {
-  try {
-    const dir = dirname(PIPE_LOG_PATH);
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    const ts = new Date().toISOString();
-    const cleaned = cleanTerminalOutput(raw);
-    const evtSummary = events.map((e) => {
-      const parts: string[] = [e.type];
-      if ("tool" in e) parts.push(`tool=${e.tool}`);
-      if ("content" in e) parts.push(`content=${(e.content as string).slice(0, 80)}`);
-      if ("state" in e) parts.push(`state=${e.state}`);
-      if ("message" in e) parts.push(`msg=${(e.message as string).slice(0, 80)}`);
-      return `{${parts.join(", ")}}`;
-    });
-    const parts = [`[${ts}] sid=${sessionId} events=${events.length}`];
-    if (cleaned.length > 0) {
-      parts.push(`  clean: ${JSON.stringify(cleaned.slice(0, 300))}`);
-    }
-    if (evtSummary.length > 0) {
-      parts.push(`  parsed: [${evtSummary.join(", ")}]`);
-    }
-    appendFileSync(PIPE_LOG_PATH, parts.join("\n") + "\n");
-  } catch {
-    // Never let debug logging break the pipeline
-  }
-}
+// pipeLog removed — structured events now come from capture-pane polling
 
 // ============================================================================
 // Types
@@ -77,6 +52,9 @@ interface PipeState {
   active: boolean;
   watcher?: FSWatcher;
   pollTimer?: ReturnType<typeof setInterval>;
+  capturePollTimer?: ReturnType<typeof setInterval>;
+  lastCapture: string;          // last capture-pane snapshot for diffing
+  lastCaptureLines: string[];   // split lines of last capture
   fd?: number;
   readOffset: number;
 }
@@ -175,6 +153,8 @@ export class SessionConnector {
         pipePath,
         active: true,
         readOffset: 0,
+        lastCapture: "",
+        lastCaptureLines: [],
       };
       this.pipes.set(sessionId, pipe);
       this.parsers.set(sessionId, new OutputParser());
@@ -232,6 +212,7 @@ export class SessionConnector {
     pipe.active = false;
     if (pipe.watcher) pipe.watcher.close();
     if (pipe.pollTimer) clearInterval(pipe.pollTimer);
+    if (pipe.capturePollTimer) clearInterval(pipe.capturePollTimer);
     if (pipe.fd !== undefined) { try { closeSync(pipe.fd); } catch {} }
     this.pipes.delete(sessionId);
 
@@ -297,28 +278,22 @@ export class SessionConnector {
 
   private startReading(pipe: PipeState): void {
     let buffer = "";
-    let pollCount = 0;
 
     pipeTrace(`startReading sid=${pipe.sessionId} pipePath=${pipe.pipePath}`);
 
+    // ── Raw pipe-pane reading (feeds session_raw for terminal view) ──────
     const readNewData = () => {
       if (!pipe.active) return;
 
       try {
         const stat = statSync(pipe.pipePath);
-        // Log every 100th poll (reduce noise)
-        if (pollCount++ % 100 === 0) {
-          pipeTrace(`poll #${pollCount} sid=${pipe.sessionId} fileSize=${stat.size} offset=${pipe.readOffset}`);
-        }
         if (stat.size <= pipe.readOffset) return;
 
-        // Open fd on first read, reuse thereafter
         if (pipe.fd === undefined) {
           pipe.fd = openSync(pipe.pipePath, "r");
         }
 
         const toRead = stat.size - pipe.readOffset;
-        pipeTrace(`reading ${toRead} bytes sid=${pipe.sessionId}`);
         const buf = Buffer.alloc(toRead);
         const bytesRead = readSync(pipe.fd, buf, 0, toRead, pipe.readOffset);
         if (bytesRead === 0) return;
@@ -328,17 +303,14 @@ export class SessionConnector {
 
         buffer += chunk;
         const lines = buffer.split("\n");
-        // Keep the last incomplete line in the buffer
         buffer = lines.pop() ?? "";
 
-        pipeTrace(`read ${bytesRead} bytes, ${lines.length} lines sid=${pipe.sessionId}`);
-
         for (const line of lines) {
-          this.emitOutput(pipe.sessionId, line);
+          // Raw output — no parsing, just broadcast for terminal view
+          this.emitRawOutput(pipe.sessionId, line);
         }
       } catch (err) {
         if (!pipe.active) return;
-        pipeTrace(`read error sid=${pipe.sessionId}: ${String(err)}`);
         logWarn("Pipe read error", {
           sessionId: pipe.sessionId,
           error: String(err),
@@ -347,13 +319,8 @@ export class SessionConnector {
     };
 
     try {
-      // Use fs.watch to get notified when pipe-pane appends data
       pipe.watcher = watch(pipe.pipePath, () => readNewData());
-
-      // Poll as fallback — fs.watch can miss events on some platforms
       pipe.pollTimer = setInterval(readNewData, 500);
-
-      // Initial read in case data already exists
       readNewData();
     } catch (err) {
       logWarn("Failed to start reading pipe", {
@@ -361,23 +328,151 @@ export class SessionConnector {
         error: String(err),
       });
     }
+
+    // ── Capture-pane polling (feeds session_output for chat view) ────────
+    this.startCapturePoll(pipe);
   }
 
-  private emitOutput(sessionId: string, line: string): void {
-    // Store in registry's output buffer
+  /**
+   * Poll `tmux capture-pane -p` to get clean rendered text.
+   * Diff against last snapshot, parse new content into events.
+   */
+  private startCapturePoll(pipe: PipeState): void {
+    const session = this.registry.get(pipe.sessionId);
+    if (!session) return;
+
+    const tmuxPane = session.tmuxPane;
+    pipeTrace(`startCapturePoll sid=${pipe.sessionId} pane=${tmuxPane}`);
+
+    // Take initial snapshot
+    execTmuxCommand(["capture-pane", "-t", tmuxPane, "-p", "-S", "-500"])
+      .then((output) => {
+        pipe.lastCapture = output;
+        pipe.lastCaptureLines = output.split("\n");
+        pipeTrace(`initial capture: ${pipe.lastCaptureLines.length} lines`);
+      })
+      .catch(() => {});
+
+    // Poll every 1.5 seconds
+    pipe.capturePollTimer = setInterval(async () => {
+      if (!pipe.active) return;
+
+      try {
+        const output = await execTmuxCommand([
+          "capture-pane", "-t", tmuxPane, "-p", "-S", "-500",
+        ]);
+
+        const newLines = output.split("\n");
+        const events = this.diffAndParse(pipe, newLines);
+
+        pipe.lastCapture = output;
+        pipe.lastCaptureLines = newLines;
+
+        if (events.length > 0) {
+          pipeTrace(`capture-poll: ${events.length} events from diff`);
+          for (const evt of events) {
+            pipeTrace(`  EVENT: ${JSON.stringify(evt).slice(0, 200)}`);
+          }
+          // Emit events with empty raw line (events-only delivery)
+          for (const handler of this.outputHandlers) {
+            try {
+              handler(pipe.sessionId, "", events);
+            } catch (err) {
+              logWarn("Output handler error (capture)", { error: String(err) });
+            }
+          }
+        }
+      } catch {
+        // tmux pane might be gone
+      }
+    }, 1500);
+  }
+
+  /**
+   * Diff new capture lines against last snapshot and parse new content.
+   * Only parses lines in the conversation area (between ──── separators).
+   */
+  private diffAndParse(pipe: PipeState, newLines: string[]): OutputEvent[] {
+    const parser = this.parsers.get(pipe.sessionId);
+    if (!parser) return [];
+
+    // Extract conversation content between separator lines
+    const oldContent = this.extractConversation(pipe.lastCaptureLines);
+    const newContent = this.extractConversation(newLines);
+
+    // Find new lines that weren't in the previous capture
+    const oldSet = new Set(oldContent);
+    const added: string[] = [];
+    for (const line of newContent) {
+      if (!oldSet.has(line)) {
+        added.push(line);
+      }
+    }
+
+    if (added.length === 0) return [];
+
+    // Reset parser for a fresh parse of the new content
+    parser.reset();
+    const events: OutputEvent[] = [];
+    for (const line of added) {
+      events.push(...parser.parseLine(line));
+    }
+    events.push(...parser.flush());
+
+    return events;
+  }
+
+  /**
+   * Extract conversation lines from a capture-pane snapshot.
+   *
+   * In Claude Code's TUI:
+   *   ❯ user input
+   *   ⏺ agent message (or tool use)
+   *     indented continuation lines
+   *
+   * We collect ❯/⏺ lines and their indented continuations.
+   * Everything else (separators, shell prompt, banner, spinner) is skipped.
+   */
+  private extractConversation(lines: string[]): string[] {
+    const SEP = /^[─━═]{10,}/;
+    const CHROME = /^\s*(~?\/?[\w/.-]*\s+\d*%?\s*❯❯|⏵⏵|Update available|You've used|▐▛|▝▜|▘▘)/;
+    const result: string[] = [];
+    let inConversation = false;
+
+    for (const line of lines) {
+      const trimmed = line.trimEnd();
+
+      // Skip empty lines, separators, and TUI chrome
+      if (trimmed.length === 0) continue;
+      if (SEP.test(trimmed)) continue;
+      if (CHROME.test(trimmed)) continue;
+
+      // Conversation lines: ❯ (user), ⏺ (agent), or indented continuation
+      if (/^[❯⏺]/.test(trimmed)) {
+        inConversation = true;
+        result.push(trimmed);
+      } else if (inConversation && /^\s{2,}/.test(line)) {
+        // Indented continuation line (agent multi-line response)
+        result.push(trimmed);
+      } else {
+        // Something else — not conversation (banner, startup text, etc.)
+        inConversation = false;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Emit raw output line (no parsing — for terminal view only).
+   */
+  private emitRawOutput(sessionId: string, line: string): void {
     this.registry.appendOutput(sessionId, line);
 
-    // Parse line into structured events
-    const parser = this.parsers.get(sessionId);
-    const events = parser ? parser.parseLine(line) : [];
-
-    // Debug: write raw line and parsed events to file
-    pipeLog(sessionId, line, events);
-
-    // Notify handlers with both raw line and parsed events
+    // Notify handlers with raw line and empty events array
     for (const handler of this.outputHandlers) {
       try {
-        handler(sessionId, line, events);
+        handler(sessionId, line, []);
       } catch (err) {
         logWarn("Output handler error", { error: String(err) });
       }
