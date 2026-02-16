@@ -14,6 +14,7 @@
  */
 
 import { Router } from "express";
+import { basename } from "path";
 import { z } from "zod";
 import { getSessionBridge } from "../services/session-bridge.js";
 import {
@@ -31,7 +32,7 @@ export const sessionsRouter = Router();
 // ============================================================================
 
 const CreateSessionSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  name: z.string().min(1).optional(),
   projectPath: z.string().min(1, "Project path is required"),
   mode: z.enum(["standalone", "swarm", "gastown"]).optional(),
   workspaceType: z.enum(["primary", "worktree", "copy"]).optional(),
@@ -92,8 +93,11 @@ sessionsRouter.post("/", async (req, res) => {
       .json(validationError("Invalid request", parsed.error.message));
   }
 
+  const data = parsed.data;
+  const name = data.name || `${basename(data.projectPath)}-agent`;
+
   const bridge = getSessionBridge();
-  const result = await bridge.createSession(parsed.data);
+  const result = await bridge.createSession({ ...data, name });
 
   if (!result.success) {
     return res.status(400).json(badRequest(result.error ?? "Failed to create session"));
