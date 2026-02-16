@@ -15,6 +15,7 @@ struct StandaloneSessionView: View {
                 VStack(spacing: 0) {
                     sessionSwitcherBar(current: session)
                     SessionChatView(session: session, wsClient: client)
+                        .id(session.id)
                 }
             } else if loader.isLoading {
                 loadingView

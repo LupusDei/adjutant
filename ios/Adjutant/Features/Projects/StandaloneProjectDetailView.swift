@@ -8,6 +8,7 @@ struct StandaloneProjectDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: StandaloneProjectDetailViewModel
     @EnvironmentObject private var coordinator: AppCoordinator
+    @State private var selectedSession: ManagedSession?
 
     init(project: Project) {
         _viewModel = StateObject(wrappedValue: StandaloneProjectDetailViewModel(project: project))
@@ -51,6 +52,14 @@ struct StandaloneProjectDetailView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will unregister the project. Source files will not be deleted.")
+        }
+        .fullScreenCover(item: $selectedSession) { session in
+            let wsClient = WebSocketClient(
+                baseURL: AppState.shared.apiBaseURL,
+                apiKey: AppState.shared.apiKey
+            )
+            SessionChatView(session: session, wsClient: wsClient, showDismiss: true)
+                .onAppear { wsClient.connect() }
         }
     }
 
@@ -149,54 +158,59 @@ struct StandaloneProjectDetailView: View {
     }
 
     private func sessionRow(_ session: ManagedSession) -> some View {
-        HStack(spacing: CRTTheme.Spacing.sm) {
-            StatusDot(
-                sessionStatusDot(session.status),
-                size: 8,
-                pulse: session.status == .working
-            )
+        Button {
+            selectedSession = session
+        } label: {
+            HStack(spacing: CRTTheme.Spacing.sm) {
+                StatusDot(
+                    sessionStatusDot(session.status),
+                    size: 8,
+                    pulse: session.status == .working
+                )
 
-            VStack(alignment: .leading, spacing: 2) {
-                CRTText(session.name.uppercased(), style: .caption, color: theme.primary)
+                VStack(alignment: .leading, spacing: 2) {
+                    CRTText(session.name.uppercased(), style: .caption, color: theme.primary)
+                    CRTText(
+                        "\(session.mode.rawValue.uppercased()) \u{2022} \(session.workspaceType.rawValue.uppercased())",
+                        style: .caption,
+                        color: theme.dim
+                    )
+                }
+
+                Spacer()
+
+                // Status label
                 CRTText(
-                    "\(session.mode.rawValue.uppercased()) \u{2022} \(session.workspaceType.rawValue.uppercased())",
+                    session.status.rawValue.replacingOccurrences(of: "_", with: " ").uppercased(),
                     style: .caption,
-                    color: theme.dim
+                    color: sessionStatusColor(session.status)
                 )
+
+                // Kill button
+                Button {
+                    Task { await viewModel.killSession(session) }
+                } label: {
+                    Image(systemName: "xmark.circle")
+                        .font(.system(size: 14))
+                        .foregroundColor(CRTTheme.State.error.opacity(0.7))
+                }
+                .buttonStyle(.plain)
             }
-
-            Spacer()
-
-            // Status label
-            CRTText(
-                session.status.rawValue.replacingOccurrences(of: "_", with: " ").uppercased(),
-                style: .caption,
-                color: sessionStatusColor(session.status)
+            .padding(.vertical, CRTTheme.Spacing.xs)
+            .padding(.horizontal, CRTTheme.Spacing.xs)
+            .background(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                    .fill(theme.dim.opacity(0.05))
             )
-
-            // Kill button
-            Button {
-                Task { await viewModel.killSession(session) }
-            } label: {
-                Image(systemName: "xmark.circle")
-                    .font(.system(size: 14))
-                    .foregroundColor(CRTTheme.State.error.opacity(0.7))
-            }
-            .buttonStyle(.plain)
+            .overlay(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                    .stroke(
+                        session.status != .offline ? theme.primary.opacity(0.2) : theme.dim.opacity(0.15),
+                        lineWidth: 1
+                    )
+            )
         }
-        .padding(.vertical, CRTTheme.Spacing.xs)
-        .padding(.horizontal, CRTTheme.Spacing.xs)
-        .background(
-            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                .fill(theme.dim.opacity(0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                .stroke(
-                    session.status != .offline ? theme.primary.opacity(0.2) : theme.dim.opacity(0.15),
-                    lineWidth: 1
-                )
-        )
+        .buttonStyle(.plain)
     }
 
     // MARK: - Swarms Card
@@ -279,7 +293,11 @@ struct StandaloneProjectDetailView: View {
                     label: "START AGENT",
                     isLoading: viewModel.isCreatingSession
                 ) {
-                    Task { _ = await viewModel.createSession() }
+                    Task {
+                        if let session = await viewModel.createSession() {
+                            selectedSession = session
+                        }
+                    }
                 }
 
                 // Start Team button
