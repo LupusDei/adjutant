@@ -35,11 +35,12 @@ export interface SessionInfo {
   id: string;
   name: string;
   tmuxSession: string;
+  tmuxPane: string;
   projectPath: string;
   mode: string;
   status: string;
   workspaceType: string;
-  connectedClients: number;
+  connectedClients: string[];
   pipeActive: boolean;
   createdAt: string;
   lastActivity: string;
@@ -224,11 +225,12 @@ export class SessionBridge {
       id: s.id,
       name: s.name,
       tmuxSession: s.tmuxSession,
+      tmuxPane: s.tmuxPane,
       projectPath: s.projectPath,
       mode: s.mode,
       status: s.status,
       workspaceType: s.workspaceType,
-      connectedClients: s.connectedClients.size,
+      connectedClients: Array.from(s.connectedClients),
       pipeActive: s.pipeActive,
       createdAt: s.createdAt.toISOString(),
       lastActivity: s.lastActivity.toISOString(),
@@ -245,11 +247,12 @@ export class SessionBridge {
       id: s.id,
       name: s.name,
       tmuxSession: s.tmuxSession,
+      tmuxPane: s.tmuxPane,
       projectPath: s.projectPath,
       mode: s.mode,
       status: s.status,
       workspaceType: s.workspaceType,
-      connectedClients: s.connectedClients.size,
+      connectedClients: Array.from(s.connectedClients),
       pipeActive: s.pipeActive,
       createdAt: s.createdAt.toISOString(),
       lastActivity: s.lastActivity.toISOString(),

@@ -134,7 +134,7 @@ describe("SessionBridge", () => {
       expect(info.projectPath).toBe("/project");
       expect(info.mode).toBe("standalone");
       expect(info.status).toBe("idle");
-      expect(info.connectedClients).toBe(0);
+      expect(info.connectedClients).toEqual([]);
       expect(info.pipeActive).toBe(false);
       expect(typeof info.createdAt).toBe("string");
       expect(typeof info.lastActivity).toBe("string");
