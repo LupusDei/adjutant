@@ -6,7 +6,7 @@
  */
 
 import { execFile } from "child_process";
-import { createReadStream, mkdirSync, existsSync, unlinkSync } from "fs";
+import { createReadStream, mkdirSync, existsSync, unlinkSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { logInfo, logWarn } from "../utils/index.js";
@@ -94,6 +94,13 @@ export class SessionConnector {
     const pipePath = join(this.pipeDir, `session-${sessionId}.pipe`);
 
     try {
+      // Ensure the pipe file exists before pipe-pane starts writing to it.
+      // pipe-pane with `cat >>` only creates the file on first output,
+      // but createReadStream needs the file to exist immediately.
+      if (!existsSync(pipePath)) {
+        writeFileSync(pipePath, "");
+      }
+
       // Start pipe-pane to capture output to a file
       await execTmuxCommand([
         "pipe-pane",

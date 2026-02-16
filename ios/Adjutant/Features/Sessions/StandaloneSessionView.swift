@@ -6,23 +6,20 @@ import AdjutantKit
 /// Used as the Chat tab content when deployment mode is `.standalone`.
 struct StandaloneSessionView: View {
     @Environment(\.crtTheme) private var theme
-    @State private var activeSession: ManagedSession?
-    @State private var wsClient: WebSocketClient?
-    @State private var isLoading = true
-    @State private var errorMessage: String?
+    @StateObject private var loader = SessionLoader()
 
     var body: some View {
         Group {
-            if let session = activeSession, let client = wsClient {
+            if let session = loader.activeSession, let client = loader.wsClient {
                 SessionChatView(session: session, wsClient: client)
-            } else if isLoading {
+            } else if loader.isLoading {
                 loadingView
             } else {
                 emptyView
             }
         }
         .task {
-            await findActiveSession()
+            await loader.loadIfNeeded()
         }
     }
 
@@ -52,13 +49,13 @@ struct StandaloneSessionView: View {
             )
             .multilineTextAlignment(.center)
 
-            if let error = errorMessage {
+            if let error = loader.errorMessage {
                 CRTText(error, style: .caption, glowIntensity: .none, color: .red)
                     .padding(.top, CRTTheme.Spacing.sm)
             }
 
             Button {
-                Task { await findActiveSession() }
+                Task { await loader.refresh() }
             } label: {
                 HStack(spacing: CRTTheme.Spacing.xs) {
                     Image(systemName: "arrow.clockwise")
@@ -79,10 +76,28 @@ struct StandaloneSessionView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(CRTTheme.Background.screen)
     }
+}
 
-    // MARK: - Data Loading
+// MARK: - Session Loader
 
-    private func findActiveSession() async {
+/// Holds the WebSocket client as a stable reference object so SwiftUI
+/// doesn't recreate it across view updates.
+@MainActor
+private class SessionLoader: ObservableObject {
+    @Published var activeSession: ManagedSession?
+    @Published var wsClient: WebSocketClient?
+    @Published var isLoading = true
+    @Published var errorMessage: String?
+
+    private var loaded = false
+
+    func loadIfNeeded() async {
+        guard !loaded else { return }
+        loaded = true
+        await refresh()
+    }
+
+    func refresh() async {
         isLoading = true
         errorMessage = nil
 
@@ -91,23 +106,29 @@ struct StandaloneSessionView: View {
             let active = sessions.first { $0.status != .offline }
 
             if let session = active {
-                let client = WebSocketClient(
-                    baseURL: AppState.shared.apiBaseURL,
-                    apiKey: AppState.shared.apiKey
-                )
-                client.connect()
+                // Reuse existing client if still valid, otherwise create new
+                if wsClient == nil {
+                    let client = WebSocketClient(
+                        baseURL: AppState.shared.apiBaseURL,
+                        apiKey: AppState.shared.apiKey
+                    )
+                    client.connect()
+                    wsClient = client
+                }
                 activeSession = session
-                wsClient = client
             } else {
                 activeSession = nil
+                wsClient?.disconnect()
                 wsClient = nil
             }
         } catch {
             errorMessage = error.localizedDescription
-            activeSession = nil
-            wsClient = nil
         }
 
         isLoading = false
+    }
+
+    deinit {
+        wsClient?.disconnect()
     }
 }
