@@ -335,6 +335,11 @@ extension APIClient {
         let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
         return try await requestWithEnvelope(.delete, path: "/projects/\(encodedId)")
     }
+
+    /// Discover local projects from the server's working directory
+    public func discoverProjects() async throws -> DiscoverProjectsResponse {
+        try await requestWithEnvelope(.post, path: "/projects/discover")
+    }
 }
 
 // MARK: - Convoys Endpoints

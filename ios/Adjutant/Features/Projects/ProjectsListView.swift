@@ -41,6 +41,9 @@ struct ProjectsListView: View {
         .onDisappear {
             viewModel.onDisappear()
         }
+        .sheet(isPresented: $viewModel.showingCreateSheet) {
+            createProjectSheet
+        }
     }
 
     // MARK: - Subviews
@@ -58,6 +61,17 @@ struct ProjectsListView: View {
             }
 
             Spacer()
+
+            // Add project button (non-gastown only)
+            if !viewModel.isGastownMode {
+                Button {
+                    viewModel.showingCreateSheet = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(theme.primary)
+                }
+            }
 
             // Refresh button
             Button {
@@ -233,6 +247,83 @@ struct ProjectsListView: View {
         .refreshable {
             await viewModel.refresh()
         }
+    }
+
+    // MARK: - Create Project Sheet
+
+    private var createProjectSheet: some View {
+        VStack(spacing: CRTTheme.Spacing.md) {
+            CRTText("ADD PROJECT", style: .subheader, glowIntensity: .medium)
+                .padding(.top, CRTTheme.Spacing.md)
+
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
+                CRTText("PROJECT PATH", style: .caption, glowIntensity: .subtle, color: theme.dim)
+                TextField("/path/to/project", text: $viewModel.newProjectPath)
+                    .textFieldStyle(.plain)
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundColor(theme.primary)
+                    .padding(CRTTheme.Spacing.sm)
+                    .background(theme.dim.opacity(0.1))
+                    .cornerRadius(8)
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .disableAutocorrection(true)
+            }
+
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
+                CRTText("NAME (OPTIONAL)", style: .caption, glowIntensity: .subtle, color: theme.dim)
+                TextField("project-name", text: $viewModel.newProjectName)
+                    .textFieldStyle(.plain)
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundColor(theme.primary)
+                    .padding(CRTTheme.Spacing.sm)
+                    .background(theme.dim.opacity(0.1))
+                    .cornerRadius(8)
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .disableAutocorrection(true)
+            }
+
+            if let error = viewModel.errorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+
+            HStack(spacing: CRTTheme.Spacing.md) {
+                Button {
+                    viewModel.showingCreateSheet = false
+                } label: {
+                    CRTText("CANCEL", style: .body, glowIntensity: .subtle, color: theme.dim)
+                        .padding(.horizontal, CRTTheme.Spacing.lg)
+                        .padding(.vertical, CRTTheme.Spacing.sm)
+                }
+
+                Button {
+                    Task { await viewModel.createProjectFromSheet() }
+                } label: {
+                    if viewModel.isCreating {
+                        LoadingIndicator(size: .small)
+                            .padding(.horizontal, CRTTheme.Spacing.lg)
+                            .padding(.vertical, CRTTheme.Spacing.sm)
+                    } else {
+                        CRTText("CREATE", style: .body, glowIntensity: .medium)
+                            .padding(.horizontal, CRTTheme.Spacing.lg)
+                            .padding(.vertical, CRTTheme.Spacing.sm)
+                            .background(theme.primary.opacity(0.15))
+                            .cornerRadius(8)
+                    }
+                }
+                .disabled(viewModel.newProjectPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isCreating)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
+        .background(CRTTheme.Background.screen)
+        .presentationDetents([.medium])
     }
 
     @ViewBuilder

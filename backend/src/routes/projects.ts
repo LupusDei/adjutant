@@ -17,6 +17,7 @@ import {
   createProject,
   activateProject,
   deleteProject,
+  discoverLocalProjects,
 } from "../services/projects-service.js";
 import { success, badRequest, notFound, internalError, conflict } from "../utils/responses.js";
 
@@ -103,6 +104,27 @@ projectsRouter.post("/", (req, res) => {
   }
 
   return res.status(201).json(success(result.data));
+});
+
+/**
+ * POST /api/projects/discover
+ * Scan the project root for git repos and auto-register them.
+ */
+projectsRouter.post("/discover", (_req, res) => {
+  const result = discoverLocalProjects();
+
+  if (!result.success) {
+    return res.status(500).json(
+      internalError(result.error?.message ?? "Failed to discover projects")
+    );
+  }
+
+  const discovered = result.data ?? [];
+  const allResult = listProjects();
+  return res.json(success({
+    discovered: discovered.length,
+    projects: allResult.success ? allResult.data : discovered,
+  }));
 });
 
 /**

@@ -7,7 +7,7 @@
  * @module services/projects-service
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
 import { execSync } from "child_process";
 import { join, resolve, basename } from "path";
 import { randomUUID } from "crypto";
@@ -118,11 +118,120 @@ function nameFromCloneUrl(url: string): string {
 // ============================================================================
 
 /**
+ * Discover local projects from the project root directory.
+ *
+ * Auto-registers:
+ * 1. The project root itself (marked as active)
+ * 2. Immediate child directories that contain a `.git/` directory
+ *
+ * Skips: node_modules, .git, hidden dirs (`.` prefix), non-directories.
+ * De-duplicates against already-registered paths.
+ */
+export function discoverLocalProjects(): ProjectsServiceResult<Project[]> {
+  try {
+    const projectRoot = resolve(process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd());
+    const store = loadStore();
+    const existingPaths = new Set(store.projects.map((p) => p.path));
+    const discovered: Project[] = [];
+
+    // Register the project root itself if not already registered
+    if (!existingPaths.has(projectRoot) && existsSync(projectRoot)) {
+      const rootProject: Project = {
+        id: generateId(),
+        name: nameFromPath(projectRoot),
+        path: projectRoot,
+        gitRemote: detectGitRemote(projectRoot),
+        mode: "standalone",
+        sessions: [],
+        createdAt: new Date().toISOString(),
+        active: true,
+      };
+      store.projects.push(rootProject);
+      existingPaths.add(projectRoot);
+      discovered.push(rootProject);
+      logInfo("discovered project root", { id: rootProject.id, name: rootProject.name, path: projectRoot });
+    } else {
+      // Mark the existing root project as active
+      const existing = store.projects.find((p) => p.path === projectRoot);
+      if (existing && !existing.active) {
+        for (const p of store.projects) {
+          p.active = p.path === projectRoot;
+        }
+      }
+    }
+
+    // Scan immediate child directories for git repos
+    if (existsSync(projectRoot)) {
+      const SKIP_DIRS = new Set(["node_modules", ".git"]);
+      let entries: string[];
+      try {
+        entries = readdirSync(projectRoot);
+      } catch {
+        entries = [];
+      }
+
+      for (const entry of entries) {
+        // Skip hidden dirs and known non-project dirs
+        if (entry.startsWith(".") || SKIP_DIRS.has(entry)) continue;
+
+        const childPath = join(projectRoot, entry);
+        try {
+          const stat = statSync(childPath);
+          if (!stat.isDirectory()) continue;
+        } catch {
+          continue;
+        }
+
+        // Only register if it has a .git directory
+        if (!existsSync(join(childPath, ".git"))) continue;
+
+        // Skip if already registered
+        if (existingPaths.has(childPath)) continue;
+
+        const project: Project = {
+          id: generateId(),
+          name: nameFromPath(childPath),
+          path: childPath,
+          gitRemote: detectGitRemote(childPath),
+          mode: "standalone",
+          sessions: [],
+          createdAt: new Date().toISOString(),
+          active: false,
+        };
+
+        store.projects.push(project);
+        existingPaths.add(childPath);
+        discovered.push(project);
+        logInfo("discovered child project", { id: project.id, name: project.name, path: childPath });
+      }
+    }
+
+    if (discovered.length > 0) {
+      saveStore(store);
+    }
+
+    return { success: true, data: discovered };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to discover projects";
+    logError("discoverLocalProjects failed", { error: message });
+    return { success: false, error: { code: "INTERNAL_ERROR", message } };
+  }
+}
+
+/**
  * List all registered projects.
+ * Auto-discovers local projects if the store is empty.
  */
 export function listProjects(): ProjectsServiceResult<Project[]> {
   try {
-    const store = loadStore();
+    let store = loadStore();
+
+    // Auto-seed on first access if no projects registered
+    if (store.projects.length === 0) {
+      discoverLocalProjects();
+      store = loadStore();
+    }
+
     return { success: true, data: store.projects };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to list projects";

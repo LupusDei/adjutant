@@ -53,3 +53,9 @@ public struct DeleteProjectResponse: Codable {
     public let id: String
     public let deleted: Bool
 }
+
+/// Response from the discover endpoint.
+public struct DiscoverProjectsResponse: Codable {
+    public let discovered: Int
+    public let projects: [Project]
+}

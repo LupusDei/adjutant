@@ -25,6 +25,20 @@ final class ProjectsListViewModel: BaseViewModel {
     /// Filtered projects for display (standalone/swarm)
     @Published private(set) var filteredProjects: [Project] = []
 
+    // MARK: - Create Sheet State
+
+    /// Whether the create project sheet is showing
+    @Published var showingCreateSheet = false
+
+    /// Path for new project
+    @Published var newProjectPath = ""
+
+    /// Optional name override for new project
+    @Published var newProjectName = ""
+
+    /// Whether a create operation is in progress
+    @Published var isCreating = false
+
     // MARK: - Dependencies
 
     private let apiClient: APIClient
@@ -87,6 +101,31 @@ final class ProjectsListViewModel: BaseViewModel {
             )
             await self.refreshProjects()
             return project
+        }
+    }
+
+    /// Create a project from the create sheet inputs
+    func createProjectFromSheet() async {
+        let path = newProjectPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !path.isEmpty else { return }
+
+        isCreating = true
+        let name = newProjectName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let result = await createFromPath(path, name: name.isEmpty ? nil : name)
+        isCreating = false
+
+        if result != nil {
+            showingCreateSheet = false
+            newProjectPath = ""
+            newProjectName = ""
+        }
+    }
+
+    /// Trigger project discovery on the backend
+    func discoverProjects() async {
+        await performAsyncAction(showLoading: false) {
+            _ = try await self.apiClient.discoverProjects()
+            await self.refreshProjects()
         }
     }
 
