@@ -238,7 +238,7 @@ final class SSEGapRecoveryTests: XCTestCase {
     }
 
     func testSSEGapDetectionLogic() {
-        // Simulate the gap detection logic from ConnectionManager
+        // Simulate SSE gap detection logic
         var lastSSESequence = 10
 
         let incomingSeq = 15 // Gap: expected 11, got 15
@@ -350,118 +350,10 @@ final class EventStreamServiceStateTests: XCTestCase {
     }
 }
 
-// MARK: - Fallback Chain Tests
-
-@MainActor
-final class FallbackChainTests: XCTestCase {
-    private var cancellables: Set<AnyCancellable>!
-
-    override func setUp() async throws {
-        cancellables = Set<AnyCancellable>()
-    }
-
-    override func tearDown() async throws {
-        ConnectionManager.shared.disconnect()
-        cancellables = nil
-    }
-
-    func testPollingOnlySkipsWebSocketAndSSE() {
-        let manager = ConnectionManager.shared
-        AppState.shared.communicationPriority = .pollingOnly
-
-        manager.connect()
-
-        XCTAssertEqual(manager.communicationMethod, .http)
-        XCTAssertEqual(manager.connectionState, .connected)
-    }
-
-    func testDisconnectSetsHTTP() {
-        let manager = ConnectionManager.shared
-        AppState.shared.communicationPriority = .pollingOnly
-        manager.connect()
-
-        manager.disconnect()
-
-        XCTAssertEqual(manager.connectionState, .disconnected)
-    }
-
-    func testDisconnectFromPollingStaysDisconnected() {
-        let manager = ConnectionManager.shared
-        AppState.shared.communicationPriority = .pollingOnly
-        manager.connect()
-
-        XCTAssertEqual(manager.connectionState, .connected)
-
-        manager.disconnect()
-        XCTAssertEqual(manager.connectionState, .disconnected)
-    }
-
-    func testStreamActiveOverridesConnectionState() {
-        let manager = ConnectionManager.shared
-        AppState.shared.communicationPriority = .pollingOnly
-        manager.connect()
-
-        manager.setStreamActive(true)
-        XCTAssertEqual(manager.connectionState, .streaming)
-        XCTAssertTrue(manager.isStreamActive)
-
-        manager.setStreamActive(false)
-        XCTAssertFalse(manager.isStreamActive)
-    }
-
-    func testCommunicationMethodInitiallyHTTP() {
-        let manager = ConnectionManager.shared
-        manager.disconnect()
-        XCTAssertEqual(manager.communicationMethod, .http)
-    }
-
-    func testQueueSurvivesDisconnect() {
-        let manager = ConnectionManager.shared
-
-        manager.send(.message(to: "mayor/", body: "Before disconnect"))
-        XCTAssertEqual(manager.queuedMessageCount, 1)
-
-        manager.disconnect()
-
-        // Queue should survive disconnects
-        XCTAssertEqual(manager.queuedMessageCount, 1)
-    }
-
-    func testMultipleQueuedMessagesSurviveDisconnect() {
-        let manager = ConnectionManager.shared
-
-        manager.send(.message(to: "mayor/", body: "msg1"))
-        manager.send(.message(to: "mayor/", body: "msg2"))
-        manager.send(.typing(to: "mayor/", started: true))
-        XCTAssertEqual(manager.queuedMessageCount, 3)
-
-        manager.disconnect()
-        XCTAssertEqual(manager.queuedMessageCount, 3)
-    }
-}
-
 // MARK: - WebSocket Sequence Tracking Tests
 
 final class WebSocketSequenceTrackingTests: XCTestCase {
     private let decoder = JSONDecoder()
-
-    func testWSMessageWithSequence() throws {
-        let json = """
-        {"type":"message","id":"m1","seq":5,"from":"mayor/","body":"Hello"}
-        """.data(using: .utf8)!
-        let msg = try decoder.decode(WSMessage.self, from: json)
-
-        XCTAssertEqual(msg.seq, 5)
-    }
-
-    func testWSMessageWithoutSequence() throws {
-        let json = """
-        {"type":"pong"}
-        """.data(using: .utf8)!
-        let msg = try decoder.decode(WSMessage.self, from: json)
-
-        XCTAssertNil(msg.seq)
-    }
 
     func testWSGapDetectionLogic() {
         var lastWSSequence = 10
@@ -610,7 +502,7 @@ final class StreamingEndToEndTests: XCTestCase {
             }
             .store(in: &cancellables)
 
-        // Simulate by directly accessing the ConnectionManager subject
+        // Simulate by directly accessing the subject
         let wsMsg = WsServerMessage(
             type: "stream_token",
             streamId: "test-stream",
@@ -787,143 +679,6 @@ final class StreamTokenDecodingTests: XCTestCase {
     }
 }
 
-// MARK: - ConnectionManager Stream Integration Tests
-
-@MainActor
-final class ConnectionManagerStreamTests: XCTestCase {
-    private var cancellables: Set<AnyCancellable>!
-
-    override func setUp() async throws {
-        cancellables = Set<AnyCancellable>()
-    }
-
-    override func tearDown() async throws {
-        ConnectionManager.shared.disconnect()
-        ConnectionManager.shared.setStreamActive(false)
-        cancellables = nil
-    }
-
-    func testStreamTokenAutoSetsStreamActive() {
-        let manager = ConnectionManager.shared
-        AppState.shared.communicationPriority = .pollingOnly
-        manager.connect()
-
-        // Simulate receiving a stream_token via WS message subject
-        let expectation = XCTestExpectation(description: "Stream token processed")
-
-        manager.wsMessageSubject
-            .first()
-            .sink { msg in
-                XCTAssertEqual(msg.type, "stream_token")
-                expectation.fulfill()
-            }
-            .store(in: &cancellables)
-
-        // Simulate the message
-        let json = "{\"type\":\"stream_token\",\"streamId\":\"s1\",\"token\":\"Hi\"}"
-        if let data = json.data(using: .utf8),
-           let msg = try? JSONDecoder().decode(WSMessage.self, from: data) {
-            manager.wsMessageSubject.send(msg)
-        }
-
-        wait(for: [expectation], timeout: 1.0)
-    }
-
-    func testWSMessageSubjectDeliversAllTypes() {
-        let manager = ConnectionManager.shared
-        let types = ["message", "typing", "delivered", "stream_token", "stream_end", "error"]
-
-        for msgType in types {
-            let expectation = XCTestExpectation(description: "\(msgType) delivered")
-
-            manager.wsMessageSubject
-                .first()
-                .sink { msg in
-                    XCTAssertEqual(msg.type, msgType)
-                    expectation.fulfill()
-                }
-                .store(in: &cancellables)
-
-            let json = "{\"type\":\"\(msgType)\"}"
-            if let data = json.data(using: .utf8),
-               let msg = try? JSONDecoder().decode(WSMessage.self, from: data) {
-                manager.wsMessageSubject.send(msg)
-            }
-
-            wait(for: [expectation], timeout: 1.0)
-        }
-    }
-
-    func testSSEEventSubjectDeliversEvents() {
-        let manager = ConnectionManager.shared
-        let expectation = XCTestExpectation(description: "SSE event delivered")
-
-        manager.sseEventSubject
-            .first()
-            .sink { event in
-                XCTAssertEqual(event.type, "mode_changed")
-                XCTAssertEqual(event.id, "99")
-                expectation.fulfill()
-            }
-            .store(in: &cancellables)
-
-        manager.sseEventSubject.send(
-            SSEEvent(type: "mode_changed", data: "{\"mode\":\"adjutant\"}", id: "99")
-        )
-
-        wait(for: [expectation], timeout: 1.0)
-    }
-}
-
-// MARK: - Communication Priority Transition Tests
-
-@MainActor
-final class CommunicationPriorityTests: XCTestCase {
-    private var cancellables: Set<AnyCancellable>!
-
-    override func setUp() async throws {
-        cancellables = Set<AnyCancellable>()
-    }
-
-    override func tearDown() async throws {
-        ConnectionManager.shared.disconnect()
-        AppState.shared.communicationPriority = .pollingOnly
-        cancellables = nil
-    }
-
-    func testPollingOnlyConnectsAsHTTP() {
-        let manager = ConnectionManager.shared
-        AppState.shared.communicationPriority = .pollingOnly
-        manager.connect()
-
-        XCTAssertEqual(manager.communicationMethod, .http)
-        XCTAssertEqual(manager.connectionState, .connected)
-    }
-
-    func testDisconnectFromPolling() {
-        let manager = ConnectionManager.shared
-        AppState.shared.communicationPriority = .pollingOnly
-        manager.connect()
-
-        manager.disconnect()
-
-        XCTAssertEqual(manager.connectionState, .disconnected)
-    }
-
-    func testReconnectAfterDisconnect() {
-        let manager = ConnectionManager.shared
-        AppState.shared.communicationPriority = .pollingOnly
-
-        manager.connect()
-        XCTAssertEqual(manager.connectionState, .connected)
-
-        manager.disconnect()
-        XCTAssertEqual(manager.connectionState, .disconnected)
-
-        manager.connect()
-        XCTAssertEqual(manager.connectionState, .connected)
-    }
-}
 
 // MARK: - WebSocket Connection State Tests
 
@@ -951,81 +706,6 @@ final class WebSocketConnectionStateTests: XCTestCase {
         XCTAssertNotEqual(WebSocketConnectionState.connecting, WebSocketConnectionState.authenticating)
         XCTAssertNotEqual(WebSocketConnectionState.authenticating, WebSocketConnectionState.connected)
         XCTAssertNotEqual(WebSocketConnectionState.connected, WebSocketConnectionState.reconnecting(attempt: 1))
-    }
-}
-
-// MARK: - WSOutboundMessage Encoding Tests
-
-final class WSOutboundMessageEncodingTests: XCTestCase {
-    func testMessageWithReplyTo() throws {
-        let msg = WSOutboundMessage.message(
-            id: "client-1",
-            to: "mayor/",
-            body: "Reply text",
-            replyTo: "original-msg-id"
-        )
-
-        let data = try JSONEncoder().encode(msg)
-        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-
-        XCTAssertEqual(json["type"] as? String, "message")
-        XCTAssertEqual(json["id"] as? String, "client-1")
-        XCTAssertEqual(json["to"] as? String, "mayor/")
-        XCTAssertEqual(json["body"] as? String, "Reply text")
-        XCTAssertEqual(json["replyTo"] as? String, "original-msg-id")
-    }
-
-    func testMessageWithoutReplyTo() throws {
-        let msg = WSOutboundMessage.message(to: "mayor/", body: "No reply")
-        let data = try JSONEncoder().encode(msg)
-        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-
-        XCTAssertEqual(json["type"] as? String, "message")
-        XCTAssertNil(json["replyTo"])
-    }
-
-    func testStreamCancelEncoding() throws {
-        let msg = WSOutboundMessage.streamCancel(streamId: "stream-to-cancel")
-        let data = try JSONEncoder().encode(msg)
-        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-
-        XCTAssertEqual(json["type"] as? String, "stream_cancel")
-        XCTAssertEqual(json["streamId"] as? String, "stream-to-cancel")
-    }
-
-    func testAckEncodingWithSeq() throws {
-        let msg = WSOutboundMessage.ack(messageId: "msg-99", seq: 42)
-        let data = try JSONEncoder().encode(msg)
-        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-
-        XCTAssertEqual(json["type"] as? String, "ack")
-        XCTAssertEqual(json["messageId"] as? String, "msg-99")
-        XCTAssertEqual(json["seq"] as? Int, 42)
-    }
-
-    func testTypingStartedEncoding() throws {
-        let msg = WSOutboundMessage.typing(to: "mayor/", started: true)
-        let data = try JSONEncoder().encode(msg)
-        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-
-        XCTAssertEqual(json["type"] as? String, "typing")
-        XCTAssertEqual(json["state"] as? String, "started")
-    }
-
-    func testTypingStoppedEncoding() throws {
-        let msg = WSOutboundMessage.typing(to: "mayor/", started: false)
-        let data = try JSONEncoder().encode(msg)
-        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-
-        XCTAssertEqual(json["type"] as? String, "typing")
-        XCTAssertEqual(json["state"] as? String, "stopped")
-    }
-
-    func testMessageIdIsUUIDByDefault() throws {
-        let msg = WSOutboundMessage.message(to: "mayor/", body: "Auto ID")
-        XCTAssertNotNil(msg.id)
-        // UUID should be 36 chars (8-4-4-4-12 with hyphens)
-        XCTAssertEqual(msg.id?.count, 36)
     }
 }
 

@@ -192,7 +192,7 @@ final class CrossPlatformConsistencyTests: XCTestCase {
         XCTAssertTrue(gtMode?.reason?.contains("Gas Town infrastructure") ?? false)
     }
 
-    // MARK: - SSE Event via ConnectionManager
+    // MARK: - SSE Event Decoding
 
     func testSSEEventDecodesAsModeChangedEvent() {
         // The SSE event type is "mode_changed" and data is a JSON payload
