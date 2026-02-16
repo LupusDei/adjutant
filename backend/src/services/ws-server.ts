@@ -24,7 +24,7 @@ import { logInfo, logWarn } from "../utils/index.js";
 
 /** Client → Server message types */
 interface WsClientMessage {
-  type: "auth_response" | "message" | "typing" | "stream_request" | "stream_cancel" | "ack" | "sync"
+  type: "auth" | "auth_response" | "message" | "typing" | "stream_request" | "stream_cancel" | "ack" | "sync"
     | "session_connect" | "session_disconnect" | "session_input" | "session_interrupt" | "session_permission_response";
   id?: string;
   to?: string;
@@ -505,7 +505,7 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
 
       // Auth response must come first
       if (!client.authenticated) {
-        if (msg.type === "auth_response") {
+        if (msg.type === "auth_response" || msg.type === "auth") {
           clearTimeout(authTimeout);
           handleAuth(client, msg);
         } else {
