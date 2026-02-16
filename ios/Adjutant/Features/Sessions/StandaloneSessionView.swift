@@ -128,7 +128,4 @@ private class SessionLoader: ObservableObject {
         isLoading = false
     }
 
-    deinit {
-        wsClient?.disconnect()
-    }
 }
