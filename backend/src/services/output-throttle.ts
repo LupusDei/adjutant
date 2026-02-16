@@ -9,7 +9,7 @@
 import { appendFileSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
-import { logInfo, logWarn } from "../utils/index.js";
+import { logWarn } from "../utils/index.js";
 
 // ============================================================================
 // Types

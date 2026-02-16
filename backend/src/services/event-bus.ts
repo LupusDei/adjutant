@@ -82,6 +82,10 @@ export interface EventMap {
   "power:state_changed": PowerStateEvent;
   "mode:changed": ModeChangedEvent;
   "stream:status": StreamStatusEvent;
+  "session:cost": Record<string, unknown>;
+  "session:cost_alert": Record<string, unknown>;
+  "session:permission": Record<string, unknown>;
+  "stream:output": Record<string, unknown>;
 }
 
 export type EventName = keyof EventMap;

@@ -22,7 +22,6 @@ import {
   notFound,
   badRequest,
   validationError,
-  internalError,
 } from "../utils/index.js";
 
 export const sessionsRouter = Router();
@@ -97,7 +96,13 @@ sessionsRouter.post("/", async (req, res) => {
   const name = data.name || `${basename(data.projectPath)}-agent`;
 
   const bridge = getSessionBridge();
-  const result = await bridge.createSession({ ...data, name });
+  const result = await bridge.createSession({
+    name,
+    projectPath: data.projectPath,
+    mode: data.mode ?? "standalone",
+    workspaceType: data.workspaceType ?? "primary",
+    claudeArgs: data.claudeArgs ?? [],
+  });
 
   if (!result.success) {
     return res.status(400).json(badRequest(result.error ?? "Failed to create session"));

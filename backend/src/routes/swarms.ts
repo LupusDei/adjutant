@@ -86,7 +86,13 @@ swarmsRouter.post("/", async (req, res) => {
       .json(validationError("Invalid request", parsed.error.message));
   }
 
-  const result = await createSwarm(parsed.data);
+  const result = await createSwarm({
+    projectPath: parsed.data.projectPath,
+    agentCount: parsed.data.agentCount,
+    workspaceType: parsed.data.workspaceType ?? "worktree",
+    coordinatorIndex: parsed.data.coordinatorIndex ?? 0,
+    baseName: parsed.data.baseName ?? "agent",
+  });
 
   if (!result.success) {
     return res.status(400).json(badRequest(result.error ?? "Failed to create swarm"));
@@ -154,7 +160,7 @@ swarmsRouter.post("/:id/merge", async (req, res) => {
  * Remove an agent from a swarm.
  */
 swarmsRouter.delete("/:id/agents/:sessionId", async (req, res) => {
-  const removeWorktree = req.query.removeWorktree === "true";
+  const removeWorktree = req.query['removeWorktree'] === "true";
   const removed = await removeAgentFromSwarm(
     req.params.id,
     req.params.sessionId,
@@ -173,7 +179,7 @@ swarmsRouter.delete("/:id/agents/:sessionId", async (req, res) => {
  * Destroy a swarm (kill all agents, optionally remove worktrees).
  */
 swarmsRouter.delete("/:id", async (req, res) => {
-  const removeWorktrees = req.query.removeWorktrees !== "false"; // default true
+  const removeWorktrees = req.query['removeWorktrees'] !== "false"; // default true
   const destroyed = await destroySwarm(req.params.id, removeWorktrees);
 
   if (!destroyed) {

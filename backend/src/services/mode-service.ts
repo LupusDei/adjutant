@@ -9,7 +9,7 @@ import { getWorkspace, resetWorkspace, getDeploymentMode, type DeploymentMode } 
 import { resetTopology } from "./topology/index.js";
 import { resetTransport } from "./transport/index.js";
 import { resetStatusProvider } from "./status/index.js";
-import { isGasTownEnvironment, isGasTownAvailable } from "./workspace/gastown-provider.js";
+import { isGasTownAvailable } from "./workspace/gastown-provider.js";
 import { getEventBus } from "./event-bus.js";
 import { logInfo } from "../utils/index.js";
 

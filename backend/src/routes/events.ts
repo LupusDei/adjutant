@@ -33,6 +33,10 @@ const EVENT_TYPE_MAP: Record<EventName, string> = {
   "mail:read": "mail_read",
   "mode:changed": "mode_changed",
   "stream:status": "stream_status",
+  "session:cost": "session_cost",
+  "session:cost_alert": "session_cost_alert",
+  "session:permission": "session_permission",
+  "stream:output": "stream_output",
 };
 
 /** Heartbeat interval (15 seconds) */

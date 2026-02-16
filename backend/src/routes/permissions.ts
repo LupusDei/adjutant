@@ -13,6 +13,7 @@ import {
   getPermissionConfig,
   updatePermissionConfig,
   getEffectiveMode,
+  type PermissionConfig,
 } from "../services/permission-service.js";
 import {
   success,
@@ -27,8 +28,8 @@ export const permissionsRouter = Router();
 
 const UpdateConfigSchema = z.object({
   defaultMode: z.enum(["auto_accept", "auto_deny", "manual"]).optional(),
-  sessions: z.record(z.enum(["auto_accept", "auto_deny", "manual"])).optional(),
-  toolOverrides: z.record(z.enum(["auto_accept", "auto_deny", "manual"])).optional(),
+  sessions: z.record(z.string(), z.enum(["auto_accept", "auto_deny", "manual"])).optional(),
+  toolOverrides: z.record(z.string(), z.enum(["auto_accept", "auto_deny", "manual"])).optional(),
 });
 
 // ============================================================================
@@ -56,7 +57,7 @@ permissionsRouter.patch("/", (req, res) => {
       .json(validationError("Invalid request", parsed.error.message));
   }
 
-  const updated = updatePermissionConfig(parsed.data);
+  const updated = updatePermissionConfig(parsed.data as PermissionConfig);
   return res.json(success(updated));
 });
 

@@ -7,7 +7,7 @@
 
 import { execFile } from "child_process";
 import { logInfo, logWarn } from "../utils/index.js";
-import type { SessionRegistry, ManagedSession, SessionMode, WorkspaceType } from "./session-registry.js";
+import type { SessionRegistry, SessionMode, WorkspaceType } from "./session-registry.js";
 
 // ============================================================================
 // Types
@@ -111,8 +111,8 @@ export class LifecycleManager {
         name: req.name,
         tmuxSession: tmuxSessionName,
         projectPath: req.projectPath,
-        mode: req.mode,
-        workspaceType: req.workspaceType,
+        mode: req.mode ?? "standalone",
+        workspaceType: req.workspaceType ?? "primary",
       });
 
       // Start Claude Code in the session

@@ -14,7 +14,6 @@ import {
   SessionRegistry,
   getSessionRegistry,
   resetSessionRegistry,
-  type ManagedSession,
   type SessionStatus,
 } from "./session-registry.js";
 import { SessionConnector } from "./session-connector.js";
@@ -131,7 +130,7 @@ export class SessionBridge {
     }
 
     // Set up output handler to broadcast via event bus
-    this.connector.onOutput((sessionId, line, events) => {
+    this.connector.onOutput((sessionId, _line, events) => {
       getEventBus().emit("stream:status", {
         streamId: sessionId,
         agent: this.registry.get(sessionId)?.name ?? "unknown",
@@ -214,7 +213,7 @@ export class SessionBridge {
       this.registry.clearOutputBuffer(sessionId);
     }
 
-    return { success: true, buffer };
+    return { success: true, ...(buffer ? { buffer } : {}) };
   }
 
   /**

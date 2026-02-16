@@ -25,10 +25,6 @@ function toTimestamp(value: string | undefined): number {
   return date.getTime();
 }
 
-function isUnread(issue: BeadsIssue): boolean {
-  const labels = parseMessageLabels(issue.labels);
-  return issue.status !== "closed" && !labels.hasReadLabel;
-}
 
 export async function listMailIssues(townRoot: string): Promise<BeadsIssue[]> {
   const beadsDir = resolveBeadsDir(townRoot);

@@ -7,7 +7,7 @@
 
 import { execFile } from "child_process";
 import { logInfo, logWarn } from "../utils/index.js";
-import { getSessionBridge, type SessionInfo } from "./session-bridge.js";
+import { getSessionBridge } from "./session-bridge.js";
 
 // ============================================================================
 // Types
@@ -133,7 +133,7 @@ export async function createSwarm(config: SwarmConfig): Promise<CreateSwarmResul
     id: swarmId,
     projectPath,
     agents,
-    coordinator: agents.find((a) => a.isCoordinator)?.sessionId,
+    coordinator: agents.find((a) => a.isCoordinator)?.sessionId ?? "",
     createdAt: new Date().toISOString(),
   };
 
@@ -182,7 +182,7 @@ export async function addAgentToSwarm(
   });
 
   if (!result.success) {
-    return { success: false, error: result.error };
+    return { success: false, error: result.error ?? "Unknown error" };
   }
 
   const agent: SwarmAgent = {
@@ -403,7 +403,7 @@ export async function mergeAgentBranch(
       const lines = errorMsg.split("\n");
       for (const line of lines) {
         const match = line.match(/CONFLICT.*:\s*(.+)/);
-        if (match) conflicts.push(match[1]);
+        if (match && match[1]) conflicts.push(match[1]);
       }
 
       return { success: false, branch, conflicts, error: "Merge conflicts detected" };

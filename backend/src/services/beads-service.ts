@@ -692,6 +692,15 @@ export async function getBead(
     }
 
     const issue = result.data[0];
+    if (!issue) {
+      return {
+        success: false,
+        error: {
+          code: "BEAD_NOT_FOUND",
+          message: `Bead not found: ${beadId}`,
+        },
+      };
+    }
 
     // Transform to BeadDetail
     const detail: BeadDetail = {

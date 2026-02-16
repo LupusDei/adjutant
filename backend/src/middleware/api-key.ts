@@ -71,4 +71,5 @@ export const apiKeyAuth: RequestHandler = (req, res, next) => {
 
   // Valid key - proceed
   next();
+  return;
 };

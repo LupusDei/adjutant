@@ -180,7 +180,7 @@ export function recordCostUpdate(
       threshold: alertThreshold,
       currentCost: entry.cost,
     };
-    getEventBus().emit("session:cost_alert", alert);
+    getEventBus().emit("session:cost_alert", alert as unknown as Record<string, unknown>);
     logInfo("Cost alert triggered", { sessionId, cost: entry.cost, threshold: alertThreshold });
   }
 
