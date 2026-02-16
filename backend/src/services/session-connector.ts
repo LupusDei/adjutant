@@ -6,12 +6,42 @@
  */
 
 import { execFile } from "child_process";
-import { mkdirSync, existsSync, unlinkSync, writeFileSync, openSync, readSync, closeSync, statSync, watch, type FSWatcher } from "fs";
-import { join } from "path";
+import { mkdirSync, existsSync, unlinkSync, writeFileSync, openSync, readSync, closeSync, statSync, watch, appendFileSync, type FSWatcher } from "fs";
+import { join, dirname } from "path";
 import { tmpdir } from "os";
 import { logInfo, logWarn } from "../utils/index.js";
 import type { SessionRegistry } from "./session-registry.js";
 import { OutputParser, type OutputEvent } from "./output-parser.js";
+
+// ============================================================================
+// Debug file logger for session pipe output
+// ============================================================================
+
+const PIPE_LOG_PATH = join(
+  process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd(),
+  "logs",
+  "session-pipe.log",
+);
+
+function pipeLog(sessionId: string, raw: string, events: OutputEvent[]): void {
+  try {
+    const dir = dirname(PIPE_LOG_PATH);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const ts = new Date().toISOString();
+    const evtSummary = events.map((e) => {
+      const parts: string[] = [e.type];
+      if ("tool" in e) parts.push(`tool=${e.tool}`);
+      if ("content" in e) parts.push(`content=${(e.content as string).slice(0, 80)}`);
+      if ("state" in e) parts.push(`state=${e.state}`);
+      if ("message" in e) parts.push(`msg=${(e.message as string).slice(0, 80)}`);
+      return `{${parts.join(", ")}}`;
+    });
+    const line = `[${ts}] sid=${sessionId} events=${events.length} raw=${JSON.stringify(raw.slice(0, 300))}${evtSummary.length > 0 ? `\n  parsed: [${evtSummary.join(", ")}]` : ""}\n`;
+    appendFileSync(PIPE_LOG_PATH, line);
+  } catch {
+    // Never let debug logging break the pipeline
+  }
+}
 
 // ============================================================================
 // Types
@@ -307,13 +337,8 @@ export class SessionConnector {
     const parser = this.parsers.get(sessionId);
     const events = parser ? parser.parseLine(line) : [];
 
-    // Debug: log raw line and parsed events
-    logInfo("session_pipe", {
-      sessionId,
-      raw: line.slice(0, 200),
-      eventCount: events.length,
-      events: events.map((e) => ({ type: e.type, ...(("tool" in e) ? { tool: e.tool } : {}), ...(("content" in e) ? { content: (e.content as string).slice(0, 80) } : {}) })),
-    });
+    // Debug: write raw line and parsed events to file
+    pipeLog(sessionId, line, events);
 
     // Notify handlers with both raw line and parsed events
     for (const handler of this.outputHandlers) {
