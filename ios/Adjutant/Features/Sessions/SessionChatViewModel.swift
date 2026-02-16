@@ -94,6 +94,7 @@ final class SessionChatViewModel: ObservableObject {
 
     func clearOutput() {
         outputLines.removeAll()
+        outputEvents.removeAll()
     }
 
     // MARK: - Private

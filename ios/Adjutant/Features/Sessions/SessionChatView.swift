@@ -59,6 +59,11 @@ struct SessionChatView: View {
                 scrollToBottom()
             }
         }
+        .onChange(of: viewModel.outputEvents.count) { _, _ in
+            if autoScroll {
+                scrollToBottom()
+            }
+        }
     }
 
     // MARK: - Header
@@ -134,19 +139,33 @@ struct SessionChatView: View {
 
     // MARK: - Output Area
 
+    /// Whether structured events are available (use chat view vs raw terminal)
+    private var hasStructuredEvents: Bool {
+        !viewModel.outputEvents.isEmpty
+    }
+
     private var outputArea: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(viewModel.outputLines) { line in
-                        Text(line.text)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundColor(theme.primary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .id(line.id)
+                    if hasStructuredEvents {
+                        // Structured chat view — parsed output events
+                        ForEach(viewModel.outputEvents) { event in
+                            OutputEventRenderer(event: event)
+                                .id(event.id)
+                        }
+                    } else {
+                        // Raw terminal view — fallback when no events parsed yet
+                        ForEach(viewModel.outputLines) { line in
+                            Text(line.text)
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundColor(theme.primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .id(line.id)
+                        }
                     }
 
-                    if viewModel.outputLines.isEmpty {
+                    if viewModel.outputLines.isEmpty && viewModel.outputEvents.isEmpty {
                         emptyState
                     }
 
