@@ -307,6 +307,14 @@ export class SessionConnector {
     const parser = this.parsers.get(sessionId);
     const events = parser ? parser.parseLine(line) : [];
 
+    // Debug: log raw line and parsed events
+    logInfo("session_pipe", {
+      sessionId,
+      raw: line.slice(0, 200),
+      eventCount: events.length,
+      events: events.map((e) => ({ type: e.type, ...(("tool" in e) ? { tool: e.tool } : {}), ...(("content" in e) ? { content: (e.content as string).slice(0, 80) } : {}) })),
+    });
+
     // Notify handlers with both raw line and parsed events
     for (const handler of this.outputHandlers) {
       try {
