@@ -7,6 +7,7 @@ import AdjutantKit
 /// Mirrors the backend OutputEvent type.
 enum OutputEvent: Identifiable, Equatable {
     case message(id: UUID = UUID(), content: String)
+    case userInput(id: UUID = UUID(), content: String)
     case toolUse(id: UUID = UUID(), tool: String, input: String)
     case toolResult(id: UUID = UUID(), tool: String, output: String, truncated: Bool)
     case status(id: UUID = UUID(), state: String)
@@ -17,6 +18,7 @@ enum OutputEvent: Identifiable, Equatable {
     var id: UUID {
         switch self {
         case .message(let id, _),
+             .userInput(let id, _),
              .toolUse(let id, _, _),
              .toolResult(let id, _, _, _),
              .status(let id, _),
@@ -38,6 +40,8 @@ struct OutputEventRenderer: View {
         switch event {
         case .message(_, let content):
             MessageBubble(content: content)
+        case .userInput(_, let content):
+            UserInputBubble(content: content)
         case .toolUse(_, let tool, let input):
             ToolCard(tool: tool, input: input, output: nil, truncated: false)
         case .toolResult(_, let tool, let output, let truncated):
@@ -74,6 +78,32 @@ struct MessageBubble: View {
             .cornerRadius(12)
 
             Spacer(minLength: 40)
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
+        .padding(.vertical, CRTTheme.Spacing.xxs)
+    }
+}
+
+// MARK: - User Input Bubble
+
+/// Chat bubble for user input messages, right-aligned.
+struct UserInputBubble: View {
+    @Environment(\.crtTheme) private var theme
+    let content: String
+
+    var body: some View {
+        HStack {
+            Spacer(minLength: 40)
+
+            VStack(alignment: .trailing, spacing: CRTTheme.Spacing.xxs) {
+                Text(content)
+                    .font(.system(.body))
+                    .foregroundColor(theme.primary)
+                    .textSelection(.enabled)
+            }
+            .padding(CRTTheme.Spacing.sm)
+            .background(theme.primary.opacity(0.15))
+            .cornerRadius(12)
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.xxs)

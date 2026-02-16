@@ -220,6 +220,8 @@ final class SessionChatViewModel: ObservableObject {
         switch dto.type {
         case "message":
             return .message(content: dto.content ?? "")
+        case "user_input":
+            return .userInput(content: dto.content ?? "")
         case "tool_use":
             return .toolUse(
                 tool: dto.tool ?? "unknown",
