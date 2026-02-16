@@ -11,8 +11,11 @@ final class SessionChatViewModel: ObservableObject {
     /// Session we're connected to
     @Published private(set) var session: ManagedSession
 
-    /// Output lines accumulated from the session
+    /// Output lines accumulated from the session (raw terminal view)
     @Published private(set) var outputLines: [OutputLine] = []
+
+    /// Structured output events from the parser (chat view)
+    @Published private(set) var outputEvents: [OutputEvent] = []
 
     /// Whether we're connected to the session's output stream
     @Published private(set) var isConnected = false
@@ -136,12 +139,21 @@ final class SessionChatViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Session output
+        // Session raw output (terminal view)
         wsClient.sessionOutputSubject
             .filter { [weak self] in $0.sessionId == self?.session.id }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 self?.appendOutput(event.output)
+            }
+            .store(in: &cancellables)
+
+        // Session structured events (chat view)
+        wsClient.sessionEventsSubject
+            .filter { [weak self] in $0.sessionId == self?.session.id }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.appendEvents(event.events)
             }
             .store(in: &cancellables)
 
@@ -188,6 +200,49 @@ final class SessionChatViewModel: ObservableObject {
         // Trim if too many lines
         if outputLines.count > maxOutputLines {
             outputLines.removeFirst(outputLines.count - maxOutputLines)
+        }
+    }
+
+    private func appendEvents(_ dtos: [OutputEventDTO]) {
+        for dto in dtos {
+            if let event = mapDTOToEvent(dto) {
+                outputEvents.append(event)
+            }
+        }
+        // Trim to same limit as raw lines
+        if outputEvents.count > maxOutputLines {
+            outputEvents.removeFirst(outputEvents.count - maxOutputLines)
+        }
+    }
+
+    private func mapDTOToEvent(_ dto: OutputEventDTO) -> OutputEvent? {
+        switch dto.type {
+        case "message":
+            return .message(content: dto.content ?? "")
+        case "tool_use":
+            return .toolUse(
+                tool: dto.tool ?? "unknown",
+                input: dto.input?.map { "\($0.key): \($0.value)" }.joined(separator: ", ") ?? ""
+            )
+        case "tool_result":
+            return .toolResult(
+                tool: dto.tool ?? "unknown",
+                output: dto.output ?? "",
+                truncated: dto.truncated ?? false
+            )
+        case "status":
+            return .status(state: dto.state ?? "idle")
+        case "permission_request":
+            return .permissionRequest(
+                action: dto.action ?? "",
+                details: dto.details ?? ""
+            )
+        case "error":
+            return .error(message: dto.message ?? "Unknown error")
+        case "raw":
+            return .raw(data: dto.data ?? "")
+        default:
+            return .raw(data: dto.content ?? dto.data ?? "")
         }
     }
 }

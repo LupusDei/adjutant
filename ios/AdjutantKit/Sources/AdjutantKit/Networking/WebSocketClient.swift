@@ -86,6 +86,7 @@ public struct WsServerMessage: Decodable, Equatable {
     public let buffer: [String]?
     public let status: String?
     public let name: String?
+    public let events: [OutputEventDTO]?
 
     public init(
         type: String,
@@ -113,7 +114,8 @@ public struct WsServerMessage: Decodable, Equatable {
         output: String? = nil,
         buffer: [String]? = nil,
         status: String? = nil,
-        name: String? = nil
+        name: String? = nil,
+        events: [OutputEventDTO]? = nil
     ) {
         self.type = type
         self.id = id
@@ -141,7 +143,28 @@ public struct WsServerMessage: Decodable, Equatable {
         self.buffer = buffer
         self.status = status
         self.name = name
+        self.events = events
     }
+}
+
+// MARK: - Output Event DTO
+
+/// Flat DTO for structured output events from the backend OutputParser.
+/// Mirrors the backend OutputEvent union type as an optional-field struct for Decodable.
+public struct OutputEventDTO: Decodable, Equatable {
+    public let type: String
+    public let content: String?
+    public let tool: String?
+    public let input: [String: String]?
+    public let output: String?
+    public let truncated: Bool?
+    public let state: String?
+    public let action: String?
+    public let details: String?
+    public let message: String?
+    public let data: String?
+    public let requestId: String?
+    public let cost: Double?
 }
 
 // MARK: - Session Event Types
@@ -165,6 +188,17 @@ public struct SessionConnectedEvent: Equatable {
     public init(sessionId: String, buffer: [String]) {
         self.sessionId = sessionId
         self.buffer = buffer
+    }
+}
+
+/// Event emitted when structured output events arrive for a session
+public struct SessionEventsEvent: Equatable {
+    public let sessionId: String
+    public let events: [OutputEventDTO]
+
+    public init(sessionId: String, events: [OutputEventDTO]) {
+        self.sessionId = sessionId
+        self.events = events
     }
 }
 
@@ -203,6 +237,7 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
 
     // Session v2 publishers
     public let sessionOutputSubject = PassthroughSubject<SessionOutputEvent, Never>()
+    public let sessionEventsSubject = PassthroughSubject<SessionEventsEvent, Never>()
     public let sessionConnectedSubject = PassthroughSubject<SessionConnectedEvent, Never>()
     public let sessionDisconnectedSubject = PassthroughSubject<String, Never>()
     public let sessionStatusSubject = PassthroughSubject<SessionStatusEvent, Never>()
@@ -445,6 +480,14 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
             }
 
         case "session_output":
+            if let sessionId = msg.sessionId, let events = msg.events, !events.isEmpty {
+                sessionEventsSubject.send(SessionEventsEvent(
+                    sessionId: sessionId,
+                    events: events
+                ))
+            }
+
+        case "session_raw":
             if let sessionId = msg.sessionId, let output = msg.output {
                 sessionOutputSubject.send(SessionOutputEvent(
                     sessionId: sessionId,

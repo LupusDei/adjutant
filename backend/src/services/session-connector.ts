@@ -11,13 +11,16 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { logInfo, logWarn } from "../utils/index.js";
 import type { SessionRegistry } from "./session-registry.js";
+import { OutputParser, type OutputEvent } from "./output-parser.js";
 
 // ============================================================================
 // Types
 // ============================================================================
 
+export type { OutputEvent };
+
 export interface OutputHandler {
-  (sessionId: string, line: string): void;
+  (sessionId: string, line: string, events: OutputEvent[]): void;
 }
 
 interface PipeState {
@@ -52,6 +55,7 @@ function execTmuxCommand(args: string[]): Promise<string> {
 
 export class SessionConnector {
   private pipes = new Map<string, PipeState>();
+  private parsers = new Map<string, OutputParser>();
   private outputHandlers: OutputHandler[] = [];
   private pipeDir: string;
   private registry: SessionRegistry;
@@ -120,6 +124,7 @@ export class SessionConnector {
         readOffset: 0,
       };
       this.pipes.set(sessionId, pipe);
+      this.parsers.set(sessionId, new OutputParser());
 
       session.pipeActive = true;
       logInfo("Pipe attached", { sessionId, tmuxPane: session.tmuxPane });
@@ -153,6 +158,22 @@ export class SessionConnector {
       }
     } catch {
       // tmux session might already be gone
+    }
+
+    // Flush parser and emit any final events before cleanup
+    const parser = this.parsers.get(sessionId);
+    if (parser) {
+      const finalEvents = parser.flush();
+      if (finalEvents.length > 0) {
+        for (const handler of this.outputHandlers) {
+          try {
+            handler(sessionId, "", finalEvents);
+          } catch (err) {
+            logWarn("Output handler error (flush)", { error: String(err) });
+          }
+        }
+      }
+      this.parsers.delete(sessionId);
     }
 
     pipe.active = false;
@@ -282,10 +303,14 @@ export class SessionConnector {
     // Store in registry's output buffer
     this.registry.appendOutput(sessionId, line);
 
-    // Notify handlers
+    // Parse line into structured events
+    const parser = this.parsers.get(sessionId);
+    const events = parser ? parser.parseLine(line) : [];
+
+    // Notify handlers with both raw line and parsed events
     for (const handler of this.outputHandlers) {
       try {
-        handler(sessionId, line);
+        handler(sessionId, line, events);
       } catch (err) {
         logWarn("Output handler error", { error: String(err) });
       }

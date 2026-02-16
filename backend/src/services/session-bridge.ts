@@ -131,12 +131,19 @@ export class SessionBridge {
     }
 
     // Set up output handler to broadcast via event bus
-    this.connector.onOutput((sessionId, line) => {
+    this.connector.onOutput((sessionId, line, events) => {
       getEventBus().emit("stream:status", {
         streamId: sessionId,
         agent: this.registry.get(sessionId)?.name ?? "unknown",
         state: "token",
       });
+      // Emit parsed events for WS broadcast
+      if (events.length > 0) {
+        getEventBus().emit("stream:output", {
+          streamId: sessionId,
+          events,
+        });
+      }
     });
 
     this.initialized = true;

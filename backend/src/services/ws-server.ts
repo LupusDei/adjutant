@@ -49,7 +49,7 @@ interface WsClientMessage {
 /** Server → Client message types */
 interface WsServerMessage {
   type: "auth_challenge" | "connected" | "message" | "stream_token" | "stream_end" | "typing" | "delivered" | "error" | "sync_response" | "pong"
-    | "session_connected" | "session_disconnected" | "session_output" | "session_status";
+    | "session_connected" | "session_disconnected" | "session_output" | "session_raw" | "session_status";
   id?: string | undefined;
   clientId?: string | undefined;
   seq?: number | undefined;
@@ -77,6 +77,7 @@ interface WsServerMessage {
   buffer?: string[] | undefined;
   status?: string | undefined;
   name?: string | undefined;
+  events?: unknown[] | undefined;
 }
 
 interface WsClient {
@@ -315,10 +316,19 @@ async function handleSessionConnect(client: WsClient, msg: WsClientMessage): Pro
       });
 
       // Set up output forwarding for this client
-      bridge.connector.onOutput((sid, line) => {
+      bridge.connector.onOutput((sid, line, events) => {
         if (sid === sessionId && client.authenticated) {
+          // Structured events for chat view
+          if (events.length > 0) {
+            send(client, {
+              type: "session_output",
+              sessionId: sid,
+              events,
+            });
+          }
+          // Raw line for terminal view
           send(client, {
-            type: "session_output",
+            type: "session_raw",
             sessionId: sid,
             output: line,
           });
