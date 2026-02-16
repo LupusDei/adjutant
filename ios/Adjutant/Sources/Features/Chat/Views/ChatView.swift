@@ -10,6 +10,7 @@ struct ChatView: View {
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showRecipientSelector = false
     @State private var showConnectionDetails = false
+    @State private var selectedSession: ManagedSession?
 
     init(apiClient: APIClient, speechService: (any SpeechRecognitionServiceProtocol)? = nil) {
         let service = speechService ?? SpeechRecognitionService()
@@ -100,6 +101,13 @@ struct ChatView: View {
                 }
             )
         }
+        .fullScreenCover(item: $selectedSession) { session in
+            let wsClient = WebSocketClient(
+                baseURL: AppState.shared.apiBaseURL,
+                apiKey: AppState.shared.apiKey
+            )
+            SessionChatView(session: session, wsClient: wsClient, showDismiss: true)
+        }
     }
 
     // MARK: - Subviews
@@ -124,7 +132,9 @@ struct ChatView: View {
             Spacer()
 
             // Session switcher button
-            SessionSwitcherButton()
+            SessionSwitcherButton(onSessionSelected: { session in
+                selectedSession = session
+            })
 
             // Connection status badge
             ConnectionStatusBadge(
@@ -365,19 +375,24 @@ private struct RecipientSelectorSheet: View {
                 CRTTextField("Search agents...", text: $searchText, icon: "magnifyingglass")
                     .padding(CRTTheme.Spacing.md)
 
+                // TODO: Consolidate Direct Channel recipient selector with Sessions switcher.
+                // In non-Gas Town modes, these serve overlapping purposes.
+
                 // Recipients list
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        // Mayor is always first
-                        recipientRow(
-                            id: "mayor/",
-                            name: "Mayor",
-                            type: .mayor,
-                            isSelected: selectedRecipient == "mayor/"
-                        )
+                        // Mayor row — only shown in Gas Town mode
+                        if AppState.shared.deploymentMode == .gastown {
+                            recipientRow(
+                                id: "mayor/",
+                                name: "Mayor",
+                                type: .mayor,
+                                isSelected: selectedRecipient == "mayor/"
+                            )
 
-                        Divider()
-                            .background(theme.dim.opacity(0.3))
+                            Divider()
+                                .background(theme.dim.opacity(0.3))
+                        }
 
                         // Other recipients
                         ForEach(filteredRecipients) { crew in

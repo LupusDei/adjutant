@@ -105,12 +105,20 @@ private struct TabContent: View {
         case .mail:
             MailListView()
         case .chat:
-            ChatView(apiClient: AppState.shared.apiClient)
+            if AppState.shared.deploymentMode == .standalone {
+                StandaloneSessionView()
+            } else {
+                ChatView(apiClient: AppState.shared.apiClient)
+            }
         case .epics:
             EpicsListView()
         case .crew:
             CrewListView(apiClient: AppState.shared.apiClient) { member in
                 coordinator.navigate(to: .agentDetail(member: member))
+            }
+        case .projects:
+            ProjectsListView(apiClient: AppState.shared.apiClient) { rig in
+                coordinator.navigate(to: .projectDetail(rig: rig))
             }
         case .beads:
             BeadsView()

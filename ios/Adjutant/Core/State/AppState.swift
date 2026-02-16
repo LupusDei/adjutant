@@ -67,9 +67,9 @@ final class AppState: ObservableObject {
         case .gastown:
             return Set(AppTab.allCases)
         case .standalone:
-            return [.chat, .beads, .settings]
+            return [.chat, .projects, .beads, .settings]
         case .swarm:
-            return [.chat, .crew, .beads, .settings]
+            return [.chat, .crew, .projects, .beads, .settings]
         }
     }
 
@@ -543,9 +543,9 @@ enum DeploymentMode: String, CaseIterable, Identifiable, Codable {
         case .gastown:
             return Set(AppTab.allCases)
         case .standalone:
-            return [.chat, .beads, .settings]
+            return [.chat, .projects, .beads, .settings]
         case .swarm:
-            return [.chat, .crew, .beads, .settings]
+            return [.chat, .crew, .projects, .beads, .settings]
         }
     }
 

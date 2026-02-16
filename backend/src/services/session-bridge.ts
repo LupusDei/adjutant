@@ -84,6 +84,19 @@ export class SessionBridge {
       // sessions that aren't alive stay "offline" (set during load)
     }
 
+    // Prune dead (offline) sessions so stale entries don't linger
+    const deadIds = this.registry
+      .getAll()
+      .filter((s) => s.status === "offline")
+      .map((s) => s.id);
+    for (const id of deadIds) {
+      this.registry.remove(id);
+    }
+    if (deadIds.length > 0) {
+      await this.registry.save();
+      logInfo("Pruned dead sessions", { count: deadIds.length, ids: deadIds });
+    }
+
     // Auto-create a session if none are alive for the project root
     const projectRoot = process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd();
     const aliveSessions = this.registry.getAll().filter((s) => s.status !== "offline");

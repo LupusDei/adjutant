@@ -5,15 +5,20 @@ import AdjutantKit
 /// Shows streaming terminal output and provides input field + interrupt button.
 struct SessionChatView: View {
     @Environment(\.crtTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: SessionChatViewModel
     @State private var scrollProxy: ScrollViewProxy?
     @State private var autoScroll = true
 
-    init(session: ManagedSession, wsClient: WebSocketClient) {
+    /// When true, shows an X button in the header for dismissing (used in fullScreenCover presentations)
+    let showDismiss: Bool
+
+    init(session: ManagedSession, wsClient: WebSocketClient, showDismiss: Bool = false) {
         _viewModel = StateObject(wrappedValue: SessionChatViewModel(
             session: session,
             wsClient: wsClient
         ))
+        self.showDismiss = showDismiss
     }
 
     var body: some View {
@@ -60,6 +65,18 @@ struct SessionChatView: View {
 
     private var sessionHeader: some View {
         HStack {
+            // Dismiss button (when presented as fullScreenCover)
+            if showDismiss {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(theme.dim)
+                }
+                .padding(.trailing, CRTTheme.Spacing.xs)
+            }
+
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: CRTTheme.Spacing.xs) {
                     CRTText(viewModel.session.name.uppercased(), style: .subheader, glowIntensity: .medium)

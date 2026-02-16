@@ -16,8 +16,8 @@ final class ChatViewModel: BaseViewModel {
     /// Current input text
     @Published var inputText: String = ""
 
-    /// Currently selected recipient (default: mayor/)
-    @Published private(set) var selectedRecipient: String = "mayor/"
+    /// Currently selected recipient (default depends on deployment mode)
+    @Published private(set) var selectedRecipient: String = AppState.shared.deploymentMode == .gastown ? "mayor/" : ""
 
     /// All available recipients (agents)
     @Published private(set) var availableRecipients: [CrewMember] = []
@@ -299,6 +299,11 @@ final class ChatViewModel: BaseViewModel {
         await performAsyncAction(showLoading: false) {
             let agents = try await self.apiClient.getAgents()
             self.availableRecipients = agents
+
+            // In non-Gas Town modes, auto-select the first agent if no recipient is set
+            if self.selectedRecipient.isEmpty, let first = agents.first {
+                self.selectedRecipient = first.id
+            }
         }
     }
 
