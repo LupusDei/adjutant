@@ -224,6 +224,7 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
     private let baseReconnectDelay: TimeInterval = 1.0
     private var reconnectTask: Task<Void, Never>?
     private var isIntentionalDisconnect = false
+    private var isHandlingDisconnect = false
 
     // MARK: - Init
 
@@ -248,6 +249,7 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
     public func connect() {
         guard connectionStateSubject.value == .disconnected else { return }
         isIntentionalDisconnect = false
+        isHandlingDisconnect = false
         reconnectAttempt = 0
         performConnect()
     }
@@ -407,6 +409,7 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
         case "connected":
             connectionStateSubject.send(.connected)
             reconnectAttempt = 0
+            isHandlingDisconnect = false
             if let lastSeq = msg.lastSeq, lastSeqSeen > 0 && lastSeqSeen < lastSeq {
                 requestSync()
             }
@@ -477,6 +480,14 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
     // MARK: - Private: Reconnection
 
     private func handleDisconnection() {
+        // Guard against multiple simultaneous calls (receive failure + delegate callbacks)
+        guard !isHandlingDisconnect else { return }
+        isHandlingDisconnect = true
+
+        // Cancel any pending reconnect before proceeding
+        reconnectTask?.cancel()
+        reconnectTask = nil
+
         guard !isIntentionalDisconnect else {
             connectionStateSubject.send(.disconnected)
             return
@@ -496,6 +507,7 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
             self?.webSocketTask = nil
             self?.session?.invalidateAndCancel()
             self?.session = nil
+            self?.isHandlingDisconnect = false
             self?.performConnect()
         }
     }
