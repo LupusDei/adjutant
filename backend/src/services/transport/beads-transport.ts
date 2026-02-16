@@ -110,14 +110,9 @@ export class BeadsTransport implements MailTransport {
     let issues: BeadsIssue[];
     try {
       issues = await listMailIssues(workspaceRoot);
-    } catch (err) {
-      return {
-        success: false,
-        error: {
-          code: "LIST_MAIL_ERROR",
-          message: err instanceof Error ? err.message : "Failed to list mail",
-        },
-      };
+    } catch {
+      // No beads database is normal in standalone mode — return empty mail
+      return { success: true, data: [] };
     }
 
     if (!Array.isArray(issues)) {
