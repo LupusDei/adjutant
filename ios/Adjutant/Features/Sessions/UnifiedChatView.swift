@@ -7,7 +7,6 @@ import AdjutantKit
 struct UnifiedChatView: View {
     @Environment(\.crtTheme) private var theme
     @StateObject private var loader = SessionLoader()
-    @State private var showingFullSession = false
 
     var body: some View {
         Group {
@@ -15,8 +14,7 @@ struct UnifiedChatView: View {
                 UnifiedChatContent(
                     session: session,
                     wsClient: client,
-                    loader: loader,
-                    showingFullSession: $showingFullSession
+                    loader: loader
                 )
                 .id(session.id)
             } else if loader.isLoading {
@@ -34,11 +32,6 @@ struct UnifiedChatView: View {
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
-        }
-        .fullScreenCover(isPresented: $showingFullSession) {
-            if let session = loader.activeSession, let client = loader.wsClient {
-                SessionChatView(session: session, wsClient: client, showDismiss: true)
-            }
         }
     }
 
@@ -104,22 +97,26 @@ private struct UnifiedChatContent: View {
     @Environment(\.crtTheme) private var theme
     @StateObject private var viewModel: SessionChatViewModel
     @ObservedObject var loader: SessionLoader
-    @Binding var showingFullSession: Bool
+    @State private var showingFullSession = false
     @State private var scrollProxy: ScrollViewProxy?
     @State private var autoScroll = true
+
+    /// Stored for passing to the full session view
+    let session: ManagedSession
+    let wsClient: WebSocketClient
 
     init(
         session: ManagedSession,
         wsClient: WebSocketClient,
-        loader: SessionLoader,
-        showingFullSession: Binding<Bool>
+        loader: SessionLoader
     ) {
+        self.session = session
+        self.wsClient = wsClient
         _viewModel = StateObject(wrappedValue: SessionChatViewModel(
             session: session,
             wsClient: wsClient
         ))
         self.loader = loader
-        _showingFullSession = showingFullSession
     }
 
     /// Filtered events: only messages, user input, and status indicators.
@@ -166,6 +163,9 @@ private struct UnifiedChatContent: View {
             if autoScroll {
                 scrollToBottom()
             }
+        }
+        .fullScreenCover(isPresented: $showingFullSession) {
+            SessionChatView(session: session, wsClient: wsClient, showDismiss: true)
         }
     }
 

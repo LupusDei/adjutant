@@ -50,6 +50,9 @@ final class SessionChatViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let maxOutputLines = 5000
 
+    /// Tracks locally-sent user inputs to deduplicate against server echoes
+    private var pendingLocalInputs: [String] = []
+
     // MARK: - Init
 
     init(session: ManagedSession, wsClient: WebSocketClient) {
@@ -75,8 +78,10 @@ final class SessionChatViewModel: ObservableObject {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
-        // Add local user input event so it appears in the chat view
+        // Add local user input event so it appears in the chat view immediately
         outputEvents.append(.userInput(content: text))
+        // Track it so we can deduplicate the server echo
+        pendingLocalInputs.append(text)
 
         wsClient.sendSessionInput(sessionId: session.id, text: text + "\n")
         inputText = ""
@@ -98,6 +103,7 @@ final class SessionChatViewModel: ObservableObject {
     func clearOutput() {
         outputLines.removeAll()
         outputEvents.removeAll()
+        pendingLocalInputs.removeAll()
     }
 
     // MARK: - Private
@@ -224,7 +230,13 @@ final class SessionChatViewModel: ObservableObject {
         case "message":
             return .message(content: dto.content ?? "")
         case "user_input":
-            return .userInput(content: dto.content ?? "")
+            let content = dto.content ?? ""
+            // Deduplicate: if we already displayed this locally from sendInput(), skip the server echo
+            if let index = pendingLocalInputs.firstIndex(of: content) {
+                pendingLocalInputs.remove(at: index)
+                return nil
+            }
+            return .userInput(content: content)
         case "tool_use":
             return .toolUse(
                 tool: dto.tool ?? "unknown",
