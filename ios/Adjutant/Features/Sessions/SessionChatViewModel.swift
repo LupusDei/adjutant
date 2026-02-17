@@ -109,9 +109,15 @@ final class SessionChatViewModel: ObservableObject {
     // MARK: - Private
 
     private func connectToSession() {
-        guard wsClient.connectionStateSubject.value == .connected else {
-            // Don't set error — the connectionState subscription will
-            // call us again once the WebSocket finishes connecting.
+        let state = wsClient.connectionStateSubject.value
+        if state == .disconnected {
+            // WebSocket not started yet — kick off connection.
+            // The connectionState subscription will call us again once connected.
+            wsClient.connect()
+            return
+        }
+        guard state == .connected else {
+            // Currently connecting/authenticating — wait for the subscription callback.
             return
         }
         errorMessage = nil
