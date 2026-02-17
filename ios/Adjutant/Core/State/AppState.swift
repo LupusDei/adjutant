@@ -65,7 +65,7 @@ final class AppState: ObservableObject {
     var visibleTabs: Set<AppTab> {
         switch deploymentMode {
         case .gastown:
-            return Set(AppTab.allCases)
+            return Set(AppTab.allCases).subtracting([.projects])
         case .standalone:
             return [.chat, .projects, .beads, .settings]
         case .swarm:
@@ -541,7 +541,7 @@ enum DeploymentMode: String, CaseIterable, Identifiable, Codable {
     var visibleTabs: Set<AppTab> {
         switch self {
         case .gastown:
-            return Set(AppTab.allCases)
+            return Set(AppTab.allCases).subtracting([.projects])
         case .standalone:
             return [.chat, .projects, .beads, .settings]
         case .swarm:

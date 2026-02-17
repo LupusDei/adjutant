@@ -219,11 +219,15 @@ final class BeadsListViewModel: BaseViewModel {
         }
     }
 
-    /// Fetches available bead sources from the API for the source filter dropdown
+    /// Fetches available projects from the API for the source filter dropdown.
+    /// Uses the projects API (same list as the Projects tab) so the dropdown
+    /// shows all registered projects.
     private func fetchBeadSources(apiClient: APIClient) async {
         do {
-            let response = try await apiClient.getBeadSources()
-            beadSources = response.sources.filter { $0.hasBeads }
+            let projects = try await apiClient.getProjects()
+            beadSources = projects.map {
+                BeadSource(name: $0.name, path: $0.path, hasBeads: true)
+            }
         } catch {
             // Non-critical — source filter just won't show options
         }
