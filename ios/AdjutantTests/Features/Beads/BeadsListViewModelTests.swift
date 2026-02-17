@@ -288,4 +288,374 @@ final class BeadsListViewModelTests: XCTestCase {
         // Clean up
         UserDefaults.standard.removeObject(forKey: "beads_sort_preference")
     }
+
+    // MARK: - Bead Sources Tests
+
+    func testBeadSourcesInitiallyEmpty() async {
+        let freshVM = BeadsListViewModel()
+        XCTAssertTrue(freshVM.beadSources.isEmpty, "beadSources should be empty on init")
+    }
+
+    func testBeadSourcesPropertyExists() async {
+        // Verify the beadSources published property is accessible and typed correctly
+        let sources: [BeadSource] = viewModel.beadSources
+        XCTAssertNotNil(sources, "beadSources should be accessible")
+    }
+
+    // MARK: - Excluded Types Tests
+
+    func testExcludedTypesFilterOutMessages() async {
+        viewModel.currentFilter = .all
+        let filtered = viewModel.filteredBeads
+        XCTAssertTrue(filtered.allSatisfy { $0.type.lowercased() != "message" },
+            "Messages should be excluded from filtered beads")
+    }
+
+    func testExcludedTypesFilterOutEpics() async {
+        viewModel.currentFilter = .all
+        let filtered = viewModel.filteredBeads
+        XCTAssertTrue(filtered.allSatisfy { $0.type.lowercased() != "epic" },
+            "Epics should be excluded from filtered beads")
+    }
+
+    func testExcludedTypesFilterOutConvoys() async {
+        viewModel.currentFilter = .all
+        let filtered = viewModel.filteredBeads
+        XCTAssertTrue(filtered.allSatisfy { $0.type.lowercased() != "convoy" },
+            "Convoys should be excluded from filtered beads")
+    }
+
+    func testExcludedTypesFilterOutAgents() async {
+        viewModel.currentFilter = .all
+        let filtered = viewModel.filteredBeads
+        XCTAssertTrue(filtered.allSatisfy { $0.type.lowercased() != "agent" },
+            "Agents should be excluded from filtered beads")
+    }
+
+    func testExcludedTypesFilterOutWisps() async {
+        viewModel.currentFilter = .all
+        let filtered = viewModel.filteredBeads
+        XCTAssertTrue(filtered.allSatisfy { $0.type.lowercased() != "wisp" },
+            "Wisps should be excluded from filtered beads")
+    }
+
+    func testExcludedTypesAllowFeatures() async {
+        viewModel.currentFilter = .all
+        let filtered = viewModel.filteredBeads
+        XCTAssertTrue(filtered.contains { $0.type.lowercased() == "feature" },
+            "Features should NOT be excluded from filtered beads")
+    }
+
+    func testExcludedTypesAllowBugs() async {
+        viewModel.currentFilter = .all
+        let filtered = viewModel.filteredBeads
+        XCTAssertTrue(filtered.contains { $0.type.lowercased() == "bug" },
+            "Bugs should NOT be excluded from filtered beads")
+    }
+
+    func testExcludedTypesAllowTasks() async {
+        viewModel.currentFilter = .all
+        let filtered = viewModel.filteredBeads
+        XCTAssertTrue(filtered.contains { $0.type.lowercased() == "task" },
+            "Tasks should NOT be excluded from filtered beads")
+    }
+
+    // MARK: - Combined Filter + Search Tests
+
+    func testFilterOpenWithSearch() async {
+        viewModel.currentFilter = .open
+        viewModel.searchText = "adj"
+        let results = viewModel.filteredBeads
+        XCTAssertTrue(results.allSatisfy { $0.status != "closed" },
+            "All results should be non-closed when filter is .open")
+        XCTAssertTrue(results.allSatisfy {
+            $0.title.lowercased().contains("adj") ||
+            $0.id.lowercased().contains("adj") ||
+            ($0.assignee?.lowercased().contains("adj") ?? false) ||
+            $0.labels.contains { $0.lowercased().contains("adj") }
+        }, "All results should match search query")
+    }
+
+    func testFilterPriorityWithSearch() async {
+        viewModel.currentFilter = .priority
+        viewModel.searchText = "adj"
+        let results = viewModel.filteredBeads
+        XCTAssertTrue(results.allSatisfy { $0.priority <= 1 },
+            "All results should be P0 or P1")
+    }
+
+    func testFilterAssignedWithSearch() async {
+        viewModel.currentFilter = .assigned
+        viewModel.searchText = "adj"
+        let results = viewModel.filteredBeads
+        XCTAssertTrue(results.allSatisfy { $0.assignee != nil && !$0.assignee!.isEmpty },
+            "All results should have assignee")
+    }
+
+    // MARK: - Combined Filter + Sort Tests
+
+    func testFilterOpenSortByPriority() async {
+        viewModel.currentFilter = .open
+        viewModel.currentSort = .priority
+        let beads = viewModel.filteredBeads
+
+        // Verify all are non-closed
+        XCTAssertTrue(beads.allSatisfy { $0.status != "closed" })
+
+        // Verify sorted by priority ascending
+        for i in 0..<max(0, beads.count - 1) {
+            XCTAssertLessThanOrEqual(beads[i].priority, beads[i + 1].priority,
+                "Open beads should be sorted by priority")
+        }
+    }
+
+    func testFilterAllSortByCreatedDate() async {
+        viewModel.currentFilter = .all
+        viewModel.currentSort = .createdDate
+        let beads = viewModel.filteredBeads
+
+        // Verify sorted by created date descending (newest first)
+        for i in 0..<max(0, beads.count - 1) {
+            let dateA = beads[i].createdDate ?? Date.distantPast
+            let dateB = beads[i + 1].createdDate ?? Date.distantPast
+            XCTAssertGreaterThanOrEqual(dateA, dateB,
+                "Beads should be sorted by created date (newest first)")
+        }
+    }
+
+    func testFilterAllSortByLastUpdated() async {
+        viewModel.currentFilter = .all
+        viewModel.currentSort = .lastUpdated
+        let beads = viewModel.filteredBeads
+
+        // Verify sorted by updated/created date descending
+        for i in 0..<max(0, beads.count - 1) {
+            let dateA = beads[i].updatedDate ?? beads[i].createdDate ?? Date.distantPast
+            let dateB = beads[i + 1].updatedDate ?? beads[i + 1].createdDate ?? Date.distantPast
+            XCTAssertGreaterThanOrEqual(dateA, dateB,
+                "Beads should be sorted by last updated date (newest first)")
+        }
+    }
+
+    // MARK: - Search by Label Tests
+
+    func testSearchByLabel() async {
+        viewModel.currentFilter = .all
+        viewModel.searchText = "ios"
+        let results = viewModel.filteredBeads
+        XCTAssertFalse(results.isEmpty, "Should find beads with 'ios' label")
+        XCTAssertTrue(results.contains { bead in
+            bead.labels.contains { $0.lowercased().contains("ios") }
+        }, "Results should include beads matching label search")
+    }
+
+    func testSearchByAssignee() async {
+        viewModel.currentFilter = .all
+        viewModel.searchText = "flint"
+        let results = viewModel.filteredBeads
+        XCTAssertFalse(results.isEmpty, "Should find beads assigned to flint")
+        XCTAssertTrue(results.allSatisfy {
+            $0.title.lowercased().contains("flint") ||
+            $0.id.lowercased().contains("flint") ||
+            ($0.assignee?.lowercased().contains("flint") ?? false) ||
+            $0.labels.contains { $0.lowercased().contains("flint") }
+        })
+    }
+
+    // MARK: - Status Update Tests
+
+    func testUpdateBeadStatusLocally() async {
+        let beadToUpdate = viewModel.beads.first { $0.status == "open" }
+        guard let bead = beadToUpdate else {
+            XCTFail("Should have an open bead in mock data")
+            return
+        }
+
+        viewModel.updateBeadStatusLocally(beadId: bead.id, newStatus: "in_progress")
+
+        let updated = viewModel.beads.first { $0.id == bead.id }
+        XCTAssertEqual(updated?.status, "in_progress",
+            "Bead status should be updated locally")
+    }
+
+    func testUpdateBeadStatusLocallyPreservesOtherFields() async {
+        let beadToUpdate = viewModel.beads.first { $0.status == "open" }
+        guard let bead = beadToUpdate else {
+            XCTFail("Should have an open bead in mock data")
+            return
+        }
+
+        let originalTitle = bead.title
+        let originalPriority = bead.priority
+        let originalLabels = bead.labels
+
+        viewModel.updateBeadStatusLocally(beadId: bead.id, newStatus: "closed")
+
+        let updated = viewModel.beads.first { $0.id == bead.id }
+        XCTAssertEqual(updated?.title, originalTitle, "Title should be preserved")
+        XCTAssertEqual(updated?.priority, originalPriority, "Priority should be preserved")
+        XCTAssertEqual(updated?.labels, originalLabels, "Labels should be preserved")
+    }
+
+    func testUpdateBeadStatusLocallyRefilters() async {
+        viewModel.currentFilter = .open
+        let initialCount = viewModel.filteredBeads.count
+
+        let beadToClose = viewModel.filteredBeads.first
+        guard let bead = beadToClose else {
+            XCTFail("Should have a filtered bead")
+            return
+        }
+
+        viewModel.updateBeadStatusLocally(beadId: bead.id, newStatus: "closed")
+
+        XCTAssertEqual(viewModel.filteredBeads.count, initialCount - 1,
+            "Closing a bead should remove it from open filter")
+    }
+
+    func testUpdateNonExistentBeadDoesNotCrash() async {
+        // Should be a no-op, not crash
+        viewModel.updateBeadStatusLocally(beadId: "nonexistent-id", newStatus: "closed")
+        XCTAssertEqual(viewModel.beads.count, BeadsListViewModel.mockBeads.count,
+            "Bead count should remain unchanged")
+    }
+
+    // MARK: - Empty State Tests
+
+    func testEmptyStateMessageForAllFilter() async {
+        viewModel.currentFilter = .all
+        XCTAssertEqual(viewModel.emptyStateMessage, "No beads found")
+    }
+
+    func testEmptyStateMessageForOpenFilter() async {
+        viewModel.currentFilter = .open
+        XCTAssertEqual(viewModel.emptyStateMessage, "No open beads")
+    }
+
+    func testEmptyStateMessageForAssignedFilter() async {
+        viewModel.currentFilter = .assigned
+        XCTAssertEqual(viewModel.emptyStateMessage, "No assigned beads")
+    }
+
+    func testEmptyStateMessageForPriorityFilter() async {
+        viewModel.currentFilter = .priority
+        XCTAssertEqual(viewModel.emptyStateMessage, "No priority beads")
+    }
+
+    func testEmptyStateMessageForSearchOverridesFilter() async {
+        viewModel.currentFilter = .priority
+        viewModel.searchText = "nonexistent"
+        XCTAssertEqual(viewModel.emptyStateMessage, "No beads match your search",
+            "Search empty state should override filter-specific message")
+    }
+
+    // MARK: - Filter Enum Tests
+
+    func testFilterIdentifiable() {
+        for filter in BeadsListViewModel.BeadFilter.allCases {
+            XCTAssertEqual(filter.id, filter.rawValue,
+                "Filter id should equal rawValue")
+        }
+    }
+
+    func testFilterCaseIterable() {
+        let allCases = BeadsListViewModel.BeadFilter.allCases
+        XCTAssertEqual(allCases.count, 4,
+            "Should have exactly 4 filter options")
+        XCTAssertTrue(allCases.contains(.all))
+        XCTAssertTrue(allCases.contains(.open))
+        XCTAssertTrue(allCases.contains(.assigned))
+        XCTAssertTrue(allCases.contains(.priority))
+    }
+
+    // MARK: - Sort Enum Tests
+
+    func testSortIdentifiable() {
+        for sort in BeadsListViewModel.BeadSort.allCases {
+            XCTAssertEqual(sort.id, sort.rawValue,
+                "Sort id should equal rawValue")
+        }
+    }
+
+    func testSortCaseIterable() {
+        let allCases = BeadsListViewModel.BeadSort.allCases
+        XCTAssertEqual(allCases.count, 5,
+            "Should have exactly 5 sort options")
+        XCTAssertTrue(allCases.contains(.lastUpdated))
+        XCTAssertTrue(allCases.contains(.priority))
+        XCTAssertTrue(allCases.contains(.createdDate))
+        XCTAssertTrue(allCases.contains(.alphabetical))
+        XCTAssertTrue(allCases.contains(.assignee))
+    }
+
+    // MARK: - Sort Stability Tests
+
+    func testSortByPriorityTiebreaksByDate() async {
+        viewModel.currentFilter = .all
+        viewModel.currentSort = .priority
+        let beads = viewModel.filteredBeads
+
+        // Find consecutive beads with same priority
+        for i in 0..<max(0, beads.count - 1) {
+            if beads[i].priority == beads[i + 1].priority {
+                // Same priority: should be sorted by last updated descending
+                let dateA = beads[i].updatedDate ?? beads[i].createdDate ?? Date.distantPast
+                let dateB = beads[i + 1].updatedDate ?? beads[i + 1].createdDate ?? Date.distantPast
+                XCTAssertGreaterThanOrEqual(dateA, dateB,
+                    "Same-priority beads should be sorted by last updated (newest first)")
+            }
+        }
+    }
+
+    func testSortByAssigneeTiebreaksByPriority() async {
+        viewModel.currentFilter = .all
+        viewModel.currentSort = .assignee
+        let beads = viewModel.filteredBeads
+
+        // Find consecutive beads with same assignee
+        for i in 0..<max(0, beads.count - 1) {
+            let assigneeA = beads[i].assignee ?? ""
+            let assigneeB = beads[i + 1].assignee ?? ""
+            if assigneeA == assigneeB && !assigneeA.isEmpty {
+                XCTAssertLessThanOrEqual(beads[i].priority, beads[i + 1].priority,
+                    "Same-assignee beads should be sorted by priority")
+            }
+        }
+    }
+
+    // MARK: - Mock Data Integrity Tests
+
+    func testMockDataHasExpectedStatuses() {
+        let statuses = Set(BeadsListViewModel.mockBeads.map { $0.status })
+        XCTAssertTrue(statuses.contains("open"), "Mock data should contain open beads")
+        XCTAssertTrue(statuses.contains("in_progress"), "Mock data should contain in_progress beads")
+        XCTAssertTrue(statuses.contains("closed"), "Mock data should contain closed beads")
+        XCTAssertTrue(statuses.contains("blocked"), "Mock data should contain blocked beads")
+    }
+
+    func testMockDataHasExpectedTypes() {
+        let types = Set(BeadsListViewModel.mockBeads.map { $0.type })
+        XCTAssertTrue(types.contains("feature"), "Mock data should contain features")
+        XCTAssertTrue(types.contains("bug"), "Mock data should contain bugs")
+        XCTAssertTrue(types.contains("task"), "Mock data should contain tasks")
+    }
+
+    func testMockDataHasMixedAssignment() {
+        let assigned = BeadsListViewModel.mockBeads.filter { $0.assignee != nil && !$0.assignee!.isEmpty }
+        let unassigned = BeadsListViewModel.mockBeads.filter { $0.assignee == nil || $0.assignee!.isEmpty }
+        XCTAssertFalse(assigned.isEmpty, "Mock data should have assigned beads")
+        XCTAssertFalse(unassigned.isEmpty, "Mock data should have unassigned beads")
+    }
+
+    func testMockDataHasMixedPriorities() {
+        let priorities = Set(BeadsListViewModel.mockBeads.map { $0.priority })
+        XCTAssertTrue(priorities.count > 1, "Mock data should have multiple priority levels")
+        XCTAssertTrue(priorities.contains(where: { $0 <= 1 }), "Mock data should have high-priority beads")
+        XCTAssertTrue(priorities.contains(where: { $0 > 1 }), "Mock data should have low-priority beads")
+    }
+
+    func testMockDataHasMixedSources() {
+        let sources = Set(BeadsListViewModel.mockBeads.map { $0.source })
+        XCTAssertTrue(sources.count > 1, "Mock data should have beads from multiple sources")
+    }
 }

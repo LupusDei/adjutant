@@ -315,6 +315,159 @@ final class ModelTests: XCTestCase {
         XCTAssertTrue(emptyConvoy.hasNoTasks, "Convoy with 0 total tasks should have hasNoTasks=true")
     }
 
+    // MARK: - BeadSource Tests
+
+    func testBeadSourceDecoding() throws {
+        let json = """
+        {
+            "name": "my-project",
+            "path": "/home/user/my-project",
+            "hasBeads": true
+        }
+        """
+
+        let source = try decoder.decode(BeadSource.self, from: json.data(using: .utf8)!)
+
+        XCTAssertEqual(source.name, "my-project")
+        XCTAssertEqual(source.path, "/home/user/my-project")
+        XCTAssertTrue(source.hasBeads)
+        XCTAssertEqual(source.id, "my-project", "BeadSource id should equal name")
+    }
+
+    func testBeadSourceWithoutBeads() throws {
+        let json = """
+        {
+            "name": "empty-project",
+            "path": "/home/user/empty-project",
+            "hasBeads": false
+        }
+        """
+
+        let source = try decoder.decode(BeadSource.self, from: json.data(using: .utf8)!)
+
+        XCTAssertEqual(source.name, "empty-project")
+        XCTAssertFalse(source.hasBeads)
+    }
+
+    func testBeadSourceEquality() {
+        let source1 = BeadSource(name: "proj", path: "/a", hasBeads: true)
+        let source2 = BeadSource(name: "proj", path: "/a", hasBeads: true)
+        let source3 = BeadSource(name: "other", path: "/b", hasBeads: false)
+
+        XCTAssertEqual(source1, source2, "Identical sources should be equal")
+        XCTAssertNotEqual(source1, source3, "Different sources should not be equal")
+    }
+
+    func testBeadSourceIdentifiable() {
+        let source = BeadSource(name: "test-project", path: "/test", hasBeads: true)
+        XCTAssertEqual(source.id, source.name, "BeadSource id should be its name")
+    }
+
+    func testBeadSourceEncoding() throws {
+        let source = BeadSource(name: "my-app", path: "/Users/dev/my-app", hasBeads: true)
+        let data = try JSONEncoder().encode(source)
+        let decoded = try decoder.decode(BeadSource.self, from: data)
+
+        XCTAssertEqual(decoded.name, source.name)
+        XCTAssertEqual(decoded.path, source.path)
+        XCTAssertEqual(decoded.hasBeads, source.hasBeads)
+    }
+
+    // MARK: - BeadSourcesResponse Tests
+
+    func testBeadSourcesResponseDecoding() throws {
+        let json = """
+        {
+            "sources": [
+                {
+                    "name": "project-a",
+                    "path": "/home/user/project-a",
+                    "hasBeads": true
+                },
+                {
+                    "name": "project-b",
+                    "path": "/home/user/project-b",
+                    "hasBeads": true
+                },
+                {
+                    "name": "empty-dir",
+                    "path": "/home/user/empty-dir",
+                    "hasBeads": false
+                }
+            ],
+            "mode": "standalone"
+        }
+        """
+
+        let response = try decoder.decode(BeadSourcesResponse.self, from: json.data(using: .utf8)!)
+
+        XCTAssertEqual(response.sources.count, 3)
+        XCTAssertEqual(response.mode, "standalone")
+        XCTAssertEqual(response.sources[0].name, "project-a")
+        XCTAssertTrue(response.sources[0].hasBeads)
+        XCTAssertEqual(response.sources[2].name, "empty-dir")
+        XCTAssertFalse(response.sources[2].hasBeads)
+    }
+
+    func testBeadSourcesResponseEmptySources() throws {
+        let json = """
+        {
+            "sources": [],
+            "mode": "gastown"
+        }
+        """
+
+        let response = try decoder.decode(BeadSourcesResponse.self, from: json.data(using: .utf8)!)
+
+        XCTAssertTrue(response.sources.isEmpty)
+        XCTAssertEqual(response.mode, "gastown")
+    }
+
+    func testBeadSourcesResponseSwarmMode() throws {
+        let json = """
+        {
+            "sources": [
+                {
+                    "name": "shared-project",
+                    "path": "/workspace/shared",
+                    "hasBeads": true
+                }
+            ],
+            "mode": "swarm"
+        }
+        """
+
+        let response = try decoder.decode(BeadSourcesResponse.self, from: json.data(using: .utf8)!)
+
+        XCTAssertEqual(response.mode, "swarm")
+        XCTAssertEqual(response.sources.count, 1)
+    }
+
+    func testBeadSourcesResponseEquality() {
+        let sources = [BeadSource(name: "proj", path: "/p", hasBeads: true)]
+        let response1 = BeadSourcesResponse(sources: sources, mode: "standalone")
+        let response2 = BeadSourcesResponse(sources: sources, mode: "standalone")
+        let response3 = BeadSourcesResponse(sources: [], mode: "gastown")
+
+        XCTAssertEqual(response1, response2)
+        XCTAssertNotEqual(response1, response3)
+    }
+
+    func testBeadSourcesResponseEncoding() throws {
+        let sources = [
+            BeadSource(name: "app", path: "/app", hasBeads: true),
+            BeadSource(name: "lib", path: "/lib", hasBeads: false)
+        ]
+        let response = BeadSourcesResponse(sources: sources, mode: "standalone")
+        let data = try JSONEncoder().encode(response)
+        let decoded = try decoder.decode(BeadSourcesResponse.self, from: data)
+
+        XCTAssertEqual(decoded.sources.count, 2)
+        XCTAssertEqual(decoded.mode, "standalone")
+        XCTAssertEqual(decoded.sources[0].name, "app")
+        XCTAssertEqual(decoded.sources[1].name, "lib")
+    }
+
     // MARK: - BeadInfo Tests
 
     func testBeadInfoDecoding() throws {
@@ -344,6 +497,153 @@ final class ModelTests: XCTestCase {
         XCTAssertEqual(bead.labels, ["frontend", "auth"])
         XCTAssertNotNil(bead.createdDate)
         XCTAssertNotNil(bead.updatedDate)
+    }
+
+    func testBeadInfoWithNullOptionals() throws {
+        let json = """
+        {
+            "id": "gb-123",
+            "title": "Unassigned task",
+            "status": "open",
+            "priority": 2,
+            "type": "task",
+            "assignee": null,
+            "rig": null,
+            "source": "my-project",
+            "labels": [],
+            "createdAt": "2024-01-10T08:00:00Z",
+            "updatedAt": null
+        }
+        """
+
+        let bead = try decoder.decode(BeadInfo.self, from: json.data(using: .utf8)!)
+
+        XCTAssertNil(bead.assignee)
+        XCTAssertNil(bead.rig)
+        XCTAssertNil(bead.updatedAt)
+        XCTAssertNil(bead.updatedDate)
+        XCTAssertTrue(bead.labels.isEmpty)
+        XCTAssertEqual(bead.source, "my-project")
+    }
+
+    func testBeadInfoSourceField() throws {
+        // Test that source field correctly identifies bead origin
+        let projectBead = try decoder.decode(BeadInfo.self, from: """
+        {
+            "id": "pb-1", "title": "Project bead", "status": "open", "priority": 2,
+            "type": "task", "assignee": null, "rig": null,
+            "source": "my-project", "labels": [],
+            "createdAt": "2024-01-10T08:00:00Z", "updatedAt": null
+        }
+        """.data(using: .utf8)!)
+
+        let rigBead = try decoder.decode(BeadInfo.self, from: """
+        {
+            "id": "rb-1", "title": "Rig bead", "status": "open", "priority": 2,
+            "type": "task", "assignee": null, "rig": "adjutant",
+            "source": "adjutant", "labels": [],
+            "createdAt": "2024-01-10T08:00:00Z", "updatedAt": null
+        }
+        """.data(using: .utf8)!)
+
+        let townBead = try decoder.decode(BeadInfo.self, from: """
+        {
+            "id": "hq-1", "title": "Town bead", "status": "open", "priority": 2,
+            "type": "task", "assignee": null, "rig": null,
+            "source": "town", "labels": [],
+            "createdAt": "2024-01-10T08:00:00Z", "updatedAt": null
+        }
+        """.data(using: .utf8)!)
+
+        XCTAssertEqual(projectBead.source, "my-project")
+        XCTAssertEqual(rigBead.source, "adjutant")
+        XCTAssertEqual(townBead.source, "town")
+    }
+
+    func testBeadInfoDateParsing() throws {
+        let json = """
+        {
+            "id": "gb-date", "title": "Date test", "status": "open", "priority": 2,
+            "type": "task", "assignee": null, "rig": null,
+            "source": "test", "labels": [],
+            "createdAt": "2026-02-16T10:30:00Z",
+            "updatedAt": "2026-02-16T14:45:00.123Z"
+        }
+        """
+
+        let bead = try decoder.decode(BeadInfo.self, from: json.data(using: .utf8)!)
+
+        XCTAssertNotNil(bead.createdDate, "Should parse ISO8601 date without fractional seconds")
+        XCTAssertNotNil(bead.updatedDate, "Should parse ISO8601 date with fractional seconds")
+
+        if let created = bead.createdDate, let updated = bead.updatedDate {
+            XCTAssertTrue(updated > created, "Updated date should be after created date")
+        }
+    }
+
+    func testBeadInfoEquality() {
+        let bead1 = BeadInfo(
+            id: "gb-1", title: "Test", status: "open", priority: 2,
+            type: "task", assignee: nil, rig: nil, source: "proj",
+            labels: ["a"], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil
+        )
+        let bead2 = BeadInfo(
+            id: "gb-1", title: "Test", status: "open", priority: 2,
+            type: "task", assignee: nil, rig: nil, source: "proj",
+            labels: ["a"], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil
+        )
+        let bead3 = BeadInfo(
+            id: "gb-2", title: "Different", status: "closed", priority: 0,
+            type: "bug", assignee: "someone", rig: "rig1", source: "other",
+            labels: [], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil
+        )
+
+        XCTAssertEqual(bead1, bead2)
+        XCTAssertNotEqual(bead1, bead3)
+    }
+
+    func testBeadInfoHashable() {
+        let bead1 = BeadInfo(
+            id: "gb-1", title: "Test", status: "open", priority: 2,
+            type: "task", assignee: nil, rig: nil, source: "proj",
+            labels: [], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil
+        )
+        let bead2 = BeadInfo(
+            id: "gb-2", title: "Other", status: "open", priority: 2,
+            type: "task", assignee: nil, rig: nil, source: "proj",
+            labels: [], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil
+        )
+
+        var set = Set<BeadInfo>()
+        set.insert(bead1)
+        set.insert(bead2)
+        set.insert(bead1) // Duplicate
+
+        XCTAssertEqual(set.count, 2, "Set should deduplicate identical beads")
+    }
+
+    func testBeadInfoPriorityLevels() {
+        let p0 = BeadInfo(id: "p0", title: "", status: "open", priority: 0,
+            type: "t", assignee: nil, rig: nil, source: "s",
+            labels: [], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil)
+        let p1 = BeadInfo(id: "p1", title: "", status: "open", priority: 1,
+            type: "t", assignee: nil, rig: nil, source: "s",
+            labels: [], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil)
+        let p2 = BeadInfo(id: "p2", title: "", status: "open", priority: 2,
+            type: "t", assignee: nil, rig: nil, source: "s",
+            labels: [], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil)
+        let p3 = BeadInfo(id: "p3", title: "", status: "open", priority: 3,
+            type: "t", assignee: nil, rig: nil, source: "s",
+            labels: [], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil)
+        let p4 = BeadInfo(id: "p4", title: "", status: "open", priority: 4,
+            type: "t", assignee: nil, rig: nil, source: "s",
+            labels: [], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil)
+
+        XCTAssertEqual(p0.priorityLevel, .urgent)
+        XCTAssertEqual(p1.priorityLevel, .high)
+        XCTAssertEqual(p2.priorityLevel, .normal)
+        XCTAssertEqual(p3.priorityLevel, .low)
+        XCTAssertEqual(p4.priorityLevel, .lowest)
     }
 
     // MARK: - Voice Tests

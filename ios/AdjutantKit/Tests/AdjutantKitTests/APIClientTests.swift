@@ -229,6 +229,135 @@ final class APIClientTests: XCTestCase {
         XCTAssertFalse(convoy.isComplete)
     }
 
+    // MARK: - Bead Source Endpoint Tests
+
+    func testGetBeadSourcesDecoding() async throws {
+        MockURLProtocol.mockHandler = MockURLProtocol.mockResponse(json: [
+            "success": true,
+            "data": [
+                "sources": [
+                    [
+                        "name": "my-project",
+                        "path": "/home/user/my-project",
+                        "hasBeads": true
+                    ],
+                    [
+                        "name": "another-app",
+                        "path": "/home/user/another-app",
+                        "hasBeads": true
+                    ],
+                    [
+                        "name": "empty-dir",
+                        "path": "/home/user/empty-dir",
+                        "hasBeads": false
+                    ]
+                ],
+                "mode": "standalone"
+            ],
+            "timestamp": "2024-01-15T10:30:00.000Z"
+        ])
+
+        let response = try await client.getBeadSources()
+
+        XCTAssertEqual(response.sources.count, 3)
+        XCTAssertEqual(response.mode, "standalone")
+        XCTAssertEqual(response.sources[0].name, "my-project")
+        XCTAssertEqual(response.sources[0].path, "/home/user/my-project")
+        XCTAssertTrue(response.sources[0].hasBeads)
+        XCTAssertEqual(response.sources[1].name, "another-app")
+        XCTAssertTrue(response.sources[1].hasBeads)
+        XCTAssertEqual(response.sources[2].name, "empty-dir")
+        XCTAssertFalse(response.sources[2].hasBeads)
+    }
+
+    func testGetBeadSourcesEmptyResponse() async throws {
+        MockURLProtocol.mockHandler = MockURLProtocol.mockResponse(json: [
+            "success": true,
+            "data": [
+                "sources": [],
+                "mode": "gastown"
+            ],
+            "timestamp": "2024-01-15T10:30:00.000Z"
+        ])
+
+        let response = try await client.getBeadSources()
+
+        XCTAssertTrue(response.sources.isEmpty)
+        XCTAssertEqual(response.mode, "gastown")
+    }
+
+    func testGetBeadSourcesSwarmMode() async throws {
+        MockURLProtocol.mockHandler = MockURLProtocol.mockResponse(json: [
+            "success": true,
+            "data": [
+                "sources": [
+                    [
+                        "name": "shared-workspace",
+                        "path": "/workspace/shared",
+                        "hasBeads": true
+                    ]
+                ],
+                "mode": "swarm"
+            ],
+            "timestamp": "2024-01-15T10:30:00.000Z"
+        ])
+
+        let response = try await client.getBeadSources()
+
+        XCTAssertEqual(response.mode, "swarm")
+        XCTAssertEqual(response.sources.count, 1)
+        XCTAssertEqual(response.sources[0].name, "shared-workspace")
+    }
+
+    func testGetBeadSourcesRequestPath() async throws {
+        var capturedRequest: URLRequest?
+
+        MockURLProtocol.mockHandler = { request in
+            capturedRequest = request
+            let envelope: [String: Any] = [
+                "success": true,
+                "data": ["sources": [], "mode": "standalone"],
+                "timestamp": "2024-01-15T10:30:00.000Z"
+            ]
+            let data = try! JSONSerialization.data(withJSONObject: envelope)
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, data)
+        }
+
+        _ = try await client.getBeadSources()
+
+        XCTAssertNotNil(capturedRequest)
+        XCTAssertEqual(capturedRequest!.httpMethod, "GET")
+        XCTAssertTrue(capturedRequest!.url!.path.contains("/beads/sources"),
+            "Request should hit /beads/sources endpoint")
+    }
+
+    func testGetBeadSourcesServerError() async throws {
+        MockURLProtocol.mockHandler = MockURLProtocol.mockError(
+            statusCode: 500,
+            code: "INTERNAL_ERROR",
+            message: "Failed to scan directories"
+        )
+
+        do {
+            _ = try await client.getBeadSources()
+            XCTFail("Expected error to be thrown")
+        } catch let error as APIClientError {
+            guard case .serverError(let apiError) = error else {
+                XCTFail("Expected serverError, got \(error)")
+                return
+            }
+            XCTAssertEqual(apiError.code, "INTERNAL_ERROR")
+        }
+    }
+
+    // MARK: - Bead Decoding Tests
+
     func testBeadDecoding() async throws {
         MockURLProtocol.mockHandler = MockURLProtocol.mockResponse(json: [
             "success": true,
