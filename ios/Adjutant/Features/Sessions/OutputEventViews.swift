@@ -86,7 +86,7 @@ struct MessageBubble: View {
 
 // MARK: - User Input Bubble
 
-/// Chat bubble for user input messages, right-aligned.
+/// Chat bubble for user input messages (right-aligned).
 struct UserInputBubble: View {
     @Environment(\.crtTheme) private var theme
     let content: String
@@ -98,11 +98,11 @@ struct UserInputBubble: View {
             VStack(alignment: .trailing, spacing: CRTTheme.Spacing.xxs) {
                 Text(content)
                     .font(.system(.body))
-                    .foregroundColor(theme.primary)
+                    .foregroundColor(.white)
                     .textSelection(.enabled)
             }
             .padding(CRTTheme.Spacing.sm)
-            .background(theme.primary.opacity(0.15))
+            .background(theme.primary.opacity(0.3))
             .cornerRadius(12)
         }
         .padding(.horizontal, CRTTheme.Spacing.md)

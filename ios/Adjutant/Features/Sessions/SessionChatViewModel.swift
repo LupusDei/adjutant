@@ -75,6 +75,9 @@ final class SessionChatViewModel: ObservableObject {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
+        // Add local user input event so it appears in the chat view
+        outputEvents.append(.userInput(content: text))
+
         wsClient.sendSessionInput(sessionId: session.id, text: text + "\n")
         inputText = ""
     }

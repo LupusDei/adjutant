@@ -105,10 +105,10 @@ private struct TabContent: View {
         case .mail:
             MailListView()
         case .chat:
-            if AppState.shared.deploymentMode == .standalone {
-                StandaloneSessionView()
-            } else {
+            if AppState.shared.deploymentMode == .gastown {
                 ChatView(apiClient: AppState.shared.apiClient)
+            } else {
+                UnifiedChatView()
             }
         case .epics:
             EpicsListView()
