@@ -399,6 +399,11 @@ extension APIClient {
         )
     }
 
+    /// List available bead sources (projects/rigs with beads databases)
+    public func getBeadSources() async throws -> BeadSourcesResponse {
+        try await requestWithEnvelope(.get, path: "/beads/sources")
+    }
+
     /// Update a bead's status (e.g., for Kanban drag-and-drop)
     ///
     /// Updates the status of a bead in its source database.

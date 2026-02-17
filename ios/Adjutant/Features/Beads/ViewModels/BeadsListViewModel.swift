@@ -35,6 +35,9 @@ final class BeadsListViewModel: BaseViewModel {
         }
     }
 
+    /// Available bead sources for the source filter dropdown
+    @Published private(set) var beadSources: [BeadSource] = []
+
     /// Currently selected rig filter (synced from AppState)
     private var selectedRig: String? {
         AppState.shared.selectedRig
@@ -197,7 +200,7 @@ final class BeadsListViewModel: BaseViewModel {
 
     /// Loads beads from the API via DataSyncService
     func loadBeads() async {
-        guard apiClient != nil else {
+        guard let apiClient else {
             // Use mock data for preview/testing
             await performAsync {
                 self.beads = Self.mockBeads
@@ -208,6 +211,21 @@ final class BeadsListViewModel: BaseViewModel {
 
         await performAsync(showLoading: beads.isEmpty) {
             await self.dataSync.refreshBeads()
+        }
+
+        // Fetch bead sources for standalone/swarm source filter
+        if AppState.shared.deploymentMode != .gastown {
+            await fetchBeadSources(apiClient: apiClient)
+        }
+    }
+
+    /// Fetches available bead sources from the API for the source filter dropdown
+    private func fetchBeadSources(apiClient: APIClient) async {
+        do {
+            let response = try await apiClient.getBeadSources()
+            beadSources = response.sources.filter { $0.hasBeads }
+        } catch {
+            // Non-critical — source filter just won't show options
         }
     }
 

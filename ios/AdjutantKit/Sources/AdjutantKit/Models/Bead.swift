@@ -74,6 +74,40 @@ public struct BeadInfo: Codable, Identifiable, Equatable, Hashable {
     }
 }
 
+// MARK: - Bead Source
+
+/// A bead source represents a project/rig directory that contains beads.
+/// Returned by GET /api/beads/sources.
+public struct BeadSource: Codable, Identifiable, Equatable {
+    /// Display name (rig name or project name)
+    public let name: String
+    /// Absolute path to the working directory
+    public let path: String
+    /// Whether this directory has beads
+    public let hasBeads: Bool
+
+    public var id: String { name }
+
+    public init(name: String, path: String, hasBeads: Bool) {
+        self.name = name
+        self.path = path
+        self.hasBeads = hasBeads
+    }
+}
+
+/// Response from GET /api/beads/sources
+public struct BeadSourcesResponse: Codable, Equatable {
+    /// Available bead sources
+    public let sources: [BeadSource]
+    /// Current deployment mode
+    public let mode: String
+
+    public init(sources: [BeadSource], mode: String) {
+        self.sources = sources
+        self.mode = mode
+    }
+}
+
 // MARK: - Transferable for Drag & Drop
 
 extension BeadInfo: Transferable {

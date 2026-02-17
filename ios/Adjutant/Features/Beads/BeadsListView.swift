@@ -105,15 +105,19 @@ struct BeadsListView: View {
 
     private var filterBar: some View {
         VStack(spacing: CRTTheme.Spacing.xs) {
-            // Top row: Overseer toggle + Rig filter
+            // Top row: Overseer toggle + Source filter (mode-aware)
             HStack(spacing: CRTTheme.Spacing.sm) {
                 // Overseer toggle
                 overseerToggle
 
                 Spacer()
 
-                // Rig filter dropdown
-                RigFilterDropdown(availableRigs: appState.availableRigs)
+                // Mode-aware filter: Rig dropdown for gastown, Project dropdown for standalone/swarm
+                if appState.deploymentMode == .gastown {
+                    RigFilterDropdown(availableRigs: appState.availableRigs)
+                } else {
+                    SourceFilterDropdown(sources: viewModel.beadSources)
+                }
             }
 
             // Search field
