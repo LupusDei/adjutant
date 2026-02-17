@@ -66,7 +66,8 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
   }, []);
 
   // Convert UI rig filter to API parameter
-  const apiRig = rigFilter === 'ALL' ? undefined : rigFilter === 'TOWN' ? 'town' : rigFilter;
+  // ALL sends rig=all to fetch from all databases; specific names fetch per-project
+  const apiRig = rigFilter === 'ALL' ? 'all' : rigFilter === 'TOWN' ? 'town' : rigFilter;
 
   // Fetch beads from API
   const {

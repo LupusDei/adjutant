@@ -339,8 +339,9 @@ public final class DataSyncService: ObservableObject {
     }
 
     /// Manually triggers a beads refresh. Safe to call multiple times (deduplicates).
-    public func refreshBeads() async {
-        await fetchBeads()
+    /// - Parameter rig: Optional rig/project name to fetch beads for. Pass "all" for all, nil defaults to "all".
+    public func refreshBeads(rig: String? = nil) async {
+        await fetchBeads(rig: rig)
     }
 
     /// Refreshes all endpoints, skipping those with fresh cache data.
@@ -483,14 +484,14 @@ public final class DataSyncService: ObservableObject {
         }
     }
 
-    private func fetchBeads() async {
+    private func fetchBeads(rig: String? = nil) async {
         guard !isFetchingBeads else { return }
         isFetchingBeads = true
         defer { isFetchingBeads = false }
 
         do {
-            // Fetch all beads (rig filtering done client-side)
-            let response = try await apiClient.getBeads(rig: "all", status: .all)
+            // Fetch beads for specified rig/project (server-side filtering)
+            let response = try await apiClient.getBeads(rig: rig ?? "all", status: .all)
             let sorted = response.sorted {
                 if $0.priority != $1.priority {
                     return $0.priority < $1.priority

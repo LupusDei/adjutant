@@ -10,6 +10,7 @@
 import { Router } from "express";
 import { listBeads, listAllBeads, updateBeadStatus, getBead, listBeadSources, type BeadStatus } from "../services/beads-service.js";
 import { resolveRigPath } from "../services/workspace/index.js";
+import { listProjects } from "../services/projects-service.js";
 import { success, internalError, badRequest } from "../utils/responses.js";
 
 export const beadsRouter = Router();
@@ -69,8 +70,22 @@ beadsRouter.get("/", async (req, res) => {
 
   // rig=town or rig=<specific>: Query single database
   // For "town", query the town database directly (no rigPath needed)
-  // For other rigs, resolve their path
-  const rigPath = rig === "town" ? undefined : resolveRigPath(rig) ?? undefined;
+  // For other rigs, resolve their path (check workspace rigs, then registered projects)
+  let rigPath: string | undefined;
+  if (rig !== "town") {
+    rigPath = resolveRigPath(rig) ?? undefined;
+
+    // If workspace rig resolution failed, check registered projects by name
+    if (!rigPath) {
+      const projectsResult = listProjects();
+      if (projectsResult.success && projectsResult.data) {
+        const project = projectsResult.data.find((p) => p.name === rig);
+        if (project) {
+          rigPath = project.path;
+        }
+      }
+    }
+  }
 
   const result = await listBeads({
     // Don't pass rig for filtering - we want all beads from the database

@@ -145,33 +145,25 @@ final class BeadsListViewModel: BaseViewModel {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newBeads in
                 guard let self = self, !newBeads.isEmpty else { return }
-                // Apply rig filter client-side
-                let rig = self.selectedRig
-                if let rig = rig {
-                    self.beads = newBeads.filter { $0.source == rig }
-                } else {
-                    self.beads = newBeads
-                }
+                // Server already filtered by rig — use results directly
+                self.beads = newBeads
                 self.applyFilter()
             }
             .store(in: &cancellables)
     }
 
-    /// Sets up observation of rig filter changes from AppState
+    /// Sets up observation of rig filter changes from AppState.
+    /// Triggers a new server-side fetch when the selected rig/project changes.
     private func setupRigFilterObserver() {
         AppState.shared.$selectedRig
             .dropFirst() // Skip initial value to avoid double-fetch on init
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newRig in
                 guard let self = self else { return }
-                // Rig changed - re-filter from DataSyncService data
-                let allBeads = self.dataSync.beads
-                if let rig = newRig {
-                    self.beads = allBeads.filter { $0.source == rig }
-                } else {
-                    self.beads = allBeads
+                // Rig changed — fetch beads for the new rig from the server
+                Task {
+                    await self.dataSync.refreshBeads(rig: newRig)
                 }
-                self.applyFilter()
             }
             .store(in: &cancellables)
     }
@@ -210,7 +202,7 @@ final class BeadsListViewModel: BaseViewModel {
         }
 
         await performAsync(showLoading: beads.isEmpty) {
-            await self.dataSync.refreshBeads()
+            await self.dataSync.refreshBeads(rig: self.selectedRig)
         }
 
         // Fetch bead sources for standalone/swarm source filter
