@@ -71,13 +71,13 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
           />
 
           {/* Source Filter */}
-          <span style={styles.filterLabel}>{isGasTown ? 'RIG:' : 'SOURCE:'}</span>
+          <span style={styles.filterLabel}>{isGasTown ? 'RIG:' : 'PROJECT:'}</span>
           <select
             value={rigFilter}
             onChange={(e) => setRigFilter(e.target.value as RigFilter)}
             style={styles.select}
           >
-            <option value="ALL">{isGasTown ? 'ALL RIGS' : 'ALL'}</option>
+            <option value="ALL">{isGasTown ? 'ALL RIGS' : 'ALL PROJECTS'}</option>
             {rigOptions.map((rig) => (
               <option key={rig} value={rig}>
                 {rig.toUpperCase().replace(/_/g, ' ')}

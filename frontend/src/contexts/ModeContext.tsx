@@ -236,9 +236,9 @@ export function useVisibleTabs(): Set<string> {
   return useMemo(() => {
     switch (mode) {
       case 'standalone':
-        return new Set(['chat', 'beads', 'settings']);
+        return new Set(['chat', 'epics', 'beads', 'settings']);
       case 'swarm':
-        return new Set(['chat', 'crew', 'beads', 'settings']);
+        return new Set(['chat', 'crew', 'epics', 'beads', 'settings']);
       case 'gastown':
       default:
         return new Set(['dashboard', 'mail', 'chat', 'epics', 'crew', 'beads', 'settings']);

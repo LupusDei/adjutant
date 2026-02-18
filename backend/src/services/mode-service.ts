@@ -59,6 +59,7 @@ const MODE_FEATURES: Record<DeploymentMode, string[]> = {
   standalone: [
     "chat",
     "beads",
+    "epics",
     "websocket",
     "sse",
   ],
@@ -66,6 +67,7 @@ const MODE_FEATURES: Record<DeploymentMode, string[]> = {
     "chat",
     "crew_flat",
     "beads",
+    "epics",
     "mail",
     "websocket",
     "sse",
