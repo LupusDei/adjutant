@@ -127,6 +127,11 @@ export class LifecycleManager {
         "Enter",
       ]);
 
+      // Wait for the pane to be responsive before returning.
+      // This prevents the race condition where iOS connects via WebSocket
+      // before pipe-pane can attach to the pane.
+      await this.waitForPane(`${tmuxSessionName}:0.0`);
+
       this.registry.updateStatus(session.id, "working");
 
       logInfo("Session created", {
@@ -263,6 +268,22 @@ export class LifecycleManager {
   // --------------------------------------------------------------------------
   // Private
   // --------------------------------------------------------------------------
+
+  /**
+   * Wait until a tmux pane is responsive (accepts display-message).
+   * Retries up to 10 times with 200ms intervals (2 seconds max).
+   */
+  private async waitForPane(pane: string, maxRetries = 10): Promise<void> {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        await execTmuxCommand(["display-message", "-t", pane, "-p", ""]);
+        return; // Pane is responsive
+      } catch {
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    }
+    logWarn("Pane readiness timeout — continuing anyway", { pane });
+  }
 
   private generateTmuxName(name: string, mode?: SessionMode): string {
     const sanitized = name.replace(/[^a-zA-Z0-9_-]/g, "-");

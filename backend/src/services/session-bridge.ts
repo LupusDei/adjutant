@@ -184,9 +184,17 @@ export class SessionBridge {
 
     this.registry.addClient(sessionId, clientId);
 
-    // Start pipe if not already attached
+    // Start pipe if not already attached.
+    // Newly-created sessions may need a moment for the tmux pane to be ready,
+    // so we retry attach up to 3 times with a short delay.
     if (!this.connector.isAttached(sessionId)) {
-      let attached = await this.connector.attach(sessionId);
+      let attached = false;
+      for (let attempt = 0; attempt < 3 && !attached; attempt++) {
+        if (attempt > 0) {
+          await new Promise((r) => setTimeout(r, 500));
+        }
+        attached = await this.connector.attach(sessionId);
+      }
       if (!attached) {
         // Pipe failed — check if the tmux session is alive (isAlive auto-heals stale pane refs)
         const alive = await this.lifecycle.isAlive(sessionId);

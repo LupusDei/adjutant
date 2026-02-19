@@ -53,6 +53,11 @@ final class SessionChatViewModel: ObservableObject {
     /// Tracks locally-sent user inputs to deduplicate against server echoes
     private var pendingLocalInputs: [String] = []
 
+    /// Retry state for session connection failures
+    private var connectRetryCount = 0
+    private let maxConnectRetries = 3
+    private var retryTask: Task<Void, Never>?
+
     // MARK: - Init
 
     init(session: ManagedSession, wsClient: WebSocketClient) {
@@ -69,6 +74,7 @@ final class SessionChatViewModel: ObservableObject {
     }
 
     func onDisappear() {
+        retryTask?.cancel()
         disconnectFromSession()
     }
 
@@ -139,6 +145,9 @@ final class SessionChatViewModel: ObservableObject {
             .sink { [weak self] event in
                 guard let self else { return }
                 self.isConnected = true
+                self.connectRetryCount = 0
+                self.retryTask?.cancel()
+                self.errorMessage = nil
                 // Append replay buffer
                 for line in event.buffer {
                     self.appendOutput(line)
@@ -197,14 +206,30 @@ final class SessionChatViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Error messages related to this session
+        // Error messages related to this session — auto-retry on connection failures
         wsClient.messageSubject
             .filter { [weak self] in
                 $0.type == "error" && $0.sessionId == self?.session.id
             }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] msg in
-                self?.errorMessage = msg.message ?? "Unknown session error"
+                guard let self else { return }
+                let errorMsg = msg.message ?? "Unknown session error"
+                let isConnectError = msg.code == "session_connect_failed"
+                    || errorMsg.contains("attach output pipe")
+                    || errorMsg.contains("no longer available")
+
+                if isConnectError && self.connectRetryCount < self.maxConnectRetries {
+                    self.connectRetryCount += 1
+                    self.errorMessage = "Connecting... (attempt \(self.connectRetryCount + 1))"
+                    self.retryTask = Task { @MainActor [weak self] in
+                        try? await Task.sleep(nanoseconds: UInt64(self?.connectRetryCount ?? 1) * 1_000_000_000)
+                        guard let self, !Task.isCancelled else { return }
+                        self.connectToSession()
+                    }
+                } else {
+                    self.errorMessage = errorMsg
+                }
             }
             .store(in: &cancellables)
     }
