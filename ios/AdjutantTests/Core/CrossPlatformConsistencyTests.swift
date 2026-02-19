@@ -27,30 +27,32 @@ final class CrossPlatformConsistencyTests: XCTestCase {
         XCTAssertTrue(tabs.contains(.settings))
     }
 
-    func testStandaloneModeShowsOnly3Tabs() {
+    func testStandaloneModeShows6Tabs() {
         let tabs = DeploymentMode.singleAgent.visibleTabs
-        XCTAssertEqual(tabs.count, 3, "Standalone mode should show 3 tabs")
+        XCTAssertEqual(tabs.count, 6, "Standalone mode should show 6 tabs")
         XCTAssertTrue(tabs.contains(.chat))
+        XCTAssertTrue(tabs.contains(.epics))
+        XCTAssertTrue(tabs.contains(.crew))
+        XCTAssertTrue(tabs.contains(.projects))
         XCTAssertTrue(tabs.contains(.beads))
         XCTAssertTrue(tabs.contains(.settings))
         // Hidden tabs
         XCTAssertFalse(tabs.contains(.dashboard))
         XCTAssertFalse(tabs.contains(.mail))
-        XCTAssertFalse(tabs.contains(.epics))
-        XCTAssertFalse(tabs.contains(.crew))
     }
 
-    func testSwarmModeShows4Tabs() {
+    func testSwarmModeShows6Tabs() {
         let tabs = DeploymentMode.swarm.visibleTabs
-        XCTAssertEqual(tabs.count, 4, "Swarm mode should show 4 tabs")
+        XCTAssertEqual(tabs.count, 6, "Swarm mode should show 6 tabs")
         XCTAssertTrue(tabs.contains(.chat))
         XCTAssertTrue(tabs.contains(.crew))
+        XCTAssertTrue(tabs.contains(.epics))
+        XCTAssertTrue(tabs.contains(.projects))
         XCTAssertTrue(tabs.contains(.beads))
         XCTAssertTrue(tabs.contains(.settings))
         // Hidden tabs
         XCTAssertFalse(tabs.contains(.dashboard))
         XCTAssertFalse(tabs.contains(.mail))
-        XCTAssertFalse(tabs.contains(.epics))
     }
 
     // MARK: - Mode Identifier Values (must match Backend/Frontend strings)

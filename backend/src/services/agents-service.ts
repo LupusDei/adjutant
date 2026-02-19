@@ -9,6 +9,8 @@ import { collectAgentSnapshot, type AgentRuntimeInfo } from "./agent-data.js";
 import { resolveWorkspaceRoot, getDeploymentMode } from "./workspace/index.js";
 import { getTopology } from "./topology/index.js";
 import { getEventBus } from "./event-bus.js";
+import { listTmuxSessions } from "./tmux.js";
+import { getSessionBridge } from "./session-bridge.js";
 import type { CrewMember, CrewMemberStatus, AgentType } from "../types/index.js";
 
 // ============================================================================
@@ -136,9 +138,11 @@ function emitStatusChanges(agents: CrewMember[]): void {
  */
 export async function getAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
   try {
-    // Agents are a Gas Town concept — return empty in standalone/swarm mode
-    if (getDeploymentMode() !== "gastown") {
-      return { success: true, data: [] };
+    const mode = getDeploymentMode();
+
+    // In standalone/swarm mode, discover agents from tmux sessions + managed sessions
+    if (mode !== "gastown") {
+      return await getTmuxAgents();
     }
 
     const townRoot = resolveWorkspaceRoot();
@@ -153,6 +157,69 @@ export async function getAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
       error: {
         code: "AGENTS_ERROR",
         message: err instanceof Error ? err.message : "Failed to get agents",
+      },
+    };
+  }
+}
+
+/**
+ * Discovers agents from tmux sessions for standalone/swarm mode.
+ * Merges tmux session data with managed session data from the SessionBridge.
+ */
+async function getTmuxAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
+  try {
+    const tmuxSessions = await listTmuxSessions();
+    const bridge = getSessionBridge();
+    const managedSessions = bridge.listSessions();
+
+    const crewMembers: CrewMember[] = [];
+
+    // Build a set of tmux sessions already tracked by managed sessions
+    const managedTmuxSessions = new Set(
+      managedSessions.map((s) => s.tmuxSession)
+    );
+
+    // Add managed sessions as agents
+    for (const session of managedSessions) {
+      const isRunning = tmuxSessions.has(session.tmuxSession);
+      crewMembers.push({
+        id: session.id,
+        name: session.name,
+        type: "crew" as AgentType,
+        rig: "",
+        status: isRunning
+          ? session.status === "working"
+            ? "working"
+            : "idle"
+          : "offline",
+        sessionId: session.id,
+      });
+    }
+
+    // Add unmanaged tmux sessions (e.g. user-created tmux sessions running claude)
+    for (const tmuxName of tmuxSessions) {
+      if (managedTmuxSessions.has(tmuxName)) continue;
+      // Only include sessions that look like agent sessions
+      if (!tmuxName.includes("claude") && !tmuxName.includes("agent")) continue;
+
+      crewMembers.push({
+        id: tmuxName,
+        name: tmuxName,
+        type: "crew" as AgentType,
+        rig: "",
+        status: "idle",
+      });
+    }
+
+    crewMembers.sort((a, b) => a.name.localeCompare(b.name));
+    emitStatusChanges(crewMembers);
+    return { success: true, data: crewMembers };
+  } catch (err) {
+    return {
+      success: false,
+      error: {
+        code: "TMUX_AGENTS_ERROR",
+        message: err instanceof Error ? err.message : "Failed to discover tmux agents",
       },
     };
   }

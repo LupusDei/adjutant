@@ -26,6 +26,12 @@ struct UnifiedChatView: View {
         .task {
             await loader.loadIfNeeded()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .switchToSession)) { notification in
+            if let sessionId = notification.userInfo?["sessionId"] as? String,
+               let target = loader.sessions.first(where: { $0.id == sessionId }) {
+                loader.switchTo(target)
+            }
+        }
         .sheet(isPresented: $loader.showingSessionPicker) {
             SessionsView { session in
                 loader.switchTo(session)
@@ -169,48 +175,41 @@ private struct UnifiedChatContent: View {
         }
     }
 
-    // MARK: - Header
+    // MARK: - Header (matches gastown ChatView style)
 
     private var headerBar: some View {
-        HStack(spacing: CRTTheme.Spacing.sm) {
-            // Session picker button
+        HStack {
+            // Agent/session picker (matches gastown recipient selector style)
             Button {
                 loader.showingSessionPicker = true
             } label: {
-                HStack(spacing: CRTTheme.Spacing.xs) {
-                    StatusDot(.success, size: 6, pulse: viewModel.sessionStatus == "working")
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: CRTTheme.Spacing.xs) {
+                        StatusDot(
+                            viewModel.isConnected ? .success : .offline,
+                            size: 6,
+                            pulse: viewModel.sessionStatus == "working"
+                        )
 
-                    CRTText(
-                        viewModel.session.name.uppercased(),
-                        style: .caption,
-                        glowIntensity: .subtle,
-                        color: theme.primary
-                    )
-                    .lineLimit(1)
+                        CRTText(
+                            viewModel.session.name.uppercased(),
+                            style: .subheader,
+                            glowIntensity: .medium
+                        )
+                        .lineLimit(1)
 
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(theme.primary)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(theme.primary)
+                    }
+                    CRTText("AGENT SESSION", style: .caption, glowIntensity: .subtle, color: theme.dim)
                 }
             }
             .buttonStyle(.plain)
 
             Spacer()
 
-            // Connection indicator
-            HStack(spacing: CRTTheme.Spacing.xxs) {
-                Circle()
-                    .fill(viewModel.isConnected ? Color.green : Color.red)
-                    .frame(width: 6, height: 6)
-                CRTText(
-                    viewModel.isConnected ? "LIVE" : "OFFLINE",
-                    style: .caption,
-                    glowIntensity: .subtle,
-                    color: viewModel.isConnected ? .green : .red
-                )
-            }
-
-            // Expand to full session button
+            // Full session view button
             Button {
                 showingFullSession = true
             } label: {
@@ -232,15 +231,30 @@ private struct UnifiedChatContent: View {
                 )
             }
             .buttonStyle(.plain)
+
+            // Connection status indicator
+            HStack(spacing: CRTTheme.Spacing.xxs) {
+                Circle()
+                    .fill(viewModel.isConnected ? Color.green : Color.red)
+                    .frame(width: 6, height: 6)
+                CRTText(
+                    viewModel.isConnected ? "LIVE" : "OFFLINE",
+                    style: .caption,
+                    glowIntensity: .subtle,
+                    color: viewModel.isConnected ? .green : .red
+                )
+            }
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
-        .padding(.vertical, CRTTheme.Spacing.xs)
-        .background(theme.primary.opacity(0.05))
-        .overlay(
-            Rectangle()
-                .frame(height: 1)
-                .foregroundColor(theme.primary.opacity(0.2)),
-            alignment: .bottom
+        .padding(.vertical, CRTTheme.Spacing.sm)
+        .background(
+            CRTTheme.Background.panel
+                .overlay(
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(theme.dim.opacity(0.3)),
+                    alignment: .bottom
+                )
         )
     }
 

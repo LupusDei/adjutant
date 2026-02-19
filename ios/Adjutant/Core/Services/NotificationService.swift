@@ -507,6 +507,9 @@ extension Notification.Name {
 
     /// Posted when the user marks mail as read from a notification
     static let markMailAsRead = Notification.Name("markMailAsRead")
+
+    /// Posted when the user wants to switch to a specific session in the chat view
+    static let switchToSession = Notification.Name("switchToSession")
 }
 
 // MARK: - Notification Error

@@ -114,7 +114,19 @@ private struct TabContent: View {
             EpicsListView()
         case .crew:
             CrewListView(apiClient: AppState.shared.apiClient) { member in
-                coordinator.navigate(to: .agentDetail(member: member))
+                if AppState.shared.deploymentMode != .gastown,
+                   let sessionId = member.sessionId {
+                    // In standalone/swarm mode, tapping a crew member opens their session chat
+                    coordinator.selectTab(.chat)
+                    // Notify the chat view to switch to this session
+                    NotificationCenter.default.post(
+                        name: .switchToSession,
+                        object: nil,
+                        userInfo: ["sessionId": sessionId]
+                    )
+                } else {
+                    coordinator.navigate(to: .agentDetail(member: member))
+                }
             }
         case .projects:
             ProjectsListView(

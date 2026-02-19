@@ -15,13 +15,15 @@ public struct CrewMember: Codable, Identifiable, Equatable, Hashable {
     /// Current task description (if working)
     public let currentTask: String?
     /// Number of unread messages
-    public let unreadMail: Int
+    public let unreadMail: Int?
     /// First unread message subject (for preview)
     public let firstSubject: String?
     /// Sender of first unread message (for preview)
     public let firstFrom: String?
     /// Current git branch (for polecats)
     public let branch: String?
+    /// Session ID for linking to session chat (standalone/swarm)
+    public let sessionId: String?
 
     public init(
         id: String,
@@ -30,10 +32,11 @@ public struct CrewMember: Codable, Identifiable, Equatable, Hashable {
         rig: String?,
         status: CrewMemberStatus,
         currentTask: String? = nil,
-        unreadMail: Int,
+        unreadMail: Int? = nil,
         firstSubject: String? = nil,
         firstFrom: String? = nil,
-        branch: String? = nil
+        branch: String? = nil,
+        sessionId: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -45,6 +48,7 @@ public struct CrewMember: Codable, Identifiable, Equatable, Hashable {
         self.firstSubject = firstSubject
         self.firstFrom = firstFrom
         self.branch = branch
+        self.sessionId = sessionId
     }
 }
 

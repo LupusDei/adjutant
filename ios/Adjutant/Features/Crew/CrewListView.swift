@@ -208,8 +208,12 @@ struct CrewListView: View {
                 .padding(.top, CRTTheme.Spacing.sm)
             } else {
                 CRTText("NO AGENTS FOUND", style: .subheader, glowIntensity: .subtle, color: theme.dim)
-                CRTText("Gas Town appears to be empty.",
-                        style: .body, glowIntensity: .none, color: theme.dim.opacity(0.6))
+                CRTText(
+                    AppState.shared.deploymentMode == .gastown
+                        ? "Gas Town appears to be empty."
+                        : "No active agent sessions. Start an agent from the Projects tab.",
+                    style: .body, glowIntensity: .none, color: theme.dim.opacity(0.6)
+                )
             }
         }
         .padding(CRTTheme.Spacing.xl)

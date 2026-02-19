@@ -187,13 +187,15 @@ export interface CrewMember {
   /** Current task description (if working) */
   currentTask?: string;
   /** Number of unread messages */
-  unreadMail: number;
+  unreadMail?: number;
   /** First unread message subject (for preview) */
   firstSubject?: string;
   /** Sender of first unread message (for preview) */
   firstFrom?: string;
   /** Current git branch (for polecats) */
   branch?: string;
+  /** Session ID for linking to session chat (standalone/swarm) */
+  sessionId?: string;
 }
 
 // ============================================================================
@@ -364,8 +366,9 @@ export const CrewMemberSchema = z.object({
   rig: z.string().nullable(),
   status: CrewMemberStatusSchema,
   currentTask: z.string().optional(),
-  unreadMail: z.number(),
+  unreadMail: z.number().optional(),
   firstSubject: z.string().optional(),
   firstFrom: z.string().optional(),
   branch: z.string().optional(),
+  sessionId: z.string().optional(),
 });
