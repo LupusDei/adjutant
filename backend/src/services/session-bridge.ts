@@ -130,14 +130,14 @@ export class SessionBridge {
     }
 
     // Set up output handler to broadcast via event bus
+    // Single output path: capture-pane polling only (no raw pipe-pane reading)
     this.connector.onOutput((sessionId, _line, events) => {
-      getEventBus().emit("stream:status", {
-        streamId: sessionId,
-        agent: this.registry.get(sessionId)?.name ?? "unknown",
-        state: "token",
-      });
-      // Emit parsed events for WS broadcast
       if (events.length > 0) {
+        getEventBus().emit("stream:status", {
+          streamId: sessionId,
+          agent: this.registry.get(sessionId)?.name ?? "unknown",
+          state: "token",
+        });
         getEventBus().emit("stream:output", {
           streamId: sessionId,
           events,

@@ -6,7 +6,7 @@
  */
 
 import { execFile } from "child_process";
-import { mkdirSync, existsSync, unlinkSync, writeFileSync, openSync, readSync, closeSync, statSync, watch, appendFileSync, type FSWatcher } from "fs";
+import { mkdirSync, existsSync, unlinkSync, writeFileSync, appendFileSync } from "fs";
 import { join, dirname } from "path";
 import { tmpdir } from "os";
 import { logInfo, logWarn } from "../utils/index.js";
@@ -50,13 +50,8 @@ interface PipeState {
   sessionId: string;
   pipePath: string;
   active: boolean;
-  watcher?: FSWatcher;
-  pollTimer?: ReturnType<typeof setInterval>;
   capturePollTimer?: ReturnType<typeof setInterval>;
-  lastCapture: string;          // last capture-pane snapshot for diffing
-  lastCaptureLines: string[];   // split lines of last capture
-  fd?: number;
-  readOffset: number;
+  lastCaptureLines: string[];   // split lines of last capture for diffing
 }
 
 // ============================================================================
@@ -152,8 +147,6 @@ export class SessionConnector {
         sessionId,
         pipePath,
         active: true,
-        readOffset: 0,
-        lastCapture: "",
         lastCaptureLines: [],
       };
       this.pipes.set(sessionId, pipe);
@@ -162,8 +155,8 @@ export class SessionConnector {
       session.pipeActive = true;
       logInfo("Pipe attached", { sessionId, tmuxPane: session.tmuxPane });
 
-      // Start reading the pipe file
-      this.startReading(pipe);
+      // Start capture-pane polling (single output path)
+      this.startCapturePoll(pipe);
 
       return true;
     } catch (err) {
@@ -210,10 +203,7 @@ export class SessionConnector {
     }
 
     pipe.active = false;
-    if (pipe.watcher) pipe.watcher.close();
-    if (pipe.pollTimer) clearInterval(pipe.pollTimer);
     if (pipe.capturePollTimer) clearInterval(pipe.capturePollTimer);
-    if (pipe.fd !== undefined) { try { closeSync(pipe.fd); } catch {} }
     this.pipes.delete(sessionId);
 
     // Clean up pipe file
@@ -276,63 +266,6 @@ export class SessionConnector {
   // Private
   // --------------------------------------------------------------------------
 
-  private startReading(pipe: PipeState): void {
-    let buffer = "";
-
-    pipeTrace(`startReading sid=${pipe.sessionId} pipePath=${pipe.pipePath}`);
-
-    // ── Raw pipe-pane reading (feeds session_raw for terminal view) ──────
-    const readNewData = () => {
-      if (!pipe.active) return;
-
-      try {
-        const stat = statSync(pipe.pipePath);
-        if (stat.size <= pipe.readOffset) return;
-
-        if (pipe.fd === undefined) {
-          pipe.fd = openSync(pipe.pipePath, "r");
-        }
-
-        const toRead = stat.size - pipe.readOffset;
-        const buf = Buffer.alloc(toRead);
-        const bytesRead = readSync(pipe.fd, buf, 0, toRead, pipe.readOffset);
-        if (bytesRead === 0) return;
-
-        pipe.readOffset += bytesRead;
-        const chunk = buf.toString("utf8", 0, bytesRead);
-
-        buffer += chunk;
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          // Raw output — no parsing, just broadcast for terminal view
-          this.emitRawOutput(pipe.sessionId, line);
-        }
-      } catch (err) {
-        if (!pipe.active) return;
-        logWarn("Pipe read error", {
-          sessionId: pipe.sessionId,
-          error: String(err),
-        });
-      }
-    };
-
-    try {
-      pipe.watcher = watch(pipe.pipePath, () => readNewData());
-      pipe.pollTimer = setInterval(readNewData, 500);
-      readNewData();
-    } catch (err) {
-      logWarn("Failed to start reading pipe", {
-        sessionId: pipe.sessionId,
-        error: String(err),
-      });
-    }
-
-    // ── Capture-pane polling (feeds session_output for chat view) ────────
-    this.startCapturePoll(pipe);
-  }
-
   /**
    * Poll `tmux capture-pane -p` to get clean rendered text.
    * Diff against last snapshot, parse new content into events.
@@ -347,7 +280,6 @@ export class SessionConnector {
     // Take initial snapshot
     execTmuxCommand(["capture-pane", "-t", tmuxPane, "-p", "-S", "-500"])
       .then((output) => {
-        pipe.lastCapture = output;
         pipe.lastCaptureLines = output.split("\n");
         pipeTrace(`initial capture: ${pipe.lastCaptureLines.length} lines`);
       })
@@ -365,7 +297,6 @@ export class SessionConnector {
         const newLines = output.split("\n");
         const events = this.diffAndParse(pipe, newLines);
 
-        pipe.lastCapture = output;
         pipe.lastCaptureLines = newLines;
 
         if (events.length > 0) {
@@ -390,25 +321,41 @@ export class SessionConnector {
 
   /**
    * Diff new capture lines against last snapshot and parse new content.
-   * Only parses lines in the conversation area (between ──── separators).
+   * Only parses lines in the conversation area (between separators).
+   *
+   * Uses suffix-matching: find the longest suffix of old conversation lines
+   * that appears as a prefix of the new conversation lines, then only parse
+   * lines after that overlap. This avoids the fragile Set-based approach
+   * which re-detected content when the pane scrolled.
    */
   private diffAndParse(pipe: PipeState, newLines: string[]): OutputEvent[] {
     const parser = this.parsers.get(pipe.sessionId);
     if (!parser) return [];
 
-    // Extract conversation content between separator lines
     const oldContent = this.extractConversation(pipe.lastCaptureLines);
     const newContent = this.extractConversation(newLines);
 
-    // Find new lines that weren't in the previous capture
-    const oldSet = new Set(oldContent);
-    const added: string[] = [];
-    for (const line of newContent) {
-      if (!oldSet.has(line)) {
-        added.push(line);
+    // Find the overlap: the longest suffix of oldContent that matches
+    // a prefix of newContent. Start from the full old content and shrink.
+    let overlapLen = 0;
+    const maxOverlap = Math.min(oldContent.length, newContent.length);
+    for (let tryLen = maxOverlap; tryLen > 0; tryLen--) {
+      const oldSuffix = oldContent.slice(oldContent.length - tryLen);
+      let match = true;
+      for (let i = 0; i < tryLen; i++) {
+        if (oldSuffix[i] !== newContent[i]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        overlapLen = tryLen;
+        break;
       }
     }
 
+    // Lines after the overlap are genuinely new
+    const added = newContent.slice(overlapLen);
     if (added.length === 0) return [];
 
     // Reset parser for a fresh parse of the new content
@@ -463,19 +410,4 @@ export class SessionConnector {
     return result;
   }
 
-  /**
-   * Emit raw output line (no parsing — for terminal view only).
-   */
-  private emitRawOutput(sessionId: string, line: string): void {
-    this.registry.appendOutput(sessionId, line);
-
-    // Notify handlers with raw line and empty events array
-    for (const handler of this.outputHandlers) {
-      try {
-        handler(sessionId, line, []);
-      } catch (err) {
-        logWarn("Output handler error", { error: String(err) });
-      }
-    }
-  }
 }

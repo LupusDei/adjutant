@@ -27,12 +27,11 @@ vi.mock("child_process", () => ({
 
 // Mock fs (used by connector and registry)
 vi.mock("fs", () => ({
-  createReadStream: vi.fn(() => ({
-    on: vi.fn().mockReturnThis(),
-  })),
   mkdirSync: vi.fn(),
   existsSync: vi.fn(() => true),
   unlinkSync: vi.fn(),
+  writeFileSync: vi.fn(),
+  appendFileSync: vi.fn(),
 }));
 
 vi.mock("fs/promises", () => ({

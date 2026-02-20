@@ -18,12 +18,11 @@ vi.mock("child_process", () => ({
 
 // Mock fs
 vi.mock("fs", () => ({
-  createReadStream: vi.fn(() => ({
-    on: vi.fn().mockReturnThis(),
-  })),
   mkdirSync: vi.fn(),
   existsSync: vi.fn(() => true),
   unlinkSync: vi.fn(),
+  writeFileSync: vi.fn(),
+  appendFileSync: vi.fn(),
 }));
 
 describe("SessionConnector", () => {
@@ -131,6 +130,24 @@ describe("SessionConnector", () => {
 
       const result = await connector.attach(session.id);
       expect(result).toBe(false);
+    });
+
+    it("should start capture-pane polling on attach", async () => {
+      const session = registry.create({
+        name: "test",
+        tmuxSession: "adj-test",
+        projectPath: "/tmp",
+      });
+
+      await connector.attach(session.id);
+
+      // Verify capture-pane initial snapshot was requested
+      expect(mockExecFile).toHaveBeenCalledWith(
+        "tmux",
+        expect.arrayContaining(["capture-pane", "-t", session.tmuxPane, "-p", "-S", "-500"]),
+        expect.anything(),
+        expect.any(Function)
+      );
     });
   });
 
@@ -317,6 +334,31 @@ describe("SessionConnector", () => {
 
       const output = await connector.capturePane(session.id);
       expect(output).toBeNull();
+    });
+  });
+
+  // ==========================================================================
+  // Single output path — no raw pipe reading
+  // ==========================================================================
+
+  describe("output deduplication", () => {
+    it("should only emit events from capture-pane polling, not from raw pipe reading", async () => {
+      const handler = vi.fn();
+      connector.onOutput(handler);
+
+      const session = registry.create({
+        name: "test",
+        tmuxSession: "adj-test",
+        projectPath: "/tmp",
+      });
+
+      await connector.attach(session.id);
+
+      // No handler calls should have occurred from raw pipe reading
+      // (the old code would call the handler for every raw line)
+      // The only calls should come from capture-pane polling (via setInterval)
+      // which won't fire in synchronous test context
+      expect(handler).not.toHaveBeenCalled();
     });
   });
 });
