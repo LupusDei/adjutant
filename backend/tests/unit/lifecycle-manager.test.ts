@@ -25,15 +25,22 @@ describe("LifecycleManager", () => {
     registry = new SessionRegistry("/tmp/test-sessions.json");
     lifecycle = new LifecycleManager(registry, 5);
 
-    // Default: tmux commands succeed
+    // Default: tmux commands succeed; list-panes returns a valid pane
     mockExecFile.mockImplementation(
       (
         _cmd: string,
-        _args: string[],
+        args: string[],
         _opts: unknown,
         cb: (err: Error | null, stdout: string, stderr: string) => void
       ) => {
-        cb(null, "", "");
+        if (args[0] === "list-panes") {
+          // Find the session name from -t arg and return a realistic pane reference
+          const tIdx = args.indexOf("-t");
+          const sessionName = tIdx >= 0 ? args[tIdx + 1] : "test";
+          cb(null, `${sessionName}:1.1\n`, "");
+        } else {
+          cb(null, "", "");
+        }
       }
     );
   });

@@ -214,30 +214,32 @@ export class LifecycleManager {
       return false;
     }
 
-    // Check if the registered pane is still valid
+    // Verify registered pane actually exists by listing real panes
+    // NOTE: display-message is too lenient — it auto-resolves invalid targets like :0.0
+    // to the nearest pane, but pipe-pane requires exact window:pane references.
     try {
-      await execTmuxCommand(["display-message", "-t", session.tmuxPane, "-p", ""]);
+      const paneList = await execTmuxCommand([
+        "list-panes", "-t", session.tmuxSession, "-F", "#{session_name}:#{window_index}.#{pane_index}",
+      ]);
+      const actualPanes = paneList.trim().split("\n").filter((l) => l.length > 0);
+      if (actualPanes.length === 0) return false;
+
+      // Check if the registered pane matches any real pane
+      if (actualPanes.includes(session.tmuxPane)) {
+        return true;
+      }
+
+      // Auto-heal: registered pane is stale, use the first real pane
+      const firstPane = actualPanes[0]!;
+      logInfo("Auto-healed stale pane reference", {
+        sessionId,
+        oldPane: session.tmuxPane,
+        newPane: firstPane,
+      });
+      session.tmuxPane = firstPane;
       return true;
     } catch {
-      // Pane is gone — try to find the first available pane in the session
-      try {
-        const paneList = await execTmuxCommand([
-          "list-panes", "-t", session.tmuxSession, "-F", "#{session_name}:#{window_index}.#{pane_index}",
-        ]);
-        const firstPane = paneList.trim().split("\n")[0];
-        if (firstPane) {
-          // Auto-heal: update the registry with the correct pane
-          logInfo("Auto-healed stale pane reference", {
-            sessionId,
-            oldPane: session.tmuxPane,
-            newPane: firstPane,
-          });
-          session.tmuxPane = firstPane;
-          return true;
-        }
-      } catch {
-        // No panes at all
-      }
+      // list-panes failed — session has no panes
       return false;
     }
   }
