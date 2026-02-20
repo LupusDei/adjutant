@@ -49,12 +49,12 @@ export interface CrewStatsProps {
  * Grouped agent structure for hierarchical display.
  */
 interface AgentGroup {
-  /** Town-level agents (mayor, deacon) or standalone agents (user, agent) */
+  /** Town-level agents (mayor, deacon) */
   town: CrewMember[];
   /** Per-rig agent groups */
   rigs: Map<string, RigAgents>;
-  /** Standalone agents (no rig) - for non-infrastructure agents in standalone mode */
-  standalone: CrewMember[];
+  /** Peer agents (no rig) - for non-infrastructure agents in swarm mode */
+  peers: CrewMember[];
 }
 
 /**
@@ -73,7 +73,7 @@ interface RigAgents {
 function groupAgents(agents: CrewMember[]): AgentGroup {
   const town: CrewMember[] = [];
   const rigs = new Map<string, RigAgents>();
-  const standalone: CrewMember[] = [];
+  const peers: CrewMember[] = [];
 
   for (const agent of agents) {
     // Town-level/infrastructure agents have no rig
@@ -82,9 +82,9 @@ function groupAgents(agents: CrewMember[]): AgentGroup {
       if (agent.type === 'mayor' || agent.type === 'deacon') {
         town.push(agent);
       }
-      // Standalone mode agents
+      // Swarm mode agents
       else if (agent.type === 'user' || agent.type === 'agent') {
-        standalone.push(agent);
+        peers.push(agent);
       }
       continue;
     }
@@ -117,7 +117,7 @@ function groupAgents(agents: CrewMember[]): AgentGroup {
     }
   }
 
-  return { town, rigs, standalone };
+  return { town, rigs, peers };
 }
 
 /**
@@ -222,9 +222,9 @@ export function CrewStats({ className = '', isActive = true }: CrewStatsProps) {
               <TownSection agents={grouped.town} gridStyle={townGridStyle} />
             )}
 
-            {/* Standalone agents */}
-            {grouped.standalone.length > 0 && (
-              <StandaloneSection agents={grouped.standalone} gridStyle={agentGridStyle} />
+            {/* Swarm peer agents */}
+            {grouped.peers.length > 0 && (
+              <SwarmSection agents={grouped.peers} gridStyle={agentGridStyle} />
             )}
 
             {/* Per-rig sections */}
@@ -241,7 +241,7 @@ export function CrewStats({ className = '', isActive = true }: CrewStatsProps) {
               />
             ))}
 
-            {grouped.rigs.size === 0 && grouped.town.length === 0 && grouped.standalone.length === 0 && (
+            {grouped.rigs.size === 0 && grouped.town.length === 0 && grouped.peers.length === 0 && (
               <div style={styles.emptyState}>NO AGENTS CONFIGURED</div>
             )}
           </>
@@ -303,15 +303,15 @@ function TownSection({ agents, gridStyle }: TownSectionProps) {
 }
 
 // =============================================================================
-// Standalone Section - For standalone mode agents
+// Swarm Section - For swarm mode agents
 // =============================================================================
 
-interface StandaloneSectionProps {
+interface SwarmSectionProps {
   agents: CrewMember[];
   gridStyle: CSSProperties;
 }
 
-function StandaloneSection({ agents, gridStyle }: StandaloneSectionProps) {
+function SwarmSection({ agents, gridStyle }: SwarmSectionProps) {
   return (
     <div style={styles.section}>
       <div style={styles.sectionHeader}>

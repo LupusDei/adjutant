@@ -9,14 +9,13 @@ import { ModeProvider, useMode, useVisibleTabs } from '../../../src/contexts/Mod
 
 /** Component that renders mode state for testing */
 function ModeDisplay() {
-  const { mode, isGasTown, isStandalone, isSwarm, loading, error, features, hasFeature } = useMode();
+  const { mode, isGasTown, isSwarm, loading, error, features, hasFeature } = useMode();
   return (
     <div>
       <span data-testid="mode">{mode}</span>
       <span data-testid="loading">{String(loading)}</span>
       <span data-testid="error">{error ?? 'null'}</span>
       <span data-testid="isGasTown">{String(isGasTown)}</span>
-      <span data-testid="isStandalone">{String(isStandalone)}</span>
       <span data-testid="isSwarm">{String(isSwarm)}</span>
       <span data-testid="features">{features.join(',')}</span>
       <span data-testid="hasDashboard">{String(hasFeature('dashboard'))}</span>
@@ -40,7 +39,7 @@ function ModeSwitcher() {
   return (
     <div>
       <span data-testid="current-mode">{mode}</span>
-      <button onClick={() => void switchMode('standalone')}>Switch to Standalone</button>
+      <button onClick={() => void switchMode('swarm')}>Switch to Swarm</button>
     </div>
   );
 }
@@ -64,7 +63,6 @@ beforeEach(() => {
         features: ['dashboard', 'mail', 'crew_hierarchy', 'epics', 'power_control'],
         availableModes: [
           { mode: 'gastown', available: true },
-          { mode: 'standalone', available: true },
           { mode: 'swarm', available: true },
         ],
       },
@@ -120,35 +118,7 @@ describe('ModeContext', () => {
 
       expect(screen.getByTestId('loading').textContent).toBe('false');
       expect(screen.getByTestId('isGasTown').textContent).toBe('true');
-      expect(screen.getByTestId('isStandalone').textContent).toBe('false');
       expect(screen.getByTestId('isSwarm').textContent).toBe('false');
-    });
-
-    it('should detect standalone mode from API', async () => {
-      mockFetchResponses['/api/mode'] = {
-        ok: true,
-        json: () => ({
-          success: true,
-          data: {
-            mode: 'standalone',
-            features: ['chat', 'beads'],
-            availableModes: [],
-          },
-        }),
-      };
-
-      render(
-        <ModeProvider>
-          <ModeDisplay />
-        </ModeProvider>
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId('mode').textContent).toBe('standalone');
-      });
-
-      expect(screen.getByTestId('isStandalone').textContent).toBe('true');
-      expect(screen.getByTestId('isGasTown').textContent).toBe('false');
     });
 
     it('should detect swarm mode from API', async () => {
@@ -194,7 +164,7 @@ describe('ModeContext', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId('mode').textContent).toBe('standalone');
+        expect(screen.getByTestId('mode').textContent).toBe('swarm');
       });
     });
 
@@ -263,27 +233,7 @@ describe('ModeContext', () => {
       });
     });
 
-    it('should show only chat, beads, settings in standalone mode', async () => {
-      mockFetchResponses['/api/mode'] = {
-        ok: true,
-        json: () => ({
-          success: true,
-          data: { mode: 'standalone', features: ['chat', 'beads'], availableModes: [] },
-        }),
-      };
-
-      render(
-        <ModeProvider>
-          <TabsDisplay />
-        </ModeProvider>
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,settings');
-      });
-    });
-
-    it('should show chat, crew, beads, settings in swarm mode', async () => {
+    it('should show chat, crew, epics, beads, settings in swarm mode', async () => {
       mockFetchResponses['/api/mode'] = {
         ok: true,
         json: () => ({
@@ -299,7 +249,7 @@ describe('ModeContext', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,crew,settings');
+        expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,crew,epics,settings');
       });
     });
   });
@@ -318,7 +268,7 @@ describe('ModeContext', () => {
             json: () => Promise.resolve({
               success: true,
               data: {
-                mode: 'standalone',
+                mode: 'swarm',
                 features: ['chat', 'beads'],
                 availableModes: [],
               },
@@ -352,10 +302,10 @@ describe('ModeContext', () => {
         expect(screen.getByTestId('current-mode').textContent).toBe('gastown');
       });
 
-      await user.click(screen.getByText('Switch to Standalone'));
+      await user.click(screen.getByText('Switch to Swarm'));
 
       await waitFor(() => {
-        expect(screen.getByTestId('current-mode').textContent).toBe('standalone');
+        expect(screen.getByTestId('current-mode').textContent).toBe('swarm');
       });
     });
   });

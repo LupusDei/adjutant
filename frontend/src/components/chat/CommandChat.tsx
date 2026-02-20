@@ -1,6 +1,6 @@
 /**
  * CommandChat Component - SMS-style conversation with the coordinator
- * Works in both Gas Town (Mayor) and standalone (User) modes
+ * Works in both Gas Town (Mayor) and Swarm modes
  * Part of 005-overseer-views feature
  *
  * Uses WebSocket for real-time messaging when available, falls back to HTTP polling.
@@ -145,7 +145,7 @@ function getStatusClass(status: ConnectionStatus): string {
 
 /**
  * CommandChat - SMS-style conversation interface with the coordinator.
- * Adapts to deployment mode (Gas Town: Mayor, Standalone: User).
+ * Adapts to deployment mode (Gas Town: Mayor, Swarm: Swarm).
  *
  * Uses WebSocket for real-time messaging when available, with HTTP polling
  * as fallback. Polling frequency adapts to connection status.
@@ -172,7 +172,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
   const { connectionStatus, sendMessage: ctxSendMessage, subscribe } = useCommunication();
 
   // Determine coordinator name and address based on mode
-  const coordinatorName = isGasTown ? 'MAYOR' : isSwarm ? 'SWARM' : 'COMMAND';
+  const coordinatorName = isGasTown ? 'MAYOR' : 'SWARM';
   const coordinatorAddress = isGasTown ? 'mayor/' : 'user';
 
   // Voice input hook for recording

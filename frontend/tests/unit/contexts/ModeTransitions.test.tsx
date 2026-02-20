@@ -7,9 +7,9 @@ import { ModeProvider, useMode, useVisibleTabs, type DeploymentMode } from '../.
 // Test Helpers
 // =============================================================================
 
-/** Component that renders mode state and provides switch buttons for all 3 modes */
+/** Component that renders mode state and provides switch buttons for both modes */
 function ModeTransitionTester() {
-  const { mode, features, switchMode, isGasTown, isStandalone, isSwarm, loading, error, hasFeature } = useMode();
+  const { mode, features, switchMode, isGasTown, isSwarm, loading, error, hasFeature } = useMode();
   const visibleTabs = useVisibleTabs();
   return (
     <div>
@@ -17,7 +17,6 @@ function ModeTransitionTester() {
       <span data-testid="loading">{String(loading)}</span>
       <span data-testid="error">{error ?? 'null'}</span>
       <span data-testid="isGasTown">{String(isGasTown)}</span>
-      <span data-testid="isStandalone">{String(isStandalone)}</span>
       <span data-testid="isSwarm">{String(isSwarm)}</span>
       <span data-testid="features">{features.join(',')}</span>
       <span data-testid="tabs">{Array.from(visibleTabs).sort().join(',')}</span>
@@ -26,9 +25,6 @@ function ModeTransitionTester() {
       <span data-testid="hasChat">{String(hasFeature('chat'))}</span>
       <button data-testid="switch-gastown" onClick={() => void switchMode('gastown')}>
         To GasTown
-      </button>
-      <button data-testid="switch-standalone" onClick={() => void switchMode('standalone')}>
-        To Standalone
       </button>
       <button data-testid="switch-swarm" onClick={() => void switchMode('swarm')}>
         To Swarm
@@ -51,16 +47,6 @@ const MODE_RESPONSES: Record<DeploymentMode, {
     features: ['power_control', 'rigs', 'epics', 'crew_hierarchy', 'mail', 'dashboard', 'refinery', 'witness', 'websocket', 'sse'],
     availableModes: [
       { mode: 'gastown', available: true },
-      { mode: 'standalone', available: true },
-      { mode: 'swarm', available: true },
-    ],
-  },
-  standalone: {
-    mode: 'standalone',
-    features: ['chat', 'beads', 'websocket', 'sse'],
-    availableModes: [
-      { mode: 'gastown', available: true },
-      { mode: 'standalone', available: true },
       { mode: 'swarm', available: true },
     ],
   },
@@ -69,7 +55,6 @@ const MODE_RESPONSES: Record<DeploymentMode, {
     features: ['chat', 'crew_flat', 'beads', 'mail', 'websocket', 'sse'],
     availableModes: [
       { mode: 'gastown', available: true },
-      { mode: 'standalone', available: true },
       { mode: 'swarm', available: true },
     ],
   },
@@ -136,11 +121,11 @@ afterEach(() => {
 
 describe('mode transitions', () => {
   // ===========================================================================
-  // Full cycle: switch through all 3 modes
+  // Full cycle: switch through both modes
   // ===========================================================================
 
   describe('full mode cycle via switchMode', () => {
-    it('should cycle gastown → standalone → swarm → gastown', async () => {
+    it('should cycle gastown → swarm → gastown', async () => {
       const user = userEvent.setup();
 
       render(
@@ -152,12 +137,6 @@ describe('mode transitions', () => {
       // Start in gastown
       await waitFor(() => {
         expect(screen.getByTestId('mode').textContent).toBe('gastown');
-      });
-
-      // Switch to standalone
-      await user.click(screen.getByTestId('switch-standalone'));
-      await waitFor(() => {
-        expect(screen.getByTestId('mode').textContent).toBe('standalone');
       });
 
       // Switch to swarm
@@ -173,8 +152,8 @@ describe('mode transitions', () => {
       });
     });
 
-    it('should cycle standalone → swarm → gastown → standalone', async () => {
-      currentMode = 'standalone';
+    it('should cycle swarm → gastown → swarm', async () => {
+      currentMode = 'swarm';
       const user = userEvent.setup();
 
       render(
@@ -184,11 +163,6 @@ describe('mode transitions', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId('mode').textContent).toBe('standalone');
-      });
-
-      await user.click(screen.getByTestId('switch-swarm'));
-      await waitFor(() => {
         expect(screen.getByTestId('mode').textContent).toBe('swarm');
       });
 
@@ -197,9 +171,9 @@ describe('mode transitions', () => {
         expect(screen.getByTestId('mode').textContent).toBe('gastown');
       });
 
-      await user.click(screen.getByTestId('switch-standalone'));
+      await user.click(screen.getByTestId('switch-swarm'));
       await waitFor(() => {
-        expect(screen.getByTestId('mode').textContent).toBe('standalone');
+        expect(screen.getByTestId('mode').textContent).toBe('swarm');
       });
     });
   });
@@ -218,7 +192,6 @@ describe('mode transitions', () => {
 
       await waitFor(() => {
         expect(screen.getByTestId('isGasTown').textContent).toBe('true');
-        expect(screen.getByTestId('isStandalone').textContent).toBe('false');
         expect(screen.getByTestId('isSwarm').textContent).toBe('false');
       });
     });
@@ -236,19 +209,10 @@ describe('mode transitions', () => {
         expect(screen.getByTestId('mode').textContent).toBe('gastown');
       });
 
-      // Switch to standalone
-      await user.click(screen.getByTestId('switch-standalone'));
-      await waitFor(() => {
-        expect(screen.getByTestId('isGasTown').textContent).toBe('false');
-        expect(screen.getByTestId('isStandalone').textContent).toBe('true');
-        expect(screen.getByTestId('isSwarm').textContent).toBe('false');
-      });
-
       // Switch to swarm
       await user.click(screen.getByTestId('switch-swarm'));
       await waitFor(() => {
         expect(screen.getByTestId('isGasTown').textContent).toBe('false');
-        expect(screen.getByTestId('isStandalone').textContent).toBe('false');
         expect(screen.getByTestId('isSwarm').textContent).toBe('true');
       });
     });
@@ -271,27 +235,7 @@ describe('mode transitions', () => {
       });
     });
 
-    it('should reduce to 3 tabs when switching to standalone', async () => {
-      const user = userEvent.setup();
-
-      render(
-        <ModeProvider>
-          <ModeTransitionTester />
-        </ModeProvider>
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId('mode').textContent).toBe('gastown');
-      });
-
-      await user.click(screen.getByTestId('switch-standalone'));
-
-      await waitFor(() => {
-        expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,settings');
-      });
-    });
-
-    it('should show 4 tabs when switching to swarm', async () => {
+    it('should show swarm tabs when switching to swarm', async () => {
       const user = userEvent.setup();
 
       render(
@@ -307,7 +251,7 @@ describe('mode transitions', () => {
       await user.click(screen.getByTestId('switch-swarm'));
 
       await waitFor(() => {
-        expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,crew,settings');
+        expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,crew,epics,settings');
       });
     });
 
@@ -324,43 +268,16 @@ describe('mode transitions', () => {
         expect(screen.getByTestId('mode').textContent).toBe('gastown');
       });
 
-      // Go to standalone (3 tabs)
-      await user.click(screen.getByTestId('switch-standalone'));
+      // Go to swarm (5 tabs)
+      await user.click(screen.getByTestId('switch-swarm'));
       await waitFor(() => {
-        expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,settings');
+        expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,crew,epics,settings');
       });
 
       // Back to gastown (all 7 tabs)
       await user.click(screen.getByTestId('switch-gastown'));
       await waitFor(() => {
         expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,crew,dashboard,epics,mail,settings');
-      });
-    });
-
-    it('should correctly transition tabs between standalone and swarm', async () => {
-      currentMode = 'standalone';
-      const user = userEvent.setup();
-
-      render(
-        <ModeProvider>
-          <ModeTransitionTester />
-        </ModeProvider>
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,settings');
-      });
-
-      // Standalone → Swarm: gains crew tab
-      await user.click(screen.getByTestId('switch-swarm'));
-      await waitFor(() => {
-        expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,crew,settings');
-      });
-
-      // Swarm → Standalone: loses crew tab
-      await user.click(screen.getByTestId('switch-standalone'));
-      await waitFor(() => {
-        expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,settings');
       });
     });
   });
@@ -370,7 +287,7 @@ describe('mode transitions', () => {
   // ===========================================================================
 
   describe('features update across transitions', () => {
-    it('should update features when switching gastown → standalone', async () => {
+    it('should update features when switching gastown → swarm', async () => {
       const user = userEvent.setup();
 
       render(
@@ -383,31 +300,10 @@ describe('mode transitions', () => {
         expect(screen.getByTestId('hasDashboard').textContent).toBe('true');
       });
 
-      await user.click(screen.getByTestId('switch-standalone'));
-
-      await waitFor(() => {
-        expect(screen.getByTestId('hasDashboard').textContent).toBe('false');
-        expect(screen.getByTestId('hasMail').textContent).toBe('false');
-      });
-    });
-
-    it('should gain mail feature when switching standalone → swarm', async () => {
-      currentMode = 'standalone';
-      const user = userEvent.setup();
-
-      render(
-        <ModeProvider>
-          <ModeTransitionTester />
-        </ModeProvider>
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId('hasMail').textContent).toBe('false');
-      });
-
       await user.click(screen.getByTestId('switch-swarm'));
 
       await waitFor(() => {
+        expect(screen.getByTestId('hasDashboard').textContent).toBe('false');
         expect(screen.getByTestId('hasMail').textContent).toBe('true');
       });
     });
@@ -428,8 +324,8 @@ describe('mode transitions', () => {
       // gastown has dashboard
       expect(screen.getByTestId('features').textContent).toContain('dashboard');
 
-      // Switch to standalone
-      await user.click(screen.getByTestId('switch-standalone'));
+      // Switch to swarm
+      await user.click(screen.getByTestId('switch-swarm'));
       await waitFor(() => {
         expect(screen.getByTestId('features').textContent).not.toContain('dashboard');
         expect(screen.getByTestId('features').textContent).not.toContain('power_control');
@@ -505,19 +401,19 @@ describe('mode transitions', () => {
         expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,crew,dashboard,epics,mail,settings');
       });
 
-      // SSE pushes mode to standalone
+      // SSE pushes mode to swarm
       act(() => {
         sseHandlers['mode_changed']?.({
           data: JSON.stringify({
-            mode: 'standalone',
-            features: ['chat', 'beads', 'websocket', 'sse'],
+            mode: 'swarm',
+            features: ['chat', 'crew_flat', 'beads', 'mail', 'websocket', 'sse'],
             action: 'mode_changed',
           }),
         } as MessageEvent);
       });
 
       await waitFor(() => {
-        expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,settings');
+        expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,crew,epics,settings');
       });
     });
 
@@ -546,7 +442,7 @@ describe('mode transitions', () => {
       // Rapid fire SSE events
       act(() => {
         sseHandlers['mode_changed']?.({
-          data: JSON.stringify({ mode: 'standalone', features: ['chat', 'beads', 'websocket', 'sse'] }),
+          data: JSON.stringify({ mode: 'gastown', features: ['dashboard', 'mail', 'websocket', 'sse'] }),
         } as MessageEvent);
         sseHandlers['mode_changed']?.({
           data: JSON.stringify({ mode: 'swarm', features: ['chat', 'crew_flat', 'beads', 'mail', 'websocket', 'sse'] }),
@@ -556,7 +452,7 @@ describe('mode transitions', () => {
       // Should settle on the last mode
       await waitFor(() => {
         expect(screen.getByTestId('mode').textContent).toBe('swarm');
-        expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,crew,settings');
+        expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,crew,epics,settings');
       });
     });
   });
@@ -588,7 +484,7 @@ describe('mode transitions', () => {
             ok: true,
             json: () => Promise.resolve({
               success: true,
-              data: MODE_RESPONSES.standalone,
+              data: MODE_RESPONSES.swarm,
             }),
           } as Response);
         }
@@ -596,7 +492,7 @@ describe('mode transitions', () => {
         return Promise.resolve({ ok: false, status: 404 } as Response);
       });
 
-      currentMode = 'standalone';
+      currentMode = 'swarm';
 
       render(
         <ModeProvider>
@@ -605,18 +501,18 @@ describe('mode transitions', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId('mode').textContent).toBe('standalone');
+        expect(screen.getByTestId('mode').textContent).toBe('swarm');
       });
 
       // Try switching to gastown (fails)
       await user.click(screen.getByTestId('switch-gastown'));
 
-      // Mode should remain standalone
+      // Mode should remain swarm
       await waitFor(() => {
         expect(screen.getByTestId('error').textContent).toContain('Gas Town infrastructure not detected');
       });
-      expect(screen.getByTestId('mode').textContent).toBe('standalone');
-      expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,settings');
+      expect(screen.getByTestId('mode').textContent).toBe('swarm');
+      expect(screen.getByTestId('tabs').textContent).toBe('beads,chat,crew,epics,settings');
     });
 
     it('should preserve current mode when network request fails', async () => {
@@ -652,7 +548,7 @@ describe('mode transitions', () => {
         expect(screen.getByTestId('mode').textContent).toBe('gastown');
       });
 
-      await user.click(screen.getByTestId('switch-standalone'));
+      await user.click(screen.getByTestId('switch-swarm'));
 
       // Mode should remain gastown, error should be set
       await waitFor(() => {
@@ -712,16 +608,16 @@ describe('mode transitions', () => {
       });
 
       // First attempt fails
-      await user.click(screen.getByTestId('switch-standalone'));
+      await user.click(screen.getByTestId('switch-swarm'));
       await waitFor(() => {
         expect(screen.getByTestId('error').textContent).not.toBe('null');
       });
 
       // Second attempt succeeds
       failSwitch = false;
-      await user.click(screen.getByTestId('switch-standalone'));
+      await user.click(screen.getByTestId('switch-swarm'));
       await waitFor(() => {
-        expect(screen.getByTestId('mode').textContent).toBe('standalone');
+        expect(screen.getByTestId('mode').textContent).toBe('swarm');
         expect(screen.getByTestId('error').textContent).toBe('null');
       });
     });

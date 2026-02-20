@@ -3,13 +3,12 @@
  *
  * Returns information about the current deployment mode:
  * - gastown: Full Gas Town infrastructure
- * - standalone: Single project without GT infrastructure
- * - swarm: Multi-agent standalone mode
+ * - swarm: Multi-agent swarm mode
  */
 
 import { useState, useEffect, useCallback } from 'react';
 
-export type DeploymentMode = 'gastown' | 'standalone' | 'swarm' | 'unknown';
+export type DeploymentMode = 'gastown' | 'swarm' | 'unknown';
 
 export interface DeploymentModeInfo {
   /** Current deployment mode */
@@ -67,8 +66,6 @@ export function useDeploymentMode(): DeploymentModeInfo {
         // Determine mode based on capabilities
         if (canControl) {
           setMode('gastown');
-        } else if (isAutoStart) {
-          setMode('standalone');
         } else {
           setMode('swarm');
         }

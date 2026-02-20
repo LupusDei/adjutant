@@ -15,7 +15,7 @@ export type PowerState = "stopped" | "starting" | "running" | "stopping";
 export type CommunicationPriority = 'real-time' | 'efficient' | 'polling-only';
 
 /** Deployment mode for the system. */
-export type DeploymentMode = 'gastown' | 'standalone' | 'swarm' | 'unknown';
+export type DeploymentMode = 'gastown' | 'swarm' | 'unknown';
 
 /** Connection status for the communication indicator. */
 export type ConnectionStatus = 'websocket' | 'sse' | 'polling' | 'reconnecting' | 'disconnected';
@@ -32,7 +32,7 @@ export type CrewMemberStatus =
  * Agent types in the system.
  *
  * Gas Town roles: mayor, deacon, witness, refinery, crew, polecat
- * Standalone roles: user, agent
+ * Swarm roles: user, agent
  */
 export type AgentType =
   // Gas Town infrastructure
@@ -43,7 +43,7 @@ export type AgentType =
   // Gas Town workers
   | "crew"
   | "polecat"
-  // Standalone/swarm mode
+  // Swarm mode
   | "user"
   | "agent";
 

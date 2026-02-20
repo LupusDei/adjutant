@@ -76,7 +76,6 @@ interface SettingsViewProps {
  */
 const MODE_OPTIONS: Array<{ mode: DeploymentMode; label: string; icon: string; description: string }> = [
   { mode: 'gastown', label: 'GAS TOWN', icon: '🏭', description: 'Full multi-agent infrastructure with Mayor, Witness, Refinery' },
-  { mode: 'standalone', label: 'SINGLE AGENT', icon: '🤖', description: 'One agent, one project. Direct chat interface' },
   { mode: 'swarm', label: 'SWARM', icon: '🐝', description: 'Multiple peer agents without formal hierarchy' },
 ];
 

@@ -14,13 +14,11 @@ vi.mock("../../../../src/contexts/ModeContext", () => ({
     features: ["power_control", "rigs", "websocket", "sse"],
     availableModes: [
       { mode: "gastown", available: true },
-      { mode: "standalone", available: true },
       { mode: "swarm", available: true },
     ],
     loading: false,
     error: null,
     isGasTown: true,
-    isStandalone: false,
     isSwarm: false,
     hasFeature: () => false,
     switchMode: vi.fn(),
@@ -144,7 +142,6 @@ describe("Communication Settings", () => {
               features: ["power_control", "rigs", "websocket", "sse"],
               availableModes: [
                 { mode: "gastown", available: true },
-                { mode: "standalone", available: true },
                 { mode: "swarm", available: true },
               ],
             },
@@ -237,10 +234,9 @@ describe("Communication Settings", () => {
       expect(screen.getByText("DEPLOYMENT MODE")).toBeTruthy();
     });
 
-    it("should render all three mode options", () => {
+    it("should render both mode options", () => {
       renderSettings();
       expect(screen.getByText("GAS TOWN")).toBeTruthy();
-      expect(screen.getByText("SINGLE AGENT")).toBeTruthy();
       expect(screen.getByText("SWARM")).toBeTruthy();
     });
 
@@ -252,13 +248,11 @@ describe("Communication Settings", () => {
         features: [],
         availableModes: [
           { mode: "gastown", available: true },
-          { mode: "standalone", available: true },
           { mode: "swarm", available: true },
         ],
         loading: false,
         error: null,
         isGasTown: true,
-        isStandalone: false,
         isSwarm: false,
         hasFeature: () => false,
         switchMode: mockSwitchMode,
@@ -266,10 +260,10 @@ describe("Communication Settings", () => {
 
       renderSettings();
 
-      fireEvent.click(screen.getByText("SINGLE AGENT"));
+      fireEvent.click(screen.getByText("SWARM"));
 
       await waitFor(() => {
-        expect(mockSwitchMode).toHaveBeenCalledWith("standalone");
+        expect(mockSwitchMode).toHaveBeenCalledWith("swarm");
       });
     });
   });
