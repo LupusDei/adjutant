@@ -134,6 +134,7 @@ Keep hierarchy clean, shallow, and sequentially-rooted.
 ## 3. Team Strategy
 - Use team members regularly for complex tasks
 - Whenever there is a sequence of serial tasks, spin up a team member to tackle them one by one
+- If the work of two or more team members will edit similar files, **use git worktrees**
 - If there is ambiguity or uncertainty about the completeness or functioning of a new feature/epic, create a QA team member which focuses on thinking about edge cases and testing - that team member needs to create new beads for the epic that other team members will return to fix before an epic is closed
 - Create team members to regularly execute code reviews, from the eyes of a Staff level Engineer, to constantly improve the quality of the code
 
