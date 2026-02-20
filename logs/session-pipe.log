@@ -1,0 +1,70 @@
+[2026-02-16T23:24:08.737Z] TRACE attach called sid=e4055335-067a-4aaa-ae4a-72e08f804765
+[2026-02-16T23:24:08.737Z] TRACE attach pane=adj-ai:1.1 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-e4055335-067a-4aaa-ae4a-72e08f804765.pipe
+[2026-02-16T23:24:08.750Z] TRACE pipe-pane started for pane=adj-ai:1.1
+[2026-02-16T23:24:08.750Z] TRACE startReading sid=e4055335-067a-4aaa-ae4a-72e08f804765 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-e4055335-067a-4aaa-ae4a-72e08f804765.pipe
+[2026-02-16T23:24:08.756Z] TRACE startCapturePoll sid=e4055335-067a-4aaa-ae4a-72e08f804765 pane=adj-ai:1.1
+[2026-02-16T23:24:08.767Z] TRACE initial capture: 200 lines
+[2026-02-17T13:54:02.552Z] TRACE attach called sid=93bd5ff4-7600-4bda-bbf1-e35a029a281c
+[2026-02-17T13:54:02.553Z] TRACE attach pane=adj-adjutant:0.0 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-93bd5ff4-7600-4bda-bbf1-e35a029a281c.pipe
+[2026-02-17T13:54:02.579Z] TRACE attach called sid=93bd5ff4-7600-4bda-bbf1-e35a029a281c
+[2026-02-17T13:54:02.579Z] TRACE attach pane=adj-adjutant:0.0 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-93bd5ff4-7600-4bda-bbf1-e35a029a281c.pipe
+[2026-02-17T13:54:11.629Z] TRACE attach called sid=e4055335-067a-4aaa-ae4a-72e08f804765
+[2026-02-17T13:54:11.629Z] TRACE attach pane=adj-ai:1.1 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-e4055335-067a-4aaa-ae4a-72e08f804765.pipe
+[2026-02-17T13:54:11.642Z] TRACE pipe-pane started for pane=adj-ai:1.1
+[2026-02-17T13:54:11.642Z] TRACE startReading sid=e4055335-067a-4aaa-ae4a-72e08f804765 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-e4055335-067a-4aaa-ae4a-72e08f804765.pipe
+[2026-02-17T13:54:11.643Z] TRACE startCapturePoll sid=e4055335-067a-4aaa-ae4a-72e08f804765 pane=adj-ai:1.1
+[2026-02-17T13:54:11.653Z] TRACE initial capture: 199 lines
+[2026-02-17T13:54:23.675Z] TRACE capture-poll: 3 events from diff
+[2026-02-17T13:54:23.675Z] TRACE   EVENT: {"type":"user_input","content":"What is the capital of France? Answer in one sentence."}
+[2026-02-17T13:54:23.676Z] TRACE   EVENT: {"type":"message","content":"  I wonder if this works"}
+[2026-02-17T13:54:23.676Z] TRACE   EVENT: {"type":"status","state":"idle"}
+[2026-02-17T13:54:29.675Z] TRACE capture-poll: 1 events from diff
+[2026-02-17T13:54:29.675Z] TRACE   EVENT: {"type":"message","content":"The capital of France is Paris."}
+[2026-02-17T13:54:53.697Z] TRACE capture-poll: 1 events from diff
+[2026-02-17T13:54:53.697Z] TRACE   EVENT: {"type":"user_input","content":"Are you getting these?"}
+[2026-02-17T13:54:56.696Z] TRACE capture-poll: 1 events from diff
+[2026-02-17T13:54:56.696Z] TRACE   EVENT: {"type":"message","content":"Yes, every single one."}
+[2026-02-17T13:55:22.204Z] TRACE capture-poll: 1 events from diff
+[2026-02-17T13:55:22.204Z] TRACE   EVENT: {"type":"user_input","content":"What directory are you in?"}
+[2026-02-17T13:55:25.206Z] TRACE capture-poll: 1 events from diff
+[2026-02-17T13:55:25.206Z] TRACE   EVENT: {"type":"message","content":"My working directory is /Users/Reason/code/ai."}
+[2026-02-17T13:56:15.718Z] TRACE attach called sid=e4055335-067a-4aaa-ae4a-72e08f804765
+[2026-02-17T13:56:15.718Z] TRACE attach pane=adj-ai:1.1 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-e4055335-067a-4aaa-ae4a-72e08f804765.pipe
+[2026-02-17T13:56:15.734Z] TRACE pipe-pane started for pane=adj-ai:1.1
+[2026-02-17T13:56:15.734Z] TRACE startReading sid=e4055335-067a-4aaa-ae4a-72e08f804765 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-e4055335-067a-4aaa-ae4a-72e08f804765.pipe
+[2026-02-17T13:56:15.734Z] TRACE startCapturePoll sid=e4055335-067a-4aaa-ae4a-72e08f804765 pane=adj-ai:1.1
+[2026-02-17T13:56:15.744Z] TRACE initial capture: 213 lines
+[2026-02-17T13:56:29.949Z] TRACE attach called sid=e4055335-067a-4aaa-ae4a-72e08f804765
+[2026-02-17T13:56:29.949Z] TRACE attach pane=adj-ai:1.1 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-e4055335-067a-4aaa-ae4a-72e08f804765.pipe
+[2026-02-17T13:56:29.975Z] TRACE pipe-pane started for pane=adj-ai:1.1
+[2026-02-17T13:56:29.975Z] TRACE startReading sid=e4055335-067a-4aaa-ae4a-72e08f804765 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-e4055335-067a-4aaa-ae4a-72e08f804765.pipe
+[2026-02-17T13:56:29.976Z] TRACE startCapturePoll sid=e4055335-067a-4aaa-ae4a-72e08f804765 pane=adj-ai:1.1
+[2026-02-17T13:56:30.010Z] TRACE initial capture: 213 lines
+[2026-02-17T13:56:58.499Z] TRACE capture-poll: 1 events from diff
+[2026-02-17T13:56:58.499Z] TRACE   EVENT: {"type":"user_input","content":"Hrmmm, can’t seem to open the full feed view"}
+[2026-02-17T13:57:03.003Z] TRACE capture-poll: 1 events from diff
+[2026-02-17T13:57:03.003Z] TRACE   EVENT: {"type":"message","content":"That sounds like a UI/display issue on the client side rather than something I can fix from here. A few things you could try:\n  - Resize your terminal window\n  - Scroll 
+[2026-02-17T13:59:17.871Z] TRACE attach called sid=e4055335-067a-4aaa-ae4a-72e08f804765
+[2026-02-17T13:59:17.871Z] TRACE attach pane=adj-ai:1.1 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-e4055335-067a-4aaa-ae4a-72e08f804765.pipe
+[2026-02-17T13:59:17.884Z] TRACE pipe-pane started for pane=adj-ai:1.1
+[2026-02-17T13:59:17.885Z] TRACE startReading sid=e4055335-067a-4aaa-ae4a-72e08f804765 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-e4055335-067a-4aaa-ae4a-72e08f804765.pipe
+[2026-02-17T13:59:17.885Z] TRACE startCapturePoll sid=e4055335-067a-4aaa-ae4a-72e08f804765 pane=adj-ai:1.1
+[2026-02-17T13:59:17.894Z] TRACE initial capture: 222 lines
+[2026-02-17T18:26:38.200Z] TRACE attach called sid=e4055335-067a-4aaa-ae4a-72e08f804765
+[2026-02-17T18:26:38.201Z] TRACE attach pane=adj-ai:1.1 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-e4055335-067a-4aaa-ae4a-72e08f804765.pipe
+[2026-02-17T18:26:38.213Z] TRACE pipe-pane started for pane=adj-ai:1.1
+[2026-02-17T18:26:38.214Z] TRACE startReading sid=e4055335-067a-4aaa-ae4a-72e08f804765 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-e4055335-067a-4aaa-ae4a-72e08f804765.pipe
+[2026-02-17T18:26:38.215Z] TRACE startCapturePoll sid=e4055335-067a-4aaa-ae4a-72e08f804765 pane=adj-ai:1.1
+[2026-02-17T18:26:38.224Z] TRACE initial capture: 222 lines
+[2026-02-17T18:27:18.756Z] TRACE capture-poll: 1 events from diff
+[2026-02-17T18:27:18.756Z] TRACE   EVENT: {"type":"user_input","content":"Still getting this?"}
+[2026-02-17T18:27:20.260Z] TRACE capture-poll: 1 events from diff
+[2026-02-17T18:27:20.260Z] TRACE   EVENT: {"type":"message","content":"Yes, still here."}
+[2026-02-17T18:27:34.872Z] TRACE attach called sid=93bd5ff4-7600-4bda-bbf1-e35a029a281c
+[2026-02-17T18:27:34.872Z] TRACE attach pane=adj-adjutant:0.0 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-93bd5ff4-7600-4bda-bbf1-e35a029a281c.pipe
+[2026-02-17T18:27:34.912Z] TRACE attach called sid=93bd5ff4-7600-4bda-bbf1-e35a029a281c
+[2026-02-17T18:27:34.912Z] TRACE attach pane=adj-adjutant:0.0 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-93bd5ff4-7600-4bda-bbf1-e35a029a281c.pipe
+[2026-02-17T18:27:49.825Z] TRACE attach called sid=acd0213b-22ac-46e1-99b5-e00246905602
+[2026-02-17T18:27:49.825Z] TRACE attach pane=adj-adjutant-agent:0.0 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-acd0213b-22ac-46e1-99b5-e00246905602.pipe
+[2026-02-17T18:27:49.865Z] TRACE attach called sid=acd0213b-22ac-46e1-99b5-e00246905602
+[2026-02-17T18:27:49.865Z] TRACE attach pane=adj-adjutant-agent:0.0 pipePath=/var/folders/tm/trksx2954dv1g_mf9pspbbfc0000gn/T/adjutant/session-acd0213b-22ac-46e1-99b5-e00246905602.pipe

@@ -20,8 +20,10 @@
 
 ## Core Rules
 - **Default**: Use beads for ALL task tracking (`bd create`, `bd ready`, `bd close`)
-- **Prohibited**: Do NOT use TodoWrite, TaskCreate, or markdown files for task tracking
-- **Workflow**: Create beads issue BEFORE writing code, mark in_progress when starting
+- **Prohibited**: Do NOT use TodoWrite, TaskCreate, or markdown files for task tracking. This applies to ALL agents — leader and teammates alike.
+- **Workflow**: Create beads issue BEFORE writing code, mark `in_progress` when starting, `close` when done
+- **Real-time updates**: Update bead status as you work, not in bulk at the end. Each task transitions: `open` → `in_progress` → `closed`
+- **Hierarchy first**: After creating beads, wire parent-child deps immediately (see "Hierarchy Wiring" section)
 - Persistence you don't need is more important than lost context
 - Git workflow: hooks auto-sync, run `bd sync` at session end
 - Session management: check `bd ready` for available work
@@ -61,10 +63,16 @@
 
 ## Common Workflows
 
-**Starting work:**
+**Starting work (solo):**
 ```bash
 bd show <id>       # Review issue details
 bd update <id> --status=in_progress  # Claim it
+```
+
+**Assigning work to a team agent:**
+```bash
+bd update <id> --assignee=<agent-name>   # Assign before spawning
+# Then include the bead ID in the agent's spawn prompt
 ```
 
 **Completing work:**
@@ -83,6 +91,27 @@ bd dep add beads-yyy beads-xxx  # Tests depend on Phase 1 (Phase 1 blocks tests)
 
 
 **All work uses BEADS library with strictly hierarchical beads.**
+
+## Hierarchy Wiring (MANDATORY)
+
+After creating any set of hierarchical beads, you MUST wire dependencies **immediately** — not later, not as an afterthought.
+
+```bash
+# Example: after creating bd-001 (epic) with sub-epics .1, .2, .3
+bd dep add bd-001 bd-001.1    # root depends on sub-epic 1
+bd dep add bd-001 bd-001.2    # root depends on sub-epic 2
+bd dep add bd-001 bd-001.3    # root depends on sub-epic 3
+
+# After creating tasks under sub-epic bd-001.1
+bd dep add bd-001.1 bd-001.1.1   # sub-epic depends on task 1
+bd dep add bd-001.1 bd-001.1.2   # sub-epic depends on task 2
+```
+
+**Rules:**
+- Every child bead must be linked to its parent via `bd dep add <parent> <child>`
+- Do this in the same step as `bd create`, not after
+- `bd show <parent>` must display all children — verify this
+- Parents cannot close until all children are closed (enforced by deps)
 
 ## Identifier Format
 - Root epic: `bd-xxx` where `bd` represents the beads prefix for the project
@@ -137,6 +166,42 @@ Keep hierarchy clean, shallow, and sequentially-rooted.
 - If the work of two or more team members will edit similar files, **use git worktrees**
 - If there is ambiguity or uncertainty about the completeness or functioning of a new feature/epic, create a QA team member which focuses on thinking about edge cases and testing - that team member needs to create new beads for the epic that other team members will return to fix before an epic is closed
 - Create team members to regularly execute code reviews, from the eyes of a Staff level Engineer, to constantly improve the quality of the code
+
+### Team Agent Beads Protocol (MANDATORY)
+
+**Teammates do NOT receive PRIME.md automatically.** They have no hooks, no session start, and no knowledge of beads unless you tell them. You must inject the workflow into every spawn prompt.
+
+When assigning work to team agents, the **coordinator** must:
+1. **Assign beads before spawning** — use `bd update <id> --assignee=<agent-name>` for every bead the agent will own
+2. **Include this block verbatim** in every spawn prompt:
+   ```
+   ## Task Tracking (MANDATORY)
+   Use the `bd` CLI for ALL task tracking. Do NOT use TaskCreate or TaskUpdate.
+
+   Your assigned beads: <list their bead IDs here>
+   Parent epic: <parent bead ID>
+
+   Before starting each task:  bd update <id> --status=in_progress
+   After completing each task:  bd close <id>
+   After ALL tasks done:        bd close <parent-id>
+   Before shutting down:        bd sync
+   ```
+3. **Include the working directory** — teammates in worktrees won't have `.beads/`, so tell them the path to the main repo if needed
+
+Each **team agent** must:
+1. Run `bd update <id> --status=in_progress` before starting each task
+2. Run `bd close <id>` after completing each task
+3. Close the parent epic after all children are done
+4. Run `bd sync` before shutting down
+
+If an agent is not updating beads, that is a bug in the spawn prompt, not the agent's fault.
+
+### Panic Prevention
+When agents hit blockers (permissions, errors, failures):
+1. **Assess** — check what work was already done (diffs, grep, status)
+2. **Resolve** — fix the blocker or ask the user, don't work around it
+3. **Only then respawn** — if the agent is confirmed dead and you know exactly what remains
+Never spawn duplicate agents on the same worktree/branch to "try again."
 
 ## 4. After Self-Improvement Loop
 After user correction:
