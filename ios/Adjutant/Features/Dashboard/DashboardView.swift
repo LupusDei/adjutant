@@ -350,8 +350,8 @@ private struct CrewPreviewRow: View {
             Spacer()
 
             // Unread mail indicator
-            if member.unreadMail > 0 {
-                BadgeView("\(member.unreadMail)", style: .count)
+            if (member.unreadMail ?? 0) > 0 {
+                BadgeView("\(member.unreadMail ?? 0)", style: .count)
             }
         }
         .padding(CRTTheme.Spacing.xs)
