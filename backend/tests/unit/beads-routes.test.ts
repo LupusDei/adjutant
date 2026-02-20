@@ -399,7 +399,7 @@ describe("beads routes", () => {
             { name: "ottodom", path: "/tmp/projects/ottodom", hasBeads: true },
             { name: "l2rr2l", path: "/tmp/projects/l2rr2l", hasBeads: true },
           ],
-          mode: "standalone",
+          mode: "swarm",
         },
       });
 
@@ -410,7 +410,7 @@ describe("beads routes", () => {
       expect(response.body.data.sources).toHaveLength(2);
       expect(response.body.data.sources[0].name).toBe("ottodom");
       expect(response.body.data.sources[1].name).toBe("l2rr2l");
-      expect(response.body.data.mode).toBe("standalone");
+      expect(response.body.data.mode).toBe("swarm");
     });
 
     it("should return empty sources when no beads dirs found", async () => {
@@ -418,7 +418,7 @@ describe("beads routes", () => {
         success: true,
         data: {
           sources: [],
-          mode: "standalone",
+          mode: "swarm",
         },
       });
 
@@ -465,7 +465,7 @@ describe("beads routes", () => {
       // Ensure "sources" is handled as the /sources route, not as a bead ID
       vi.mocked(listBeadSources).mockResolvedValue({
         success: true,
-        data: { sources: [], mode: "standalone" },
+        data: { sources: [], mode: "swarm" },
       });
 
       const response = await request(app).get("/api/beads/sources");

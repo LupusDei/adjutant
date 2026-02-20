@@ -3,7 +3,7 @@
  *
  * Provides deployment-mode-aware mail transport:
  * - Gas Town: gt mail send with tmux notifications
- * - Standalone: Direct beads operations
+ * - Swarm: Direct beads operations
  *
  * Usage:
  *   import { getTransport } from "./transport/index.js";
@@ -27,7 +27,7 @@ let transportInstance: MailTransport | null = null;
  *
  * Uses the workspace provider to determine which transport to use:
  * - gastown mode → GasTownTransport
- * - standalone/swarm mode → BeadsTransport
+ * - swarm mode → BeadsTransport
  */
 export function getTransport(): MailTransport {
   if (transportInstance) {
@@ -40,7 +40,6 @@ export function getTransport(): MailTransport {
     case "gastown":
       transportInstance = new GasTownTransport();
       break;
-    case "standalone":
     case "swarm":
     default:
       transportInstance = new BeadsTransport();

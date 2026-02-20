@@ -2,11 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { StandaloneProvider } from "../../src/services/workspace/standalone-provider.js";
+import { SwarmProvider } from "../../src/services/workspace/swarm-provider.js";
 
-const TEST_DIR = join(tmpdir(), `standalone-provider-test-${Date.now()}`);
+const TEST_DIR = join(tmpdir(), `swarm-provider-test-${Date.now()}`);
 
-describe("StandaloneProvider", () => {
+describe("SwarmProvider", () => {
   beforeEach(() => {
     mkdirSync(TEST_DIR, { recursive: true });
   });
@@ -29,7 +29,7 @@ describe("StandaloneProvider", () => {
     it("returns root .beads/ when no sub-projects exist", async () => {
       mkdirSync(join(TEST_DIR, ".beads"), { recursive: true });
 
-      const provider = new StandaloneProvider(TEST_DIR);
+      const provider = new SwarmProvider(TEST_DIR);
       const dirs = await provider.listBeadsDirs();
 
       expect(dirs).toHaveLength(1);
@@ -39,7 +39,7 @@ describe("StandaloneProvider", () => {
     });
 
     it("returns empty array when no .beads/ exists anywhere", async () => {
-      const provider = new StandaloneProvider(TEST_DIR);
+      const provider = new SwarmProvider(TEST_DIR);
       const dirs = await provider.listBeadsDirs();
 
       expect(dirs).toHaveLength(0);
@@ -56,7 +56,7 @@ describe("StandaloneProvider", () => {
       mkdirSync(join(TEST_DIR, "backend", ".beads"), { recursive: true });
       writeFileSync(join(TEST_DIR, "backend", ".beads", "beads.db"), "");
 
-      const provider = new StandaloneProvider(TEST_DIR);
+      const provider = new SwarmProvider(TEST_DIR);
       const dirs = await provider.listBeadsDirs();
 
       expect(dirs).toHaveLength(3);
@@ -84,7 +84,7 @@ describe("StandaloneProvider", () => {
       // No .beads/ at all
       mkdirSync(join(TEST_DIR, "plain"), { recursive: true });
 
-      const provider = new StandaloneProvider(TEST_DIR);
+      const provider = new SwarmProvider(TEST_DIR);
       const dirs = await provider.listBeadsDirs();
 
       expect(dirs).toHaveLength(1);
@@ -100,7 +100,7 @@ describe("StandaloneProvider", () => {
         writeFileSync(join(TEST_DIR, skip, ".beads", "beads.db"), "");
       }
 
-      const provider = new StandaloneProvider(TEST_DIR);
+      const provider = new SwarmProvider(TEST_DIR);
       const dirs = await provider.listBeadsDirs();
 
       expect(dirs).toHaveLength(1);
@@ -118,7 +118,7 @@ describe("StandaloneProvider", () => {
       writeFileSync(join(subDir, ".beads", "redirect"), redirectTarget);
       mkdirSync(redirectTarget, { recursive: true });
 
-      const provider = new StandaloneProvider(TEST_DIR);
+      const provider = new SwarmProvider(TEST_DIR);
       const dirs = await provider.listBeadsDirs();
 
       const rig = dirs.find((d) => d.rig === "myrig");
@@ -136,7 +136,7 @@ describe("StandaloneProvider", () => {
     it("returns empty array when no sub-projects exist", async () => {
       mkdirSync(join(TEST_DIR, ".beads"), { recursive: true });
 
-      const provider = new StandaloneProvider(TEST_DIR);
+      const provider = new SwarmProvider(TEST_DIR);
       const names = await provider.listRigNames();
 
       expect(names).toEqual([]);
@@ -152,7 +152,7 @@ describe("StandaloneProvider", () => {
       // This one has no beads.db, should not appear
       mkdirSync(join(TEST_DIR, "gamma", ".beads"), { recursive: true });
 
-      const provider = new StandaloneProvider(TEST_DIR);
+      const provider = new SwarmProvider(TEST_DIR);
       const names = await provider.listRigNames();
 
       expect(names).toHaveLength(2);
@@ -165,7 +165,7 @@ describe("StandaloneProvider", () => {
       mkdirSync(join(TEST_DIR, ".secret", ".beads"), { recursive: true });
       writeFileSync(join(TEST_DIR, ".secret", ".beads", "beads.db"), "");
 
-      const provider = new StandaloneProvider(TEST_DIR);
+      const provider = new SwarmProvider(TEST_DIR);
       const names = await provider.listRigNames();
 
       expect(names).toEqual([]);
@@ -180,7 +180,7 @@ describe("StandaloneProvider", () => {
     it("returns path for valid sub-project with .beads/", () => {
       mkdirSync(join(TEST_DIR, "myrig", ".beads"), { recursive: true });
 
-      const provider = new StandaloneProvider(TEST_DIR);
+      const provider = new SwarmProvider(TEST_DIR);
       const result = provider.resolveRigPath("myrig");
 
       expect(result).toBe(join(TEST_DIR, "myrig"));
@@ -189,14 +189,14 @@ describe("StandaloneProvider", () => {
     it("returns null for directory without .beads/", () => {
       mkdirSync(join(TEST_DIR, "plain"), { recursive: true });
 
-      const provider = new StandaloneProvider(TEST_DIR);
+      const provider = new SwarmProvider(TEST_DIR);
       const result = provider.resolveRigPath("plain");
 
       expect(result).toBeNull();
     });
 
     it("returns null for non-existent directory", () => {
-      const provider = new StandaloneProvider(TEST_DIR);
+      const provider = new SwarmProvider(TEST_DIR);
       const result = provider.resolveRigPath("nonexistent");
 
       expect(result).toBeNull();

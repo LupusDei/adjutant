@@ -111,7 +111,7 @@ export class LifecycleManager {
         name: req.name,
         tmuxSession: tmuxSessionName,
         projectPath: req.projectPath,
-        mode: req.mode ?? "standalone",
+        mode: req.mode ?? "swarm",
         workspaceType: req.workspaceType ?? "primary",
       });
 
@@ -245,7 +245,7 @@ export class LifecycleManager {
           name: tmuxName,
           tmuxSession: tmuxName,
           projectPath: ".",
-          mode: "standalone",
+          mode: "swarm",
         });
         this.registry.updateStatus(session.id, "idle");
         discovered.push(session.id);

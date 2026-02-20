@@ -122,7 +122,7 @@ describe("SessionBridge", () => {
         name: "test-agent",
         tmuxSession: "adj-test",
         projectPath: "/project",
-        mode: "standalone",
+        mode: "swarm",
       });
 
       const sessions = bridge.listSessions();
@@ -132,7 +132,7 @@ describe("SessionBridge", () => {
       expect(info.name).toBe("test-agent");
       expect(info.tmuxSession).toBe("adj-test");
       expect(info.projectPath).toBe("/project");
-      expect(info.mode).toBe("standalone");
+      expect(info.mode).toBe("swarm");
       expect(info.status).toBe("idle");
       expect(info.connectedClients).toEqual([]);
       expect(info.pipeActive).toBe(false);

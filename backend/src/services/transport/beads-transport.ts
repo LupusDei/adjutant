@@ -1,12 +1,12 @@
 /**
- * BeadsTransport - MailTransport implementation for standalone deployments.
+ * BeadsTransport - MailTransport implementation for swarm deployments.
  *
  * Uses direct bd/beads operations without:
  * - gt binary dependency
  * - tmux session notifications
  *
  * Suitable for:
- * - Standalone single-project mode
+ * - Swarm multi-agent mode
  * - Swarm deployments without Gas Town infrastructure
  */
 
@@ -48,7 +48,7 @@ function transformMessage(raw: BeadsIssue): Message {
 }
 
 function identityVariants(identity: string): string[] {
-  // In standalone mode, identities are simpler
+  // In swarm mode, identities are simpler
   if (identity === "user") return ["user", "user/"];
   return [identity];
 }
@@ -97,7 +97,7 @@ export class BeadsTransport implements MailTransport {
   readonly name = "beads";
 
   getSenderIdentity(): string {
-    // In standalone mode, default to "user" identity
+    // In swarm mode, default to "user" identity
     return process.env["MAIL_IDENTITY"] ?? "user";
   }
 
@@ -111,7 +111,7 @@ export class BeadsTransport implements MailTransport {
     try {
       issues = await listMailIssues(workspaceRoot);
     } catch {
-      // No beads database is normal in standalone mode — return empty mail
+      // No beads database is normal in swarm mode — return empty mail
       return { success: true, data: [] };
     }
 
@@ -247,7 +247,7 @@ export class BeadsTransport implements MailTransport {
       };
     }
 
-    // In standalone mode, no tmux notifications
+    // In swarm mode, no tmux notifications
     // Push notifications could be added via NotificationProvider if configured
 
     return { success: true, data: {} };

@@ -57,7 +57,6 @@ const EXPECTED_VISIBLE_TABS: Record<DeploymentMode, string[]> = {
     "beads",
     "settings",
   ],
-  standalone: ["chat", "beads", "settings"],
   swarm: ["chat", "crew", "beads", "settings"],
 };
 
@@ -78,8 +77,7 @@ const EXPECTED_FEATURES: Record<DeploymentMode, string[]> = {
     "websocket",
     "sse",
   ],
-  standalone: ["chat", "beads", "websocket", "sse"],
-  swarm: ["chat", "crew_flat", "beads", "mail", "websocket", "sse"],
+  swarm: ["chat", "crew_flat", "beads", "epics", "mail", "websocket", "sse"],
 };
 
 describe("cross-platform consistency", () => {
@@ -92,7 +90,7 @@ describe("cross-platform consistency", () => {
   // ===========================================================================
 
   describe("tab visibility rules match across platforms", () => {
-    it.each(["gastown", "standalone", "swarm"] as DeploymentMode[])(
+    it.each(["gastown", "swarm"] as DeploymentMode[])(
       "should return correct features for %s mode (iOS and Frontend derive tabs from these)",
       (mode) => {
         vi.mocked(getDeploymentMode).mockReturnValue(mode);
@@ -112,26 +110,13 @@ describe("cross-platform consistency", () => {
       const info = getModeInfo();
 
       // These features determine tab visibility on both platforms
-      expect(info.features).toContain("dashboard"); // → dashboard tab
-      expect(info.features).toContain("mail"); // → mail tab
-      expect(info.features).toContain("epics"); // → epics tab
-      expect(info.features).toContain("crew_hierarchy"); // → crew tab
+      expect(info.features).toContain("dashboard"); // -> dashboard tab
+      expect(info.features).toContain("mail"); // -> mail tab
+      expect(info.features).toContain("epics"); // -> epics tab
+      expect(info.features).toContain("crew_hierarchy"); // -> crew tab
     });
 
-    it("standalone mode should NOT include dashboard, mail, epics, or crew features", () => {
-      vi.mocked(getDeploymentMode).mockReturnValue("standalone");
-      vi.mocked(isGasTownAvailable).mockReturnValue(false);
-
-      const info = getModeInfo();
-
-      expect(info.features).not.toContain("dashboard");
-      expect(info.features).not.toContain("mail");
-      expect(info.features).not.toContain("epics");
-      expect(info.features).not.toContain("crew_hierarchy");
-      expect(info.features).not.toContain("crew_flat");
-    });
-
-    it("swarm mode should include crew_flat but NOT dashboard or epics", () => {
+    it("swarm mode should include crew_flat and mail but NOT dashboard or power_control", () => {
       vi.mocked(getDeploymentMode).mockReturnValue("swarm");
       vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
@@ -140,7 +125,7 @@ describe("cross-platform consistency", () => {
       expect(info.features).toContain("crew_flat");
       expect(info.features).toContain("mail");
       expect(info.features).not.toContain("dashboard");
-      expect(info.features).not.toContain("epics");
+      expect(info.features).not.toContain("power_control");
       expect(info.features).not.toContain("crew_hierarchy");
     });
   });
@@ -153,7 +138,7 @@ describe("cross-platform consistency", () => {
     it("should emit mode_changed event with mode and features on switch", () => {
       vi.mocked(getDeploymentMode)
         .mockReturnValueOnce("gastown")
-        .mockReturnValue("standalone");
+        .mockReturnValue("swarm");
       vi.mocked(isGasTownAvailable).mockReturnValue(true);
       vi.mocked(getWorkspace).mockReturnValue(
         {} as ReturnType<typeof getWorkspace>
@@ -164,20 +149,20 @@ describe("cross-platform consistency", () => {
         emit: mockEmit,
       } as unknown as ReturnType<typeof getEventBus>);
 
-      switchMode("standalone");
+      switchMode("swarm");
 
       expect(mockEmit).toHaveBeenCalledWith("mode:changed", {
-        mode: "standalone",
-        features: EXPECTED_FEATURES["standalone"],
+        mode: "swarm",
+        features: EXPECTED_FEATURES["swarm"],
         reason: expect.stringContaining("gastown"),
       });
     });
 
     it("mode_changed event should contain the same features as getModeInfo", () => {
       vi.mocked(getDeploymentMode)
-        .mockReturnValueOnce("standalone")
+        .mockReturnValueOnce("gastown")
         .mockReturnValue("swarm");
-      vi.mocked(isGasTownAvailable).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(true);
       vi.mocked(getWorkspace).mockReturnValue(
         {} as ReturnType<typeof getWorkspace>
       );
@@ -195,7 +180,7 @@ describe("cross-platform consistency", () => {
     });
 
     it("should NOT emit mode_changed when switching to the same mode", () => {
-      vi.mocked(getDeploymentMode).mockReturnValue("standalone");
+      vi.mocked(getDeploymentMode).mockReturnValue("swarm");
       vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       const mockEmit = vi.fn();
@@ -203,7 +188,7 @@ describe("cross-platform consistency", () => {
         emit: mockEmit,
       } as unknown as ReturnType<typeof getEventBus>);
 
-      switchMode("standalone");
+      switchMode("swarm");
 
       expect(mockEmit).not.toHaveBeenCalled();
     });
@@ -230,7 +215,7 @@ describe("cross-platform consistency", () => {
     });
 
     it("availableModes should have mode, available, and optional reason fields", () => {
-      vi.mocked(getDeploymentMode).mockReturnValue("standalone");
+      vi.mocked(getDeploymentMode).mockReturnValue("swarm");
       vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       const info = getModeInfo();
@@ -246,15 +231,14 @@ describe("cross-platform consistency", () => {
       }
     });
 
-    it("availableModes should always include all three modes", () => {
-      vi.mocked(getDeploymentMode).mockReturnValue("standalone");
+    it("availableModes should include both modes", () => {
+      vi.mocked(getDeploymentMode).mockReturnValue("swarm");
       vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       const info = getModeInfo();
 
       const modes = info.availableModes.map((m) => m.mode);
       expect(modes).toContain("gastown");
-      expect(modes).toContain("standalone");
       expect(modes).toContain("swarm");
     });
   });
@@ -270,14 +254,6 @@ describe("cross-platform consistency", () => {
 
       const info = getModeInfo();
       expect(info.mode).toBe("gastown");
-    });
-
-    it('should use "standalone" (not "single_agent" or "single") as the mode identifier', () => {
-      vi.mocked(getDeploymentMode).mockReturnValue("standalone");
-      vi.mocked(isGasTownAvailable).mockReturnValue(false);
-
-      const info = getModeInfo();
-      expect(info.mode).toBe("standalone");
     });
 
     it('should use "swarm" as the mode identifier', () => {

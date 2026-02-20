@@ -16,7 +16,7 @@ export const statusRouter = Router();
  * Returns the current system status. Uses the appropriate
  * StatusProvider based on deployment mode:
  * - gastown: Full infrastructure status with power control
- * - standalone/swarm: Simple always-on status
+ * - swarm: Simple always-on status
  */
 statusRouter.get("/", async (_req, res) => {
   const provider = getStatusProvider();

@@ -3,7 +3,7 @@
  *
  * Provides deployment-mode-aware status handling:
  * - Gas Town: Full infrastructure status with power control
- * - Standalone: Simple always-on status without power control
+ * - Swarm: Simple always-on status without power control
  *
  * Usage:
  *   import { getStatusProvider } from "./status/index.js";
@@ -20,7 +20,7 @@ import type {
   PowerTransitionResult,
 } from "./status-provider.js";
 import { GasTownStatusProvider } from "./gastown-status-provider.js";
-import { StandaloneStatusProvider } from "./standalone-status-provider.js";
+import { SwarmStatusProvider } from "./swarm-status-provider.js";
 
 // Re-export types
 export type {
@@ -40,7 +40,7 @@ let statusProviderInstance: StatusProvider | null = null;
  *
  * Uses the workspace provider to determine which status provider to use:
  * - gastown mode → GasTownStatusProvider
- * - standalone/swarm mode → StandaloneStatusProvider
+ * - swarm mode → SwarmStatusProvider
  */
 export function getStatusProvider(): StatusProvider {
   if (statusProviderInstance) {
@@ -53,10 +53,9 @@ export function getStatusProvider(): StatusProvider {
     case "gastown":
       statusProviderInstance = new GasTownStatusProvider();
       break;
-    case "standalone":
     case "swarm":
     default:
-      statusProviderInstance = new StandaloneStatusProvider();
+      statusProviderInstance = new SwarmStatusProvider();
       break;
   }
 
@@ -72,4 +71,4 @@ export function resetStatusProvider(): void {
 
 // Re-export specific provider classes for direct use if needed
 export { GasTownStatusProvider } from "./gastown-status-provider.js";
-export { StandaloneStatusProvider } from "./standalone-status-provider.js";
+export { SwarmStatusProvider } from "./swarm-status-provider.js";

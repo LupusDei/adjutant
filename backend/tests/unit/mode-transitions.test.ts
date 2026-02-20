@@ -62,17 +62,13 @@ describe("mode transitions", () => {
   }
 
   // ===========================================================================
-  // Full cycle: all 6 directional transitions
+  // All directional transitions
   // ===========================================================================
 
   describe("all directional transitions", () => {
     const transitions: Array<{ from: DeploymentMode; to: DeploymentMode }> = [
-      { from: "gastown", to: "standalone" },
       { from: "gastown", to: "swarm" },
-      { from: "standalone", to: "gastown" },
-      { from: "standalone", to: "swarm" },
       { from: "swarm", to: "gastown" },
-      { from: "swarm", to: "standalone" },
     ];
 
     for (const { from, to } of transitions) {
@@ -95,8 +91,7 @@ describe("mode transitions", () => {
   describe("provider reset on transition", () => {
     it("should reset all three provider singletons on every transition", () => {
       const transitions: Array<[DeploymentMode, DeploymentMode]> = [
-        ["gastown", "standalone"],
-        ["standalone", "swarm"],
+        ["gastown", "swarm"],
         ["swarm", "gastown"],
       ];
 
@@ -113,7 +108,7 @@ describe("mode transitions", () => {
     });
 
     it("should re-initialize workspace after resetting providers", () => {
-      setupTransition("standalone", "swarm");
+      setupTransition("gastown", "swarm");
 
       switchMode("swarm");
 
@@ -135,13 +130,12 @@ describe("mode transitions", () => {
   describe("feature sets after transitions", () => {
     const expectedFeatures: Record<DeploymentMode, string[]> = {
       gastown: ["power_control", "rigs", "epics", "crew_hierarchy", "mail", "dashboard", "refinery", "witness", "websocket", "sse"],
-      standalone: ["chat", "beads", "websocket", "sse"],
-      swarm: ["chat", "crew_flat", "beads", "mail", "websocket", "sse"],
+      swarm: ["chat", "crew_flat", "beads", "epics", "mail", "websocket", "sse"],
     };
 
-    for (const mode of ["gastown", "standalone", "swarm"] as DeploymentMode[]) {
+    for (const mode of ["gastown", "swarm"] as DeploymentMode[]) {
       it(`should have correct features after transitioning to ${mode}`, () => {
-        const from = mode === "gastown" ? "standalone" : "gastown";
+        const from = mode === "gastown" ? "swarm" : "gastown";
         setupTransition(from, mode);
 
         const result = switchMode(mode);
@@ -152,25 +146,24 @@ describe("mode transitions", () => {
     }
 
     it("should not leak features from previous mode", () => {
-      // Transition gastown→standalone: gastown-only features must disappear
-      setupTransition("gastown", "standalone");
+      // Transition gastown→swarm: gastown-only features must disappear
+      setupTransition("gastown", "swarm");
 
-      const result = switchMode("standalone");
+      const result = switchMode("swarm");
 
       expect(result.data?.features).not.toContain("power_control");
       expect(result.data?.features).not.toContain("rigs");
-      expect(result.data?.features).not.toContain("epics");
       expect(result.data?.features).not.toContain("crew_hierarchy");
       expect(result.data?.features).not.toContain("dashboard");
     });
 
-    it("should gain features when upgrading modes", () => {
-      // Transition standalone→swarm: mail and crew_flat should appear
-      setupTransition("standalone", "swarm");
+    it("should gain features when switching from gastown to swarm", () => {
+      // Transition gastown→swarm: swarm features should appear
+      setupTransition("gastown", "swarm");
 
       const result = switchMode("swarm");
 
-      expect(result.data?.features).toContain("mail");
+      expect(result.data?.features).toContain("chat");
       expect(result.data?.features).toContain("crew_flat");
     });
   });
@@ -182,8 +175,7 @@ describe("mode transitions", () => {
   describe("mode:changed event emission", () => {
     it("should emit mode:changed with correct payload on every transition", () => {
       const transitions: Array<{ from: DeploymentMode; to: DeploymentMode }> = [
-        { from: "gastown", to: "standalone" },
-        { from: "standalone", to: "swarm" },
+        { from: "gastown", to: "swarm" },
         { from: "swarm", to: "gastown" },
       ];
 
@@ -202,38 +194,31 @@ describe("mode transitions", () => {
     });
 
     it("should not emit mode:changed on no-op switch", () => {
-      vi.mocked(getDeploymentMode).mockReturnValue("standalone");
+      vi.mocked(getDeploymentMode).mockReturnValue("swarm");
       vi.mocked(isGasTownAvailable).mockReturnValue(false);
       const mockEmit = vi.fn();
       vi.mocked(getEventBus).mockReturnValue({ emit: mockEmit } as unknown as ReturnType<typeof getEventBus>);
 
-      switchMode("standalone");
+      switchMode("swarm");
 
       expect(mockEmit).not.toHaveBeenCalled();
     });
   });
 
   // ===========================================================================
-  // Full cycle: round-trip through all 3 modes
+  // Full cycle: round-trip through both modes
   // ===========================================================================
 
   describe("full round-trip cycle", () => {
-    it("should complete gastown → standalone → swarm → gastown cycle", () => {
-      // Step 1: gastown → standalone
+    it("should complete gastown → swarm → gastown cycle", () => {
+      // Step 1: gastown → swarm
       vi.clearAllMocks();
-      setupTransition("gastown", "standalone");
-      let result = switchMode("standalone");
-      expect(result.success).toBe(true);
-      expect(result.data?.mode).toBe("standalone");
-
-      // Step 2: standalone → swarm
-      vi.clearAllMocks();
-      setupTransition("standalone", "swarm");
-      result = switchMode("swarm");
+      setupTransition("gastown", "swarm");
+      let result = switchMode("swarm");
       expect(result.success).toBe(true);
       expect(result.data?.mode).toBe("swarm");
 
-      // Step 3: swarm → gastown
+      // Step 2: swarm → gastown
       vi.clearAllMocks();
       setupTransition("swarm", "gastown");
       result = switchMode("gastown");
@@ -241,22 +226,17 @@ describe("mode transitions", () => {
       expect(result.data?.mode).toBe("gastown");
     });
 
-    it("should complete standalone → swarm → gastown → standalone cycle", () => {
-      vi.clearAllMocks();
-      setupTransition("standalone", "swarm");
-      let result = switchMode("swarm");
-      expect(result.success).toBe(true);
-
+    it("should complete swarm → gastown → swarm cycle", () => {
       vi.clearAllMocks();
       setupTransition("swarm", "gastown");
-      result = switchMode("gastown");
+      let result = switchMode("gastown");
       expect(result.success).toBe(true);
 
       vi.clearAllMocks();
-      setupTransition("gastown", "standalone");
-      result = switchMode("standalone");
+      setupTransition("gastown", "swarm");
+      result = switchMode("swarm");
       expect(result.success).toBe(true);
-      expect(result.data?.mode).toBe("standalone");
+      expect(result.data?.mode).toBe("swarm");
     });
   });
 
@@ -265,23 +245,21 @@ describe("mode transitions", () => {
   // ===========================================================================
 
   describe("transition availability", () => {
-    it("should always list standalone and swarm as available from any mode", () => {
-      for (const mode of ["gastown", "standalone", "swarm"] as DeploymentMode[]) {
+    it("should always list swarm as available from any mode", () => {
+      for (const mode of ["gastown", "swarm"] as DeploymentMode[]) {
         vi.clearAllMocks();
         vi.mocked(getDeploymentMode).mockReturnValue(mode);
         vi.mocked(isGasTownAvailable).mockReturnValue(true);
 
         const info = getModeInfo();
 
-        const standalone = info.availableModes.find(m => m.mode === "standalone");
         const swarm = info.availableModes.find(m => m.mode === "swarm");
-        expect(standalone?.available).toBe(true);
         expect(swarm?.available).toBe(true);
       }
     });
 
     it("should block gastown transition when GT infrastructure is missing", () => {
-      vi.mocked(getDeploymentMode).mockReturnValue("standalone");
+      vi.mocked(getDeploymentMode).mockReturnValue("swarm");
       vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       const result = switchMode("gastown");
@@ -305,7 +283,7 @@ describe("mode transitions", () => {
     });
 
     it("should include reason when gastown is unavailable", () => {
-      vi.mocked(getDeploymentMode).mockReturnValue("standalone");
+      vi.mocked(getDeploymentMode).mockReturnValue("swarm");
       vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       const info = getModeInfo();
@@ -323,18 +301,12 @@ describe("mode transitions", () => {
 
   describe("environment variable management", () => {
     it("should update ADJUTANT_MODE env var on each transition step", () => {
-      // Step 1
-      setupTransition("gastown", "standalone");
-      switchMode("standalone");
-      expect(process.env["ADJUTANT_MODE"]).toBe("standalone");
-
-      // Step 2
-      vi.clearAllMocks();
-      setupTransition("standalone", "swarm");
+      // Step 1: gastown → swarm
+      setupTransition("gastown", "swarm");
       switchMode("swarm");
       expect(process.env["ADJUTANT_MODE"]).toBe("swarm");
 
-      // Step 3
+      // Step 2: swarm → gastown
       vi.clearAllMocks();
       setupTransition("swarm", "gastown");
       switchMode("gastown");
@@ -342,23 +314,23 @@ describe("mode transitions", () => {
     });
 
     it("should not modify ADJUTANT_MODE on failed transition", () => {
-      process.env["ADJUTANT_MODE"] = "standalone";
-      vi.mocked(getDeploymentMode).mockReturnValue("standalone");
+      process.env["ADJUTANT_MODE"] = "swarm";
+      vi.mocked(getDeploymentMode).mockReturnValue("swarm");
       vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       switchMode("gastown"); // fails - GT not available
 
-      expect(process.env["ADJUTANT_MODE"]).toBe("standalone");
+      expect(process.env["ADJUTANT_MODE"]).toBe("swarm");
     });
 
     it("should not modify ADJUTANT_MODE on no-op transition", () => {
-      process.env["ADJUTANT_MODE"] = "standalone";
-      vi.mocked(getDeploymentMode).mockReturnValue("standalone");
+      process.env["ADJUTANT_MODE"] = "swarm";
+      vi.mocked(getDeploymentMode).mockReturnValue("swarm");
       vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
-      switchMode("standalone"); // no-op
+      switchMode("swarm"); // no-op
 
-      expect(process.env["ADJUTANT_MODE"]).toBe("standalone");
+      expect(process.env["ADJUTANT_MODE"]).toBe("swarm");
     });
   });
 });

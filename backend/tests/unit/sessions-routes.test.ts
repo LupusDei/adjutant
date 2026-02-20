@@ -57,7 +57,7 @@ describe("sessions routes", () => {
           name: "agent-1",
           tmuxSession: "adj-1",
           projectPath: "/project",
-          mode: "standalone",
+          mode: "swarm",
           status: "idle",
           workspaceType: "primary",
           connectedClients: [],

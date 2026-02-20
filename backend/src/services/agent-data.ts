@@ -202,7 +202,7 @@ export async function collectAgentSnapshot(
   }
 
   // Synthesize agents from running tmux sessions if not found in beads
-  // This section handles Gas Town session patterns - in standalone mode,
+  // This section handles Gas Town session patterns - in swarm mode,
   // agents are discovered purely through beads, not tmux sessions
   for (const sessionName of sessions) {
     let rig: string | null = null;
@@ -241,7 +241,7 @@ export async function collectAgentSnapshot(
         }
       }
     } else if (sessionName.startsWith("agent-")) {
-      // Standalone mode: agent-{name} sessions
+      // Swarm mode: agent-{name} sessions
       role = "agent";
       name = sessionName.slice("agent-".length);
     }

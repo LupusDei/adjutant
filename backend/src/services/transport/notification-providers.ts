@@ -3,7 +3,7 @@
  *
  * Provides different strategies for notifying agents about new mail:
  * - TmuxNotificationProvider: Injects message into tmux sessions
- * - NoOpNotificationProvider: Does nothing (for standalone mode)
+ * - NoOpNotificationProvider: Does nothing (for swarm mode)
  */
 
 import { spawn } from "child_process";
@@ -69,7 +69,7 @@ export class TmuxNotificationProvider implements NotificationProvider {
 /**
  * NoOpNotificationProvider - Does nothing.
  *
- * Used in standalone mode where there are no tmux sessions to notify.
+ * Used in swarm mode where there are no tmux sessions to notify.
  * Push notifications can be handled separately via APNS.
  */
 export class NoOpNotificationProvider implements NotificationProvider {
@@ -81,7 +81,7 @@ export class NoOpNotificationProvider implements NotificationProvider {
     _subject: string,
     _messageId?: string
   ): Promise<void> {
-    // Do nothing - standalone mode relies on polling or push notifications
+    // Do nothing - swarm mode relies on polling or push notifications
   }
 }
 

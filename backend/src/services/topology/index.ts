@@ -3,7 +3,7 @@
  *
  * Provides deployment-mode-aware topology handling:
  * - Gas Town: Full hierarchy (mayor, deacon, witness, refinery, crew, polecat)
- * - Standalone: Simple model (user, agent)
+ * - Swarm: Simple model (user, agent)
  *
  * Usage:
  *   import { getTopology } from "./topology/index.js";
@@ -14,7 +14,7 @@
 import { getWorkspace } from "../workspace/index.js";
 import type { TopologyProvider, AgentAddress, SessionInfo } from "./topology-provider.js";
 import { GasTownTopology } from "./gastown-topology.js";
-import { StandaloneTopology } from "./standalone-topology.js";
+import { SwarmTopology } from "./swarm-topology.js";
 
 // Re-export types
 export type { TopologyProvider, AgentAddress, SessionInfo };
@@ -27,7 +27,7 @@ let topologyInstance: TopologyProvider | null = null;
  *
  * Uses the workspace provider to determine which topology to use:
  * - gastown mode → GasTownTopology
- * - standalone/swarm mode → StandaloneTopology
+ * - swarm mode → SwarmTopology
  */
 export function getTopology(): TopologyProvider {
   if (topologyInstance) {
@@ -40,10 +40,9 @@ export function getTopology(): TopologyProvider {
     case "gastown":
       topologyInstance = new GasTownTopology();
       break;
-    case "standalone":
     case "swarm":
     default:
-      topologyInstance = new StandaloneTopology();
+      topologyInstance = new SwarmTopology();
       break;
   }
 
@@ -59,4 +58,4 @@ export function resetTopology(): void {
 
 // Re-export specific topology classes for direct use if needed
 export { GasTownTopology } from "./gastown-topology.js";
-export { StandaloneTopology } from "./standalone-topology.js";
+export { SwarmTopology } from "./swarm-topology.js";

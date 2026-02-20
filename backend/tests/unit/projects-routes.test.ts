@@ -33,7 +33,7 @@ function createMockProject(overrides: Partial<Project> = {}): Project {
     id: "abcd1234",
     name: "test-project",
     path: "/Users/test/code/test-project",
-    mode: "standalone",
+    mode: "swarm",
     sessions: [],
     createdAt: "2026-01-01T00:00:00.000Z",
     active: false,

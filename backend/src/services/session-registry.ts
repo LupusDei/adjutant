@@ -15,7 +15,7 @@ import { logInfo, logWarn } from "../utils/index.js";
 // Types
 // ============================================================================
 
-export type SessionMode = "standalone" | "swarm" | "gastown";
+export type SessionMode = "swarm" | "swarm" | "gastown";
 export type SessionStatus = "idle" | "working" | "waiting_permission" | "offline";
 export type WorkspaceType = "primary" | "worktree" | "copy";
 
@@ -90,7 +90,7 @@ export class SessionRegistry {
       tmuxSession: opts.tmuxSession,
       tmuxPane: opts.tmuxPane ?? `${opts.tmuxSession}:0.0`,
       projectPath: opts.projectPath,
-      mode: opts.mode ?? "standalone",
+      mode: opts.mode ?? "swarm",
       status: "idle",
       workspaceType: opts.workspaceType ?? "primary",
       connectedClients: new Set(),

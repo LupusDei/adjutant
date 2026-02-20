@@ -231,7 +231,7 @@ describe("LifecycleManager", () => {
   // ==========================================================================
 
   describe("tmux naming", () => {
-    it("should prefix standalone sessions with adj-", async () => {
+    it("should prefix default-mode sessions with adj-", async () => {
       mockExecFile.mockImplementation(
         (
           _cmd: string,
@@ -250,7 +250,6 @@ describe("LifecycleManager", () => {
       await lifecycle.createSession({
         name: "myagent",
         projectPath: "/tmp",
-        mode: "standalone",
       });
 
       // Check the new-session call
