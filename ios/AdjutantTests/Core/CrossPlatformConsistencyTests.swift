@@ -9,14 +9,14 @@ import Combine
 /// the Frontend and Backend expectations. Both iOS and Frontend must:
 /// 1. Show the same tabs per mode
 /// 2. React to SSE mode_changed events the same way
-/// 3. Use the same mode identifiers ("gastown", "standalone", "swarm")
+/// 3. Use the same mode identifiers ("gastown", "swarm")
 @MainActor
 final class CrossPlatformConsistencyTests: XCTestCase {
 
     // MARK: - Tab Visibility Rules (must match Frontend useVisibleTabs)
 
     func testGasTownModeShowsAll7Tabs() {
-        let tabs = DeploymentMode.gasTown.visibleTabs
+        let tabs = DeploymentMode.gastown.visibleTabs
         XCTAssertEqual(tabs.count, 7, "Gas Town mode should show all 7 tabs")
         XCTAssertTrue(tabs.contains(.dashboard))
         XCTAssertTrue(tabs.contains(.mail))
@@ -25,20 +25,6 @@ final class CrossPlatformConsistencyTests: XCTestCase {
         XCTAssertTrue(tabs.contains(.crew))
         XCTAssertTrue(tabs.contains(.beads))
         XCTAssertTrue(tabs.contains(.settings))
-    }
-
-    func testStandaloneModeShows6Tabs() {
-        let tabs = DeploymentMode.singleAgent.visibleTabs
-        XCTAssertEqual(tabs.count, 6, "Standalone mode should show 6 tabs")
-        XCTAssertTrue(tabs.contains(.chat))
-        XCTAssertTrue(tabs.contains(.epics))
-        XCTAssertTrue(tabs.contains(.crew))
-        XCTAssertTrue(tabs.contains(.projects))
-        XCTAssertTrue(tabs.contains(.beads))
-        XCTAssertTrue(tabs.contains(.settings))
-        // Hidden tabs
-        XCTAssertFalse(tabs.contains(.dashboard))
-        XCTAssertFalse(tabs.contains(.mail))
     }
 
     func testSwarmModeShows6Tabs() {
@@ -58,23 +44,22 @@ final class CrossPlatformConsistencyTests: XCTestCase {
     // MARK: - Mode Identifier Values (must match Backend/Frontend strings)
 
     func testModeRawValuesMatchBackend() {
-        // Backend uses: "gastown", "standalone", "swarm"
-        // Frontend uses: type DeploymentMode = 'gastown' | 'standalone' | 'swarm'
-        XCTAssertEqual(DeploymentMode.gasTown.rawValue, "gastown")
-        XCTAssertEqual(DeploymentMode.singleAgent.rawValue, "standalone")
+        // Backend uses: "gastown", "swarm"
+        // Frontend uses: type DeploymentMode = 'gastown' | 'swarm'
+        XCTAssertEqual(DeploymentMode.gastown.rawValue, "gastown")
         XCTAssertEqual(DeploymentMode.swarm.rawValue, "swarm")
     }
 
     func testModeCanBeCreatedFromBackendStrings() {
         // These are the exact strings the backend GET /api/mode returns
-        XCTAssertEqual(DeploymentMode(rawValue: "gastown"), .gasTown)
-        XCTAssertEqual(DeploymentMode(rawValue: "standalone"), .singleAgent)
+        XCTAssertEqual(DeploymentMode(rawValue: "gastown"), .gastown)
         XCTAssertEqual(DeploymentMode(rawValue: "swarm"), .swarm)
     }
 
     func testModeRejectsInvalidStrings() {
         XCTAssertNil(DeploymentMode(rawValue: "gas_town"))
         XCTAssertNil(DeploymentMode(rawValue: "GT"))
+        XCTAssertNil(DeploymentMode(rawValue: "standalone"))
         XCTAssertNil(DeploymentMode(rawValue: "single_agent"))
         XCTAssertNil(DeploymentMode(rawValue: "single"))
         XCTAssertNil(DeploymentMode(rawValue: ""))
@@ -83,10 +68,10 @@ final class CrossPlatformConsistencyTests: XCTestCase {
     // MARK: - SSE mode_changed Event Parsing
 
     func testModeChangedEventDecoding() {
-        // Backend emits: { mode: "standalone", features: [...], reason: "..." }
+        // Backend emits: { mode: "swarm", features: [...], reason: "..." }
         let json = """
         {
-            "mode": "standalone",
+            "mode": "swarm",
             "features": ["chat", "beads", "websocket", "sse"],
             "reason": "Switched from gastown"
         }
@@ -95,7 +80,7 @@ final class CrossPlatformConsistencyTests: XCTestCase {
         let event = try? JSONDecoder().decode(ModeChangedEvent.self, from: data)
 
         XCTAssertNotNil(event)
-        XCTAssertEqual(event?.mode, "standalone")
+        XCTAssertEqual(event?.mode, "swarm")
         XCTAssertEqual(event?.features, ["chat", "beads", "websocket", "sse"])
         XCTAssertEqual(event?.reason, "Switched from gastown")
     }
@@ -119,23 +104,23 @@ final class CrossPlatformConsistencyTests: XCTestCase {
         let appState = AppState.shared
 
         // Set initial mode
-        appState.deploymentMode = .gasTown
-        XCTAssertEqual(appState.deploymentMode, .gasTown)
+        appState.deploymentMode = .gastown
+        XCTAssertEqual(appState.deploymentMode, .gastown)
 
         // Simulate SSE event
         let event = ModeChangedEvent(
-            mode: "standalone",
+            mode: "swarm",
             features: ["chat", "beads"],
             reason: "Switched from gastown"
         )
         appState.updateDeploymentMode(from: event)
 
-        XCTAssertEqual(appState.deploymentMode, .singleAgent)
+        XCTAssertEqual(appState.deploymentMode, .swarm)
     }
 
     func testUpdateDeploymentModeIgnoresInvalidMode() {
         let appState = AppState.shared
-        appState.deploymentMode = .gasTown
+        appState.deploymentMode = .gastown
 
         let event = ModeChangedEvent(
             mode: "invalid_mode",
@@ -145,7 +130,7 @@ final class CrossPlatformConsistencyTests: XCTestCase {
         appState.updateDeploymentMode(from: event)
 
         // Should remain unchanged
-        XCTAssertEqual(appState.deploymentMode, .gasTown)
+        XCTAssertEqual(appState.deploymentMode, .gastown)
     }
 
     // MARK: - ModeInfo Response Model
@@ -158,7 +143,6 @@ final class CrossPlatformConsistencyTests: XCTestCase {
             "features": ["power_control", "rigs", "epics", "crew_hierarchy", "mail", "dashboard", "refinery", "witness", "websocket", "sse"],
             "availableModes": [
                 {"mode": "gastown", "available": true},
-                {"mode": "standalone", "available": true},
                 {"mode": "swarm", "available": true}
             ]
         }
@@ -169,17 +153,16 @@ final class CrossPlatformConsistencyTests: XCTestCase {
         XCTAssertNotNil(modeInfo)
         XCTAssertEqual(modeInfo?.mode, "gastown")
         XCTAssertEqual(modeInfo?.features.count, 10)
-        XCTAssertEqual(modeInfo?.availableModes.count, 3)
+        XCTAssertEqual(modeInfo?.availableModes.count, 2)
     }
 
     func testModeInfoWithUnavailableMode() {
         let json = """
         {
-            "mode": "standalone",
+            "mode": "swarm",
             "features": ["chat", "beads", "websocket", "sse"],
             "availableModes": [
                 {"mode": "gastown", "available": false, "reason": "Gas Town infrastructure not detected (no mayor/town.json)"},
-                {"mode": "standalone", "available": true},
                 {"mode": "swarm", "available": true}
             ]
         }
@@ -225,11 +208,7 @@ final class CrossPlatformConsistencyTests: XCTestCase {
     }
 
     func testGasTownDefaultTabIsDashboard() {
-        XCTAssertEqual(DeploymentMode.gasTown.defaultTab, .dashboard)
-    }
-
-    func testStandaloneDefaultTabIsChat() {
-        XCTAssertEqual(DeploymentMode.singleAgent.defaultTab, .chat)
+        XCTAssertEqual(DeploymentMode.gastown.defaultTab, .dashboard)
     }
 
     func testSwarmDefaultTabIsChat() {

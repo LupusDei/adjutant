@@ -112,7 +112,7 @@ struct BeadsListView: View {
 
                 Spacer()
 
-                // Mode-aware filter: Rig dropdown for gastown, Project dropdown for standalone/swarm
+                // Mode-aware filter: Rig dropdown for gastown, Project dropdown for swarm
                 if appState.deploymentMode == .gastown {
                     RigFilterDropdown(availableRigs: appState.availableRigs)
                 } else {

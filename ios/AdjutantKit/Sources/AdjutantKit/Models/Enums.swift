@@ -21,7 +21,6 @@ public enum MessageType: String, Codable, CaseIterable {
 /// Determines which features and tabs are available.
 public enum DeploymentMode: String, Codable, CaseIterable {
     case gastown
-    case standalone
     case swarm
 }
 

@@ -2,10 +2,10 @@ import Foundation
 import Combine
 import AdjutantKit
 
-/// ViewModel for the standalone/swarm project detail view.
+/// ViewModel for the swarm project detail view.
 /// Manages sessions, swarms, and project actions.
 @MainActor
-final class StandaloneProjectDetailViewModel: BaseViewModel {
+final class SwarmProjectDetailViewModel: BaseViewModel {
     // MARK: - Published Properties
 
     @Published private(set) var project: Project
@@ -50,7 +50,7 @@ final class StandaloneProjectDetailViewModel: BaseViewModel {
 
     // MARK: - Actions
 
-    /// Create a new standalone agent session for this project
+    /// Create a new swarm agent session for this project
     func createSession() async -> ManagedSession? {
         isCreatingSession = true
         defer { isCreatingSession = false }
@@ -59,7 +59,7 @@ final class StandaloneProjectDetailViewModel: BaseViewModel {
             try await self.apiClient.createSession(
                 CreateSessionRequest(
                     projectPath: self.project.path,
-                    mode: "standalone"
+                    mode: "swarm"
                 )
             )
         }

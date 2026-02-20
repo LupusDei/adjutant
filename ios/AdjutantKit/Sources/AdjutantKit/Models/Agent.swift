@@ -22,7 +22,7 @@ public struct CrewMember: Codable, Identifiable, Equatable, Hashable {
     public let firstFrom: String?
     /// Current git branch (for polecats)
     public let branch: String?
-    /// Session ID for linking to session chat (standalone/swarm)
+    /// Session ID for linking to session chat (swarm)
     public let sessionId: String?
 
     public init(

@@ -90,19 +90,6 @@ final class SourceFilterIntegrationTests: XCTestCase {
             "Gastown mode should not populate beadSources (uses rig filter instead)")
     }
 
-    func testStandaloneModeUsesBeadSources() async {
-        // When deploymentMode is standalone and no API client is set (mock mode),
-        // beadSources stays empty but the property exists for the source filter
-        AppState.shared.deploymentMode = .standalone
-        let freshVM = BeadsListViewModel()
-        await freshVM.loadBeads()
-
-        // Without a real API client, sources stay empty (no mock server)
-        // This tests that the code path doesn't crash
-        XCTAssertNotNil(freshVM.beadSources,
-            "beadSources should be accessible in standalone mode")
-    }
-
     func testSwarmModeUsesBeadSources() async {
         AppState.shared.deploymentMode = .swarm
         let freshVM = BeadsListViewModel()

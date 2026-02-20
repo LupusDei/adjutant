@@ -205,7 +205,7 @@ final class BeadsListViewModel: BaseViewModel {
             await self.dataSync.refreshBeads(rig: self.selectedRig)
         }
 
-        // Fetch bead sources for standalone/swarm source filter
+        // Fetch bead sources for swarm source filter
         if AppState.shared.deploymentMode != .gastown {
             await fetchBeadSources(apiClient: apiClient)
         }

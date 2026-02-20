@@ -18,7 +18,7 @@ public struct AvailableMode: Codable, Equatable {
 
 /// Current deployment mode information from the backend
 public struct ModeInfo: Codable, Equatable {
-    /// Current deployment mode ("gastown", "standalone", or "swarm")
+    /// Current deployment mode ("gastown" or "swarm")
     public let mode: String
     /// Features available in this mode
     public let features: [String]

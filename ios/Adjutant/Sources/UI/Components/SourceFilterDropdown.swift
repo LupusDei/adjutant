@@ -1,7 +1,7 @@
 import SwiftUI
 import AdjutantKit
 
-/// A dropdown menu for filtering beads by project source in standalone/swarm modes.
+/// A dropdown menu for filtering beads by project source in swarm modes.
 /// Shows "All" option plus available project directories that contain beads.
 /// Uses the same `selectedRig` on AppState as RigFilterDropdown for filtering.
 struct SourceFilterDropdown: View {

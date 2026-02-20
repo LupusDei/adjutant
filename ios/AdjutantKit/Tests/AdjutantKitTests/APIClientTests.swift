@@ -252,7 +252,7 @@ final class APIClientTests: XCTestCase {
                         "hasBeads": false
                     ]
                 ],
-                "mode": "standalone"
+                "mode": "swarm"
             ],
             "timestamp": "2024-01-15T10:30:00.000Z"
         ])
@@ -260,7 +260,7 @@ final class APIClientTests: XCTestCase {
         let response = try await client.getBeadSources()
 
         XCTAssertEqual(response.sources.count, 3)
-        XCTAssertEqual(response.mode, "standalone")
+        XCTAssertEqual(response.mode, "swarm")
         XCTAssertEqual(response.sources[0].name, "my-project")
         XCTAssertEqual(response.sources[0].path, "/home/user/my-project")
         XCTAssertTrue(response.sources[0].hasBeads)
@@ -316,7 +316,7 @@ final class APIClientTests: XCTestCase {
             capturedRequest = request
             let envelope: [String: Any] = [
                 "success": true,
-                "data": ["sources": [], "mode": "standalone"],
+                "data": ["sources": [], "mode": "swarm"],
                 "timestamp": "2024-01-15T10:30:00.000Z"
             ]
             let data = try! JSONSerialization.data(withJSONObject: envelope)
