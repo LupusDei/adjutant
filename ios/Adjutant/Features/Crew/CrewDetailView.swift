@@ -95,8 +95,8 @@ struct CrewDetailView: View {
                         detailRow(label: "TASK", value: task)
                     }
 
-                    if viewModel.member.unreadMail > 0 {
-                        detailRow(label: "UNREAD", value: "\(viewModel.member.unreadMail) MESSAGES")
+                    if (viewModel.member.unreadMail ?? 0) > 0 {
+                        detailRow(label: "UNREAD", value: "\(viewModel.member.unreadMail ?? 0) MESSAGES")
                     }
                 }
             }

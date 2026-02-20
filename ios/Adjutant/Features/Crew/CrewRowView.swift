@@ -37,8 +37,8 @@ struct CrewRowView: View {
                 Spacer()
 
                 // Unread mail badge
-                if member.unreadMail > 0 {
-                    UnreadBadge(member.unreadMail)
+                if (member.unreadMail ?? 0) > 0 {
+                    UnreadBadge(member.unreadMail ?? 0)
                 }
 
                 // Navigation chevron
@@ -115,8 +115,8 @@ struct CrewRowView: View {
             description += ", \(rig)"
         }
         description += ", status: \(statusDisplayText.lowercased())"
-        if member.unreadMail > 0 {
-            description += ", \(member.unreadMail) unread messages"
+        if (member.unreadMail ?? 0) > 0 {
+            description += ", \(member.unreadMail ?? 0) unread messages"
         }
         return description
     }
