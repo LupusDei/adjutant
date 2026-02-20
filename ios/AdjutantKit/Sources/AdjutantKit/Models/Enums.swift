@@ -19,9 +19,29 @@ public enum MessageType: String, Codable, CaseIterable {
 
 /// Deployment mode for the Adjutant app.
 /// Determines which features and tabs are available.
-public enum DeploymentMode: String, Codable, CaseIterable {
+public enum DeploymentMode: String, CaseIterable {
     case gastown
     case swarm
+}
+
+extension DeploymentMode: Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        // Map legacy "standalone" → .swarm as a defensive fallback.
+        // The gt CLI and older data may still emit "standalone".
+        if rawValue == "standalone" {
+            self = .swarm
+            return
+        }
+        guard let mode = DeploymentMode(rawValue: rawValue) else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Unknown DeploymentMode: \(rawValue)"
+            )
+        }
+        self = mode
+    }
 }
 
 /// Possible states for the gastown system.

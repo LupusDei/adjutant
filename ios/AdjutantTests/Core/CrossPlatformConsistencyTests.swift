@@ -59,10 +59,17 @@ final class CrossPlatformConsistencyTests: XCTestCase {
     func testModeRejectsInvalidStrings() {
         XCTAssertNil(DeploymentMode(rawValue: "gas_town"))
         XCTAssertNil(DeploymentMode(rawValue: "GT"))
-        XCTAssertNil(DeploymentMode(rawValue: "standalone"))
         XCTAssertNil(DeploymentMode(rawValue: "single_agent"))
         XCTAssertNil(DeploymentMode(rawValue: "single"))
         XCTAssertNil(DeploymentMode(rawValue: ""))
+    }
+
+    func testStandaloneDecodesAsSwarm() throws {
+        // Legacy "standalone" mode should decode to .swarm via custom Codable
+        let json = Data(#"{"mode":"standalone","features":[]}"#.utf8)
+        struct Wrapper: Codable { let mode: DeploymentMode; let features: [String] }
+        let decoded = try JSONDecoder().decode(Wrapper.self, from: json)
+        XCTAssertEqual(decoded.mode, .swarm)
     }
 
     // MARK: - SSE mode_changed Event Parsing

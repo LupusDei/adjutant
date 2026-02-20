@@ -23,7 +23,7 @@ export interface Project {
   name: string;
   path: string;
   gitRemote?: string | undefined;
-  mode: "swarm" | "swarm" | "gastown";
+  mode: "swarm" | "gastown";
   sessions: string[];
   createdAt: string;
   active: boolean;
@@ -71,7 +71,15 @@ function loadStore(): ProjectsStore {
   }
   try {
     const raw = readFileSync(PROJECTS_FILE, "utf8");
-    return JSON.parse(raw) as ProjectsStore;
+    const store = JSON.parse(raw) as ProjectsStore;
+    // Normalize legacy "standalone" mode to "swarm" at the API boundary.
+    // The gt CLI and older projects.json files may still contain "standalone".
+    for (const project of store.projects) {
+      if ((project.mode as string) === "standalone") {
+        project.mode = "swarm";
+      }
+    }
+    return store;
   } catch {
     return { projects: [] };
   }

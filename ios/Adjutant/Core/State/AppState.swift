@@ -314,7 +314,7 @@ final class AppState: ObservableObject {
         let client = apiClient
         do {
             let modeInfo = try await client.switchMode(to: mode.rawValue)
-            if let newMode = DeploymentMode(rawValue: modeInfo.mode) {
+            if let newMode = DeploymentMode.from(modeInfo.mode) {
                 deploymentMode = newMode
             }
             return true
@@ -328,7 +328,7 @@ final class AppState: ObservableObject {
     /// Updates deployment mode from an SSE mode_changed event.
     /// Called by DataSyncService when it receives a mode_changed event.
     func updateDeploymentMode(from event: ModeChangedEvent) {
-        if let mode = DeploymentMode(rawValue: event.mode) {
+        if let mode = DeploymentMode.from(event.mode) {
             deploymentMode = mode
         }
     }
@@ -358,7 +358,7 @@ final class AppState: ObservableObject {
         }
 
         if let modeRaw = UserDefaults.standard.string(forKey: "deploymentMode"),
-           let mode = DeploymentMode(rawValue: modeRaw) {
+           let mode = DeploymentMode.from(modeRaw) {
             deploymentMode = mode
         }
         // Default to "town" rig if no value persisted (not "all")
@@ -502,11 +502,19 @@ enum PowerState: String {
 }
 
 /// Deployment modes for the Adjutant system
-enum DeploymentMode: String, CaseIterable, Identifiable, Codable {
+enum DeploymentMode: String, CaseIterable, Identifiable {
     case gastown = "gastown"
     case swarm = "swarm"
 
     var id: String { rawValue }
+
+    /// Creates a DeploymentMode from a raw string, mapping legacy values.
+    /// Use this instead of `init(rawValue:)` when the string may come from
+    /// external sources (API, SSE, persisted state) that could contain "standalone".
+    static func from(_ rawValue: String) -> DeploymentMode? {
+        if rawValue == "standalone" { return .swarm }
+        return DeploymentMode(rawValue: rawValue)
+    }
 
     var displayName: String {
         switch self {
@@ -547,6 +555,26 @@ enum DeploymentMode: String, CaseIterable, Identifiable, Codable {
         case .gastown: return .dashboard
         case .swarm: return .chat
         }
+    }
+}
+
+extension DeploymentMode: Codable {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        // Map legacy "standalone" → .swarm as a defensive fallback.
+        // The gt CLI and older data may still emit "standalone".
+        if rawValue == "standalone" {
+            self = .swarm
+            return
+        }
+        guard let mode = DeploymentMode(rawValue: rawValue) else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Unknown DeploymentMode: \(rawValue)"
+            )
+        }
+        self = mode
     }
 }
 
