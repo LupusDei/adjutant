@@ -24,7 +24,6 @@ vi.mock('../../../../src/contexts/ModeContext', () => ({
     loading: false,
     error: null,
     isGasTown: true,
-    isStandalone: false,
     isSwarm: false,
     hasFeature: () => false,
     switchMode: vi.fn(),

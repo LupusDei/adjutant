@@ -153,7 +153,7 @@ export function RecipientSelector({
       case 'refinery': return '🔧';
       case 'crew': return '👤';
       case 'polecat': return '🐾';
-      // Standalone roles
+      // Swarm roles
       case 'user': return '👤';
       case 'agent': return '🤖';
       default: return '•';

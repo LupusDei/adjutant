@@ -34,8 +34,7 @@ function ModeAndTabsDisplay() {
 
 const EXPECTED_TABS = {
   gastown: ['beads', 'chat', 'crew', 'dashboard', 'epics', 'mail', 'settings'],
-  standalone: ['beads', 'chat', 'settings'],
-  swarm: ['beads', 'chat', 'crew', 'settings'],
+  swarm: ['beads', 'chat', 'crew', 'epics', 'settings'],
 };
 
 // =============================================================================
@@ -108,21 +107,7 @@ describe('cross-platform consistency', () => {
       });
     });
 
-    it('standalone mode: shows only chat, beads, settings (matches iOS)', async () => {
-      setupModeResponse('standalone', ['chat', 'beads']);
-
-      render(
-        <ModeProvider>
-          <ModeAndTabsDisplay />
-        </ModeProvider>
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId('tabs').textContent).toBe(EXPECTED_TABS.standalone.join(','));
-      });
-    });
-
-    it('swarm mode: shows chat, crew, beads, settings (matches iOS)', async () => {
+    it('swarm mode: shows chat, crew, epics, beads, settings (matches iOS)', async () => {
       setupModeResponse('swarm', ['chat', 'crew_flat', 'beads', 'mail']);
 
       render(
@@ -166,23 +151,23 @@ describe('cross-platform consistency', () => {
       const listener = modeChangedCall![1] as (event: { data: string }) => void;
       listener({
         data: JSON.stringify({
-          mode: 'standalone',
-          features: ['chat', 'beads', 'websocket', 'sse'],
+          mode: 'swarm',
+          features: ['chat', 'crew_flat', 'beads', 'mail', 'websocket', 'sse'],
           reason: 'Switched from gastown',
         }),
       });
 
       // Verify mode updated
       await waitFor(() => {
-        expect(screen.getByTestId('mode').textContent).toBe('standalone');
+        expect(screen.getByTestId('mode').textContent).toBe('swarm');
       });
 
-      // Verify tabs also updated to match standalone
-      expect(screen.getByTestId('tabs').textContent).toBe(EXPECTED_TABS.standalone.join(','));
+      // Verify tabs also updated to match swarm
+      expect(screen.getByTestId('tabs').textContent).toBe(EXPECTED_TABS.swarm.join(','));
     });
 
     it('mode_changed event with same payload format as backend emits', async () => {
-      setupModeResponse('standalone', ['chat', 'beads']);
+      setupModeResponse('swarm', ['chat', 'crew_flat', 'beads', 'mail']);
 
       render(
         <ModeProvider>
@@ -191,7 +176,7 @@ describe('cross-platform consistency', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId('mode').textContent).toBe('standalone');
+        expect(screen.getByTestId('mode').textContent).toBe('swarm');
       });
 
       const es = mockEventSourceInstances[0]!;
@@ -206,7 +191,7 @@ describe('cross-platform consistency', () => {
         data: JSON.stringify({
           mode: 'swarm',
           features: ['chat', 'crew_flat', 'beads', 'mail', 'websocket', 'sse'],
-          reason: 'Switched from standalone',
+          reason: 'Switched from swarm',
         }),
       });
 
@@ -218,20 +203,14 @@ describe('cross-platform consistency', () => {
   });
 
   describe('mode identifier values match iOS DeploymentMode.rawValue', () => {
-    // iOS uses: case gasTown = "gastown", case singleAgent = "standalone", case swarm = "swarm"
-    // Frontend uses: type DeploymentMode = 'gastown' | 'standalone' | 'swarm' | 'unknown'
-    // Backend uses: type DeploymentMode = "gastown" | "standalone" | "swarm"
+    // iOS uses: case gasTown = "gastown", case swarm = "swarm"
+    // Frontend uses: type DeploymentMode = 'gastown' | 'swarm' | 'unknown'
+    // Backend uses: type DeploymentMode = "gastown" | "swarm"
 
     it('uses "gastown" not "gas_town" or "GT"', async () => {
       setupModeResponse('gastown', []);
       render(<ModeProvider><ModeAndTabsDisplay /></ModeProvider>);
       await waitFor(() => expect(screen.getByTestId('mode').textContent).toBe('gastown'));
-    });
-
-    it('uses "standalone" not "single_agent" or "single"', async () => {
-      setupModeResponse('standalone', []);
-      render(<ModeProvider><ModeAndTabsDisplay /></ModeProvider>);
-      await waitFor(() => expect(screen.getByTestId('mode').textContent).toBe('standalone'));
     });
 
     it('uses "swarm"', async () => {

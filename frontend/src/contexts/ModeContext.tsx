@@ -13,7 +13,7 @@ import { getApiKey } from '../services/api';
 // Types
 // ============================================================================
 
-export type DeploymentMode = 'gastown' | 'standalone' | 'swarm' | 'unknown';
+export type DeploymentMode = 'gastown' | 'swarm' | 'unknown';
 
 export interface AvailableMode {
   mode: DeploymentMode;
@@ -34,8 +34,6 @@ export interface ModeContextValue {
   error: string | null;
   /** Convenience: whether current mode is gastown */
   isGasTown: boolean;
-  /** Convenience: whether current mode is standalone */
-  isStandalone: boolean;
   /** Convenience: whether current mode is swarm */
   isSwarm: boolean;
   /** Check if a feature is available in the current mode */
@@ -101,7 +99,7 @@ export function ModeProvider({ children }: { children: ReactNode }) {
         if (capResponse.ok) {
           const capData = await capResponse.json() as { success: boolean; data?: { canControl: boolean; autoStart: boolean } };
           if (capData.success && capData.data) {
-            const detected = capData.data.canControl ? 'gastown' : capData.data.autoStart ? 'standalone' : 'swarm';
+            const detected = capData.data.canControl ? 'gastown' : 'swarm';
             applyModeInfo({ mode: detected, features: [] });
             return;
           }
@@ -193,7 +191,6 @@ export function ModeProvider({ children }: { children: ReactNode }) {
     loading,
     error,
     isGasTown: mode === 'gastown',
-    isStandalone: mode === 'standalone',
     isSwarm: mode === 'swarm',
     hasFeature,
     switchMode: doSwitchMode,
@@ -227,16 +224,13 @@ export function useMode(): ModeContextValue {
  *
  * Tab visibility rules (from AdjutantMode.md):
  * - GT Mode: all 7 tabs
- * - Single Agent: chat, beads, settings
- * - Swarm: chat, crew, beads, settings
+ * - Swarm: chat, crew, epics, beads, settings
  */
 export function useVisibleTabs(): Set<string> {
   const { mode } = useMode();
 
   return useMemo(() => {
     switch (mode) {
-      case 'standalone':
-        return new Set(['chat', 'epics', 'crew', 'beads', 'settings']);
       case 'swarm':
         return new Set(['chat', 'crew', 'epics', 'beads', 'settings']);
       case 'gastown':
