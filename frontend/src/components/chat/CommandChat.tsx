@@ -165,7 +165,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Get deployment mode for UI labels and recipient adaptation
-  const { isGasTown, isSwarm } = useMode();
+  const { isGasTown } = useMode();
   const { priority, connectionStatus: commContextStatus } = useCommunication();
 
   // Communication context for real-time messaging
