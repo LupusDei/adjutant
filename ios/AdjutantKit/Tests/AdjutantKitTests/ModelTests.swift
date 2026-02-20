@@ -395,14 +395,14 @@ final class ModelTests: XCTestCase {
                     "hasBeads": false
                 }
             ],
-            "mode": "standalone"
+            "mode": "swarm"
         }
         """
 
         let response = try decoder.decode(BeadSourcesResponse.self, from: json.data(using: .utf8)!)
 
         XCTAssertEqual(response.sources.count, 3)
-        XCTAssertEqual(response.mode, "standalone")
+        XCTAssertEqual(response.mode, "swarm")
         XCTAssertEqual(response.sources[0].name, "project-a")
         XCTAssertTrue(response.sources[0].hasBeads)
         XCTAssertEqual(response.sources[2].name, "empty-dir")
@@ -445,8 +445,8 @@ final class ModelTests: XCTestCase {
 
     func testBeadSourcesResponseEquality() {
         let sources = [BeadSource(name: "proj", path: "/p", hasBeads: true)]
-        let response1 = BeadSourcesResponse(sources: sources, mode: "standalone")
-        let response2 = BeadSourcesResponse(sources: sources, mode: "standalone")
+        let response1 = BeadSourcesResponse(sources: sources, mode: "swarm")
+        let response2 = BeadSourcesResponse(sources: sources, mode: "swarm")
         let response3 = BeadSourcesResponse(sources: [], mode: "gastown")
 
         XCTAssertEqual(response1, response2)
@@ -458,12 +458,12 @@ final class ModelTests: XCTestCase {
             BeadSource(name: "app", path: "/app", hasBeads: true),
             BeadSource(name: "lib", path: "/lib", hasBeads: false)
         ]
-        let response = BeadSourcesResponse(sources: sources, mode: "standalone")
+        let response = BeadSourcesResponse(sources: sources, mode: "swarm")
         let data = try JSONEncoder().encode(response)
         let decoded = try decoder.decode(BeadSourcesResponse.self, from: data)
 
         XCTAssertEqual(decoded.sources.count, 2)
-        XCTAssertEqual(decoded.mode, "standalone")
+        XCTAssertEqual(decoded.mode, "swarm")
         XCTAssertEqual(decoded.sources[0].name, "app")
         XCTAssertEqual(decoded.sources[1].name, "lib")
     }

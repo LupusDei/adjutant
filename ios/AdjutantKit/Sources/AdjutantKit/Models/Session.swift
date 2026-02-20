@@ -47,7 +47,6 @@ public struct ManagedSession: Codable, Identifiable, Equatable, Hashable {
 
 /// Session operating mode
 public enum SessionMode: String, Codable, CaseIterable {
-    case standalone
     case swarm
     case gastown
 }
@@ -77,7 +76,7 @@ public struct CreateSessionRequest: Encodable {
     public init(
         name: String? = nil,
         projectPath: String,
-        mode: String = "standalone",
+        mode: String = "swarm",
         workspaceType: String? = nil
     ) {
         self.name = name

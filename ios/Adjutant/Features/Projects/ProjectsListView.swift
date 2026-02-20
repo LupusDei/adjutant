@@ -2,7 +2,7 @@ import SwiftUI
 import AdjutantKit
 
 /// Top-level view listing projects.
-/// Mode-aware: shows rigs in gastown mode, registered projects in standalone/swarm mode.
+/// Mode-aware: shows rigs in gastown mode, registered projects in swarm mode.
 struct ProjectsListView: View {
     @Environment(\.crtTheme) private var theme
     @StateObject private var viewModel: ProjectsListViewModel
@@ -10,7 +10,7 @@ struct ProjectsListView: View {
     /// Callback when a rig is selected (gastown mode)
     var onSelectRig: ((RigStatus) -> Void)?
 
-    /// Callback when a project is selected (standalone/swarm mode)
+    /// Callback when a project is selected (swarm mode)
     var onSelectProject: ((Project) -> Void)?
 
     init(
@@ -227,13 +227,13 @@ struct ProjectsListView: View {
         }
     }
 
-    // MARK: - Standalone/Swarm Project List
+    // MARK: - Swarm Project List
 
     private var projectList: some View {
         ScrollView {
             LazyVStack(spacing: CRTTheme.Spacing.sm) {
                 ForEach(viewModel.filteredProjects) { project in
-                    StandaloneProjectRow(
+                    SwarmProjectRow(
                         project: project,
                         onTap: { onSelectProject?(project) }
                     )
@@ -340,10 +340,10 @@ struct ProjectsListView: View {
     }
 }
 
-// MARK: - Standalone Project Row
+// MARK: - Swarm Project Row
 
-/// Row view for a standalone/swarm project.
-private struct StandaloneProjectRow: View {
+/// Row view for a swarm project.
+private struct SwarmProjectRow: View {
     @Environment(\.crtTheme) private var theme
 
     let project: Project

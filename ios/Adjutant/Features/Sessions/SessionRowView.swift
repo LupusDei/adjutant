@@ -127,7 +127,7 @@ struct SessionRowView: View {
                 tmuxSession: "gt-adj-polecat-s1",
                 tmuxPane: "%0",
                 projectPath: "/Users/dev/adjutant",
-                mode: .standalone,
+                mode: .swarm,
                 status: .working,
                 workspaceType: .primary,
                 connectedClients: ["c1"],

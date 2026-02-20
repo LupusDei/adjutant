@@ -46,7 +46,7 @@ final class SessionsViewModel: BaseViewModel {
     // MARK: - Session Actions
 
     /// Create a new session
-    func createSession(projectPath: String, mode: String = "standalone", name: String? = nil) async {
+    func createSession(projectPath: String, mode: String = "swarm", name: String? = nil) async {
         isActioning = true
         defer { isActioning = false }
 

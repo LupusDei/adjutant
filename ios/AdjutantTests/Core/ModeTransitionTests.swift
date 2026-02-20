@@ -2,7 +2,7 @@ import XCTest
 @testable import AdjutantUI
 import AdjutantKit
 
-/// Tests for mode transitions: switching between all 3 modes,
+/// Tests for mode transitions: switching between gastown and swarm modes,
 /// verifying no data loss, and UI tab adaptation.
 @MainActor
 final class ModeTransitionTests: XCTestCase {
@@ -27,28 +27,10 @@ final class ModeTransitionTests: XCTestCase {
         XCTAssertEqual(appState.deploymentMode, .gastown)
     }
 
-    // MARK: - All 6 Directional Transitions
-
-    func testGastownToStandalone() {
-        appState.updateDeploymentMode(.gastown)
-        appState.updateDeploymentMode(.standalone)
-        XCTAssertEqual(appState.deploymentMode, .standalone)
-    }
+    // MARK: - All Directional Transitions
 
     func testGastownToSwarm() {
         appState.updateDeploymentMode(.gastown)
-        appState.updateDeploymentMode(.swarm)
-        XCTAssertEqual(appState.deploymentMode, .swarm)
-    }
-
-    func testStandaloneToGastown() {
-        appState.updateDeploymentMode(.standalone)
-        appState.updateDeploymentMode(.gastown)
-        XCTAssertEqual(appState.deploymentMode, .gastown)
-    }
-
-    func testStandaloneToSwarm() {
-        appState.updateDeploymentMode(.standalone)
         appState.updateDeploymentMode(.swarm)
         XCTAssertEqual(appState.deploymentMode, .swarm)
     }
@@ -59,20 +41,11 @@ final class ModeTransitionTests: XCTestCase {
         XCTAssertEqual(appState.deploymentMode, .gastown)
     }
 
-    func testSwarmToStandalone() {
-        appState.updateDeploymentMode(.swarm)
-        appState.updateDeploymentMode(.standalone)
-        XCTAssertEqual(appState.deploymentMode, .standalone)
-    }
-
     // MARK: - Full Round-Trip Cycles
 
-    func testFullCycleGastownStandaloneSwarmGastown() {
+    func testFullCycleGastownSwarmGastown() {
         appState.updateDeploymentMode(.gastown)
         XCTAssertEqual(appState.deploymentMode, .gastown)
-
-        appState.updateDeploymentMode(.standalone)
-        XCTAssertEqual(appState.deploymentMode, .standalone)
 
         appState.updateDeploymentMode(.swarm)
         XCTAssertEqual(appState.deploymentMode, .swarm)
@@ -81,12 +54,11 @@ final class ModeTransitionTests: XCTestCase {
         XCTAssertEqual(appState.deploymentMode, .gastown)
     }
 
-    func testFullCycleStandaloneSwarmGastownStandalone() {
-        appState.updateDeploymentMode(.standalone)
+    func testFullCycleSwarmGastownSwarm() {
         appState.updateDeploymentMode(.swarm)
         appState.updateDeploymentMode(.gastown)
-        appState.updateDeploymentMode(.standalone)
-        XCTAssertEqual(appState.deploymentMode, .standalone)
+        appState.updateDeploymentMode(.swarm)
+        XCTAssertEqual(appState.deploymentMode, .swarm)
     }
 
     // MARK: - Tab Visibility per Mode
@@ -100,21 +72,6 @@ final class ModeTransitionTests: XCTestCase {
         for tab in AppTab.allCases where tab != .projects {
             XCTAssertTrue(tabs.contains(tab), "Gastown should show \(tab)")
         }
-    }
-
-    func testStandaloneShowsChatEpicsCrewProjectsBeadsSettings() {
-        appState.updateDeploymentMode(.standalone)
-        let tabs = appState.visibleTabs
-
-        XCTAssertEqual(tabs.count, 6)
-        XCTAssertTrue(tabs.contains(.chat))
-        XCTAssertTrue(tabs.contains(.epics))
-        XCTAssertTrue(tabs.contains(.crew))
-        XCTAssertTrue(tabs.contains(.projects))
-        XCTAssertTrue(tabs.contains(.beads))
-        XCTAssertTrue(tabs.contains(.settings))
-        XCTAssertFalse(tabs.contains(.dashboard))
-        XCTAssertFalse(tabs.contains(.mail))
     }
 
     func testSwarmShowsChatCrewEpicsProjectsBeadsSettings() {
@@ -134,17 +91,17 @@ final class ModeTransitionTests: XCTestCase {
 
     // MARK: - Tab Visibility Adapts on Transition
 
-    func testTabsReduceWhenSwitchingGastownToStandalone() {
+    func testTabsReduceWhenSwitchingGastownToSwarm() {
         appState.updateDeploymentMode(.gastown)
         XCTAssertEqual(appState.visibleTabs.count, 7)
 
-        appState.updateDeploymentMode(.standalone)
+        appState.updateDeploymentMode(.swarm)
         XCTAssertEqual(appState.visibleTabs.count, 6)
         XCTAssertFalse(appState.visibleTabs.contains(.dashboard))
     }
 
-    func testTabsExpandWhenSwitchingStandaloneToGastown() {
-        appState.updateDeploymentMode(.standalone)
+    func testTabsExpandWhenSwitchingSwarmToGastown() {
+        appState.updateDeploymentMode(.swarm)
         XCTAssertEqual(appState.visibleTabs.count, 6)
 
         appState.updateDeploymentMode(.gastown)
@@ -152,18 +109,12 @@ final class ModeTransitionTests: XCTestCase {
         XCTAssertTrue(appState.visibleTabs.contains(.dashboard))
     }
 
-    func testCrewTabVisibleInBothStandaloneAndSwarm() {
-        appState.updateDeploymentMode(.standalone)
-        XCTAssertTrue(appState.visibleTabs.contains(.crew))
-
+    func testCrewTabVisibleInSwarm() {
         appState.updateDeploymentMode(.swarm)
         XCTAssertTrue(appState.visibleTabs.contains(.crew))
     }
 
-    func testEpicsTabVisibleInBothStandaloneAndSwarm() {
-        appState.updateDeploymentMode(.standalone)
-        XCTAssertTrue(appState.visibleTabs.contains(.epics))
-
+    func testEpicsTabVisibleInSwarm() {
         appState.updateDeploymentMode(.swarm)
         XCTAssertTrue(appState.visibleTabs.contains(.epics))
     }
@@ -172,8 +123,8 @@ final class ModeTransitionTests: XCTestCase {
         appState.updateDeploymentMode(.gastown)
         let originalTabs = appState.visibleTabs
 
-        // Go to standalone (fewer tabs)
-        appState.updateDeploymentMode(.standalone)
+        // Go to swarm (fewer tabs)
+        appState.updateDeploymentMode(.swarm)
         XCTAssertNotEqual(appState.visibleTabs, originalTabs)
 
         // Come back to gastown
@@ -185,7 +136,7 @@ final class ModeTransitionTests: XCTestCase {
 
     func testPowerStatePreservedAcrossModeTransition() {
         appState.updatePowerState(.running)
-        appState.updateDeploymentMode(.standalone)
+        appState.updateDeploymentMode(.swarm)
 
         XCTAssertEqual(appState.powerState, .running)
         XCTAssertTrue(appState.isPowerOn)
@@ -193,7 +144,7 @@ final class ModeTransitionTests: XCTestCase {
 
     func testUnreadMailCountPreservedAcrossModeTransition() {
         appState.updateUnreadMailCount(5)
-        appState.updateDeploymentMode(.standalone)
+        appState.updateDeploymentMode(.swarm)
 
         XCTAssertEqual(appState.unreadMailCount, 5)
     }
@@ -207,7 +158,7 @@ final class ModeTransitionTests: XCTestCase {
 
     func testCommunicationPriorityPreservedAcrossModeTransition() {
         appState.communicationPriority = .realTime
-        appState.updateDeploymentMode(.standalone)
+        appState.updateDeploymentMode(.swarm)
 
         XCTAssertEqual(appState.communicationPriority, .realTime)
     }
@@ -221,7 +172,7 @@ final class ModeTransitionTests: XCTestCase {
 
     func testSelectedRigPreservedAcrossModeTransition() {
         appState.selectedRig = "greenplace"
-        appState.updateDeploymentMode(.standalone)
+        appState.updateDeploymentMode(.swarm)
 
         XCTAssertEqual(appState.selectedRig, "greenplace")
     }
@@ -244,8 +195,7 @@ final class ModeTransitionTests: XCTestCase {
         appState.selectedRig = "adjutant"
         appState.addMailIds(["a", "b", "c"])
 
-        // Cycle through all 3 modes
-        appState.updateDeploymentMode(.standalone)
+        // Cycle through both modes
         appState.updateDeploymentMode(.swarm)
         appState.updateDeploymentMode(.gastown)
 
@@ -263,13 +213,13 @@ final class ModeTransitionTests: XCTestCase {
     // MARK: - Same-Mode No-Op
 
     func testSameModeTransitionIsNoOp() {
-        appState.updateDeploymentMode(.standalone)
+        appState.updateDeploymentMode(.swarm)
         let tabsBefore = appState.visibleTabs
 
-        appState.updateDeploymentMode(.standalone) // no-op
+        appState.updateDeploymentMode(.swarm) // no-op
         let tabsAfter = appState.visibleTabs
 
-        XCTAssertEqual(appState.deploymentMode, .standalone)
+        XCTAssertEqual(appState.deploymentMode, .swarm)
         XCTAssertEqual(tabsBefore, tabsAfter)
     }
 

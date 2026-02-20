@@ -1,17 +1,17 @@
 import SwiftUI
 import AdjutantKit
 
-/// Detail view for a standalone/swarm project.
+/// Detail view for a swarm project.
 /// Shows project info, active sessions, swarms, and actions to start agents or teams.
-struct StandaloneProjectDetailView: View {
+struct SwarmProjectDetailView: View {
     @Environment(\.crtTheme) private var theme
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var viewModel: StandaloneProjectDetailViewModel
+    @StateObject private var viewModel: SwarmProjectDetailViewModel
     @EnvironmentObject private var coordinator: AppCoordinator
     @State private var selectedSession: ManagedSession?
 
     init(project: Project) {
-        _viewModel = StateObject(wrappedValue: StandaloneProjectDetailViewModel(project: project))
+        _viewModel = StateObject(wrappedValue: SwarmProjectDetailViewModel(project: project))
     }
 
     var body: some View {
@@ -413,15 +413,15 @@ struct StandaloneProjectDetailView: View {
 
 // MARK: - Preview
 
-#Preview("StandaloneProjectDetailView") {
+#Preview("SwarmProjectDetailView") {
     NavigationStack {
-        StandaloneProjectDetailView(
+        SwarmProjectDetailView(
             project: Project(
                 id: "proj-1",
                 name: "adjutant",
                 path: "/Users/dev/code/adjutant",
                 gitRemote: "git@github.com:org/adjutant.git",
-                mode: "standalone",
+                mode: "swarm",
                 sessions: ["sess-1", "sess-2"],
                 createdAt: "2025-01-15T10:00:00Z",
                 active: true

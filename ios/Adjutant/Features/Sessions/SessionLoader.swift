@@ -6,7 +6,7 @@ import AdjutantKit
 
 /// Holds the WebSocket client as a stable reference object so SwiftUI
 /// doesn't recreate it across view updates.
-/// Shared between StandaloneSessionView and UnifiedChatView.
+/// Shared between SwarmSessionView and UnifiedChatView.
 @MainActor
 class SessionLoader: ObservableObject {
     @Published var activeSession: ManagedSession?

@@ -1,7 +1,7 @@
 import SwiftUI
 import AdjutantKit
 
-/// Unified chat interface for standalone/swarm modes.
+/// Unified chat interface for swarm modes.
 /// Shows a filtered view of session events (only messages and user input as chat bubbles),
 /// with a session picker and an expand button to see the full session detail.
 struct UnifiedChatView: View {

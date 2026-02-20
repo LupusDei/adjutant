@@ -3,7 +3,7 @@ import Combine
 import AdjutantKit
 
 /// ViewModel for the Projects List.
-/// Mode-aware: shows rigs in gastown mode, registered projects in standalone/swarm mode.
+/// Mode-aware: shows rigs in gastown mode, registered projects in swarm mode.
 @MainActor
 final class ProjectsListViewModel: BaseViewModel {
     // MARK: - Published Properties
@@ -11,7 +11,7 @@ final class ProjectsListViewModel: BaseViewModel {
     /// All rigs from the status API (gastown mode)
     @Published private(set) var rigs: [RigStatus] = []
 
-    /// All projects from the projects API (standalone/swarm mode)
+    /// All projects from the projects API (swarm mode)
     @Published private(set) var projects: [Project] = []
 
     /// Current search query
@@ -22,7 +22,7 @@ final class ProjectsListViewModel: BaseViewModel {
     /// Filtered rigs for display (gastown)
     @Published private(set) var filteredRigs: [RigStatus] = []
 
-    /// Filtered projects for display (standalone/swarm)
+    /// Filtered projects for display (swarm)
     @Published private(set) var filteredProjects: [Project] = []
 
     // MARK: - Create Sheet State
@@ -91,7 +91,7 @@ final class ProjectsListViewModel: BaseViewModel {
         }
     }
 
-    // MARK: - Project Actions (standalone/swarm)
+    // MARK: - Project Actions (swarm)
 
     /// Create a project from an existing directory path
     func createFromPath(_ path: String, name: String? = nil) async -> Project? {
@@ -215,7 +215,7 @@ final class ProjectsListViewModel: BaseViewModel {
         return count
     }
 
-    // MARK: - Computed Properties (standalone/swarm)
+    // MARK: - Computed Properties (swarm)
 
     /// Total number of projects
     var totalProjectCount: Int {

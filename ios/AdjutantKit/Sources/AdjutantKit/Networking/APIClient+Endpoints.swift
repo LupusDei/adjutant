@@ -468,11 +468,11 @@ extension APIClient {
     ///
     /// ## Example
     /// ```swift
-    /// let result = try await client.switchMode(to: "standalone")
+    /// let result = try await client.switchMode(to: "swarm")
     /// print("Switched to: \(result.mode)")
     /// ```
     ///
-    /// - Parameter mode: The target mode ("gastown", "standalone", or "swarm").
+    /// - Parameter mode: The target mode ("gastown" or "swarm").
     /// - Returns: A ``ModeInfo`` containing the new mode state.
     /// - Throws: ``APIClientError`` if the request fails or mode is unavailable.
     public func switchMode(to mode: String) async throws -> ModeInfo {

@@ -116,7 +116,7 @@ private struct TabContent: View {
             CrewListView(apiClient: AppState.shared.apiClient) { member in
                 if AppState.shared.deploymentMode != .gastown,
                    let sessionId = member.sessionId {
-                    // In standalone/swarm mode, tapping a crew member opens their session chat
+                    // In swarm mode, tapping a crew member opens their session chat
                     coordinator.selectTab(.chat)
                     // Notify the chat view to switch to this session
                     NotificationCenter.default.post(
@@ -135,7 +135,7 @@ private struct TabContent: View {
                     coordinator.navigate(to: .projectDetail(rig: rig))
                 },
                 onSelectProject: { project in
-                    coordinator.navigate(to: .standaloneProjectDetail(project: project))
+                    coordinator.navigate(to: .swarmProjectDetail(project: project))
                 }
             )
         case .beads:
@@ -158,8 +158,8 @@ private struct TabContent: View {
             BeadDetailView(beadId: id)
         case .projectDetail(let rig):
             ProjectDetailView(rig: rig)
-        case .standaloneProjectDetail(let project):
-            StandaloneProjectDetailView(project: project)
+        case .swarmProjectDetail(let project):
+            SwarmProjectDetailView(project: project)
         case .themeSettings, .voiceSettings, .tunnelSettings:
             SettingsView()
         default:

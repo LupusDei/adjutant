@@ -52,7 +52,7 @@ final class AppState: ObservableObject {
     /// Communication priority level (affects polling intervals)
     @Published var communicationPriority: CommunicationPriority = .efficient
 
-    /// Current deployment mode (gastown, standalone, swarm)
+    /// Current deployment mode (gastown, swarm)
     @Published var deploymentMode: DeploymentMode = .gastown
 
     /// Available modes and their transition availability
@@ -66,8 +66,6 @@ final class AppState: ObservableObject {
         switch deploymentMode {
         case .gastown:
             return Set(AppTab.allCases).subtracting([.projects])
-        case .standalone:
-            return [.chat, .epics, .crew, .projects, .beads, .settings]
         case .swarm:
             return [.chat, .crew, .epics, .projects, .beads, .settings]
         }
@@ -506,7 +504,6 @@ enum PowerState: String {
 /// Deployment modes for the Adjutant system
 enum DeploymentMode: String, CaseIterable, Identifiable, Codable {
     case gastown = "gastown"
-    case standalone = "standalone"
     case swarm = "swarm"
 
     var id: String { rawValue }
@@ -514,7 +511,6 @@ enum DeploymentMode: String, CaseIterable, Identifiable, Codable {
     var displayName: String {
         switch self {
         case .gastown: return "GAS TOWN"
-        case .standalone: return "SINGLE AGENT"
         case .swarm: return "SWARM"
         }
     }
@@ -522,7 +518,6 @@ enum DeploymentMode: String, CaseIterable, Identifiable, Codable {
     var icon: String {
         switch self {
         case .gastown: return "building.2"
-        case .standalone: return "person"
         case .swarm: return "ant"
         }
     }
@@ -530,7 +525,6 @@ enum DeploymentMode: String, CaseIterable, Identifiable, Codable {
     var description: String {
         switch self {
         case .gastown: return "Full multi-agent infrastructure with Mayor, Witness, Refinery"
-        case .standalone: return "One agent, one project. Direct chat interface"
         case .swarm: return "Multiple peer agents without formal hierarchy"
         }
     }
@@ -542,8 +536,6 @@ enum DeploymentMode: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .gastown:
             return Set(AppTab.allCases).subtracting([.projects])
-        case .standalone:
-            return [.chat, .epics, .crew, .projects, .beads, .settings]
         case .swarm:
             return [.chat, .crew, .epics, .projects, .beads, .settings]
         }
@@ -553,7 +545,6 @@ enum DeploymentMode: String, CaseIterable, Identifiable, Codable {
     var defaultTab: AppTab {
         switch self {
         case .gastown: return .dashboard
-        case .standalone: return .chat
         case .swarm: return .chat
         }
     }

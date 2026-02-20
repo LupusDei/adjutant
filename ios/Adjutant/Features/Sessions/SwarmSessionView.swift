@@ -1,10 +1,10 @@
 import SwiftUI
 import AdjutantKit
 
-/// Standalone session view for Single Agent mode.
+/// Swarm session view for Swarm mode.
 /// Automatically finds the first active session and shows SessionChatView for it.
-/// Used as the Chat tab content when deployment mode is `.standalone`.
-struct StandaloneSessionView: View {
+/// Used as the Chat tab content when deployment mode is `.swarm`.
+struct SwarmSessionView: View {
     @Environment(\.crtTheme) private var theme
     @StateObject private var loader = SessionLoader()
 

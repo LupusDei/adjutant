@@ -15,7 +15,7 @@ final class SessionChatViewModelTests: XCTestCase {
         tmuxSession: "gt-test",
         tmuxPane: "gt-test:0.0",
         projectPath: "/tmp/test",
-        mode: .standalone,
+        mode: .swarm,
         status: .idle,
         workspaceType: .primary,
         connectedClients: [],
