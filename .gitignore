@@ -37,7 +37,11 @@ backend/.audio-cache/
 .beads/bd.sock*
 .beads/redirect
 .beads/PRIME.md
+.beads/dolt/
+.beads/.sync.lock
+.beads/.jsonl.lock
+.beads/sync_base.jsonl
+.beads/export-state/
+.beads/dolt-access.lock
+.beads/interactions.jsonl
 .logs/
-
-# Gas Town (added by gt)
-.beads/
