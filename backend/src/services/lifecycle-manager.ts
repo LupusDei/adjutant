@@ -57,6 +57,26 @@ function execTmuxCommand(args: string[]): Promise<string> {
   return execCommand("tmux", args);
 }
 
+/**
+ * Query tmux for the first pane of a session.
+ * Respects user's base-index and pane-base-index settings.
+ * Returns a fully-qualified pane reference like "session:1.1".
+ */
+async function resolveFirstPane(tmuxSession: string): Promise<string> {
+  const output = await execTmuxCommand([
+    "list-panes",
+    "-t",
+    tmuxSession,
+    "-F",
+    "#{session_name}:#{window_index}.#{pane_index}",
+  ]);
+  const firstPane = output.trim().split("\n")[0];
+  if (!firstPane) {
+    throw new Error(`No panes found in tmux session '${tmuxSession}'`);
+  }
+  return firstPane;
+}
+
 // ============================================================================
 // LifecycleManager
 // ============================================================================
@@ -106,10 +126,16 @@ export class LifecycleManager {
         req.projectPath,
       ]);
 
-      // Register the session
+      // Query tmux for the actual first pane reference.
+      // This respects the user's base-index/pane-base-index settings
+      // instead of assuming :0.0.
+      const tmuxPane = await resolveFirstPane(tmuxSessionName);
+
+      // Register the session with the correct pane reference
       const session = this.registry.create({
         name: req.name,
         tmuxSession: tmuxSessionName,
+        tmuxPane,
         projectPath: req.projectPath,
         mode: req.mode ?? "swarm",
         workspaceType: req.workspaceType ?? "primary",
@@ -130,7 +156,7 @@ export class LifecycleManager {
       // Wait for the pane to be responsive before returning.
       // This prevents the race condition where iOS connects via WebSocket
       // before pipe-pane can attach to the pane.
-      await this.waitForPane(`${tmuxSessionName}:0.0`);
+      await this.waitForPane(tmuxPane);
 
       this.registry.updateStatus(session.id, "working");
 
@@ -241,9 +267,19 @@ export class LifecycleManager {
         // Apply prefix filter if provided
         if (prefix && !tmuxName.startsWith(prefix)) continue;
 
+        // Query the actual first pane reference (respects base-index settings)
+        let tmuxPane: string | undefined;
+        try {
+          tmuxPane = await resolveFirstPane(tmuxName);
+        } catch {
+          // Skip sessions we can't resolve panes for
+          continue;
+        }
+
         const session = this.registry.create({
           name: tmuxName,
           tmuxSession: tmuxName,
+          tmuxPane,
           projectPath: ".",
           mode: "swarm",
         });

@@ -85,14 +85,17 @@ describe("SessionRegistry", () => {
       expect(session.lastActivity).toBeInstanceOf(Date);
     });
 
-    it("should generate default tmuxPane from tmuxSession", () => {
+    it("should default tmuxPane to tmuxSession name when not provided", () => {
       const session = registry.create({
         name: "test",
         tmuxSession: "my-session",
         projectPath: "/tmp",
       });
 
-      expect(session.tmuxPane).toBe("my-session:0.0");
+      // When tmuxPane is not explicitly provided, fall back to the session name.
+      // tmux resolves bare session names to the active pane, which works
+      // regardless of the user's base-index/pane-base-index settings.
+      expect(session.tmuxPane).toBe("my-session");
     });
 
     it("should use provided optional fields", () => {

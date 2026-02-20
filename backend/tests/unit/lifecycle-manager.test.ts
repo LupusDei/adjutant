@@ -38,27 +38,39 @@ describe("LifecycleManager", () => {
     );
   });
 
+  /**
+   * Helper to build a mock that handles has-session (fail) and list-panes
+   * (return correct pane reference). The list-panes response respects the
+   * tmux session name passed to createSession.
+   */
+  function mockTmuxForCreate(sessionName: string) {
+    mockExecFile.mockImplementation(
+      (
+        _cmd: string,
+        args: string[],
+        _opts: unknown,
+        cb: (err: Error | null, stdout: string, stderr: string) => void
+      ) => {
+        if (args[0] === "has-session") {
+          cb(new Error("no session"), "", "no session");
+        } else if (args[0] === "list-panes") {
+          // Return a pane reference like tmux would with base-index 1
+          cb(null, `${sessionName}:1.1\n`, "");
+        } else {
+          cb(null, "", "");
+        }
+      }
+    );
+  }
+
   // ==========================================================================
   // Create session
   // ==========================================================================
 
   describe("createSession", () => {
+
     it("should create a tmux session and register it", async () => {
-      // has-session should fail (session doesn't exist yet)
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          args: string[],
-          _opts: unknown,
-          cb: (err: Error | null, stdout: string, stderr: string) => void
-        ) => {
-          if (args[0] === "has-session") {
-            cb(new Error("no session"), "", "no session");
-          } else {
-            cb(null, "", "");
-          }
-        }
-      );
+      mockTmuxForCreate("adj-test-agent");
 
       const result = await lifecycle.createSession({
         name: "test-agent",
@@ -70,21 +82,22 @@ describe("LifecycleManager", () => {
       expect(registry.size).toBe(1);
     });
 
+    it("should register the correct tmux pane from list-panes", async () => {
+      mockTmuxForCreate("adj-pane-test");
+
+      const result = await lifecycle.createSession({
+        name: "pane-test",
+        projectPath: "/home/user/project",
+      });
+
+      expect(result.success).toBe(true);
+      const session = registry.get(result.sessionId!);
+      // Should use the pane reference returned by list-panes, not a hardcoded :0.0
+      expect(session?.tmuxPane).toBe("adj-pane-test:1.1");
+    });
+
     it("should use default claudeArgs", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          args: string[],
-          _opts: unknown,
-          cb: (err: Error | null, stdout: string, stderr: string) => void
-        ) => {
-          if (args[0] === "has-session") {
-            cb(new Error("no session"), "", "no session");
-          } else {
-            cb(null, "", "");
-          }
-        }
-      );
+      mockTmuxForCreate("adj-test");
 
       await lifecycle.createSession({
         name: "test",
@@ -103,20 +116,7 @@ describe("LifecycleManager", () => {
     });
 
     it("should use custom claudeArgs", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          args: string[],
-          _opts: unknown,
-          cb: (err: Error | null, stdout: string, stderr: string) => void
-        ) => {
-          if (args[0] === "has-session") {
-            cb(new Error("no session"), "", "no session");
-          } else {
-            cb(null, "", "");
-          }
-        }
-      );
+      mockTmuxForCreate("adj-test");
 
       await lifecycle.createSession({
         name: "test",
@@ -173,7 +173,6 @@ describe("LifecycleManager", () => {
     });
 
     it("should fail when tmux new-session fails", async () => {
-      let callCount = 0;
       mockExecFile.mockImplementation(
         (
           _cmd: string,
@@ -201,20 +200,7 @@ describe("LifecycleManager", () => {
     });
 
     it("should set session status to working after creation", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          args: string[],
-          _opts: unknown,
-          cb: (err: Error | null, stdout: string, stderr: string) => void
-        ) => {
-          if (args[0] === "has-session") {
-            cb(new Error("no session"), "", "no session");
-          } else {
-            cb(null, "", "");
-          }
-        }
-      );
+      mockTmuxForCreate("adj-worker");
 
       const result = await lifecycle.createSession({
         name: "worker",
@@ -232,20 +218,7 @@ describe("LifecycleManager", () => {
 
   describe("tmux naming", () => {
     it("should prefix default-mode sessions with adj-", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          args: string[],
-          _opts: unknown,
-          cb: (err: Error | null, stdout: string, stderr: string) => void
-        ) => {
-          if (args[0] === "has-session") {
-            cb(new Error("no"), "", "no");
-          } else {
-            cb(null, "", "");
-          }
-        }
-      );
+      mockTmuxForCreate("adj-myagent");
 
       await lifecycle.createSession({
         name: "myagent",
@@ -261,20 +234,7 @@ describe("LifecycleManager", () => {
     });
 
     it("should prefix swarm sessions with adj-swarm-", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          args: string[],
-          _opts: unknown,
-          cb: (err: Error | null, stdout: string, stderr: string) => void
-        ) => {
-          if (args[0] === "has-session") {
-            cb(new Error("no"), "", "no");
-          } else {
-            cb(null, "", "");
-          }
-        }
-      );
+      mockTmuxForCreate("adj-swarm-worker1");
 
       await lifecycle.createSession({
         name: "worker1",
@@ -291,20 +251,7 @@ describe("LifecycleManager", () => {
     });
 
     it("should use name directly for gastown mode", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          args: string[],
-          _opts: unknown,
-          cb: (err: Error | null, stdout: string, stderr: string) => void
-        ) => {
-          if (args[0] === "has-session") {
-            cb(new Error("no"), "", "no");
-          } else {
-            cb(null, "", "");
-          }
-        }
-      );
+      mockTmuxForCreate("mayor");
 
       await lifecycle.createSession({
         name: "mayor",
@@ -319,20 +266,7 @@ describe("LifecycleManager", () => {
     });
 
     it("should sanitize special characters in names", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          args: string[],
-          _opts: unknown,
-          cb: (err: Error | null, stdout: string, stderr: string) => void
-        ) => {
-          if (args[0] === "has-session") {
-            cb(new Error("no"), "", "no");
-          } else {
-            cb(null, "", "");
-          }
-        }
-      );
+      mockTmuxForCreate("adj-my-agent-1");
 
       await lifecycle.createSession({
         name: "my agent/1",
@@ -444,7 +378,11 @@ describe("LifecycleManager", () => {
   // ==========================================================================
 
   describe("discoverSessions", () => {
-    it("should discover tmux sessions and register them", async () => {
+    /**
+     * Helper to mock list-sessions + list-panes for discovery tests.
+     * Returns pane references that match each session name.
+     */
+    function mockTmuxForDiscover(sessionNames: string[]) {
       mockExecFile.mockImplementation(
         (
           _cmd: string,
@@ -453,33 +391,39 @@ describe("LifecycleManager", () => {
           cb: (err: Error | null, stdout: string, stderr: string) => void
         ) => {
           if (args[0] === "list-sessions") {
-            cb(null, "adj-worker1\nadj-worker2\nother-session\n", "");
+            cb(null, sessionNames.join("\n") + "\n", "");
+          } else if (args[0] === "list-panes") {
+            // Extract session name from -t argument
+            const tIdx = args.indexOf("-t");
+            const sessionName = tIdx >= 0 ? args[tIdx + 1] : "unknown";
+            cb(null, `${sessionName}:1.1\n`, "");
           } else {
             cb(null, "", "");
           }
         }
       );
+    }
+
+    it("should discover tmux sessions and register them", async () => {
+      mockTmuxForDiscover(["adj-worker1", "adj-worker2", "other-session"]);
 
       const discovered = await lifecycle.discoverSessions();
       expect(discovered).toHaveLength(3);
       expect(registry.size).toBe(3);
     });
 
+    it("should register discovered sessions with correct pane reference", async () => {
+      mockTmuxForDiscover(["adj-worker1"]);
+
+      const discovered = await lifecycle.discoverSessions();
+      expect(discovered).toHaveLength(1);
+
+      const session = registry.get(discovered[0]);
+      expect(session?.tmuxPane).toBe("adj-worker1:1.1");
+    });
+
     it("should filter by prefix", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          args: string[],
-          _opts: unknown,
-          cb: (err: Error | null, stdout: string, stderr: string) => void
-        ) => {
-          if (args[0] === "list-sessions") {
-            cb(null, "adj-worker1\nadj-worker2\nother-session\n", "");
-          } else {
-            cb(null, "", "");
-          }
-        }
-      );
+      mockTmuxForDiscover(["adj-worker1", "adj-worker2", "other-session"]);
 
       const discovered = await lifecycle.discoverSessions("adj-");
       expect(discovered).toHaveLength(2);
@@ -492,20 +436,7 @@ describe("LifecycleManager", () => {
         projectPath: "/tmp",
       });
 
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          args: string[],
-          _opts: unknown,
-          cb: (err: Error | null, stdout: string, stderr: string) => void
-        ) => {
-          if (args[0] === "list-sessions") {
-            cb(null, "adj-worker1\nadj-worker2\n", "");
-          } else {
-            cb(null, "", "");
-          }
-        }
-      );
+      mockTmuxForDiscover(["adj-worker1", "adj-worker2"]);
 
       const discovered = await lifecycle.discoverSessions();
       expect(discovered).toHaveLength(1); // only worker2 is new
