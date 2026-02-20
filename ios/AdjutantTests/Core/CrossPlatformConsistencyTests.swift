@@ -3,6 +3,9 @@ import Combine
 @testable import AdjutantUI
 @testable import AdjutantKit
 
+// Disambiguate: use the app-level DeploymentMode which has visibleTabs, defaultTab, etc.
+private typealias DeploymentMode = AdjutantUI.DeploymentMode
+
 /// Cross-platform consistency tests (Phase 5.3).
 ///
 /// Verifies that iOS tab visibility rules and mode event handling match
@@ -67,7 +70,7 @@ final class CrossPlatformConsistencyTests: XCTestCase {
     func testStandaloneDecodesAsSwarm() throws {
         // Legacy "standalone" mode should decode to .swarm via custom Codable
         let json = Data(#"{"mode":"standalone","features":[]}"#.utf8)
-        struct Wrapper: Codable { let mode: DeploymentMode; let features: [String] }
+        struct Wrapper: Codable { let mode: AdjutantKit.DeploymentMode; let features: [String] }
         let decoded = try JSONDecoder().decode(Wrapper.self, from: json)
         XCTAssertEqual(decoded.mode, .swarm)
     }

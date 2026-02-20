@@ -229,7 +229,7 @@ final class ModelTests: XCTestCase {
         XCTAssertEqual(status.town.name, "gastown")
         XCTAssertEqual(status.operator.name, "testuser")
         XCTAssertEqual(status.operator.unreadMail, 3)
-        XCTAssertTrue(status.infrastructure.mayor.running)
+        XCTAssertTrue(status.infrastructure?.mayor.running ?? false)
         XCTAssertEqual(status.rigs.count, 0)
     }
 

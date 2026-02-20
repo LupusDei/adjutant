@@ -44,6 +44,8 @@ final class CrewListViewModel: BaseViewModel {
             case .refinery: return "REFINERIES"
             case .crew: return "CREW"
             case .polecat: return "POLECATS"
+            case .user: return "USERS"
+            case .agent: return "AGENTS"
             }
         }
 
@@ -56,6 +58,8 @@ final class CrewListViewModel: BaseViewModel {
             case .refinery: return 3
             case .crew: return 4
             case .polecat: return 5
+            case .user: return 6
+            case .agent: return 7
             }
         }
     }

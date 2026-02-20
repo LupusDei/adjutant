@@ -289,6 +289,8 @@ struct CrewDetailView: View {
         case .refinery: return "gearshape.2.fill"
         case .crew: return "person.fill"
         case .polecat: return "terminal.fill"
+        case .user: return "person.circle.fill"
+        case .agent: return "cpu.fill"
         }
     }
 

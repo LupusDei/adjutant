@@ -46,24 +46,60 @@ public struct ManagedSession: Codable, Identifiable, Equatable, Hashable {
 }
 
 /// Session operating mode
-public enum SessionMode: String, Codable, CaseIterable {
+public enum SessionMode: String, CaseIterable {
     case swarm
     case gastown
 }
 
+extension SessionMode: Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        // Map legacy "standalone" to .swarm
+        if rawValue == "standalone" {
+            self = .swarm
+            return
+        }
+        guard let mode = SessionMode(rawValue: rawValue) else {
+            // Default to .swarm for unknown values
+            self = .swarm
+            return
+        }
+        self = mode
+    }
+}
+
 /// Session operational status
-public enum SessionStatus: String, Codable, CaseIterable {
+public enum SessionStatus: String, CaseIterable {
     case idle
     case working
     case waitingPermission = "waiting_permission"
     case offline
 }
 
+extension SessionStatus: Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        // Fall back to .offline for unknown statuses
+        self = SessionStatus(rawValue: rawValue) ?? .offline
+    }
+}
+
 /// Workspace type for the session
-public enum WorkspaceType: String, Codable, CaseIterable {
+public enum WorkspaceType: String, CaseIterable {
     case primary
     case worktree
     case copy
+}
+
+extension WorkspaceType: Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        // Fall back to .primary for unknown workspace types
+        self = WorkspaceType(rawValue: rawValue) ?? .primary
+    }
 }
 
 /// Request body for creating a new session

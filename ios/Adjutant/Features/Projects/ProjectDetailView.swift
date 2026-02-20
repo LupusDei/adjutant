@@ -250,6 +250,8 @@ struct ProjectDetailView: View {
         case .refinery: return "gearshape.2"
         case .crew: return "wrench"
         case .polecat: return "hare"
+        case .user: return "person.circle"
+        case .agent: return "cpu"
         }
     }
 }

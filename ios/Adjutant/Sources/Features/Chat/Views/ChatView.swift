@@ -472,6 +472,8 @@ private struct RecipientSelectorSheet: View {
         case .refinery: return "gearshape.2"
         case .crew: return "person"
         case .polecat: return "bolt"
+        case .user: return "person.circle"
+        case .agent: return "cpu"
         }
     }
 }

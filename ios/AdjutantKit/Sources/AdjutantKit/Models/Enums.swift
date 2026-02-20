@@ -10,11 +10,20 @@ public enum MessagePriority: Int, Codable, CaseIterable {
 }
 
 /// Message types indicating the purpose of the message.
-public enum MessageType: String, Codable, CaseIterable {
+public enum MessageType: String, CaseIterable {
     case notification
     case task
     case scavenge
     case reply
+}
+
+extension MessageType: Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        // Fall back to .notification for unknown types
+        self = MessageType(rawValue: rawValue) ?? .notification
+    }
 }
 
 /// Deployment mode for the Adjutant app.
@@ -53,7 +62,7 @@ public enum PowerState: String, Codable, CaseIterable {
 }
 
 /// Possible statuses for a crew member.
-public enum CrewMemberStatus: String, Codable, CaseIterable {
+public enum CrewMemberStatus: String, CaseIterable {
     case idle
     case working
     case blocked
@@ -61,20 +70,53 @@ public enum CrewMemberStatus: String, Codable, CaseIterable {
     case offline
 }
 
-/// Agent types in gastown.
-public enum AgentType: String, Codable, CaseIterable {
+extension CrewMemberStatus: Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        // Fall back to .idle for unknown statuses
+        self = CrewMemberStatus(rawValue: rawValue) ?? .idle
+    }
+}
+
+/// Agent types in the system.
+/// Gas Town roles: mayor, deacon, witness, refinery, crew, polecat
+/// Swarm roles: user, agent
+/// Unknown values are mapped to .crew as a safe fallback.
+public enum AgentType: String, CaseIterable {
     case mayor
     case deacon
     case witness
     case refinery
     case crew
     case polecat
+    // Swarm mode roles
+    case user
+    case agent
+}
+
+extension AgentType: Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        // Use known value or fall back to .crew for unknown roles
+        self = AgentType(rawValue: rawValue) ?? .crew
+    }
 }
 
 /// Agent special states
-public enum AgentState: String, Codable, CaseIterable {
+public enum AgentState: String, CaseIterable {
     case stuck
     case awaitingGate = "awaiting-gate"
     case idle
     case working
+}
+
+extension AgentState: Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        // Fall back to .idle for unknown states
+        self = AgentState(rawValue: rawValue) ?? .idle
+    }
 }
