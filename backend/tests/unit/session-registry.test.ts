@@ -75,7 +75,7 @@ describe("SessionRegistry", () => {
       expect(session.name).toBe("test-agent");
       expect(session.tmuxSession).toBe("adj-test-agent");
       expect(session.projectPath).toBe("/home/user/project");
-      expect(session.mode).toBe("standalone");
+      expect(session.mode).toBe("swarm");
       expect(session.status).toBe("idle");
       expect(session.workspaceType).toBe("primary");
       expect(session.connectedClients.size).toBe(0);
@@ -428,7 +428,7 @@ describe("SessionRegistry", () => {
         name: "agent-1",
         tmuxSession: "adj-1",
         projectPath: "/project/1",
-        mode: "standalone",
+        mode: "swarm",
       });
       registry.create({
         name: "agent-2",

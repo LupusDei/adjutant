@@ -25,7 +25,7 @@ export type CrewMemberStatus =
  * Agent types in the system.
  *
  * Gas Town roles: mayor, deacon, witness, refinery, crew, polecat
- * Standalone roles: user, agent
+ * Swarm roles: user, agent
  * Extensible via string for custom deployments.
  */
 export type AgentType =
@@ -37,7 +37,7 @@ export type AgentType =
   // Gas Town worker roles
   | "crew"
   | "polecat"
-  // Standalone/swarm mode roles
+  // Swarm mode roles
   | "user"
   | "agent"
   // Extensibility for custom deployments
@@ -194,7 +194,7 @@ export interface CrewMember {
   firstFrom?: string;
   /** Current git branch (for polecats) */
   branch?: string;
-  /** Session ID for linking to session chat (standalone/swarm) */
+  /** Session ID for linking to session chat (swarm) */
   sessionId?: string;
 }
 
@@ -280,7 +280,7 @@ export const AgentTypeSchema = z.union([
     // Gas Town workers
     "crew",
     "polecat",
-    // Standalone/swarm mode
+    // Swarm mode
     "user",
     "agent",
   ]),

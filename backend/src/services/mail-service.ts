@@ -4,7 +4,7 @@
  * This service provides a typed interface for mail operations.
  * Delegates to the appropriate MailTransport based on deployment mode:
  * - Gas Town: gt mail send with tmux notifications
- * - Standalone: Direct beads operations
+ * - Swarm: Direct beads operations
  */
 
 import { getTransport, type TransportResult } from "./transport/index.js";
@@ -84,7 +84,7 @@ export async function getMessage(
 }
 
 /**
- * Sends a message. Defaults to sending to the Mayor (or user in standalone).
+ * Sends a message. Defaults to sending to the Mayor (or user in swarm mode).
  */
 export async function sendMail(
   request: SendMessageRequest

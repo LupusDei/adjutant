@@ -31,7 +31,7 @@ modeRouter.get("/", (_req, res) => {
 /**
  * POST /api/mode
  * Switch deployment mode at runtime.
- * Body: { mode: "gastown" | "standalone" | "swarm" }
+ * Body: { mode: "gastown" | "swarm" }
  */
 modeRouter.post("/", (req, res) => {
   const { mode } = req.body as { mode?: string };
@@ -40,7 +40,7 @@ modeRouter.post("/", (req, res) => {
     return res.status(400).json(badRequest("Missing required field: mode"));
   }
 
-  const validModes: DeploymentMode[] = ["gastown", "standalone", "swarm"];
+  const validModes: DeploymentMode[] = ["gastown", "swarm"];
   if (!validModes.includes(mode as DeploymentMode)) {
     return res.status(400).json(
       badRequest(`Invalid mode: ${mode}. Valid modes: ${validModes.join(", ")}`)

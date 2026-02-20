@@ -3,7 +3,6 @@
  *
  * This allows Adjutant to work with different deployment modes:
  * - Gas Town: Full multi-agent orchestration with mayor, rigs, etc.
- * - Standalone: Single project with local .beads/ directory
  * - Swarm: Multiple agents without Gas Town infrastructure
  */
 
@@ -36,17 +35,17 @@ export interface WorkspaceConfig {
 /**
  * Deployment mode for this workspace.
  */
-export type DeploymentMode = "gastown" | "standalone" | "swarm";
+export type DeploymentMode = "gastown" | "swarm";
 
 /**
  * Abstract interface for workspace resolution.
  *
  * Implementations:
  * - GasTownProvider: Full Gas Town deployment with mayor/town.json
- * - StandaloneProvider: Single project with local .beads/
+ * - SwarmProvider: Swarm/multi-agent deployment with local .beads/
  */
 export interface WorkspaceProvider {
-  /** Name of this provider (e.g., "gastown", "standalone") */
+  /** Name of this provider (e.g., "gastown", "swarm") */
   readonly name: string;
 
   /** Deployment mode */
@@ -55,21 +54,21 @@ export interface WorkspaceProvider {
   /**
    * Root directory for this workspace.
    * - Gas Town: Town root (directory containing mayor/)
-   * - Standalone: Project root (cwd or configured path)
+   * - Swarm: Project root (cwd or configured path)
    */
   resolveRoot(): string;
 
   /**
    * Load workspace configuration.
    * - Gas Town: Reads mayor/town.json
-   * - Standalone: Reads adjutant.config.json or returns defaults
+   * - Swarm: Reads adjutant.config.json or returns defaults
    */
   loadConfig(): Promise<WorkspaceConfig>;
 
   /**
    * List all beads directories to scan.
    * - Gas Town: Town .beads/ + all rig .beads/ directories
-   * - Standalone: Just the local .beads/ directory
+   * - Swarm: Just the local .beads/ directory
    */
   listBeadsDirs(): Promise<BeadsDirInfo[]>;
 
@@ -83,21 +82,21 @@ export interface WorkspaceProvider {
   /**
    * Whether this workspace has centralized power control.
    * - Gas Town: true (gt up / gt down)
-   * - Standalone: false (always "running")
+   * - Swarm: false (always "running")
    */
   hasPowerControl(): boolean;
 
   /**
    * Whether the gt binary is available.
    * - Gas Town: true
-   * - Standalone: false
+   * - Swarm: false
    */
   hasGtBinary(): boolean;
 
   /**
    * List available rig names.
    * - Gas Town: Reads from mayor/rigs.json
-   * - Standalone: Empty array
+   * - Swarm: Empty array
    */
   listRigNames(): Promise<string[]>;
 

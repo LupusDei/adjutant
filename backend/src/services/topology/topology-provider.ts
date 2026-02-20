@@ -3,7 +3,7 @@
  *
  * This allows Adjutant to work with different agent topologies:
  * - Gas Town: mayor, deacon, witness, refinery, crew, polecat
- * - Standalone: user, agent
+ * - Swarm: user, agent
  * - Custom: any user-defined roles
  */
 
@@ -38,10 +38,10 @@ export interface SessionInfo {
  *
  * Implementations:
  * - GasTownTopology: Full Gas Town role hierarchy
- * - StandaloneTopology: Simple user/agent model
+ * - SwarmTopology: Simple user/agent model
  */
 export interface TopologyProvider {
-  /** Name of this topology (e.g., "gastown", "standalone") */
+  /** Name of this topology (e.g., "gastown", "swarm") */
   readonly name: string;
 
   /**
@@ -52,21 +52,21 @@ export interface TopologyProvider {
   /**
    * Get the "coordinator" agent type.
    * - Gas Town: mayor
-   * - Standalone: user
+   * - Swarm: user
    */
   coordinatorType(): AgentType;
 
   /**
    * Get infrastructure agent types (coordinator, health check, etc.).
    * - Gas Town: [mayor, deacon]
-   * - Standalone: [user]
+   * - Swarm: [user]
    */
   infrastructureTypes(): AgentType[];
 
   /**
    * Get worker agent types.
    * - Gas Town: [crew, polecat, witness, refinery]
-   * - Standalone: [agent]
+   * - Swarm: [agent]
    */
   workerTypes(): AgentType[];
 

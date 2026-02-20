@@ -3,7 +3,7 @@
  *
  * Implementations:
  * - GasTownTransport: Uses gt mail send with tmux notifications
- * - BeadsTransport: Direct bd/beads operations (standalone mode)
+ * - BeadsTransport: Direct bd/beads operations (swarm mode)
  */
 
 import type { Message, MessagePriority, MessageType } from "../../types/index.js";

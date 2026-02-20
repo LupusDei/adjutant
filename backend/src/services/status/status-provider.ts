@@ -3,7 +3,7 @@
  *
  * Implementations:
  * - GasTownStatusProvider: Full Gas Town infrastructure status
- * - StandaloneStatusProvider: Simple single-project status
+ * - SwarmStatusProvider: Simple swarm mode status
  */
 
 import type { PowerState, AgentStatus, RigStatus, CrewMember } from "../../types/index.js";
@@ -47,10 +47,10 @@ export interface OperatorInfo {
 
 /**
  * Infrastructure status (coordinator agents).
- * Optional in standalone mode.
+ * Optional in swarm mode.
  */
 export interface InfrastructureStatus {
-  /** Primary coordinator (mayor in Gas Town, user in standalone) */
+  /** Primary coordinator (mayor in Gas Town, user in swarm) */
   coordinator: AgentStatus;
   /** Health check agent (optional) */
   healthCheck?: AgentStatus;
@@ -62,7 +62,7 @@ export interface InfrastructureStatus {
  * Generalized system status.
  *
  * Replaces GastownStatus with a deployment-mode-agnostic structure.
- * Gas Town mode populates all fields; standalone mode uses a subset.
+ * Gas Town mode populates all fields; swarm mode uses a subset.
  */
 export interface SystemStatus {
   /** Current power state */
@@ -73,9 +73,9 @@ export interface SystemStatus {
   workspace: WorkspaceInfo;
   /** Operator (human user) information */
   operator: OperatorInfo;
-  /** Infrastructure agent statuses (optional in standalone) */
+  /** Infrastructure agent statuses (optional in swarm) */
   infrastructure?: InfrastructureStatus;
-  /** Per-rig/project information (empty in standalone) */
+  /** Per-rig/project information (empty in swarm) */
   rigs: RigStatus[];
   /** All crew members/agents */
   agents: CrewMember[];

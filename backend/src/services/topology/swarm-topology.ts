@@ -1,5 +1,5 @@
 /**
- * StandaloneTopology - TopologyProvider implementation for standalone/swarm deployments.
+ * SwarmTopology - TopologyProvider implementation for swarm deployments.
  *
  * Implements a simple two-role model:
  * - user: The human operator (coordinator)
@@ -29,9 +29,9 @@ const ROLE_ALIASES: Record<string, AgentType> = {
 };
 
 /**
- * Known standalone roles.
+ * Known swarm roles.
  */
-const STANDALONE_ROLES: AgentType[] = ["user", "agent"];
+const SWARM_ROLES: AgentType[] = ["user", "agent"];
 
 /**
  * Display names for agent types.
@@ -42,19 +42,19 @@ const DISPLAY_NAMES: Record<string, string> = {
 };
 
 /**
- * TopologyProvider implementation for standalone/swarm deployments.
+ * TopologyProvider implementation for swarm deployments.
  *
- * In standalone mode:
+ * In swarm mode:
  * - There's one "user" (the human operator)
  * - There can be multiple "agent" instances
  * - No rig hierarchy - all agents are at the same level
  * - Session names are simple: "user" or "agent-{name}"
  */
-export class StandaloneTopology implements TopologyProvider {
-  readonly name = "standalone";
+export class SwarmTopology implements TopologyProvider {
+  readonly name = "swarm";
 
   agentTypes(): AgentType[] {
-    return [...STANDALONE_ROLES];
+    return [...SWARM_ROLES];
   }
 
   coordinatorType(): AgentType {
@@ -62,7 +62,7 @@ export class StandaloneTopology implements TopologyProvider {
   }
 
   infrastructureTypes(): AgentType[] {
-    // In standalone mode, only the user is "infrastructure"
+    // In swarm mode, only the user is "infrastructure"
     return ["user"];
   }
 
@@ -78,7 +78,7 @@ export class StandaloneTopology implements TopologyProvider {
     if (alias) return alias;
 
     // Check if it's a known role
-    if (STANDALONE_ROLES.includes(lower as AgentType)) {
+    if (SWARM_ROLES.includes(lower as AgentType)) {
       return lower as AgentType;
     }
 
@@ -108,7 +108,7 @@ export class StandaloneTopology implements TopologyProvider {
       const role = this.normalizeRole(part);
 
       // If it normalizes to a known role, use it
-      if (STANDALONE_ROLES.includes(role)) {
+      if (SWARM_ROLES.includes(role)) {
         return { address, role, rig: null, name: null };
       }
 

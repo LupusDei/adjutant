@@ -140,7 +140,7 @@ export async function getAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
   try {
     const mode = getDeploymentMode();
 
-    // In standalone/swarm mode, discover agents from tmux sessions + managed sessions
+    // In swarm mode, discover agents from tmux sessions + managed sessions
     if (mode !== "gastown") {
       return await getTmuxAgents();
     }
@@ -163,7 +163,7 @@ export async function getAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
 }
 
 /**
- * Discovers agents from tmux sessions for standalone/swarm mode.
+ * Discovers agents from tmux sessions for swarm mode.
  * Merges tmux session data with managed session data from the SessionBridge.
  */
 async function getTmuxAgents(): Promise<AgentsServiceResult<CrewMember[]>> {

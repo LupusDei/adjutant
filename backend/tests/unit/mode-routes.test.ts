@@ -21,11 +21,10 @@ function createTestApp() {
 
 function createMockModeInfo(overrides: Partial<ModeInfo> = {}): ModeInfo {
   return {
-    mode: "standalone",
-    features: ["chat", "beads", "websocket", "sse"],
+    mode: "swarm",
+    features: ["chat", "crew_flat", "beads", "epics", "mail", "websocket", "sse"],
     availableModes: [
       { mode: "gastown", available: false, reason: "Gas Town infrastructure not detected" },
-      { mode: "standalone", available: true },
       { mode: "swarm", available: true },
     ],
     ...overrides,
@@ -53,9 +52,9 @@ describe("mode routes", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.data.mode).toBe("standalone");
-      expect(response.body.data.features).toEqual(["chat", "beads", "websocket", "sse"]);
-      expect(response.body.data.availableModes).toHaveLength(3);
+      expect(response.body.data.mode).toBe("swarm");
+      expect(response.body.data.features).toEqual(["chat", "crew_flat", "beads", "epics", "mail", "websocket", "sse"]);
+      expect(response.body.data.availableModes).toHaveLength(2);
     });
 
     it("should return gastown mode info when in gastown mode", async () => {
@@ -64,7 +63,6 @@ describe("mode routes", () => {
         features: ["power_control", "rigs", "epics", "crew_hierarchy", "mail", "dashboard", "refinery", "witness", "websocket", "sse"],
         availableModes: [
           { mode: "gastown", available: true },
-          { mode: "standalone", available: true },
           { mode: "swarm", available: true },
         ],
       });
@@ -110,18 +108,18 @@ describe("mode routes", () => {
     it("should switch mode successfully", async () => {
       const mockResult: ModeServiceResult<ModeInfo> = {
         success: true,
-        data: createMockModeInfo({ mode: "swarm", features: ["chat", "crew_flat", "beads", "mail", "websocket", "sse"] }),
+        data: createMockModeInfo({ mode: "gastown", features: ["power_control", "rigs", "epics", "crew_hierarchy", "mail", "dashboard", "refinery", "witness", "websocket", "sse"] }),
       };
       vi.mocked(switchMode).mockReturnValue(mockResult);
 
       const response = await request(app)
         .post("/api/mode")
-        .send({ mode: "swarm" });
+        .send({ mode: "gastown" });
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.data.mode).toBe("swarm");
-      expect(switchMode).toHaveBeenCalledWith("swarm");
+      expect(response.body.data.mode).toBe("gastown");
+      expect(switchMode).toHaveBeenCalledWith("gastown");
     });
 
     it("should return 400 when mode is missing", async () => {
@@ -143,7 +141,6 @@ describe("mode routes", () => {
       expect(response.body.success).toBe(false);
       expect(response.body.error.message).toContain("Invalid mode: invalid");
       expect(response.body.error.message).toContain("gastown");
-      expect(response.body.error.message).toContain("standalone");
       expect(response.body.error.message).toContain("swarm");
     });
 
@@ -187,14 +184,14 @@ describe("mode routes", () => {
 
       const response = await request(app)
         .post("/api/mode")
-        .send({ mode: "standalone" });
+        .send({ mode: "swarm" });
 
       expect(response.status).toBe(500);
       expect(response.body.error.message).toBe("Failed to switch mode");
     });
 
     it("should accept all valid mode values", async () => {
-      for (const mode of ["gastown", "standalone", "swarm"]) {
+      for (const mode of ["gastown", "swarm"]) {
         vi.mocked(switchMode).mockReturnValue({
           success: true,
           data: createMockModeInfo({ mode: mode as ModeInfo["mode"] }),

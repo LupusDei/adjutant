@@ -33,7 +33,7 @@ export const sessionsRouter = Router();
 const CreateSessionSchema = z.object({
   name: z.string().min(1).optional(),
   projectPath: z.string().min(1, "Project path is required"),
-  mode: z.enum(["standalone", "swarm", "gastown"]).optional(),
+  mode: z.enum(["swarm", "gastown"]).optional(),
   workspaceType: z.enum(["primary", "worktree", "copy"]).optional(),
   claudeArgs: z.array(z.string()).optional(),
 });
@@ -99,7 +99,7 @@ sessionsRouter.post("/", async (req, res) => {
   const result = await bridge.createSession({
     name,
     projectPath: data.projectPath,
-    mode: data.mode ?? "standalone",
+    mode: data.mode ?? "swarm",
     workspaceType: data.workspaceType ?? "primary",
     claudeArgs: data.claudeArgs ?? [],
   });

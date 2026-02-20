@@ -66,19 +66,6 @@ describe("mode-service", () => {
       expect(info.features).toContain("sse");
     });
 
-    it("should return standalone mode info with limited features", () => {
-      vi.mocked(getDeploymentMode).mockReturnValue("standalone");
-      vi.mocked(isGasTownAvailable).mockReturnValue(false);
-
-      const info = getModeInfo();
-
-      expect(info.mode).toBe("standalone");
-      expect(info.features).toContain("chat");
-      expect(info.features).toContain("beads");
-      expect(info.features).not.toContain("power_control");
-      expect(info.features).not.toContain("rigs");
-    });
-
     it("should return swarm mode info with swarm features", () => {
       vi.mocked(getDeploymentMode).mockReturnValue("swarm");
       vi.mocked(isGasTownAvailable).mockReturnValue(false);
@@ -92,7 +79,7 @@ describe("mode-service", () => {
     });
 
     it("should mark gastown as available when GT environment detected", () => {
-      vi.mocked(getDeploymentMode).mockReturnValue("standalone");
+      vi.mocked(getDeploymentMode).mockReturnValue("swarm");
       vi.mocked(isGasTownAvailable).mockReturnValue(true);
 
       const info = getModeInfo();
@@ -103,7 +90,7 @@ describe("mode-service", () => {
     });
 
     it("should mark gastown as unavailable when GT environment not detected", () => {
-      vi.mocked(getDeploymentMode).mockReturnValue("standalone");
+      vi.mocked(getDeploymentMode).mockReturnValue("swarm");
       vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       const info = getModeInfo();
@@ -113,15 +100,13 @@ describe("mode-service", () => {
       expect(gtMode?.reason).toContain("Gas Town infrastructure not detected");
     });
 
-    it("should always mark standalone and swarm as available", () => {
+    it("should always mark swarm as available", () => {
       vi.mocked(getDeploymentMode).mockReturnValue("gastown");
       vi.mocked(isGasTownAvailable).mockReturnValue(true);
 
       const info = getModeInfo();
 
-      const standalone = info.availableModes.find((m) => m.mode === "standalone");
       const swarm = info.availableModes.find((m) => m.mode === "swarm");
-      expect(standalone?.available).toBe(true);
       expect(swarm?.available).toBe(true);
     });
   });
@@ -132,24 +117,24 @@ describe("mode-service", () => {
 
   describe("switchMode", () => {
     it("should no-op when switching to the same mode", () => {
-      vi.mocked(getDeploymentMode).mockReturnValue("standalone");
+      vi.mocked(getDeploymentMode).mockReturnValue("swarm");
       vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
-      const result = switchMode("standalone");
+      const result = switchMode("swarm");
 
       expect(result.success).toBe(true);
-      expect(result.data?.mode).toBe("standalone");
+      expect(result.data?.mode).toBe("swarm");
       // Should not reset providers
       expect(resetWorkspace).not.toHaveBeenCalled();
       expect(resetTopology).not.toHaveBeenCalled();
       expect(resetTransport).not.toHaveBeenCalled();
     });
 
-    it("should switch from standalone to swarm successfully", () => {
+    it("should switch from gastown to swarm successfully", () => {
       vi.mocked(getDeploymentMode)
-        .mockReturnValueOnce("standalone") // initial check
+        .mockReturnValueOnce("gastown") // initial check
         .mockReturnValue("swarm"); // after switch
-      vi.mocked(isGasTownAvailable).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(true);
       vi.mocked(getWorkspace).mockReturnValue({} as ReturnType<typeof getWorkspace>);
 
       const mockEmit = vi.fn();
@@ -167,9 +152,9 @@ describe("mode-service", () => {
 
     it("should emit mode:changed event on successful switch", () => {
       vi.mocked(getDeploymentMode)
-        .mockReturnValueOnce("standalone")
+        .mockReturnValueOnce("gastown")
         .mockReturnValue("swarm");
-      vi.mocked(isGasTownAvailable).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(true);
       vi.mocked(getWorkspace).mockReturnValue({} as ReturnType<typeof getWorkspace>);
 
       const mockEmit = vi.fn();
@@ -180,12 +165,12 @@ describe("mode-service", () => {
       expect(mockEmit).toHaveBeenCalledWith("mode:changed", expect.objectContaining({
         mode: "swarm",
         features: expect.any(Array),
-        reason: expect.stringContaining("standalone"),
+        reason: expect.stringContaining("gastown"),
       }));
     });
 
     it("should reject switching to gastown when GT environment not available", () => {
-      vi.mocked(getDeploymentMode).mockReturnValue("standalone");
+      vi.mocked(getDeploymentMode).mockReturnValue("swarm");
       vi.mocked(isGasTownAvailable).mockReturnValue(false);
 
       const result = switchMode("gastown");
@@ -197,7 +182,7 @@ describe("mode-service", () => {
 
     it("should allow switching to gastown when GT environment is available", () => {
       vi.mocked(getDeploymentMode)
-        .mockReturnValueOnce("standalone")
+        .mockReturnValueOnce("swarm")
         .mockReturnValue("gastown");
       vi.mocked(isGasTownAvailable).mockReturnValue(true);
       vi.mocked(getWorkspace).mockReturnValue({} as ReturnType<typeof getWorkspace>);
@@ -212,7 +197,7 @@ describe("mode-service", () => {
     });
 
     it("should reject invalid mode", () => {
-      vi.mocked(getDeploymentMode).mockReturnValue("standalone");
+      vi.mocked(getDeploymentMode).mockReturnValue("swarm");
 
       const result = switchMode("invalid" as "gastown");
 
@@ -222,9 +207,9 @@ describe("mode-service", () => {
 
     it("should set ADJUTANT_MODE env var on switch", () => {
       vi.mocked(getDeploymentMode)
-        .mockReturnValueOnce("standalone")
+        .mockReturnValueOnce("gastown")
         .mockReturnValue("swarm");
-      vi.mocked(isGasTownAvailable).mockReturnValue(false);
+      vi.mocked(isGasTownAvailable).mockReturnValue(true);
       vi.mocked(getWorkspace).mockReturnValue({} as ReturnType<typeof getWorkspace>);
 
       const mockEmit = vi.fn();

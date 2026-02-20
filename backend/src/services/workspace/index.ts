@@ -7,12 +7,12 @@
  * Detection priority:
  * 1. ADJUTANT_MODE env var (explicit override)
  * 2. Gas Town markers (mayor/town.json exists)
- * 3. Standalone fallback
+ * 3. Swarm fallback
  */
 
 import type { WorkspaceProvider, DeploymentMode, BeadsDirInfo, WorkspaceConfig } from "./workspace-provider.js";
 import { GasTownProvider, isGasTownEnvironment } from "./gastown-provider.js";
-import { StandaloneProvider } from "./standalone-provider.js";
+import { SwarmProvider } from "./swarm-provider.js";
 
 // Re-export types
 export type { WorkspaceProvider, DeploymentMode, BeadsDirInfo, WorkspaceConfig };
@@ -53,7 +53,7 @@ export function resetWorkspace(): void {
  */
 export function getDeploymentMode(): DeploymentMode {
   const envMode = process.env["ADJUTANT_MODE"]?.toLowerCase();
-  if (envMode === "gastown" || envMode === "standalone" || envMode === "swarm") {
+  if (envMode === "gastown" || envMode === "swarm") {
     return envMode;
   }
   return getWorkspace().mode;
@@ -73,12 +73,8 @@ function createWorkspaceProvider(): WorkspaceProvider {
   if (explicitMode === "gastown") {
     return new GasTownProvider();
   }
-  if (explicitMode === "standalone") {
-    return new StandaloneProvider();
-  }
   if (explicitMode === "swarm") {
-    // Swarm mode uses standalone provider with multi-directory support (future)
-    return new StandaloneProvider();
+    return new SwarmProvider();
   }
 
   // Auto-detection
@@ -86,8 +82,8 @@ function createWorkspaceProvider(): WorkspaceProvider {
     return new GasTownProvider();
   }
 
-  // Default to standalone
-  return new StandaloneProvider();
+  // Default to swarm
+  return new SwarmProvider();
 }
 
 // ============================================================================

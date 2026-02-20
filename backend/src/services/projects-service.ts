@@ -23,7 +23,7 @@ export interface Project {
   name: string;
   path: string;
   gitRemote?: string | undefined;
-  mode: "standalone" | "swarm" | "gastown";
+  mode: "swarm" | "swarm" | "gastown";
   sessions: string[];
   createdAt: string;
   active: boolean;
@@ -141,7 +141,7 @@ export function discoverLocalProjects(): ProjectsServiceResult<Project[]> {
         name: nameFromPath(projectRoot),
         path: projectRoot,
         gitRemote: detectGitRemote(projectRoot),
-        mode: "standalone",
+        mode: "swarm",
         sessions: [],
         createdAt: new Date().toISOString(),
         active: true,
@@ -193,7 +193,7 @@ export function discoverLocalProjects(): ProjectsServiceResult<Project[]> {
           name: nameFromPath(childPath),
           path: childPath,
           gitRemote: detectGitRemote(childPath),
-          mode: "standalone",
+          mode: "swarm",
           sessions: [],
           createdAt: new Date().toISOString(),
           active: false,
@@ -312,7 +312,7 @@ function createFromPath(store: ProjectsStore, dirPath: string, name?: string): P
     name: name ?? nameFromPath(absPath),
     path: absPath,
     gitRemote: detectGitRemote(absPath),
-    mode: "standalone",
+    mode: "swarm",
     sessions: [],
     createdAt: new Date().toISOString(),
     active: false,
@@ -352,7 +352,7 @@ function createFromClone(store: ProjectsStore, cloneUrl: string, name?: string):
     name: projectName,
     path: targetDir,
     gitRemote: cloneUrl,
-    mode: "standalone",
+    mode: "swarm",
     sessions: [],
     createdAt: new Date().toISOString(),
     active: false,
@@ -389,7 +389,7 @@ function createEmpty(store: ProjectsStore, name: string): ProjectsServiceResult<
     id: generateId(),
     name,
     path: targetDir,
-    mode: "standalone",
+    mode: "swarm",
     sessions: [],
     createdAt: new Date().toISOString(),
     active: false,

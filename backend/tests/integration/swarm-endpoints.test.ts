@@ -1,12 +1,12 @@
 /**
- * Integration tests for standalone mode endpoints.
+ * Integration tests for swarm mode endpoints.
  *
  * These tests mock ONLY the external binary dependencies (bd, tmux)
  * and let all real services, providers, singleton management, mode
  * detection, and Express middleware run end-to-end.
  *
  * Every endpoint tested here was returning 500 before the fixes
- * in this session. If these tests pass, standalone mode works.
+ * in this session. If these tests pass, swarm mode works.
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
@@ -84,7 +84,7 @@ function resetAllSingletons() {
 // Tests
 // ==========================================================================
 
-describe("standalone mode integration", () => {
+describe("swarm mode integration", () => {
   let app: express.Express;
   let tmpDir: string;
   let savedEnv: Record<string, string | undefined>;
@@ -112,14 +112,14 @@ describe("standalone mode integration", () => {
   });
 
   beforeEach(() => {
-    process.env["ADJUTANT_MODE"] = "standalone";
+    process.env["ADJUTANT_MODE"] = "swarm";
     process.env["ADJUTANT_PROJECT_ROOT"] = tmpDir;
     delete process.env["GT_TOWN_ROOT"];
 
     resetAllSingletons();
     app = createTestApp();
 
-    // bd binary unavailable — simulates standalone with no beads database
+    // bd binary unavailable — simulates swarm with no beads database
     mockExecBd.mockReset();
     mockExecBd.mockResolvedValue({
       success: false,
@@ -159,7 +159,7 @@ describe("standalone mode integration", () => {
 
     it("should not call collectAgentSnapshot (bd binary)", async () => {
       await request(app).get("/api/agents");
-      // In standalone mode, getAgents() returns early — bd should never be called
+      // In swarm mode, getAgents() returns early — bd should never be called
       expect(mockExecBd).not.toHaveBeenCalled();
     });
   });
@@ -212,23 +212,23 @@ describe("standalone mode integration", () => {
   });
 
   describe("GET /api/beads/sources", () => {
-    it("should return 200 with standalone mode", async () => {
+    it("should return 200 with swarm mode", async () => {
       const res = await request(app).get("/api/beads/sources");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.data.mode).toBe("standalone");
+      expect(res.body.data.mode).toBe("swarm");
       expect(Array.isArray(res.body.data.sources)).toBe(true);
     });
   });
 
   describe("GET /api/mode", () => {
-    it("should return standalone mode info with features", async () => {
+    it("should return swarm mode info with features", async () => {
       const res = await request(app).get("/api/mode");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.data.mode).toBe("standalone");
+      expect(res.body.data.mode).toBe("swarm");
       expect(res.body.data.features).toContain("chat");
       expect(Array.isArray(res.body.data.availableModes)).toBe(true);
     });
@@ -249,14 +249,7 @@ describe("standalone mode integration", () => {
   // ========================================================================
 
   describe("POST /api/mode", () => {
-    it("should handle standalone → standalone no-op", async () => {
-      const res = await request(app).post("/api/mode").send({ mode: "standalone" });
-
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
-    });
-
-    it("should switch to swarm mode", async () => {
+    it("should handle swarm → swarm no-op", async () => {
       const res = await request(app).post("/api/mode").send({ mode: "swarm" });
 
       expect(res.status).toBe(200);
@@ -290,12 +283,7 @@ describe("standalone mode integration", () => {
   // Verifies switchMode() properly resets all singletons.
   // ========================================================================
 
-  describe("endpoints after switching to swarm mode", () => {
-    beforeEach(async () => {
-      const switchRes = await request(app).post("/api/mode").send({ mode: "swarm" });
-      expect(switchRes.status).toBe(200);
-    });
-
+  describe("endpoints after mode round-trip", () => {
     it("GET /api/status returns 200", async () => {
       const res = await request(app).get("/api/status");
       expect(res.status).toBe(200);
@@ -319,16 +307,6 @@ describe("standalone mode integration", () => {
       const res = await request(app).get("/api/beads/sources");
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-    });
-
-    it("can switch back to standalone", async () => {
-      const res = await request(app).post("/api/mode").send({ mode: "standalone" });
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
-
-      // Endpoints still work after switching back
-      const statusRes = await request(app).get("/api/status");
-      expect(statusRes.status).toBe(200);
     });
   });
 });

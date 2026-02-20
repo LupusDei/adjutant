@@ -1,7 +1,7 @@
 /**
- * StandaloneStatusProvider - StatusProvider implementation for standalone deployments.
+ * SwarmStatusProvider - StatusProvider implementation for swarm deployments.
  *
- * Provides simple status for single-project mode:
+ * Provides simple status for swarm mode:
  * - Always "running" power state (no power control)
  * - No infrastructure agents
  * - No rig hierarchy
@@ -21,20 +21,20 @@ import type {
 } from "./status-provider.js";
 
 // ============================================================================
-// StandaloneStatusProvider
+// SwarmStatusProvider
 // ============================================================================
 
 /**
- * StatusProvider implementation for standalone/swarm deployments.
+ * StatusProvider implementation for swarm deployments.
  *
- * In standalone mode:
+ * In swarm mode:
  * - Power state is always "running" (no gt binary to control)
  * - No power control capabilities
  * - No infrastructure agents
  * - No rig hierarchy
  */
-export class StandaloneStatusProvider implements StatusProvider {
-  readonly name = "standalone";
+export class SwarmStatusProvider implements StatusProvider {
+  readonly name = "swarm";
 
   getPowerCapabilities(): PowerCapabilities {
     return {
@@ -57,12 +57,12 @@ export class StandaloneStatusProvider implements StatusProvider {
       const agentsResult = await getAgents();
       const crewMembers: CrewMember[] = agentsResult.success && agentsResult.data ? agentsResult.data : [];
 
-      // In standalone mode, count user's unread mail
+      // In swarm mode, count user's unread mail
       // For now, assume 0 since we don't have a specific user mailbox
       const unreadMail = 0;
 
       const status: SystemStatus = {
-        // Always running in standalone mode
+        // Always running in swarm mode
         powerState: "running",
         powerCapabilities: this.getPowerCapabilities(),
         workspace: {
@@ -74,7 +74,7 @@ export class StandaloneStatusProvider implements StatusProvider {
           email: config.owner?.email ?? "",
           unreadMail,
         },
-        // No rigs in standalone mode
+        // No rigs in swarm mode
         rigs: [],
         agents: crewMembers,
         fetchedAt: new Date().toISOString(),
@@ -97,7 +97,7 @@ export class StandaloneStatusProvider implements StatusProvider {
       success: false,
       error: {
         code: "NOT_SUPPORTED",
-        message: "Power control is not available in standalone mode",
+        message: "Power control is not available in swarm mode",
       },
     };
   }
@@ -107,7 +107,7 @@ export class StandaloneStatusProvider implements StatusProvider {
       success: false,
       error: {
         code: "NOT_SUPPORTED",
-        message: "Power control is not available in standalone mode",
+        message: "Power control is not available in swarm mode",
       },
     };
   }

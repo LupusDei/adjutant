@@ -1,5 +1,5 @@
 /**
- * StandaloneProvider - WorkspaceProvider for single-project deployments.
+ * SwarmProvider - WorkspaceProvider for swarm/multi-agent deployments.
  *
  * This provider is for running Adjutant without Gas Town infrastructure.
  * It assumes a single project with a local .beads/ directory.
@@ -44,11 +44,11 @@ function extractBeadPrefix(beadId: string): string | null {
 }
 
 // ============================================================================
-// StandaloneProvider Implementation
+// SwarmProvider Implementation
 // ============================================================================
 
 /**
- * WorkspaceProvider implementation for standalone/single-project deployments.
+ * WorkspaceProvider implementation for swarm/multi-agent deployments.
  *
  * Features:
  * - Single .beads/ directory (local to project)
@@ -56,9 +56,9 @@ function extractBeadPrefix(beadId: string): string | null {
  * - No gt binary required
  * - No rigs (single project)
  */
-export class StandaloneProvider implements WorkspaceProvider {
-  readonly name = "standalone";
-  readonly mode: DeploymentMode = "standalone";
+export class SwarmProvider implements WorkspaceProvider {
+  readonly name = "swarm";
+  readonly mode: DeploymentMode = "swarm";
 
   private projectRoot: string;
 
@@ -147,7 +147,7 @@ export class StandaloneProvider implements WorkspaceProvider {
     const prefix = extractBeadPrefix(beadId);
     if (!prefix) return null;
 
-    // In standalone mode, all beads go to the local directory
+    // In swarm mode, all beads go to the local directory
     const beadsPath = resolveBeadsDir(this.projectRoot);
     if (!existsSync(join(this.projectRoot, ".beads"))) {
       return null;
@@ -160,12 +160,12 @@ export class StandaloneProvider implements WorkspaceProvider {
   }
 
   hasPowerControl(): boolean {
-    // Standalone mode is always "running"
+    // Swarm mode is always "running"
     return false;
   }
 
   hasGtBinary(): boolean {
-    // No gt binary in standalone mode
+    // No gt binary in swarm mode
     return false;
   }
 
@@ -199,9 +199,9 @@ export class StandaloneProvider implements WorkspaceProvider {
 }
 
 /**
- * Check if a directory looks like a standalone project (has .beads/ but no mayor/).
+ * Check if a directory looks like a swarm project (has .beads/ but no mayor/).
  */
-export function isStandaloneProject(dir: string): boolean {
+export function isSwarmProject(dir: string): boolean {
   const hasBeads = existsSync(join(dir, ".beads"));
   const hasMayor = existsSync(join(dir, "mayor"));
   return hasBeads && !hasMayor;

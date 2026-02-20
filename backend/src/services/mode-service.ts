@@ -1,7 +1,7 @@
 /**
  * Mode service for Adjutant.
  *
- * Manages runtime deployment mode switching between gastown, standalone, and swarm.
+ * Manages runtime deployment mode switching between gastown and swarm.
  * Validates mode transitions and swaps workspace/topology/transport providers.
  */
 
@@ -56,13 +56,6 @@ const MODE_FEATURES: Record<DeploymentMode, string[]> = {
     "websocket",
     "sse",
   ],
-  standalone: [
-    "chat",
-    "beads",
-    "epics",
-    "websocket",
-    "sse",
-  ],
   swarm: [
     "chat",
     "crew_flat",
@@ -93,10 +86,6 @@ export function getModeInfo(): ModeInfo {
         mode: "gastown",
         available: gtAvailable,
         ...(!gtAvailable && { reason: "Gas Town infrastructure not detected (no mayor/town.json)" }),
-      },
-      {
-        mode: "standalone",
-        available: true,
       },
       {
         mode: "swarm",
@@ -132,7 +121,7 @@ export function switchMode(newMode: DeploymentMode): ModeServiceResult<ModeInfo>
     };
   }
 
-  const validModes: DeploymentMode[] = ["gastown", "standalone", "swarm"];
+  const validModes: DeploymentMode[] = ["gastown", "swarm"];
   if (!validModes.includes(newMode)) {
     return {
       success: false,
