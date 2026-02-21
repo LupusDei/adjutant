@@ -48,9 +48,9 @@ final class ChatViewModelTests: XCTestCase {
 
     func testRefreshUpdatesConnectionStateToConnected() async {
         let testMessages = [
-            createTestMessage(id: "test-1", from: "mayor/", to: "user")
+            createTestMessage(id: "test-1", agentId: "mayor/", role: .agent)
         ]
-        MockURLProtocol.mockHandler = mockMailResponse(messages: testMessages)
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: testMessages)
 
         await viewModel.refresh()
 
@@ -59,20 +59,19 @@ final class ChatViewModelTests: XCTestCase {
     }
 
     func testServerURLReturnsHost() {
-        // serverURL should return a host string
         let url = viewModel.serverURL
         XCTAssertFalse(url.isEmpty)
     }
 
     // MARK: - Message Loading Tests
 
-    func testRefreshLoadsMessages() async {
+    func testRefreshLoadsMessagesFromGetMessages() async {
         let testMessages = [
-            createTestMessage(id: "test-1", from: "mayor/", to: "user"),
-            createTestMessage(id: "test-2", from: "user", to: "mayor/")
+            createTestMessage(id: "test-1", agentId: "mayor/", role: .agent),
+            createTestMessage(id: "test-2", agentId: "user", role: .user, recipient: "mayor/")
         ]
 
-        MockURLProtocol.mockHandler = mockMailResponse(messages: testMessages)
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: testMessages)
 
         await viewModel.refresh()
 
@@ -81,30 +80,30 @@ final class ChatViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.errorMessage)
     }
 
-    func testRefreshFiltersOnlySelectedRecipientMessages() async {
-        let testMessages = [
-            createTestMessage(id: "test-1", from: "mayor/", to: "user"),
-            createTestMessage(id: "test-2", from: "other/", to: "user"), // Should be filtered out
-            createTestMessage(id: "test-3", from: "user", to: "mayor/")
-        ]
+    func testRefreshCallsGetMessagesWithAgentId() async {
+        var capturedURL: URL?
 
-        MockURLProtocol.mockHandler = mockMailResponse(messages: testMessages)
+        MockURLProtocol.mockHandler = { request in
+            capturedURL = request.url
+            return self.mockMessagesResponse(messages: [])(request)
+        }
 
         await viewModel.refresh()
 
-        // Default recipient is "mayor/", so should filter to mayor messages
-        XCTAssertEqual(viewModel.messages.count, 2)
-        XCTAssertTrue(viewModel.messages.allSatisfy { $0.from == "mayor/" || $0.to == "mayor/" })
+        // Should call /api/messages?agentId=mayor/
+        let components = URLComponents(url: capturedURL!, resolvingAgainstBaseURL: false)!
+        let agentParam = components.queryItems?.first(where: { $0.name == "agentId" })
+        XCTAssertEqual(agentParam?.value, "mayor/")
     }
 
     func testMessagesSortedOldestFirst() async {
         let now = Date()
         let testMessages = [
-            createTestMessage(id: "test-new", from: "mayor/", to: "user", date: now),
-            createTestMessage(id: "test-old", from: "mayor/", to: "user", date: now.addingTimeInterval(-3600))
+            createTestMessage(id: "test-new", agentId: "mayor/", role: .agent, date: now),
+            createTestMessage(id: "test-old", agentId: "mayor/", role: .agent, date: now.addingTimeInterval(-3600))
         ]
 
-        MockURLProtocol.mockHandler = mockMailResponse(messages: testMessages)
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: testMessages)
 
         await viewModel.refresh()
 
@@ -112,36 +111,90 @@ final class ChatViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.messages.last?.id, "test-new")
     }
 
+    func testHasMoreHistoryReflectsServerResponse() async {
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: [], hasMore: true)
+
+        await viewModel.refresh()
+
+        XCTAssertTrue(viewModel.hasMoreHistory)
+    }
+
+    func testHasMoreHistoryFalseWhenServerSaysNoMore() async {
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: [], hasMore: false)
+
+        await viewModel.refresh()
+
+        XCTAssertFalse(viewModel.hasMoreHistory)
+    }
+
+    // MARK: - Agent Scoping Tests
+
+    func testSetRecipientClearsMessagesAndRefreshes() async {
+        // Load initial messages
+        let initialMessages = [
+            createTestMessage(id: "test-1", agentId: "mayor/", role: .agent)
+        ]
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: initialMessages)
+        await viewModel.refresh()
+        XCTAssertEqual(viewModel.messages.count, 1)
+
+        // Switch recipient
+        let newMessages = [
+            createTestMessage(id: "test-2", agentId: "coder", role: .agent)
+        ]
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: newMessages)
+        await viewModel.setRecipient("coder")
+
+        XCTAssertEqual(viewModel.selectedRecipient, "coder")
+        XCTAssertEqual(viewModel.messages.count, 1)
+        XCTAssertEqual(viewModel.messages.first?.agentId, "coder")
+    }
+
+    func testSetRecipientSameRecipientDoesNothing() async {
+        var refreshCount = 0
+        MockURLProtocol.mockHandler = { request in
+            refreshCount += 1
+            return self.mockMessagesResponse(messages: [])(request)
+        }
+
+        await viewModel.setRecipient("mayor/") // Same as default
+        XCTAssertEqual(refreshCount, 0)
+    }
+
     // MARK: - Send Message Tests
 
     func testSendMessageClearsInputImmediately() async {
-        viewModel.inputText = "Hello Mayor"
-        MockURLProtocol.mockHandler = mockSendMailSuccess()
+        viewModel.inputText = "Hello Agent"
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: [])
 
-        // Start sending but don't wait
         let task = Task {
             await viewModel.sendMessage()
         }
 
-        // Input should be cleared immediately
         try? await Task.sleep(nanoseconds: 50_000_000)
         XCTAssertEqual(viewModel.inputText, "")
 
         await task.value
     }
 
-    func testSendMessageWithEmptyInputDoesNothing() async {
-        viewModel.inputText = "   "
-
-        var requestMade = false
-        MockURLProtocol.mockHandler = { _ in
-            requestMade = true
-            return mockSendMailSuccess()
-        }()
+    func testSendMessageCreatesOptimisticPersistentMessage() async {
+        viewModel.inputText = "Test message"
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: [])
 
         await viewModel.sendMessage()
 
-        XCTAssertFalse(requestMade)
+        // Should have an optimistic local message
+        let localMessages = viewModel.messages.filter { $0.id.hasPrefix("local-") }
+        XCTAssertEqual(localMessages.count, 1)
+        XCTAssertEqual(localMessages.first?.body, "Test message")
+        XCTAssertEqual(localMessages.first?.role, .user)
+        XCTAssertEqual(localMessages.first?.deliveryStatus, .pending)
+    }
+
+    func testSendMessageWithEmptyInputDoesNothing() async {
+        viewModel.inputText = "   "
+        await viewModel.sendMessage()
+        XCTAssertTrue(viewModel.messages.isEmpty)
     }
 
     func testCanSendIsFalseWhenInputEmpty() {
@@ -157,70 +210,28 @@ final class ChatViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.canSend)
     }
 
-    // MARK: - Subject Generation Tests
-
-    func testSendMessageGeneratesSubjectFromBody() async {
-        viewModel.inputText = "Hello Mayor, how are you today?"
-
-        var capturedSubject: String?
-        MockURLProtocol.mockHandler = { request in
-            if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
-                capturedSubject = json["subject"] as? String
-            }
-            return self.mockSendMailSuccess()
-        }()
-
-        await viewModel.sendMessage()
-
-        XCTAssertEqual(capturedSubject, "Hello Mayor, how are you today?")
-    }
-
-    func testSendMessageTruncatesLongSubject() async {
-        viewModel.inputText = "This is a very long message that should be truncated at the word boundary to form a subject line"
-
-        var capturedSubject: String?
-        MockURLProtocol.mockHandler = { request in
-            if let body = request.httpBody,
-               let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
-                capturedSubject = json["subject"] as? String
-            }
-            return self.mockSendMailSuccess()
-        }()
-
-        await viewModel.sendMessage()
-
-        // Should be truncated at word boundary before 50 chars, with "..."
-        XCTAssertNotNil(capturedSubject)
-        XCTAssertTrue(capturedSubject!.hasSuffix("..."))
-        XCTAssertLessThanOrEqual(capturedSubject!.count, 53) // 50 + "..."
-    }
-
     // MARK: - Outgoing Message Detection Tests
 
-    func testIsOutgoingForMessageToSelectedRecipient() {
-        // Default recipient is "mayor/"
-        let outgoingMessage = createTestMessage(id: "test", from: "user", to: "mayor/")
-        XCTAssertTrue(viewModel.isOutgoing(outgoingMessage))
+    func testIsOutgoingForUserMessage() {
+        let userMsg = createTestMessage(id: "test", agentId: "user", role: .user, recipient: "mayor/")
+        XCTAssertTrue(viewModel.isOutgoing(userMsg))
     }
 
-    func testIsOutgoingFalseForMessageFromSelectedRecipient() {
-        // Default recipient is "mayor/"
-        let incomingMessage = createTestMessage(id: "test", from: "mayor/", to: "user")
-        XCTAssertFalse(viewModel.isOutgoing(incomingMessage))
+    func testIsOutgoingFalseForAgentMessage() {
+        let agentMsg = createTestMessage(id: "test", agentId: "mayor/", role: .agent)
+        XCTAssertFalse(viewModel.isOutgoing(agentMsg))
     }
 
     // MARK: - Recipient Display Name Tests
 
     func testRecipientDisplayNameForMayor() {
-        // Default recipient is "mayor/"
         XCTAssertEqual(viewModel.recipientDisplayName, "MAYOR")
     }
 
     // MARK: - Load More History Tests
 
     func testLoadMoreHistorySetsLoadingState() async {
-        MockURLProtocol.mockHandler = mockMailResponse(messages: [])
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: [])
 
         let expectation = XCTestExpectation(description: "isLoadingHistory changes")
         var loadingStates: [Bool] = []
@@ -240,27 +251,33 @@ final class ChatViewModelTests: XCTestCase {
         XCTAssertEqual(loadingStates, [false, true, false])
     }
 
-    func testLoadMoreHistorySetsHasMoreHistoryFalseWhenNoMoreMessages() async {
+    func testLoadMoreHistoryUsesBeforeIdPagination() async {
         // First load some messages
-        let messages = [createTestMessage(id: "test-1", from: "mayor/", to: "user")]
-        MockURLProtocol.mockHandler = mockMailResponse(messages: messages)
+        let messages = [createTestMessage(id: "msg-1", agentId: "mayor/", role: .agent)]
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: messages)
         await viewModel.refresh()
 
-        // Now load all - should return same count
-        MockURLProtocol.mockHandler = mockMailResponse(messages: messages, all: true)
+        // Now load more - should pass beforeId
+        var capturedURL: URL?
+        MockURLProtocol.mockHandler = { request in
+            capturedURL = request.url
+            return self.mockMessagesResponse(messages: [], hasMore: false)(request)
+        }
+
         await viewModel.loadMoreHistory()
 
-        XCTAssertFalse(viewModel.hasMoreHistory)
+        let components = URLComponents(url: capturedURL!, resolvingAgainstBaseURL: false)!
+        let beforeIdParam = components.queryItems?.first(where: { $0.name == "beforeId" })
+        XCTAssertEqual(beforeIdParam?.value, "msg-1")
     }
 
     // MARK: - Voice Transcription Tests
 
     func testSendVoiceTranscriptionSetsInputAndSends() async {
-        MockURLProtocol.mockHandler = mockSendMailSuccess()
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: [])
 
         await viewModel.sendVoiceTranscription("Voice message text")
 
-        // Input should be cleared after sending
         XCTAssertEqual(viewModel.inputText, "")
     }
 
@@ -279,80 +296,85 @@ final class ChatViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isLoading)
     }
 
+    // MARK: - Subject Generation Tests
+
+    func testShortMessage() {
+        XCTAssertEqual(ChatViewModel.generateSubject(from: "Short"), "Short")
+    }
+
+    func testEmptyMessage() {
+        XCTAssertEqual(ChatViewModel.generateSubject(from: ""), "Chat")
+    }
+
+    func testWhitespaceOnly() {
+        XCTAssertEqual(ChatViewModel.generateSubject(from: "   "), "Chat")
+    }
+
+    func testExactly50Chars() {
+        let text = String(repeating: "a", count: 50)
+        XCTAssertEqual(ChatViewModel.generateSubject(from: text), text)
+    }
+
+    func testLongMessageTruncatesAtWordBoundary() {
+        let text = "This is a very long message that should be truncated at word boundary for subject"
+        let subject = ChatViewModel.generateSubject(from: text)
+        XCTAssertTrue(subject.hasSuffix("..."))
+        XCTAssertLessThanOrEqual(subject.count, 53)
+    }
+
+    func testLongMessageNoSpacesTruncatesAtCharLimit() {
+        let text = String(repeating: "x", count: 60)
+        let subject = ChatViewModel.generateSubject(from: text)
+        XCTAssertTrue(subject.hasSuffix("..."))
+        XCTAssertEqual(subject.count, 53)
+    }
+
     // MARK: - Helpers
 
     private func createMockAPIClient() -> APIClient {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockURLProtocol.self]
-        let session = URLSession(configuration: config)
 
-        let apiConfig = APIClientConfiguration(baseURL: URL(string: "http://test.local")!)
-        return APIClient(configuration: apiConfig, session: session)
+        let apiConfig = APIClientConfiguration(baseURL: URL(string: "http://test.local/api")!)
+        return APIClient(configuration: apiConfig, urlSessionConfiguration: config)
     }
 
     private func createTestMessage(
         id: String,
-        from: String,
-        to: String,
+        agentId: String,
+        role: MessageRole,
+        recipient: String? = nil,
         body: String = "Test message",
         date: Date = Date()
-    ) -> Message {
-        Message(
+    ) -> PersistentMessage {
+        let now = ISO8601DateFormatter().string(from: date)
+        return PersistentMessage(
             id: id,
-            from: from,
-            to: to,
-            subject: "",
+            agentId: agentId,
+            recipient: recipient,
+            role: role,
             body: body,
-            timestamp: ISO8601DateFormatter().string(from: date),
-            read: true,
-            priority: .normal,
-            type: .notification,
-            threadId: "thread-\(id)",
-            replyTo: nil,
-            pinned: false,
-            cc: nil,
-            isInfrastructure: false
+            deliveryStatus: .delivered,
+            createdAt: now,
+            updatedAt: now
         )
     }
 
-    private func mockMailResponse(messages: [Message], all: Bool = false) -> MockURLProtocol.MockHandler {
+    private func mockMessagesResponse(
+        messages: [PersistentMessage],
+        hasMore: Bool = false
+    ) -> MockURLProtocol.MockHandler {
         { request in
-            let paginatedResponse = PaginatedResponse(
-                data: messages,
-                total: messages.count,
-                page: 1,
-                limit: 50
-            )
+            let items: [[String: Any]] = try messages.map { msg in
+                let data = try JSONEncoder().encode(msg)
+                return try JSONSerialization.jsonObject(with: data) as! [String: Any]
+            }
             let envelope: [String: Any] = [
                 "success": true,
                 "data": [
-                    "data": try messages.map { msg in
-                        try JSONSerialization.jsonObject(with: JSONEncoder().encode(msg))
-                    },
+                    "items": items,
                     "total": messages.count,
-                    "page": 1,
-                    "limit": 50
-                ],
-                "timestamp": ISO8601DateFormatter().string(from: Date())
-            ]
-            let data = try JSONSerialization.data(withJSONObject: envelope)
-            let response = HTTPURLResponse(
-                url: request.url!,
-                statusCode: 200,
-                httpVersion: "HTTP/1.1",
-                headerFields: ["Content-Type": "application/json"]
-            )!
-            return (response, data)
-        }
-    }
-
-    private func mockSendMailSuccess() -> MockURLProtocol.MockHandler {
-        { request in
-            let envelope: [String: Any] = [
-                "success": true,
-                "data": [
-                    "success": true,
-                    "message": "Message sent"
+                    "hasMore": hasMore
                 ],
                 "timestamp": ISO8601DateFormatter().string(from: Date())
             ]
@@ -424,7 +446,6 @@ final class ChatViewModelSpeechTests: XCTestCase {
 
         viewModel.toggleVoiceRecording()
 
-        // Give async authorization time to complete
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertTrue(mockSpeechService.requestAuthorizationCalled)
@@ -437,7 +458,6 @@ final class ChatViewModelSpeechTests: XCTestCase {
 
         viewModel.toggleVoiceRecording()
 
-        // Give async authorization time to complete
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertNotNil(viewModel.speechError)
@@ -457,18 +477,11 @@ final class ChatViewModelSpeechTests: XCTestCase {
     func testTranscriptionUpdatesInputText() async {
         mockSpeechService.authorizationStatus = .authorized
 
-        // Start recording
         viewModel.toggleVoiceRecording()
-
-        // Simulate transcription
         mockSpeechService.simulateTranscription("Hello world")
 
-        // Give binding time to propagate
         try? await Task.sleep(nanoseconds: 100_000_000)
 
-        // Note: The input text binding only updates while recording
-        // Since mockSpeechService.state is set to .recording in startRecording(),
-        // and we're using the mock, the state is .recording
         XCTAssertEqual(viewModel.inputText, "Hello world")
     }
 
@@ -516,11 +529,8 @@ final class ChatViewModelSpeechTests: XCTestCase {
         viewModel.toggleVoiceRecording()
         mockSpeechService.shouldThrowOnStartRecording = true
 
-        // This would have set an error if the service threw, but since we set the flag after toggle,
-        // let's manually set the error state
         mockSpeechService.simulateError("Test error")
 
-        // Now clear it
         viewModel.clearSpeechError()
 
         XCTAssertNil(viewModel.speechError)
@@ -542,10 +552,9 @@ final class ChatViewModelSpeechTests: XCTestCase {
     private func createMockAPIClient() -> APIClient {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockURLProtocol.self]
-        let session = URLSession(configuration: config)
 
-        let apiConfig = APIClientConfiguration(baseURL: URL(string: "http://test.local")!)
-        return APIClient(configuration: apiConfig, session: session)
+        let apiConfig = APIClientConfiguration(baseURL: URL(string: "http://test.local/api")!)
+        return APIClient(configuration: apiConfig, urlSessionConfiguration: config)
     }
 }
 
@@ -640,6 +649,15 @@ final class WsServerMessageDecodingTests: XCTestCase {
         XCTAssertEqual(msg.seq, 5)
         XCTAssertEqual(msg.from, "mayor/")
         XCTAssertEqual(msg.body, "Hello")
+    }
+
+    func testDecodeChatMessageEvent() throws {
+        let json = "{\"type\":\"chat_message\",\"id\":\"msg-2\",\"from\":\"coder\",\"to\":\"user\",\"body\":\"Build complete\",\"timestamp\":\"2026-02-21T00:00:00Z\"}".data(using: .utf8)!
+        let msg = try decoder.decode(WsServerMessage.self, from: json)
+        XCTAssertEqual(msg.type, "chat_message")
+        XCTAssertEqual(msg.id, "msg-2")
+        XCTAssertEqual(msg.from, "coder")
+        XCTAssertEqual(msg.body, "Build complete")
     }
 
     func testDecodeDelivered() throws {
@@ -772,41 +790,5 @@ final class StreamingResponseTests: XCTestCase {
         XCTAssertTrue(stream.isComplete)
         XCTAssertEqual(stream.messageId, "msg-final")
         XCTAssertEqual(stream.assembledText, "Done")
-    }
-}
-
-// MARK: - Subject Generation Tests
-
-@MainActor
-final class SubjectGenerationTests: XCTestCase {
-    func testShortMessage() {
-        XCTAssertEqual(ChatViewModel.generateSubject(from: "Short"), "Short")
-    }
-
-    func testEmptyMessage() {
-        XCTAssertEqual(ChatViewModel.generateSubject(from: ""), "Chat")
-    }
-
-    func testWhitespaceOnly() {
-        XCTAssertEqual(ChatViewModel.generateSubject(from: "   "), "Chat")
-    }
-
-    func testExactly50Chars() {
-        let text = String(repeating: "a", count: 50)
-        XCTAssertEqual(ChatViewModel.generateSubject(from: text), text)
-    }
-
-    func testLongMessageTruncatesAtWordBoundary() {
-        let text = "This is a very long message that should be truncated at word boundary for subject"
-        let subject = ChatViewModel.generateSubject(from: text)
-        XCTAssertTrue(subject.hasSuffix("..."))
-        XCTAssertLessThanOrEqual(subject.count, 53) // 50 + "..."
-    }
-
-    func testLongMessageNoSpacesTruncatesAtCharLimit() {
-        let text = String(repeating: "x", count: 60)
-        let subject = ChatViewModel.generateSubject(from: text)
-        XCTAssertTrue(subject.hasSuffix("..."))
-        XCTAssertEqual(subject.count, 53) // 50 chars + "..."
     }
 }
