@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "@parse/node-apn": "^7.0.1",
+    "better-sqlite3": "^12.6.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
@@ -41,6 +42,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^25.0.6",
