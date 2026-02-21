@@ -39,15 +39,17 @@ const {
 });
 
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
-  McpServer: vi.fn(() => ({
-    connect: mockConnect,
-    close: vi.fn().mockResolvedValue(undefined),
-    server: {},
-  })),
+  McpServer: vi.fn(function () {
+    return {
+      connect: mockConnect,
+      close: vi.fn().mockResolvedValue(undefined),
+      server: {},
+    };
+  }),
 }));
 
 vi.mock("@modelcontextprotocol/sdk/server/sse.js", () => ({
-  SSEServerTransport: vi.fn().mockImplementation(() => {
+  SSEServerTransport: vi.fn().mockImplementation(function () {
     sessionIdState.counter++;
     const transport = {
       sessionId: `session-${sessionIdState.counter}`,

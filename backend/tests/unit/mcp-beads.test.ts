@@ -26,12 +26,14 @@ vi.mock("../../src/services/bd-client.js", () => ({
 // Mock MCP SDK
 const { mockTool, MockMcpServer } = vi.hoisted(() => {
   const mockTool = vi.fn();
-  const MockMcpServer = vi.fn().mockImplementation(() => ({
-    tool: mockTool,
-    connect: vi.fn().mockResolvedValue(undefined),
-    close: vi.fn().mockResolvedValue(undefined),
-    server: {},
-  }));
+  const MockMcpServer = vi.fn().mockImplementation(function () {
+    return {
+      tool: mockTool,
+      connect: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+      server: {},
+    };
+  });
   return { mockTool, MockMcpServer };
 });
 
