@@ -8,6 +8,7 @@ export { convoysRouter } from "./convoys.js";
 export { devicesRouter } from "./devices.js";
 export { eventsRouter } from "./events.js";
 export { mailRouter } from "./mail.js";
+export { mcpRouter } from "./mcp.js";
 export { modeRouter } from "./mode.js";
 export { powerRouter } from "./power.js";
 export { statusRouter } from "./status.js";
