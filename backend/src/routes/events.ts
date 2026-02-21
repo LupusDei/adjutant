@@ -37,6 +37,8 @@ const EVENT_TYPE_MAP: Record<EventName, string> = {
   "session:cost_alert": "session_cost_alert",
   "session:permission": "session_permission",
   "stream:output": "stream_output",
+  "mcp:agent_connected": "mcp_agent_connected",
+  "mcp:agent_disconnected": "mcp_agent_disconnected",
 };
 
 /** Heartbeat interval (15 seconds) */

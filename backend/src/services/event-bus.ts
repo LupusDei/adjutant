@@ -69,6 +69,16 @@ export interface StreamStatusEvent {
   state: "started" | "token" | "completed" | "cancelled" | "error";
 }
 
+export interface McpAgentConnectedEvent {
+  agentId: string;
+  sessionId: string;
+}
+
+export interface McpAgentDisconnectedEvent {
+  agentId: string;
+  sessionId: string;
+}
+
 /**
  * Map of event names to their payload types.
  */
@@ -86,6 +96,8 @@ export interface EventMap {
   "session:cost_alert": Record<string, unknown>;
   "session:permission": Record<string, unknown>;
   "stream:output": Record<string, unknown>;
+  "mcp:agent_connected": McpAgentConnectedEvent;
+  "mcp:agent_disconnected": McpAgentDisconnectedEvent;
 }
 
 export type EventName = keyof EventMap;

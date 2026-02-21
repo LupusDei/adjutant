@@ -125,12 +125,10 @@ export async function connectAgent(
 
   logInfo("MCP agent connected", { agentId, sessionId: transport.sessionId });
 
-  // Safe cast: MCP events extend beyond the strict EventMap — emitting as unknown
-  const bus = getEventBus();
-  (bus.emit as (event: string, data: unknown) => void)(
-    "mcp:agent_connected",
-    { agentId, sessionId: transport.sessionId },
-  );
+  getEventBus().emit("mcp:agent_connected", {
+    agentId,
+    sessionId: transport.sessionId,
+  });
 
   return connection;
 }
@@ -152,11 +150,10 @@ export function disconnectAgent(sessionId: string): void {
     sessionId,
   });
 
-  const bus = getEventBus();
-  (bus.emit as (event: string, data: unknown) => void)(
-    "mcp:agent_disconnected",
-    { agentId: connection.agentId, sessionId },
-  );
+  getEventBus().emit("mcp:agent_disconnected", {
+    agentId: connection.agentId,
+    sessionId,
+  });
 }
 
 /**
