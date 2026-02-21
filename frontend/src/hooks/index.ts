@@ -42,3 +42,9 @@ export type { UseEpicsOptions, UseEpicsResult, UseEpicDetailOptions, UseEpicDeta
 
 export { useSwarmAgents } from "./useSwarmAgents";
 export type { UseSwarmAgentsResult } from "./useSwarmAgents";
+
+export { useChatMessages } from "./useChatMessages";
+export type { UseChatMessagesResult } from "./useChatMessages";
+
+export { useAgentStatus } from "./useAgentStatus";
+export type { AgentStatusInfo, UseAgentStatusResult } from "./useAgentStatus";

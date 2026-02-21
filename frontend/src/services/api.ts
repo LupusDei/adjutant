@@ -12,6 +12,9 @@ import type {
   PowerState,
   BeadInfo,
   BeadDetail,
+  ChatMessage,
+  ChatThread,
+  UnreadCount,
 } from '../types';
 import type {
   SynthesizeRequest,
@@ -388,6 +391,59 @@ export const api = {
         method: 'POST',
         body: name ? { name } : {},
       });
+    },
+  },
+
+  /**
+   * Persistent chat messages (SQLite-backed).
+   */
+  messages: {
+    async list(params?: {
+      agentId?: string;
+      threadId?: string;
+      before?: string;
+      beforeId?: string;
+      limit?: number;
+    }): Promise<PaginatedResponse<ChatMessage>> {
+      const searchParams = new URLSearchParams();
+      if (params?.agentId) searchParams.set('agentId', params.agentId);
+      if (params?.threadId) searchParams.set('threadId', params.threadId);
+      if (params?.before) searchParams.set('before', params.before);
+      if (params?.beforeId) searchParams.set('beforeId', params.beforeId);
+      if (params?.limit) searchParams.set('limit', params.limit.toString());
+
+      const query = searchParams.toString();
+      return apiFetch(`/messages${query ? `?${query}` : ''}`);
+    },
+
+    async get(id: string): Promise<ChatMessage> {
+      return apiFetch(`/messages/${encodeURIComponent(id)}`);
+    },
+
+    async getUnread(): Promise<{ counts: UnreadCount[] }> {
+      return apiFetch('/messages/unread');
+    },
+
+    async getThreads(agentId?: string): Promise<{ threads: ChatThread[] }> {
+      const query = agentId ? `?agentId=${encodeURIComponent(agentId)}` : '';
+      return apiFetch(`/messages/threads${query}`);
+    },
+
+    async markRead(id: string): Promise<void> {
+      return apiFetch(`/messages/${encodeURIComponent(id)}/read`, { method: 'PATCH' });
+    },
+
+    async markAllRead(agentId: string): Promise<void> {
+      return apiFetch(`/messages/read-all?agentId=${encodeURIComponent(agentId)}`, { method: 'PATCH' });
+    },
+
+    async send(params: {
+      to: string;
+      body: string;
+      threadId?: string;
+      metadata?: Record<string, unknown>;
+    }): Promise<{ messageId: string; timestamp: string }> {
+      return apiFetch('/messages', { method: 'POST', body: params });
     },
   },
 
