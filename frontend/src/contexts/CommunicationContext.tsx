@@ -50,7 +50,7 @@ export interface CommunicationContextValue {
   setPriority: (priority: CommunicationPriority) => void;
   /** Current connection status */
   connectionStatus: ConnectionStatus;
-  /** Send a chat message via WebSocket (falls back to HTTP POST /api/mail) */
+  /** Send a chat message via WebSocket (falls back to HTTP POST /api/messages) */
   sendMessage: (opts: SendMessageOptions) => Promise<void>;
   /** Subscribe to incoming chat messages. Returns an unsubscribe function. */
   subscribe: (callback: MessageHandler) => () => void;
