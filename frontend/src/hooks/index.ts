@@ -39,3 +39,6 @@ export type { CrewNotificationInfo, UseCrewNotificationsOptions, UseCrewNotifica
 
 export { useEpics, useEpicDetail } from "./useEpics";
 export type { UseEpicsOptions, UseEpicsResult, UseEpicDetailOptions, UseEpicDetailResult } from "./useEpics";
+
+export { useSwarmAgents } from "./useSwarmAgents";
+export type { UseSwarmAgentsResult } from "./useSwarmAgents";
