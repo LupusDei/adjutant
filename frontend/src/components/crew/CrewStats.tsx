@@ -6,6 +6,7 @@ import { api, ApiError } from '../../services/api';
 import { useMode } from '../../contexts/ModeContext';
 import { TerminalPane } from '../terminal';
 import type { CrewMember } from '../../types';
+import { SwarmAgentCard } from './SwarmAgentCard';
 
 /** localStorage key for polecat filter preference */
 const SHOW_ALL_POLECATS_KEY = 'adjutant:showAllPolecats';
@@ -120,6 +121,48 @@ function groupAgents(agents: CrewMember[]): AgentGroup {
   return { town, rigs, peers };
 }
 
+// =============================================================================
+// Swarm Status Grouping
+// =============================================================================
+
+type StatusGroup = 'working' | 'blocked' | 'stuck' | 'idle' | 'offline';
+
+const STATUS_GROUP_ORDER: StatusGroup[] = ['working', 'blocked', 'stuck', 'idle', 'offline'];
+
+const STATUS_GROUP_LABELS: Record<StatusGroup, string> = {
+  working: 'WORKING',
+  blocked: 'BLOCKED',
+  stuck: 'STUCK',
+  idle: 'IDLE',
+  offline: 'OFFLINE',
+};
+
+function getEffectiveStatusGroup(agent: CrewMember): StatusGroup {
+  if (agent.status === 'offline') return 'offline';
+  if (agent.status === 'stuck') return 'stuck';
+  if (agent.status === 'blocked') return 'blocked';
+  if (agent.status === 'working') return 'working';
+  if (agent.status === 'idle' && agent.currentTask) return 'working';
+  return 'idle';
+}
+
+function sortByLastActivity(a: CrewMember, b: CrewMember): number {
+  if (!a.lastActivity && !b.lastActivity) return 0;
+  if (!a.lastActivity) return 1;
+  if (!b.lastActivity) return -1;
+  return new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime();
+}
+
+function getGroupColor(group: StatusGroup): string {
+  switch (group) {
+    case 'working': return colors.working;
+    case 'blocked': return colors.blocked;
+    case 'stuck': return colors.stuck;
+    case 'idle': return colors.idle;
+    case 'offline': return colors.offline;
+  }
+}
+
 /**
  * Pip-Boy styled crew stats dashboard.
  * Displays agents organized by hierarchy: Town-level → Per-rig sections.
@@ -222,6 +265,11 @@ export function CrewStats({ className = '', isActive = true }: CrewStatsProps) {
               <TownSection agents={grouped.town} gridStyle={townGridStyle} />
             )}
 
+            {/* Swarm summary panel (swarm mode only) */}
+            {isSwarm && grouped.peers.length > 0 && (
+              <SwarmSummaryPanel agents={grouped.peers} />
+            )}
+
             {/* Swarm peer agents */}
             {grouped.peers.length > 0 && (
               <SwarmSection agents={grouped.peers} gridStyle={agentGridStyle} />
@@ -303,6 +351,60 @@ function TownSection({ agents, gridStyle }: TownSectionProps) {
 }
 
 // =============================================================================
+// Swarm Summary Panel - Overview stats for swarm mode
+// =============================================================================
+
+interface SwarmSummaryPanelProps {
+  agents: CrewMember[];
+}
+
+function SwarmSummaryPanel({ agents }: SwarmSummaryPanelProps) {
+  const counts = useMemo(() => {
+    let active = 0, idle = 0, blocked = 0, offline = 0;
+    for (const agent of agents) {
+      const group = getEffectiveStatusGroup(agent);
+      switch (group) {
+        case 'working': active++; break;
+        case 'idle': idle++; break;
+        case 'blocked':
+        case 'stuck': blocked++; break;
+        case 'offline': offline++; break;
+      }
+    }
+    return { active, idle, blocked, offline };
+  }, [agents]);
+
+  const hasIssues = counts.blocked > 0;
+  const overallStatus = hasIssues ? 'AGENTS BLOCKED' : 'SWARM OPERATIONAL';
+  const overallColor = hasIssues ? colors.blocked : colors.working;
+
+  return (
+    <div style={styles.summaryPanel}>
+      <div style={styles.summaryBadges}>
+        <span style={{ ...styles.summaryBadge, color: colors.working }}>
+          {counts.active} ACTIVE
+        </span>
+        <span style={styles.summaryDivider}>│</span>
+        <span style={{ ...styles.summaryBadge, color: colors.idle }}>
+          {counts.idle} IDLE
+        </span>
+        <span style={styles.summaryDivider}>│</span>
+        <span style={{ ...styles.summaryBadge, color: colors.blocked }}>
+          {counts.blocked} BLOCKED
+        </span>
+        <span style={styles.summaryDivider}>│</span>
+        <span style={{ ...styles.summaryBadge, color: colors.offline }}>
+          {counts.offline} OFFLINE
+        </span>
+      </div>
+      <div style={{ ...styles.summaryStatus, color: overallColor }} className="crt-glow">
+        {'>'} {overallStatus}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
 // Swarm Section - For swarm mode agents
 // =============================================================================
 
@@ -312,6 +414,21 @@ interface SwarmSectionProps {
 }
 
 function SwarmSection({ agents, gridStyle }: SwarmSectionProps) {
+  const [showOffline, setShowOffline] = useState(false);
+
+  const groups = useMemo(() => {
+    const grouped: Record<StatusGroup, CrewMember[]> = {
+      working: [], blocked: [], stuck: [], idle: [], offline: [],
+    };
+    for (const agent of agents) {
+      grouped[getEffectiveStatusGroup(agent)].push(agent);
+    }
+    for (const key of STATUS_GROUP_ORDER) {
+      grouped[key].sort(sortByLastActivity);
+    }
+    return grouped;
+  }, [agents]);
+
   return (
     <div style={styles.section}>
       <div style={styles.sectionHeader}>
@@ -319,15 +436,47 @@ function SwarmSection({ agents, gridStyle }: SwarmSectionProps) {
         <span style={styles.sectionTitle} className="crt-glow">AGENTS</span>
         <span style={styles.sectionLine} />
       </div>
-      <div style={gridStyle}>
-        {agents.map((agent) => (
-          <AgentCard
-            key={agent.id}
-            agent={agent}
-            icon={agent.type === 'user' ? '👤' : '🤖'}
-          />
-        ))}
-      </div>
+      {STATUS_GROUP_ORDER.map((group) => {
+        const groupAgents = groups[group];
+        if (groupAgents.length === 0) return null;
+
+        if (group === 'offline') {
+          return (
+            <div key={group} style={styles.statusGroup}>
+              <button
+                style={styles.offlineToggle}
+                onClick={() => setShowOffline(prev => !prev)}
+                aria-expanded={showOffline}
+              >
+                <span style={{ color: getGroupColor(group) }}>
+                  {'>'} {STATUS_GROUP_LABELS[group]} ({groupAgents.length})
+                </span>
+                <span style={styles.toggleArrow}>{showOffline ? '▼' : '▶'}</span>
+              </button>
+              {showOffline && (
+                <div style={gridStyle}>
+                  {groupAgents.map((agent) => (
+                    <SwarmAgentCard key={agent.id} agent={agent} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        return (
+          <div key={group} style={styles.statusGroup}>
+            <div style={{ ...styles.groupHeader, color: getGroupColor(group) }}>
+              {'>'} {STATUS_GROUP_LABELS[group]} ({groupAgents.length})
+            </div>
+            <div style={gridStyle}>
+              {groupAgents.map((agent) => (
+                <SwarmAgentCard key={agent.id} agent={agent} />
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -967,6 +1116,76 @@ const styles = {
     fontSize: '0.7rem',
     color: colors.primaryDim,
     letterSpacing: '0.1em',
+  },
+
+  // Swarm summary panel styles
+  summaryPanel: {
+    border: `1px solid ${colors.panelBorder}`,
+    backgroundColor: colors.backgroundDark,
+    padding: '12px 16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+
+  summaryBadges: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontSize: '0.8rem',
+    letterSpacing: '0.1em',
+    fontWeight: 'bold',
+    flexWrap: 'wrap',
+  },
+
+  summaryBadge: {
+    fontWeight: 'bold',
+  },
+
+  summaryDivider: {
+    color: colors.primaryDim,
+    opacity: 0.5,
+  },
+
+  summaryStatus: {
+    fontSize: '0.85rem',
+    letterSpacing: '0.15em',
+    fontWeight: 'bold',
+  },
+
+  // Status group styles (swarm grouping)
+  statusGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    marginLeft: '8px',
+  },
+
+  groupHeader: {
+    fontSize: '0.75rem',
+    letterSpacing: '0.15em',
+    fontWeight: 'bold',
+  },
+
+  offlineToggle: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    background: 'none',
+    border: 'none',
+    padding: '4px 0',
+    cursor: 'pointer',
+    fontFamily: '"Share Tech Mono", "Courier New", monospace',
+    fontSize: '0.75rem',
+    letterSpacing: '0.15em',
+    fontWeight: 'bold',
+    color: colors.primary,
+    textAlign: 'left',
+  },
+
+  toggleArrow: {
+    fontSize: '0.6rem',
+    color: colors.primaryDim,
   },
 
   // Subsection styles
