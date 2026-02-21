@@ -4,13 +4,15 @@
  * Endpoints:
  * - GET /api/agents - Get all agents as CrewMember list
  * - POST /api/agents/spawn-polecat - Request polecat spawn for a rig
- * - GET /api/agents/:rig/:polecat/terminal - Capture polecat terminal content
+ * - GET /api/agents/session/:sessionId/terminal - Capture swarm agent terminal content
+ * - GET /api/agents/:rig/:polecat/terminal - Capture polecat terminal content (legacy)
  */
 
 import { Router } from "express";
 import { z } from "zod";
 import { getAgents } from "../services/agents-service.js";
 import { sendMail } from "../services/mail-service.js";
+import { getSessionBridge } from "../services/session-bridge.js";
 import { captureTmuxPane, listTmuxSessions } from "../services/tmux.js";
 import { success, internalError, badRequest, notFound } from "../utils/responses.js";
 
@@ -70,6 +72,48 @@ agentsRouter.post("/spawn-polecat", async (req, res) => {
   }
 
   return res.json(success({ rig, requested: true }));
+});
+
+/**
+ * GET /api/agents/session/:sessionId/terminal
+ * Captures terminal content for a swarm agent by session ID.
+ * Looks up the tmux session via SessionBridge.
+ */
+agentsRouter.get("/session/:sessionId/terminal", async (req, res) => {
+  const { sessionId } = req.params;
+
+  const bridge = getSessionBridge();
+  const session = bridge.getSession(sessionId);
+
+  if (!session) {
+    return res.status(404).json(
+      notFound("Session", sessionId)
+    );
+  }
+
+  // Verify tmux session is running
+  const sessions = await listTmuxSessions();
+  if (!sessions.has(session.tmuxSession)) {
+    return res.status(404).json(
+      notFound("Terminal session", session.tmuxSession)
+    );
+  }
+
+  try {
+    const content = await captureTmuxPane(session.tmuxSession);
+
+    return res.json(
+      success({
+        content,
+        sessionId,
+        sessionName: session.tmuxSession,
+        timestamp: new Date().toISOString(),
+      })
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to capture terminal";
+    return res.status(500).json(internalError(message));
+  }
 });
 
 /**
