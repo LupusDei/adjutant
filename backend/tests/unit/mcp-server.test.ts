@@ -24,8 +24,15 @@ vi.mock("../../src/services/event-bus.js", () => ({
   resetEventBus: vi.fn(),
 }));
 
-// Mock MCP SDK - use vi.hoisted so mocks are available in vi.mock factories
-const { mockConnect, mockClose, MockMcpServer, mockStart } = vi.hoisted(() => {
+// Mock MCP SDK - use vi.hoisted so all variables are available in vi.mock factories
+const {
+  mockConnect,
+  mockClose,
+  MockMcpServer,
+  mockStart,
+  sessionIdState,
+  createdTransports,
+} = vi.hoisted(() => {
   const mockConnect = vi.fn().mockResolvedValue(undefined);
   const mockClose = vi.fn().mockResolvedValue(undefined);
   const MockMcpServer = vi.fn().mockImplementation(() => ({
@@ -34,20 +41,20 @@ const { mockConnect, mockClose, MockMcpServer, mockStart } = vi.hoisted(() => {
     server: {},
   }));
   const mockStart = vi.fn().mockResolvedValue(undefined);
-  return { mockConnect, mockClose, MockMcpServer, mockStart };
+  const sessionIdState = { counter: 0 };
+  const createdTransports: Array<{ sessionId: string; onclose?: () => void }> = [];
+  return { mockConnect, mockClose, MockMcpServer, mockStart, sessionIdState, createdTransports };
 });
 
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
   McpServer: MockMcpServer,
 }));
 
-let sessionIdCounter = 0;
-const createdTransports: Array<{ sessionId: string; onclose?: () => void }> = [];
 vi.mock("@modelcontextprotocol/sdk/server/sse.js", () => ({
   SSEServerTransport: vi.fn().mockImplementation(() => {
-    sessionIdCounter++;
+    sessionIdState.counter++;
     const transport = {
-      sessionId: `session-${sessionIdCounter}`,
+      sessionId: `session-${sessionIdState.counter}`,
       start: mockStart,
       close: vi.fn().mockResolvedValue(undefined),
       onclose: undefined as (() => void) | undefined,
@@ -71,7 +78,7 @@ import { getEventBus } from "../../src/services/event-bus.js";
 describe("MCP Server", () => {
   beforeEach(() => {
     resetMcpServer();
-    sessionIdCounter = 0;
+    sessionIdState.counter = 0;
     createdTransports.length = 0;
     vi.clearAllMocks();
   });
