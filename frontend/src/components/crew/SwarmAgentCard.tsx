@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
-import { api } from '../../services/api';
+import { useTerminalStream } from '../../hooks/useTerminalStream';
 import type { CrewMember } from '../../types';
 
 /** Format ISO timestamp as relative time (e.g., "2m ago", "just now"). */
@@ -13,16 +13,6 @@ function formatRelativeTime(iso: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(diffMs / 86_400_000);
   return `${days}d ago`;
-}
-
-/** Strip ANSI escape codes for clean text display. */
-function stripAnsi(str: string): string {
-  // CSI sequences, OSC sequences, other ESC sequences
-  return str
-    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
-    .replace(/\x1b\][^\x07]*\x07/g, '')
-    .replace(/\x1b[^[\]].?/g, '')
-    .replace(/\r/g, '');
 }
 
 const colors = {
@@ -58,8 +48,6 @@ function getStatusColor(status: string): string {
   }
 }
 
-const TERMINAL_POLL_MS = 3000;
-
 interface SwarmAgentCardProps {
   agent: CrewMember;
 }
@@ -67,7 +55,7 @@ interface SwarmAgentCardProps {
 /**
  * Rich agent card for swarm mode.
  * Shows status, current task, branch, last activity, mail preview, and worktree.
- * Supports expandable inline terminal view when the agent has a session.
+ * Supports expandable inline terminal view with WebSocket streaming + polling fallback.
  */
 export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
   const isOnline = agent.status !== 'offline';
@@ -78,12 +66,14 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
   const hasSession = Boolean(agent.sessionId) && isOnline;
 
   const [expanded, setExpanded] = useState(false);
-  const [terminalContent, setTerminalContent] = useState<string | null>(null);
-  const [terminalError, setTerminalError] = useState<string | null>(null);
-  const [terminalLoading, setTerminalLoading] = useState(false);
   const terminalRef = useRef<HTMLPreElement>(null);
   const userScrolledRef = useRef(false);
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // WebSocket terminal stream with polling fallback
+  const { content: terminalContent, error: terminalError, loading: terminalLoading, mode: streamMode } = useTerminalStream({
+    sessionId: agent.sessionId,
+    enabled: expanded && hasSession,
+  });
 
   const relativeTime = useMemo(() => {
     if (!agent.lastActivity) return null;
@@ -91,18 +81,6 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
   }, [agent.lastActivity]);
 
   const hasFooter = relativeTime || agent.worktreePath || agent.progress;
-
-  const fetchTerminal = useCallback(async () => {
-    if (!agent.sessionId) return;
-    try {
-      const result = await api.agents.getSessionTerminal(agent.sessionId);
-      const cleaned = stripAnsi(result.content);
-      setTerminalContent(cleaned);
-      setTerminalError(null);
-    } catch {
-      setTerminalError('Failed to fetch terminal output');
-    }
-  }, [agent.sessionId]);
 
   // Auto-scroll to bottom unless user scrolled up
   useEffect(() => {
@@ -119,27 +97,16 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
     userScrolledRef.current = distanceFromBottom > 40;
   }, []);
 
-  // Start/stop polling when expanded changes
-  useEffect(() => {
-    if (expanded && agent.sessionId) {
-      setTerminalLoading(true);
-      userScrolledRef.current = false;
-      fetchTerminal().finally(() => setTerminalLoading(false));
-      pollTimerRef.current = setInterval(fetchTerminal, TERMINAL_POLL_MS);
-    }
-
-    return () => {
-      if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-        pollTimerRef.current = null;
-      }
-    };
-  }, [expanded, agent.sessionId, fetchTerminal]);
-
+  // Reset scroll lock when collapsing
   const toggleExpand = useCallback(() => {
     if (!hasSession) return;
-    setExpanded(prev => !prev);
+    setExpanded(prev => {
+      if (prev) userScrolledRef.current = false;
+      return !prev;
+    });
   }, [hasSession]);
+
+  const modeLabel = streamMode === 'ws' ? 'LIVE' : streamMode === 'polling' ? 'POLL' : '';
 
   return (
     <div
@@ -242,6 +209,14 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
           <div style={styles.terminalHeader}>
             <span style={styles.terminalTitle}>
               TERMINAL {agent.sessionId ? `[${agent.sessionId.slice(0, 8)}]` : ''}
+              {modeLabel && (
+                <span style={{
+                  ...styles.modeBadge,
+                  color: streamMode === 'ws' ? colors.working : colors.primaryDim,
+                }}>
+                  {modeLabel}
+                </span>
+              )}
             </span>
             <button
               style={styles.terminalCloseBtn}
@@ -406,6 +381,15 @@ const styles = {
   },
   terminalTitle: {
     textTransform: 'uppercase',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  modeBadge: {
+    fontSize: '0.5rem',
+    letterSpacing: '0.05em',
+    padding: '1px 4px',
+    border: `1px solid currentColor`,
   },
   terminalCloseBtn: {
     background: 'none',
