@@ -132,7 +132,7 @@ export function CrewStats({ className = '', isActive = true }: CrewStatsProps) {
     error,
     lastUpdated,
   } = usePolling<CrewMember[]>(() => api.agents.list(), {
-    interval: 60000,
+    interval: isSwarm ? 10000 : 60000,
     enabled: isActive,
   });
 
