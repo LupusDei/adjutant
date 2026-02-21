@@ -11,9 +11,6 @@ import type { ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import { logInfo, logWarn } from "../utils/index.js";
 import { getEventBus } from "./event-bus.js";
-import { getDatabase } from "./database.js";
-import { createMessageStore } from "./message-store.js";
-import { registerStatusTools } from "./mcp-tools/status.js";
 
 // ============================================================================
 // Types
@@ -68,15 +65,12 @@ export function resetMcpServer(): void {
 }
 
 /**
- * Initialize the MCP server. Called at startup.
- * Registers all MCP tools (status, progress, announce).
+ * Initialize the MCP server singleton. Called at startup.
+ * Tool registration is done separately in index.ts.
  */
 export function initMcpServer(): void {
-  const server = getMcpServer();
-  const db = getDatabase();
-  const store = createMessageStore(db);
-  registerStatusTools(server, store);
-  logInfo("MCP status tools registered");
+  getMcpServer();
+  logInfo("MCP server initialized");
 }
 
 // ============================================================================

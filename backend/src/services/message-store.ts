@@ -237,8 +237,11 @@ export function createMessageStore(db: Database.Database): MessageStore {
 
     searchMessages(query: string, opts?: SearchOptions): Message[] {
       if (!query || query.trim().length === 0) return [];
+      // Sanitize FTS5 query: wrap in double quotes to treat as literal phrase,
+      // escaping any internal double quotes to prevent FTS5 syntax errors
+      const sanitized = '"' + query.trim().replace(/"/g, '""') + '"';
       const conditions: string[] = ["m.rowid IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)"];
-      const params: unknown[] = [query.trim()];
+      const params: unknown[] = [sanitized];
 
       if (opts?.agentId !== undefined) {
         conditions.push("m.agent_id = ?");

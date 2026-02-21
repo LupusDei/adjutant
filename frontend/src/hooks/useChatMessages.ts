@@ -118,11 +118,14 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
   const loadMore = useCallback(async () => {
     if (!hasMore || messages.length === 0) return;
 
-    const oldestMessage = messages[0];
-    if (!oldestMessage) return;
+    // Find the oldest message by createdAt for correct cursor pagination
+    const oldestMessage = messages.reduce((oldest, m) =>
+      m.createdAt < oldest.createdAt ? m : oldest
+    );
 
     try {
       const params: Parameters<typeof api.messages.list>[0] = {
+        before: oldestMessage.createdAt,
         beforeId: oldestMessage.id,
       };
       if (agentId) params.agentId = agentId;

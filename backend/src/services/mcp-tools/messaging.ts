@@ -29,13 +29,12 @@ export function registerMessagingTools(server: McpServer, store: MessageStore): 
       metadata: z.record(z.string(), z.unknown()).optional().describe("Optional metadata"),
     },
     async ({ to, body, threadId, metadata }, extra) => {
-      const agent = getAgentBySession((extra as Record<string, unknown>).sessionId as string);
-      if (!agent) {
+      const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
+      if (!agentId) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: "Unknown session" }) }],
         };
       }
-      const agentId = agent;
 
       // 1. Store the message
       const insertInput: Parameters<typeof store.insertMessage>[0] = {
