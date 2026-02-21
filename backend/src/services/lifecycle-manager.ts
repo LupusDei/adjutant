@@ -33,6 +33,14 @@ export interface CreateSessionResult {
 
 const MAX_SESSIONS = 10;
 
+/** Escape a string for safe use in a shell command sent via tmux send-keys. */
+function shellEscape(s: string): string {
+  // Allow only alphanumeric, hyphen, underscore, dot
+  if (/^[a-zA-Z0-9._-]+$/.test(s)) return s;
+  // Wrap in single quotes, escaping embedded single quotes
+  return `'${s.replace(/'/g, "'\\''")}'`;
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -140,6 +148,15 @@ export class LifecycleManager {
         mode: req.mode ?? "swarm",
         workspaceType: req.workspaceType ?? "primary",
       });
+
+      // Set agent identity env var so the MCP server can identify this agent
+      await execTmuxCommand([
+        "send-keys",
+        "-t",
+        tmuxSessionName,
+        `export ADJUTANT_AGENT_ID=${shellEscape(req.name)}`,
+        "Enter",
+      ]);
 
       // Start Claude Code in the session
       const claudeArgs = req.claudeArgs ?? ["--dangerously-skip-permissions"];
