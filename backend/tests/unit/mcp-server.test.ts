@@ -42,15 +42,18 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
 }));
 
 let sessionIdCounter = 0;
+const createdTransports: Array<{ sessionId: string; onclose?: () => void }> = [];
 vi.mock("@modelcontextprotocol/sdk/server/sse.js", () => ({
   SSEServerTransport: vi.fn().mockImplementation(() => {
     sessionIdCounter++;
-    return {
+    const transport = {
       sessionId: `session-${sessionIdCounter}`,
       start: mockStart,
       close: vi.fn().mockResolvedValue(undefined),
-      onclose: undefined,
+      onclose: undefined as (() => void) | undefined,
     };
+    createdTransports.push(transport);
+    return transport;
   }),
 }));
 
@@ -69,6 +72,7 @@ describe("MCP Server", () => {
   beforeEach(() => {
     resetMcpServer();
     sessionIdCounter = 0;
+    createdTransports.length = 0;
     vi.clearAllMocks();
   });
 
@@ -244,6 +248,51 @@ describe("MCP Server", () => {
       await connectAgent("researcher", createMockResponse());
 
       expect(mockConnect).toHaveBeenCalled();
+    });
+  });
+
+  describe("transport onclose cleanup", () => {
+    it("should set onclose handler on transport", async () => {
+      await connectAgent("researcher", createMockResponse());
+
+      const transport = createdTransports[0]!;
+      expect(transport.onclose).toBeTypeOf("function");
+    });
+
+    it("should disconnect agent when transport onclose fires", async () => {
+      const connection = await connectAgent("researcher", createMockResponse());
+
+      expect(getConnectedAgents()).toHaveLength(1);
+
+      // Simulate transport close (network drop, agent crash, etc.)
+      const transport = createdTransports[0]!;
+      transport.onclose!();
+
+      expect(getConnectedAgents()).toHaveLength(0);
+    });
+
+    it("should emit mcp:agent_disconnected when transport closes", async () => {
+      const bus = getEventBus();
+      await connectAgent("researcher", createMockResponse());
+
+      vi.clearAllMocks();
+
+      const transport = createdTransports[0]!;
+      transport.onclose!();
+
+      expect(bus.emit).toHaveBeenCalledWith(
+        "mcp:agent_disconnected",
+        expect.objectContaining({ agentId: "researcher" }),
+      );
+    });
+
+    it("should not throw if onclose fires after manual disconnect", async () => {
+      const connection = await connectAgent("researcher", createMockResponse());
+      disconnectAgent(connection.sessionId);
+
+      // Transport close fires after manual disconnect — should be a no-op
+      const transport = createdTransports[0]!;
+      expect(() => transport.onclose!()).not.toThrow();
     });
   });
 });

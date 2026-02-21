@@ -123,6 +123,11 @@ export async function connectAgent(
 
   connections.set(transport.sessionId, connection);
 
+  // Auto-disconnect when transport closes (network drop, agent crash, etc.)
+  transport.onclose = () => {
+    disconnectAgent(transport.sessionId);
+  };
+
   logInfo("MCP agent connected", { agentId, sessionId: transport.sessionId });
 
   getEventBus().emit("mcp:agent_connected", {
