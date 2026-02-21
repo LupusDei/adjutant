@@ -314,6 +314,37 @@ describe("MCP Bead Tools", () => {
       });
     });
 
+    it("should pass --reason flag when reason is provided", async () => {
+      mockExecBd.mockResolvedValue({
+        success: true,
+        data: "Closed",
+        exitCode: 0,
+      });
+
+      const handler = getToolHandler("close_bead");
+      await handler({ id: "adj-010", reason: "All tasks completed" });
+
+      const args = mockExecBd.mock.calls[0]![0] as string[];
+      expect(args[0]).toBe("close");
+      expect(args).toContain("adj-010");
+      expect(args).toContain("--reason");
+      expect(args).toContain("All tasks completed");
+    });
+
+    it("should not include --reason when reason is not provided", async () => {
+      mockExecBd.mockResolvedValue({
+        success: true,
+        data: "Closed",
+        exitCode: 0,
+      });
+
+      const handler = getToolHandler("close_bead");
+      await handler({ id: "adj-010" });
+
+      const args = mockExecBd.mock.calls[0]![0] as string[];
+      expect(args).not.toContain("--reason");
+    });
+
     it("should return error when close fails", async () => {
       mockExecBd.mockResolvedValue({
         success: false,

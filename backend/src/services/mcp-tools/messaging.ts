@@ -9,27 +9,9 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { MessageStore } from "../message-store.js";
 import { wsBroadcast } from "../ws-server.js";
+import { getAgentBySession } from "../mcp-server.js";
 import { isAPNsConfigured, sendNotificationToAll } from "../apns-service.js";
 import { logInfo, logWarn } from "../../utils/index.js";
-
-/**
- * Resolve the agent identity from the MCP tool call extra context.
- * Falls back to "unknown-agent" if not available.
- */
-function resolveAgentFromExtra(extra: Record<string, unknown>): string {
-  // The _meta field may contain agentId from the connection context
-  const meta = extra["_meta"] as Record<string, unknown> | undefined;
-  if (meta && typeof meta["agentId"] === "string" && meta["agentId"].length > 0) {
-    return meta["agentId"];
-  }
-
-  // Fallback to sessionId-based identity
-  if (typeof extra["sessionId"] === "string") {
-    return `agent-${extra["sessionId"]}`;
-  }
-
-  return "unknown-agent";
-}
 
 /**
  * Register all messaging MCP tools on the given server.
@@ -47,7 +29,13 @@ export function registerMessagingTools(server: McpServer, store: MessageStore): 
       metadata: z.record(z.string(), z.unknown()).optional().describe("Optional metadata"),
     },
     async ({ to, body, threadId, metadata }, extra) => {
-      const agentId = resolveAgentFromExtra(extra as Record<string, unknown>);
+      const agent = getAgentBySession((extra as Record<string, unknown>).sessionId as string);
+      if (!agent) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Unknown session" }) }],
+        };
+      }
+      const agentId = agent;
 
       // 1. Store the message
       const insertInput: Parameters<typeof store.insertMessage>[0] = {
@@ -64,7 +52,7 @@ export function registerMessagingTools(server: McpServer, store: MessageStore): 
 
       // 2. Broadcast via WebSocket
       wsBroadcast({
-        type: "chat_message" as any,
+        type: "chat_message",
         id: message.id,
         from: agentId,
         to,
@@ -172,6 +160,17 @@ export function registerMessagingTools(server: McpServer, store: MessageStore): 
       agentId: z.string().optional().describe("Mark all messages from this agent as read"),
     },
     async ({ messageId, agentId }) => {
+      if (!messageId && !agentId) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({ error: "Either messageId or agentId is required" }),
+            },
+          ],
+        };
+      }
+
       if (messageId) {
         store.markRead(messageId);
         logInfo("MCP mark_read", { messageId });

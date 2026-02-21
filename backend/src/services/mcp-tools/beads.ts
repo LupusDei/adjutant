@@ -152,9 +152,12 @@ export function registerBeadTools(server: McpServer): void {
       id: z.string().describe("Bead ID to close"),
       reason: z.string().optional().describe("Close reason"),
     },
-    async ({ id }) => {
+    async ({ id, reason }) => {
       return bdMutex.runExclusive(async () => {
         const args: string[] = ["close", id];
+        if (reason) {
+          args.push("--reason", reason);
+        }
 
         const result = await execBd(args);
         if (!result.success) {

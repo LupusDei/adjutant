@@ -15,7 +15,6 @@ import type { Server as HttpServer } from "http";
 import { randomUUID } from "crypto";
 import { getEventBus } from "./event-bus.js";
 import { hasApiKeys, validateApiKey } from "./api-key-service.js";
-import { sendMail } from "./mail-service.js";
 import { logInfo, logWarn } from "../utils/index.js";
 
 // ============================================================================
@@ -48,7 +47,7 @@ interface WsClientMessage {
 
 /** Server → Client message types */
 interface WsServerMessage {
-  type: "auth_challenge" | "connected" | "message" | "stream_token" | "stream_end" | "typing" | "delivered" | "error" | "sync_response" | "pong"
+  type: "auth_challenge" | "connected" | "message" | "chat_message" | "stream_token" | "stream_end" | "typing" | "delivered" | "error" | "sync_response" | "pong"
     | "session_connected" | "session_disconnected" | "session_output" | "session_raw" | "session_status";
   id?: string | undefined;
   clientId?: string | undefined;
@@ -241,17 +240,6 @@ function handleMessage(client: WsClient, msg: WsClientMessage): void {
 
   // Broadcast to all authenticated clients
   broadcast(serverMsg);
-
-  // Persist the message via mail transport so agents can read it
-  sendMail({
-    to: serverMsg.to ?? "mayor/",
-    from: serverMsg.from ?? "overseer",
-    subject: msg.subject ?? "(WebSocket message)",
-    body: serverMsg.body ?? "",
-    replyTo: msg.replyTo,
-  }).catch((err) => {
-    logWarn("Failed to persist WebSocket message via mail transport", { error: String(err) });
-  });
 }
 
 function handleTyping(client: WsClient, msg: WsClientMessage): void {

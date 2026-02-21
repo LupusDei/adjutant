@@ -134,7 +134,7 @@ export function createMessagesRouter(store: MessageStore): Router {
 
     // Broadcast via WebSocket
     wsBroadcast({
-      type: "chat_message" as any,
+      type: "chat_message",
       id: message.id,
       from: "user",
       to,

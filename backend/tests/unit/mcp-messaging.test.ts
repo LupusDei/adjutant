@@ -27,6 +27,12 @@ vi.mock("../../src/services/apns-service.js", () => ({
   isAPNsConfigured: mockIsAPNsConfigured,
 }));
 
+// Mock mcp-server (agent identity resolution)
+const mockGetAgentBySession = vi.fn();
+vi.mock("../../src/services/mcp-server.js", () => ({
+  getAgentBySession: (...args: unknown[]) => mockGetAgentBySession(...args),
+}));
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -63,6 +69,8 @@ describe("MCP Messaging Tools", () => {
     db = await setupDb();
     store = await setupStore(db);
     vi.clearAllMocks();
+    // Default: resolve "researcher" for any session
+    mockGetAgentBySession.mockReturnValue("researcher");
   });
 
   afterEach(() => {
@@ -222,8 +230,11 @@ describe("MCP Messaging Tools", () => {
       expect(stored!.metadata).toEqual({ source: "test", priority: 1 });
     });
 
-    it("should resolve agent identity from extra context", async () => {
+    it("should resolve agent identity via server-side session lookup, ignoring client-supplied _meta", async () => {
       const { registerMessagingTools } = await import("../../src/services/mcp-tools/messaging.js");
+
+      // Server-side lookup returns "server-resolved-agent"
+      mockGetAgentBySession.mockReturnValue("server-resolved-agent");
 
       const handlers = new Map<string, Function>();
       const mockServer = {
@@ -237,12 +248,39 @@ describe("MCP Messaging Tools", () => {
       const handler = handlers.get("send_message")!;
       const result = await handler(
         { to: "user", body: "Identity test" },
+        // Client sends _meta.agentId="qa-agent", but server should use session lookup
         { sessionId: "mcp-session-1", _meta: { agentId: "qa-agent" } },
       );
 
       const data = JSON.parse(result.content[0].text);
       const stored = store.getMessage(data.messageId);
-      expect(stored!.agentId).toBe("qa-agent");
+      // Must use server-side resolved identity, not client-supplied _meta
+      expect(stored!.agentId).toBe("server-resolved-agent");
+      expect(mockGetAgentBySession).toHaveBeenCalledWith("mcp-session-1");
+    });
+
+    it("should return error when session is unknown", async () => {
+      const { registerMessagingTools } = await import("../../src/services/mcp-tools/messaging.js");
+
+      mockGetAgentBySession.mockReturnValue(undefined);
+
+      const handlers = new Map<string, Function>();
+      const mockServer = {
+        tool: (name: string, _schema: any, handler: Function) => {
+          handlers.set(name, handler);
+        },
+      } as any;
+
+      registerMessagingTools(mockServer, store);
+
+      const handler = handlers.get("send_message")!;
+      const result = await handler(
+        { to: "user", body: "Unknown session test" },
+        { sessionId: "unknown-session" },
+      );
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe("Unknown session");
     });
   });
 
@@ -422,6 +460,25 @@ describe("MCP Messaging Tools", () => {
 
       const updated = store.getMessage("mark-me");
       expect(updated!.deliveryStatus).toBe("read");
+    });
+
+    it("should return error when neither messageId nor agentId is provided", async () => {
+      const { registerMessagingTools } = await import("../../src/services/mcp-tools/messaging.js");
+
+      const handlers = new Map<string, Function>();
+      const mockServer = {
+        tool: (name: string, _schema: any, handler: Function) => {
+          handlers.set(name, handler);
+        },
+      } as any;
+
+      registerMessagingTools(mockServer, store);
+
+      const handler = handlers.get("mark_read")!;
+      const result = await handler({}, {});
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe("Either messageId or agentId is required");
     });
 
     it("should mark all messages from an agent as read", async () => {
