@@ -281,6 +281,105 @@ final class ChatViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.inputText, "")
     }
 
+    // MARK: - WebSocket Incoming Message Tests
+
+    func testIncomingWebSocketMessageAppendsToMessages() async {
+        // Load initial messages
+        let initial = [createTestMessage(id: "msg-1", agentId: "mayor/", role: .agent)]
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: initial)
+        await viewModel.refresh()
+        XCTAssertEqual(viewModel.messages.count, 1)
+
+        // Simulate a WebSocket chat_message event by directly calling the service's publisher
+        // The ChatViewModel subscribes to wsService.incomingMessage
+        let wsService = ChatWebSocketService()
+        let vm = ChatViewModel(apiClient: mockAPIClient, wsService: wsService)
+
+        // Seed the VM with some initial messages via refresh
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: initial)
+        await vm.refresh()
+        XCTAssertEqual(vm.messages.count, 1)
+
+        // Simulate incoming WebSocket message for the selected agent
+        let now = ISO8601DateFormatter().string(from: Date())
+        let wsMessage = PersistentMessage(
+            id: "ws-msg-1",
+            agentId: "mayor/",
+            recipient: "user",
+            role: .agent,
+            body: "WebSocket message",
+            deliveryStatus: .delivered,
+            createdAt: now,
+            updatedAt: now
+        )
+        wsService.incomingMessage.send(wsMessage)
+
+        // Give the main actor a chance to process
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(vm.messages.count, 2)
+        XCTAssertTrue(vm.messages.contains(where: { $0.id == "ws-msg-1" }))
+    }
+
+    func testIncomingWebSocketMessageFromOtherAgentIsFiltered() async {
+        let wsService = ChatWebSocketService()
+        let vm = ChatViewModel(apiClient: mockAPIClient, wsService: wsService)
+
+        let initial = [createTestMessage(id: "msg-1", agentId: "mayor/", role: .agent)]
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: initial)
+        await vm.refresh()
+        XCTAssertEqual(vm.messages.count, 1)
+
+        // Send a message from a different agent (not the selected "mayor/")
+        let now = ISO8601DateFormatter().string(from: Date())
+        let otherMessage = PersistentMessage(
+            id: "ws-msg-other",
+            agentId: "coder",
+            recipient: "user",
+            role: .agent,
+            body: "From another agent",
+            deliveryStatus: .delivered,
+            createdAt: now,
+            updatedAt: now
+        )
+        wsService.incomingMessage.send(otherMessage)
+
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        // Should still be 1 message (the other agent's message was filtered)
+        XCTAssertEqual(vm.messages.count, 1)
+        XCTAssertFalse(vm.messages.contains(where: { $0.id == "ws-msg-other" }))
+    }
+
+    func testIncomingWebSocketMessageDeduplicatesById() async {
+        let wsService = ChatWebSocketService()
+        let vm = ChatViewModel(apiClient: mockAPIClient, wsService: wsService)
+
+        let initial = [createTestMessage(id: "msg-1", agentId: "mayor/", role: .agent)]
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: initial)
+        await vm.refresh()
+        XCTAssertEqual(vm.messages.count, 1)
+
+        // Send a message with the same ID that already exists
+        let now = ISO8601DateFormatter().string(from: Date())
+        let duplicate = PersistentMessage(
+            id: "msg-1",
+            agentId: "mayor/",
+            recipient: "user",
+            role: .agent,
+            body: "Duplicate",
+            deliveryStatus: .delivered,
+            createdAt: now,
+            updatedAt: now
+        )
+        wsService.incomingMessage.send(duplicate)
+
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        // Should still be 1 message (duplicate was filtered)
+        XCTAssertEqual(vm.messages.count, 1)
+    }
+
     // MARK: - Error Handling Tests
 
     func testRefreshHandlesError() async {
