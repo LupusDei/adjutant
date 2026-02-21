@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { useMemo, useState, useCallback } from 'react';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { usePolling } from '../../hooks/usePolling';
+import { useSwarmAgents } from '../../hooks/useSwarmAgents';
 import { api, ApiError } from '../../services/api';
 import { useMode } from '../../contexts/ModeContext';
 import { TerminalPane } from '../terminal';
@@ -169,15 +170,21 @@ function getGroupColor(group: StatusGroup): string {
  */
 export function CrewStats({ className = '', isActive = true }: CrewStatsProps) {
   const { isGasTown, isSwarm } = useMode();
-  const {
-    data: agents,
-    loading,
-    error,
-    lastUpdated,
-  } = usePolling<CrewMember[]>(() => api.agents.list(), {
-    interval: isSwarm ? 10000 : 60000,
-    enabled: isActive,
+
+  // Gas Town mode: simple polling
+  const polling = usePolling<CrewMember[]>(() => api.agents.list(), {
+    interval: 60000,
+    enabled: isActive && !isSwarm,
   });
+
+  // Swarm mode: WebSocket + polling hybrid
+  const swarm = useSwarmAgents();
+
+  // Pick the active data source based on mode
+  const agents = isSwarm ? swarm.agents : polling.data;
+  const loading = isSwarm ? swarm.loading : polling.loading;
+  const error = isSwarm ? (swarm.error ? { message: swarm.error } : null) : polling.error;
+  const lastUpdated = isSwarm ? null : polling.lastUpdated;
 
   const isNarrow = useMediaQuery('(max-width: 768px)');
   const [showAllPolecats, setShowAllPolecats] = useShowAllPolecats();
