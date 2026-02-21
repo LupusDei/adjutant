@@ -306,5 +306,40 @@ export type PowerResponse = ApiResponse<{
 }>;
 export type AgentsResponse = ApiResponse<CrewMember[]>;
 
+// ============================================================================
+// Chat Message Types (SQLite-backed persistent messages)
+// ============================================================================
+
+/** A persistent chat message from the message store. */
+export interface ChatMessage {
+  id: string;
+  sessionId: string | null;
+  agentId: string;
+  recipient: string | null;
+  role: 'user' | 'agent' | 'system' | 'announcement';
+  body: string;
+  metadata: Record<string, unknown> | null;
+  deliveryStatus: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
+  eventType: string | null;
+  threadId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Thread summary from the messages API. */
+export interface ChatThread {
+  threadId: string;
+  messageCount: number;
+  latestBody: string;
+  latestCreatedAt: string;
+  agentId: string;
+}
+
+/** Unread count per agent. */
+export interface UnreadCount {
+  agentId: string;
+  count: number;
+}
+
 export * from './epics';
 export * from './kanban';
