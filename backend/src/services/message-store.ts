@@ -236,8 +236,9 @@ export function createMessageStore(db: Database.Database): MessageStore {
     },
 
     searchMessages(query: string, opts?: SearchOptions): Message[] {
+      if (!query || query.trim().length === 0) return [];
       const conditions: string[] = ["m.rowid IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)"];
-      const params: unknown[] = [query];
+      const params: unknown[] = [query.trim()];
 
       if (opts?.agentId !== undefined) {
         conditions.push("m.agent_id = ?");

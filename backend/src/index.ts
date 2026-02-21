@@ -15,6 +15,9 @@ import { getMcpServer, initMcpServer } from "./services/mcp-server.js";
 import { initDatabase } from "./services/database.js";
 import { createMessageStore } from "./services/message-store.js";
 import { registerMessagingTools } from "./services/mcp-tools/messaging.js";
+import { registerStatusTools } from "./services/mcp-tools/status.js";
+import { registerBeadTools } from "./services/mcp-tools/beads.js";
+import { registerQueryTools } from "./services/mcp-tools/queries.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
@@ -90,8 +93,11 @@ const server = app.listen(PORT, () => {
   // Initialize MCP server for agent tool connections
   initMcpServer();
 
-  // Register messaging MCP tools
+  // Register MCP tools for agent use
   registerMessagingTools(getMcpServer(), messageStore);
+  registerStatusTools(getMcpServer(), messageStore);
+  registerBeadTools(getMcpServer());
+  registerQueryTools(getMcpServer(), messageStore);
 
   // Initialize Session Bridge v2 (tmux session management)
   // init() loads persisted sessions, verifies tmux state, and auto-creates
