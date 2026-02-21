@@ -11,6 +11,9 @@ import type { ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import { logInfo, logWarn } from "../utils/index.js";
 import { getEventBus } from "./event-bus.js";
+import { getDatabase } from "./database.js";
+import { createMessageStore } from "./message-store.js";
+import { registerStatusTools } from "./mcp-tools/status.js";
 
 // ============================================================================
 // Types
@@ -66,9 +69,14 @@ export function resetMcpServer(): void {
 
 /**
  * Initialize the MCP server. Called at startup.
+ * Registers all MCP tools (status, progress, announce).
  */
 export function initMcpServer(): void {
-  getMcpServer();
+  const server = getMcpServer();
+  const db = getDatabase();
+  const store = createMessageStore(db);
+  registerStatusTools(server, store);
+  logInfo("MCP status tools registered");
 }
 
 // ============================================================================
@@ -166,6 +174,14 @@ export function disconnectAgent(sessionId: string): void {
  */
 export function getConnectedAgents(): AgentConnection[] {
   return Array.from(connections.values());
+}
+
+/**
+ * Get the agent ID associated with an MCP session.
+ * Used by MCP tool handlers to resolve who is calling the tool.
+ */
+export function getAgentBySession(sessionId: string): string | undefined {
+  return connections.get(sessionId)?.agentId;
 }
 
 /**
