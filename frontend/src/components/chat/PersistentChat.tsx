@@ -8,7 +8,9 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 
+
 import { useChatMessages, type DisplayMessage } from '../../hooks/useChatMessages';
+import { useUnreadCounts } from '../../hooks/useUnreadCounts';
 import { useAgentStatus } from '../../hooks/useAgentStatus';
 import { useCommunication } from '../../contexts/CommunicationContext';
 import type { ConnectionStatus } from '../../types';
@@ -72,8 +74,16 @@ function getStatusClass(status: ConnectionStatus): string {
 
 export const PersistentChat: React.FC<PersistentChatProps> = ({ agentId, isActive = true }) => {
   const { messages, isLoading, error, hasMore, sendMessage, loadMore } = useChatMessages(agentId);
+  const { markRead } = useUnreadCounts();
   const { statuses } = useAgentStatus();
   const { connectionStatus } = useCommunication();
+
+  // Mark conversation as read when opened
+  useEffect(() => {
+    if (agentId && isActive) {
+      void markRead(agentId);
+    }
+  }, [agentId, isActive, markRead]);
 
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);

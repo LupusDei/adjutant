@@ -10,6 +10,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { ConnectionStatus } from '../../types';
 import { useChatMessages, type DisplayMessage } from '../../hooks/useChatMessages';
+import { useUnreadCounts } from '../../hooks/useUnreadCounts';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoicePlayer } from '../../hooks/useVoicePlayer';
 import { useMode } from '../../contexts/ModeContext';
@@ -130,6 +131,15 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     confirmDelivery,
     loadMore,
   } = useChatMessages(agentId);
+
+  // Unread counts - mark conversation as read when opened
+  const { markRead } = useUnreadCounts();
+
+  useEffect(() => {
+    if (agentId && isActive) {
+      void markRead(agentId);
+    }
+  }, [agentId, isActive, markRead]);
 
   // Determine coordinator name based on mode and agentId
   const coordinatorName = agentId
