@@ -50,7 +50,7 @@ export interface CommunicationContextValue {
   setPriority: (priority: CommunicationPriority) => void;
   /** Current connection status */
   connectionStatus: ConnectionStatus;
-  /** Send a chat message via WebSocket (falls back to HTTP POST /api/mail) */
+  /** Send a chat message via WebSocket (falls back to HTTP POST /api/messages) */
   sendMessage: (opts: SendMessageOptions) => Promise<void>;
   /** Subscribe to incoming chat messages. Returns an unsubscribe function. */
   subscribe: (callback: MessageHandler) => () => void;
@@ -250,6 +250,7 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
             if (mounted) setConnectionStatus('websocket');
             break;
           case 'message':
+          case 'chat_message':
             if (msg.id && msg.from && msg.to && msg.body && msg.timestamp) {
               const incoming: IncomingChatMessage = {
                 id: msg.id,
@@ -330,17 +331,11 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
         replyTo: opts.replyTo,
       }));
     } else {
-      // HTTP fallback
-      const request: Parameters<typeof api.mail.send>[0] = {
-        from: 'overseer',
+      // HTTP fallback — use persistent messages API
+      await api.messages.send({
         to: opts.to ?? 'mayor/',
-        subject: opts.body.slice(0, 50) + (opts.body.length > 50 ? '...' : ''),
         body: opts.body,
-        priority: 2,
-        type: 'reply',
-      };
-      if (opts.replyTo) request.replyTo = opts.replyTo;
-      await api.mail.send(request);
+      });
     }
   }, []);
 

@@ -535,6 +535,93 @@
   box-shadow: 0 0 6px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.3));
 }
 
+/* Search bar */
+.chat-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--crt-phosphor-dim, #00aa00);
+  background-color: #050505;
+  flex-shrink: 0;
+}
+
+.chat-search-input {
+  flex: 1;
+  padding: 5px 10px;
+  background-color: #111;
+  border: 1px solid var(--crt-phosphor-dim, #00aa00);
+  color: var(--crt-phosphor, #00ff00);
+  font-family: inherit;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  outline: none;
+}
+
+.chat-search-input:focus {
+  border-color: var(--crt-phosphor, #00ff00);
+}
+
+.chat-search-input::placeholder {
+  color: var(--crt-phosphor-dim, #00aa00);
+  opacity: 0.5;
+}
+
+.chat-search-clear {
+  background: none;
+  border: none;
+  color: var(--crt-phosphor-dim, #00aa00);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.chat-search-status {
+  font-size: 0.65rem;
+  color: var(--crt-phosphor-dim, #00aa00);
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+/* Failed message */
+.chat-bubble-failed {
+  border-color: #ff4444;
+  opacity: 0.8;
+}
+
+.chat-delivery-failed {
+  color: #ff4444;
+}
+
+.chat-bubble-user .chat-delivery-failed {
+  color: #aa0000;
+}
+
+/* System/Announcement messages - centered, no bubble */
+.chat-system-message {
+  align-self: center;
+  text-align: center;
+  padding: 8px 16px;
+  max-width: 85%;
+}
+
+.chat-system-body {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--crt-phosphor-dim, #00aa00);
+  opacity: 0.7;
+  letter-spacing: 0.05em;
+  line-height: 1.4;
+}
+
+.chat-system-time {
+  display: block;
+  font-size: 0.55rem;
+  color: var(--crt-phosphor-dim, #00aa00);
+  opacity: 0.5;
+  margin-top: 4px;
+}
+
 /* Agent status badge */
 .agent-status-badge {
   font-size: 0.65rem;

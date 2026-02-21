@@ -8,10 +8,12 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 
-import { useChatMessages } from '../../hooks/useChatMessages';
+
+import { useChatMessages, type DisplayMessage } from '../../hooks/useChatMessages';
+import { useUnreadCounts } from '../../hooks/useUnreadCounts';
 import { useAgentStatus } from '../../hooks/useAgentStatus';
 import { useCommunication } from '../../contexts/CommunicationContext';
-import type { ChatMessage, ConnectionStatus } from '../../types';
+import type { ConnectionStatus } from '../../types';
 import { AnnouncementBanner } from './AnnouncementBanner';
 import './chat.css';
 
@@ -72,20 +74,49 @@ function getStatusClass(status: ConnectionStatus): string {
 
 export const PersistentChat: React.FC<PersistentChatProps> = ({ agentId, isActive = true }) => {
   const { messages, isLoading, error, hasMore, sendMessage, loadMore } = useChatMessages(agentId);
+  const { markRead } = useUnreadCounts();
   const { statuses } = useAgentStatus();
   const { connectionStatus } = useCommunication();
+
+  // Mark conversation as read when opened
+  useEffect(() => {
+    if (agentId && isActive) {
+      void markRead(agentId);
+    }
+  }, [agentId, isActive, markRead]);
 
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // IntersectionObserver for infinite scroll
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasMore && !loadingMore) {
+          setLoadingMore(true);
+          void loadMore().finally(() => setLoadingMore(false));
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore, loadingMore]);
 
   // Handle sending a message
   const handleSend = useCallback(async () => {
@@ -169,15 +200,11 @@ export const PersistentChat: React.FC<PersistentChatProps> = ({ agentId, isActiv
 
       {/* Messages container */}
       <div className="chat-messages">
-        {/* Load more button */}
+        {/* Infinite scroll sentinel */}
         {hasMore && (
-          <button
-            type="button"
-            className="chat-load-more"
-            onClick={() => void loadMore()}
-          >
-            LOAD OLDER MESSAGES
-          </button>
+          <div ref={loadMoreSentinelRef} className="chat-load-more">
+            {loadingMore ? 'LOADING...' : 'SCROLL UP FOR MORE'}
+          </div>
         )}
 
         {messages.length === 0 ? (
@@ -188,8 +215,19 @@ export const PersistentChat: React.FC<PersistentChatProps> = ({ agentId, isActiv
             </p>
           </div>
         ) : (
-          messages.map((msg: ChatMessage) => {
+          messages.map((msg: DisplayMessage) => {
             const isUser = msg.role === 'user';
+            const isSystem = msg.role === 'system' || msg.role === 'announcement';
+
+            if (isSystem) {
+              return (
+                <div key={msg.id} className="chat-system-message">
+                  <span className="chat-system-body">{msg.body}</span>
+                  <span className="chat-system-time">{formatTimestamp(msg.createdAt)}</span>
+                </div>
+              );
+            }
+
             return (
               <div
                 key={msg.id}

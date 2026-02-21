@@ -15,6 +15,8 @@ export interface RecipientSelectorProps {
   disabled?: boolean;
   /** Optional CSS class name */
   className?: string;
+  /** Optional unread counts map (agentId -> count) for badge display */
+  unreadCounts?: Map<string, number>;
 }
 
 /**
@@ -26,6 +28,7 @@ export function RecipientSelector({
   onChange,
   disabled = false,
   className = '',
+  unreadCounts,
 }: RecipientSelectorProps) {
   const [agents, setAgents] = useState<CrewMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -222,24 +225,30 @@ export function RecipientSelector({
           {filteredAgents.length === 0 ? (
             <li style={styles.emptyItem}>No matching recipients</li>
           ) : (
-            filteredAgents.map(agent => (
-              <li
-                key={agent.id}
-                role="option"
-                aria-selected={agent.id === value}
-                style={{
-                  ...styles.dropdownItem,
-                  ...(agent.id === value ? styles.dropdownItemSelected : {}),
-                }}
-                onClick={() => { handleSelect(agent); }}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleSelect(agent); }}
-                tabIndex={0}
-              >
-                <span style={styles.agentIcon}>{getAgentIcon(agent.type)}</span>
-                <span style={styles.agentName}>{agent.name}</span>
-                <span style={styles.agentAddress}>{agent.id}</span>
-              </li>
-            ))
+            filteredAgents.map(agent => {
+              const unread = unreadCounts?.get(agent.id) ?? 0;
+              return (
+                <li
+                  key={agent.id}
+                  role="option"
+                  aria-selected={agent.id === value}
+                  style={{
+                    ...styles.dropdownItem,
+                    ...(agent.id === value ? styles.dropdownItemSelected : {}),
+                  }}
+                  onClick={() => { handleSelect(agent); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSelect(agent); }}
+                  tabIndex={0}
+                >
+                  <span style={styles.agentIcon}>{getAgentIcon(agent.type)}</span>
+                  <span style={styles.agentName}>{agent.name}</span>
+                  {unread > 0 && (
+                    <span style={styles.unreadBadge}>{unread}</span>
+                  )}
+                  <span style={styles.agentAddress}>{agent.id}</span>
+                </li>
+              );
+            })
           )}
         </ul>
       )}
@@ -361,6 +370,18 @@ const styles = {
     fontSize: '0.7rem',
     color: colors.primaryDim,
     opacity: 0.8,
+  },
+
+  unreadBadge: {
+    fontSize: '0.65rem',
+    fontWeight: 'bold',
+    color: colors.background,
+    backgroundColor: colors.primary,
+    padding: '1px 5px',
+    borderRadius: '2px',
+    minWidth: '16px',
+    textAlign: 'center',
+    flexShrink: 0,
   },
 
   loadingBadge: {

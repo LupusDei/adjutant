@@ -1,19 +1,21 @@
 /**
- * CommandChat Component - SMS-style conversation with the coordinator
+ * CommandChat Component - SMS-style conversation with agents
  * Works in both Gas Town (Mayor) and Swarm modes
- * Part of 005-overseer-views feature
  *
- * Uses WebSocket for real-time messaging when available, falls back to HTTP polling.
- * Features: optimistic send, delivery confirmation, streaming responses,
- * connection status indicator.
+ * Uses useChatMessages for persistent SQLite-backed messages via /api/messages.
+ * WebSocket for real-time delivery, streaming responses, and typing indicators.
+ * Features: optimistic send, delivery confirmation, agent-scoped conversations,
+ * connection status indicator, voice input/playback.
  */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import type { ConnectionStatus, ChatMessage } from '../../types';
+import { useChatMessages, type DisplayMessage } from '../../hooks/useChatMessages';
 import { api } from '../../services/api';
-import type { Message, ConnectionStatus } from '../../types';
+import { useUnreadCounts } from '../../hooks/useUnreadCounts';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoicePlayer } from '../../hooks/useVoicePlayer';
 import { useMode } from '../../contexts/ModeContext';
-import { useCommunication, type IncomingChatMessage } from '../../contexts/CommunicationContext';
+import { useCommunication } from '../../contexts/CommunicationContext';
 import { useChatWebSocket } from '../../hooks/useChatWebSocket';
 import type { WsChatMessage, WsDeliveryConfirmation, WsStreamToken, WsTypingIndicator, ChatWebSocketCallbacks } from '../../hooks/useChatWebSocket';
 import './chat.css';
@@ -21,20 +23,8 @@ import './chat.css';
 export interface CommandChatProps {
   /** Whether this tab is currently active */
   isActive?: boolean;
-}
-
-// ============================================================================
-// Types
-// ============================================================================
-
-/** Extended message with delivery status for optimistic UI */
-interface ChatMessage extends Message {
-  /** Delivery status for optimistic UI */
-  deliveryStatus?: 'sending' | 'delivered' | 'failed' | undefined;
-  /** Client-side ID for matching delivery confirmations */
-  clientId?: string | undefined;
-  /** Whether this message is currently streaming */
-  streaming?: boolean | undefined;
+  /** Agent ID to scope the conversation. Undefined shows coordinator messages. */
+  agentId?: string;
 }
 
 // ============================================================================
@@ -42,27 +32,10 @@ interface ChatMessage extends Message {
 // ============================================================================
 
 /**
- * Check if a message is part of a command/coordinator conversation.
+ * Check if message is from the user.
  */
-function isCommandMessage(msg: { from: string; to: string }): boolean {
-  const fromLower = msg.from.toLowerCase();
-  const toLower = msg.to.toLowerCase();
-  return (
-    fromLower.includes('mayor') ||
-    toLower.includes('mayor') ||
-    fromLower.includes('overseer') ||
-    toLower.includes('overseer') ||
-    fromLower === 'user' ||
-    toLower === 'user'
-  );
-}
-
-/**
- * Check if message is from the user (overseer side).
- */
-function isUserMessage(msg: ChatMessage): boolean {
-  const fromLower = msg.from.toLowerCase();
-  return fromLower.includes('overseer') || fromLower === 'user';
+function isUserMessage(msg: DisplayMessage): boolean {
+  return msg.role === 'user';
 }
 
 /**
@@ -96,23 +69,6 @@ function formatTimestamp(timestamp: string): string {
   }
 }
 
-/** Convert an incoming real-time message to the Message type used for rendering. */
-function incomingToMessage(msg: IncomingChatMessage): Message {
-  return {
-    id: msg.id,
-    from: msg.from,
-    to: msg.to,
-    subject: msg.body.slice(0, 50),
-    body: msg.body,
-    timestamp: msg.timestamp,
-    read: false,
-    priority: 2,
-    type: 'reply',
-    threadId: msg.id,
-    pinned: false,
-  };
-}
-
 /**
  * Get display label for connection status.
  */
@@ -144,36 +100,60 @@ function getStatusClass(status: ConnectionStatus): string {
 // ============================================================================
 
 /**
- * CommandChat - SMS-style conversation interface with the coordinator.
- * Adapts to deployment mode (Gas Town: Mayor, Swarm: Swarm).
+ * CommandChat - SMS-style conversation interface.
+ * Adapts to deployment mode (Gas Town: Mayor, Swarm: Agent).
  *
- * Uses WebSocket for real-time messaging when available, with HTTP polling
- * as fallback. Polling frequency adapts to connection status.
+ * Data source: /api/messages (SQLite-backed persistent store)
+ * Real-time: WebSocket for messages, streaming, typing indicators
  */
-export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agentId }) => {
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
   const [typingFrom, setTypingFrom] = useState<string | null>(null);
   const [streamingMessages, setStreamingMessages] = useState<Map<string, string>>(new Map());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<ChatMessage[] | null>(null);
+  const [searching, setSearching] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  // Get deployment mode for UI labels and recipient adaptation
+  // Get deployment mode for UI labels
   const { isGasTown } = useMode();
   const { priority, connectionStatus: commContextStatus } = useCommunication();
 
-  // Communication context for real-time messaging
-  const { connectionStatus, sendMessage: ctxSendMessage, subscribe } = useCommunication();
+  // Persistent messages from SQLite store
+  const {
+    messages,
+    isLoading,
+    error: fetchError,
+    hasMore,
+    sendMessage: hookSendMessage,
+    confirmDelivery,
+    loadMore,
+  } = useChatMessages(agentId);
 
-  // Determine coordinator name and address based on mode
-  const coordinatorName = isGasTown ? 'MAYOR' : 'SWARM';
-  const coordinatorAddress = isGasTown ? 'mayor/' : 'user';
+  // Unread counts - mark conversation as read when opened
+  const { markRead } = useUnreadCounts();
+
+  useEffect(() => {
+    if (agentId && isActive) {
+      void markRead(agentId);
+    }
+  }, [agentId, isActive, markRead]);
+
+  // Determine coordinator name based on mode and agentId
+  const coordinatorName = agentId
+    ? agentId.toUpperCase()
+    : (isGasTown ? 'MAYOR' : 'SWARM');
+  const coordinatorAddress = agentId
+    ? agentId
+    : (isGasTown ? 'mayor/' : 'user');
 
   // Voice input hook for recording
   const voiceInput = useVoiceInput();
@@ -186,41 +166,13 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
 
   // WebSocket callbacks (stable refs via useMemo)
   const wsCallbacks: ChatWebSocketCallbacks = useMemo(() => ({
-    onMessage: (msg: WsChatMessage) => {
-      setMessages((prev) => {
-        // Avoid duplicates (message might already exist from optimistic add or HTTP fetch)
-        if (prev.some((m) => m.id === msg.id)) return prev;
-
-        const newMsg: ChatMessage = {
-          id: msg.id,
-          from: msg.from,
-          to: msg.to,
-          subject: msg.body.slice(0, 50),
-          body: msg.body,
-          timestamp: msg.timestamp,
-          read: false,
-          priority: 2,
-          type: 'reply',
-          threadId: '',
-          pinned: false,
-          ...(msg.replyTo ? { replyTo: msg.replyTo } : {}),
-        };
-
-        // Only add if it's a command message
-        if (!isCommandMessage(newMsg)) return prev;
-
-        return [...prev, newMsg];
-      });
+    onMessage: (_msg: WsChatMessage) => {
+      // Messages from WebSocket are now handled by useChatMessages
+      // via the CommunicationContext subscription. No-op here to avoid duplicates.
     },
 
     onDelivery: (confirmation: WsDeliveryConfirmation) => {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.clientId === confirmation.clientId
-            ? { ...m, id: confirmation.messageId, deliveryStatus: 'delivered' as const }
-            : m,
-        ),
-      );
+      confirmDelivery(confirmation.clientId, confirmation.messageId);
     },
 
     onStreamToken: (token: WsStreamToken) => {
@@ -237,22 +189,13 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
         const next = new Map(prev);
         next.delete(streamId);
 
-        // Convert completed stream to a regular message
-        if (body) {
-          const finalMsg: ChatMessage = {
-            id: messageId ?? streamId,
-            from: coordinatorAddress === 'mayor/' ? 'mayor/' : 'agent',
-            to: 'overseer',
-            subject: body.slice(0, 50),
-            body,
-            timestamp: new Date().toISOString(),
-            read: false,
-            priority: 2,
-            type: 'reply',
-            threadId: '',
-            pinned: false,
-          };
-          setMessages((msgs) => [...msgs, finalMsg]);
+        // Convert completed stream to a message via the hook's real-time subscription
+        // The final message will arrive via WebSocket/CommunicationContext
+        // If it doesn't arrive within a brief window, we could trigger a refetch,
+        // but typically the backend sends the finalized message as a chat_message event.
+        if (body && !messageId) {
+          // Stream completed without a final message ID — body was ephemeral
+          // This is fine; the final message will come through as a regular message event
         }
 
         return next;
@@ -273,10 +216,10 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
         }
       }
     },
-  }), [coordinatorAddress]);
+  }), [confirmDelivery]);
 
-  // WebSocket connection
-  const { connected: wsConnected, connectionStatus: wsConnectionStatus, sendMessage: wsSendMessage, sendTyping } = useChatWebSocket(wsEnabled, wsCallbacks);
+  // WebSocket connection for streaming and typing
+  const { connected: wsConnected, connectionStatus: wsConnectionStatus, sendTyping } = useChatWebSocket(wsEnabled, wsCallbacks);
 
   // Effective connection status: WS status when enabled, otherwise from context
   const effectiveStatus: ConnectionStatus = wsEnabled ? wsConnectionStatus : commContextStatus;
@@ -295,58 +238,6 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
-  // Fetch command-related messages via HTTP
-  const fetchMessages = useCallback(async () => {
-    try {
-      const response = await api.mail.list({ all: true });
-      const commandMessages = response.items
-        .filter(isCommandMessage)
-        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-      setMessages((prev) => {
-        // Merge: keep optimistic messages that haven't been confirmed yet
-        const optimistic = prev.filter((m) => m.deliveryStatus === 'sending');
-        const serverIds = new Set(commandMessages.map((m) => m.id));
-        const unresolvedOptimistic = optimistic.filter((m) => !serverIds.has(m.id));
-        return [...commandMessages, ...unresolvedOptimistic];
-      });
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load messages');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Subscribe to real-time incoming messages (SSE / CommunicationContext path)
-  useEffect(() => {
-    const unsubscribe = subscribe((incoming) => {
-      if (!isCommandMessage(incoming)) return;
-      const msg = incomingToMessage(incoming);
-      setMessages((prev) => {
-        // Avoid duplicates
-        if (prev.some((m) => m.id === msg.id)) return prev;
-        return [...prev, msg];
-      });
-    });
-    return unsubscribe;
-  }, [subscribe]);
-
-  // Initial fetch and adaptive polling based on connection status
-  useEffect(() => {
-    if (!isActive) return;
-
-    void fetchMessages();
-
-    // Poll less often when a real-time connection is active
-    const interval = (wsConnected || connectionStatus === 'websocket' || connectionStatus === 'sse')
-      ? 120_000   // 2 min — real-time handles new messages
-      : 30_000;   // 30s — polling mode
-
-    const intervalId = setInterval(() => void fetchMessages(), interval);
-    return () => clearInterval(intervalId);
-  }, [isActive, fetchMessages, wsConnected, connectionStatus]);
-
   // Scroll to bottom when messages or streaming update
   useEffect(() => {
     scrollToBottom();
@@ -359,53 +250,40 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
     };
   }, []);
 
-  // Handle sending a message
+  // IntersectionObserver for infinite scroll — loads older messages when sentinel is visible
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasMore && !loadingMore) {
+          setLoadingMore(true);
+          void loadMore().finally(() => setLoadingMore(false));
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore, loadingMore]);
+
+  // Handle sending a message — always via HTTP (hookSendMessage).
+  // The backend stores the message and broadcasts it via WebSocket.
   const handleSend = async () => {
     const text = inputValue.trim();
     if (!text || sending) return;
 
     setInputValue('');
-
-    // Try WebSocket first
-    if (wsConnected) {
-      const clientId = crypto.randomUUID();
-      const sent = wsSendMessage(text, coordinatorAddress, clientId);
-      if (sent) {
-        // Optimistic: add message immediately with 'sending' status
-        const optimisticMsg: ChatMessage = {
-          id: `optimistic-${clientId}`,
-          clientId,
-          from: 'overseer',
-          to: coordinatorAddress,
-          subject: text.slice(0, 50) + (text.length > 50 ? '...' : ''),
-          body: text,
-          timestamp: new Date().toISOString(),
-          read: true,
-          priority: 2,
-          type: 'reply',
-          threadId: '',
-          pinned: false,
-          deliveryStatus: 'sending',
-        };
-        setMessages((prev) => [...prev, optimisticMsg]);
-        inputRef.current?.focus();
-        return;
-      }
-      // If WS send failed, fall through to HTTP
-    }
-
-    // HTTP fallback
+    setSendError(null);
     setSending(true);
-    try {
-      await ctxSendMessage({ to: coordinatorAddress, body: text });
 
-      // When not on WebSocket, refetch to see the sent message
-      if (connectionStatus !== 'websocket') {
-        await fetchMessages();
-      }
+    try {
+      await hookSendMessage(text);
       inputRef.current?.focus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send message');
+      setSendError(err instanceof Error ? err.message : 'Failed to send message');
       setInputValue(text); // Restore input on error
     } finally {
       setSending(false);
@@ -418,6 +296,42 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
       e.preventDefault();
       void handleSend();
     }
+  };
+
+  // Handle search
+  const handleSearch = useCallback(async (query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setSearchResults(null);
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const params: Parameters<typeof api.messages.search>[0] = { q: trimmed };
+      if (agentId) params.agentId = agentId;
+      const result = await api.messages.search(params);
+      setSearchResults(result.items);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, [agentId]);
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void handleSearch(searchQuery);
+    } else if (e.key === 'Escape') {
+      setSearchQuery('');
+      setSearchResults(null);
+    }
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setSearchResults(null);
   };
 
   // Handle input change with typing indicator
@@ -438,7 +352,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
   };
 
   // Handle playing a message
-  const handlePlayMessage = async (msg: ChatMessage) => {
+  const handlePlayMessage = async (msg: DisplayMessage) => {
     if (voicePlayer.isPlaying && playingMessageId === msg.id) {
       voicePlayer.stop();
       setPlayingMessageId(null);
@@ -459,7 +373,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
     }
   }, [voicePlayer.isPlaying, voicePlayer.isLoading]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="command-chat">
         <div className="chat-loading">
@@ -472,6 +386,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
 
   // Convert streaming messages to displayable entries
   const streamingEntries = Array.from(streamingMessages.entries());
+  const displayError = fetchError?.message ?? sendError;
 
   return (
     <div className="command-chat">
@@ -488,11 +403,34 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
         </div>
       </header>
 
+      {/* Search bar */}
+      <div className="chat-search-bar">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={handleSearchKeyDown}
+          placeholder="SEARCH MESSAGES..."
+          className="chat-search-input"
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            className="chat-search-clear"
+            onClick={clearSearch}
+            aria-label="Clear search"
+          >
+            x
+          </button>
+        )}
+        {searching && <span className="chat-search-status">SEARCHING...</span>}
+      </div>
+
       {/* Error banner */}
-      {error && (
+      {displayError && (
         <div className="chat-error" role="alert">
-          {error}
-          <button onClick={() => setError(null)} className="chat-error-dismiss">
+          {displayError}
+          <button onClick={() => setSendError(null)} className="chat-error-dismiss">
             x
           </button>
         </div>
@@ -500,24 +438,78 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
 
       {/* Messages container */}
       <div className="chat-messages">
+        {/* Search results overlay */}
+        {searchResults !== null ? (
+          searchResults.length === 0 ? (
+            <div className="chat-empty">
+              <p>NO RESULTS FOUND</p>
+              <p className="chat-empty-hint">Try a different search term</p>
+            </div>
+          ) : (
+            searchResults.map((msg) => {
+              const isUser = msg.role === 'user';
+              return (
+                <div
+                  key={msg.id}
+                  className={`chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-command'}`}
+                >
+                  <div className="chat-bubble-header">
+                    <span className="chat-bubble-sender">
+                      {isUser ? 'YOU' : (msg.agentId ?? coordinatorName).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="chat-bubble-content">{msg.body}</div>
+                  <div className="chat-bubble-time">{formatTimestamp(msg.createdAt)}</div>
+                </div>
+              );
+            })
+          )
+        ) : (
+        <>
+        {/* Infinite scroll sentinel for loading older messages */}
+        {hasMore && (
+          <div ref={loadMoreSentinelRef} className="chat-load-more">
+            {loadingMore ? 'LOADING...' : 'SCROLL UP FOR MORE'}
+          </div>
+        )}
+
         {messages.length === 0 ? (
           <div className="chat-empty">
             <p>NO MESSAGES YET</p>
-            <p className="chat-empty-hint">Send a message to {coordinatorName} below</p>
+            <p className="chat-empty-hint">
+              {agentId
+                ? `Send a message to ${coordinatorName} below`
+                : `Send a message to ${coordinatorName} below`}
+            </p>
           </div>
         ) : (
           messages.map((msg) => {
             const isUser = isUserMessage(msg);
+            const isSystem = msg.role === 'system' || msg.role === 'announcement';
+
+            // System/announcement messages: centered, no bubble
+            if (isSystem) {
+              return (
+                <div key={msg.id} className="chat-system-message">
+                  <span className="chat-system-body">{msg.body}</span>
+                  <span className="chat-system-time">{formatTimestamp(msg.createdAt)}</span>
+                </div>
+              );
+            }
+
             const isPlayingThis = playingMessageId === msg.id;
             const isLoadingThis = isPlayingThis && voicePlayer.isLoading;
+            const isSending = msg.optimisticStatus === 'sending';
+            const isDelivered = msg.optimisticStatus === 'delivered';
+            const isFailed = msg.optimisticStatus === 'failed';
             return (
               <div
                 key={msg.id}
-                className={`chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-command'} ${msg.deliveryStatus === 'sending' ? 'chat-bubble-sending' : ''}`}
+                className={`chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-command'} ${isSending ? 'chat-bubble-sending' : ''} ${isFailed ? 'chat-bubble-failed' : ''}`}
               >
                 <div className="chat-bubble-header">
                   <span className="chat-bubble-sender">
-                    {isUser ? 'YOU' : coordinatorName}
+                    {isUser ? 'YOU' : (msg.agentId ?? coordinatorName).toUpperCase()}
                   </span>
                   <button
                     type="button"
@@ -534,13 +526,16 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
                   {msg.body}
                 </div>
                 <div className="chat-bubble-time">
-                  {msg.deliveryStatus === 'sending' && (
+                  {isSending && (
                     <span className="chat-delivery-status">SENDING </span>
                   )}
-                  {msg.deliveryStatus === 'delivered' && (
+                  {isDelivered && msg.clientId && (
                     <span className="chat-delivery-status chat-delivery-confirmed">DELIVERED </span>
                   )}
-                  {formatTimestamp(msg.timestamp)}
+                  {isFailed && (
+                    <span className="chat-delivery-status chat-delivery-failed">FAILED </span>
+                  )}
+                  {formatTimestamp(msg.createdAt)}
                 </div>
               </div>
             );
@@ -571,6 +566,8 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true }) => 
         )}
 
         <div ref={messagesEndRef} />
+        </>
+        )}
       </div>
 
       {/* Input area */}

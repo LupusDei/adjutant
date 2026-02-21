@@ -337,6 +337,21 @@
     transform: scale(0.96);
   }
 
+  .nav-tab-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 5px;
+    min-width: 16px;
+    font-size: 0.65rem;
+    font-weight: bold;
+    line-height: 16px;
+    text-align: center;
+    background-color: var(--crt-phosphor);
+    color: #0a0a0a;
+    border-radius: 2px;
+    vertical-align: middle;
+  }
+
   .app-content {
     flex: 1;
     display: flex;
