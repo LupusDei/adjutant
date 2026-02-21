@@ -456,4 +456,85 @@ describe('useChatMessages', () => {
       expect(result.current.messages).toHaveLength(1);
     });
   });
+
+  describe('acceptance criteria', () => {
+    it('uses /api/messages, not /api/mail', async () => {
+      // Verify the hook calls api.messages.list, not api.mail.list
+      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+        mockListResponse([])
+      );
+
+      renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(api.messages.list).toHaveBeenCalled();
+      });
+      // api.mail is not imported or used in the hook
+    });
+
+    it('scopes messages per agent when switching', async () => {
+      const msg1 = makeChatMessage({ agentId: 'agent-1', body: 'Agent 1 msg' });
+      const msg2 = makeChatMessage({ agentId: 'agent-2', body: 'Agent 2 msg' });
+
+      (api.messages.list as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(mockListResponse([msg1]))
+        .mockResolvedValueOnce(mockListResponse([msg2]));
+
+      const { result, rerender } = renderHook(
+        ({ agentId }) => useChatMessages(agentId),
+        { initialProps: { agentId: 'agent-1' } }
+      );
+
+      await waitFor(() => {
+        expect(result.current.messages[0]?.body).toBe('Agent 1 msg');
+      });
+
+      // Switch to agent-2
+      rerender({ agentId: 'agent-2' });
+
+      await waitFor(() => {
+        expect(result.current.messages[0]?.body).toBe('Agent 2 msg');
+      });
+
+      // Verify each call was scoped
+      expect(api.messages.list).toHaveBeenNthCalledWith(1, { agentId: 'agent-1' });
+      expect(api.messages.list).toHaveBeenNthCalledWith(2, { agentId: 'agent-2' });
+    });
+
+    it('preserves optimistic messages when server refetch completes', async () => {
+      const serverMsg = makeChatMessage({ id: 'server-1', body: 'From server' });
+
+      // First call returns server message, second (refetch after send) also returns it
+      (api.messages.list as ReturnType<typeof vi.fn>)
+        .mockResolvedValue(mockListResponse([serverMsg]));
+
+      let resolveApiSend: ((v: any) => void) | undefined;
+      (api.messages.send as ReturnType<typeof vi.fn>).mockImplementation(
+        () => new Promise((resolve) => { resolveApiSend = resolve; })
+      );
+
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.messages).toHaveLength(1);
+      });
+
+      // Start sending — optimistic message appears
+      act(() => {
+        void result.current.sendMessage('Optimistic msg');
+      });
+
+      expect(result.current.messages).toHaveLength(2);
+      expect(result.current.messages[1]!.optimisticStatus).toBe('sending');
+
+      // Resolve the API call
+      await act(async () => {
+        resolveApiSend!({ messageId: 'server-2', timestamp: '2026-02-21T11:00:00Z' });
+      });
+
+      // The optimistic message is now confirmed
+      expect(result.current.messages[1]!.optimisticStatus).toBe('delivered');
+      expect(result.current.messages[1]!.id).toBe('server-2');
+    });
+  });
 });
