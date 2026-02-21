@@ -8,10 +8,10 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 
-import { useChatMessages } from '../../hooks/useChatMessages';
+import { useChatMessages, type DisplayMessage } from '../../hooks/useChatMessages';
 import { useAgentStatus } from '../../hooks/useAgentStatus';
 import { useCommunication } from '../../contexts/CommunicationContext';
-import type { ChatMessage, ConnectionStatus } from '../../types';
+import type { ConnectionStatus } from '../../types';
 import { AnnouncementBanner } from './AnnouncementBanner';
 import './chat.css';
 
@@ -188,7 +188,7 @@ export const PersistentChat: React.FC<PersistentChatProps> = ({ agentId, isActiv
             </p>
           </div>
         ) : (
-          messages.map((msg: ChatMessage) => {
+          messages.map((msg: DisplayMessage) => {
             const isUser = msg.role === 'user';
             return (
               <div

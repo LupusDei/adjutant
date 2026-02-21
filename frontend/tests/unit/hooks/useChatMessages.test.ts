@@ -199,8 +199,69 @@ describe('useChatMessages', () => {
     });
   });
 
-  describe('sendMessage', () => {
-    it('should call API to send a message', async () => {
+  describe('sendMessage (optimistic UI)', () => {
+    it('should add optimistic message immediately before API call resolves', async () => {
+      let resolveApiSend: ((v: any) => void) | undefined;
+      (api.messages.send as ReturnType<typeof vi.fn>).mockImplementation(
+        () => new Promise((resolve) => { resolveApiSend = resolve; })
+      );
+
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Start sending - don't await
+      let sendPromise: Promise<void>;
+      act(() => {
+        sendPromise = result.current.sendMessage('Hello, agent!');
+      });
+
+      // Optimistic message should appear immediately
+      expect(result.current.messages).toHaveLength(1);
+      const optimistic = result.current.messages[0]!;
+      expect(optimistic.body).toBe('Hello, agent!');
+      expect(optimistic.optimisticStatus).toBe('sending');
+      expect(optimistic.role).toBe('user');
+      expect(optimistic.id).toMatch(/^optimistic-/);
+
+      // Resolve the API call
+      await act(async () => {
+        resolveApiSend!({ messageId: 'server-msg-1', timestamp: '2026-02-21T11:00:00Z' });
+        await sendPromise!;
+      });
+
+      // Message should now be confirmed
+      expect(result.current.messages[0]!.id).toBe('server-msg-1');
+      expect(result.current.messages[0]!.optimisticStatus).toBe('delivered');
+    });
+
+    it('should mark optimistic message as failed on API error', async () => {
+      (api.messages.send as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error('Send failed')
+      );
+
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        try {
+          await result.current.sendMessage('Will fail');
+        } catch {
+          // Expected
+        }
+      });
+
+      expect(result.current.messages).toHaveLength(1);
+      expect(result.current.messages[0]!.optimisticStatus).toBe('failed');
+      expect(result.current.messages[0]!.body).toBe('Will fail');
+    });
+
+    it('should call API with correct params', async () => {
       (api.messages.send as ReturnType<typeof vi.fn>).mockResolvedValue({
         messageId: 'new-msg',
         timestamp: '2026-02-21T11:00:00Z',
@@ -247,6 +308,71 @@ describe('useChatMessages', () => {
           threadId: 'thread-123',
         })
       );
+    });
+  });
+
+  describe('confirmDelivery', () => {
+    it('should update optimistic message with server ID and delivered status', async () => {
+      // Set up a message with 'sending' status
+      let resolveApiSend: ((v: any) => void) | undefined;
+      (api.messages.send as ReturnType<typeof vi.fn>).mockImplementation(
+        () => new Promise((resolve) => { resolveApiSend = resolve; })
+      );
+
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Start sending (don't await, let it hang)
+      act(() => {
+        void result.current.sendMessage('Hello');
+      });
+
+      const clientId = result.current.messages[0]!.clientId!;
+      expect(clientId).toBeDefined();
+
+      // Manually confirm delivery (e.g., from WebSocket confirmation)
+      act(() => {
+        result.current.confirmDelivery(clientId, 'server-id-42');
+      });
+
+      expect(result.current.messages[0]!.id).toBe('server-id-42');
+      expect(result.current.messages[0]!.optimisticStatus).toBe('delivered');
+
+      // Clean up the pending promise
+      resolveApiSend!({ messageId: 'server-id-42', timestamp: '2026-02-21T11:00:00Z' });
+    });
+  });
+
+  describe('markFailed', () => {
+    it('should mark an optimistic message as failed by clientId', async () => {
+      let resolveApiSend: ((v: any) => void) | undefined;
+      (api.messages.send as ReturnType<typeof vi.fn>).mockImplementation(
+        () => new Promise((resolve) => { resolveApiSend = resolve; })
+      );
+
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      act(() => {
+        void result.current.sendMessage('Will fail');
+      });
+
+      const clientId = result.current.messages[0]!.clientId!;
+
+      act(() => {
+        result.current.markFailed(clientId);
+      });
+
+      expect(result.current.messages[0]!.optimisticStatus).toBe('failed');
+
+      // Clean up the pending promise
+      resolveApiSend!({ messageId: 'whatever', timestamp: '2026-02-21T11:00:00Z' });
     });
   });
 
