@@ -32,6 +32,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@parse/node-apn": "^7.0.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
