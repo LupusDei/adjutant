@@ -1,0 +1,142 @@
+---
+name: adjutant-agent
+description: "MCP tools for communicating with the Adjutant dashboard and other agents. Use when agents need to send messages, report status, manage beads, or query system state. Auto-connects to the Adjutant MCP server."
+---
+
+# Adjutant Agent MCP Tools
+
+This skill provides MCP tools for agents to interact with the Adjutant dashboard,
+communicate with the user (Mayor) and other agents, manage beads, and report status.
+
+## Connection
+
+The MCP server auto-connects via the `adjutant` server configured in `.claude/settings.json`.
+Your agent identity is resolved server-side from the MCP session -- the server maps your
+session ID to your agent ID (set via the `agentId` query param on SSE connect).
+
+The server endpoint is `http://localhost:4201/mcp/sse` (SSE transport).
+
+## Available Tools
+
+### Messaging Tools
+
+Use these to communicate with the Mayor (user) and other agents.
+
+**`send_message`** -- Send a message to a recipient.
+```
+send_message({
+  to: "user",
+  body: "Build complete. All tests pass.",
+  threadId: "build-status"
+})
+```
+
+**`read_messages`** -- Read messages with optional filters (by agent, thread).
+```
+read_messages({ limit: 10, threadId: "build-status" })
+```
+
+**`list_threads`** -- List conversation threads with message counts.
+```
+list_threads({ agentId: "my-agent" })
+```
+
+**`mark_read`** -- Mark messages as read (by messageId or agentId).
+```
+mark_read({ messageId: "uuid-here" })
+mark_read({ agentId: "researcher" })
+```
+
+### Status Tools
+
+Use these to report your current state to the dashboard.
+
+**`set_status`** -- Update your agent status. Use for state transitions.
+```
+set_status({ status: "working", task: "Implementing feature X", beadId: "adj-010.3" })
+```
+Valid statuses: `working`, `blocked`, `idle`, `done`
+
+**`report_progress`** -- Report task progress with a percentage. Use for long-running work.
+```
+report_progress({ task: "adj-010.7 skill tools", percentage: 50, description: "Halfway through implementation" })
+```
+
+**`announce`** -- Broadcast an announcement to the dashboard. Requires both title and body.
+```
+announce({ type: "completion", title: "Feature X done", body: "All tests pass. Ready for review.", beadId: "adj-010.3" })
+```
+Announcement types: `completion`, `blocker`, `question`
+
+### Bead Tools
+
+Use these to manage beads (work items) without shelling out to `bd`.
+
+**`create_bead`** -- Create a new bead.
+```
+create_bead({ title: "Fix login bug", description: "Login times out after 30s", type: "bug", priority: 1 })
+```
+
+**`update_bead`** -- Update bead fields (status, assignee, title, etc.).
+```
+update_bead({ id: "adj-042", status: "in_progress", assignee: "my-agent" })
+```
+
+**`close_bead`** -- Close a bead with optional reason.
+```
+close_bead({ id: "adj-042", reason: "All tasks completed" })
+```
+
+**`list_beads`** -- List beads with optional filters.
+```
+list_beads({ status: "open", assignee: "my-agent" })
+```
+
+**`show_bead`** -- Get full details for a single bead.
+```
+show_bead({ id: "adj-042" })
+```
+
+### Query Tools
+
+Read-only tools for system introspection.
+
+**`list_agents`** -- List all agents with their status.
+```
+list_agents({ status: "active" })
+```
+
+**`get_project_state`** -- Get a summary of the current project state (beads, agents, messages).
+```
+get_project_state()
+```
+
+**`search_messages`** -- Full-text search across all messages.
+```
+search_messages({ query: "deployment failed", limit: 5 })
+```
+
+## Messaging Workflow
+
+Messages flow through this pipeline:
+
+1. Agent calls `send_message` via MCP
+2. Message is persisted to SQLite (survives restarts)
+3. WebSocket event broadcasts to connected dashboard clients
+4. If recipient is `"user"` or `"mayor/"`, APNS push notification is sent to iOS
+
+Messages are durable -- they persist even if the dashboard is not connected.
+Use `read_messages` to catch up on messages sent while you were offline.
+
+## Status Reporting Guidelines
+
+- **`set_status`**: Use when your overall state changes (starting work, getting blocked, finishing).
+  Call this at the beginning and end of major work phases.
+- **`report_progress`**: Use periodically during long-running tasks to show incremental progress.
+  Include a percentage and brief description string.
+- **`announce`**: Use for events that need dashboard attention. Completions, blockers, and questions.
+  These are highlighted prominently in the UI. Requires both `title` and `body`.
+
+## References
+
+See `references/tool-catalog.md` for complete input/output schemas for all tools.
