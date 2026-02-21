@@ -6,10 +6,12 @@ import AdjutantKit
 /// Supports chatting with Mayor or any crew agent.
 struct ChatView: View {
     @Environment(\.crtTheme) private var theme
+    @EnvironmentObject private var coordinator: AppCoordinator
     @StateObject private var viewModel: ChatViewModel
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showRecipientSelector = false
     @State private var showConnectionDetails = false
+    @State private var showSearch = false
     @State private var selectedSession: ManagedSession?
 
     init(apiClient: APIClient, speechService: (any SpeechRecognitionServiceProtocol)? = nil) {
@@ -65,6 +67,13 @@ struct ChatView: View {
         .background(CRTTheme.Background.screen)
         .onAppear {
             viewModel.onAppear()
+            // Handle deep link from push notification
+            if let agentId = coordinator.pendingChatAgentId {
+                coordinator.pendingChatAgentId = nil
+                Task {
+                    await viewModel.setRecipient(agentId)
+                }
+            }
         }
         .onDisappear {
             viewModel.onDisappear()
@@ -93,6 +102,7 @@ struct ChatView: View {
             RecipientSelectorSheet(
                 recipients: viewModel.availableRecipients,
                 selectedRecipient: viewModel.selectedRecipient,
+                unreadCounts: viewModel.unreadCounts,
                 onSelect: { recipient in
                     Task {
                         await viewModel.setRecipient(recipient)
@@ -107,6 +117,9 @@ struct ChatView: View {
                 apiKey: AppState.shared.apiKey
             )
             SessionChatView(session: session, wsClient: wsClient, showDismiss: true)
+        }
+        .sheet(isPresented: $showSearch) {
+            ChatSearchSheet(viewModel: viewModel)
         }
     }
 
@@ -130,6 +143,17 @@ struct ChatView: View {
             .buttonStyle(.plain)
 
             Spacer()
+
+            // Search button
+            Button {
+                showSearch = true
+            } label: {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(theme.primary)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
 
             // Session switcher button
             SessionSwitcherButton(onSessionSelected: { session in
@@ -226,24 +250,37 @@ struct ChatView: View {
     }
 
     private var loadMoreButton: some View {
-        Button {
-            Task {
-                await viewModel.loadMoreHistory()
-            }
-        } label: {
-            HStack(spacing: CRTTheme.Spacing.xs) {
-                if viewModel.isLoadingHistory {
+        Group {
+            if viewModel.isLoadingHistory {
+                HStack(spacing: CRTTheme.Spacing.xs) {
                     LoadingIndicator(size: .small)
-                } else {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 12))
+                    CRTText("LOADING...", style: .caption, glowIntensity: .subtle)
                 }
-                CRTText("LOAD EARLIER MESSAGES", style: .caption, glowIntensity: .subtle)
+                .foregroundColor(theme.dim)
+                .padding(.vertical, CRTTheme.Spacing.sm)
+            } else {
+                Button {
+                    Task {
+                        await viewModel.loadMoreHistory()
+                    }
+                } label: {
+                    HStack(spacing: CRTTheme.Spacing.xs) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 12))
+                        CRTText("LOAD EARLIER MESSAGES", style: .caption, glowIntensity: .subtle)
+                    }
+                    .foregroundColor(theme.dim)
+                    .padding(.vertical, CRTTheme.Spacing.sm)
+                }
+                .buttonStyle(.plain)
+                .onAppear {
+                    // Auto-load when this element scrolls into view
+                    Task {
+                        await viewModel.loadMoreHistory()
+                    }
+                }
             }
-            .foregroundColor(theme.dim)
-            .padding(.vertical, CRTTheme.Spacing.sm)
         }
-        .disabled(viewModel.isLoadingHistory)
     }
 
     private var emptyState: some View {
@@ -353,6 +390,7 @@ private struct RecipientSelectorSheet: View {
 
     let recipients: [CrewMember]
     let selectedRecipient: String
+    let unreadCounts: [String: Int]
     let onSelect: (String) -> Void
 
     @State private var searchText = ""
@@ -387,7 +425,8 @@ private struct RecipientSelectorSheet: View {
                                 id: "mayor/",
                                 name: "Mayor",
                                 type: .mayor,
-                                isSelected: selectedRecipient == "mayor/"
+                                isSelected: selectedRecipient == "mayor/",
+                                unreadCount: unreadCounts["mayor/"] ?? 0
                             )
 
                             Divider()
@@ -400,7 +439,8 @@ private struct RecipientSelectorSheet: View {
                                 id: crew.id,
                                 name: crew.name,
                                 type: crew.type,
-                                isSelected: selectedRecipient == crew.id
+                                isSelected: selectedRecipient == crew.id,
+                                unreadCount: unreadCounts[crew.id] ?? 0
                             )
 
                             if crew.id != filteredRecipients.last?.id {
@@ -430,7 +470,7 @@ private struct RecipientSelectorSheet: View {
     }
 
     @ViewBuilder
-    private func recipientRow(id: String, name: String, type: AgentType, isSelected: Bool) -> some View {
+    private func recipientRow(id: String, name: String, type: AgentType, isSelected: Bool, unreadCount: Int = 0) -> some View {
         Button {
             onSelect(id)
         } label: {
@@ -449,6 +489,17 @@ private struct RecipientSelectorSheet: View {
                 }
 
                 Spacer()
+
+                // Unread count badge
+                if unreadCount > 0 {
+                    Text("\(unreadCount)")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundColor(CRTTheme.Background.screen)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(theme.primary)
+                        .clipShape(Capsule())
+                }
 
                 // Selection indicator
                 if isSelected {
@@ -475,6 +526,113 @@ private struct RecipientSelectorSheet: View {
         case .user: return "person.circle"
         case .agent: return "cpu"
         }
+    }
+}
+
+// MARK: - Chat Search Sheet
+
+/// Sheet for searching chat messages
+private struct ChatSearchSheet: View {
+    @Environment(\.crtTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var viewModel: ChatViewModel
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Search field
+                CRTTextField("Search messages...", text: $viewModel.searchQuery, icon: "magnifyingglass")
+                    .padding(CRTTheme.Spacing.md)
+                    .onChange(of: viewModel.searchQuery) { _, _ in
+                        viewModel.performSearch()
+                    }
+
+                // Results
+                if viewModel.isSearching {
+                    Spacer()
+                    LoadingIndicator(size: .medium)
+                    CRTText("SEARCHING...", style: .caption, glowIntensity: .subtle, color: theme.dim)
+                        .padding(.top, CRTTheme.Spacing.sm)
+                    Spacer()
+                } else if let results = viewModel.searchResults {
+                    if results.isEmpty {
+                        Spacer()
+                        VStack(spacing: CRTTheme.Spacing.sm) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 36))
+                                .foregroundColor(theme.dim)
+                            CRTText("NO RESULTS", style: .subheader, glowIntensity: .subtle, color: theme.dim)
+                        }
+                        Spacer()
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 0) {
+                                ForEach(results) { message in
+                                    searchResultRow(message)
+
+                                    if message.id != results.last?.id {
+                                        Divider()
+                                            .background(theme.dim.opacity(0.3))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Spacer()
+                    VStack(spacing: CRTTheme.Spacing.sm) {
+                        Image(systemName: "text.magnifyingglass")
+                            .font(.system(size: 36))
+                            .foregroundColor(theme.dim)
+                        CRTText("SEARCH MESSAGES", style: .subheader, glowIntensity: .subtle, color: theme.dim)
+                        CRTText("Type to search conversation history", style: .caption, glowIntensity: .none, color: theme.dim.opacity(0.6))
+                    }
+                    Spacer()
+                }
+            }
+            .background(CRTTheme.Background.screen)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    CRTText("SEARCH", style: .subheader, glowIntensity: .subtle)
+                }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        viewModel.clearSearch()
+                        dismiss()
+                    }
+                    .foregroundColor(theme.primary)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func searchResultRow(_ message: PersistentMessage) -> some View {
+        VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxs) {
+            HStack {
+                CRTText(
+                    message.isFromUser ? "YOU" : message.agentId.uppercased(),
+                    style: .caption,
+                    glowIntensity: .subtle
+                )
+                Spacer()
+                if let date = message.date {
+                    CRTText(
+                        date.formatted(date: .abbreviated, time: .shortened),
+                        style: .caption,
+                        glowIntensity: .none,
+                        color: theme.dim
+                    )
+                }
+            }
+            CRTText(message.body, style: .body, glowIntensity: .subtle)
+                .lineLimit(3)
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
+        .padding(.vertical, CRTTheme.Spacing.sm)
     }
 }
 
