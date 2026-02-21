@@ -197,6 +197,137 @@ describe('useChatMessages', () => {
       // Should still be only 1 message
       expect(result.current.messages).toHaveLength(1);
     });
+
+    it('should filter WS messages by agentId scope (adj-jqs regression)', async () => {
+      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+        mockListResponse([])
+      );
+
+      let subscriberCallback: ((msg: any) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: any) => {
+        subscriberCallback = cb;
+        return vi.fn();
+      });
+
+      // Hook scoped to agent-1
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Message from a different agent (agent-2) should be filtered out
+      act(() => {
+        subscriberCallback!({
+          id: 'msg-wrong-agent',
+          from: 'agent-2',
+          to: 'user',
+          body: 'From wrong agent',
+          timestamp: '2026-02-21T10:05:00Z',
+        });
+      });
+
+      expect(result.current.messages).toHaveLength(0);
+
+      // Message from agent-1 should be accepted
+      act(() => {
+        subscriberCallback!({
+          id: 'msg-right-agent',
+          from: 'agent-1',
+          to: 'user',
+          body: 'From correct agent',
+          timestamp: '2026-02-21T10:06:00Z',
+        });
+      });
+
+      expect(result.current.messages).toHaveLength(1);
+      expect(result.current.messages[0]!.body).toBe('From correct agent');
+    });
+
+    it('should accept all WS messages when no agentId is set', async () => {
+      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+        mockListResponse([])
+      );
+
+      let subscriberCallback: ((msg: any) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: any) => {
+        subscriberCallback = cb;
+        return vi.fn();
+      });
+
+      // No agentId scope
+      const { result } = renderHook(() => useChatMessages());
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Messages from any agent should be accepted
+      act(() => {
+        subscriberCallback!({
+          id: 'msg-any-1',
+          from: 'agent-1',
+          to: 'user',
+          body: 'From agent 1',
+          timestamp: '2026-02-21T10:05:00Z',
+        });
+      });
+
+      act(() => {
+        subscriberCallback!({
+          id: 'msg-any-2',
+          from: 'agent-2',
+          to: 'user',
+          body: 'From agent 2',
+          timestamp: '2026-02-21T10:06:00Z',
+        });
+      });
+
+      expect(result.current.messages).toHaveLength(2);
+    });
+  });
+
+  describe('addOptimistic', () => {
+    it('should add an optimistic message without HTTP send', async () => {
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      act(() => {
+        result.current.addOptimistic('WS message', 'client-123');
+      });
+
+      expect(result.current.messages).toHaveLength(1);
+      const msg = result.current.messages[0]!;
+      expect(msg.body).toBe('WS message');
+      expect(msg.clientId).toBe('client-123');
+      expect(msg.optimisticStatus).toBe('sending');
+      expect(msg.role).toBe('user');
+
+      // api.messages.send should NOT have been called
+      expect(api.messages.send).not.toHaveBeenCalled();
+    });
+
+    it('should be confirmable via confirmDelivery', async () => {
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      act(() => {
+        result.current.addOptimistic('WS message', 'client-456');
+      });
+
+      act(() => {
+        result.current.confirmDelivery('client-456', 'server-id-789');
+      });
+
+      expect(result.current.messages[0]!.id).toBe('server-id-789');
+      expect(result.current.messages[0]!.optimisticStatus).toBe('delivered');
+    });
   });
 
   describe('sendMessage (optimistic UI)', () => {

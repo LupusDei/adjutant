@@ -28,8 +28,10 @@ export interface UseChatMessagesResult {
   isLoading: boolean;
   error: Error | null;
   hasMore: boolean;
-  /** Send a message. Adds it optimistically and confirms on API response. */
+  /** Send a message via HTTP. Adds it optimistically and confirms on API response. */
   sendMessage: (body: string, threadId?: string) => Promise<void>;
+  /** Add an optimistic message without sending via HTTP (for WebSocket sends). */
+  addOptimistic: (body: string, clientId: string) => void;
   /** Confirm delivery of an optimistic message by clientId */
   confirmDelivery: (clientId: string, messageId: string) => void;
   /** Mark a sent message as failed by clientId */
@@ -87,9 +89,12 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
     };
   }, [fetchMessages]);
 
-  // Subscribe to real-time messages
+  // Subscribe to real-time messages, filtered by agent scope
   useEffect(() => {
     const unsubscribe = subscribe((incoming: IncomingChatMessage) => {
+      // Filter by agent scope: only accept messages to/from the selected agent
+      if (agentId && incoming.from !== agentId && incoming.to !== agentId) return;
+
       // Convert to ChatMessage shape and append, deduplicating by ID
       setMessages((prev) => {
         if (prev.some((m) => m.id === incoming.id)) return prev;
@@ -114,7 +119,7 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
     });
 
     return unsubscribe;
-  }, [subscribe]);
+  }, [subscribe, agentId]);
 
   // Send a message with optimistic UI
   const sendMessage = useCallback(
@@ -183,6 +188,31 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
     [agentId],
   );
 
+  // Add an optimistic message without sending via HTTP (for WebSocket sends)
+  const addOptimistic = useCallback(
+    (body: string, clientId: string) => {
+      const now = new Date().toISOString();
+      const optimisticMsg: DisplayMessage = {
+        id: `optimistic-${clientId}`,
+        clientId,
+        sessionId: null,
+        agentId: 'user',
+        recipient: agentId ?? 'user',
+        role: 'user',
+        body,
+        metadata: null,
+        deliveryStatus: 'pending',
+        optimisticStatus: 'sending',
+        eventType: null,
+        threadId: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      setMessages((prev) => [...prev, optimisticMsg]);
+    },
+    [agentId],
+  );
+
   // Confirm delivery of a message sent via WebSocket
   const confirmDelivery = useCallback((clientId: string, messageId: string) => {
     setMessages((prev) =>
@@ -246,6 +276,7 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
     error,
     hasMore,
     sendMessage,
+    addOptimistic,
     confirmDelivery,
     markFailed,
     markRead,

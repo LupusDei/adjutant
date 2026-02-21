@@ -127,7 +127,9 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     error: fetchError,
     hasMore,
     sendMessage: hookSendMessage,
+    addOptimistic,
     confirmDelivery,
+    markFailed,
     loadMore,
   } = useChatMessages(agentId);
 
@@ -242,21 +244,19 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     setInputValue('');
     setSendError(null);
 
-    // Try WebSocket first for faster delivery
+    // WebSocket path: send via WS, add optimistic message, wait for delivery confirmation
     if (wsConnected) {
       const clientId = crypto.randomUUID();
       const sent = wsSendMessage(text, coordinatorAddress, clientId);
       if (sent) {
-        // The useChatMessages hook handles optimistic UI via sendMessage,
-        // but for WS sends we add directly since we bypass the hook's send.
-        // Actually, we should still use the hook for optimistic UI consistency.
-        // Fall through to hook-based send which adds optimistic message.
+        addOptimistic(text, clientId);
+        inputRef.current?.focus();
+        return; // WS handles delivery; don't also send via HTTP
       }
-      // If WS send succeeded, we still want the optimistic message in the hook.
-      // The WS delivery confirmation will update it via confirmDelivery callback.
+      // WS send failed — fall through to HTTP path
     }
 
-    // Use the hook's sendMessage for optimistic UI and persistence
+    // HTTP path: hook sends via api.messages.send with built-in optimistic UI
     setSending(true);
     try {
       await hookSendMessage(text);
