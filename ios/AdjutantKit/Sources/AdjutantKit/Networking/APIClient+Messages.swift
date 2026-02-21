@@ -89,4 +89,29 @@ extension APIClient {
     public func getUnreadCounts() async throws -> UnreadCountsResponse {
         try await requestWithEnvelope(.get, path: "/messages/unread")
     }
+
+    /// Search messages by text query.
+    ///
+    /// Maps to `GET /api/messages/search?q=&agentId=`
+    ///
+    /// - Parameters:
+    ///   - query: The search query string.
+    ///   - agentId: Optional agent ID to scope the search.
+    /// - Returns: A ``MessagesListResponse`` with matching messages.
+    public func searchMessages(
+        query: String,
+        agentId: String? = nil
+    ) async throws -> MessagesListResponse {
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "q", value: query)
+        ]
+        if let agentId {
+            queryItems.append(URLQueryItem(name: "agentId", value: agentId))
+        }
+        return try await requestWithEnvelope(
+            .get,
+            path: "/messages/search",
+            queryItems: queryItems
+        )
+    }
 }

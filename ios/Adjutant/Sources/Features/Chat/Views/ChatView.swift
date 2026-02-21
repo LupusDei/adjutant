@@ -11,6 +11,7 @@ struct ChatView: View {
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showRecipientSelector = false
     @State private var showConnectionDetails = false
+    @State private var showSearch = false
     @State private var selectedSession: ManagedSession?
 
     init(apiClient: APIClient, speechService: (any SpeechRecognitionServiceProtocol)? = nil) {
@@ -117,6 +118,9 @@ struct ChatView: View {
             )
             SessionChatView(session: session, wsClient: wsClient, showDismiss: true)
         }
+        .sheet(isPresented: $showSearch) {
+            ChatSearchSheet(viewModel: viewModel)
+        }
     }
 
     // MARK: - Subviews
@@ -139,6 +143,17 @@ struct ChatView: View {
             .buttonStyle(.plain)
 
             Spacer()
+
+            // Search button
+            Button {
+                showSearch = true
+            } label: {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(theme.primary)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
 
             // Session switcher button
             SessionSwitcherButton(onSessionSelected: { session in
@@ -511,6 +526,113 @@ private struct RecipientSelectorSheet: View {
         case .user: return "person.circle"
         case .agent: return "cpu"
         }
+    }
+}
+
+// MARK: - Chat Search Sheet
+
+/// Sheet for searching chat messages
+private struct ChatSearchSheet: View {
+    @Environment(\.crtTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var viewModel: ChatViewModel
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Search field
+                CRTTextField("Search messages...", text: $viewModel.searchQuery, icon: "magnifyingglass")
+                    .padding(CRTTheme.Spacing.md)
+                    .onChange(of: viewModel.searchQuery) { _, _ in
+                        viewModel.performSearch()
+                    }
+
+                // Results
+                if viewModel.isSearching {
+                    Spacer()
+                    LoadingIndicator(size: .medium)
+                    CRTText("SEARCHING...", style: .caption, glowIntensity: .subtle, color: theme.dim)
+                        .padding(.top, CRTTheme.Spacing.sm)
+                    Spacer()
+                } else if let results = viewModel.searchResults {
+                    if results.isEmpty {
+                        Spacer()
+                        VStack(spacing: CRTTheme.Spacing.sm) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 36))
+                                .foregroundColor(theme.dim)
+                            CRTText("NO RESULTS", style: .subheader, glowIntensity: .subtle, color: theme.dim)
+                        }
+                        Spacer()
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 0) {
+                                ForEach(results) { message in
+                                    searchResultRow(message)
+
+                                    if message.id != results.last?.id {
+                                        Divider()
+                                            .background(theme.dim.opacity(0.3))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Spacer()
+                    VStack(spacing: CRTTheme.Spacing.sm) {
+                        Image(systemName: "text.magnifyingglass")
+                            .font(.system(size: 36))
+                            .foregroundColor(theme.dim)
+                        CRTText("SEARCH MESSAGES", style: .subheader, glowIntensity: .subtle, color: theme.dim)
+                        CRTText("Type to search conversation history", style: .caption, glowIntensity: .none, color: theme.dim.opacity(0.6))
+                    }
+                    Spacer()
+                }
+            }
+            .background(CRTTheme.Background.screen)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    CRTText("SEARCH", style: .subheader, glowIntensity: .subtle)
+                }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        viewModel.clearSearch()
+                        dismiss()
+                    }
+                    .foregroundColor(theme.primary)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func searchResultRow(_ message: PersistentMessage) -> some View {
+        VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxs) {
+            HStack {
+                CRTText(
+                    message.isFromUser ? "YOU" : message.agentId.uppercased(),
+                    style: .caption,
+                    glowIntensity: .subtle
+                )
+                Spacer()
+                if let date = message.date {
+                    CRTText(
+                        date.formatted(date: .abbreviated, time: .shortened),
+                        style: .caption,
+                        glowIntensity: .none,
+                        color: theme.dim
+                    )
+                }
+            }
+            CRTText(message.body, style: .body, glowIntensity: .subtle)
+                .lineLimit(3)
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
+        .padding(.vertical, CRTTheme.Spacing.sm)
     }
 }
 

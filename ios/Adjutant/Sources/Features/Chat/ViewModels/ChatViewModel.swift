@@ -70,6 +70,15 @@ final class ChatViewModel: BaseViewModel {
     /// Text being streamed token-by-token (nil when no active stream)
     @Published private(set) var streamingText: String?
 
+    /// Current search query text
+    @Published var searchQuery: String = ""
+
+    /// Whether a search is currently in progress
+    @Published private(set) var isSearching: Bool = false
+
+    /// Search results (nil when not searching, empty array when no results)
+    @Published private(set) var searchResults: [PersistentMessage]?
+
     // MARK: - Dependencies
 
     private let apiClient: APIClient
@@ -84,6 +93,7 @@ final class ChatViewModel: BaseViewModel {
     private let pollingInterval: TimeInterval = 30.0
     private var lastMessageId: String?
     private var speechCancellables = Set<AnyCancellable>()
+    private var searchTask: Task<Void, Never>?
     /// Pending optimistic messages: clientId -> PersistentMessage
     private var pendingLocalMessages: [String: PersistentMessage] = [:]
     /// Track which client IDs have been confirmed by server
@@ -372,6 +382,47 @@ final class ChatViewModel: BaseViewModel {
                 self.hasMoreHistory = response.hasMore
             }
         }
+    }
+
+    // MARK: - Search
+
+    /// Perform a debounced search as the user types
+    func performSearch() {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Clear results if query is empty
+        guard !query.isEmpty else {
+            searchResults = nil
+            isSearching = false
+            searchTask?.cancel()
+            return
+        }
+
+        // Debounce: cancel pending search and wait briefly
+        searchTask?.cancel()
+        searchTask = Task {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+
+            isSearching = true
+            defer { isSearching = false }
+
+            let response = try? await apiClient.searchMessages(
+                query: query,
+                agentId: selectedRecipient
+            )
+
+            guard !Task.isCancelled else { return }
+            searchResults = response?.items ?? []
+        }
+    }
+
+    /// Clear search state and return to normal message view
+    func clearSearch() {
+        searchQuery = ""
+        searchResults = nil
+        isSearching = false
+        searchTask?.cancel()
     }
 
     // MARK: - WebSocket Message Handling
