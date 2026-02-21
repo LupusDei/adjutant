@@ -48,7 +48,7 @@ interface WsClientMessage {
 
 /** Server → Client message types */
 interface WsServerMessage {
-  type: "auth_challenge" | "connected" | "message" | "stream_token" | "stream_end" | "typing" | "delivered" | "error" | "sync_response" | "pong"
+  type: "auth_challenge" | "connected" | "message" | "chat_message" | "stream_token" | "stream_end" | "typing" | "delivered" | "error" | "sync_response" | "pong"
     | "session_connected" | "session_disconnected" | "session_output" | "session_raw" | "session_status";
   id?: string | undefined;
   clientId?: string | undefined;
