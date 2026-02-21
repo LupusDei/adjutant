@@ -358,6 +358,27 @@ export const api = {
   },
 
   /**
+   * Session operations.
+   */
+  sessions: {
+    async kill(sessionId: string): Promise<{ killed: boolean }> {
+      return apiFetch(`/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+    },
+  },
+
+  /**
+   * Swarm operations.
+   */
+  swarms: {
+    async addAgent(swarmId: string, name?: string): Promise<{ id: string; name: string }> {
+      return apiFetch(`/swarms/${encodeURIComponent(swarmId)}/agents`, {
+        method: 'POST',
+        body: name ? { name } : {},
+      });
+    },
+  },
+
+  /**
    * Voice operations - T020
    */
   voice: {

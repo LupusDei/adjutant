@@ -358,6 +358,9 @@ interface SwarmSummaryPanelProps {
   agents: CrewMember[];
 }
 
+/** Spawn button state for swarm summary panel */
+type SwarmSpawnState = 'idle' | 'loading' | 'success' | 'error';
+
 function SwarmSummaryPanel({ agents }: SwarmSummaryPanelProps) {
   const counts = useMemo(() => {
     let active = 0, idle = 0, blocked = 0, offline = 0;
@@ -374,9 +377,41 @@ function SwarmSummaryPanel({ agents }: SwarmSummaryPanelProps) {
     return { active, idle, blocked, offline };
   }, [agents]);
 
+  const swarmId = useMemo(() => agents.find(a => a.swarmId)?.swarmId ?? null, [agents]);
+  const [spawnState, setSpawnState] = useState<SwarmSpawnState>('idle');
+  const [spawnError, setSpawnError] = useState<string | null>(null);
+
+  const handleSpawnAgent = useCallback(async () => {
+    if (spawnState === 'loading' || !swarmId) return;
+    setSpawnState('loading');
+    setSpawnError(null);
+    try {
+      await api.swarms.addAgent(swarmId);
+      setSpawnState('success');
+      setTimeout(() => setSpawnState('idle'), 2000);
+    } catch (err) {
+      setSpawnState('error');
+      setSpawnError(err instanceof ApiError ? err.message : 'Failed to spawn agent');
+      setTimeout(() => { setSpawnState('idle'); setSpawnError(null); }, 3000);
+    }
+  }, [swarmId, spawnState]);
+
   const hasIssues = counts.blocked > 0;
   const overallStatus = hasIssues ? 'AGENTS BLOCKED' : 'SWARM OPERATIONAL';
   const overallColor = hasIssues ? colors.blocked : colors.working;
+
+  const spawnLabel = spawnState === 'loading' ? 'SPAWNING...'
+    : spawnState === 'success' ? 'SPAWNED'
+    : spawnState === 'error' ? 'FAILED'
+    : 'SPAWN AGENT';
+
+  const spawnBtnStyle: CSSProperties = {
+    ...styles.swarmSpawnButton,
+    ...(spawnState === 'loading' ? { cursor: 'wait', opacity: 0.7 } : {}),
+    ...(spawnState === 'success' ? { borderColor: colors.working, color: colors.working } : {}),
+    ...(spawnState === 'error' ? { borderColor: colors.stuck, color: colors.stuck } : {}),
+    ...(!swarmId ? { opacity: 0.4, cursor: 'not-allowed' } : {}),
+  };
 
   return (
     <div style={styles.summaryPanel}>
@@ -397,8 +432,26 @@ function SwarmSummaryPanel({ agents }: SwarmSummaryPanelProps) {
           {counts.offline} OFFLINE
         </span>
       </div>
-      <div style={{ ...styles.summaryStatus, color: overallColor }} className="crt-glow">
-        {'>'} {overallStatus}
+      <div style={styles.summaryStatusRow}>
+        <div style={{ ...styles.summaryStatus, color: overallColor }} className="crt-glow">
+          {'>'} {overallStatus}
+        </div>
+        <div style={styles.swarmSpawnContainer}>
+          <button
+            style={spawnBtnStyle}
+            onClick={handleSpawnAgent}
+            disabled={spawnState === 'loading' || !swarmId}
+            title={spawnError ?? (swarmId ? 'Spawn a new agent' : 'No active swarm')}
+            aria-label="Spawn new agent"
+          >
+            {spawnLabel}
+          </button>
+          {spawnState === 'error' && spawnError && (
+            <span style={styles.swarmSpawnError} title={spawnError}>
+              {spawnError.length > 25 ? `${spawnError.slice(0, 25)}...` : spawnError}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1147,10 +1200,48 @@ const styles = {
     opacity: 0.5,
   },
 
+  summaryStatusRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '12px',
+  },
+
   summaryStatus: {
     fontSize: '0.85rem',
     letterSpacing: '0.15em',
     fontWeight: 'bold',
+  },
+
+  swarmSpawnContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flexShrink: 0,
+  },
+
+  swarmSpawnButton: {
+    padding: '4px 12px',
+    border: `1px solid ${colors.primary}`,
+    backgroundColor: 'transparent',
+    color: colors.primary,
+    fontSize: '0.7rem',
+    fontWeight: 'bold',
+    fontFamily: '"Share Tech Mono", "Courier New", monospace',
+    letterSpacing: '0.1em',
+    textTransform: 'uppercase',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+  },
+
+  swarmSpawnError: {
+    fontSize: '0.6rem',
+    color: colors.stuck,
+    letterSpacing: '0.05em',
+    maxWidth: '150px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
 
   // Status group styles (swarm grouping)
