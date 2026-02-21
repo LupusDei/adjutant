@@ -297,6 +297,10 @@ final class ChatViewModel: BaseViewModel {
                 }
             }
 
+            // Deduplicate by ID (WebSocket + API fetch can produce duplicates)
+            var seen = Set<String>()
+            serverMessages = serverMessages.filter { seen.insert($0.id).inserted }
+
             self.messages = serverMessages
             self.hasMoreHistory = response.hasMore
             self.lastMessageId = serverMessages.filter { !$0.id.hasPrefix("local-") }.last?.id
