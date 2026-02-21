@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BeadsView } from "./components/beads/BeadsView";
-import { MayorChat } from "./components/chat/MayorChat";
+import { ChatView } from "./components/chat/ChatView";
 import { EpicsView } from "./components/epics/EpicsView";
 import { CrewStats } from "./components/crew/CrewStats";
 import { MailView } from "./components/mail/MailView";
@@ -135,7 +135,7 @@ function AppContent() {
             hidden={activeTab !== "chat"}
             aria-hidden={activeTab !== "chat"}
           >
-            <MayorChat isActive={activeTab === "chat"} />
+            <ChatView isActive={activeTab === "chat"} />
           </section>
           {visibleTabs.has("epics") && (
             <section
