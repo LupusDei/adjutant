@@ -38,6 +38,7 @@ public final class NotificationService: NSObject, ObservableObject {
     /// Category identifiers for different notification types
     public enum Category: String {
         case newMail = "NEW_MAIL"
+        case chatMessage = "CHAT_MESSAGE"
         case taskUpdate = "TASK_UPDATE"
         case systemAlert = "SYSTEM_ALERT"
         case reminder = "REMINDER"
@@ -130,6 +131,13 @@ public final class NotificationService: NSObject, ObservableObject {
             options: [.customDismissAction]
         )
 
+        let chatMessageCategory = UNNotificationCategory(
+            identifier: Category.chatMessage.rawValue,
+            actions: [viewAction, dismissAction],
+            intentIdentifiers: [],
+            options: []
+        )
+
         let taskUpdateCategory = UNNotificationCategory(
             identifier: Category.taskUpdate.rawValue,
             actions: [viewAction, dismissAction],
@@ -153,6 +161,7 @@ public final class NotificationService: NSObject, ObservableObject {
 
         notificationCenter.setNotificationCategories([
             newMailCategory,
+            chatMessageCategory,
             taskUpdateCategory,
             systemAlertCategory,
             reminderCategory
@@ -229,6 +238,28 @@ public final class NotificationService: NSObject, ObservableObject {
             userInfo: ["mailId": mailId, "type": "mail"],
             delay: delay,
             identifier: "mail-\(mailId)"
+        )
+    }
+
+    /// Schedules a chat message notification.
+    /// - Parameters:
+    ///   - agentId: The agent who sent the message
+    ///   - body: The message body preview
+    ///   - messageId: The unique message identifier
+    /// - Returns: The notification identifier
+    @discardableResult
+    public func scheduleChatMessageNotification(
+        agentId: String,
+        body: String,
+        messageId: String
+    ) async -> String {
+        let preview = body.count > 100 ? String(body.prefix(100)) + "..." : body
+        return await scheduleNotification(
+            title: "Message from \(agentId)",
+            body: preview,
+            category: .chatMessage,
+            userInfo: ["agentId": agentId, "messageId": messageId, "type": "chat_message"],
+            identifier: "chat-\(messageId)"
         )
     }
 
@@ -450,6 +481,17 @@ extension NotificationService: UNUserNotificationCenterDelegate {
                 }
             }
 
+        case "chat_message":
+            if let agentId = userInfo["agentId"] as? String {
+                await MainActor.run {
+                    NotificationCenter.default.post(
+                        name: .navigateToChat,
+                        object: nil,
+                        userInfo: ["agentId": agentId]
+                    )
+                }
+            }
+
         case "task":
             if let taskId = userInfo["taskId"] as? String {
                 await MainActor.run {
@@ -504,6 +546,9 @@ extension Notification.Name {
 
     /// Posted when the user wants to navigate to a specific task
     static let navigateToTask = Notification.Name("navigateToTask")
+
+    /// Posted when the user wants to navigate to a specific agent chat
+    static let navigateToChat = Notification.Name("navigateToChat")
 
     /// Posted when the user marks mail as read from a notification
     static let markMailAsRead = Notification.Name("markMailAsRead")

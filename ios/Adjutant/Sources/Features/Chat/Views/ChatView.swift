@@ -6,6 +6,7 @@ import AdjutantKit
 /// Supports chatting with Mayor or any crew agent.
 struct ChatView: View {
     @Environment(\.crtTheme) private var theme
+    @EnvironmentObject private var coordinator: AppCoordinator
     @StateObject private var viewModel: ChatViewModel
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showRecipientSelector = false
@@ -65,6 +66,13 @@ struct ChatView: View {
         .background(CRTTheme.Background.screen)
         .onAppear {
             viewModel.onAppear()
+            // Handle deep link from push notification
+            if let agentId = coordinator.pendingChatAgentId {
+                coordinator.pendingChatAgentId = nil
+                Task {
+                    await viewModel.setRecipient(agentId)
+                }
+            }
         }
         .onDisappear {
             viewModel.onDisappear()

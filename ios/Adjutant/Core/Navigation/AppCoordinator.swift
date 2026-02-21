@@ -123,6 +123,15 @@ final class AppCoordinator: Coordinator, ObservableObject {
                 self?.handleTaskNotificationTap(taskId: taskId)
             }
             .store(in: &cancellables)
+
+        // Handle chat message notification taps
+        NotificationCenter.default.publisher(for: .navigateToChat)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let agentId = notification.userInfo?["agentId"] as? String else { return }
+                self?.handleChatNotificationTap(agentId: agentId)
+            }
+            .store(in: &cancellables)
     }
 
     /// Handles navigation when a mail notification is tapped
@@ -137,6 +146,16 @@ final class AppCoordinator: Coordinator, ObservableObject {
     private func handleTaskNotificationTap(taskId: String) {
         selectTab(.beads)
         navigate(to: .beadDetail(id: taskId))
+    }
+
+    /// The agent ID to select when the chat tab opens (set by push notification deep link)
+    @Published var pendingChatAgentId: String?
+
+    /// Handles navigation when a chat message notification is tapped
+    /// - Parameter agentId: The agent to navigate to in chat
+    private func handleChatNotificationTap(agentId: String) {
+        pendingChatAgentId = agentId
+        selectTab(.chat)
     }
 
     // MARK: - Navigation
@@ -239,6 +258,13 @@ final class AppCoordinator: Coordinator, ObservableObject {
             } else {
                 selectTab(.mail)
             }
+            return true
+
+        case "chat":
+            if let agentId = components.queryItems?.first(where: { $0.name == "agent" })?.value {
+                pendingChatAgentId = agentId
+            }
+            selectTab(.chat)
             return true
 
         case "beads":

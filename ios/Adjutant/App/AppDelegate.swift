@@ -130,6 +130,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         case "task", "bead_update", "bead_status":
             return await handleTaskNotification(userInfo: userInfo)
 
+        case "chat_message":
+            return await handleChatMessageNotification(userInfo: userInfo)
+
         case "system":
             return await handleSystemNotification(userInfo: userInfo)
 
@@ -194,6 +197,26 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         } else {
             return .noData
         }
+    }
+
+    /// Handles chat message notifications by scheduling a local notification with agent context.
+    @MainActor
+    private func handleChatMessageNotification(userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
+        guard let agentId = userInfo["agentId"] as? String,
+              let body = userInfo["body"] as? String else {
+            print("[AppDelegate] Chat message notification missing required fields")
+            return .noData
+        }
+
+        let messageId = userInfo["messageId"] as? String ?? UUID().uuidString
+
+        await NotificationService.shared.scheduleChatMessageNotification(
+            agentId: agentId,
+            body: body,
+            messageId: messageId
+        )
+
+        return .newData
     }
 
     /// Handles system notifications by processing alert announcements.
