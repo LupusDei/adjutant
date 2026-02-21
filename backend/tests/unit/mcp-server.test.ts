@@ -27,27 +27,23 @@ vi.mock("../../src/services/event-bus.js", () => ({
 // Mock MCP SDK - use vi.hoisted so all variables are available in vi.mock factories
 const {
   mockConnect,
-  mockClose,
-  MockMcpServer,
   mockStart,
   sessionIdState,
   createdTransports,
 } = vi.hoisted(() => {
   const mockConnect = vi.fn().mockResolvedValue(undefined);
-  const mockClose = vi.fn().mockResolvedValue(undefined);
-  const MockMcpServer = vi.fn().mockImplementation(() => ({
-    connect: mockConnect,
-    close: mockClose,
-    server: {},
-  }));
   const mockStart = vi.fn().mockResolvedValue(undefined);
   const sessionIdState = { counter: 0 };
   const createdTransports: Array<{ sessionId: string; onclose?: () => void }> = [];
-  return { mockConnect, mockClose, MockMcpServer, mockStart, sessionIdState, createdTransports };
+  return { mockConnect, mockStart, sessionIdState, createdTransports };
 });
 
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
-  McpServer: MockMcpServer,
+  McpServer: vi.fn(() => ({
+    connect: mockConnect,
+    close: vi.fn().mockResolvedValue(undefined),
+    server: {},
+  })),
 }));
 
 vi.mock("@modelcontextprotocol/sdk/server/sse.js", () => ({
@@ -73,7 +69,10 @@ import {
   disconnectAgent,
   resolveAgentId,
 } from "../../src/services/mcp-server.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getEventBus } from "../../src/services/event-bus.js";
+
+const MockedMcpServer = vi.mocked(McpServer);
 
 describe("MCP Server", () => {
   beforeEach(() => {
@@ -92,7 +91,7 @@ describe("MCP Server", () => {
 
     it("should configure server with name 'adjutant'", () => {
       createMcpServer();
-      expect(MockMcpServer).toHaveBeenCalledWith(
+      expect(MockedMcpServer).toHaveBeenCalledWith(
         expect.objectContaining({ name: "adjutant" }),
         expect.anything(),
       );
