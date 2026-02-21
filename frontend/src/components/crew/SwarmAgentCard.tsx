@@ -1,6 +1,7 @@
 import type { CSSProperties, FormEvent } from 'react';
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { api, ApiError } from '../../services/api';
+import { useTerminalStream } from '../../hooks/useTerminalStream';
 import type { CrewMember } from '../../types';
 
 /** Format ISO timestamp as relative time (e.g., "2m ago", "just now"). */
@@ -62,6 +63,7 @@ type AssignState = 'idle' | 'loading';
  * Rich agent card for swarm mode.
  * Shows status, current task, branch, last activity, mail preview, and worktree.
  * Includes kill (D2) and assign (D3) controls.
+ * Supports expandable inline terminal view with WebSocket streaming + polling fallback.
  */
 export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
   const isOnline = agent.status !== 'offline';
@@ -71,6 +73,7 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
   const isWorking = displayStatus === 'working' || displayStatus === 'active';
   const canKill = isOnline && !agent.isCoordinator && agent.sessionId;
   const canAssign = displayStatus === 'idle' && isOnline;
+  const hasSession = Boolean(agent.sessionId) && isOnline;
 
   // D2: Kill agent state
   const [killState, setKillState] = useState<KillState>('idle');
@@ -123,6 +126,17 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
     setAssignState('idle');
   }, [beadId, agent.name, assignState]);
 
+  // Terminal expansion state
+  const [expanded, setExpanded] = useState(false);
+  const terminalRef = useRef<HTMLPreElement>(null);
+  const userScrolledRef = useRef(false);
+
+  // WebSocket terminal stream with polling fallback
+  const { content: terminalContent, error: terminalError, loading: terminalLoading, mode: streamMode } = useTerminalStream({
+    sessionId: agent.sessionId,
+    enabled: expanded && hasSession,
+  });
+
   const relativeTime = useMemo(() => {
     if (!agent.lastActivity) return null;
     return formatRelativeTime(agent.lastActivity);
@@ -130,11 +144,38 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
 
   const hasFooter = relativeTime || agent.worktreePath || agent.progress;
 
+  // Auto-scroll to bottom unless user scrolled up
+  useEffect(() => {
+    const el = terminalRef.current;
+    if (!el || !terminalContent || userScrolledRef.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [terminalContent]);
+
+  // Detect user scroll-up to pause auto-scroll
+  const handleTerminalScroll = useCallback(() => {
+    const el = terminalRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    userScrolledRef.current = distanceFromBottom > 40;
+  }, []);
+
+  // Reset scroll lock when collapsing
+  const toggleExpand = useCallback(() => {
+    if (!hasSession) return;
+    setExpanded(prev => {
+      if (prev) userScrolledRef.current = false;
+      return !prev;
+    });
+  }, [hasSession]);
+
+  const modeLabel = streamMode === 'ws' ? 'LIVE' : streamMode === 'polling' ? 'POLL' : '';
+
   return (
     <div
       style={{
         ...styles.card,
         borderColor: killState === 'loading' ? colors.stuck
+          : expanded ? colors.primaryBright
           : isOnline ? colors.panelBorder : colors.offlineBorder,
         boxShadow: isWorking
           ? `0 0 12px ${colors.primaryGlow}, inset 0 0 6px ${colors.primaryGlow}`
@@ -144,8 +185,16 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
       role="listitem"
       aria-label={`${agent.name} - ${displayStatus}`}
     >
-      {/* Header: status dot + name + badges + kill button */}
-      <div style={styles.header}>
+      {/* Header: status dot + name + badges + kill button + terminal toggle */}
+      <div
+        style={{
+          ...styles.header,
+          cursor: hasSession ? 'pointer' : 'default',
+        }}
+        onClick={toggleExpand}
+        role={hasSession ? 'button' : undefined}
+        aria-expanded={hasSession ? expanded : undefined}
+      >
         <span
           className={isActive ? 'pulsate' : ''}
           style={{
@@ -167,12 +216,17 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
         {canKill && killState === 'idle' && (
           <button
             style={styles.killButton}
-            onClick={handleKillClick}
+            onClick={(e) => { e.stopPropagation(); handleKillClick(); }}
             title={`Terminate ${agent.name}`}
             aria-label={`Kill ${agent.name}`}
           >
             ✕
           </button>
+        )}
+        {hasSession && (
+          <span style={styles.terminalToggle} title="Toggle terminal">
+            {expanded ? '▼' : '▶'}
+          </span>
         )}
       </div>
 
@@ -274,6 +328,45 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
           </button>
         </form>
       )}
+
+      {/* Inline terminal expansion */}
+      {expanded && (
+        <div style={styles.terminalContainer}>
+          <div style={styles.terminalHeader}>
+            <span style={styles.terminalTitle}>
+              TERMINAL {agent.sessionId ? `[${agent.sessionId.slice(0, 8)}]` : ''}
+              {modeLabel && (
+                <span style={{
+                  ...styles.modeBadge,
+                  color: streamMode === 'ws' ? colors.working : colors.primaryDim,
+                }}>
+                  {modeLabel}
+                </span>
+              )}
+            </span>
+            <button
+              style={styles.terminalCloseBtn}
+              onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
+              aria-label="Close terminal"
+            >
+              ✕
+            </button>
+          </div>
+          {terminalLoading && !terminalContent ? (
+            <div style={styles.terminalLoading}>CONNECTING...</div>
+          ) : terminalError && !terminalContent ? (
+            <div style={styles.terminalErrorMsg}>{terminalError}</div>
+          ) : (
+            <pre
+              ref={terminalRef}
+              style={styles.terminalOutput}
+              onScroll={handleTerminalScroll}
+            >
+              {terminalContent || 'No output yet.'}
+            </pre>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -329,6 +422,12 @@ const styles = {
     color: colors.primaryBright,
     fontWeight: 'bold',
     flexShrink: 0,
+  },
+  terminalToggle: {
+    fontSize: '0.6rem',
+    color: colors.primaryDim,
+    flexShrink: 0,
+    marginLeft: '4px',
   },
   taskRow: {
     display: 'flex',
@@ -524,5 +623,75 @@ const styles = {
     justifyContent: 'center',
     lineHeight: 1,
     transition: 'all 0.2s ease',
+  },
+
+  // Terminal expansion styles
+  terminalContainer: {
+    borderTop: `1px solid ${colors.panelBorder}`,
+    marginTop: '4px',
+    paddingTop: '4px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0',
+  },
+  terminalHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '4px 8px',
+    fontSize: '0.6rem',
+    letterSpacing: '0.1em',
+    color: colors.primaryDim,
+  },
+  terminalTitle: {
+    textTransform: 'uppercase',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  modeBadge: {
+    fontSize: '0.5rem',
+    letterSpacing: '0.05em',
+    padding: '1px 4px',
+    border: `1px solid currentColor`,
+  },
+  terminalCloseBtn: {
+    background: 'none',
+    border: 'none',
+    color: colors.primaryDim,
+    cursor: 'pointer',
+    fontSize: '0.7rem',
+    fontFamily: 'monospace',
+    padding: '2px 4px',
+    lineHeight: 1,
+  },
+  terminalOutput: {
+    margin: 0,
+    padding: '8px',
+    backgroundColor: '#020202',
+    color: colors.primary,
+    fontSize: '0.65rem',
+    lineHeight: 1.4,
+    fontFamily: '"Share Tech Mono", "Courier New", monospace',
+    maxHeight: '250px',
+    overflowY: 'auto',
+    overflowX: 'hidden',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+    border: `1px solid #1a1a1a`,
+  },
+  terminalLoading: {
+    padding: '16px 8px',
+    color: colors.primaryDim,
+    fontSize: '0.65rem',
+    letterSpacing: '0.1em',
+    textAlign: 'center',
+  },
+  terminalErrorMsg: {
+    padding: '16px 8px',
+    color: colors.stuck,
+    fontSize: '0.65rem',
+    letterSpacing: '0.05em',
+    textAlign: 'center',
   },
 } satisfies Record<string, CSSProperties>;

@@ -8,6 +8,7 @@ import { startCacheCleanupScheduler } from "./services/audio-cache.js";
 import { startPrefixMapRefreshScheduler } from "./services/beads-service.js";
 import { initWebSocketServer } from "./services/ws-server.js";
 import { initAgentStatusStream } from "./services/agent-status-stream.js";
+import { initTerminalStream } from "./services/terminal-stream.js";
 import { initStreamingBridge } from "./services/streaming-bridge.js";
 import { getSessionBridge } from "./services/session-bridge.js";
 
@@ -68,6 +69,9 @@ const server = app.listen(PORT, () => {
 
   // Initialize agent status stream (WS /api/agents/stream)
   initAgentStatusStream(server);
+
+  // Initialize terminal stream (WS /api/terminal/stream)
+  initTerminalStream(server);
 
   // Initialize streaming bridge (watches .beads/streams/ for agent output)
   initStreamingBridge();

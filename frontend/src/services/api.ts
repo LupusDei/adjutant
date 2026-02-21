@@ -267,6 +267,19 @@ export const api = {
     }> {
       return apiFetch(`/agents/${encodeURIComponent(rig)}/${encodeURIComponent(polecat)}/terminal`);
     },
+
+    /**
+     * Get terminal content for a swarm agent by session ID.
+     * Returns plain text terminal output for lightweight display.
+     */
+    async getSessionTerminal(sessionId: string): Promise<{
+      content: string;
+      sessionId: string;
+      sessionName: string;
+      timestamp: string;
+    }> {
+      return apiFetch(`/agents/session/${encodeURIComponent(sessionId)}/terminal`);
+    },
   },
 
   /**
