@@ -9,6 +9,9 @@ import { CommunicationProvider, useCommunication } from "../../../src/contexts/C
 
 type WsHandler = ((event: { data: string }) => void) | null;
 
+/** Store the most recently created MockWebSocket for test-driven message injection */
+let lastMockWs: MockWebSocket | null = null;
+
 class MockWebSocket {
   static readonly CONNECTING = 0;
   static readonly OPEN = 1;
@@ -23,6 +26,7 @@ class MockWebSocket {
 
   constructor(url: string) {
     this.url = url;
+    lastMockWs = this;
     // Simulate open + auth challenge asynchronously
     queueMicrotask(() => {
       this.readyState = MockWebSocket.OPEN;
@@ -45,6 +49,11 @@ class MockWebSocket {
         });
       });
     }
+  }
+
+  /** Inject a server message for testing */
+  _injectMessage(data: unknown) {
+    this.onmessage?.({ data: JSON.stringify(data) });
   }
 
   close() {
@@ -242,6 +251,71 @@ describe("CommunicationContext", () => {
       expect(typeof unsubscribe).toBe("function");
       // Should not throw
       unsubscribe();
+    });
+
+    it("should deliver chat_message events to subscribers", async () => {
+      const { result } = renderHook(() => useCommunication(), { wrapper });
+      await flushMicrotasks(); // Wait for WS connection
+      expect(result.current.connectionStatus).toBe("websocket");
+
+      const received: unknown[] = [];
+      act(() => {
+        result.current.subscribe((msg) => received.push(msg));
+      });
+
+      // Inject a chat_message event via the MockWebSocket
+      act(() => {
+        lastMockWs!._injectMessage({
+          type: "chat_message",
+          id: "chat-msg-1",
+          from: "agent-1",
+          to: "user",
+          body: "Hello from agent via MCP",
+          timestamp: "2026-02-21T10:00:00Z",
+        });
+      });
+
+      expect(received).toHaveLength(1);
+      const msg = received[0] as { id: string; from: string; body: string };
+      expect(msg.id).toBe("chat-msg-1");
+      expect(msg.from).toBe("agent-1");
+      expect(msg.body).toBe("Hello from agent via MCP");
+    });
+
+    it("should deliver both message and chat_message types", async () => {
+      const { result } = renderHook(() => useCommunication(), { wrapper });
+      await flushMicrotasks();
+
+      const received: unknown[] = [];
+      act(() => {
+        result.current.subscribe((msg) => received.push(msg));
+      });
+
+      // Inject a regular message
+      act(() => {
+        lastMockWs!._injectMessage({
+          type: "message",
+          id: "msg-1",
+          from: "mayor/",
+          to: "overseer",
+          body: "Regular message",
+          timestamp: "2026-02-21T10:00:00Z",
+        });
+      });
+
+      // Inject a chat_message
+      act(() => {
+        lastMockWs!._injectMessage({
+          type: "chat_message",
+          id: "chat-2",
+          from: "agent-2",
+          to: "user",
+          body: "Chat message",
+          timestamp: "2026-02-21T10:01:00Z",
+        });
+      });
+
+      expect(received).toHaveLength(2);
     });
   });
 
