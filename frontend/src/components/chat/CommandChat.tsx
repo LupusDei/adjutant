@@ -127,9 +127,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     error: fetchError,
     hasMore,
     sendMessage: hookSendMessage,
-    addOptimistic,
     confirmDelivery,
-    markFailed,
     loadMore,
   } = useChatMessages(agentId);
 
@@ -205,7 +203,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
   }), [confirmDelivery]);
 
   // WebSocket connection for streaming and typing
-  const { connected: wsConnected, connectionStatus: wsConnectionStatus, sendMessage: wsSendMessage, sendTyping } = useChatWebSocket(wsEnabled, wsCallbacks);
+  const { connected: wsConnected, connectionStatus: wsConnectionStatus, sendTyping } = useChatWebSocket(wsEnabled, wsCallbacks);
 
   // Effective connection status: WS status when enabled, otherwise from context
   const effectiveStatus: ConnectionStatus = wsEnabled ? wsConnectionStatus : commContextStatus;
@@ -236,28 +234,16 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     };
   }, []);
 
-  // Handle sending a message
+  // Handle sending a message — always via HTTP (hookSendMessage).
+  // The backend stores the message and broadcasts it via WebSocket.
   const handleSend = async () => {
     const text = inputValue.trim();
     if (!text || sending) return;
 
     setInputValue('');
     setSendError(null);
-
-    // WebSocket path: send via WS, add optimistic message, wait for delivery confirmation
-    if (wsConnected) {
-      const clientId = crypto.randomUUID();
-      const sent = wsSendMessage(text, coordinatorAddress, clientId);
-      if (sent) {
-        addOptimistic(text, clientId);
-        inputRef.current?.focus();
-        return; // WS handles delivery; don't also send via HTTP
-      }
-      // WS send failed — fall through to HTTP path
-    }
-
-    // HTTP path: hook sends via api.messages.send with built-in optimistic UI
     setSending(true);
+
     try {
       await hookSendMessage(text);
       inputRef.current?.focus();
