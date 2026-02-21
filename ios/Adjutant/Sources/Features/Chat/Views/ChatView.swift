@@ -101,6 +101,7 @@ struct ChatView: View {
             RecipientSelectorSheet(
                 recipients: viewModel.availableRecipients,
                 selectedRecipient: viewModel.selectedRecipient,
+                unreadCounts: viewModel.unreadCounts,
                 onSelect: { recipient in
                     Task {
                         await viewModel.setRecipient(recipient)
@@ -361,6 +362,7 @@ private struct RecipientSelectorSheet: View {
 
     let recipients: [CrewMember]
     let selectedRecipient: String
+    let unreadCounts: [String: Int]
     let onSelect: (String) -> Void
 
     @State private var searchText = ""
@@ -395,7 +397,8 @@ private struct RecipientSelectorSheet: View {
                                 id: "mayor/",
                                 name: "Mayor",
                                 type: .mayor,
-                                isSelected: selectedRecipient == "mayor/"
+                                isSelected: selectedRecipient == "mayor/",
+                                unreadCount: unreadCounts["mayor/"] ?? 0
                             )
 
                             Divider()
@@ -408,7 +411,8 @@ private struct RecipientSelectorSheet: View {
                                 id: crew.id,
                                 name: crew.name,
                                 type: crew.type,
-                                isSelected: selectedRecipient == crew.id
+                                isSelected: selectedRecipient == crew.id,
+                                unreadCount: unreadCounts[crew.id] ?? 0
                             )
 
                             if crew.id != filteredRecipients.last?.id {
@@ -438,7 +442,7 @@ private struct RecipientSelectorSheet: View {
     }
 
     @ViewBuilder
-    private func recipientRow(id: String, name: String, type: AgentType, isSelected: Bool) -> some View {
+    private func recipientRow(id: String, name: String, type: AgentType, isSelected: Bool, unreadCount: Int = 0) -> some View {
         Button {
             onSelect(id)
         } label: {
@@ -457,6 +461,17 @@ private struct RecipientSelectorSheet: View {
                 }
 
                 Spacer()
+
+                // Unread count badge
+                if unreadCount > 0 {
+                    Text("\(unreadCount)")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundColor(CRTTheme.Background.screen)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(theme.primary)
+                        .clipShape(Capsule())
+                }
 
                 // Selection indicator
                 if isSelected {

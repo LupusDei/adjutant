@@ -25,6 +25,9 @@ final class ChatViewModel: BaseViewModel {
     /// All available recipients (agents)
     @Published private(set) var availableRecipients: [CrewMember] = []
 
+    /// Unread message counts keyed by agentId
+    @Published private(set) var unreadCounts: [String: Int] = [:]
+
     /// Whether the recipient is currently typing
     @Published private(set) var isTyping: Bool = false
 
@@ -307,6 +310,19 @@ final class ChatViewModel: BaseViewModel {
                 self.selectedRecipient = first.id
             }
         }
+        await loadUnreadCounts()
+    }
+
+    /// Fetches unread message counts per agent
+    func loadUnreadCounts() async {
+        await performAsyncAction(showLoading: false) {
+            let response = try await self.apiClient.getUnreadCounts()
+            var counts: [String: Int] = [:]
+            for entry in response.counts {
+                counts[entry.agentId] = entry.count
+            }
+            self.unreadCounts = counts
+        }
     }
 
     /// Sets the current recipient and refreshes messages
@@ -319,7 +335,8 @@ final class ChatViewModel: BaseViewModel {
         streamingText = nil
         await refresh()
 
-        // Mark all messages from this agent as read
+        // Mark all messages from this agent as read and clear local count
+        unreadCounts[recipient] = 0
         Task {
             try? await apiClient.markAllMessagesRead(agentId: recipient)
         }
