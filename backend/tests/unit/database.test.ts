@@ -134,9 +134,54 @@ describe("database", () => {
           .all() as Array<{ name: string }>;
         const indexNames = indexes.map((i) => i.name);
         expect(indexNames).toContain("idx_messages_agent");
+        expect(indexNames).toContain("idx_messages_recipient");
         expect(indexNames).toContain("idx_messages_thread");
         expect(indexNames).toContain("idx_messages_session");
         expect(indexNames).toContain("idx_messages_status");
+      } finally {
+        db.close();
+      }
+    });
+
+    it("should include recipient column in messages table", async () => {
+      const { createDatabase, runMigrations } = await import("../../src/services/database.js");
+      const db = createDatabase(join(testDir, "test.db"));
+      try {
+        runMigrations(db);
+        const columns = db.prepare("PRAGMA table_info(messages)").all() as Array<{ name: string }>;
+        const colNames = columns.map((c) => c.name);
+        expect(colNames).toContain("recipient");
+      } finally {
+        db.close();
+      }
+    });
+
+    it("should allow failed delivery_status", async () => {
+      const { createDatabase, runMigrations } = await import("../../src/services/database.js");
+      const db = createDatabase(join(testDir, "test.db"));
+      try {
+        runMigrations(db);
+        // Insert a message and update to failed - should not violate CHECK constraint
+        db.prepare(
+          "INSERT INTO messages (id, agent_id, role, body, delivery_status) VALUES ('t1', 'a1', 'user', 'test', 'failed')"
+        ).run();
+        const row = db.prepare("SELECT delivery_status FROM messages WHERE id = 't1'").get() as { delivery_status: string };
+        expect(row.delivery_status).toBe("failed");
+      } finally {
+        db.close();
+      }
+    });
+
+    it("should default delivery_status to pending", async () => {
+      const { createDatabase, runMigrations } = await import("../../src/services/database.js");
+      const db = createDatabase(join(testDir, "test.db"));
+      try {
+        runMigrations(db);
+        db.prepare(
+          "INSERT INTO messages (id, agent_id, role, body) VALUES ('t2', 'a1', 'user', 'test')"
+        ).run();
+        const row = db.prepare("SELECT delivery_status FROM messages WHERE id = 't2'").get() as { delivery_status: string };
+        expect(row.delivery_status).toBe("pending");
       } finally {
         db.close();
       }

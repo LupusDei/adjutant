@@ -5,10 +5,11 @@ export interface Message {
   id: string;
   sessionId: string | null;
   agentId: string;
+  recipient: string | null;
   role: "user" | "agent" | "system" | "announcement";
   body: string;
   metadata: Record<string, unknown> | null;
-  deliveryStatus: "pending" | "sent" | "delivered" | "read";
+  deliveryStatus: "pending" | "sent" | "delivered" | "read" | "failed";
   eventType: string | null;
   threadId: string | null;
   createdAt: string;
@@ -26,6 +27,7 @@ export interface Thread {
 interface InsertMessageInput {
   id?: string;
   agentId: string;
+  recipient?: string;
   role: "user" | "agent" | "system" | "announcement";
   body: string;
   metadata?: Record<string, unknown>;
@@ -36,10 +38,13 @@ interface InsertMessageInput {
 
 interface GetMessagesOptions {
   agentId?: string;
+  recipient?: string;
   threadId?: string;
   sessionId?: string;
   before?: string;
+  beforeId?: string;
   after?: string;
+  afterId?: string;
   limit?: number;
 }
 
@@ -58,6 +63,7 @@ interface MessageRow {
   id: string;
   session_id: string | null;
   agent_id: string;
+  recipient: string | null;
   role: string;
   body: string;
   metadata: string | null;
@@ -81,6 +87,7 @@ function rowToMessage(row: MessageRow): Message {
     id: row.id,
     sessionId: row.session_id,
     agentId: row.agent_id,
+    recipient: row.recipient,
     role: row.role as Message["role"],
     body: row.body,
     metadata: row.metadata !== null ? (JSON.parse(row.metadata) as Record<string, unknown>) : null,
@@ -115,8 +122,8 @@ export interface MessageStore {
 
 export function createMessageStore(db: Database.Database): MessageStore {
   const insertStmt = db.prepare(`
-    INSERT INTO messages (id, session_id, agent_id, role, body, metadata, delivery_status, event_type, thread_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'sent', ?, ?, datetime('now'), datetime('now'))
+    INSERT INTO messages (id, session_id, agent_id, recipient, role, body, metadata, delivery_status, event_type, thread_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, datetime('now'), datetime('now'))
   `);
 
   const getByIdStmt = db.prepare("SELECT * FROM messages WHERE id = ?");
@@ -145,6 +152,7 @@ export function createMessageStore(db: Database.Database): MessageStore {
         id,
         input.sessionId ?? null,
         input.agentId,
+        input.recipient ?? null,
         input.role,
         input.body,
         metadataJson,
@@ -170,6 +178,11 @@ export function createMessageStore(db: Database.Database): MessageStore {
         params.push(opts.agentId);
       }
 
+      if (opts.recipient !== undefined) {
+        conditions.push("recipient = ?");
+        params.push(opts.recipient);
+      }
+
       if (opts.threadId !== undefined) {
         conditions.push("thread_id = ?");
         params.push(opts.threadId);
@@ -180,20 +193,36 @@ export function createMessageStore(db: Database.Database): MessageStore {
         params.push(opts.sessionId);
       }
 
+      // Composite cursor pagination: (created_at, id) to handle same-second ties
       if (opts.before !== undefined) {
-        conditions.push("created_at < ?");
-        params.push(opts.before);
+        const beforeId = opts.beforeId;
+        if (beforeId !== undefined) {
+          conditions.push("(created_at < ? OR (created_at = ? AND id < ?))");
+          params.push(opts.before, opts.before, beforeId);
+        } else {
+          conditions.push("created_at < ?");
+          params.push(opts.before);
+        }
       }
 
       if (opts.after !== undefined) {
-        conditions.push("created_at > ?");
-        params.push(opts.after);
+        const afterId = opts.afterId;
+        if (afterId !== undefined) {
+          conditions.push("(created_at > ? OR (created_at = ? AND id > ?))");
+          params.push(opts.after, opts.after, afterId);
+        } else {
+          conditions.push("created_at > ?");
+          params.push(opts.after);
+        }
       }
 
       const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-      const limit = opts.limit !== undefined ? `LIMIT ${opts.limit}` : "";
+      const limitClause = opts.limit !== undefined ? "LIMIT ?" : "";
+      if (opts.limit !== undefined) {
+        params.push(opts.limit);
+      }
 
-      const sql = `SELECT * FROM messages ${where} ORDER BY created_at DESC ${limit}`;
+      const sql = `SELECT * FROM messages ${where} ORDER BY created_at DESC, id DESC ${limitClause}`;
       const rows = db.prepare(sql).all(...params) as MessageRow[];
       return rows.map(rowToMessage);
     },
@@ -216,9 +245,12 @@ export function createMessageStore(db: Database.Database): MessageStore {
       }
 
       const where = conditions.join(" AND ");
-      const limit = opts?.limit !== undefined ? `LIMIT ${opts.limit}` : "";
+      const limitClause = opts?.limit !== undefined ? "LIMIT ?" : "";
+      if (opts?.limit !== undefined) {
+        params.push(opts.limit);
+      }
 
-      const sql = `SELECT m.* FROM messages m WHERE ${where} ORDER BY m.created_at DESC ${limit}`;
+      const sql = `SELECT m.* FROM messages m WHERE ${where} ORDER BY m.created_at DESC ${limitClause}`;
       const rows = db.prepare(sql).all(...params) as MessageRow[];
       return rows.map(rowToMessage);
     },
