@@ -33,8 +33,8 @@ final class ResponseCache {
     /// Cached beads
     private(set) var beads: [BeadInfo] = []
 
-    /// Cached chat messages (same type as mail messages)
-    private(set) var chatMessages: [Message] = []
+    /// Cached chat messages (persistent messages from SQLite store)
+    private(set) var chatMessages: [PersistentMessage] = []
 
     /// Cached dashboard data
     private(set) var dashboardMail: [Message] = []
@@ -93,7 +93,7 @@ final class ResponseCache {
     }
 
     /// Updates the cached chat messages
-    func updateChatMessages(_ messages: [Message]) {
+    func updateChatMessages(_ messages: [PersistentMessage]) {
         self.chatMessages = messages
         lastUpdated[.chat] = Date()
     }

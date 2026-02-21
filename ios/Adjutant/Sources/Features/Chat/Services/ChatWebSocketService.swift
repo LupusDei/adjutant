@@ -2,13 +2,6 @@ import Foundation
 import Combine
 import AdjutantKit
 
-/// Delivery status for optimistic messages
-enum MessageDeliveryStatus: Equatable {
-    case pending
-    case delivered
-    case failed(String)
-}
-
 /// A streaming response being assembled token-by-token
 struct StreamingResponse: Equatable {
     let streamId: String
@@ -40,7 +33,7 @@ final class ChatWebSocketService: ObservableObject {
     // MARK: - Event Publishers
 
     /// Emits when a new chat message arrives from the server
-    let incomingMessage = PassthroughSubject<Message, Never>()
+    let incomingMessage = PassthroughSubject<PersistentMessage, Never>()
 
     /// Emits delivery confirmations for optimistic messages (clientId -> serverId)
     let deliveryConfirmation = PassthroughSubject<(clientId: String, serverId: String, timestamp: String), Never>()
@@ -118,6 +111,8 @@ final class ChatWebSocketService: ObservableObject {
     private func handleServerMessage(_ msg: WsServerMessage) {
         switch msg.type {
         case "message":
+            handleLegacyChatMessage(msg)
+        case "chat_message":
             handleChatMessage(msg)
         case "delivered":
             handleDelivered(msg)
@@ -135,25 +130,44 @@ final class ChatWebSocketService: ObservableObject {
         }
     }
 
+    /// Handle the new chat_message event type from the message store
     private func handleChatMessage(_ msg: WsServerMessage) {
+        guard let id = msg.id,
+              let body = msg.body else { return }
+
+        let now = ISO8601DateFormatter().string(from: Date())
+        let message = PersistentMessage(
+            id: id,
+            agentId: msg.from ?? "unknown",
+            recipient: msg.to,
+            role: .agent,
+            body: body,
+            deliveryStatus: .delivered,
+            threadId: msg.threadId,
+            createdAt: msg.timestamp ?? now,
+            updatedAt: msg.timestamp ?? now
+        )
+
+        incomingMessage.send(message)
+    }
+
+    /// Handle legacy "message" type for backwards compatibility
+    private func handleLegacyChatMessage(_ msg: WsServerMessage) {
         guard let id = msg.id,
               let from = msg.from,
               let body = msg.body else { return }
 
-        let message = Message(
+        let now = ISO8601DateFormatter().string(from: Date())
+        let message = PersistentMessage(
             id: id,
-            from: from,
-            to: msg.to ?? "user",
-            subject: String(body.prefix(50)),
+            agentId: from,
+            recipient: msg.to ?? "user",
+            role: .agent,
             body: body,
-            timestamp: msg.timestamp ?? ISO8601DateFormatter().string(from: Date()),
-            read: false,
-            priority: .normal,
-            type: .notification,
-            threadId: msg.threadId ?? id,
-            replyTo: msg.replyTo,
-            pinned: false,
-            isInfrastructure: false
+            deliveryStatus: .delivered,
+            threadId: msg.threadId,
+            createdAt: msg.timestamp ?? now,
+            updatedAt: msg.timestamp ?? now
         )
 
         incomingMessage.send(message)

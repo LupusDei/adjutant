@@ -5,7 +5,7 @@ import AdjutantKit
 struct ChatBubble: View {
     @Environment(\.crtTheme) private var theme
 
-    let message: Message
+    let message: PersistentMessage
     let isOutgoing: Bool
 
     /// Whether this message is currently playing audio
@@ -103,14 +103,23 @@ struct ChatBubble: View {
                     }
                 }
 
-                // Timestamp
-                if let date = message.date {
-                    CRTText(
-                        formatTimestamp(date),
-                        style: .caption,
-                        glowIntensity: .none,
-                        color: theme.dim.opacity(0.6)
-                    )
+                // Timestamp and delivery status
+                HStack(spacing: CRTTheme.Spacing.xxs) {
+                    if let date = message.date {
+                        CRTText(
+                            formatTimestamp(date),
+                            style: .caption,
+                            glowIntensity: .none,
+                            color: theme.dim.opacity(0.6)
+                        )
+                    }
+
+                    // Delivery status indicator for outgoing messages
+                    if isOutgoing && message.deliveryStatus == .pending {
+                        Image(systemName: "clock")
+                            .font(.system(size: 10))
+                            .foregroundColor(theme.dim.opacity(0.5))
+                    }
                 }
             }
 
@@ -144,34 +153,28 @@ struct ChatBubble: View {
 
 struct ChatBubble_Previews: PreviewProvider {
     static var previews: some View {
-        let incomingMessage = Message(
+        let now = ISO8601DateFormatter().string(from: Date())
+
+        let incomingMessage = PersistentMessage(
             id: "test-1",
-            from: "mayor/",
-            to: "user",
-            subject: "",
+            agentId: "mayor",
+            recipient: "user",
+            role: .agent,
             body: "Welcome to Gas Town. How can I help you today?",
-            timestamp: ISO8601DateFormatter().string(from: Date()),
-            read: true,
-            priority: .normal,
-            type: .notification,
-            threadId: "thread-1",
-            pinned: false,
-            isInfrastructure: false
+            deliveryStatus: .delivered,
+            createdAt: now,
+            updatedAt: now
         )
 
-        let outgoingMessage = Message(
+        let outgoingMessage = PersistentMessage(
             id: "test-2",
-            from: "user",
-            to: "mayor/",
-            subject: "",
+            agentId: "user",
+            recipient: "mayor",
+            role: .user,
             body: "I need to check the status of my convoy.",
-            timestamp: ISO8601DateFormatter().string(from: Date()),
-            read: true,
-            priority: .normal,
-            type: .task,
-            threadId: "thread-1",
-            pinned: false,
-            isInfrastructure: false
+            deliveryStatus: .delivered,
+            createdAt: now,
+            updatedAt: now
         )
 
         VStack(spacing: 16) {
