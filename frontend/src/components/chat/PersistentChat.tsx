@@ -90,12 +90,33 @@ export const PersistentChat: React.FC<PersistentChatProps> = ({ agentId, isActiv
   const [sendError, setSendError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // IntersectionObserver for infinite scroll
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasMore && !loadingMore) {
+          setLoadingMore(true);
+          void loadMore().finally(() => setLoadingMore(false));
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore, loadingMore]);
 
   // Handle sending a message
   const handleSend = useCallback(async () => {
@@ -179,15 +200,11 @@ export const PersistentChat: React.FC<PersistentChatProps> = ({ agentId, isActiv
 
       {/* Messages container */}
       <div className="chat-messages">
-        {/* Load more button */}
+        {/* Infinite scroll sentinel */}
         {hasMore && (
-          <button
-            type="button"
-            className="chat-load-more"
-            onClick={() => void loadMore()}
-          >
-            LOAD OLDER MESSAGES
-          </button>
+          <div ref={loadMoreSentinelRef} className="chat-load-more">
+            {loadingMore ? 'LOADING...' : 'SCROLL UP FOR MORE'}
+          </div>
         )}
 
         {messages.length === 0 ? (

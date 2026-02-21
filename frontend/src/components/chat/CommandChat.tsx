@@ -114,8 +114,10 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
   const [streamingMessages, setStreamingMessages] = useState<Map<string, string>>(new Map());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Get deployment mode for UI labels
   const { isGasTown } = useMode();
@@ -244,6 +246,25 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     };
   }, []);
 
+  // IntersectionObserver for infinite scroll — loads older messages when sentinel is visible
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasMore && !loadingMore) {
+          setLoadingMore(true);
+          void loadMore().finally(() => setLoadingMore(false));
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore, loadingMore]);
+
   // Handle sending a message — always via HTTP (hookSendMessage).
   // The backend stores the message and broadcasts it via WebSocket.
   const handleSend = async () => {
@@ -354,15 +375,11 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
 
       {/* Messages container */}
       <div className="chat-messages">
-        {/* Load more button for pagination */}
+        {/* Infinite scroll sentinel for loading older messages */}
         {hasMore && (
-          <button
-            type="button"
-            className="chat-load-more"
-            onClick={() => void loadMore()}
-          >
-            LOAD OLDER MESSAGES
-          </button>
+          <div ref={loadMoreSentinelRef} className="chat-load-more">
+            {loadingMore ? 'LOADING...' : 'SCROLL UP FOR MORE'}
+          </div>
         )}
 
         {messages.length === 0 ? (
