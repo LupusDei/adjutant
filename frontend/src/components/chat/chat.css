@@ -597,6 +597,31 @@
   color: #aa0000;
 }
 
+/* System/Announcement messages - centered, no bubble */
+.chat-system-message {
+  align-self: center;
+  text-align: center;
+  padding: 8px 16px;
+  max-width: 85%;
+}
+
+.chat-system-body {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--crt-phosphor-dim, #00aa00);
+  opacity: 0.7;
+  letter-spacing: 0.05em;
+  line-height: 1.4;
+}
+
+.chat-system-time {
+  display: block;
+  font-size: 0.55rem;
+  color: var(--crt-phosphor-dim, #00aa00);
+  opacity: 0.5;
+  margin-top: 4px;
+}
+
 /* Agent status badge */
 .agent-status-badge {
   font-size: 0.65rem;

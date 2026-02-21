@@ -217,6 +217,17 @@ export const PersistentChat: React.FC<PersistentChatProps> = ({ agentId, isActiv
         ) : (
           messages.map((msg: DisplayMessage) => {
             const isUser = msg.role === 'user';
+            const isSystem = msg.role === 'system' || msg.role === 'announcement';
+
+            if (isSystem) {
+              return (
+                <div key={msg.id} className="chat-system-message">
+                  <span className="chat-system-body">{msg.body}</span>
+                  <span className="chat-system-time">{formatTimestamp(msg.createdAt)}</span>
+                </div>
+              );
+            }
+
             return (
               <div
                 key={msg.id}

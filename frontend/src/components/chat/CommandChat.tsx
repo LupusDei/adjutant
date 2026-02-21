@@ -485,6 +485,18 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
         ) : (
           messages.map((msg) => {
             const isUser = isUserMessage(msg);
+            const isSystem = msg.role === 'system' || msg.role === 'announcement';
+
+            // System/announcement messages: centered, no bubble
+            if (isSystem) {
+              return (
+                <div key={msg.id} className="chat-system-message">
+                  <span className="chat-system-body">{msg.body}</span>
+                  <span className="chat-system-time">{formatTimestamp(msg.createdAt)}</span>
+                </div>
+              );
+            }
+
             const isPlayingThis = playingMessageId === msg.id;
             const isLoadingThis = isPlayingThis && voicePlayer.isLoading;
             const isSending = msg.optimisticStatus === 'sending';
