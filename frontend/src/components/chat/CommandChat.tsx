@@ -8,8 +8,9 @@
  * connection status indicator, voice input/playback.
  */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import type { ConnectionStatus } from '../../types';
+import type { ConnectionStatus, ChatMessage } from '../../types';
 import { useChatMessages, type DisplayMessage } from '../../hooks/useChatMessages';
+import { api } from '../../services/api';
 import { useUnreadCounts } from '../../hooks/useUnreadCounts';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoicePlayer } from '../../hooks/useVoicePlayer';
@@ -112,6 +113,9 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
   const [typingFrom, setTypingFrom] = useState<string | null>(null);
   const [streamingMessages, setStreamingMessages] = useState<Map<string, string>>(new Map());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<ChatMessage[] | null>(null);
+  const [searching, setSearching] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
@@ -294,6 +298,42 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     }
   };
 
+  // Handle search
+  const handleSearch = useCallback(async (query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setSearchResults(null);
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const params: Parameters<typeof api.messages.search>[0] = { q: trimmed };
+      if (agentId) params.agentId = agentId;
+      const result = await api.messages.search(params);
+      setSearchResults(result.items);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, [agentId]);
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void handleSearch(searchQuery);
+    } else if (e.key === 'Escape') {
+      setSearchQuery('');
+      setSearchResults(null);
+    }
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setSearchResults(null);
+  };
+
   // Handle input change with typing indicator
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value);
@@ -363,6 +403,29 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
         </div>
       </header>
 
+      {/* Search bar */}
+      <div className="chat-search-bar">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={handleSearchKeyDown}
+          placeholder="SEARCH MESSAGES..."
+          className="chat-search-input"
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            className="chat-search-clear"
+            onClick={clearSearch}
+            aria-label="Clear search"
+          >
+            x
+          </button>
+        )}
+        {searching && <span className="chat-search-status">SEARCHING...</span>}
+      </div>
+
       {/* Error banner */}
       {displayError && (
         <div className="chat-error" role="alert">
@@ -375,6 +438,34 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
 
       {/* Messages container */}
       <div className="chat-messages">
+        {/* Search results overlay */}
+        {searchResults !== null ? (
+          searchResults.length === 0 ? (
+            <div className="chat-empty">
+              <p>NO RESULTS FOUND</p>
+              <p className="chat-empty-hint">Try a different search term</p>
+            </div>
+          ) : (
+            searchResults.map((msg) => {
+              const isUser = msg.role === 'user';
+              return (
+                <div
+                  key={msg.id}
+                  className={`chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-command'}`}
+                >
+                  <div className="chat-bubble-header">
+                    <span className="chat-bubble-sender">
+                      {isUser ? 'YOU' : (msg.agentId ?? coordinatorName).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="chat-bubble-content">{msg.body}</div>
+                  <div className="chat-bubble-time">{formatTimestamp(msg.createdAt)}</div>
+                </div>
+              );
+            })
+          )
+        ) : (
+        <>
         {/* Infinite scroll sentinel for loading older messages */}
         {hasMore && (
           <div ref={loadMoreSentinelRef} className="chat-load-more">
@@ -463,6 +554,8 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
         )}
 
         <div ref={messagesEndRef} />
+        </>
+        )}
       </div>
 
       {/* Input area */}

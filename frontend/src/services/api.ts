@@ -445,6 +445,19 @@ export const api = {
     }): Promise<{ messageId: string; timestamp: string }> {
       return apiFetch('/messages', { method: 'POST', body: params });
     },
+
+    async search(params: {
+      q: string;
+      agentId?: string;
+      limit?: number;
+    }): Promise<PaginatedResponse<ChatMessage>> {
+      const searchParams = new URLSearchParams();
+      searchParams.set('q', params.q);
+      if (params.agentId) searchParams.set('agentId', params.agentId);
+      if (params.limit) searchParams.set('limit', params.limit.toString());
+
+      return apiFetch(`/messages/search?${searchParams}`);
+    },
   },
 
   /**
