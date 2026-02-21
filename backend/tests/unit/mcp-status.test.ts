@@ -22,6 +22,12 @@ vi.mock("../../src/services/mcp-server.js", () => ({
   getAgentBySession: (...args: unknown[]) => mockGetAgentBySession(...args),
 }));
 
+// Mock APNS service
+vi.mock("../../src/services/apns-service.js", () => ({
+  isAPNsConfigured: vi.fn(() => false),
+  sendNotificationToAll: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -168,6 +174,8 @@ describe("MCP Status Tools", () => {
       expect(broadcast.from).toBe("agent-1");
       expect(broadcast.state).toBe("blocked");
       expect(broadcast.metadata).toMatchObject({
+        type: "agent_status",
+        status: "blocked",
         task: "Waiting on review",
       });
     });
@@ -221,6 +229,8 @@ describe("MCP Status Tools", () => {
       expect(broadcast.from).toBe("agent-1");
       expect(broadcast.state).toBe("working");
       expect(broadcast.metadata).toMatchObject({
+        type: "agent_status",
+        status: "working",
         task: "Building MCP tools",
         percentage: 75,
         description: "3 of 4 tools done",
@@ -295,6 +305,7 @@ describe("MCP Status Tools", () => {
       expect(broadcast.body).toContain("[BLOCKER]");
       expect(broadcast.body).toContain("API down");
       expect(broadcast.metadata).toMatchObject({
+        type: "announcement",
         announcementType: "blocker",
       });
     });

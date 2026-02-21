@@ -9,6 +9,8 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { wsBroadcast } from "../ws-server.js";
 import { getAgentBySession } from "../mcp-server.js";
+import { isAPNsConfigured, sendNotificationToAll } from "../apns-service.js";
+import { logWarn } from "../../utils/index.js";
 import type { MessageStore } from "../message-store.js";
 
 // ============================================================================
@@ -96,7 +98,7 @@ export function registerStatusTools(server: McpServer, store: MessageStore): voi
         type: "typing",
         from: agentId,
         state: status,
-        metadata: { task, beadId },
+        metadata: { type: "agent_status", status, task, beadId },
       });
 
       return {
@@ -124,7 +126,7 @@ export function registerStatusTools(server: McpServer, store: MessageStore): voi
         type: "typing",
         from: agentId,
         state: "working",
-        metadata: { task, percentage, description },
+        metadata: { type: "agent_status", status: "working", task, percentage, description },
       });
 
       return {
@@ -166,8 +168,27 @@ export function registerStatusTools(server: McpServer, store: MessageStore): voi
         from: agentId,
         body: formattedBody,
         timestamp: message.createdAt,
-        metadata: { announcementType: type, beadId },
+        metadata: { type: "announcement", announcementType: type, beadId },
       });
+
+      // Send APNS push for announcements
+      if (isAPNsConfigured()) {
+        sendNotificationToAll({
+          title: `${type.toUpperCase()}: ${title}`,
+          body: body.length > 200 ? body.slice(0, 197) + "..." : body,
+          sound: "default",
+          category: "AGENT_ANNOUNCEMENT",
+          threadId: "announcements",
+          data: {
+            type: "announcement",
+            messageId: message.id,
+            from: agentId,
+            announcementType: type,
+          },
+        }).catch((err) => {
+          logWarn("Failed to send APNS for announcement", { error: String(err) });
+        });
+      }
 
       return {
         content: [{
