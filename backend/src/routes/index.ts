@@ -19,3 +19,4 @@ export { sessionsRouter } from "./sessions.js";
 export { swarmsRouter } from "./swarms.js";
 export { permissionsRouter } from "./permissions.js";
 export { costsRouter } from "./costs.js";
+export { createMessagesRouter } from "./messages.js";

@@ -1,7 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, convoysRouter, costsRouter, devicesRouter, eventsRouter, mailRouter, mcpRouter, modeRouter, permissionsRouter, powerRouter, projectsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, convoysRouter, costsRouter, createMessagesRouter, devicesRouter, eventsRouter, mailRouter, mcpRouter, modeRouter, permissionsRouter, powerRouter, projectsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
@@ -11,7 +11,10 @@ import { initAgentStatusStream } from "./services/agent-status-stream.js";
 import { initTerminalStream } from "./services/terminal-stream.js";
 import { initStreamingBridge } from "./services/streaming-bridge.js";
 import { getSessionBridge } from "./services/session-bridge.js";
-import { initMcpServer } from "./services/mcp-server.js";
+import { getMcpServer, initMcpServer } from "./services/mcp-server.js";
+import { initDatabase } from "./services/database.js";
+import { createMessageStore } from "./services/message-store.js";
+import { registerMessagingTools } from "./services/mcp-tools/messaging.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
@@ -51,6 +54,12 @@ app.use("/api/sessions", sessionsRouter);
 app.use("/api/swarms", swarmsRouter);
 app.use("/api/permissions", permissionsRouter);
 app.use("/api/costs", costsRouter);
+
+// Initialize message store and mount messages router
+const messageDb = initDatabase();
+const messageStore = createMessageStore(messageDb);
+app.use("/api/messages", createMessagesRouter(messageStore));
+
 app.use("/mcp", mcpRouter);
 
 app.get("/health", (_req, res) => {
@@ -80,6 +89,9 @@ const server = app.listen(PORT, () => {
 
   // Initialize MCP server for agent tool connections
   initMcpServer();
+
+  // Register messaging MCP tools
+  registerMessagingTools(getMcpServer(), messageStore);
 
   // Initialize Session Bridge v2 (tmux session management)
   // init() loads persisted sessions, verifies tmux state, and auto-creates
