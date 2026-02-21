@@ -235,24 +235,37 @@ struct ChatView: View {
     }
 
     private var loadMoreButton: some View {
-        Button {
-            Task {
-                await viewModel.loadMoreHistory()
-            }
-        } label: {
-            HStack(spacing: CRTTheme.Spacing.xs) {
-                if viewModel.isLoadingHistory {
+        Group {
+            if viewModel.isLoadingHistory {
+                HStack(spacing: CRTTheme.Spacing.xs) {
                     LoadingIndicator(size: .small)
-                } else {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 12))
+                    CRTText("LOADING...", style: .caption, glowIntensity: .subtle)
                 }
-                CRTText("LOAD EARLIER MESSAGES", style: .caption, glowIntensity: .subtle)
+                .foregroundColor(theme.dim)
+                .padding(.vertical, CRTTheme.Spacing.sm)
+            } else {
+                Button {
+                    Task {
+                        await viewModel.loadMoreHistory()
+                    }
+                } label: {
+                    HStack(spacing: CRTTheme.Spacing.xs) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 12))
+                        CRTText("LOAD EARLIER MESSAGES", style: .caption, glowIntensity: .subtle)
+                    }
+                    .foregroundColor(theme.dim)
+                    .padding(.vertical, CRTTheme.Spacing.sm)
+                }
+                .buttonStyle(.plain)
+                .onAppear {
+                    // Auto-load when this element scrolls into view
+                    Task {
+                        await viewModel.loadMoreHistory()
+                    }
+                }
             }
-            .foregroundColor(theme.dim)
-            .padding(.vertical, CRTTheme.Spacing.sm)
         }
-        .disabled(viewModel.isLoadingHistory)
     }
 
     private var emptyState: some View {
