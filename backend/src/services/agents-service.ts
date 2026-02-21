@@ -89,7 +89,38 @@ function transformAgent(agent: AgentRuntimeInfo): CrewMember {
   if (agent.branch) {
     result.branch = agent.branch;
   }
+  // Swarm fields (populated by enrichWithSessionData)
+  if (agent.lastActivity) {
+    result.lastActivity = agent.lastActivity;
+  }
+  if (agent.worktreePath) {
+    result.worktreePath = agent.worktreePath;
+  }
   return result;
+}
+
+/**
+ * Enriches CrewMembers with session data from the SessionBridge.
+ * Adds lastActivity, worktreePath, sessionId, and swarm metadata.
+ */
+function enrichWithSessionData(members: CrewMember[]): void {
+  const bridge = getSessionBridge();
+  const sessions = bridge.listSessions();
+
+  for (const member of members) {
+    // Match by session ID (if already set) or by name
+    const session = member.sessionId
+      ? sessions.find((s) => s.id === member.sessionId)
+      : sessions.find((s) => s.name === member.name);
+
+    if (session) {
+      if (!member.sessionId) member.sessionId = session.id;
+      member.lastActivity = session.lastActivity;
+      if (session.workspaceType === "worktree") {
+        member.worktreePath = session.projectPath;
+      }
+    }
+  }
 }
 
 // ============================================================================
@@ -148,6 +179,7 @@ export async function getAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
     const townRoot = resolveWorkspaceRoot();
     const { agents } = await collectAgentSnapshot(townRoot);
     const crewMembers = agents.map(transformAgent);
+    enrichWithSessionData(crewMembers);
     crewMembers.sort((a, b) => a.name.localeCompare(b.name));
     emitStatusChanges(crewMembers);
     return { success: true, data: crewMembers };
@@ -182,7 +214,7 @@ async function getTmuxAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
     // Add managed sessions as agents
     for (const session of managedSessions) {
       const isRunning = tmuxSessions.has(session.tmuxSession);
-      crewMembers.push({
+      const member: CrewMember = {
         id: session.id,
         name: session.name,
         type: "crew" as AgentType,
@@ -193,7 +225,13 @@ async function getTmuxAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
             : "idle"
           : "offline",
         sessionId: session.id,
-      });
+        unreadMail: 0,
+        lastActivity: session.lastActivity,
+      };
+      if (session.workspaceType === "worktree") {
+        member.worktreePath = session.projectPath;
+      }
+      crewMembers.push(member);
     }
 
     // Add unmanaged tmux sessions (e.g. user-created tmux sessions running claude)
@@ -211,6 +249,7 @@ async function getTmuxAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
       });
     }
 
+    enrichWithSessionData(crewMembers);
     crewMembers.sort((a, b) => a.name.localeCompare(b.name));
     emitStatusChanges(crewMembers);
     return { success: true, data: crewMembers };

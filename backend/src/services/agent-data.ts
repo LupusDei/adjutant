@@ -35,6 +35,10 @@ export interface AgentRuntimeInfo {
   firstSubject?: string;
   firstFrom?: string;
   branch?: string;
+  /** ISO timestamp of last activity (from session registry) */
+  lastActivity?: string;
+  /** Worktree path if agent works in a git worktree */
+  worktreePath?: string;
 }
 
 export interface AgentSnapshot {

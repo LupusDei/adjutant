@@ -196,6 +196,18 @@ export interface CrewMember {
   firstFrom?: string;
   /** Current git branch (for polecats) */
   branch?: string;
+  /** Session ID for linking to session chat (swarm) */
+  sessionId?: string;
+  /** ISO timestamp of last activity (from session registry) */
+  lastActivity?: string;
+  /** Git worktree path (swarm agents working in worktrees) */
+  worktreePath?: string;
+  /** Task progress for this agent (completed/total from assigned beads) */
+  progress?: { completed: number; total: number };
+  /** Which swarm this agent belongs to (swarm mode) */
+  swarmId?: string;
+  /** Whether this agent is the merge coordinator (swarm mode) */
+  isCoordinator?: boolean;
 }
 
 // ============================================================================
