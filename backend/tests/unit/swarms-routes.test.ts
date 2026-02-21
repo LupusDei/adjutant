@@ -23,6 +23,12 @@ vi.mock("../../src/services/swarm-service.js", () => ({
   mergeAgentBranch: (...args: unknown[]) => mockMergeAgentBranch(...args),
 }));
 
+// Mock agents-service for /active endpoint
+const mockGetAgents = vi.fn();
+vi.mock("../../src/services/agents-service.js", () => ({
+  getAgents: (...args: unknown[]) => mockGetAgents(...args),
+}));
+
 import { swarmsRouter } from "../../src/routes/swarms.js";
 
 function createTestApp() {
@@ -378,6 +384,93 @@ describe("swarms routes", () => {
 
       expect(response.status).toBe(404);
       expect(response.body.success).toBe(false);
+    });
+  });
+
+  // ==========================================================================
+  // GET /api/swarms/active
+  // ==========================================================================
+
+  describe("GET /api/swarms/active", () => {
+    it("should return empty array when no swarms exist", async () => {
+      mockListSwarms.mockReturnValue([]);
+
+      const response = await request(app).get("/api/swarms/active");
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toEqual([]);
+    });
+
+    it("should return summary stats for active swarms", async () => {
+      mockListSwarms.mockReturnValue([
+        {
+          id: "swarm-1",
+          projectPath: "/tmp/project",
+          agents: [
+            { sessionId: "s1", name: "agent-1", status: "working", isCoordinator: true },
+            { sessionId: "s2", name: "agent-2", status: "idle", isCoordinator: false },
+            { sessionId: "s3", name: "agent-3", status: "working", isCoordinator: false },
+          ],
+          createdAt: "2026-02-15T00:00:00Z",
+        },
+      ]);
+
+      const response = await request(app).get("/api/swarms/active");
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toHaveLength(1);
+
+      const swarm = response.body.data[0];
+      expect(swarm.id).toBe("swarm-1");
+      expect(swarm.agentCount).toBe(3);
+      expect(swarm.activeCount).toBe(2);
+      expect(swarm.idleCount).toBe(1);
+      expect(swarm.createdAt).toBe("2026-02-15T00:00:00Z");
+    });
+
+    it("should count blocked and offline agents correctly", async () => {
+      mockListSwarms.mockReturnValue([
+        {
+          id: "swarm-2",
+          projectPath: "/tmp/project2",
+          agents: [
+            { sessionId: "s1", name: "a1", status: "working", isCoordinator: false },
+            { sessionId: "s2", name: "a2", status: "offline", isCoordinator: false },
+            { sessionId: "s3", name: "a3", status: "idle", isCoordinator: false },
+            { sessionId: "s4", name: "a4", status: "offline", isCoordinator: false },
+          ],
+          createdAt: "2026-02-16T00:00:00Z",
+        },
+      ]);
+
+      const response = await request(app).get("/api/swarms/active");
+      const swarm = response.body.data[0];
+      expect(swarm.agentCount).toBe(4);
+      expect(swarm.activeCount).toBe(1);
+      expect(swarm.idleCount).toBe(1);
+      expect(swarm.offlineCount).toBe(2);
+    });
+
+    it("should return multiple swarm summaries", async () => {
+      mockListSwarms.mockReturnValue([
+        {
+          id: "swarm-1",
+          projectPath: "/tmp/p1",
+          agents: [{ sessionId: "s1", name: "a1", status: "working", isCoordinator: false }],
+          createdAt: "2026-02-15T00:00:00Z",
+        },
+        {
+          id: "swarm-2",
+          projectPath: "/tmp/p2",
+          agents: [{ sessionId: "s2", name: "a2", status: "idle", isCoordinator: false }],
+          createdAt: "2026-02-16T00:00:00Z",
+        },
+      ]);
+
+      const response = await request(app).get("/api/swarms/active");
+      expect(response.body.data).toHaveLength(2);
+      expect(response.body.data[0].id).toBe("swarm-1");
+      expect(response.body.data[1].id).toBe("swarm-2");
     });
   });
 });

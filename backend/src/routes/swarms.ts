@@ -3,6 +3,7 @@
  *
  * Endpoints:
  * - GET    /api/swarms             - List all swarms
+ * - GET    /api/swarms/active      - Aggregated stats for active swarms
  * - GET    /api/swarms/:id         - Get swarm status
  * - POST   /api/swarms             - Create a new swarm
  * - POST   /api/swarms/:id/agents  - Add an agent to a swarm
@@ -58,6 +59,38 @@ const AddAgentSchema = z.object({
 swarmsRouter.get("/", (_req, res) => {
   const swarms = listSwarms();
   return res.json(success(swarms));
+});
+
+/**
+ * GET /api/swarms/active
+ * Returns summary stats for all active swarms.
+ */
+swarmsRouter.get("/active", (_req, res) => {
+  const swarms = listSwarms();
+
+  const summaries = swarms.map((swarm) => {
+    let activeCount = 0;
+    let idleCount = 0;
+    let offlineCount = 0;
+
+    for (const agent of swarm.agents) {
+      if (agent.status === "working") activeCount++;
+      else if (agent.status === "idle") idleCount++;
+      else if (agent.status === "offline") offlineCount++;
+      else idleCount++; // treat unknown statuses as idle
+    }
+
+    return {
+      id: swarm.id,
+      agentCount: swarm.agents.length,
+      activeCount,
+      idleCount,
+      offlineCount,
+      createdAt: swarm.createdAt,
+    };
+  });
+
+  return res.json(success(summaries));
 });
 
 /**
