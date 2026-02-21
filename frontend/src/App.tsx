@@ -14,6 +14,7 @@ import { RigProvider } from "./contexts/RigContext";
 import { CommunicationProvider } from "./contexts/CommunicationContext";
 import { ModeProvider, useVisibleTabs } from "./contexts/ModeContext";
 import { DashboardView } from "./components/dashboard/OverviewDashboard";
+import { useUnreadCounts } from "./hooks/useUnreadCounts";
 
 export type ThemeId = 'green' | 'red' | 'blue' | 'tan' | 'pink' | 'purple';
 
@@ -59,6 +60,7 @@ function AppContent() {
   );
   const isSmallScreen = useIsSmallScreen();
   const visibleTabs = useVisibleTabs();
+  const { totalUnread } = useUnreadCounts();
 
   // Filter tabs based on current mode
   const filteredTabs = useMemo(
@@ -102,6 +104,9 @@ function AppContent() {
               title={tab.label}
             >
               {isSmallScreen && tab.id === "settings" ? tab.icon : tab.label}
+              {tab.id === "chat" && totalUnread > 0 && (
+                <span className="nav-tab-badge">{totalUnread > 99 ? '99+' : totalUnread}</span>
+              )}
             </button>
           ))}
         </nav>
