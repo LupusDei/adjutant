@@ -38,7 +38,7 @@ let wss: WebSocketServer | null = null;
 export function initTerminalStream(server: HttpServer): WebSocketServer {
   if (wss) return wss;
 
-  wss = new WebSocketServer({ server, path: "/api/terminal/stream" });
+  wss = new WebSocketServer({ noServer: true });
 
   wss.on("connection", (ws) => {
     const client: StreamClient = {

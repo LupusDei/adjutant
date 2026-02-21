@@ -78,14 +78,25 @@ const server = app.listen(PORT, () => {
   // Start prefix map refresh scheduler (adj-sha0s)
   startPrefixMapRefreshScheduler();
 
-  // Initialize WebSocket server on the same HTTP server
-  initWebSocketServer(server);
+  // Initialize WebSocket servers (all use noServer: true)
+  const chatWss = initWebSocketServer(server);
+  const agentWss = initAgentStatusStream(server);
+  const terminalWss = initTerminalStream(server);
 
-  // Initialize agent status stream (WS /api/agents/stream)
-  initAgentStatusStream(server);
-
-  // Initialize terminal stream (WS /api/terminal/stream)
-  initTerminalStream(server);
+  // Centralized WebSocket upgrade routing — prevents multi-WSS conflicts
+  // where competing WSS instances call abortHandshake() on each other's sockets
+  server.on("upgrade", (req, socket, head) => {
+    const pathname = req.url?.split("?")[0];
+    if (pathname === "/ws/chat") {
+      chatWss.handleUpgrade(req, socket, head, (ws) => chatWss.emit("connection", ws, req));
+    } else if (pathname === "/api/agents/stream") {
+      agentWss.handleUpgrade(req, socket, head, (ws) => agentWss.emit("connection", ws, req));
+    } else if (pathname === "/api/terminal/stream") {
+      terminalWss.handleUpgrade(req, socket, head, (ws) => terminalWss.emit("connection", ws, req));
+    } else {
+      socket.destroy();
+    }
+  });
 
   // Initialize streaming bridge (watches .beads/streams/ for agent output)
   initStreamingBridge();

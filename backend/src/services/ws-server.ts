@@ -463,7 +463,7 @@ async function handleSessionPermissionResponse(client: WsClient, msg: WsClientMe
 export function initWebSocketServer(server: HttpServer): WebSocketServer {
   if (wss) return wss;
 
-  wss = new WebSocketServer({ server, path: "/ws/chat" });
+  wss = new WebSocketServer({ noServer: true });
 
   wss.on("connection", (ws) => {
     const sessionId = randomUUID();

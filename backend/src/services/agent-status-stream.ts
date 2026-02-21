@@ -19,7 +19,7 @@ let wss: WebSocketServer | null = null;
 export function initAgentStatusStream(server: HttpServer): WebSocketServer {
   if (wss) return wss;
 
-  wss = new WebSocketServer({ server, path: "/api/agents/stream" });
+  wss = new WebSocketServer({ noServer: true });
 
   wss.on("connection", (ws) => {
     const eventBus = getEventBus();
