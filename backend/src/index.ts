@@ -1,7 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, convoysRouter, costsRouter, devicesRouter, eventsRouter, mailRouter, modeRouter, permissionsRouter, powerRouter, projectsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, convoysRouter, costsRouter, devicesRouter, eventsRouter, mailRouter, mcpRouter, modeRouter, permissionsRouter, powerRouter, projectsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
@@ -11,6 +11,7 @@ import { initAgentStatusStream } from "./services/agent-status-stream.js";
 import { initTerminalStream } from "./services/terminal-stream.js";
 import { initStreamingBridge } from "./services/streaming-bridge.js";
 import { getSessionBridge } from "./services/session-bridge.js";
+import { initMcpServer } from "./services/mcp-server.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
@@ -50,6 +51,7 @@ app.use("/api/sessions", sessionsRouter);
 app.use("/api/swarms", swarmsRouter);
 app.use("/api/permissions", permissionsRouter);
 app.use("/api/costs", costsRouter);
+app.use("/mcp", mcpRouter);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
@@ -75,6 +77,9 @@ const server = app.listen(PORT, () => {
 
   // Initialize streaming bridge (watches .beads/streams/ for agent output)
   initStreamingBridge();
+
+  // Initialize MCP server for agent tool connections
+  initMcpServer();
 
   // Initialize Session Bridge v2 (tmux session management)
   // init() loads persisted sessions, verifies tmux state, and auto-creates
