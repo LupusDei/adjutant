@@ -1,0 +1,103 @@
+openapi: 3.0.3
+info:
+  title: Agent Task Assignment API
+  version: 1.0.0
+  description: Endpoints for assigning beads to agents
+
+paths:
+  /api/beads/{id}:
+    patch:
+      summary: Update bead (extended with assignee)
+      description: |
+        Updates a bead's status and/or assignee. When assignee is set and status
+        is not provided, status auto-transitions to "in_progress" if currently "open".
+        Sends a notification message to the assigned agent.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Bead ID (e.g., "hq-abc123")
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [open, in_progress, closed]
+                  description: New bead status
+                assignee:
+                  type: string
+                  nullable: true
+                  description: Agent ID to assign, or null to unassign
+              minProperties: 1
+      responses:
+        "200":
+          description: Bead updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                  assignee:
+                    type: string
+                    nullable: true
+        "400":
+          description: Invalid request (no fields provided)
+        "404":
+          description: Bead not found
+        "500":
+          description: BD CLI error
+
+  /api/agents:
+    get:
+      summary: List agents with status
+      description: Returns all known agents and their current status from the in-memory store.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [idle, working, blocked, done]
+          description: Filter by agent status
+      responses:
+        "200":
+          description: List of agents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AgentInfo"
+
+components:
+  schemas:
+    AgentInfo:
+      type: object
+      required: [agentId, status, updatedAt]
+      properties:
+        agentId:
+          type: string
+          description: Unique agent identifier
+        status:
+          type: string
+          enum: [idle, working, blocked, done]
+        task:
+          type: string
+          description: Current task description
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last status update timestamp
