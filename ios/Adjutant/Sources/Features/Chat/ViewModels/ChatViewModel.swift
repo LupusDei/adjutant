@@ -318,6 +318,9 @@ final class ChatViewModel: BaseViewModel {
             var seen = Set<String>()
             serverMessages = serverMessages.filter { seen.insert($0.id).inserted }
 
+            // Filter out non-chat messages (announcements, system events)
+            serverMessages = serverMessages.filter { $0.role == .user || $0.role == .agent }
+
             // Merge server messages with any remaining local-only messages
             let serverIds = Set(serverMessages.map { $0.id })
             let localOnly = self.messages.filter { msg in
@@ -461,6 +464,9 @@ final class ChatViewModel: BaseViewModel {
     // MARK: - WebSocket Message Handling
 
     private func handleIncomingMessage(_ message: PersistentMessage) {
+        // Only show chat messages (user/agent), not announcements or system events
+        guard message.role == .user || message.role == .agent else { return }
+
         // Only show messages for the current agent conversation
         guard message.agentId == selectedRecipient || message.recipient == selectedRecipient else {
             // Message is for a different agent -- increment unread count
