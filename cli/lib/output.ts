@@ -53,7 +53,7 @@ export function printSummary(results: CheckResult[]): void {
 
   console.log(`\n${COLORS.bold}Summary${COLORS.reset}`);
   const parts: string[] = [];
-  if (counts["pass"] ?? counts["created"]) {
+  if ((counts["pass"] ?? 0) + (counts["created"] ?? 0) > 0) {
     parts.push(`${COLORS.green}${(counts["pass"] ?? 0) + (counts["created"] ?? 0)} passed${COLORS.reset}`);
   }
   if (counts["fail"]) {
@@ -65,7 +65,7 @@ export function printSummary(results: CheckResult[]): void {
   if (counts["info"]) {
     parts.push(`${COLORS.blue}${counts["info"]} info${COLORS.reset}`);
   }
-  if (counts["skip"] ?? counts["skipped"]) {
+  if ((counts["skip"] ?? 0) + (counts["skipped"] ?? 0) > 0) {
     parts.push(`${COLORS.gray}${(counts["skip"] ?? 0) + (counts["skipped"] ?? 0)} skipped${COLORS.reset}`);
   }
   console.log(`  ${parts.join(", ")}`);

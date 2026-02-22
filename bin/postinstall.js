@@ -55,6 +55,20 @@ if (process.env.CI || process.env.npm_command === 'pack' || process.env.npm_comm
 }
 
 log(COLORS.green, 'Setting up adjutant...');
+
+// Build CLI TypeScript first (needed for adjutant init/doctor commands)
+log(COLORS.blue, 'Building CLI...');
+try {
+  execSync('npx tsc -p tsconfig.cli.json', {
+    cwd: PROJECT_ROOT,
+    stdio: 'inherit',
+  });
+  log(COLORS.green, 'CLI built successfully');
+} catch (error) {
+  log(COLORS.yellow, 'Warning: Failed to build CLI');
+  log(COLORS.yellow, 'Run manually: npx tsc -p tsconfig.cli.json');
+}
+
 installDeps('backend', 'Backend');
 installDeps('frontend', 'Frontend');
 log(COLORS.green, 'Setup complete! Run: adjutant --help');

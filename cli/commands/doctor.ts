@@ -15,6 +15,7 @@ import {
   httpReachable,
   commandAvailable,
   adjutantHookRegistered,
+  nodeVersionOk,
 } from "../lib/checks.js";
 
 /** adj-013.3.1: File/directory existence checks. */
@@ -32,6 +33,8 @@ function checkFiles(cwd: string): CheckResult[] {
   const mcp = mcpJsonValid(cwd);
   if (!mcp.exists) {
     results.push({ name: ".mcp.json", status: "fail", message: "run adjutant init" });
+  } else if (mcp.malformed) {
+    results.push({ name: ".mcp.json", status: "fail", message: "invalid JSON — fix manually" });
   } else if (!mcp.hasAdjutant) {
     results.push({ name: ".mcp.json has adjutant", status: "fail", message: "run adjutant init" });
   } else {
@@ -104,8 +107,13 @@ async function checkNetwork(): Promise<CheckResult[]> {
 function checkTools(): CheckResult[] {
   const results: CheckResult[] = [];
 
-  // Node.js (always pass since we're running)
-  results.push({ name: "Node.js", status: "pass" });
+  // Node.js version check
+  const nodeCheck = nodeVersionOk();
+  results.push(
+    nodeCheck.ok
+      ? { name: `Node.js (v${nodeCheck.version})`, status: "pass" }
+      : { name: `Node.js (v${nodeCheck.version})`, status: "fail", message: "requires >= 20" },
+  );
 
   // bd CLI
   results.push(

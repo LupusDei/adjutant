@@ -47,7 +47,8 @@ program
   .action(async (options) => {
     try {
       const { runInit } = await import('../dist/cli/commands/init.js');
-      await runInit({ force: options.force ?? false });
+      const exitCode = await runInit({ force: options.force ?? false });
+      process.exit(exitCode);
     } catch (error) {
       if (error.code === 'ERR_MODULE_NOT_FOUND') {
         console.error('CLI not built. Run: npx tsc -p tsconfig.cli.json');

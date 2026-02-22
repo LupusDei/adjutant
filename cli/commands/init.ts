@@ -19,7 +19,7 @@ import {
   getAdjutantDbPath,
 } from "../lib/checks.js";
 import { registerHooks } from "../lib/hooks.js";
-import { printHeader, printCheck, printSummary, printSuccess, type CheckResult } from "../lib/output.js";
+import { printHeader, printCheck, printSummary, printSuccess, printError, type CheckResult } from "../lib/output.js";
 import { PRIME_MD_CONTENT } from "../lib/prime.js";
 
 interface InitOptions {
@@ -52,11 +52,15 @@ function initAdjutantDir(projectRoot: string, force: boolean): CheckResult {
 }
 
 function initMcpJson(projectRoot: string): CheckResult {
-  const { exists, hasAdjutant } = mcpJsonValid(projectRoot);
+  const { exists, hasAdjutant, malformed } = mcpJsonValid(projectRoot);
 
   if (!exists) {
     writeJsonFile(join(projectRoot, ".mcp.json"), MCP_CONFIG);
     return { name: ".mcp.json", status: "created" };
+  }
+
+  if (malformed) {
+    return { name: ".mcp.json", status: "fail", message: "file exists but contains invalid JSON — fix manually" };
   }
 
   if (hasAdjutant) {
@@ -108,7 +112,7 @@ function checkDatabase(): CheckResult {
   };
 }
 
-export async function runInit(options: InitOptions): Promise<void> {
+export async function runInit(options: InitOptions): Promise<number> {
   printHeader("Adjutant Init");
   const projectRoot = process.cwd();
   const results: CheckResult[] = [];
@@ -132,5 +136,12 @@ export async function runInit(options: InitOptions): Promise<void> {
     printCheck(r);
   }
   printSummary(results);
+
+  const hasFail = results.some((r) => r.status === "fail");
+  if (hasFail) {
+    printError("\nAdjutant init completed with errors.");
+    return 1;
+  }
   printSuccess("\nAdjutant init complete.");
+  return 0;
 }

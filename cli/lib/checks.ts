@@ -41,14 +41,22 @@ export function writeJsonFile(path: string, data: unknown): void {
   writeFileSync(path, JSON.stringify(data, null, 2) + "\n", "utf-8");
 }
 
-/** Check if a command is available on PATH. */
+/** Check if a command is available on PATH. Uses POSIX `command -v` for portability. */
 export function commandAvailable(command: string): boolean {
+  if (!/^[a-zA-Z0-9_-]+$/.test(command)) return false;
   try {
-    execSync(`which ${command}`, { stdio: "ignore" });
+    execSync(`command -v ${command}`, { stdio: "ignore", shell: "/bin/sh" });
     return true;
   } catch {
     return false;
   }
+}
+
+/** Check if the current Node.js version meets the minimum requirement (>=20). */
+export function nodeVersionOk(): { ok: boolean; version: string } {
+  const version = process.versions.node;
+  const major = parseInt(version.split(".")[0], 10);
+  return { ok: major >= 20, version };
 }
 
 /** Check if an HTTP endpoint is reachable. Returns the status code or null. */
@@ -80,18 +88,18 @@ export function getApiKeysPath(): string {
 }
 
 /** Check if .mcp.json has the adjutant MCP server configured. */
-export function mcpJsonValid(projectRoot: string): { exists: boolean; hasAdjutant: boolean } {
+export function mcpJsonValid(projectRoot: string): { exists: boolean; hasAdjutant: boolean; malformed: boolean } {
   const mcpPath = join(projectRoot, ".mcp.json");
   if (!fileExists(mcpPath)) {
-    return { exists: false, hasAdjutant: false };
+    return { exists: false, hasAdjutant: false, malformed: false };
   }
 
   const config = parseJsonFile<{ mcpServers?: { adjutant?: unknown } }>(mcpPath);
   if (!config) {
-    return { exists: true, hasAdjutant: false };
+    return { exists: true, hasAdjutant: false, malformed: true };
   }
 
-  return { exists: true, hasAdjutant: !!config.mcpServers?.adjutant };
+  return { exists: true, hasAdjutant: !!config.mcpServers?.adjutant, malformed: false };
 }
 
 export interface HookEntry {
