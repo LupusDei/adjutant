@@ -95,6 +95,7 @@ final class ChatViewModel: BaseViewModel {
     private var lastMessageId: String?
     private var speechCancellables = Set<AnyCancellable>()
     private var searchTask: Task<Void, Never>?
+    private var refreshTask: Task<Void, Never>?
     /// Pending optimistic messages: clientId -> PersistentMessage
     private var pendingLocalMessages: [String: PersistentMessage] = [:]
     /// Track which client IDs have been confirmed by server
@@ -148,7 +149,7 @@ final class ChatViewModel: BaseViewModel {
     /// Falls back to UserDefaults-persisted messages on cold start.
     private func loadFromCache() {
         ResponseCache.shared.loadPersistedChatMessages()
-        let cached = ResponseCache.shared.chatMessages
+        let cached = ResponseCache.shared.chatMessages(forAgent: selectedRecipient)
         if !cached.isEmpty {
             messages = cached
             lastMessageId = messages.last?.id
@@ -275,6 +276,16 @@ final class ChatViewModel: BaseViewModel {
     // MARK: - Data Loading
 
     override func refresh() async {
+        // Cancel any in-flight refresh to avoid triple-refresh on foreground
+        refreshTask?.cancel()
+        let task = Task {
+            await performRefresh()
+        }
+        refreshTask = task
+        await task.value
+    }
+
+    private func performRefresh() async {
         await performAsyncAction(showLoading: messages.isEmpty) {
             let response = try await self.apiClient.getMessages(agentId: self.selectedRecipient)
             self.markConnectionSuccess()
@@ -307,10 +318,20 @@ final class ChatViewModel: BaseViewModel {
             var seen = Set<String>()
             serverMessages = serverMessages.filter { seen.insert($0.id).inserted }
 
+            // Merge server messages with any remaining local-only messages
+            let serverIds = Set(serverMessages.map { $0.id })
+            let localOnly = self.messages.filter { msg in
+                msg.id.hasPrefix("local-") && !serverIds.contains(msg.id)
+            }
+            if !localOnly.isEmpty {
+                serverMessages.append(contentsOf: localOnly)
+                serverMessages.sort { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
+            }
+
             self.messages = serverMessages
             self.hasMoreHistory = response.hasMore
             self.lastMessageId = serverMessages.filter { !$0.id.hasPrefix("local-") }.last?.id
-            ResponseCache.shared.updateChatMessages(self.messages)
+            ResponseCache.shared.updateChatMessages(self.messages, forAgent: self.selectedRecipient)
         }
     }
 
@@ -353,6 +374,7 @@ final class ChatViewModel: BaseViewModel {
         pendingLocalMessages = [:]
         confirmedClientIds = []
         streamingText = nil
+        hasMoreHistory = true
         await refresh()
 
         // Mark all messages from this agent as read and clear local count
@@ -370,11 +392,12 @@ final class ChatViewModel: BaseViewModel {
         defer { isLoadingHistory = false }
 
         await performAsyncAction(showLoading: false) {
-            // Use the oldest message's ID as the beforeId cursor
-            let oldestId = self.messages.filter { !$0.id.hasPrefix("local-") }.first?.id
+            // Use the oldest message's timestamp + ID as the pagination cursor
+            let oldest = self.messages.filter { !$0.id.hasPrefix("local-") }.first
             let response = try await self.apiClient.getMessages(
                 agentId: self.selectedRecipient,
-                beforeId: oldestId,
+                before: oldest?.createdAt,
+                beforeId: oldest?.id,
                 limit: 50
             )
 
@@ -446,7 +469,7 @@ final class ChatViewModel: BaseViewModel {
 
         messages.append(message)
         messages.sort { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
-        ResponseCache.shared.updateChatMessages(messages)
+        ResponseCache.shared.updateChatMessages(messages, forAgent: selectedRecipient)
     }
 
     private func handleDeliveryConfirmation(_ confirmation: (clientId: String, serverId: String, timestamp: String)) {
@@ -469,7 +492,7 @@ final class ChatViewModel: BaseViewModel {
             )
             messages[index] = confirmed
             pendingLocalMessages.removeValue(forKey: confirmation.clientId)
-            ResponseCache.shared.updateChatMessages(messages)
+            ResponseCache.shared.updateChatMessages(messages, forAgent: selectedRecipient)
         }
     }
 
@@ -783,6 +806,8 @@ final class ChatViewModel: BaseViewModel {
                     self.connectionState = .disconnected
                 } else if self.connectionState == .disconnected {
                     self.connectionState = .connecting
+                    // Trigger WebSocket reconnection on network restore
+                    self.wsService.reconnectOnNetworkRestored()
                 }
             }
             .store(in: &cancellables)

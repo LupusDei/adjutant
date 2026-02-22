@@ -35,6 +35,7 @@ final class ResponseCache {
 
     /// Cached chat messages (persistent messages from SQLite store)
     private(set) var chatMessages: [PersistentMessage] = []
+    private var chatMessagesByAgent: [String: [PersistentMessage]] = [:]
 
     /// Cached dashboard data
     private(set) var dashboardMail: [Message] = []
@@ -99,6 +100,20 @@ final class ResponseCache {
         persistChatMessages(messages)
     }
 
+    /// Updates cached chat messages for a specific agent
+    func updateChatMessages(_ messages: [PersistentMessage], forAgent agentId: String) {
+        chatMessagesByAgent[agentId] = messages
+        // Also update the flat list for backward compatibility
+        chatMessages = messages
+        lastUpdated[.chat] = Date()
+        persistChatMessages(messages)
+    }
+
+    /// Gets cached chat messages for a specific agent
+    func chatMessages(forAgent agentId: String) -> [PersistentMessage] {
+        return chatMessagesByAgent[agentId] ?? []
+    }
+
     /// Updates the cached dashboard data
     func updateDashboard(mail: [Message], crew: [CrewMember], convoys: [Convoy]) {
         self.dashboardMail = mail
@@ -136,6 +151,7 @@ final class ResponseCache {
         epics = []
         beads = []
         chatMessages = []
+        chatMessagesByAgent = [:]
         dashboardMail = []
         dashboardCrew = []
         dashboardConvoys = []
