@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 import AdjutantKit
 
 /// ViewModel for the Chat feature.
@@ -143,8 +144,10 @@ final class ChatViewModel: BaseViewModel {
         ttsService.volume = Float(savedVolume == 0 ? 0.8 : savedVolume)
     }
 
-    /// Loads cached chat messages for immediate display
+    /// Loads cached chat messages for immediate display.
+    /// Falls back to UserDefaults-persisted messages on cold start.
     private func loadFromCache() {
+        ResponseCache.shared.loadPersistedChatMessages()
         let cached = ResponseCache.shared.chatMessages
         if !cached.isEmpty {
             messages = cached
@@ -212,13 +215,16 @@ final class ChatViewModel: BaseViewModel {
     // MARK: - Lifecycle
 
     override func onAppear() {
-        super.onAppear()
+        // Don't call super.onAppear() — it fires refresh() before recipients are loaded.
+        // Instead, load recipients first, then refresh explicitly.
         connectionState = .connecting
         Task {
             await loadRecipients()
+            await refresh()
         }
         connectWebSocket()
         observeNetworkChanges()
+        observeForegroundTransitions()
     }
 
     override func onDisappear() {
@@ -754,6 +760,18 @@ final class ChatViewModel: BaseViewModel {
     }
 
     // MARK: - Connection State
+
+    /// Refresh chat messages when the app returns to foreground.
+    /// Ensures messages are up-to-date after being backgrounded or suspended.
+    private func observeForegroundTransitions() {
+        NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                Task { await self.refresh() }
+            }
+            .store(in: &cancellables)
+    }
 
     /// Observe network changes to update connection state
     private func observeNetworkChanges() {

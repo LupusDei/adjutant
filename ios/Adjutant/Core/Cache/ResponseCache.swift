@@ -92,10 +92,11 @@ final class ResponseCache {
         lastUpdated[.beads] = Date()
     }
 
-    /// Updates the cached chat messages
+    /// Updates the cached chat messages and persists the most recent to disk
     func updateChatMessages(_ messages: [PersistentMessage]) {
         self.chatMessages = messages
         lastUpdated[.chat] = Date()
+        persistChatMessages(messages)
     }
 
     /// Updates the cached dashboard data
@@ -139,6 +140,7 @@ final class ResponseCache {
         dashboardCrew = []
         dashboardConvoys = []
         lastUpdated = [:]
+        UserDefaults.standard.removeObject(forKey: Self.chatCacheKey)
     }
 
     /// Clears cache for a specific type
@@ -156,11 +158,37 @@ final class ResponseCache {
             beads = []
         case .chat:
             chatMessages = []
+            UserDefaults.standard.removeObject(forKey: Self.chatCacheKey)
         case .dashboard:
             dashboardMail = []
             dashboardCrew = []
             dashboardConvoys = []
         }
         lastUpdated[type] = nil
+    }
+
+    // MARK: - Chat Persistence
+
+    private static let chatCacheKey = "cachedChatMessages"
+    private static let maxPersistedMessages = 50
+
+    /// Persists the most recent chat messages to UserDefaults for cold start recovery
+    private func persistChatMessages(_ messages: [PersistentMessage]) {
+        let recent = Array(messages.suffix(Self.maxPersistedMessages))
+        if let data = try? JSONEncoder().encode(recent) {
+            UserDefaults.standard.set(data, forKey: Self.chatCacheKey)
+        }
+    }
+
+    /// Loads persisted chat messages from UserDefaults into the in-memory cache.
+    /// Only loads if the in-memory cache is empty (cold start scenario).
+    func loadPersistedChatMessages() {
+        guard chatMessages.isEmpty else { return }
+        guard let data = UserDefaults.standard.data(forKey: Self.chatCacheKey),
+              let messages = try? JSONDecoder().decode([PersistentMessage].self, from: data) else {
+            return
+        }
+        chatMessages = messages
+        lastUpdated[.chat] = Date()
     }
 }
