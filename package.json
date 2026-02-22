@@ -8,6 +8,9 @@
   },
   "files": [
     "bin",
+    "cli",
+    "dist/cli",
+    ".adjutant",
     "backend",
     "frontend",
     "scripts"
@@ -19,7 +22,8 @@
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev",
     "kill": "lsof -ti:4200,4201 | xargs kill -9 2>/dev/null || true",
-    "build": "npm run build:backend && npm run build:frontend",
+    "build": "npm run build:cli && npm run build:backend && npm run build:frontend",
+    "build:cli": "npx tsc -p tsconfig.cli.json",
     "build:backend": "cd backend && npm run build",
     "build:frontend": "cd frontend && npm run build",
     "start": "npx concurrently -k -n backend,frontend -c blue,green \"npm run start:backend\" \"npm run start:frontend\"",
@@ -28,6 +32,8 @@
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "tunnel": "./scripts/tunnel.sh",
     "tunnel:auto": "./scripts/tunnel.sh --no-wait",
+    "setup": "npm run build:cli && node dist/cli/index.js init",
+    "doctor": "npm run build:cli && node dist/cli/index.js doctor",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -54,7 +60,9 @@
     "commander": "^14.0.3"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "@types/node": "^25.3.0",
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=20.0.0"

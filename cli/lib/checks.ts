@@ -1,0 +1,126 @@
+/**
+ * Shared check functions used by both `adjutant init` and `adjutant doctor`.
+ *
+ * Each check returns a boolean or a richer result. These are pure functions
+ * that inspect the system state without modifying it.
+ */
+
+import { existsSync, readFileSync, statSync } from "fs";
+import { execSync } from "child_process";
+import { join } from "path";
+import { homedir } from "os";
+
+/** Check if a file exists at the given path. */
+export function fileExists(path: string): boolean {
+  return existsSync(path);
+}
+
+/** Check if a directory exists at the given path. */
+export function dirExists(path: string): boolean {
+  try {
+    const stats = statSync(path);
+    return stats.isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/** Try to parse a JSON file. Returns the parsed object or null on failure. */
+export function parseJsonFile<T = unknown>(path: string): T | null {
+  try {
+    const content = readFileSync(path, "utf-8");
+    return JSON.parse(content) as T;
+  } catch {
+    return null;
+  }
+}
+
+/** Check if a command is available on PATH. */
+export function commandAvailable(command: string): boolean {
+  try {
+    execSync(`which ${command}`, { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Check if an HTTP endpoint is reachable. Returns the status code or null. */
+export async function httpReachable(url: string, timeoutMs = 3000): Promise<number | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+    return response.status;
+  } catch {
+    return null;
+  }
+}
+
+/** Get the path to Claude Code settings file. */
+export function getClaudeSettingsPath(): string {
+  return join(homedir(), ".claude", "settings.json");
+}
+
+/** Get the path to the adjutant database. */
+export function getAdjutantDbPath(): string {
+  return join(homedir(), ".adjutant", "adjutant.db");
+}
+
+/** Get the path to the API keys file. */
+export function getApiKeysPath(): string {
+  return join(homedir(), ".gastown", "api-keys.json");
+}
+
+/** Check if .mcp.json has the adjutant MCP server configured. */
+export function mcpJsonValid(projectRoot: string): { exists: boolean; hasAdjutant: boolean } {
+  const mcpPath = join(projectRoot, ".mcp.json");
+  if (!fileExists(mcpPath)) {
+    return { exists: false, hasAdjutant: false };
+  }
+
+  const config = parseJsonFile<{ mcpServers?: { adjutant?: unknown } }>(mcpPath);
+  if (!config) {
+    return { exists: true, hasAdjutant: false };
+  }
+
+  return { exists: true, hasAdjutant: !!config.mcpServers?.adjutant };
+}
+
+interface HookEntry {
+  type: string;
+  command: string;
+}
+
+interface HookMatcher {
+  matcher: string;
+  hooks: HookEntry[];
+}
+
+interface ClaudeSettings {
+  hooks?: {
+    SessionStart?: HookMatcher[];
+    PreCompact?: HookMatcher[];
+    [key: string]: HookMatcher[] | undefined;
+  };
+  [key: string]: unknown;
+}
+
+/** Check if adjutant-prime hook is registered in Claude Code settings. */
+export function adjutantHookRegistered(): boolean {
+  const settingsPath = getClaudeSettingsPath();
+  const settings = parseJsonFile<ClaudeSettings>(settingsPath);
+  if (!settings?.hooks) return false;
+
+  const HOOK_COMMAND = "cat .adjutant/PRIME.md 2>/dev/null || true";
+
+  function hasHook(matchers: HookMatcher[] | undefined): boolean {
+    if (!matchers) return false;
+    return matchers.some((m) =>
+      m.hooks?.some((h) => h.command === HOOK_COMMAND)
+    );
+  }
+
+  return hasHook(settings.hooks.SessionStart) && hasHook(settings.hooks.PreCompact);
+}
