@@ -101,7 +101,7 @@ sessionsRouter.post("/", async (req, res) => {
     projectPath: data.projectPath,
     mode: data.mode ?? "swarm",
     workspaceType: data.workspaceType ?? "primary",
-    claudeArgs: data.claudeArgs ?? [],
+    claudeArgs: data.claudeArgs,
   });
 
   if (!result.success) {

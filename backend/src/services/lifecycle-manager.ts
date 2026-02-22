@@ -159,8 +159,11 @@ export class LifecycleManager {
       ]);
 
       // Start Claude Code in the session
-      const claudeArgs = req.claudeArgs ?? ["--dangerously-skip-permissions"];
-      const claudeCmd = `claude ${claudeArgs.join(" ")}`;
+      // Always include --dangerously-skip-permissions so agents don't block on prompts.
+      // Custom claudeArgs are appended after the mandatory flag.
+      const baseArgs = ["--dangerously-skip-permissions"];
+      const extraArgs = req.claudeArgs?.filter((a) => a !== "--dangerously-skip-permissions") ?? [];
+      const claudeCmd = `claude ${[...baseArgs, ...extraArgs].join(" ")}`;
 
       await execTmuxCommand([
         "send-keys",
