@@ -28,6 +28,19 @@ vi.mock("../../src/services/mcp-server.js", () => ({
   getTransportBySession: mockGetTransportBySession,
 }));
 
+// Mock SDK types — use real isInitializeRequest logic
+const { mockIsInitializeRequest } = vi.hoisted(() => ({
+  mockIsInitializeRequest: vi.fn((value: unknown) => {
+    if (typeof value !== "object" || value === null) return false;
+    const obj = value as Record<string, unknown>;
+    return obj["method"] === "initialize" && obj["jsonrpc"] === "2.0";
+  }),
+}));
+
+vi.mock("@modelcontextprotocol/sdk/types.js", () => ({
+  isInitializeRequest: mockIsInitializeRequest,
+}));
+
 import { mcpRouter } from "../../src/routes/mcp.js";
 
 describe("MCP Routes", () => {
@@ -124,6 +137,21 @@ describe("MCP Routes", () => {
       await handler!(req, res, vi.fn());
 
       expect(res.status).toHaveBeenCalledWith(500);
+    });
+
+    it("should return 400 for non-initialize request without session ID", async () => {
+      const req = createMockReq({
+        method: "POST",
+        headers: {},
+        body: { jsonrpc: "2.0", method: "tools/list", id: 1 },
+      });
+      const res = createMockRes();
+
+      const handler = findRouteHandler(mcpRouter, "post", "/");
+      await handler!(req, res, vi.fn());
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(mockCreateSessionTransport).not.toHaveBeenCalled();
     });
   });
 

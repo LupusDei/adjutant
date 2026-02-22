@@ -7,6 +7,7 @@
  */
 
 import { Router } from "express";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import {
   createSessionTransport,
   resolveAgentId,
@@ -50,7 +51,13 @@ mcpRouter.post("/", async (req, res) => {
     return;
   }
 
-  // No session ID — create new session (initialization)
+  // No session ID — must be an initialize request to create a new session.
+  // Reject non-initialize requests to avoid creating orphaned transport+server.
+  if (!isInitializeRequest(req.body)) {
+    res.status(400).json({ error: "Missing Mcp-Session-Id header" });
+    return;
+  }
+
   const agentId = resolveAgentId(
     req.query as Record<string, unknown>,
     req.headers as Record<string, unknown>,

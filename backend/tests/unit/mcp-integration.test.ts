@@ -45,6 +45,15 @@ const { sessionIdState, createdTransports, mockConnect } = vi.hoisted(() => {
   return { sessionIdState, createdTransports, mockConnect };
 });
 
+// Mock SDK types — realistic isInitializeRequest
+vi.mock("@modelcontextprotocol/sdk/types.js", () => ({
+  isInitializeRequest: (value: unknown) => {
+    if (typeof value !== "object" || value === null) return false;
+    const obj = value as Record<string, unknown>;
+    return obj["method"] === "initialize" && obj["jsonrpc"] === "2.0";
+  },
+}));
+
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
   McpServer: vi.fn(function () {
     return {
