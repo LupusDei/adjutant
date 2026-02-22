@@ -234,7 +234,8 @@ public enum WebSocketConnectionState: Equatable {
 
 /// WebSocket client for real-time communication with the Adjutant backend.
 /// Handles auth handshake, reconnection, sequence tracking, and gap recovery.
-public final class WebSocketClient: NSObject, @unchecked Sendable {
+@MainActor
+public final class WebSocketClient: NSObject, Sendable {
     // MARK: - Publishers
 
     public let messageSubject = PassthroughSubject<WsServerMessage, Never>()
@@ -280,7 +281,9 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
     }
 
     deinit {
-        disconnect()
+        // Inline cleanup since deinit is nonisolated and can't call @MainActor methods
+        webSocketTask?.cancel(with: .goingAway, reason: nil)
+        session?.invalidateAndCancel()
     }
 
     // MARK: - Public API
@@ -291,6 +294,19 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
         isIntentionalDisconnect = false
         isHandlingDisconnect = false
         reconnectAttempt = 0
+        performConnect()
+    }
+
+    /// Triggers reconnection when network is restored.
+    /// Resets the reconnect attempt counter for fresh backoff.
+    public func reconnectOnNetworkRestored() {
+        guard connectionStateSubject.value == .disconnected ||
+              connectionStateSubject.value != .connected else { return }
+        reconnectAttempt = 0
+        isIntentionalDisconnect = false
+        isHandlingDisconnect = false
+        reconnectTask?.cancel()
+        reconnectTask = nil
         performConnect()
     }
 
@@ -411,22 +427,24 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
 
     private func receiveMessage() {
         webSocketTask?.receive { [weak self] result in
-            guard let self = self else { return }
-            switch result {
-            case .success(let message):
-                switch message {
-                case .string(let text):
-                    self.handleRawMessage(text)
-                case .data(let data):
-                    if let text = String(data: data, encoding: .utf8) {
+            Task { @MainActor in
+                guard let self = self else { return }
+                switch result {
+                case .success(let message):
+                    switch message {
+                    case .string(let text):
                         self.handleRawMessage(text)
+                    case .data(let data):
+                        if let text = String(data: data, encoding: .utf8) {
+                            self.handleRawMessage(text)
+                        }
+                    @unknown default:
+                        break
                     }
-                @unknown default:
-                    break
+                    self.receiveMessage()
+                case .failure:
+                    self.handleDisconnection()
                 }
-                self.receiveMessage()
-            case .failure:
-                self.handleDisconnection()
             }
         }
     }
@@ -435,6 +453,11 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
         guard let data = text.data(using: .utf8),
               let msg = try? decoder.decode(WsServerMessage.self, from: data) else {
             return
+        }
+
+        // Update sequence tracking for ALL message types (not just default case)
+        if let seq = msg.seq {
+            lastSeqSeen = max(lastSeqSeen, seq)
         }
 
         switch msg.type {
@@ -512,9 +535,6 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
             }
 
         default:
-            if let seq = msg.seq {
-                lastSeqSeen = max(lastSeqSeen, seq)
-            }
             messageSubject.send(msg)
         }
     }
@@ -572,7 +592,7 @@ public final class WebSocketClient: NSObject, @unchecked Sendable {
 // MARK: - URLSessionWebSocketDelegate
 
 extension WebSocketClient: URLSessionWebSocketDelegate {
-    public func urlSession(
+    nonisolated public func urlSession(
         _ session: URLSession,
         webSocketTask: URLSessionWebSocketTask,
         didOpenWithProtocol protocol: String?
@@ -580,24 +600,26 @@ extension WebSocketClient: URLSessionWebSocketDelegate {
         // Connection opened, waiting for auth_challenge
     }
 
-    public func urlSession(
+    nonisolated public func urlSession(
         _ session: URLSession,
         webSocketTask: URLSessionWebSocketTask,
         didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
         reason: Data?
     ) {
-        // Ignore callbacks from stale sessions being invalidated
-        guard session === self.session else { return }
-        handleDisconnection()
+        Task { @MainActor in
+            guard session === self.session else { return }
+            self.handleDisconnection()
+        }
     }
 
-    public func urlSession(
+    nonisolated public func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
         didCompleteWithError error: (any Error)?
     ) {
-        // Ignore callbacks from stale sessions being invalidated
-        guard error != nil, session === self.session else { return }
-        handleDisconnection()
+        Task { @MainActor in
+            guard error != nil, session === self.session else { return }
+            self.handleDisconnection()
+        }
     }
 }

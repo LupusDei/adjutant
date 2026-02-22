@@ -92,6 +92,11 @@ final class ChatWebSocketService: ObservableObject {
         connectionState == .connected
     }
 
+    /// Triggers WebSocket reconnection when network is restored
+    func reconnectOnNetworkRestored() {
+        wsClient?.reconnectOnNetworkRestored()
+    }
+
     // MARK: - Sending
 
     func sendMessage(to recipient: String, body: String, clientId: String) {
