@@ -3,6 +3,10 @@
  *
  * Provides the core MCP (Model Context Protocol) server that agents connect to
  * via SSE transport. Tracks connected agents and emits lifecycle events.
+ *
+ * Each SSE connection gets its own McpServer instance because the MCP SDK's
+ * Protocol class only supports a single transport at a time. Tools are
+ * registered on each new instance via the toolRegistrar callback.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -19,58 +23,63 @@ import { getEventBus } from "./event-bus.js";
 export interface AgentConnection {
   agentId: string;
   sessionId: string;
+  server: McpServer;
   transport: SSEServerTransport;
   connectedAt: Date;
 }
+
+/** Callback to register tools on a new McpServer instance. */
+export type ToolRegistrar = (server: McpServer) => void;
 
 // ============================================================================
 // State
 // ============================================================================
 
-let mcpServer: McpServer | null = null;
 const connections = new Map<string, AgentConnection>();
+let toolRegistrar: ToolRegistrar | null = null;
 
 // ============================================================================
 // Server lifecycle
 // ============================================================================
 
 /**
- * Create a new McpServer instance.
+ * Create a new McpServer instance with tools registered.
  */
 export function createMcpServer(): McpServer {
   const server = new McpServer(
     { name: "adjutant", version: "0.2.2" },
     {},
   );
+  if (toolRegistrar) {
+    toolRegistrar(server);
+  }
   return server;
 }
 
 /**
- * Get the singleton McpServer, creating it if needed.
+ * Set the tool registrar callback. Called once at startup after
+ * all tool registration functions are ready. Each new connection
+ * will use this to register tools on its dedicated McpServer.
  */
-export function getMcpServer(): McpServer {
-  if (!mcpServer) {
-    mcpServer = createMcpServer();
-    logInfo("MCP server initialized");
-  }
-  return mcpServer;
+export function setToolRegistrar(registrar: ToolRegistrar): void {
+  toolRegistrar = registrar;
+  logInfo("MCP tool registrar set");
 }
 
 /**
- * Reset the singleton (for testing).
+ * Reset state (for testing).
  */
 export function resetMcpServer(): void {
   connections.clear();
-  mcpServer = null;
+  toolRegistrar = null;
 }
 
 /**
- * Initialize the MCP server singleton. Called at startup.
- * Tool registration is done separately in index.ts.
+ * Initialize the MCP server subsystem. Called at startup.
+ * Tool registration is done via setToolRegistrar() in index.ts.
  */
 export function initMcpServer(): void {
-  getMcpServer();
-  logInfo("MCP server initialized");
+  logInfo("MCP server initialized (per-connection model)");
 }
 
 // ============================================================================
@@ -105,30 +114,34 @@ export function resolveAgentId(
 
 /**
  * Connect an agent via SSE transport.
+ *
+ * Creates a dedicated McpServer for this connection (the MCP SDK Protocol
+ * only supports one transport per server instance). Tools are registered
+ * via the toolRegistrar set at startup.
+ *
+ * NOTE: Do NOT call transport.start() before server.connect() — the SDK's
+ * Protocol.connect() calls start() internally and SSEServerTransport throws
+ * if started twice.
  */
 export async function connectAgent(
   agentId: string,
   res: ServerResponse,
 ): Promise<AgentConnection> {
-  const server = getMcpServer();
+  const server = createMcpServer();
   const transport = new SSEServerTransport("/mcp/messages", res);
 
-  await transport.start();
+  // server.connect() calls transport.start() internally
   await server.connect(transport);
 
   const connection: AgentConnection = {
     agentId,
     sessionId: transport.sessionId,
+    server,
     transport,
     connectedAt: new Date(),
   };
 
   connections.set(transport.sessionId, connection);
-
-  // Auto-disconnect when transport closes (network drop, agent crash, etc.)
-  transport.onclose = () => {
-    disconnectAgent(transport.sessionId);
-  };
 
   logInfo("MCP agent connected", { agentId, sessionId: transport.sessionId });
 
@@ -151,6 +164,9 @@ export function disconnectAgent(sessionId: string): void {
   }
 
   connections.delete(sessionId);
+
+  // Close the per-connection server to release resources
+  connection.server.close().catch(() => {});
 
   logInfo("MCP agent disconnected", {
     agentId: connection.agentId,

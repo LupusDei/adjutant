@@ -190,6 +190,39 @@ describe("beads-service", () => {
       expect(result.error?.message).toBe("Network timeout");
     });
 
+    it("should propagate bd panic errors instead of returning empty", async () => {
+      vi.mocked(execBd).mockResolvedValue({
+        success: false,
+        error: {
+          code: "BD_PANIC",
+          message: "bd crashed: runtime error: nil pointer dereference",
+        },
+        exitCode: 2,
+      });
+
+      const result = await listBeads();
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe("BD_PANIC");
+      expect(result.error?.message).toContain("bd crashed");
+    });
+
+    it("should propagate bd command failures instead of returning empty", async () => {
+      vi.mocked(execBd).mockResolvedValue({
+        success: false,
+        error: {
+          code: "COMMAND_FAILED",
+          message: "some bd error",
+        },
+        exitCode: 1,
+      });
+
+      const result = await listBeads();
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe("COMMAND_FAILED");
+    });
+
     it("should sort beads by priority and date", async () => {
       vi.mocked(execBd).mockResolvedValue({
         success: true,

@@ -99,7 +99,7 @@ export function registerBeadTools(server: McpServer): void {
         }
 
         const data = result.data as Record<string, unknown> | undefined;
-        const createdId = data?.id ?? "unknown";
+        const createdId = data?.['id'] ?? "unknown";
         return {
           content: [{ type: "text" as const, text: `Created bead ${createdId}: ${title}` }],
         };
@@ -208,7 +208,7 @@ export function registerBeadTools(server: McpServer): void {
         }
 
         const lines = beads.map((b) =>
-          `[${b.status}] ${b.id} (${b.issue_type}, P${b.priority}): ${b.title}`,
+          `[${b['status']}] ${b['id']} (${b['issue_type']}, P${b['priority']}): ${b['title']}`,
         );
         return {
           content: [{ type: "text" as const, text: lines.join("\n") }],
@@ -244,22 +244,22 @@ export function registerBeadTools(server: McpServer): void {
         }
 
         const lines = [
-          `ID: ${bead.id}`,
-          `Title: ${bead.title}`,
-          `Status: ${bead.status}`,
-          `Type: ${bead.issue_type}`,
-          `Priority: P${bead.priority}`,
+          `ID: ${bead['id']}`,
+          `Title: ${bead['title']}`,
+          `Status: ${bead['status']}`,
+          `Type: ${bead['issue_type']}`,
+          `Priority: P${bead['priority']}`,
         ];
-        if (bead.assignee) lines.push(`Assignee: ${bead.assignee}`);
-        if (bead.description) lines.push(`Description: ${bead.description}`);
-        if (bead.created_at) lines.push(`Created: ${bead.created_at}`);
-        if (bead.updated_at) lines.push(`Updated: ${bead.updated_at}`);
+        if (bead['assignee']) lines.push(`Assignee: ${bead['assignee']}`);
+        if (bead['description']) lines.push(`Description: ${bead['description']}`);
+        if (bead['created_at']) lines.push(`Created: ${bead['created_at']}`);
+        if (bead['updated_at']) lines.push(`Updated: ${bead['updated_at']}`);
 
-        const deps = bead.dependencies as Array<Record<string, string>> | undefined;
+        const deps = bead['dependencies'] as Array<Record<string, string>> | undefined;
         if (deps && deps.length > 0) {
           lines.push(`Dependencies:`);
           for (const dep of deps) {
-            lines.push(`  - ${dep.depends_on_id} (${dep.type})`);
+            lines.push(`  - ${dep['depends_on_id']} (${dep['type']})`);
           }
         }
 

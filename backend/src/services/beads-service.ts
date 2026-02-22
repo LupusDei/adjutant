@@ -315,15 +315,24 @@ function parseStatusFilter(filter: string | undefined): BeadStatus[] | null {
   return valid.length > 0 ? (valid as BeadStatus[]) : null;
 }
 
+/** Result from fetching beads from a single database. */
+interface FetchResult {
+  beads: BeadInfo[];
+  /** Non-null if the fetch failed. Callers can decide whether to treat as fatal. */
+  error?: { code: string; message: string };
+}
+
 /**
  * Fetches beads from a single database.
+ * Returns partial results: beads may be empty on failure, with error set.
+ * This allows callers to decide whether to propagate or tolerate the error.
  */
 async function fetchBeadsFromDatabase(
   workDir: string,
   beadsDir: string,
   source: string,
   options: ListBeadsOptions
-): Promise<BeadInfo[]> {
+): Promise<FetchResult> {
   const args = ["list", "--json"];
 
   const statusesToInclude = parseStatusFilter(options.status);
@@ -352,8 +361,19 @@ async function fetchBeadsFromDatabase(
   }
 
   const result = await execBd<BeadsIssue[]>(args, { cwd: workDir, beadsDir });
-  if (!result.success || !result.data) {
-    return [];
+  if (!result.success) {
+    const errorCode = result.error?.code ?? "BD_EXEC_FAILED";
+    const errorMsg = result.error?.message ?? "bd command failed";
+    logInfo("fetchBeadsFromDatabase failed", { source, errorCode, errorMsg });
+    return {
+      beads: [],
+      error: { code: errorCode, message: errorMsg },
+    };
+  }
+
+  // Success but no data (empty database) - return empty beads, no error
+  if (!result.data) {
+    return { beads: [] };
   }
 
   // Filter out wisps (transient work units) - they clutter the UI
@@ -372,7 +392,7 @@ async function fetchBeadsFromDatabase(
     );
   }
 
-  return beads;
+  return { beads };
 }
 
 /**
@@ -390,7 +410,20 @@ export async function listBeads(
     const beadsDir = resolveBeadsDir(workDir);
     const source = options.rig ?? "town";
 
-    let beads = await fetchBeadsFromDatabase(workDir, beadsDir, source, options);
+    const fetchResult = await fetchBeadsFromDatabase(workDir, beadsDir, source, options);
+
+    // If the single-database fetch failed, propagate the error
+    if (fetchResult.error) {
+      return {
+        success: false,
+        error: {
+          code: fetchResult.error.code,
+          message: fetchResult.error.message,
+        },
+      };
+    }
+
+    let beads = fetchResult.beads;
 
     // Filter by rig if specified AND we're not already querying a rig-specific database.
     if (options.rig && !options.rigPath) {
@@ -455,13 +488,43 @@ export async function listAllBeads(
       });
     }
 
-    // Fetch from all databases in parallel (town + rigs)
-    const fetchPromises = databasesToQuery.map(async (db) => {
-      return fetchBeadsFromDatabase(db.workDir, db.beadsDir, db.source, options);
-    });
+    // Fetch from all databases sequentially (serialized through bd semaphore
+    // to prevent concurrent SQLite access that causes SIGSEGV).
+    // Even though the semaphore serializes at the execBd level, we collect
+    // results and track per-database errors for better diagnostics.
+    const fetchResults: FetchResult[] = [];
+    const errors: Array<{ source: string; error: { code: string; message: string } }> = [];
 
-    const results = await Promise.all(fetchPromises);
-    let allBeads = results.flat();
+    for (const db of databasesToQuery) {
+      const result = await fetchBeadsFromDatabase(db.workDir, db.beadsDir, db.source, options);
+      fetchResults.push(result);
+      if (result.error) {
+        errors.push({ source: db.source, error: result.error });
+      }
+    }
+
+    // If ALL databases failed, return an error
+    if (errors.length === databasesToQuery.length && databasesToQuery.length > 0) {
+      const firstError = errors[0]!;
+      return {
+        success: false,
+        error: {
+          code: firstError.error.code,
+          message: `All bead databases failed. First error: ${firstError.error.message}`,
+        },
+      };
+    }
+
+    // Log partial failures but continue with successful results
+    if (errors.length > 0) {
+      logInfo("listAllBeads partial failure", {
+        totalDbs: databasesToQuery.length,
+        failedDbs: errors.length,
+        errors: errors.map((e) => `${e.source}: ${e.error.message}`),
+      });
+    }
+
+    let allBeads = fetchResults.flatMap((r) => r.beads);
 
     // Deduplicate by bead ID (same bead may exist in multiple databases)
     const seenIds = new Set<string>();

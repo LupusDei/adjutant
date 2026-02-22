@@ -11,7 +11,7 @@ import { initAgentStatusStream } from "./services/agent-status-stream.js";
 import { initTerminalStream } from "./services/terminal-stream.js";
 import { initStreamingBridge } from "./services/streaming-bridge.js";
 import { getSessionBridge } from "./services/session-bridge.js";
-import { getMcpServer, initMcpServer } from "./services/mcp-server.js";
+import { initMcpServer, setToolRegistrar } from "./services/mcp-server.js";
 import { initDatabase } from "./services/database.js";
 import { createMessageStore } from "./services/message-store.js";
 import { registerMessagingTools } from "./services/mcp-tools/messaging.js";
@@ -101,14 +101,16 @@ const server = app.listen(PORT, () => {
   // Initialize streaming bridge (watches .beads/streams/ for agent output)
   initStreamingBridge();
 
-  // Initialize MCP server for agent tool connections
+  // Initialize MCP server subsystem with tool registrar.
+  // Each SSE connection gets its own McpServer; the registrar
+  // is called on each new instance to wire up tools.
   initMcpServer();
-
-  // Register MCP tools for agent use
-  registerMessagingTools(getMcpServer(), messageStore);
-  registerStatusTools(getMcpServer(), messageStore);
-  registerBeadTools(getMcpServer());
-  registerQueryTools(getMcpServer(), messageStore);
+  setToolRegistrar((server) => {
+    registerMessagingTools(server, messageStore);
+    registerStatusTools(server, messageStore);
+    registerBeadTools(server);
+    registerQueryTools(server, messageStore);
+  });
 
   // Initialize Session Bridge v2 (tmux session management)
   // init() loads persisted sessions, verifies tmux state, and auto-creates

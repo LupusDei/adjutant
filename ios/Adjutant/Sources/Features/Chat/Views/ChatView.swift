@@ -124,6 +124,16 @@ struct ChatView: View {
                 }
             )
         }
+        .onChange(of: showRecipientSelector) { _, isShowing in
+            if isShowing {
+                Task { await viewModel.loadRecipients() }
+            }
+        }
+        .onChange(of: coordinator.selectedTab) { _, newTab in
+            if newTab == .chat {
+                Task { await viewModel.loadRecipients() }
+            }
+        }
         .fullScreenCover(item: $selectedSession) { session in
             let wsClient = WebSocketClient(
                 baseURL: AppState.shared.apiBaseURL,
@@ -133,6 +143,15 @@ struct ChatView: View {
         }
         .sheet(isPresented: $showSearch) {
             ChatSearchSheet(viewModel: viewModel)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .switchToSession)) { notification in
+            if let sessionId = notification.userInfo?["sessionId"] as? String {
+                Task {
+                    if let session = try? await AppState.shared.apiClient.getSession(id: sessionId) {
+                        selectedSession = session
+                    }
+                }
+            }
         }
     }
 

@@ -22,9 +22,9 @@ import type { BeadsIssue } from "../bd-client.js";
 interface AgentInfo {
   agentId: string;
   status: string;
-  connectedAt?: string;
-  sessionId?: string;
-  currentTask?: string;
+  connectedAt?: string | undefined;
+  sessionId?: string | undefined;
+  currentTask?: string | undefined;
 }
 
 // ============================================================================

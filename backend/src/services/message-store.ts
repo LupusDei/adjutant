@@ -49,8 +49,8 @@ interface GetMessagesOptions {
 }
 
 interface SearchOptions {
-  agentId?: string;
-  limit?: number;
+  agentId?: string | undefined;
+  limit?: number | undefined;
 }
 
 interface UnreadCount {

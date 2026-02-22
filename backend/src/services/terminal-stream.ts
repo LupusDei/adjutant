@@ -35,7 +35,7 @@ let wss: WebSocketServer | null = null;
 /**
  * Initialize the terminal stream WebSocket server.
  */
-export function initTerminalStream(server: HttpServer): WebSocketServer {
+export function initTerminalStream(_server: HttpServer): WebSocketServer {
   if (wss) return wss;
 
   wss = new WebSocketServer({ noServer: true });

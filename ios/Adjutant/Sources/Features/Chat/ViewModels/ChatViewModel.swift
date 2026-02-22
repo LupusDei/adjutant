@@ -524,6 +524,12 @@ final class ChatViewModel: BaseViewModel {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
+        // Prevent sending to an empty recipient (e.g. if agents haven't loaded yet)
+        guard !selectedRecipient.isEmpty else {
+            errorMessage = "No recipient selected. Please select a recipient first."
+            return
+        }
+
         // Clear input immediately for responsive feel
         inputText = ""
 
@@ -772,7 +778,7 @@ final class ChatViewModel: BaseViewModel {
 
     /// Check if we can send a message
     var canSend: Bool {
-        !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isLoading
+        !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isLoading && !selectedRecipient.isEmpty
     }
 
     /// Display name for the selected recipient
@@ -797,14 +803,17 @@ final class ChatViewModel: BaseViewModel {
 
     // MARK: - Connection State
 
-    /// Refresh chat messages when the app returns to foreground.
-    /// Ensures messages are up-to-date after being backgrounded or suspended.
+    /// Refresh chat messages and recipients when the app returns to foreground.
+    /// Ensures messages and agent list are up-to-date after being backgrounded or suspended.
     private func observeForegroundTransitions() {
         NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self = self else { return }
-                Task { await self.refresh() }
+                Task {
+                    await self.loadRecipients()
+                    await self.refresh()
+                }
             }
             .store(in: &cancellables)
     }

@@ -68,7 +68,7 @@ function mapStatus(running: boolean, state?: string, hasHookedWork?: boolean): C
 function transformAgent(agent: AgentRuntimeInfo): CrewMember {
   const hasHookedWork = Boolean(agent.hookBead);
   const result: CrewMember = {
-    id: agent.address,
+    id: agent.name,
     name: agent.name,
     type: mapAgentType(agent.role),
     rig: agent.rig,
@@ -215,7 +215,7 @@ async function getTmuxAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
     for (const session of managedSessions) {
       const isRunning = tmuxSessions.has(session.tmuxSession);
       const member: CrewMember = {
-        id: session.id,
+        id: session.name,
         name: session.name,
         type: "crew" as AgentType,
         rig: "",

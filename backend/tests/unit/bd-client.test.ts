@@ -138,12 +138,34 @@ describe("bd-client", () => {
 
       const resultPromise = execBd(["bad-command"]);
       await tick();
-      mockProcess.simulateOutput("", "SIGSEGV crash", 2);
+      mockProcess.simulateOutput("", "some error message", 1);
 
       const result = await resultPromise;
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe("COMMAND_FAILED");
+      expect(result.exitCode).toBe(1);
+    });
+
+    it("should detect Go panic and return BD_PANIC error code", async () => {
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
+
+      const panicStderr = [
+        "goroutine 1 [running]:",
+        "runtime: panic: runtime error: invalid memory address or nil pointer dereference",
+        "github.com/dolthub/dolt/go/store/nbs.(*tableCache).get(...)",
+      ].join("\n");
+
+      const resultPromise = execBd(["list", "--json"]);
+      await tick();
+      mockProcess.simulateOutput("", panicStderr, 2);
+
+      const result = await resultPromise;
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe("BD_PANIC");
+      expect(result.error?.message).toContain("bd crashed:");
       expect(result.exitCode).toBe(2);
     });
 

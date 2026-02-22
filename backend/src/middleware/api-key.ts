@@ -20,7 +20,7 @@ const PUBLIC_PATHS = ["/health"];
  * Path prefixes that bypass API key authentication.
  * MCP routes use their own identity system (agentId on SSE connect).
  */
-const PUBLIC_PREFIXES = ["/mcp"];
+const PUBLIC_PREFIXES = ["/mcp", "/.well-known"];
 
 /**
  * Extract bearer token from Authorization header.

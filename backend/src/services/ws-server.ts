@@ -340,7 +340,7 @@ async function handleSessionConnect(client: WsClient, msg: WsClientMessage): Pro
         if (sid === sessionId && client.authenticated) {
           // Structured events for chat view
           if (events.length > 0) {
-            logInfo("ws sending session_output", { sessionId: sid, eventCount: events.length, types: events.map((e: Record<string, unknown>) => e.type) });
+            logInfo("ws sending session_output", { sessionId: sid, eventCount: events.length, types: events.map((e) => (e as Record<string, unknown>)['type']) });
             send(client, {
               type: "session_output",
               sessionId: sid,
@@ -491,7 +491,7 @@ async function handleSessionPermissionResponse(client: WsClient, msg: WsClientMe
 /**
  * Initialize the WebSocket server on the existing HTTP server.
  */
-export function initWebSocketServer(server: HttpServer, store?: MessageStore): WebSocketServer {
+export function initWebSocketServer(_server: HttpServer, store?: MessageStore): WebSocketServer {
   if (wss) return wss;
   if (store) messageStore = store;
 

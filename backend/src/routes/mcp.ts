@@ -68,7 +68,10 @@ mcpRouter.post("/messages", async (req, res) => {
   }
 
   try {
-    await transport.handlePostMessage(req, res);
+    // Pass req.body as parsedBody since Express json() middleware
+    // already consumed the stream — raw-body would fail with
+    // "stream is not readable" otherwise.
+    await transport.handlePostMessage(req, res, req.body);
   } catch (err) {
     logError("MCP message handling failed", {
       sessionId,

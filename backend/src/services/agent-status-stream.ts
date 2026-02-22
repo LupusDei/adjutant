@@ -16,7 +16,7 @@ let wss: WebSocketServer | null = null;
 /**
  * Initialize the agent status stream WebSocket server.
  */
-export function initAgentStatusStream(server: HttpServer): WebSocketServer {
+export function initAgentStatusStream(_server: HttpServer): WebSocketServer {
   if (wss) return wss;
 
   wss = new WebSocketServer({ noServer: true });
