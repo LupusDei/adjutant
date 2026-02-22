@@ -10,9 +10,10 @@ communicate with the user (Mayor) and other agents, manage beads, and report sta
 
 ## Connection
 
-The MCP server auto-connects via the `adjutant` server configured in `.claude/settings.json`.
+The MCP server auto-connects via the `adjutant` server configured in `.mcp.json` at the project root.
 Your agent identity is resolved server-side from the MCP session -- the server maps your
-session ID to your agent ID (set via the `agentId` query param on SSE connect).
+session ID to your agent ID (set via the `agentId` query param on SSE connect or the
+`X-Agent-Id` header, or the `ADJUTANT_AGENT_ID` environment variable).
 
 The server endpoint is `http://localhost:4201/mcp/sse` (SSE transport).
 
@@ -127,6 +128,21 @@ Messages flow through this pipeline:
 
 Messages are durable -- they persist even if the dashboard is not connected.
 Use `read_messages` to catch up on messages sent while you were offline.
+
+## Responding to Messages (MANDATORY)
+
+When you receive a message via MCP (visible through `read_messages`), you **MUST** respond
+using `send_message`. Never respond via stdout or text output alone -- the user and other
+agents can only see messages sent through the MCP tools.
+
+**On startup**: Call `read_messages({ limit: 5 })` to check for any pending messages.
+If there are unread messages addressed to you, respond to them via `send_message`.
+
+**During work**: Periodically check for new messages, especially if you're working on
+a long task. The user may send follow-up questions or priority changes.
+
+**When asked a question**: Always reply via `send_message({ to: "user", body: "..." })`.
+Do NOT just print an answer to the terminal.
 
 ## Status Reporting Guidelines
 

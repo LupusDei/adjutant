@@ -17,6 +17,12 @@ import { logWarn } from "../utils/logger.js";
 const PUBLIC_PATHS = ["/health"];
 
 /**
+ * Path prefixes that bypass API key authentication.
+ * MCP routes use their own identity system (agentId on SSE connect).
+ */
+const PUBLIC_PREFIXES = ["/mcp"];
+
+/**
  * Extract bearer token from Authorization header.
  */
 function extractBearerToken(authHeader: string | undefined): string | null {
@@ -37,6 +43,12 @@ function extractBearerToken(authHeader: string | undefined): string | null {
 export const apiKeyAuth: RequestHandler = (req, res, next) => {
   // Skip auth for public paths
   if (PUBLIC_PATHS.includes(req.path)) {
+    next();
+    return;
+  }
+
+  // Skip auth for public path prefixes (MCP uses its own identity system)
+  if (PUBLIC_PREFIXES.some((prefix) => req.path.startsWith(prefix))) {
     next();
     return;
   }
