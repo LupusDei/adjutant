@@ -254,13 +254,28 @@ public final class NotificationService: NSObject, ObservableObject {
         messageId: String
     ) async -> String {
         let preview = body.count > 100 ? String(body.prefix(100)) + "..." : body
-        return await scheduleNotification(
-            title: "Message from \(agentId)",
-            body: preview,
-            category: .chatMessage,
-            userInfo: ["agentId": agentId, "messageId": messageId, "type": "chat_message"],
-            identifier: "chat-\(messageId)"
-        )
+
+        // Create notification with thread grouping by agent
+        let id = "chat-\(messageId)"
+        let content = UNMutableNotificationContent()
+        content.title = "Message from \(agentId)"
+        content.body = preview
+        content.sound = .default
+        content.categoryIdentifier = Category.chatMessage.rawValue
+        content.threadIdentifier = "chat-\(agentId)"
+        content.userInfo = ["agentId": agentId, "messageId": messageId, "type": "chat_message"]
+
+        let request = UNNotificationRequest(identifier: id, content: content, trigger: nil)
+
+        do {
+            try await notificationCenter.add(request)
+            await refreshPendingCount()
+            print("[NotificationService] Scheduled chat notification: \(id)")
+        } catch {
+            print("[NotificationService] Failed to schedule chat notification: \(error.localizedDescription)")
+        }
+
+        return id
     }
 
     /// Schedules a task update notification.

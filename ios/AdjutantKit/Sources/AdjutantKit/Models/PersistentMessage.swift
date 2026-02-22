@@ -61,11 +61,18 @@ public struct PersistentMessage: Codable, Identifiable, Hashable, Sendable {
         self.updatedAt = updatedAt
     }
 
+    private static let dateFormatterWithFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private static let dateFormatterBasic = ISO8601DateFormatter()
+
     /// Parse the createdAt timestamp string into a Date
     public var date: Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: createdAt) ?? ISO8601DateFormatter().date(from: createdAt)
+        Self.dateFormatterWithFractional.date(from: createdAt)
+            ?? Self.dateFormatterBasic.date(from: createdAt)
     }
 
     /// Display name for the sender

@@ -20,6 +20,9 @@ struct ChatBubble: View {
     /// Callback when stop button is tapped
     var onStop: (() -> Void)?
 
+    /// Callback when retry button is tapped (for failed messages)
+    var onRetry: (() -> Void)?
+
     /// Bubble alignment based on message direction
     private var alignment: HorizontalAlignment {
         isOutgoing ? .trailing : .leading
@@ -115,10 +118,24 @@ struct ChatBubble: View {
                     }
 
                     // Delivery status indicator for outgoing messages
-                    if isOutgoing && message.deliveryStatus == .pending {
-                        Image(systemName: "clock")
-                            .font(.system(size: 10))
-                            .foregroundColor(theme.dim.opacity(0.5))
+                    if isOutgoing {
+                        if message.deliveryStatus == .pending {
+                            Image(systemName: "clock")
+                                .font(.system(size: 10))
+                                .foregroundColor(theme.dim.opacity(0.5))
+                        } else if message.deliveryStatus == .failed {
+                            Button {
+                                onRetry?()
+                            } label: {
+                                HStack(spacing: 2) {
+                                    Image(systemName: "exclamationmark.circle")
+                                        .font(.system(size: 10))
+                                    CRTText("FAILED", style: .caption, glowIntensity: .none, color: CRTTheme.State.error)
+                                }
+                                .foregroundColor(CRTTheme.State.error)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                 }
             }

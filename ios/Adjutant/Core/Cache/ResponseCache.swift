@@ -172,8 +172,32 @@ final class ResponseCache {
     private static let chatCacheKey = "cachedChatMessages"
     private static let maxPersistedMessages = 50
 
-    /// Persists the most recent chat messages to UserDefaults for cold start recovery
+    /// Debounce timer for chat message persistence
+    private var persistDebounceTask: Task<Void, Never>?
+    private var lastPersistTime: Date = .distantPast
+    private static let persistDebounceInterval: TimeInterval = 5.0
+
+    /// Persists the most recent chat messages to UserDefaults for cold start recovery (debounced)
     private func persistChatMessages(_ messages: [PersistentMessage]) {
+        let now = Date()
+        // If it's been more than 5s since last persist, write immediately
+        if now.timeIntervalSince(lastPersistTime) >= Self.persistDebounceInterval {
+            performPersist(messages)
+            return
+        }
+
+        // Otherwise debounce
+        persistDebounceTask?.cancel()
+        persistDebounceTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.persistDebounceInterval * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            self?.performPersist(messages)
+        }
+    }
+
+    /// Actually writes messages to UserDefaults
+    private func performPersist(_ messages: [PersistentMessage]) {
+        lastPersistTime = Date()
         let recent = Array(messages.suffix(Self.maxPersistedMessages))
         if let data = try? JSONEncoder().encode(recent) {
             UserDefaults.standard.set(data, forKey: Self.chatCacheKey)

@@ -216,6 +216,17 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             messageId: messageId
         )
 
+        // Also fetch and cache the message for instant display when app opens
+        do {
+            let apiClient = AppState.shared.apiClient
+            let response = try await apiClient.getMessages(agentId: agentId, limit: 1)
+            if !response.items.isEmpty {
+                ResponseCache.shared.updateChatMessages(response.items)
+            }
+        } catch {
+            print("[AppDelegate] Failed to pre-fetch chat message: \(error.localizedDescription)")
+        }
+
         return .newData
     }
 

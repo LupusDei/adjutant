@@ -24,6 +24,11 @@ struct ChatView: View {
             // Header
             chatHeader
 
+            // Reconnection banner
+            if viewModel.connectionState != .connected && viewModel.connectionState != .streaming {
+                reconnectionBanner
+            }
+
             // Messages area
             messagesArea
 
@@ -78,8 +83,8 @@ struct ChatView: View {
         .onDisappear {
             viewModel.onDisappear()
         }
-        .onChange(of: viewModel.messages.count) { _, _ in
-            scrollToBottom()
+        .onChange(of: viewModel.messages.last?.id) { oldId, newId in
+            if newId != oldId { scrollToBottom() }
         }
         .sheet(isPresented: $showConnectionDetails) {
             ConnectionDetailsSheet(
@@ -91,6 +96,14 @@ struct ChatView: View {
                 lastPollTime: viewModel.lastPollTime,
                 pollingInterval: 30.0
             )
+        }
+        .onChange(of: coordinator.pendingChatAgentId) { _, newAgentId in
+            if let agentId = newAgentId {
+                coordinator.pendingChatAgentId = nil
+                Task {
+                    await viewModel.setRecipient(agentId)
+                }
+            }
         }
         .onChange(of: viewModel.streamingText) { _, _ in
             scrollToBottom()
@@ -178,6 +191,41 @@ struct ChatView: View {
                         .foregroundColor(theme.dim.opacity(0.3)),
                     alignment: .bottom
                 )
+        )
+    }
+
+    private var reconnectionBanner: some View {
+        HStack(spacing: CRTTheme.Spacing.xs) {
+            if viewModel.connectionState == .connecting {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: theme.primary))
+                    .scaleEffect(0.7)
+            } else {
+                Image(systemName: "wifi.slash")
+                    .font(.system(size: 12))
+                    .foregroundColor(CRTTheme.State.warning)
+            }
+            CRTText(
+                viewModel.connectionState == .connecting ? "RECONNECTING..." : "CONNECTION LOST",
+                style: .caption,
+                glowIntensity: .subtle,
+                color: viewModel.connectionState == .connecting ? theme.primary : CRTTheme.State.warning
+            )
+            Spacer()
+            if viewModel.connectionState == .disconnected {
+                Button {
+                    viewModel.onAppear()
+                } label: {
+                    CRTText("RETRY", style: .caption, glowIntensity: .medium)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
+        .padding(.vertical, CRTTheme.Spacing.xs)
+        .background(
+            (viewModel.connectionState == .connecting ? theme.primary : CRTTheme.State.warning)
+                .opacity(0.1)
         )
     }
 
