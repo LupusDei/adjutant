@@ -205,6 +205,14 @@ export class OutputParser {
       return events;
     }
 
+    // Check for idle prompt before filtering short lines — it's meaningful
+    if (IDLE_PATTERN.test(clean)) {
+      events.push(...this.flushCurrent());
+      events.push({ type: "status", state: "idle" });
+      this.mode = "idle";
+      return events;
+    }
+
     // Partial streaming frames: very short lines (< 4 chars) that aren't
     // meaningful on their own (TUI redraws per-token during streaming)
     if (trimmed.length < 4 && !AGENT_BULLET.test(trimmed) && this.mode === "idle") {

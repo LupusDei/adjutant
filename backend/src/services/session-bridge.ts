@@ -142,6 +142,16 @@ export class SessionBridge {
           streamId: sessionId,
           events,
         });
+
+        // Update session status from parsed output events.
+        // This triggers flushQueue() when the agent goes idle,
+        // delivering any queued input from iOS/WebSocket.
+        for (const event of events) {
+          if (event.type === "status") {
+            const mapped = event.state === "thinking" ? "working" : event.state;
+            this.updateSessionStatus(sessionId, mapped as SessionStatus);
+          }
+        }
       }
     });
 

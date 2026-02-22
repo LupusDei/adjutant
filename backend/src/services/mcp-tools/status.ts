@@ -9,6 +9,8 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { wsBroadcast } from "../ws-server.js";
 import { getAgentBySession } from "../mcp-server.js";
+import { getSessionBridge } from "../session-bridge.js";
+import type { SessionStatus } from "../session-registry.js";
 import { isAPNsConfigured, sendNotificationToAll } from "../apns-service.js";
 import { logWarn } from "../../utils/index.js";
 import type { MessageStore } from "../message-store.js";
@@ -61,6 +63,32 @@ function unknownAgentError() {
   };
 }
 
+/**
+ * Map MCP agent status to SessionRegistry status and update the SessionBridge.
+ * This bridges the gap so /api/agents reflects MCP status changes.
+ */
+function syncToSessionBridge(agentId: string, mcpStatus: string): void {
+  const bridge = getSessionBridge();
+  if (!bridge.isInitialized) return;
+
+  const statusMap: Record<string, SessionStatus> = {
+    working: "working",
+    blocked: "idle",
+    idle: "idle",
+    done: "idle",
+  };
+  const sessionStatus = statusMap[mcpStatus] ?? "idle";
+
+  // Find session by name matching the agent ID
+  const sessions = bridge.listSessions();
+  for (const session of sessions) {
+    if (session.name === agentId) {
+      bridge.updateSessionStatus(session.id, sessionStatus);
+      return;
+    }
+  }
+}
+
 // ============================================================================
 // Tool Registration
 // ============================================================================
@@ -93,6 +121,9 @@ export function registerStatusTools(server: McpServer, store: MessageStore): voi
         beadId,
         updatedAt: now,
       });
+
+      // Sync to SessionBridge so /api/agents reflects this change
+      syncToSessionBridge(agentId, status);
 
       wsBroadcast({
         type: "typing",

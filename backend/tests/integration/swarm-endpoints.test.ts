@@ -196,18 +196,19 @@ describe("swarm mode integration", () => {
   });
 
   describe("GET /api/beads", () => {
-    it("should return 200 with empty data when bd unavailable", async () => {
+    it("should return 500 when bd unavailable", async () => {
+      // beads-service now propagates bd errors instead of returning empty
       const res = await request(app).get("/api/beads");
 
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
+      expect(res.status).toBe(500);
+      expect(res.body.success).toBe(false);
     });
 
-    it("should return 200 with rig=all", async () => {
+    it("should return 500 with rig=all when bd unavailable", async () => {
       const res = await request(app).get("/api/beads?rig=all");
 
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
+      expect(res.status).toBe(500);
+      expect(res.body.success).toBe(false);
     });
   });
 

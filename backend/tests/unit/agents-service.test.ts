@@ -75,7 +75,7 @@ describe("agents-service", () => {
       expect(result.data).toHaveLength(2);
       expect(result.data?.[0].name).toBe("alice");
       expect(result.data?.[0].type).toBe("crew");
-      expect(result.data?.[0].id).toBe("rig/crew/alice");
+      expect(result.data?.[0].id).toBe("alice");
     });
 
     it("should sort agents alphabetically by name", async () => {
@@ -249,7 +249,7 @@ describe("agents-service", () => {
       await getAgents();
 
       expect(mockEmit).toHaveBeenCalledWith("agent:status_changed", {
-        agent: "rig/crew/alice",
+        agent: "alice",
         status: "working",
       });
     });
@@ -290,7 +290,7 @@ describe("agents-service", () => {
       await getAgents();
 
       expect(mockEmit).toHaveBeenCalledWith("agent:status_changed", {
-        agent: "rig/crew/alice",
+        agent: "alice",
         status: "working",
         activity: "Fix bug #42",
       });
@@ -317,11 +317,11 @@ describe("agents-service", () => {
 
       expect(mockEmit).toHaveBeenCalledTimes(2);
       expect(mockEmit).toHaveBeenCalledWith("agent:status_changed", {
-        agent: "rig/crew/alice",
+        agent: "alice",
         status: "working",
       });
       expect(mockEmit).toHaveBeenCalledWith("agent:status_changed", {
-        agent: "rig/crew/bob",
+        agent: "bob",
         status: "offline",
       });
     });

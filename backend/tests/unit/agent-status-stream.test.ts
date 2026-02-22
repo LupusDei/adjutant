@@ -69,6 +69,18 @@ describe("agent status stream", () => {
 
     const app = express();
     server = createServer(app);
+
+    // Wire up upgrade handler — same as index.ts does for noServer WSSes
+    const agentWss = initAgentStatusStream(server);
+    server.on("upgrade", (req, socket, head) => {
+      const pathname = req.url?.split("?")[0];
+      if (pathname === "/api/agents/stream") {
+        agentWss.handleUpgrade(req, socket, head, (ws) => agentWss.emit("connection", ws, req));
+      } else {
+        socket.destroy();
+      }
+    });
+
     await new Promise<void>((resolve) => {
       server.listen(0, () => {
         const addr = server.address();
@@ -86,8 +98,6 @@ describe("agent status stream", () => {
   });
 
   it("should accept WebSocket connections on /api/agents/stream", async () => {
-    initAgentStatusStream(server);
-
     const ws = new WebSocket(`ws://localhost:${port}/api/agents/stream`);
     await waitForOpen(ws);
 
@@ -96,8 +106,6 @@ describe("agent status stream", () => {
   });
 
   it("should subscribe to agent:status_changed events on connection", async () => {
-    initAgentStatusStream(server);
-
     const ws = new WebSocket(`ws://localhost:${port}/api/agents/stream`);
     await waitForOpen(ws);
 
@@ -113,8 +121,6 @@ describe("agent status stream", () => {
   });
 
   it("should forward agent:status_changed events to connected clients", async () => {
-    initAgentStatusStream(server);
-
     const ws = new WebSocket(`ws://localhost:${port}/api/agents/stream`);
     await waitForOpen(ws);
     await new Promise((r) => setTimeout(r, 50));
@@ -138,8 +144,6 @@ describe("agent status stream", () => {
   });
 
   it("should unsubscribe from events when client disconnects", async () => {
-    initAgentStatusStream(server);
-
     const ws = new WebSocket(`ws://localhost:${port}/api/agents/stream`);
     await waitForOpen(ws);
     await new Promise((r) => setTimeout(r, 50));

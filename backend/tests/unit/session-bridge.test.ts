@@ -266,9 +266,19 @@ describe("SessionBridge", () => {
       const sent = await bridge.sendInput(session.id, "fix the bug");
       expect(sent).toBe(true);
 
-      expect(mockExecFile).toHaveBeenCalledWith(
+      // Implementation sends literal text (-l) and Enter as two separate calls
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
+      expect(mockExecFile).toHaveBeenNthCalledWith(
+        1,
         "tmux",
-        ["send-keys", "-t", session.tmuxPane, "fix the bug", "Enter"],
+        ["send-keys", "-t", session.tmuxPane, "-l", "fix the bug"],
+        expect.anything(),
+        expect.any(Function)
+      );
+      expect(mockExecFile).toHaveBeenNthCalledWith(
+        2,
+        "tmux",
+        ["send-keys", "-t", session.tmuxPane, "Enter"],
         expect.anything(),
         expect.any(Function)
       );
