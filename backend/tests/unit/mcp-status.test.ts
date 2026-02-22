@@ -291,23 +291,14 @@ describe("MCP Status Tools", () => {
       });
     });
 
-    it("should broadcast announcement via WebSocket", async () => {
+    it("should not broadcast announcement via WebSocket (stored in SQLite, delivered via APNS)", async () => {
       const tool = server.getTool("announce")!;
       await tool.handler(
         { type: "blocker", title: "API down", body: "External service unavailable" },
         fakeExtra(),
       );
 
-      expect(mockWsBroadcast).toHaveBeenCalledTimes(1);
-      const broadcast = mockWsBroadcast.mock.calls[0]![0];
-      expect(broadcast.type).toBe("message");
-      expect(broadcast.from).toBe("agent-1");
-      expect(broadcast.body).toContain("[BLOCKER]");
-      expect(broadcast.body).toContain("API down");
-      expect(broadcast.metadata).toMatchObject({
-        type: "announcement",
-        announcementType: "blocker",
-      });
+      expect(mockWsBroadcast).not.toHaveBeenCalled();
     });
 
     it("should return error for unknown session", async () => {

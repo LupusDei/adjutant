@@ -162,15 +162,6 @@ export function registerStatusTools(server: McpServer, store: MessageStore): voi
         metadata: { announcementType: type, beadId },
       });
 
-      wsBroadcast({
-        type: "message",
-        id: message.id,
-        from: agentId,
-        body: formattedBody,
-        timestamp: message.createdAt,
-        metadata: { type: "announcement", announcementType: type, beadId },
-      });
-
       // Send APNS push for announcements
       if (isAPNsConfigured()) {
         sendNotificationToAll({
