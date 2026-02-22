@@ -143,7 +143,7 @@ final class ChatWebSocketService: ObservableObject {
             id: id,
             agentId: msg.from ?? "unknown",
             recipient: msg.to,
-            role: .agent,
+            role: msg.from == "user" ? .user : .agent,
             body: body,
             deliveryStatus: .delivered,
             threadId: msg.threadId,

@@ -43,7 +43,7 @@ enum ConnectionState: Equatable {
         case .connected: return "CONNECTED"
         case .connecting: return "CONNECTING"
         case .streaming: return "STREAMING"
-        case .disconnected: return "OFFLINE"
+        case .disconnected: return "DEGRADED"
         }
     }
 

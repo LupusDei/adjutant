@@ -462,7 +462,14 @@ final class ChatViewModel: BaseViewModel {
 
     private func handleIncomingMessage(_ message: PersistentMessage) {
         // Only show messages for the current agent conversation
-        guard message.agentId == selectedRecipient || message.recipient == selectedRecipient else { return }
+        guard message.agentId == selectedRecipient || message.recipient == selectedRecipient else {
+            // Message is for a different agent -- increment unread count
+            let agentKey = message.role == .user ? (message.recipient ?? message.agentId) : message.agentId
+            if agentKey != selectedRecipient {
+                unreadCounts[agentKey, default: 0] += 1
+            }
+            return
+        }
 
         // Avoid duplicates
         guard !messages.contains(where: { $0.id == message.id }) else { return }
