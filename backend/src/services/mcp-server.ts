@@ -2,16 +2,16 @@
  * MCP Server service for Adjutant.
  *
  * Provides the core MCP (Model Context Protocol) server that agents connect to
- * via SSE transport. Tracks connected agents and emits lifecycle events.
+ * via Streamable HTTP transport. Tracks connected agents and emits lifecycle events.
  *
- * Each SSE connection gets its own McpServer instance because the MCP SDK's
+ * Each session gets its own McpServer instance because the MCP SDK's
  * Protocol class only supports a single transport at a time. Tools are
  * registered on each new instance via the toolRegistrar callback.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import type { ServerResponse } from "node:http";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { randomUUID } from "node:crypto";
 import { logInfo, logWarn } from "../utils/index.js";
 import { getEventBus } from "./event-bus.js";
@@ -24,7 +24,7 @@ export interface AgentConnection {
   agentId: string;
   sessionId: string;
   server: McpServer;
-  transport: SSEServerTransport;
+  transport: StreamableHTTPServerTransport;
   connectedAt: Date;
 }
 
@@ -109,49 +109,75 @@ export function resolveAgentId(
 }
 
 // ============================================================================
-// Connection tracking
+// Session transport factory
 // ============================================================================
 
 /**
- * Connect an agent via SSE transport.
+ * Create a new StreamableHTTPServerTransport + McpServer pair for an agent.
  *
- * Creates a dedicated McpServer for this connection (the MCP SDK Protocol
- * only supports one transport per server instance). Tools are registered
- * via the toolRegistrar set at startup.
+ * Returns the transport and server. The caller (route handler) should call
+ * transport.handleRequest() with the initialization request.
  *
- * NOTE: Do NOT call transport.start() before server.connect() — the SDK's
- * Protocol.connect() calls start() internally and SSEServerTransport throws
- * if started twice.
+ * The session is tracked once the transport fires onsessioninitialized.
  */
-export async function connectAgent(
+export async function createSessionTransport(
   agentId: string,
-  res: ServerResponse,
-): Promise<AgentConnection> {
+): Promise<{ transport: StreamableHTTPServerTransport; server: McpServer }> {
   const server = createMcpServer();
-  const transport = new SSEServerTransport("/mcp/messages", res);
 
-  // server.connect() calls transport.start() internally
-  await server.connect(transport);
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => randomUUID(),
+    onsessioninitialized: (sessionId: string) => {
+      const connection: AgentConnection = {
+        agentId,
+        sessionId,
+        server,
+        transport,
+        connectedAt: new Date(),
+      };
+      connections.set(sessionId, connection);
 
-  const connection: AgentConnection = {
-    agentId,
-    sessionId: transport.sessionId,
-    server,
-    transport,
-    connectedAt: new Date(),
-  };
+      logInfo("MCP agent connected", { agentId, sessionId });
+      getEventBus().emit("mcp:agent_connected", { agentId, sessionId });
+    },
+    onsessionclosed: (sessionId: string) => {
+      const connection = connections.get(sessionId);
+      if (!connection) {
+        return;
+      }
 
-  connections.set(transport.sessionId, connection);
+      connections.delete(sessionId);
+      connection.server.close().catch(() => {});
 
-  logInfo("MCP agent connected", { agentId, sessionId: transport.sessionId });
-
-  getEventBus().emit("mcp:agent_connected", {
-    agentId,
-    sessionId: transport.sessionId,
+      logInfo("MCP agent disconnected", {
+        agentId: connection.agentId,
+        sessionId,
+      });
+      getEventBus().emit("mcp:agent_disconnected", {
+        agentId: connection.agentId,
+        sessionId,
+      });
+    },
   });
 
-  return connection;
+  // Clean up on transport close (e.g., network drop)
+  transport.onclose = () => {
+    if (transport.sessionId) {
+      disconnectAgent(transport.sessionId);
+    }
+  };
+
+  // Cast required: SDK's StreamableHTTPServerTransport declares onclose as
+  // optional property, but exactOptionalPropertyTypes makes the types
+  // incompatible with the Transport interface's optional onclose.
+  await server.connect(transport as unknown as Transport);
+
+  return { transport, server };
 }
+
+// ============================================================================
+// Connection tracking
+// ============================================================================
 
 /**
  * Disconnect an agent by session ID.
@@ -195,10 +221,10 @@ export function getAgentBySession(sessionId: string): string | undefined {
 }
 
 /**
- * Get a transport by session ID (for routing POST messages).
+ * Get a transport by session ID (for routing requests).
  */
 export function getTransportBySession(
   sessionId: string,
-): SSEServerTransport | undefined {
+): StreamableHTTPServerTransport | undefined {
   return connections.get(sessionId)?.transport;
 }

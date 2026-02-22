@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ServerResponse } from "node:http";
 
 // Mock logger before imports
 vi.mock("../../src/utils/index.js", () => ({
@@ -24,38 +23,54 @@ vi.mock("../../src/services/event-bus.js", () => ({
   resetEventBus: vi.fn(),
 }));
 
-// Mock MCP SDK - use vi.hoisted so all variables are available in vi.mock factories
+// Mock MCP SDK
 const {
   mockConnect,
-  mockStart,
+  mockClose,
   sessionIdState,
   createdTransports,
 } = vi.hoisted(() => {
   const mockConnect = vi.fn().mockResolvedValue(undefined);
-  const mockStart = vi.fn().mockResolvedValue(undefined);
+  const mockClose = vi.fn().mockResolvedValue(undefined);
   const sessionIdState = { counter: 0 };
-  const createdTransports: Array<{ sessionId: string; onclose?: () => void }> = [];
-  return { mockConnect, mockStart, sessionIdState, createdTransports };
+  const createdTransports: Array<{
+    sessionId: string | undefined;
+    onclose?: () => void;
+    _onsessioninitialized?: (sessionId: string) => void;
+    _onsessionclosed?: (sessionId: string) => void;
+    handleRequest: ReturnType<typeof vi.fn>;
+    close: ReturnType<typeof vi.fn>;
+  }> = [];
+  return { mockConnect, mockClose, sessionIdState, createdTransports };
 });
 
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
   McpServer: vi.fn(function () {
     return {
       connect: mockConnect,
-      close: vi.fn().mockResolvedValue(undefined),
+      close: mockClose,
       server: {},
     };
   }),
 }));
 
-vi.mock("@modelcontextprotocol/sdk/server/sse.js", () => ({
-  SSEServerTransport: vi.fn().mockImplementation(function () {
+vi.mock("@modelcontextprotocol/sdk/server/streamableHttp.js", () => ({
+  StreamableHTTPServerTransport: vi.fn().mockImplementation(function (
+    options?: {
+      sessionIdGenerator?: () => string;
+      onsessioninitialized?: (sessionId: string) => void;
+      onsessionclosed?: (sessionId: string) => void;
+    },
+  ) {
     sessionIdState.counter++;
     const transport = {
-      sessionId: `session-${sessionIdState.counter}`,
-      start: mockStart,
-      close: vi.fn().mockResolvedValue(undefined),
+      sessionId: undefined as string | undefined,
       onclose: undefined as (() => void) | undefined,
+      _onsessioninitialized: options?.onsessioninitialized,
+      _onsessionclosed: options?.onsessionclosed,
+      handleRequest: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+      start: vi.fn().mockResolvedValue(undefined),
     };
     createdTransports.push(transport);
     return transport;
@@ -64,12 +79,14 @@ vi.mock("@modelcontextprotocol/sdk/server/sse.js", () => ({
 
 import {
   createMcpServer,
-  getMcpServer,
   resetMcpServer,
   getConnectedAgents,
-  connectAgent,
+  getAgentBySession,
+  getTransportBySession,
   disconnectAgent,
   resolveAgentId,
+  createSessionTransport,
+  setToolRegistrar,
 } from "../../src/services/mcp-server.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getEventBus } from "../../src/services/event-bus.js";
@@ -98,20 +115,12 @@ describe("MCP Server", () => {
         expect.anything(),
       );
     });
-  });
 
-  describe("getMcpServer (singleton)", () => {
-    it("should return the same instance on repeated calls", () => {
-      const server1 = getMcpServer();
-      const server2 = getMcpServer();
-      expect(server1).toBe(server2);
-    });
-
-    it("should return a new instance after reset", () => {
-      const server1 = getMcpServer();
-      resetMcpServer();
-      const server2 = getMcpServer();
-      expect(server1).not.toBe(server2);
+    it("should call toolRegistrar when set", () => {
+      const registrar = vi.fn();
+      setToolRegistrar(registrar);
+      const server = createMcpServer();
+      expect(registrar).toHaveBeenCalledWith(server);
     });
   });
 
@@ -146,41 +155,107 @@ describe("MCP Server", () => {
     });
   });
 
-  describe("connection tracking", () => {
-    it("should start with no connected agents", () => {
-      const agents = getConnectedAgents();
-      expect(agents).toHaveLength(0);
+  describe("createSessionTransport", () => {
+    it("should create a transport and connect server to it", async () => {
+      await createSessionTransport("researcher");
+
+      expect(createdTransports).toHaveLength(1);
+      expect(mockConnect).toHaveBeenCalledTimes(1);
     });
 
-    it("should track a connected agent", async () => {
-      const mockRes = createMockResponse();
-      await connectAgent("researcher", mockRes);
+    it("should configure transport with sessionIdGenerator", async () => {
+      await createSessionTransport("researcher");
+
+      const { StreamableHTTPServerTransport } = await import(
+        "@modelcontextprotocol/sdk/server/streamableHttp.js"
+      );
+      expect(StreamableHTTPServerTransport).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionIdGenerator: expect.any(Function),
+        }),
+      );
+    });
+
+    it("should configure transport with onsessioninitialized callback", async () => {
+      await createSessionTransport("researcher");
+
+      const transport = createdTransports[0]!;
+      expect(transport._onsessioninitialized).toBeTypeOf("function");
+    });
+
+    it("should configure transport with onsessionclosed callback", async () => {
+      await createSessionTransport("researcher");
+
+      const transport = createdTransports[0]!;
+      expect(transport._onsessionclosed).toBeTypeOf("function");
+    });
+
+    it("should return transport and server", async () => {
+      const result = await createSessionTransport("researcher");
+
+      expect(result.transport).toBeDefined();
+      expect(result.server).toBeDefined();
+    });
+  });
+
+  describe("session lifecycle via onsessioninitialized", () => {
+    it("should start with no connected agents", () => {
+      expect(getConnectedAgents()).toHaveLength(0);
+    });
+
+    it("should track agent after onsessioninitialized fires", async () => {
+      await createSessionTransport("researcher");
+
+      const transport = createdTransports[0]!;
+      // Simulate the SDK calling onsessioninitialized after processing initialize request
+      transport.sessionId = "session-abc";
+      transport._onsessioninitialized!("session-abc");
 
       const agents = getConnectedAgents();
       expect(agents).toHaveLength(1);
       expect(agents[0]!.agentId).toBe("researcher");
-    });
-
-    it("should record session ID from transport", async () => {
-      const mockRes = createMockResponse();
-      const connection = await connectAgent("researcher", mockRes);
-
-      expect(connection.sessionId).toMatch(/^session-/);
+      expect(agents[0]!.sessionId).toBe("session-abc");
     });
 
     it("should record connection timestamp", async () => {
       const before = new Date();
-      const mockRes = createMockResponse();
-      const connection = await connectAgent("researcher", mockRes);
+      await createSessionTransport("researcher");
+
+      const transport = createdTransports[0]!;
+      transport.sessionId = "session-abc";
+      transport._onsessioninitialized!("session-abc");
       const after = new Date();
 
-      expect(connection.connectedAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
-      expect(connection.connectedAt.getTime()).toBeLessThanOrEqual(after.getTime());
+      const agents = getConnectedAgents();
+      expect(agents[0]!.connectedAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
+      expect(agents[0]!.connectedAt.getTime()).toBeLessThanOrEqual(after.getTime());
     });
 
-    it("should track multiple connected agents", async () => {
-      await connectAgent("researcher", createMockResponse());
-      await connectAgent("builder", createMockResponse());
+    it("should emit mcp:agent_connected event", async () => {
+      const bus = getEventBus();
+      await createSessionTransport("researcher");
+
+      const transport = createdTransports[0]!;
+      transport.sessionId = "session-abc";
+      transport._onsessioninitialized!("session-abc");
+
+      expect(bus.emit).toHaveBeenCalledWith(
+        "mcp:agent_connected",
+        expect.objectContaining({
+          agentId: "researcher",
+          sessionId: "session-abc",
+        }),
+      );
+    });
+
+    it("should track multiple agents independently", async () => {
+      await createSessionTransport("researcher");
+      await createSessionTransport("builder");
+
+      createdTransports[0]!.sessionId = "session-1";
+      createdTransports[0]!._onsessioninitialized!("session-1");
+      createdTransports[1]!.sessionId = "session-2";
+      createdTransports[1]!._onsessioninitialized!("session-2");
 
       const agents = getConnectedAgents();
       expect(agents).toHaveLength(2);
@@ -188,24 +263,94 @@ describe("MCP Server", () => {
       expect(ids).toContain("researcher");
       expect(ids).toContain("builder");
     });
+  });
 
-    it("should remove agent on disconnect", async () => {
-      const connection = await connectAgent("researcher", createMockResponse());
-      disconnectAgent(connection.sessionId);
+  describe("session cleanup via onsessionclosed", () => {
+    it("should remove agent when onsessionclosed fires", async () => {
+      await createSessionTransport("researcher");
 
-      const agents = getConnectedAgents();
-      expect(agents).toHaveLength(0);
+      const transport = createdTransports[0]!;
+      transport.sessionId = "session-abc";
+      transport._onsessioninitialized!("session-abc");
+      expect(getConnectedAgents()).toHaveLength(1);
+
+      // Simulate DELETE request triggering onsessionclosed
+      transport._onsessionclosed!("session-abc");
+
+      expect(getConnectedAgents()).toHaveLength(0);
     });
 
-    it("should only remove the specified agent", async () => {
-      const conn1 = await connectAgent("researcher", createMockResponse());
-      await connectAgent("builder", createMockResponse());
+    it("should emit mcp:agent_disconnected on session close", async () => {
+      const bus = getEventBus();
+      await createSessionTransport("researcher");
 
-      disconnectAgent(conn1.sessionId);
+      const transport = createdTransports[0]!;
+      transport.sessionId = "session-abc";
+      transport._onsessioninitialized!("session-abc");
+      vi.clearAllMocks();
+
+      transport._onsessionclosed!("session-abc");
+
+      expect(bus.emit).toHaveBeenCalledWith(
+        "mcp:agent_disconnected",
+        expect.objectContaining({
+          agentId: "researcher",
+          sessionId: "session-abc",
+        }),
+      );
+    });
+
+    it("should only remove the specified session", async () => {
+      await createSessionTransport("researcher");
+      await createSessionTransport("builder");
+
+      createdTransports[0]!.sessionId = "session-1";
+      createdTransports[0]!._onsessioninitialized!("session-1");
+      createdTransports[1]!.sessionId = "session-2";
+      createdTransports[1]!._onsessioninitialized!("session-2");
+
+      createdTransports[0]!._onsessionclosed!("session-1");
 
       const agents = getConnectedAgents();
       expect(agents).toHaveLength(1);
       expect(agents[0]!.agentId).toBe("builder");
+    });
+
+    it("should handle onsessionclosed for unknown session gracefully", async () => {
+      await createSessionTransport("researcher");
+      const transport = createdTransports[0]!;
+      expect(() => transport._onsessionclosed!("nonexistent")).not.toThrow();
+    });
+  });
+
+  describe("disconnectAgent (manual)", () => {
+    it("should remove agent from connections", async () => {
+      await createSessionTransport("researcher");
+      const transport = createdTransports[0]!;
+      transport.sessionId = "session-abc";
+      transport._onsessioninitialized!("session-abc");
+
+      disconnectAgent("session-abc");
+      expect(getConnectedAgents()).toHaveLength(0);
+    });
+
+    it("should emit mcp:agent_disconnected event", async () => {
+      const bus = getEventBus();
+      await createSessionTransport("researcher");
+      const transport = createdTransports[0]!;
+      transport.sessionId = "session-abc";
+      transport._onsessioninitialized!("session-abc");
+      vi.clearAllMocks();
+
+      disconnectAgent("session-abc");
+
+      expect(bus.emit).toHaveBeenCalledWith(
+        "mcp:agent_disconnected",
+        expect.objectContaining({
+          agentId: "researcher",
+          sessionId: "session-abc",
+        }),
+      );
     });
 
     it("should handle disconnect of unknown session gracefully", () => {
@@ -213,106 +358,62 @@ describe("MCP Server", () => {
     });
   });
 
-  describe("EventBus integration", () => {
-    it("should emit mcp:agent_connected on connect", async () => {
-      const bus = getEventBus();
-      await connectAgent("researcher", createMockResponse());
+  describe("getAgentBySession", () => {
+    it("should return agentId for known session", async () => {
+      await createSessionTransport("researcher");
+      const transport = createdTransports[0]!;
+      transport.sessionId = "session-abc";
+      transport._onsessioninitialized!("session-abc");
 
-      expect(bus.emit).toHaveBeenCalledWith(
-        "mcp:agent_connected",
-        expect.objectContaining({
-          agentId: "researcher",
-          sessionId: expect.stringMatching(/^session-/),
-        }),
-      );
+      expect(getAgentBySession("session-abc")).toBe("researcher");
     });
 
-    it("should emit mcp:agent_disconnected on disconnect", async () => {
-      const bus = getEventBus();
-      const connection = await connectAgent("researcher", createMockResponse());
-
-      vi.clearAllMocks();
-      disconnectAgent(connection.sessionId);
-
-      expect(bus.emit).toHaveBeenCalledWith(
-        "mcp:agent_disconnected",
-        expect.objectContaining({
-          agentId: "researcher",
-          sessionId: connection.sessionId,
-        }),
-      );
+    it("should return undefined for unknown session", () => {
+      expect(getAgentBySession("nonexistent")).toBeUndefined();
     });
   });
 
-  describe("SSE transport creation", () => {
-    it("should create SSE transport and start it", async () => {
-      const mockRes = createMockResponse();
-      await connectAgent("researcher", mockRes);
+  describe("getTransportBySession", () => {
+    it("should return transport for known session", async () => {
+      await createSessionTransport("researcher");
+      const transport = createdTransports[0]!;
+      transport.sessionId = "session-abc";
+      transport._onsessioninitialized!("session-abc");
 
-      expect(mockStart).toHaveBeenCalled();
+      expect(getTransportBySession("session-abc")).toBe(transport);
     });
 
-    it("should connect transport to the MCP server", async () => {
-      await connectAgent("researcher", createMockResponse());
-
-      expect(mockConnect).toHaveBeenCalled();
+    it("should return undefined for unknown session", () => {
+      expect(getTransportBySession("nonexistent")).toBeUndefined();
     });
   });
 
   describe("transport onclose cleanup", () => {
     it("should set onclose handler on transport", async () => {
-      await connectAgent("researcher", createMockResponse());
-
+      await createSessionTransport("researcher");
       const transport = createdTransports[0]!;
       expect(transport.onclose).toBeTypeOf("function");
     });
 
     it("should disconnect agent when transport onclose fires", async () => {
-      const connection = await connectAgent("researcher", createMockResponse());
+      await createSessionTransport("researcher");
+      const transport = createdTransports[0]!;
+      transport.sessionId = "session-abc";
+      transport._onsessioninitialized!("session-abc");
 
       expect(getConnectedAgents()).toHaveLength(1);
-
-      // Simulate transport close (network drop, agent crash, etc.)
-      const transport = createdTransports[0]!;
       transport.onclose!();
-
       expect(getConnectedAgents()).toHaveLength(0);
     });
 
-    it("should emit mcp:agent_disconnected when transport closes", async () => {
-      const bus = getEventBus();
-      await connectAgent("researcher", createMockResponse());
-
-      vi.clearAllMocks();
-
-      const transport = createdTransports[0]!;
-      transport.onclose!();
-
-      expect(bus.emit).toHaveBeenCalledWith(
-        "mcp:agent_disconnected",
-        expect.objectContaining({ agentId: "researcher" }),
-      );
-    });
-
     it("should not throw if onclose fires after manual disconnect", async () => {
-      const connection = await connectAgent("researcher", createMockResponse());
-      disconnectAgent(connection.sessionId);
-
-      // Transport close fires after manual disconnect — should be a no-op
+      await createSessionTransport("researcher");
       const transport = createdTransports[0]!;
+      transport.sessionId = "session-abc";
+      transport._onsessioninitialized!("session-abc");
+
+      disconnectAgent("session-abc");
       expect(() => transport.onclose!()).not.toThrow();
     });
   });
 });
-
-/**
- * Create a mock ServerResponse for testing.
- */
-function createMockResponse(): ServerResponse {
-  return {
-    writeHead: vi.fn(),
-    write: vi.fn(),
-    end: vi.fn(),
-    on: vi.fn(),
-  } as unknown as ServerResponse;
-}

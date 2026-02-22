@@ -102,7 +102,7 @@ const server = app.listen(PORT, () => {
   initStreamingBridge();
 
   // Initialize MCP server subsystem with tool registrar.
-  // Each SSE connection gets its own McpServer; the registrar
+  // Each Streamable HTTP session gets its own McpServer; the registrar
   // is called on each new instance to wire up tools.
   initMcpServer();
   setToolRegistrar((server) => {

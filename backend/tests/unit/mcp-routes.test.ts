@@ -9,16 +9,20 @@ vi.mock("../../src/utils/index.js", () => ({
 }));
 
 // Hoisted mocks for mcp-server
-const { mockConnectAgent, mockDisconnectAgent, mockResolveAgentId, mockGetTransportBySession } =
-  vi.hoisted(() => ({
-    mockConnectAgent: vi.fn(),
-    mockDisconnectAgent: vi.fn(),
-    mockResolveAgentId: vi.fn(),
-    mockGetTransportBySession: vi.fn(),
-  }));
+const {
+  mockCreateSessionTransport,
+  mockDisconnectAgent,
+  mockResolveAgentId,
+  mockGetTransportBySession,
+} = vi.hoisted(() => ({
+  mockCreateSessionTransport: vi.fn(),
+  mockDisconnectAgent: vi.fn(),
+  mockResolveAgentId: vi.fn(),
+  mockGetTransportBySession: vi.fn(),
+}));
 
 vi.mock("../../src/services/mcp-server.js", () => ({
-  connectAgent: mockConnectAgent,
+  createSessionTransport: mockCreateSessionTransport,
   disconnectAgent: mockDisconnectAgent,
   resolveAgentId: mockResolveAgentId,
   getTransportBySession: mockGetTransportBySession,
@@ -35,122 +39,195 @@ describe("MCP Routes", () => {
     expect(mcpRouter).toBeDefined();
   });
 
-  describe("GET /sse", () => {
-    it("should resolve agent identity and connect", async () => {
+  describe("POST / (initialization)", () => {
+    it("should create new session for initialize request without session ID", async () => {
       const mockTransport = {
-        sessionId: "sess-1",
-        handlePostMessage: vi.fn(),
+        handleRequest: vi.fn().mockResolvedValue(undefined),
       };
-      const mockConnection = {
-        agentId: "researcher",
-        sessionId: "sess-1",
-        transport: mockTransport,
-        connectedAt: new Date(),
-      };
+      const mockServer = {};
 
       mockResolveAgentId.mockReturnValue("researcher");
-      mockConnectAgent.mockResolvedValue(mockConnection);
+      mockCreateSessionTransport.mockResolvedValue({
+        transport: mockTransport,
+        server: mockServer,
+      });
 
       const req = createMockReq({
-        method: "GET",
-        query: { agentId: "researcher" },
-        headers: {},
+        method: "POST",
+        headers: { "x-agent-id": "researcher" },
+        body: { jsonrpc: "2.0", method: "initialize", id: 1 },
       });
       const res = createMockRes();
 
-      // Find the GET /sse handler from the router stack
-      const handler = findRouteHandler(mcpRouter, "get", "/sse");
+      const handler = findRouteHandler(mcpRouter, "post", "/");
       expect(handler).toBeDefined();
 
       await handler!(req, res, vi.fn());
 
-      expect(mockResolveAgentId).toHaveBeenCalledWith(
-        { agentId: "researcher" },
-        expect.any(Object),
-      );
-      expect(mockConnectAgent).toHaveBeenCalledWith("researcher", res);
+      expect(mockResolveAgentId).toHaveBeenCalled();
+      expect(mockCreateSessionTransport).toHaveBeenCalledWith("researcher");
+      expect(mockTransport.handleRequest).toHaveBeenCalledWith(req, res, req.body);
     });
 
-    it("should disconnect agent when request closes", async () => {
+    it("should route to existing transport when session ID header is present", async () => {
       const mockTransport = {
-        sessionId: "sess-1",
-        handlePostMessage: vi.fn(),
-      };
-      const mockConnection = {
-        agentId: "researcher",
-        sessionId: "sess-1",
-        transport: mockTransport,
-        connectedAt: new Date(),
-      };
-
-      mockResolveAgentId.mockReturnValue("researcher");
-      mockConnectAgent.mockResolvedValue(mockConnection);
-
-      let closeHandler: (() => void) | undefined;
-      const req = createMockReq({
-        method: "GET",
-        query: {},
-        headers: {},
-        onClose: (fn: () => void) => {
-          closeHandler = fn;
-        },
-      });
-      const res = createMockRes();
-
-      const handler = findRouteHandler(mcpRouter, "get", "/sse");
-      await handler!(req, res, vi.fn());
-
-      // Simulate connection close
-      expect(closeHandler).toBeDefined();
-      closeHandler!();
-
-      expect(mockDisconnectAgent).toHaveBeenCalledWith("sess-1");
-    });
-  });
-
-  describe("POST /messages", () => {
-    it("should route message to correct transport", async () => {
-      const mockHandlePost = vi.fn().mockResolvedValue(undefined);
-      const mockTransport = {
-        sessionId: "sess-1",
-        handlePostMessage: mockHandlePost,
+        handleRequest: vi.fn().mockResolvedValue(undefined),
       };
 
       mockGetTransportBySession.mockReturnValue(mockTransport);
 
       const req = createMockReq({
         method: "POST",
-        query: { sessionId: "sess-1" },
-        headers: {},
+        headers: { "mcp-session-id": "session-abc" },
+        body: { jsonrpc: "2.0", method: "tools/list", id: 2 },
       });
       const res = createMockRes();
 
-      const handler = findRouteHandler(mcpRouter, "post", "/messages");
-      expect(handler).toBeDefined();
-
+      const handler = findRouteHandler(mcpRouter, "post", "/");
       await handler!(req, res, vi.fn());
 
-      expect(mockGetTransportBySession).toHaveBeenCalledWith("sess-1");
-      expect(mockHandlePost).toHaveBeenCalledWith(req, res);
+      expect(mockGetTransportBySession).toHaveBeenCalledWith("session-abc");
+      expect(mockTransport.handleRequest).toHaveBeenCalledWith(req, res, req.body);
     });
 
-    it("should return 404 for unknown session", async () => {
+    it("should return 404 for unknown session ID", async () => {
       mockGetTransportBySession.mockReturnValue(undefined);
 
       const req = createMockReq({
         method: "POST",
-        query: { sessionId: "nonexistent" },
-        headers: {},
+        headers: { "mcp-session-id": "nonexistent" },
+        body: { jsonrpc: "2.0", method: "tools/list", id: 2 },
       });
       const res = createMockRes();
 
-      const handler = findRouteHandler(mcpRouter, "post", "/messages");
+      const handler = findRouteHandler(mcpRouter, "post", "/");
       await handler!(req, res, vi.fn());
 
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({ error: expect.any(String) }),
       );
+    });
+
+    it("should return 500 when transport creation fails", async () => {
+      mockResolveAgentId.mockReturnValue("researcher");
+      mockCreateSessionTransport.mockRejectedValue(new Error("creation failed"));
+
+      const req = createMockReq({
+        method: "POST",
+        headers: {},
+        body: { jsonrpc: "2.0", method: "initialize", id: 1 },
+      });
+      const res = createMockRes();
+
+      const handler = findRouteHandler(mcpRouter, "post", "/");
+      await handler!(req, res, vi.fn());
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe("GET / (SSE stream)", () => {
+    it("should route to existing transport for valid session", async () => {
+      const mockTransport = {
+        handleRequest: vi.fn().mockResolvedValue(undefined),
+      };
+
+      mockGetTransportBySession.mockReturnValue(mockTransport);
+
+      const req = createMockReq({
+        method: "GET",
+        headers: { "mcp-session-id": "session-abc" },
+      });
+      const res = createMockRes();
+
+      const handler = findRouteHandler(mcpRouter, "get", "/");
+      expect(handler).toBeDefined();
+
+      await handler!(req, res, vi.fn());
+
+      expect(mockGetTransportBySession).toHaveBeenCalledWith("session-abc");
+      expect(mockTransport.handleRequest).toHaveBeenCalledWith(req, res);
+    });
+
+    it("should return 400 when no session ID header", async () => {
+      const req = createMockReq({
+        method: "GET",
+        headers: {},
+      });
+      const res = createMockRes();
+
+      const handler = findRouteHandler(mcpRouter, "get", "/");
+      await handler!(req, res, vi.fn());
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it("should return 404 for unknown session", async () => {
+      mockGetTransportBySession.mockReturnValue(undefined);
+
+      const req = createMockReq({
+        method: "GET",
+        headers: { "mcp-session-id": "nonexistent" },
+      });
+      const res = createMockRes();
+
+      const handler = findRouteHandler(mcpRouter, "get", "/");
+      await handler!(req, res, vi.fn());
+
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+  });
+
+  describe("DELETE / (session termination)", () => {
+    it("should route to existing transport for valid session", async () => {
+      const mockTransport = {
+        handleRequest: vi.fn().mockResolvedValue(undefined),
+      };
+
+      mockGetTransportBySession.mockReturnValue(mockTransport);
+
+      const req = createMockReq({
+        method: "DELETE",
+        headers: { "mcp-session-id": "session-abc" },
+      });
+      const res = createMockRes();
+
+      const handler = findRouteHandler(mcpRouter, "delete", "/");
+      expect(handler).toBeDefined();
+
+      await handler!(req, res, vi.fn());
+
+      expect(mockGetTransportBySession).toHaveBeenCalledWith("session-abc");
+      expect(mockTransport.handleRequest).toHaveBeenCalledWith(req, res);
+    });
+
+    it("should return 400 when no session ID header", async () => {
+      const req = createMockReq({
+        method: "DELETE",
+        headers: {},
+      });
+      const res = createMockRes();
+
+      const handler = findRouteHandler(mcpRouter, "delete", "/");
+      await handler!(req, res, vi.fn());
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it("should return 404 for unknown session", async () => {
+      mockGetTransportBySession.mockReturnValue(undefined);
+
+      const req = createMockReq({
+        method: "DELETE",
+        headers: { "mcp-session-id": "nonexistent" },
+      });
+      const res = createMockRes();
+
+      const handler = findRouteHandler(mcpRouter, "delete", "/");
+      await handler!(req, res, vi.fn());
+
+      expect(res.status).toHaveBeenCalledWith(404);
     });
   });
 });
@@ -161,21 +238,18 @@ describe("MCP Routes", () => {
 
 interface MockReqOptions {
   method: string;
-  query: Record<string, string>;
   headers: Record<string, string>;
-  onClose?: (fn: () => void) => void;
+  body?: unknown;
+  query?: Record<string, string>;
 }
 
 function createMockReq(opts: MockReqOptions) {
   return {
     method: opts.method,
-    query: opts.query,
+    query: opts.query ?? {},
     headers: opts.headers,
-    on: vi.fn((event: string, fn: () => void) => {
-      if (event === "close" && opts.onClose) {
-        opts.onClose(fn);
-      }
-    }),
+    body: opts.body,
+    on: vi.fn(),
   };
 }
 
@@ -187,6 +261,7 @@ function createMockRes() {
     on: vi.fn(),
     status: vi.fn(),
     json: vi.fn(),
+    headersSent: false,
   };
   res.status.mockReturnValue(res);
   return res;
@@ -197,7 +272,6 @@ function createMockRes() {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function findRouteHandler(router: any, method: string, path: string) {
-  // Express stores routes in router.stack
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const layer of router.stack) {
     if (
@@ -205,7 +279,6 @@ function findRouteHandler(router: any, method: string, path: string) {
       layer.route.path === path &&
       layer.route.methods[method]
     ) {
-      // Return the last handler (the actual route handler, not middleware)
       const handlers = layer.route.stack;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return handlers[handlers.length - 1].handle as (...args: any[]) => any;
