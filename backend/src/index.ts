@@ -79,7 +79,7 @@ const server = app.listen(PORT, () => {
   startPrefixMapRefreshScheduler();
 
   // Initialize WebSocket servers (all use noServer: true)
-  const chatWss = initWebSocketServer(server);
+  const chatWss = initWebSocketServer(server, messageStore);
   const agentWss = initAgentStatusStream(server);
   const terminalWss = initTerminalStream(server);
 

@@ -19,7 +19,7 @@ import type { ConnectionStatus } from '../types';
 
 /** Server → Client message types */
 interface WsServerMessage {
-  type: 'auth_challenge' | 'connected' | 'message' | 'stream_token' | 'stream_end' | 'typing' | 'delivered' | 'error' | 'sync_response' | 'pong';
+  type: 'auth_challenge' | 'connected' | 'message' | 'chat_message' | 'stream_token' | 'stream_end' | 'typing' | 'delivered' | 'error' | 'sync_response' | 'pong';
   id?: string;
   clientId?: string;
   seq?: number;
@@ -191,7 +191,7 @@ export function useChatWebSocket(
           seqRef.current = msg.lastSeq ?? 0;
           break;
 
-        case 'message':
+        case 'chat_message':
           if (msg.id && msg.from && msg.to && msg.body !== undefined) {
             if (msg.seq) seqRef.current = msg.seq;
             callbacksRef.current.onMessage?.({

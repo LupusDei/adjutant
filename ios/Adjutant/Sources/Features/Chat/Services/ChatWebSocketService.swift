@@ -110,8 +110,6 @@ final class ChatWebSocketService: ObservableObject {
 
     private func handleServerMessage(_ msg: WsServerMessage) {
         switch msg.type {
-        case "message":
-            handleLegacyChatMessage(msg)
         case "chat_message":
             handleChatMessage(msg)
         case "delivered":
@@ -140,28 +138,6 @@ final class ChatWebSocketService: ObservableObject {
             id: id,
             agentId: msg.from ?? "unknown",
             recipient: msg.to,
-            role: .agent,
-            body: body,
-            deliveryStatus: .delivered,
-            threadId: msg.threadId,
-            createdAt: msg.timestamp ?? now,
-            updatedAt: msg.timestamp ?? now
-        )
-
-        incomingMessage.send(message)
-    }
-
-    /// Handle legacy "message" type for backwards compatibility
-    private func handleLegacyChatMessage(_ msg: WsServerMessage) {
-        guard let id = msg.id,
-              let from = msg.from,
-              let body = msg.body else { return }
-
-        let now = ISO8601DateFormatter().string(from: Date())
-        let message = PersistentMessage(
-            id: id,
-            agentId: from,
-            recipient: msg.to ?? "user",
             role: .agent,
             body: body,
             deliveryStatus: .delivered,
