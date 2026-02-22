@@ -249,7 +249,6 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
             reconnectAttemptsRef.current = 0;
             if (mounted) setConnectionStatus('websocket');
             break;
-          case 'message':
           case 'chat_message':
             if (msg.id && msg.from && msg.to && msg.body && msg.timestamp) {
               const incoming: IncomingChatMessage = {

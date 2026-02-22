@@ -16,6 +16,7 @@ import { randomUUID } from "crypto";
 import { getEventBus } from "./event-bus.js";
 import { hasApiKeys, validateApiKey } from "./api-key-service.js";
 import { logInfo, logWarn } from "../utils/index.js";
+import type { MessageStore } from "./message-store.js";
 
 // ============================================================================
 // Types
@@ -113,6 +114,7 @@ const RATE_WINDOW_MS = 60_000;
 // ============================================================================
 
 let wss: WebSocketServer | null = null;
+let messageStore: MessageStore | null = null;
 const clients = new Map<string, WsClient>();
 const replayBuffer: ReplayEntry[] = [];
 let globalSeq = 0;
@@ -214,32 +216,43 @@ function handleMessage(client: WsClient, msg: WsClientMessage): void {
   }
   client.messageTimestamps.push(Date.now());
 
-  const seq = nextSeq();
-  const serverMsg: WsServerMessage = {
-    type: "message",
-    id: randomUUID(),
-    clientId: msg.id,
-    seq,
-    from: "overseer",
-    to: msg.to ?? "mayor/",
-    body: msg.body ?? "",
-    timestamp: new Date().toISOString(),
-    replyTo: msg.replyTo,
-    metadata: msg.metadata,
-  };
+  if (!messageStore) {
+    logWarn("ws handleMessage: no message store configured, dropping message");
+    send(client, {
+      type: "error",
+      code: "server_error",
+      message: "Message store not available",
+      relatedId: msg.id,
+    });
+    return;
+  }
 
-  addToReplay(serverMsg);
+  // Persist to SQLite via message store
+  const recipient = msg.to ?? "mayor/";
+  const message = messageStore.insertMessage({
+    agentId: "user",
+    recipient,
+    role: "user",
+    body: msg.body ?? "",
+  });
 
   // Send delivery confirmation to sender
   send(client, {
     type: "delivered",
-    messageId: serverMsg.id,
+    messageId: message.id,
     clientId: msg.id,
-    timestamp: serverMsg.timestamp,
+    timestamp: message.createdAt,
   });
 
-  // Broadcast to all authenticated clients
-  broadcast(serverMsg);
+  // Broadcast persisted chat_message to all authenticated clients
+  wsBroadcast({
+    type: "chat_message",
+    id: message.id,
+    from: "user",
+    to: recipient,
+    body: message.body,
+    timestamp: message.createdAt,
+  });
 }
 
 function handleTyping(client: WsClient, msg: WsClientMessage): void {
@@ -460,8 +473,9 @@ async function handleSessionPermissionResponse(client: WsClient, msg: WsClientMe
 /**
  * Initialize the WebSocket server on the existing HTTP server.
  */
-export function initWebSocketServer(server: HttpServer): WebSocketServer {
+export function initWebSocketServer(server: HttpServer, store?: MessageStore): WebSocketServer {
   if (wss) return wss;
+  if (store) messageStore = store;
 
   wss = new WebSocketServer({ noServer: true });
 

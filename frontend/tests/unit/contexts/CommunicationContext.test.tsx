@@ -282,7 +282,7 @@ describe("CommunicationContext", () => {
       expect(msg.body).toBe("Hello from agent via MCP");
     });
 
-    it("should deliver both message and chat_message types", async () => {
+    it("should only deliver chat_message type, ignoring legacy message type", async () => {
       const { result } = renderHook(() => useCommunication(), { wrapper });
       await flushMicrotasks();
 
@@ -291,19 +291,19 @@ describe("CommunicationContext", () => {
         result.current.subscribe((msg) => received.push(msg));
       });
 
-      // Inject a regular message
+      // Inject a legacy "message" type — should be IGNORED (session leak fix)
       act(() => {
         lastMockWs!._injectMessage({
           type: "message",
           id: "msg-1",
           from: "mayor/",
           to: "overseer",
-          body: "Regular message",
+          body: "Legacy message",
           timestamp: "2026-02-21T10:00:00Z",
         });
       });
 
-      // Inject a chat_message
+      // Inject a chat_message — should be delivered
       act(() => {
         lastMockWs!._injectMessage({
           type: "chat_message",
@@ -315,7 +315,9 @@ describe("CommunicationContext", () => {
         });
       });
 
-      expect(received).toHaveLength(2);
+      // Only chat_message should be delivered, not legacy message
+      expect(received).toHaveLength(1);
+      expect((received[0] as { id: string }).id).toBe("chat-2");
     });
   });
 

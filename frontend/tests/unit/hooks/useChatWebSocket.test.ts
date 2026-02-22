@@ -218,7 +218,7 @@ describe('useChatWebSocket', () => {
   });
 
   describe('receiving messages', () => {
-    it('should invoke onMessage callback for incoming messages', async () => {
+    it('should invoke onMessage callback for chat_message events', async () => {
       const onMessage = vi.fn();
       const callbacks: ChatWebSocketCallbacks = { onMessage };
 
@@ -233,10 +233,10 @@ describe('useChatWebSocket', () => {
         mockWs!.simulateMessage({ type: 'connected', sessionId: 's', lastSeq: 0 });
       });
 
-      // Receive a message
+      // Receive a chat_message (persisted via SQLite)
       act(() => {
         mockWs!.simulateMessage({
-          type: 'message',
+          type: 'chat_message',
           id: 'msg-1',
           from: 'mayor/',
           to: 'overseer',
@@ -254,6 +254,37 @@ describe('useChatWebSocket', () => {
         timestamp: '2026-01-01T00:00:00Z',
         replyTo: undefined,
       });
+    });
+
+    it('should NOT invoke onMessage for legacy "message" type (session leak fix)', async () => {
+      const onMessage = vi.fn();
+      const callbacks: ChatWebSocketCallbacks = { onMessage };
+
+      renderHook(() => useChatWebSocket(true, callbacks));
+
+      await vi.waitFor(() => expect(mockWs).not.toBeNull());
+      await vi.waitFor(() => expect(mockWs!.readyState).toBe(MockWebSocket.OPEN));
+
+      // Auth flow
+      act(() => {
+        mockWs!.simulateMessage({ type: 'auth_challenge' });
+        mockWs!.simulateMessage({ type: 'connected', sessionId: 's', lastSeq: 0 });
+      });
+
+      // Legacy "message" type should be ignored
+      act(() => {
+        mockWs!.simulateMessage({
+          type: 'message',
+          id: 'msg-legacy',
+          from: 'overseer',
+          to: 'mayor/',
+          body: 'Legacy message',
+          timestamp: '2026-01-01T00:00:00Z',
+          seq: 1,
+        });
+      });
+
+      expect(onMessage).not.toHaveBeenCalled();
     });
 
     it('should invoke onDelivery for delivery confirmations', async () => {
