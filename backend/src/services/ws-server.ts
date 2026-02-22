@@ -90,6 +90,8 @@ interface WsClient {
   /** Rate limiting: typing timestamps */
   typingTimestamps: number[];
   pingTimer?: ReturnType<typeof setInterval>;
+  /** Session bridge output listener for cleanup on disconnect */
+  outputHandler?: (sid: string, line: string, events: unknown[]) => void;
 }
 
 interface ReplayEntry {
@@ -320,11 +322,11 @@ async function handleSessionConnect(client: WsClient, msg: WsClientMessage): Pro
       });
 
       // Set up output forwarding for this client
-      bridge.connector.onOutput((sid, line, events) => {
+      const handler = (sid: string, line: string, events: unknown[]) => {
         if (sid === sessionId && client.authenticated) {
           // Structured events for chat view
           if (events.length > 0) {
-            logInfo("ws sending session_output", { sessionId: sid, eventCount: events.length, types: events.map(e => e.type) });
+            logInfo("ws sending session_output", { sessionId: sid, eventCount: events.length, types: events.map((e: Record<string, unknown>) => e.type) });
             send(client, {
               type: "session_output",
               sessionId: sid,
@@ -338,7 +340,9 @@ async function handleSessionConnect(client: WsClient, msg: WsClientMessage): Pro
             output: line,
           });
         }
-      });
+      };
+      bridge.connector.onOutput(handler);
+      client.outputHandler = handler;
     } else {
       send(client, {
         type: "error",
@@ -596,6 +600,10 @@ export function initWebSocketServer(server: HttpServer, store?: MessageStore): W
       import("./session-bridge.js")
         .then(({ getSessionBridge }) => {
           const bridge = getSessionBridge();
+          // Clean up output listener
+          if (client.outputHandler) {
+            bridge.connector.offOutput(client.outputHandler);
+          }
           for (const s of bridge.registry.getAll()) {
             if (s.connectedClients.has(client.sessionId)) {
               bridge.disconnectClient(s.id, client.sessionId).catch(() => {});

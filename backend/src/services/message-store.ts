@@ -174,8 +174,8 @@ export function createMessageStore(db: Database.Database): MessageStore {
       const params: unknown[] = [];
 
       if (opts.agentId !== undefined) {
-        conditions.push("agent_id = ?");
-        params.push(opts.agentId);
+        conditions.push("(agent_id = ? OR (role = 'user' AND recipient = ?))");
+        params.push(opts.agentId, opts.agentId);
       }
 
       if (opts.recipient !== undefined) {
@@ -191,6 +191,12 @@ export function createMessageStore(db: Database.Database): MessageStore {
       if (opts.sessionId !== undefined) {
         conditions.push("session_id = ?");
         params.push(opts.sessionId);
+      }
+
+      // Resolve beforeId to timestamp when before is missing (iOS sends only beforeId)
+      if (opts.beforeId !== undefined && opts.before === undefined) {
+        const ref = getByIdStmt.get(opts.beforeId) as MessageRow | undefined;
+        if (ref) opts.before = ref.created_at;
       }
 
       // Composite cursor pagination: (created_at, id) to handle same-second ties
@@ -244,8 +250,8 @@ export function createMessageStore(db: Database.Database): MessageStore {
       const params: unknown[] = [sanitized];
 
       if (opts?.agentId !== undefined) {
-        conditions.push("m.agent_id = ?");
-        params.push(opts.agentId);
+        conditions.push("(m.agent_id = ? OR (m.role = 'user' AND m.recipient = ?))");
+        params.push(opts.agentId, opts.agentId);
       }
 
       const where = conditions.join(" AND ");

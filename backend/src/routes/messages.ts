@@ -26,7 +26,7 @@ import {
 
 const SendChatMessageSchema = z.object({
   to: z.string().min(1, "Recipient is required"),
-  body: z.string().min(1, "Message body is required"),
+  body: z.string().min(1, "Message body is required").max(10000, "Message body too long"),
   threadId: z.string().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
@@ -68,7 +68,7 @@ export function createMessagesRouter(store: MessageStore): Router {
     const before = req.query["before"] as string | undefined;
     const beforeId = req.query["beforeId"] as string | undefined;
     const limitStr = req.query["limit"] as string | undefined;
-    const limit = limitStr ? parseInt(limitStr, 10) : undefined;
+    const limit = limitStr ? Math.min(Math.max(parseInt(limitStr, 10) || 50, 1), 200) : undefined;
 
     const opts: Parameters<typeof store.getMessages>[0] = {};
     if (agentId !== undefined) opts.agentId = agentId;

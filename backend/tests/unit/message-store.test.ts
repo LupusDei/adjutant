@@ -328,6 +328,74 @@ describe("message-store", () => {
     });
   });
 
+  describe("conversation scoping (Fix 1)", () => {
+    it("should return both agent messages AND user messages sent TO that agent", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      // Agent sends a message (agent_id = "agent-A", role = "agent")
+      store.insertMessage({ agentId: "agent-A", role: "agent", body: "Hello from agent" });
+      // User sends a message TO agent-A (agent_id = "user", role = "user", recipient = "agent-A")
+      store.insertMessage({ agentId: "user", recipient: "agent-A", role: "user", body: "Hello to agent" });
+      // Unrelated agent message
+      store.insertMessage({ agentId: "agent-B", role: "agent", body: "Other agent" });
+      // User sends to a different agent
+      store.insertMessage({ agentId: "user", recipient: "agent-B", role: "user", body: "Hello to B" });
+
+      const messages = store.getMessages({ agentId: "agent-A" });
+      expect(messages).toHaveLength(2);
+      const bodies = messages.map((m) => m.body).sort();
+      expect(bodies).toEqual(["Hello from agent", "Hello to agent"]);
+    });
+
+    it("should scope search results to include user messages sent TO the agent", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      store.insertMessage({ agentId: "agent-A", role: "agent", body: "deploy the app" });
+      store.insertMessage({ agentId: "user", recipient: "agent-A", role: "user", body: "please deploy now" });
+      store.insertMessage({ agentId: "user", recipient: "agent-B", role: "user", body: "deploy for B" });
+
+      const results = store.searchMessages("deploy", { agentId: "agent-A" });
+      expect(results).toHaveLength(2);
+      const bodies = results.map((m) => m.body).sort();
+      expect(bodies).toEqual(["deploy the app", "please deploy now"]);
+    });
+  });
+
+  describe("beforeId-to-timestamp fallback (Fix 2)", () => {
+    it("should paginate correctly when only beforeId is provided (no before timestamp)", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      const msgs = [];
+      for (let i = 1; i <= 5; i++) {
+        const m = store.insertMessage({
+          id: `msg-fallback-${i.toString().padStart(3, "0")}`,
+          agentId: "agent-A",
+          role: "user",
+          body: `Message ${i}`,
+        });
+        msgs.push(m);
+      }
+
+      // Request with only beforeId (no before timestamp) - simulates iOS client behavior
+      const pivotMsg = msgs[2]!; // msg-fallback-003
+      const result = store.getMessages({
+        agentId: "agent-A",
+        beforeId: pivotMsg.id,
+        // NOTE: no `before` timestamp provided
+      });
+
+      const resultIds = result.map((m) => m.id);
+      expect(resultIds).toContain("msg-fallback-001");
+      expect(resultIds).toContain("msg-fallback-002");
+      expect(resultIds).not.toContain("msg-fallback-003");
+      expect(resultIds).not.toContain("msg-fallback-004");
+      expect(resultIds).not.toContain("msg-fallback-005");
+    });
+  });
+
   describe("markRead", () => {
     it("should update delivery_status to read", async () => {
       const { createMessageStore } = await import("../../src/services/message-store.js");
