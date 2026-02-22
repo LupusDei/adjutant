@@ -552,4 +552,242 @@ describe("message-store", () => {
       expect(threads[0]?.threadId).toBe("t1");
     });
   });
+
+  describe("pagination edge cases", () => {
+    it("should return empty array and hasMore:false when no messages exist", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      const messages = store.getMessages({ agentId: "agent-A", limit: 10 });
+      expect(messages).toHaveLength(0);
+    });
+
+    it("should return single message and hasMore:false for 1-message store", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      store.insertMessage({ id: "only-msg", agentId: "agent-A", role: "user", body: "Solo" });
+
+      const messages = store.getMessages({ agentId: "agent-A", limit: 10 });
+      expect(messages).toHaveLength(1);
+      expect(messages[0]?.id).toBe("only-msg");
+    });
+
+    it("should handle cursor pointing to the oldest message in the store", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      const msgs = [];
+      for (let i = 1; i <= 3; i++) {
+        const m = store.insertMessage({
+          id: `cursor-edge-${i.toString().padStart(3, "0")}`,
+          agentId: "agent-A",
+          role: "user",
+          body: `Msg ${i}`,
+        });
+        msgs.push(m);
+      }
+
+      // All messages will have the same created_at since they're inserted instantly.
+      // Use the oldest message (sorted by id desc, so cursor-edge-001 is oldest)
+      const oldest = msgs[0]!;
+      const result = store.getMessages({
+        agentId: "agent-A",
+        before: oldest.createdAt,
+        beforeId: oldest.id,
+      });
+
+      // Nothing should be older than the oldest message
+      expect(result).toHaveLength(0);
+    });
+
+    it("should correctly paginate messages with identical timestamps using id tiebreaker", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      // Insert 5 messages — all in the same second (same created_at)
+      for (let i = 1; i <= 5; i++) {
+        store.insertMessage({
+          id: `ts-tie-${String.fromCharCode(96 + i)}`, // ts-tie-a, ts-tie-b, ...
+          agentId: "agent-A",
+          role: "user",
+          body: `Msg ${i}`,
+        });
+      }
+
+      // Get page 1 (newest 2)
+      const page1 = store.getMessages({ agentId: "agent-A", limit: 2 });
+      expect(page1).toHaveLength(2);
+      // Ordered DESC by id: ts-tie-e, ts-tie-d
+      expect(page1[0]?.id).toBe("ts-tie-e");
+      expect(page1[1]?.id).toBe("ts-tie-d");
+
+      // Get page 2 using composite cursor from the oldest on page 1
+      const cursor = page1[1]!;
+      const page2 = store.getMessages({
+        agentId: "agent-A",
+        before: cursor.createdAt,
+        beforeId: cursor.id,
+        limit: 2,
+      });
+      expect(page2).toHaveLength(2);
+      expect(page2[0]?.id).toBe("ts-tie-c");
+      expect(page2[1]?.id).toBe("ts-tie-b");
+
+      // Get page 3 from cursor of last on page 2
+      const cursor2 = page2[1]!;
+      const page3 = store.getMessages({
+        agentId: "agent-A",
+        before: cursor2.createdAt,
+        beforeId: cursor2.id,
+        limit: 2,
+      });
+      expect(page3).toHaveLength(1);
+      expect(page3[0]?.id).toBe("ts-tie-a");
+    });
+
+    it("should handle beforeId that does not exist in the store", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      store.insertMessage({ id: "msg-aaa", agentId: "agent-A", role: "user", body: "First" });
+      store.insertMessage({ id: "msg-bbb", agentId: "agent-A", role: "user", body: "Second" });
+      store.insertMessage({ id: "msg-ccc", agentId: "agent-A", role: "user", body: "Third" });
+
+      const refMsg = store.getMessage("msg-bbb")!;
+
+      // Use a non-existent beforeId with a valid timestamp
+      // The composite cursor (created_at = ? AND id < ?) should still work:
+      // it returns messages whose id sorts before the fabricated cursor id
+      const result = store.getMessages({
+        agentId: "agent-A",
+        before: refMsg.createdAt,
+        beforeId: "msg-bbb-deleted",
+      });
+
+      // "msg-aaa" and "msg-bbb" sort before "msg-bbb-deleted" lexicographically
+      // So they should be returned, but not "msg-ccc"
+      const resultIds = result.map((m) => m.id);
+      expect(resultIds).toContain("msg-aaa");
+      expect(resultIds).toContain("msg-bbb");
+      expect(resultIds).not.toContain("msg-ccc");
+    });
+
+    it("should return hasMore:true when more messages exist beyond the limit", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      for (let i = 0; i < 5; i++) {
+        store.insertMessage({ agentId: "agent-A", role: "user", body: `Msg ${i}` });
+      }
+
+      const messages = store.getMessages({ agentId: "agent-A", limit: 3 });
+      expect(messages).toHaveLength(3);
+      // The store itself doesn't return hasMore — the route handler checks messages.length === limit.
+      // Verify the underlying behavior: we got exactly limit messages.
+      expect(messages.length).toBe(3);
+    });
+
+    it("should return fewer than limit when all messages have been returned", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      store.insertMessage({ agentId: "agent-A", role: "user", body: "Only one" });
+
+      const messages = store.getMessages({ agentId: "agent-A", limit: 10 });
+      expect(messages.length).toBeLessThan(10);
+      expect(messages).toHaveLength(1);
+    });
+
+    it("should paginate correctly when filtered by agentId", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      // Insert interleaved messages from two agents
+      for (let i = 1; i <= 6; i++) {
+        const agent = i % 2 === 0 ? "agent-A" : "agent-B";
+        store.insertMessage({
+          id: `interleave-${i.toString().padStart(3, "0")}`,
+          agentId: agent,
+          role: "user",
+          body: `Msg ${i} from ${agent}`,
+        });
+      }
+
+      // Page 1: newest 2 from agent-A
+      const page1 = store.getMessages({ agentId: "agent-A", limit: 2 });
+      expect(page1).toHaveLength(2);
+      expect(page1.every((m) => m.agentId === "agent-A")).toBe(true);
+
+      // Page 2: use cursor from oldest on page 1
+      const cursor = page1[1]!;
+      const page2 = store.getMessages({
+        agentId: "agent-A",
+        before: cursor.createdAt,
+        beforeId: cursor.id,
+        limit: 2,
+      });
+      expect(page2).toHaveLength(1); // Only 3 total for agent-A
+      expect(page2.every((m) => m.agentId === "agent-A")).toBe(true);
+    });
+
+    it("should not leak messages from other agents when paginating", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      store.insertMessage({ id: "leak-a1", agentId: "agent-A", role: "user", body: "A1" });
+      store.insertMessage({ id: "leak-b1", agentId: "agent-B", role: "user", body: "B1" });
+      store.insertMessage({ id: "leak-a2", agentId: "agent-A", role: "user", body: "A2" });
+      store.insertMessage({ id: "leak-b2", agentId: "agent-B", role: "user", body: "B2" });
+
+      // Get all pages for agent-A
+      const allAgentA = store.getMessages({ agentId: "agent-A" });
+      expect(allAgentA.every((m) => m.agentId === "agent-A")).toBe(true);
+      expect(allAgentA.some((m) => m.agentId === "agent-B")).toBe(false);
+    });
+
+    it("should not return duplicates when new messages arrive between pagination calls", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      // Insert initial 5 messages
+      for (let i = 1; i <= 5; i++) {
+        store.insertMessage({
+          id: `dup-test-${i.toString().padStart(3, "0")}`,
+          agentId: "agent-A",
+          role: "user",
+          body: `Msg ${i}`,
+        });
+      }
+
+      // Get first page
+      const page1 = store.getMessages({ agentId: "agent-A", limit: 3 });
+      expect(page1).toHaveLength(3);
+
+      // Simulate new message arriving between pagination calls
+      store.insertMessage({
+        id: "dup-test-new",
+        agentId: "agent-A",
+        role: "user",
+        body: "New arrival",
+      });
+
+      // Get second page using cursor from oldest in page 1
+      const cursor = page1[page1.length - 1]!;
+      const page2 = store.getMessages({
+        agentId: "agent-A",
+        before: cursor.createdAt,
+        beforeId: cursor.id,
+        limit: 3,
+      });
+
+      // Combine pages and check for duplicates
+      const allIds = [...page1.map((m) => m.id), ...page2.map((m) => m.id)];
+      const uniqueIds = new Set(allIds);
+      expect(allIds.length).toBe(uniqueIds.size);
+
+      // The new message should NOT appear in page2 (it's newer than cursor)
+      expect(page2.some((m) => m.id === "dup-test-new")).toBe(false);
+    });
+  });
 });

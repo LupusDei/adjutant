@@ -255,6 +255,20 @@ function handleMessage(client: WsClient, msg: WsClientMessage): void {
     body: message.body,
     timestamp: message.createdAt,
   });
+
+  // Deliver to agent's tmux pane if they have an active session
+  import("./session-bridge.js")
+    .then(({ getSessionBridge }) => {
+      const bridge = getSessionBridge();
+      const sessions = bridge.registry.findByName(recipient);
+      for (const session of sessions) {
+        if (session.status !== "offline") {
+          logInfo("Delivering WS message to agent tmux pane", { to: recipient, sessionId: session.id });
+          bridge.sendInput(session.id, msg.body ?? "").catch(() => {});
+        }
+      }
+    })
+    .catch(() => {});
 }
 
 function handleTyping(client: WsClient, msg: WsClientMessage): void {

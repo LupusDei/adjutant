@@ -668,4 +668,275 @@ describe('useChatMessages', () => {
       expect(result.current.messages[1]!.id).toBe('server-2');
     });
   });
+
+  describe('iOS edge cases: agent switch state reset', () => {
+    it('should clear messages when agentId changes', async () => {
+      const msg1 = makeChatMessage({ agentId: 'agent-1', body: 'From 1' });
+      const msg2 = makeChatMessage({ agentId: 'agent-2', body: 'From 2' });
+
+      // Control the timing: first call resolves, second hangs initially
+      let resolveSecondFetch: ((v: PaginatedResponse<ChatMessage>) => void) | undefined;
+      (api.messages.list as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(mockListResponse([msg1]))
+        .mockImplementationOnce(
+          () => new Promise((resolve) => { resolveSecondFetch = resolve; })
+        );
+
+      const { result, rerender } = renderHook(
+        ({ agentId }) => useChatMessages(agentId),
+        { initialProps: { agentId: 'agent-1' } }
+      );
+
+      await waitFor(() => {
+        expect(result.current.messages).toHaveLength(1);
+      });
+
+      // Switch agent — messages from agent-1 should NOT persist
+      rerender({ agentId: 'agent-2' });
+
+      // While loading, the state should reflect the new fetch is happening
+      expect(result.current.isLoading).toBe(true);
+
+      // Resolve the second fetch
+      await act(async () => {
+        resolveSecondFetch!(mockListResponse([msg2]));
+      });
+
+      // Only agent-2 messages should be present
+      expect(result.current.messages).toHaveLength(1);
+      expect(result.current.messages[0]!.body).toBe('From 2');
+    });
+
+    it('should reset hasMore when agentId changes', async () => {
+      (api.messages.list as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(mockListResponse([makeChatMessage()], true))  // hasMore=true for agent-1
+        .mockResolvedValueOnce(mockListResponse([makeChatMessage()], false)); // hasMore=false for agent-2
+
+      const { result, rerender } = renderHook(
+        ({ agentId }) => useChatMessages(agentId),
+        { initialProps: { agentId: 'agent-1' } }
+      );
+
+      await waitFor(() => {
+        expect(result.current.hasMore).toBe(true);
+      });
+
+      rerender({ agentId: 'agent-2' });
+
+      await waitFor(() => {
+        expect(result.current.hasMore).toBe(false);
+      });
+    });
+  });
+
+  describe('iOS edge cases: optimistic + WS deduplication', () => {
+    it('should replace optimistic message when real message arrives via WS', async () => {
+      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+        mockListResponse([])
+      );
+
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
+        subscriberCallback = cb;
+        return vi.fn();
+      });
+
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Add optimistic message via addOptimistic
+      act(() => {
+        result.current.addOptimistic('Hello from WS', 'client-ws-1');
+      });
+
+      expect(result.current.messages).toHaveLength(1);
+      expect(result.current.messages[0]!.optimisticStatus).toBe('sending');
+
+      // Confirm delivery with a server-side ID
+      act(() => {
+        result.current.confirmDelivery('client-ws-1', 'server-id-ws-1');
+      });
+
+      expect(result.current.messages[0]!.id).toBe('server-id-ws-1');
+      expect(result.current.messages[0]!.optimisticStatus).toBe('delivered');
+
+      // Now if the same message arrives via WS, it should NOT create a duplicate
+      act(() => {
+        subscriberCallback!({
+          id: 'server-id-ws-1',
+          from: 'user',
+          to: 'agent-1',
+          body: 'Hello from WS',
+          timestamp: '2026-02-21T10:00:00Z',
+        });
+      });
+
+      // Still only one message — deduplicated by ID
+      expect(result.current.messages).toHaveLength(1);
+    });
+  });
+
+  describe('iOS edge cases: pagination order', () => {
+    it('should prepend older messages before existing messages', async () => {
+      const recentMsg = makeChatMessage({
+        id: 'msg-recent',
+        createdAt: '2026-02-21T10:05:00Z',
+        body: 'Recent',
+      });
+      const olderMsg1 = makeChatMessage({
+        id: 'msg-old-1',
+        createdAt: '2026-02-21T09:00:00Z',
+        body: 'Older 1',
+      });
+      const olderMsg2 = makeChatMessage({
+        id: 'msg-old-2',
+        createdAt: '2026-02-21T08:00:00Z',
+        body: 'Older 2',
+      });
+
+      (api.messages.list as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(mockListResponse([recentMsg], true))
+        .mockResolvedValueOnce(mockListResponse([olderMsg1, olderMsg2], false));
+
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.messages).toHaveLength(1);
+      });
+
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      expect(result.current.messages).toHaveLength(3);
+      // Older messages should come first (prepended)
+      expect(result.current.messages[0]!.id).toBe('msg-old-1');
+      expect(result.current.messages[1]!.id).toBe('msg-old-2');
+      expect(result.current.messages[2]!.id).toBe('msg-recent');
+    });
+
+    it('should set hasMore:false when no more messages exist after loadMore', async () => {
+      const recentMsg = makeChatMessage({
+        id: 'msg-r',
+        createdAt: '2026-02-21T10:05:00Z',
+        body: 'Recent',
+      });
+
+      (api.messages.list as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(mockListResponse([recentMsg], true))
+        .mockResolvedValueOnce(mockListResponse([], false));
+
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.hasMore).toBe(true);
+      });
+
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      expect(result.current.hasMore).toBe(false);
+    });
+  });
+
+  describe('iOS edge cases: WS subscription lifecycle', () => {
+    it('should unsubscribe from WS on unmount', async () => {
+      const mockUnsubscribe = vi.fn();
+      mockSubscribe.mockImplementation(() => mockUnsubscribe);
+
+      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+        mockListResponse([])
+      );
+
+      const { unmount } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(mockSubscribe).toHaveBeenCalled();
+      });
+
+      unmount();
+
+      expect(mockUnsubscribe).toHaveBeenCalled();
+    });
+
+    it('should not add messages after unmount', async () => {
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
+        subscriberCallback = cb;
+        return vi.fn();
+      });
+
+      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+        mockListResponse([])
+      );
+
+      const { result, unmount } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      unmount();
+
+      // Sending a message after unmount should not cause errors
+      // (the unsubscribe should have been called, preventing delivery)
+      expect(() => {
+        subscriberCallback?.({
+          id: 'post-unmount',
+          from: 'agent-1',
+          to: 'user',
+          body: 'Ghost message',
+          timestamp: '2026-02-21T12:00:00Z',
+        });
+      }).not.toThrow();
+    });
+  });
+
+  describe('iOS edge cases: loadMore guard', () => {
+    it('should not fetch when hasMore is false', async () => {
+      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+        mockListResponse([makeChatMessage()], false)
+      );
+
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      const callCountBefore = (api.messages.list as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      // Should not have made another API call
+      expect((api.messages.list as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callCountBefore);
+    });
+
+    it('should not fetch when messages array is empty', async () => {
+      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+        mockListResponse([], true) // hasMore is true but no messages
+      );
+
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      const callCountBefore = (api.messages.list as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      // Should not have made another API call (no cursor to use)
+      expect((api.messages.list as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callCountBefore);
+    });
+  });
 });

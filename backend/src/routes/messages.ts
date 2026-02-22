@@ -18,6 +18,8 @@ import { Router } from "express";
 import { z } from "zod";
 import type { MessageStore } from "../services/message-store.js";
 import { wsBroadcast } from "../services/ws-server.js";
+import { getSessionBridge } from "../services/session-bridge.js";
+import { logInfo } from "../utils/index.js";
 import {
   success,
   notFound,
@@ -143,6 +145,20 @@ export function createMessagesRouter(store: MessageStore): Router {
       threadId: message.threadId ?? undefined,
       metadata: message.metadata ?? undefined,
     });
+
+    // Deliver to agent's tmux pane if they have an active session
+    try {
+      const bridge = getSessionBridge();
+      const sessions = bridge.registry.findByName(to);
+      for (const session of sessions) {
+        if (session.status !== "offline") {
+          logInfo("Delivering message to agent tmux pane", { to, sessionId: session.id });
+          bridge.sendInput(session.id, body).catch(() => {});
+        }
+      }
+    } catch {
+      // Session bridge not initialized — agent will pull via MCP
+    }
 
     return res.status(201).json(success({ messageId: message.id, timestamp: message.createdAt }));
   });

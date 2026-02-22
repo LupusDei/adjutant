@@ -388,5 +388,193 @@ describe("CommunicationContext", () => {
 
       expect(result.current.connectionStatus).toBe("polling");
     });
+
+  });
+
+  describe("subscriber error isolation", () => {
+    it("should handle subscriber throwing an error without affecting others", async () => {
+      const { result } = renderHook(() => useCommunication(), { wrapper });
+      await flushMicrotasks();
+
+      const received: unknown[] = [];
+
+      // First subscriber throws
+      act(() => {
+        result.current.subscribe(() => {
+          throw new Error("Subscriber explosion");
+        });
+      });
+
+      // Second subscriber collects messages
+      act(() => {
+        result.current.subscribe((msg) => received.push(msg));
+      });
+
+      // Inject a message — should not throw even though first subscriber does
+      act(() => {
+        lastMockWs!._injectMessage({
+          type: "chat_message",
+          id: "resilient-msg",
+          from: "agent-1",
+          to: "user",
+          body: "Still delivered",
+          timestamp: "2026-02-21T10:00:00Z",
+        });
+      });
+
+      // Second subscriber should still receive the message
+      expect(received).toHaveLength(1);
+      expect((received[0] as { id: string }).id).toBe("resilient-msg");
+    });
+
+    it("should not deliver messages to unsubscribed callbacks", async () => {
+      const { result } = renderHook(() => useCommunication(), { wrapper });
+      await flushMicrotasks();
+
+      const received: unknown[] = [];
+
+      // Subscribe then unsubscribe
+      let unsubscribe: () => void;
+      act(() => {
+        unsubscribe = result.current.subscribe((msg) => received.push(msg));
+      });
+
+      act(() => {
+        unsubscribe!();
+      });
+
+      // Inject a message after unsubscribe
+      act(() => {
+        lastMockWs!._injectMessage({
+          type: "chat_message",
+          id: "unsubbed-msg",
+          from: "agent-1",
+          to: "user",
+          body: "Should not arrive",
+          timestamp: "2026-02-21T10:00:00Z",
+        });
+      });
+
+      expect(received).toHaveLength(0);
+    });
+
+    it("should deliver to all active subscribers", async () => {
+      const { result } = renderHook(() => useCommunication(), { wrapper });
+      await flushMicrotasks();
+
+      const received1: unknown[] = [];
+      const received2: unknown[] = [];
+
+      act(() => {
+        result.current.subscribe((msg) => received1.push(msg));
+        result.current.subscribe((msg) => received2.push(msg));
+      });
+
+      act(() => {
+        lastMockWs!._injectMessage({
+          type: "chat_message",
+          id: "multi-sub-msg",
+          from: "agent-1",
+          to: "user",
+          body: "To all subscribers",
+          timestamp: "2026-02-21T10:00:00Z",
+        });
+      });
+
+      expect(received1).toHaveLength(1);
+      expect(received2).toHaveLength(1);
+      expect((received1[0] as { id: string }).id).toBe("multi-sub-msg");
+      expect((received2[0] as { id: string }).id).toBe("multi-sub-msg");
+    });
+  });
+
+  describe("sendMessage transport", () => {
+    it("should send message via WebSocket when connected", async () => {
+      const { result } = renderHook(() => useCommunication(), { wrapper });
+      await flushMicrotasks();
+      expect(result.current.connectionStatus).toBe("websocket");
+
+      // Should not throw when sending via WS
+      await act(async () => {
+        await result.current.sendMessage({ body: "Hello via WS", to: "agent-1" });
+      });
+    });
+  });
+
+  describe("priority persistence (additional)", () => {
+    it("should persist communication priority to localStorage on set", async () => {
+      const { result } = renderHook(() => useCommunication(), { wrapper });
+
+      await act(async () => {
+        result.current.setPriority("efficient");
+      });
+
+      expect(localStorage.getItem("adjutant-comm-priority")).toBe("efficient");
+    });
+
+    it("should restore communication priority from localStorage on mount", () => {
+      localStorage.setItem("adjutant-comm-priority", "polling-only");
+      const { result } = renderHook(() => useCommunication(), { wrapper });
+      expect(result.current.priority).toBe("polling-only");
+    });
+
+    it("should handle cycling through all priority values", async () => {
+      const { result } = renderHook(() => useCommunication(), { wrapper });
+
+      for (const p of ["efficient", "polling-only", "real-time"] as const) {
+        await act(async () => {
+          result.current.setPriority(p);
+        });
+        expect(result.current.priority).toBe(p);
+        expect(localStorage.getItem("adjutant-comm-priority")).toBe(p);
+      }
+    });
+  });
+
+  describe("WebSocket auth error handling", () => {
+    it("should fall back to SSE on auth failure", async () => {
+      // Create a WebSocket that rejects auth
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      globalThis.WebSocket = class AuthFailWs {
+        static readonly OPEN = 1;
+        readyState = 0;
+        onmessage: WsHandler = null;
+        onclose: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        url: string;
+        constructor(url: string) {
+          this.url = url;
+          queueMicrotask(() => {
+            this.readyState = 1;
+            // Server sends auth challenge
+            this.onmessage?.({ data: JSON.stringify({ type: "auth_challenge" }) });
+          });
+        }
+        send(data: string) {
+          const msg = JSON.parse(data);
+          if (msg.type === "auth_response") {
+            // Simulate auth failure
+            queueMicrotask(() => {
+              this.onmessage?.({
+                data: JSON.stringify({
+                  type: "error",
+                  code: "auth_failed",
+                  message: "Invalid API key",
+                }),
+              });
+            });
+          }
+        }
+        close() {
+          this.readyState = 3;
+        }
+      } as any;
+
+      const { result } = renderHook(() => useCommunication(), { wrapper });
+      await flushMicrotasks();
+
+      // After auth failure, should fall back to SSE
+      expect(result.current.connectionStatus).toBe("sse");
+    });
   });
 });
