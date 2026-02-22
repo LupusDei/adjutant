@@ -45,3 +45,4 @@ backend/.audio-cache/
 .beads/dolt-access.lock
 .beads/interactions.jsonl
 .logs/
+logs/
