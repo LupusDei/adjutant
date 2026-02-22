@@ -5,9 +5,9 @@
  * that inspect the system state without modifying it.
  */
 
-import { existsSync, readFileSync, statSync } from "fs";
+import { existsSync, readFileSync, statSync, writeFileSync, mkdirSync } from "fs";
 import { execSync } from "child_process";
-import { join } from "path";
+import { dirname, join } from "path";
 import { homedir } from "os";
 
 /** Check if a file exists at the given path. */
@@ -33,6 +33,12 @@ export function parseJsonFile<T = unknown>(path: string): T | null {
   } catch {
     return null;
   }
+}
+
+/** Safely write a JSON file, creating parent directories if needed. */
+export function writeJsonFile(path: string, data: unknown): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(data, null, 2) + "\n", "utf-8");
 }
 
 /** Check if a command is available on PATH. */
@@ -88,17 +94,17 @@ export function mcpJsonValid(projectRoot: string): { exists: boolean; hasAdjutan
   return { exists: true, hasAdjutant: !!config.mcpServers?.adjutant };
 }
 
-interface HookEntry {
+export interface HookEntry {
   type: string;
   command: string;
 }
 
-interface HookMatcher {
+export interface HookMatcher {
   matcher: string;
   hooks: HookEntry[];
 }
 
-interface ClaudeSettings {
+export interface ClaudeSettings {
   hooks?: {
     SessionStart?: HookMatcher[];
     PreCompact?: HookMatcher[];
@@ -107,13 +113,13 @@ interface ClaudeSettings {
   [key: string]: unknown;
 }
 
+export const HOOK_COMMAND = "cat .adjutant/PRIME.md 2>/dev/null || true";
+
 /** Check if adjutant-prime hook is registered in Claude Code settings. */
 export function adjutantHookRegistered(): boolean {
   const settingsPath = getClaudeSettingsPath();
   const settings = parseJsonFile<ClaudeSettings>(settingsPath);
   if (!settings?.hooks) return false;
-
-  const HOOK_COMMAND = "cat .adjutant/PRIME.md 2>/dev/null || true";
 
   function hasHook(matchers: HookMatcher[] | undefined): boolean {
     if (!matchers) return false;
