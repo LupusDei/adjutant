@@ -8,10 +8,19 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import { listBeads, listAllBeads, updateBead, getBead, listBeadSources, type BeadStatus } from "../services/beads-service.js";
 import { resolveRigPath } from "../services/workspace/index.js";
 import { listProjects } from "../services/projects-service.js";
 import { success, internalError, badRequest } from "../utils/responses.js";
+
+/** Zod schema for PATCH /api/beads/:id request body */
+const beadUpdateSchema = z.object({
+  status: z.string().min(1).optional(),
+  assignee: z.string().min(1).optional(),
+}).refine(data => data.status !== undefined || data.assignee !== undefined, {
+  message: "At least one of 'status' or 'assignee' is required",
+});
 
 export const beadsRouter = Router();
 
@@ -168,19 +177,22 @@ beadsRouter.get("/:id", async (req, res) => {
  */
 beadsRouter.patch("/:id", async (req, res) => {
   const beadId = req.params["id"];
-  const { status, assignee } = req.body as { status?: string; assignee?: string };
 
   if (!beadId) {
     return res.status(400).json(badRequest("Bead ID is required"));
   }
 
-  if (!status && assignee === undefined) {
-    return res.status(400).json(badRequest("At least one of 'status' or 'assignee' is required in request body"));
+  const parsed = beadUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const msg = parsed.error.issues.map(i => i.message).join("; ");
+    return res.status(400).json(badRequest(msg));
   }
+
+  const { status, assignee } = parsed.data;
 
   const result = await updateBead(beadId, {
     ...(status ? { status: status as BeadStatus } : {}),
-    ...(assignee !== undefined ? { assignee } : {}),
+    ...(assignee ? { assignee } : {}),
   });
 
   if (!result.success) {
