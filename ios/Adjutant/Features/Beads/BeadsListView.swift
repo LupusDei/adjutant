@@ -376,9 +376,9 @@ struct BeadsListView: View {
     }
 
     /// Beads filtered for Kanban display with search and overseer mode applied.
-    /// Uses all beads (not status-filtered) since Kanban shows all columns.
+    /// Uses kanbanBeads (sorted + type-filtered, not status-filtered) since Kanban shows all columns.
     private var filteredBeadsForKanban: [BeadInfo] {
-        var result = viewModel.beads
+        var result = viewModel.kanbanBeads
 
         // Apply search filter
         if !viewModel.searchText.isEmpty {

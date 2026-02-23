@@ -345,6 +345,14 @@ final class BeadsListViewModel: BaseViewModel {
 
     // MARK: - Computed Properties
 
+    /// Beads sorted and type-filtered but not status-filtered, for Kanban display.
+    /// The Kanban board needs all statuses (each gets its own column), but still
+    /// needs sorting and type exclusion applied.
+    var kanbanBeads: [BeadInfo] {
+        let result = beads.filter { !Self.excludedTypes.contains($0.type.lowercased()) }
+        return sortBeads(result)
+    }
+
     /// Unique rig names extracted from bead sources (excludes "town" and "unknown")
     /// Matches frontend BeadsView.tsx rigOptions logic
     var rigOptions: [String] {

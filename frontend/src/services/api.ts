@@ -364,6 +364,7 @@ export const api = {
       const query = new URLSearchParams();
       if (params?.rig) query.set('rig', params.rig);
       query.set('type', 'epic');
+      query.set('status', 'all');
       return apiFetch(`/beads?${query}`);
     },
 

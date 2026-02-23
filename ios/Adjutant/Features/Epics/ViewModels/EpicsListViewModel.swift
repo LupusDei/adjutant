@@ -114,6 +114,7 @@ final class EpicsListViewModel: BaseViewModel {
             let rigFilter = self.selectedRig ?? "all"
             let epics = try await self.apiClient.getBeads(
                 rig: rigFilter,
+                status: .all,
                 type: "epic"
             )
 
