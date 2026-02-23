@@ -60,9 +60,8 @@ beadsRouter.get("/", async (req, res) => {
     });
 
     if (!result.success) {
-      return res.status(500).json(
-        internalError(result.error?.message ?? "Failed to list beads")
-      );
+      // Graceful degradation: return empty when bd unavailable
+      return res.json(success([]));
     }
 
     return res.json(success(result.data));
@@ -96,9 +95,8 @@ beadsRouter.get("/", async (req, res) => {
   });
 
   if (!result.success) {
-    return res.status(500).json(
-      internalError(result.error?.message ?? "Failed to list beads")
-    );
+    // Graceful degradation: return empty when bd unavailable
+    return res.json(success([]));
   }
 
   return res.json(success(result.data));

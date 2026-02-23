@@ -56,7 +56,13 @@ describe("InputRouter", () => {
 
       expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
-        ["send-keys", "-t", session.tmuxPane, "Hello world", "Enter"],
+        ["send-keys", "-t", session.tmuxPane, "-l", "Hello world"],
+        expect.anything(),
+        expect.any(Function)
+      );
+      expect(mockExecFile).toHaveBeenCalledWith(
+        "tmux",
+        ["send-keys", "-t", session.tmuxPane, "Enter"],
         expect.anything(),
         expect.any(Function)
       );
@@ -138,7 +144,13 @@ describe("InputRouter", () => {
 
       expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
-        ["send-keys", "-t", session.tmuxPane, "y", "Enter"],
+        ["send-keys", "-t", session.tmuxPane, "-l", "y"],
+        expect.anything(),
+        expect.any(Function)
+      );
+      expect(mockExecFile).toHaveBeenCalledWith(
+        "tmux",
+        ["send-keys", "-t", session.tmuxPane, "Enter"],
         expect.anything(),
         expect.any(Function)
       );
@@ -156,7 +168,13 @@ describe("InputRouter", () => {
 
       expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
-        ["send-keys", "-t", session.tmuxPane, "n", "Enter"],
+        ["send-keys", "-t", session.tmuxPane, "-l", "n"],
+        expect.anything(),
+        expect.any(Function)
+      );
+      expect(mockExecFile).toHaveBeenCalledWith(
+        "tmux",
+        ["send-keys", "-t", session.tmuxPane, "Enter"],
         expect.anything(),
         expect.any(Function)
       );
@@ -270,14 +288,26 @@ describe("InputRouter", () => {
         "send-keys",
         "-t",
         session.tmuxPane,
+        "-l",
         "first",
-        "Enter",
       ]);
       expect(sendKeyCalls[1][1]).toEqual([
         "send-keys",
         "-t",
         session.tmuxPane,
+        "Enter",
+      ]);
+      expect(sendKeyCalls[2][1]).toEqual([
+        "send-keys",
+        "-t",
+        session.tmuxPane,
+        "-l",
         "second",
+      ]);
+      expect(sendKeyCalls[3][1]).toEqual([
+        "send-keys",
+        "-t",
+        session.tmuxPane,
         "Enter",
       ]);
     });

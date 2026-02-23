@@ -25,6 +25,21 @@ struct ServerSentEvent {
     let data: String
 }
 
+/// Convenience wrapper used by tests — maps `type` to `ServerSentEvent.event`
+/// and adds a typed JSON decode helper.
+struct SSEEvent {
+    let type: String
+    let data: String
+    let id: String?
+
+    /// Decode the JSON `data` payload into a Decodable type.
+    func decode<T: Decodable>(_ type: T.Type) -> T? {
+        guard !data.isEmpty,
+              let jsonData = data.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(type, from: jsonData)
+    }
+}
+
 /// Service that maintains a persistent SSE connection to the backend
 /// and publishes parsed events for consumption by DataSyncService.
 @MainActor

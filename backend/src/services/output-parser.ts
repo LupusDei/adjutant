@@ -143,7 +143,13 @@ export class OutputParser {
   parseLine(line: string): OutputEvent[] {
     // Clean terminal output — may produce multiple sublines from \r splits
     const cleaned = cleanTerminalOutput(line);
-    if (cleaned === "") return [];
+    if (cleaned === "") {
+      // Preserve blank lines when accumulating tool results or messages
+      if (this.mode === "tool_result" || this.mode === "message") {
+        return this.parseSingleLine("");
+      }
+      return [];
+    }
 
     // If cleaning produced multiple lines, process each and flush at end
     const sublines = cleaned.split("\n");
@@ -207,7 +213,7 @@ export class OutputParser {
 
     // Partial streaming frames: very short lines (< 4 chars) that aren't
     // meaningful on their own (TUI redraws per-token during streaming)
-    if (trimmed.length < 4 && !AGENT_BULLET.test(trimmed) && this.mode === "idle") {
+    if (trimmed.length < 4 && !AGENT_BULLET.test(trimmed) && !IDLE_PATTERN.test(clean) && this.mode === "idle") {
       return events;
     }
 
@@ -616,12 +622,13 @@ export function cleanTerminalOutput(str: string): string {
   // 5. Replace \r with \n so we can split into sublines
   result = result.replace(/\r/g, "\n");
 
-  // 6. Collapse multiple blank lines / trim
+  // 6. Trim trailing whitespace per line, strip leading/trailing blank lines
   result = result
     .split("\n")
     .map((l) => l.trimEnd())
-    .filter((l) => l.length > 0)
-    .join("\n");
+    .join("\n")
+    .replace(/^\n+/, "")
+    .replace(/\n+$/, "");
 
   return result;
 }

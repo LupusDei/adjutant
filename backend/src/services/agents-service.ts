@@ -68,7 +68,7 @@ function mapStatus(running: boolean, state?: string, hasHookedWork?: boolean): C
 function transformAgent(agent: AgentRuntimeInfo): CrewMember {
   const hasHookedWork = Boolean(agent.hookBead);
   const result: CrewMember = {
-    id: agent.name,
+    id: agent.address,
     name: agent.name,
     type: mapAgentType(agent.role),
     rig: agent.rig,

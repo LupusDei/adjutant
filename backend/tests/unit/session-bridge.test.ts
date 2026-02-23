@@ -268,7 +268,13 @@ describe("SessionBridge", () => {
 
       expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
-        ["send-keys", "-t", session.tmuxPane, "fix the bug", "Enter"],
+        ["send-keys", "-t", session.tmuxPane, "-l", "fix the bug"],
+        expect.anything(),
+        expect.any(Function)
+      );
+      expect(mockExecFile).toHaveBeenCalledWith(
+        "tmux",
+        ["send-keys", "-t", session.tmuxPane, "Enter"],
         expect.anything(),
         expect.any(Function)
       );
