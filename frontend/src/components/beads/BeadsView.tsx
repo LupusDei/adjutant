@@ -353,6 +353,7 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
       <BeadDetailView
         beadId={selectedBeadId}
         onClose={handleCloseDetail}
+        onBeadNavigate={setSelectedBeadId}
       />
 
       {pendingAssign && (

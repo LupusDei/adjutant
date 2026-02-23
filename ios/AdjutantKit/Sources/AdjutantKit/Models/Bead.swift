@@ -74,6 +74,110 @@ public struct BeadInfo: Codable, Identifiable, Equatable, Hashable {
     }
 }
 
+// MARK: - Bead Detail
+
+/// A dependency relationship between two beads.
+public struct BeadDependency: Codable, Equatable, Hashable {
+    /// The bead that has this dependency
+    public let issueId: String
+    /// The bead it depends on
+    public let dependsOnId: String
+    /// Dependency type (blocks, blocked_by)
+    public let type: String
+
+    public init(issueId: String, dependsOnId: String, type: String) {
+        self.issueId = issueId
+        self.dependsOnId = dependsOnId
+        self.type = type
+    }
+}
+
+/// Detailed bead info returned by GET /api/beads/:id.
+/// Includes description, dependencies, and additional metadata.
+public struct BeadDetail: Codable, Identifiable, Equatable {
+    public let id: String
+    public let title: String
+    public let status: String
+    public let priority: Int
+    public let type: String
+    public let assignee: String?
+    public let rig: String?
+    public let source: String
+    public let labels: [String]
+    public let createdAt: String
+    public let updatedAt: String?
+    /// Full description text
+    public let description: String
+    /// Timestamp when bead was closed
+    public let closedAt: String?
+    /// Agent state (working, idle, stuck, stale)
+    public let agentState: String?
+    /// Dependency relationships
+    public let dependencies: [BeadDependency]
+    /// Whether this bead is pinned
+    public let pinned: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, status, priority, type, assignee, rig, source, labels
+        case createdAt, updatedAt, description, closedAt, agentState
+        case dependencies, pinned
+    }
+
+    /// Parse the createdAt timestamp into a Date
+    public var createdDate: Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: createdAt) ?? ISO8601DateFormatter().date(from: createdAt)
+    }
+
+    /// Parse the updatedAt timestamp into a Date
+    public var updatedDate: Date? {
+        guard let updatedAt else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: updatedAt) ?? ISO8601DateFormatter().date(from: updatedAt)
+    }
+
+    /// Parse the closedAt timestamp into a Date
+    public var closedDate: Date? {
+        guard let closedAt else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: closedAt) ?? ISO8601DateFormatter().date(from: closedAt)
+    }
+
+    /// Dependencies where this bead blocks another (other beads depend on this one)
+    public var blocksDeps: [BeadDependency] {
+        dependencies.filter { $0.type == "blocks" }
+    }
+
+    /// Dependencies where this bead is blocked by another
+    public var blockedByDeps: [BeadDependency] {
+        dependencies.filter { $0.type == "blocked_by" }
+    }
+
+    /// Derive parent epic ID from bead ID hierarchy.
+    /// e.g., "adj-001.1.2" → "adj-001.1", "adj-001.1" → "adj-001"
+    public var parentEpicId: String? {
+        guard let lastDot = id.lastIndex(of: ".") else { return nil }
+        return String(id[id.startIndex..<lastDot])
+    }
+
+    /// Get priority as MessagePriority enum
+    public var priorityLevel: MessagePriority? {
+        MessagePriority(rawValue: priority)
+    }
+
+    /// Convert to BeadInfo for compatibility
+    public var asBeadInfo: BeadInfo {
+        BeadInfo(
+            id: id, title: title, status: status, priority: priority,
+            type: type, assignee: assignee, rig: rig, source: source,
+            labels: labels, createdAt: createdAt, updatedAt: updatedAt
+        )
+    }
+}
+
 // MARK: - Bead Source
 
 /// A bead source represents a project/rig directory that contains beads.

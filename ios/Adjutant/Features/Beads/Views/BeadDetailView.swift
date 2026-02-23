@@ -22,11 +22,31 @@ struct BeadDetailView: View {
                     // Header card with ID, type, priority
                     headerCard(bead)
 
-                    // Title and description
+                    // Title
                     titleCard(bead)
+
+                    // Description (full text from detail endpoint)
+                    if let description = viewModel.descriptionText {
+                        descriptionCard(description)
+                    }
 
                     // Status section
                     statusCard(bead)
+
+                    // Agent state (if assigned and active)
+                    if let agentState = viewModel.agentState {
+                        agentStateCard(agentState)
+                    }
+
+                    // Parent epic
+                    if let parentId = viewModel.parentEpicId {
+                        parentEpicCard(parentId)
+                    }
+
+                    // Dependencies (blocks / blocked by)
+                    if viewModel.hasDependencies {
+                        dependenciesCard()
+                    }
 
                     // Assignment section
                     assignmentCard(bead)
@@ -36,11 +56,13 @@ struct BeadDetailView: View {
                         labelsCard(bead)
                     }
 
-                    // Timestamps
+                    // Timestamps (with closed date if available)
                     timestampsCard(bead)
 
-                    // Relationships placeholder
-                    // TODO: Add blocking/blockedBy when API supports it
+                    // Pinned badge
+                    if viewModel.isPinned {
+                        pinnedBadge()
+                    }
                 } else if let error = viewModel.errorMessage {
                     errorView(error)
                 }
@@ -116,6 +138,124 @@ struct BeadDetailView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .crtCardStyle(.elevated)
+    }
+
+    // MARK: - Description Card
+
+    @ViewBuilder
+    private func descriptionCard(_ description: String) -> some View {
+        CRTCard(header: "DESCRIPTION") {
+            CRTText(description, style: .body, glowIntensity: .subtle)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - Agent State Card
+
+    @ViewBuilder
+    private func agentStateCard(_ state: String) -> some View {
+        CRTCard(header: "AGENT STATUS") {
+            HStack(spacing: CRTTheme.Spacing.sm) {
+                StatusDot(agentStateStatusType(for: state), pulse: state == "working")
+                CRTText(state.uppercased(), style: .subheader, glowIntensity: .medium)
+                    .foregroundColor(agentStateColor(for: state))
+                Spacer()
+            }
+        }
+    }
+
+    // MARK: - Parent Epic Card
+
+    @ViewBuilder
+    private func parentEpicCard(_ parentId: String) -> some View {
+        CRTCard(header: "PARENT EPIC") {
+            Button {
+                coordinator.navigate(to: .beadDetail(id: parentId))
+            } label: {
+                HStack(spacing: CRTTheme.Spacing.sm) {
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.dim)
+                    CRTText(parentId, style: .mono, glowIntensity: .medium)
+                        .foregroundColor(theme.bright)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.dim)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Dependencies Card
+
+    @ViewBuilder
+    private func dependenciesCard() -> some View {
+        CRTCard(header: "DEPENDENCIES") {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.md) {
+                // Blocks section
+                if !viewModel.blocksDeps.isEmpty {
+                    VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
+                        CRTText("BLOCKS", style: .caption, glowIntensity: .subtle)
+                            .foregroundColor(theme.dim)
+                        FlowLayout(spacing: CRTTheme.Spacing.xs) {
+                            ForEach(viewModel.blocksDeps, id: \.issueId) { dep in
+                                dependencyButton(dep.issueId)
+                            }
+                        }
+                    }
+                }
+
+                // Blocked by section
+                if !viewModel.blockedByDeps.isEmpty {
+                    VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
+                        CRTText("BLOCKED BY", style: .caption, glowIntensity: .subtle)
+                            .foregroundColor(theme.dim)
+                        FlowLayout(spacing: CRTTheme.Spacing.xs) {
+                            ForEach(viewModel.blockedByDeps, id: \.dependsOnId) { dep in
+                                dependencyButton(dep.dependsOnId)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func dependencyButton(_ beadId: String) -> some View {
+        Button {
+            coordinator.navigate(to: .beadDetail(id: beadId))
+        } label: {
+            CRTText(beadId, style: .mono, glowIntensity: .subtle)
+                .foregroundColor(theme.bright)
+                .padding(.horizontal, CRTTheme.Spacing.sm)
+                .padding(.vertical, CRTTheme.Spacing.xxs)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 2)
+                        .stroke(theme.dim.opacity(0.5), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Pinned Badge
+
+    @ViewBuilder
+    private func pinnedBadge() -> some View {
+        HStack {
+            Image(systemName: "pin.fill")
+                .font(.system(size: 12))
+            CRTText("PINNED", style: .caption, glowIntensity: .subtle)
+        }
+        .foregroundColor(CRTTheme.State.warning)
+        .padding(CRTTheme.Spacing.sm)
+        .frame(maxWidth: .infinity)
+        .overlay(
+            RoundedRectangle(cornerRadius: 2)
+                .stroke(CRTTheme.State.warning.opacity(0.5), lineWidth: 1)
+        )
     }
 
     // MARK: - Status Card
@@ -218,6 +358,9 @@ struct BeadDetailView: View {
             VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
                 timestampRow("CREATED:", value: viewModel.formattedCreatedDate)
                 timestampRow("UPDATED:", value: viewModel.formattedUpdatedDate)
+                if let closedDate = viewModel.formattedClosedDate {
+                    timestampRow("CLOSED:", value: closedDate)
+                }
             }
         }
         .crtCardStyle(.minimal)
@@ -291,6 +434,26 @@ struct BeadDetailView: View {
         case "hooked", "in_progress": return CRTTheme.State.info
         case "open": return CRTTheme.State.success
         default: return theme.primary
+        }
+    }
+
+    private func agentStateStatusType(for state: String) -> BadgeView.Style.StatusType {
+        switch state {
+        case "working": return .success
+        case "stuck": return .warning
+        case "stale": return .warning
+        case "idle": return .info
+        default: return .offline
+        }
+    }
+
+    private func agentStateColor(for state: String) -> Color {
+        switch state {
+        case "working": return CRTTheme.State.success
+        case "stuck": return CRTTheme.State.error
+        case "stale": return CRTTheme.State.warning
+        case "idle": return CRTTheme.State.info
+        default: return theme.dim
         }
     }
 }

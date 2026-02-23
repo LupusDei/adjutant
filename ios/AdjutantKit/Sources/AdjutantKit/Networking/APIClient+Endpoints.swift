@@ -404,6 +404,18 @@ extension APIClient {
         )
     }
 
+    /// Get detailed information about a single bead.
+    ///
+    /// Returns full bead data including description, dependencies, and metadata.
+    ///
+    /// - Parameter id: Full bead ID (e.g., "hq-vts8", "adj-67tta")
+    /// - Returns: A ``BeadDetail`` with complete bead information.
+    /// - Throws: ``APIClientError`` if the request fails or bead is not found.
+    public func getBeadDetail(id: String) async throws -> BeadDetail {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        return try await requestWithEnvelope(.get, path: "/beads/\(encodedId)")
+    }
+
     /// List available bead sources (projects/rigs with beads databases)
     public func getBeadSources() async throws -> BeadSourcesResponse {
         try await requestWithEnvelope(.get, path: "/beads/sources")

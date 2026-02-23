@@ -8,12 +8,11 @@ import AdjutantKit
 final class BeadDetailViewModel: BaseViewModel {
     // MARK: - Published Properties
 
-    /// The bead being displayed
+    /// The bead info (for compatibility with existing view bindings)
     @Published private(set) var bead: BeadInfo?
 
-    /// Related beads (blocking/blocked by) - placeholder for future API support
-    @Published private(set) var blockingBeads: [BeadInfo] = []
-    @Published private(set) var blockedByBeads: [BeadInfo] = []
+    /// Full bead detail with description, dependencies, etc.
+    @Published private(set) var beadDetail: BeadDetail?
 
     /// Controls the agent picker sheet
     @Published var showingAgentPicker = false
@@ -39,16 +38,12 @@ final class BeadDetailViewModel: BaseViewModel {
 
     // MARK: - Public Methods
 
-    /// Loads the bead by filtering from the full beads list
+    /// Loads full bead detail via GET /api/beads/:id
     func loadBead() async {
         await performAsyncAction {
-            // Load all beads and find the one we want
-            let allBeads = try await self.apiClient.getBeads(rig: "all", status: .all)
-            self.bead = allBeads.first { $0.id == self.beadId }
-
-            if self.bead == nil {
-                throw BeadDetailError.notFound(self.beadId)
-            }
+            let detail = try await self.apiClient.getBeadDetail(id: self.beadId)
+            self.beadDetail = detail
+            self.bead = detail.asBeadInfo
         }
     }
 
@@ -56,7 +51,6 @@ final class BeadDetailViewModel: BaseViewModel {
     func updateStatus(_ newStatus: String) async {
         await performAsyncAction(showLoading: false) {
             _ = try await self.apiClient.updateBeadStatus(id: self.beadId, status: newStatus)
-            // Reload to get updated data
             await self.loadBead()
         }
     }
@@ -70,6 +64,48 @@ final class BeadDetailViewModel: BaseViewModel {
     }
 
     // MARK: - Computed Properties
+
+    /// Full description text
+    var descriptionText: String? {
+        guard let desc = beadDetail?.description, !desc.isEmpty else { return nil }
+        return desc
+    }
+
+    /// Dependencies where this bead blocks others
+    var blocksDeps: [BeadDependency] {
+        beadDetail?.blocksDeps ?? []
+    }
+
+    /// Dependencies where this bead is blocked by others
+    var blockedByDeps: [BeadDependency] {
+        beadDetail?.blockedByDeps ?? []
+    }
+
+    /// Parent epic ID derived from bead ID hierarchy
+    var parentEpicId: String? {
+        beadDetail?.parentEpicId
+    }
+
+    /// Whether this bead has any dependencies
+    var hasDependencies: Bool {
+        !blocksDeps.isEmpty || !blockedByDeps.isEmpty
+    }
+
+    /// Agent state if assigned
+    var agentState: String? {
+        beadDetail?.agentState
+    }
+
+    /// Formatted closed date
+    var formattedClosedDate: String? {
+        guard let date = beadDetail?.closedDate else { return nil }
+        return formatDate(date)
+    }
+
+    /// Whether the bead is pinned
+    var isPinned: Bool {
+        beadDetail?.pinned ?? false
+    }
 
     /// Formatted creation date
     var formattedCreatedDate: String {

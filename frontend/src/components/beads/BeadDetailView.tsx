@@ -11,6 +11,7 @@ import type { BeadDetail, BeadDependency } from '../../types';
 export interface BeadDetailViewProps {
   beadId: string | null;
   onClose: () => void;
+  onBeadNavigate?: (beadId: string) => void;
 }
 
 /**
@@ -124,7 +125,38 @@ function DependencySection({
   );
 }
 
-export function BeadDetailView({ beadId, onClose }: BeadDetailViewProps) {
+/**
+ * Derives parent epic IDs from a bead's ID hierarchy and dependencies.
+ * A bead like "adj-001.1.2" has parent "adj-001.1" and root epic "adj-001".
+ * Also checks "blocks" dependencies for parent-like IDs.
+ */
+function getParentEpicIds(beadId: string, dependencies: BeadDependency[]): string[] {
+  const parents = new Set<string>();
+
+  // ID hierarchy: remove last ".N" segment(s) to find parents
+  const parts = beadId.split('.');
+  if (parts.length > 1) {
+    // Walk up the hierarchy: adj-001.1.2 -> adj-001.1 -> adj-001
+    for (let i = parts.length - 1; i >= 1; i--) {
+      parents.add(parts.slice(0, i).join('.'));
+    }
+  }
+
+  // Dependencies: "blocks" means this bead blocks another (i.e., is a child of it).
+  // Only add targets that are strict prefixes of this bead's ID (true parent relationship).
+  const blocksDeps = dependencies.filter(d => d.type === 'blocks');
+  for (const dep of blocksDeps) {
+    const targetId = dep.issueId;
+    if (beadId.startsWith(targetId + '.')) {
+      parents.add(targetId);
+    }
+  }
+
+  // Sort by depth: shallowest parent first (fewest dots)
+  return Array.from(parents).sort((a, b) => a.split('.').length - b.split('.').length);
+}
+
+export function BeadDetailView({ beadId, onClose, onBeadNavigate }: BeadDetailViewProps) {
   const { isSwarm } = useMode();
   const [bead, setBead] = useState<BeadDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -164,11 +196,10 @@ export function BeadDetailView({ beadId, onClose }: BeadDetailViewProps) {
   }, [bead]);
 
   const handleBeadClick = useCallback((id: string) => {
-    // Navigate to another bead by updating the URL or state
-    // For now, we'll just close and let parent handle it
-    // In a full implementation, you'd want to navigate to that bead
-    console.log('Navigate to bead:', id);
-  }, []);
+    if (onBeadNavigate) {
+      onBeadNavigate(id);
+    }
+  }, [onBeadNavigate]);
 
   // Close on escape key
   useEffect(() => {
@@ -305,6 +336,28 @@ export function BeadDetailView({ beadId, onClose }: BeadDetailViewProps) {
                   </div>
                 </div>
               )}
+
+              {/* Parent Epic */}
+              {(() => {
+                const parentIds = getParentEpicIds(bead.id, bead.dependencies);
+                if (parentIds.length === 0) return null;
+                return (
+                  <div style={styles.section}>
+                    <h4 style={styles.sectionTitle}>PARENT EPIC</h4>
+                    <div style={styles.depList}>
+                      {parentIds.map((parentId) => (
+                        <button
+                          key={parentId}
+                          style={styles.depItem}
+                          onClick={() => { handleBeadClick(parentId); }}
+                        >
+                          {parentId}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Dependencies */}
               <DependencySection
