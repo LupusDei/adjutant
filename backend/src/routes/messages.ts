@@ -153,7 +153,9 @@ export function createMessagesRouter(store: MessageStore): Router {
       for (const session of sessions) {
         if (session.status !== "offline") {
           logInfo("Delivering message to agent tmux pane", { to, sessionId: session.id });
-          bridge.sendInput(session.id, body).catch(() => {});
+          bridge.sendInput(session.id, body).then(() => {
+            store.markDelivered(message.id);
+          }).catch(() => {});
         }
       }
     } catch {

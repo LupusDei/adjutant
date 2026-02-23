@@ -116,6 +116,13 @@ export function registerMessagingTools(server: McpServer, store: MessageStore): 
       if (beforeId !== undefined) opts.beforeId = beforeId;
       const messages = store.getMessages(opts);
 
+      // Mark pending messages as delivered since the agent just fetched them
+      for (const msg of messages) {
+        if (msg.deliveryStatus === "pending") {
+          store.markDelivered(msg.id);
+        }
+      }
+
       return {
         content: [
           {

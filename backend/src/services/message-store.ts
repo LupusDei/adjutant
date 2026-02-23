@@ -113,6 +113,7 @@ export interface MessageStore {
   insertMessage(input: InsertMessageInput): Message;
   getMessage(id: string): Message | null;
   getMessages(opts: GetMessagesOptions): Message[];
+  markDelivered(id: string): void;
   markRead(id: string): void;
   markAllRead(agentId: string): void;
   searchMessages(query: string, opts?: SearchOptions): Message[];
@@ -127,6 +128,11 @@ export function createMessageStore(db: Database.Database): MessageStore {
   `);
 
   const getByIdStmt = db.prepare("SELECT * FROM messages WHERE id = ?");
+
+  const markDeliveredStmt = db.prepare(`
+    UPDATE messages SET delivery_status = 'delivered', updated_at = datetime('now')
+    WHERE id = ? AND delivery_status = 'pending'
+  `);
 
   const markReadStmt = db.prepare(`
     UPDATE messages SET delivery_status = 'read', updated_at = datetime('now') WHERE id = ?
@@ -231,6 +237,10 @@ export function createMessageStore(db: Database.Database): MessageStore {
       const sql = `SELECT * FROM messages ${where} ORDER BY created_at DESC, id DESC ${limitClause}`;
       const rows = db.prepare(sql).all(...params) as MessageRow[];
       return rows.map(rowToMessage);
+    },
+
+    markDelivered(id: string): void {
+      markDeliveredStmt.run(id);
     },
 
     markRead(id: string): void {
