@@ -134,6 +134,9 @@ struct AgentListView: View {
                     .stroke(theme.primary.opacity(0.3), lineWidth: 1)
             )
 
+            // Status filter chips
+            statusFilterBar
+
             // Rig filter button
             HStack {
                 Button {
@@ -176,6 +179,88 @@ struct AgentListView: View {
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
         .background(CRTTheme.Background.panel.opacity(0.5))
+    }
+
+    // MARK: - Status Filter Bar
+
+    private var statusFilterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: CRTTheme.Spacing.xs) {
+                // ALL chip
+                statusFilterChip(label: "ALL", count: viewModel.allCrewMembers.count, isSelected: viewModel.selectedStatus == nil) {
+                    viewModel.selectedStatus = nil
+                }
+
+                // Per-status chips
+                ForEach(statusFilterOptions, id: \.status) { option in
+                    statusFilterChip(
+                        label: option.label,
+                        count: viewModel.statusCounts[option.status] ?? 0,
+                        isSelected: viewModel.selectedStatus == option.status,
+                        dotColor: option.color
+                    ) {
+                        if viewModel.selectedStatus == option.status {
+                            viewModel.selectedStatus = nil
+                        } else {
+                            viewModel.selectedStatus = option.status
+                        }
+                    }
+                }
+            }
+            .padding(.vertical, 2)
+        }
+    }
+
+    /// Status filter options with display metadata
+    private var statusFilterOptions: [(status: CrewMemberStatus, label: String, color: Color)] {
+        [
+            (.working, "WORKING", CRTTheme.State.success),
+            (.idle, "IDLE", CRTTheme.State.info),
+            (.blocked, "BLOCKED", CRTTheme.State.warning),
+            (.offline, "OFFLINE", CRTTheme.State.offline),
+        ]
+    }
+
+    private func statusFilterChip(
+        label: String,
+        count: Int,
+        isSelected: Bool,
+        dotColor: Color? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: CRTTheme.Spacing.xxs) {
+                if let dotColor {
+                    Circle()
+                        .fill(dotColor)
+                        .frame(width: 6, height: 6)
+                }
+
+                Text(label)
+                    .font(CRTTheme.Typography.font(size: 10, weight: isSelected ? .bold : .medium))
+                    .tracking(CRTTheme.Typography.letterSpacing)
+
+                Text("\(count)")
+                    .font(CRTTheme.Typography.font(size: 10, weight: .medium))
+                    .opacity(0.7)
+            }
+            .foregroundColor(isSelected ? theme.primary : theme.dim)
+            .padding(.horizontal, CRTTheme.Spacing.sm)
+            .padding(.vertical, CRTTheme.Spacing.xxs)
+            .background(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                    .fill(isSelected ? theme.primary.opacity(0.15) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                    .stroke(
+                        isSelected ? theme.primary.opacity(0.6) : theme.dim.opacity(0.2),
+                        lineWidth: 1
+                    )
+            )
+            .crtGlow(color: theme.primary, radius: isSelected ? 3 : 0, intensity: isSelected ? 0.3 : 0)
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
