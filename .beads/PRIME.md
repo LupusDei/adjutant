@@ -8,15 +8,18 @@
 **CRITICAL**: Before saying "done" or "complete", you MUST run this checklist:
 
 ```
-[ ] 1. git status              (check what changed)
-[ ] 2. git add <files>         (stage code changes)
-[ ] 3. bd sync                 (commit beads changes)
-[ ] 4. git commit -m "..."     (commit code)
-[ ] 5. bd sync                 (commit any new beads changes)
-[ ] 6. git push                (push to remote)
+[ ] 1. npm run build           (lint & type-check — must exit 0)
+[ ] 2. npm test                (all tests must pass)
+[ ] 3. git status              (check what changed)
+[ ] 4. git add <files>         (stage code changes)
+[ ] 5. bd sync                 (commit beads changes)
+[ ] 6. git commit -m "..."     (commit code)
+[ ] 7. bd sync                 (commit any new beads changes)
+[ ] 8. git push                (push to remote)
 ```
 
-**NEVER skip this.** Work is not done until commited and sometimes pushed.
+**NEVER skip this.** Work is not done until it builds, tests pass, and is committed.
+If build or tests fail, fix the issues BEFORE committing — do NOT push broken code.
 
 ## Core Rules
 - **Default**: Use beads for ALL task tracking (`bd create`, `bd ready`, `bd close`)
@@ -182,8 +185,15 @@ When assigning work to team agents, the **coordinator** must:
    Parent epic: <parent bead ID>
 
    Before starting each task:  bd update <id> --status=in_progress
-   After completing each task:  bd close <id>
+   After completing each task:
+     1. npm run build          (must exit 0)
+     2. npm test               (must pass)
+     3. git add <files> && bd sync && git commit -m "task: <bead-id> <description>" && bd sync
+     4. git push -u origin <your-branch>
+     5. bd close <id>
+   Do NOT merge to main — push your branch only. Coordinator merges.
    Do NOT close parent epics — they auto-close when all children are done.
+   If build/tests fail, fix them before closing the bead.
    Before shutting down:        bd sync
    ```
 3. **Include the working directory** — teammates in worktrees won't have `.beads/`, so tell them the path to the main repo if needed
