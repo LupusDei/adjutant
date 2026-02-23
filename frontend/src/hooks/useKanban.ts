@@ -158,7 +158,7 @@ export function useKanban(
       // API call
       setIsUpdating(true);
       try {
-        await api.beads.update(beadId, targetColumn);
+        await api.beads.update(beadId, { status: targetColumn });
         onStatusUpdate?.(beadId, targetColumn);
       } catch (err) {
         // Rollback on error

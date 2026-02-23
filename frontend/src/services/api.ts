@@ -321,14 +321,26 @@ export const api = {
     },
 
     /**
-     * Update a bead's status (for Kanban drag-and-drop).
+     * Update a bead's status and/or assignee.
      * @param id Full bead ID (e.g., "hq-vts8", "gb-53tj")
-     * @param status New status value
+     * @param fields Fields to update (at least one required)
      */
-    async update(id: string, status: string): Promise<{ id: string; status: string }> {
+    async update(id: string, fields: { status?: string; assignee?: string }): Promise<{ id: string; status?: string; assignee?: string }> {
       return apiFetch(`/beads/${encodeURIComponent(id)}`, {
         method: 'PATCH',
-        body: { status },
+        body: fields,
+      });
+    },
+
+    /**
+     * Assign a bead to an agent.
+     * @param id Full bead ID
+     * @param agentId Agent name to assign to
+     */
+    async assign(id: string, agentId: string): Promise<{ id: string; assignee: string }> {
+      return apiFetch(`/beads/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: { assignee: agentId },
       });
     },
 
