@@ -30,7 +30,7 @@ final class AgentDetailViewModelTests: XCTestCase {
         let member = createPolecatMember()
 
         // When
-        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
 
         // Then
         XCTAssertTrue(sut.hasTerm)
@@ -41,7 +41,7 @@ final class AgentDetailViewModelTests: XCTestCase {
         let member = createMayorMember()
 
         // When
-        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
 
         // Then
         XCTAssertFalse(sut.hasTerm)
@@ -52,7 +52,7 @@ final class AgentDetailViewModelTests: XCTestCase {
         let member = createPolecatMember()
 
         // When
-        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
 
         // Then
         XCTAssertTrue(sut.autoScrollEnabled)
@@ -63,7 +63,7 @@ final class AgentDetailViewModelTests: XCTestCase {
         let member = createPolecatMember()
 
         // When
-        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
 
         // Then
         XCTAssertNil(sut.terminalContent)
@@ -80,7 +80,7 @@ final class AgentDetailViewModelTests: XCTestCase {
             sessionName: "gt-greenplace-polecat-abc",
             timestamp: "2026-01-25T12:00:00Z"
         ))
-        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
 
         // When
         await sut.loadTerminal()
@@ -95,7 +95,7 @@ final class AgentDetailViewModelTests: XCTestCase {
         // Given
         let member = createPolecatMember()
         mockAPIClient.terminalResult = .failure(APIClientError.networkError("Connection failed"))
-        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
 
         // When
         await sut.loadTerminal()
@@ -113,7 +113,7 @@ final class AgentDetailViewModelTests: XCTestCase {
             sessionName: "test",
             timestamp: "2026-01-25T12:00:00Z"
         ))
-        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
 
         // When
         await sut.loadTerminal()
@@ -133,7 +133,7 @@ final class AgentDetailViewModelTests: XCTestCase {
             status: .idle,
             unreadMail: 0
         )
-        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
 
         // When
         await sut.loadTerminal()
@@ -150,7 +150,7 @@ final class AgentDetailViewModelTests: XCTestCase {
         let member = createPolecatMember(status: .idle)
 
         // When
-        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
 
         // Then
         XCTAssertEqual(sut.statusDisplayText, "IDLE")
@@ -161,7 +161,7 @@ final class AgentDetailViewModelTests: XCTestCase {
         let member = createPolecatMember(status: .working)
 
         // When
-        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
 
         // Then
         XCTAssertEqual(sut.statusDisplayText, "WORKING")
@@ -172,7 +172,7 @@ final class AgentDetailViewModelTests: XCTestCase {
         let member = createPolecatMember(status: .blocked)
 
         // When
-        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
 
         // Then
         XCTAssertEqual(sut.statusDisplayText, "BLOCKED")
@@ -183,7 +183,7 @@ final class AgentDetailViewModelTests: XCTestCase {
         let member = createPolecatMember(status: .stuck)
 
         // When
-        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
 
         // Then
         XCTAssertEqual(sut.statusDisplayText, "STUCK")
@@ -194,7 +194,7 @@ final class AgentDetailViewModelTests: XCTestCase {
         let member = createPolecatMember(status: .offline)
 
         // When
-        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
 
         // Then
         XCTAssertEqual(sut.statusDisplayText, "OFFLINE")
@@ -210,7 +210,7 @@ final class AgentDetailViewModelTests: XCTestCase {
             sessionName: "test",
             timestamp: "2026-01-25T14:30:00Z"
         ))
-        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
 
         // When
         await sut.loadTerminal()
@@ -222,7 +222,7 @@ final class AgentDetailViewModelTests: XCTestCase {
     func testFormattedTimestamp_noTimestamp_returnsEmpty() async {
         // Given
         let member = createPolecatMember()
-        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
 
         // Then
         XCTAssertTrue(sut.formattedTimestamp.isEmpty)
@@ -233,7 +233,7 @@ final class AgentDetailViewModelTests: XCTestCase {
     func testAutoScrollEnabled_canToggle() async {
         // Given
         let member = createPolecatMember()
-        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
         XCTAssertTrue(sut.autoScrollEnabled)
 
         // When
