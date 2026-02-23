@@ -24,8 +24,16 @@ final class AgentListViewModel: BaseViewModel {
         didSet { applyFilters() }
     }
 
+    /// Current status filter (nil = all statuses)
+    @Published var selectedStatus: CrewMemberStatus? {
+        didSet { applyFilters() }
+    }
+
     /// Available rigs for filtering
     @Published private(set) var availableRigs: [String] = []
+
+    /// Count of agents per status (computed from allCrewMembers, ignoring filters)
+    @Published private(set) var statusCounts: [CrewMemberStatus: Int] = [:]
 
     // MARK: - Types
 
@@ -127,9 +135,17 @@ final class AgentListViewModel: BaseViewModel {
 
     // MARK: - Filtering
 
-    /// Apply search and rig filters to create grouped display data
+    /// Apply search, rig, and status filters to create grouped display data
     private func applyFilters() {
+        // Update status counts from full unfiltered list
+        updateStatusCounts()
+
         var filtered = allCrewMembers
+
+        // Apply status filter
+        if let status = selectedStatus {
+            filtered = filtered.filter { $0.status == status }
+        }
 
         // Apply rig filter
         if let rig = selectedRig {
@@ -157,6 +173,15 @@ final class AgentListViewModel: BaseViewModel {
         .sorted { $0.sortOrder < $1.sortOrder }
     }
 
+    /// Update status counts from the full agent list (ignoring filters)
+    private func updateStatusCounts() {
+        var counts: [CrewMemberStatus: Int] = [:]
+        for member in allCrewMembers {
+            counts[member.status, default: 0] += 1
+        }
+        statusCounts = counts
+    }
+
     /// Update the list of available rigs from loaded data
     private func updateAvailableRigs() {
         let rigs = Set(allCrewMembers.compactMap { $0.rig })
@@ -167,6 +192,7 @@ final class AgentListViewModel: BaseViewModel {
     func clearFilters() {
         searchText = ""
         selectedRig = nil
+        selectedStatus = nil
     }
 
     // MARK: - Computed Properties
@@ -178,6 +204,6 @@ final class AgentListViewModel: BaseViewModel {
 
     /// Whether any filters are active
     var hasActiveFilters: Bool {
-        !searchText.isEmpty || selectedRig != nil
+        !searchText.isEmpty || selectedRig != nil || selectedStatus != nil
     }
 }
