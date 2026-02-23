@@ -33,8 +33,8 @@ describe('AnnouncementBanner', () => {
   });
 
   it('should display an announcement when one arrives via WebSocket', () => {
-    let subscriberCallback: ((msg: any) => void) | undefined;
-    mockSubscribe.mockImplementation((cb: any) => {
+    let subscriberCallback: ((msg: unknown) => void) | undefined;
+    mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
       subscriberCallback = cb;
       return vi.fn();
     });
@@ -59,8 +59,8 @@ describe('AnnouncementBanner', () => {
   });
 
   it('should show announcement type label', () => {
-    let subscriberCallback: ((msg: any) => void) | undefined;
-    mockSubscribe.mockImplementation((cb: any) => {
+    let subscriberCallback: ((msg: unknown) => void) | undefined;
+    mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
       subscriberCallback = cb;
       return vi.fn();
     });
@@ -85,8 +85,8 @@ describe('AnnouncementBanner', () => {
   });
 
   it('should auto-dismiss after 10 seconds', () => {
-    let subscriberCallback: ((msg: any) => void) | undefined;
-    mockSubscribe.mockImplementation((cb: any) => {
+    let subscriberCallback: ((msg: unknown) => void) | undefined;
+    mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
       subscriberCallback = cb;
       return vi.fn();
     });
@@ -118,8 +118,8 @@ describe('AnnouncementBanner', () => {
 
   it('should dismiss on click', async () => {
     vi.useRealTimers(); // userEvent needs real timers
-    let subscriberCallback: ((msg: any) => void) | undefined;
-    mockSubscribe.mockImplementation((cb: any) => {
+    let subscriberCallback: ((msg: unknown) => void) | undefined;
+    mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
       subscriberCallback = cb;
       return vi.fn();
     });
@@ -151,8 +151,8 @@ describe('AnnouncementBanner', () => {
   });
 
   it('should ignore non-announcement messages', () => {
-    let subscriberCallback: ((msg: any) => void) | undefined;
-    mockSubscribe.mockImplementation((cb: any) => {
+    let subscriberCallback: ((msg: unknown) => void) | undefined;
+    mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
       subscriberCallback = cb;
       return vi.fn();
     });

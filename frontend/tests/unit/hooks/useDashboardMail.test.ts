@@ -55,7 +55,7 @@ describe('useDashboardMail', () => {
   });
 
   it('should fetch and return mail data successfully', async () => {
-    (api.mail.list as vi.Mock).mockResolvedValue({
+    vi.mocked(api.mail.list).mockResolvedValue({
       items: mockMessages,
       total: mockMessages.length,
       limit: 100,
@@ -84,7 +84,7 @@ describe('useDashboardMail', () => {
 
   it('should handle API errors gracefully', async () => {
     const errorMessage = 'Network error during mail fetch';
-    (api.mail.list as vi.Mock).mockRejectedValue(new Error(errorMessage));
+    vi.mocked(api.mail.list).mockRejectedValue(new Error(errorMessage));
 
     const { result } = renderHook(() => useDashboardMail());
 
@@ -97,7 +97,7 @@ describe('useDashboardMail', () => {
   });
 
   it('should return empty state if no messages are found', async () => {
-    (api.mail.list as vi.Mock).mockResolvedValue({ items: [], total: 0, limit: 100, offset: 0 });
+    vi.mocked(api.mail.list).mockResolvedValue({ items: [], total: 0, limit: 100, offset: 0 });
 
     const { result } = renderHook(() => useDashboardMail());
 
@@ -124,7 +124,7 @@ describe('useDashboardMail', () => {
         threadId: 'thread4',
       },
     ];
-    (api.mail.list as vi.Mock).mockResolvedValue({
+    vi.mocked(api.mail.list).mockResolvedValue({
       items: messagesWithHandoff,
       total: 4,
       limit: 100,

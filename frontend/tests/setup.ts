@@ -1,11 +1,10 @@
 import "@testing-library/jest-dom/vitest";
-import { vi } from 'vitest';
 
 // Configure React Testing Library to use act()
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-if (!window.matchMedia) {
-  window.matchMedia = (query: string) => ({
+// Polyfill matchMedia for jsdom
+window.matchMedia = (query: string) => ({
     matches: false,
     media: query,
     onchange: null,
@@ -15,7 +14,6 @@ if (!window.matchMedia) {
     removeListener: () => undefined,
     dispatchEvent: () => false,
   });
-}
 
 // Global mocks for dashboard hooks
 // vi.mock('../src/hooks/useDashboardMail', () => ({

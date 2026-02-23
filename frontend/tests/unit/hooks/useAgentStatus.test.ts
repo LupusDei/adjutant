@@ -29,8 +29,8 @@ describe('useAgentStatus', () => {
   });
 
   it('should update status when receiving a typing event with metadata', () => {
-    let subscriberCallback: ((msg: any) => void) | undefined;
-    mockSubscribe.mockImplementation((cb: any) => {
+    let subscriberCallback: ((msg: unknown) => void) | undefined;
+    mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
       subscriberCallback = cb;
       return vi.fn();
     });
@@ -66,8 +66,8 @@ describe('useAgentStatus', () => {
   });
 
   it('should update existing status for the same agent', () => {
-    let subscriberCallback: ((msg: any) => void) | undefined;
-    mockSubscribe.mockImplementation((cb: any) => {
+    let subscriberCallback: ((msg: unknown) => void) | undefined;
+    mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
       subscriberCallback = cb;
       return vi.fn();
     });
@@ -112,8 +112,8 @@ describe('useAgentStatus', () => {
   });
 
   it('should track multiple agents independently', () => {
-    let subscriberCallback: ((msg: any) => void) | undefined;
-    mockSubscribe.mockImplementation((cb: any) => {
+    let subscriberCallback: ((msg: unknown) => void) | undefined;
+    mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
       subscriberCallback = cb;
       return vi.fn();
     });
@@ -145,8 +145,8 @@ describe('useAgentStatus', () => {
   });
 
   it('should ignore messages without agent_status metadata type', () => {
-    let subscriberCallback: ((msg: any) => void) | undefined;
-    mockSubscribe.mockImplementation((cb: any) => {
+    let subscriberCallback: ((msg: unknown) => void) | undefined;
+    mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
       subscriberCallback = cb;
       return vi.fn();
     });

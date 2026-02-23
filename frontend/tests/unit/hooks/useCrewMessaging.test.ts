@@ -29,7 +29,6 @@ vi.mock("../../../src/hooks/usePolling", () => ({
 import { usePolling } from "../../../src/hooks/usePolling";
 
 const mockUsePolling = usePolling as ReturnType<typeof vi.fn>;
-const mockApiAgentsList = api.agents.list as ReturnType<typeof vi.fn>;
 const mockApiMailSend = api.mail.send as ReturnType<typeof vi.fn>;
 
 // =============================================================================

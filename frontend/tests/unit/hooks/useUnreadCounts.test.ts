@@ -29,7 +29,7 @@ import { api } from '../../../src/services/api';
 describe('useUnreadCounts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (api.messages.getUnread as ReturnType<typeof vi.fn>).mockResolvedValue({
+    vi.mocked(api.messages.getUnread).mockResolvedValue({
       counts: [],
     });
   });
@@ -40,7 +40,7 @@ describe('useUnreadCounts', () => {
 
   describe('initial fetch', () => {
     it('should fetch unread counts on mount', async () => {
-      (api.messages.getUnread as ReturnType<typeof vi.fn>).mockResolvedValue({
+      vi.mocked(api.messages.getUnread).mockResolvedValue({
         counts: [
           { agentId: 'agent-1', count: 3 },
           { agentId: 'agent-2', count: 1 },
@@ -65,7 +65,7 @@ describe('useUnreadCounts', () => {
     });
 
     it('should set error on fetch failure', async () => {
-      (api.messages.getUnread as ReturnType<typeof vi.fn>).mockRejectedValue(
+      vi.mocked(api.messages.getUnread).mockRejectedValue(
         new Error('Network error')
       );
 
@@ -80,7 +80,7 @@ describe('useUnreadCounts', () => {
     });
 
     it('should exclude agents with zero count', async () => {
-      (api.messages.getUnread as ReturnType<typeof vi.fn>).mockResolvedValue({
+      vi.mocked(api.messages.getUnread).mockResolvedValue({
         counts: [
           { agentId: 'agent-1', count: 0 },
           { agentId: 'agent-2', count: 5 },
@@ -101,12 +101,12 @@ describe('useUnreadCounts', () => {
 
   describe('real-time updates via WebSocket', () => {
     it('should increment count when a message arrives from an agent', async () => {
-      (api.messages.getUnread as ReturnType<typeof vi.fn>).mockResolvedValue({
+      vi.mocked(api.messages.getUnread).mockResolvedValue({
         counts: [{ agentId: 'agent-1', count: 2 }],
       });
 
-      let subscriberCallback: ((msg: any) => void) | undefined;
-      mockSubscribe.mockImplementation((cb: any) => {
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
         subscriberCallback = cb;
         return vi.fn();
       });
@@ -135,12 +135,12 @@ describe('useUnreadCounts', () => {
     });
 
     it('should create new entry for previously unseen agent', async () => {
-      (api.messages.getUnread as ReturnType<typeof vi.fn>).mockResolvedValue({
+      vi.mocked(api.messages.getUnread).mockResolvedValue({
         counts: [],
       });
 
-      let subscriberCallback: ((msg: any) => void) | undefined;
-      mockSubscribe.mockImplementation((cb: any) => {
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
         subscriberCallback = cb;
         return vi.fn();
       });
@@ -168,12 +168,12 @@ describe('useUnreadCounts', () => {
     });
 
     it('should NOT increment count for messages from user', async () => {
-      (api.messages.getUnread as ReturnType<typeof vi.fn>).mockResolvedValue({
+      vi.mocked(api.messages.getUnread).mockResolvedValue({
         counts: [],
       });
 
-      let subscriberCallback: ((msg: any) => void) | undefined;
-      mockSubscribe.mockImplementation((cb: any) => {
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
         subscriberCallback = cb;
         return vi.fn();
       });
@@ -201,13 +201,13 @@ describe('useUnreadCounts', () => {
 
   describe('markRead', () => {
     it('should clear count for agent and call API', async () => {
-      (api.messages.getUnread as ReturnType<typeof vi.fn>).mockResolvedValue({
+      vi.mocked(api.messages.getUnread).mockResolvedValue({
         counts: [
           { agentId: 'agent-1', count: 5 },
           { agentId: 'agent-2', count: 2 },
         ],
       });
-      (api.messages.markAllRead as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+      vi.mocked(api.messages.markAllRead).mockResolvedValue(undefined);
 
       const { result } = renderHook(() => useUnreadCounts());
 
@@ -228,10 +228,10 @@ describe('useUnreadCounts', () => {
     });
 
     it('should not modify counts for unknown agent', async () => {
-      (api.messages.getUnread as ReturnType<typeof vi.fn>).mockResolvedValue({
+      vi.mocked(api.messages.getUnread).mockResolvedValue({
         counts: [{ agentId: 'agent-1', count: 3 }],
       });
-      (api.messages.markAllRead as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+      vi.mocked(api.messages.markAllRead).mockResolvedValue(undefined);
 
       const { result } = renderHook(() => useUnreadCounts());
 
@@ -250,7 +250,7 @@ describe('useUnreadCounts', () => {
 
   describe('incrementCount', () => {
     it('should manually increment count for an agent', async () => {
-      (api.messages.getUnread as ReturnType<typeof vi.fn>).mockResolvedValue({
+      vi.mocked(api.messages.getUnread).mockResolvedValue({
         counts: [{ agentId: 'agent-1', count: 1 }],
       });
 

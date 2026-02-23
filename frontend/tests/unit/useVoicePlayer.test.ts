@@ -4,7 +4,7 @@
 // ============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
 
 // Mock the API
 vi.mock("../../src/services/api", () => ({
@@ -99,7 +99,7 @@ describe("useVoicePlayer", () => {
       const { result } = renderHook(() => useVoicePlayer());
 
       act(() => {
-        result.current.play("Test", "agent");
+        void result.current.play("Test", "agent");
       });
 
       expect(result.current.isLoading).toBe(true);
@@ -129,10 +129,10 @@ describe("useVoicePlayer", () => {
       // Simulate audio playing
       mockAudio.paused = false;
       const playHandler = mockAudio.addEventListener.mock.calls.find(
-        (call) => call[0] === "play"
+        (call: unknown[]) => call[0] === "play"
       );
       if (playHandler) {
-        act(() => playHandler[1]());
+        act(() => { (playHandler[1] as () => void)(); });
       }
 
       expect(result.current.isPlaying).toBe(true);
@@ -206,10 +206,10 @@ describe("useVoicePlayer", () => {
 
       // Simulate pause event
       const pauseHandler = mockAudio.addEventListener.mock.calls.find(
-        (call) => call[0] === "pause"
+        (call: unknown[]) => call[0] === "pause"
       );
       if (pauseHandler) {
-        act(() => pauseHandler[1]());
+        act(() => { (pauseHandler[1] as () => void)(); });
       }
 
       expect(result.current.state).toBe("paused");
@@ -255,10 +255,10 @@ describe("useVoicePlayer", () => {
       // Simulate timeupdate event
       mockAudio.currentTime = 5;
       const timeUpdateHandler = mockAudio.addEventListener.mock.calls.find(
-        (call) => call[0] === "timeupdate"
+        (call: unknown[]) => call[0] === "timeupdate"
       );
       if (timeUpdateHandler) {
-        act(() => timeUpdateHandler[1]());
+        act(() => { (timeUpdateHandler[1] as () => void)(); });
       }
 
       expect(result.current.progress).toBe(50); // 5/10 * 100
@@ -295,10 +295,10 @@ describe("useVoicePlayer", () => {
 
       // Simulate ended event
       const endedHandler = mockAudio.addEventListener.mock.calls.find(
-        (call) => call[0] === "ended"
+        (call: unknown[]) => call[0] === "ended"
       );
       if (endedHandler) {
-        act(() => endedHandler[1]());
+        act(() => { (endedHandler[1] as () => void)(); });
       }
 
       expect(result.current.state).toBe("idle");
