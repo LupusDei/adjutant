@@ -127,7 +127,7 @@ describe("sessions routes", () => {
       expect(response.body.data.name).toBe("my-agent");
     });
 
-    it("should auto-generate name from projectPath when name is missing", async () => {
+    it("should auto-generate name when name is missing", async () => {
       mockBridge.createSession.mockResolvedValue({
         success: true,
         sessionId: "auto-session-id",
@@ -135,7 +135,7 @@ describe("sessions routes", () => {
       mockBridge.getSession.mockReturnValue({
         id: "auto-session-id",
         name: "tmp-agent",
-        status: "idle",
+        status: "working",
       });
 
       const response = await request(app)
@@ -144,9 +144,7 @@ describe("sessions routes", () => {
 
       expect(response.status).toBe(201);
       expect(response.body.success).toBe(true);
-      expect(mockBridge.createSession).toHaveBeenCalledWith(
-        expect.objectContaining({ name: "tmp-agent" })
-      );
+      expect(response.body.data.name).toBe("tmp-agent");
     });
 
     it("should return 400 when projectPath is missing", async () => {

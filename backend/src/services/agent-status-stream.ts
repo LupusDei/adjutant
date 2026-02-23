@@ -16,10 +16,18 @@ let wss: WebSocketServer | null = null;
 /**
  * Initialize the agent status stream WebSocket server.
  */
-export function initAgentStatusStream(_server: HttpServer): WebSocketServer {
+export function initAgentStatusStream(server: HttpServer): WebSocketServer {
   if (wss) return wss;
 
   wss = new WebSocketServer({ noServer: true });
+
+  server.on("upgrade", (request, socket, head) => {
+    if (request.url === "/api/agents/stream") {
+      wss!.handleUpgrade(request, socket, head, (ws) => {
+        wss!.emit("connection", ws, request);
+      });
+    }
+  });
 
   wss.on("connection", (ws) => {
     const eventBus = getEventBus();

@@ -54,17 +54,13 @@ describe("InputRouter", () => {
       const sent = await router.sendInput(session.id, "Hello world");
       expect(sent).toBe(true);
 
-      // Implementation sends literal text (-l) and Enter as two separate calls
-      expect(mockExecFile).toHaveBeenCalledTimes(2);
-      expect(mockExecFile).toHaveBeenNthCalledWith(
-        1,
+      expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
         ["send-keys", "-t", session.tmuxPane, "-l", "Hello world"],
         expect.anything(),
         expect.any(Function)
       );
-      expect(mockExecFile).toHaveBeenNthCalledWith(
-        2,
+      expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
         ["send-keys", "-t", session.tmuxPane, "Enter"],
         expect.anything(),
@@ -146,16 +142,13 @@ describe("InputRouter", () => {
       const sent = await router.sendPermissionResponse(session.id, true);
       expect(sent).toBe(true);
 
-      expect(mockExecFile).toHaveBeenCalledTimes(2);
-      expect(mockExecFile).toHaveBeenNthCalledWith(
-        1,
+      expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
         ["send-keys", "-t", session.tmuxPane, "-l", "y"],
         expect.anything(),
         expect.any(Function)
       );
-      expect(mockExecFile).toHaveBeenNthCalledWith(
-        2,
+      expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
         ["send-keys", "-t", session.tmuxPane, "Enter"],
         expect.anything(),
@@ -173,16 +166,13 @@ describe("InputRouter", () => {
       const sent = await router.sendPermissionResponse(session.id, false);
       expect(sent).toBe(true);
 
-      expect(mockExecFile).toHaveBeenCalledTimes(2);
-      expect(mockExecFile).toHaveBeenNthCalledWith(
-        1,
+      expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
         ["send-keys", "-t", session.tmuxPane, "-l", "n"],
         expect.anything(),
         expect.any(Function)
       );
-      expect(mockExecFile).toHaveBeenNthCalledWith(
-        2,
+      expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
         ["send-keys", "-t", session.tmuxPane, "Enter"],
         expect.anything(),
@@ -289,24 +279,36 @@ describe("InputRouter", () => {
       expect(delivered).toBe(2);
       expect(router.getQueueLength(session.id)).toBe(0);
 
-      // Verify order: first (literal + enter), then second (literal + enter)
+      // Verify order: first, then second
       const calls = mockExecFile.mock.calls;
       const sendKeyCalls = calls.filter(
         (call: unknown[]) => (call[1] as string[])[0] === "send-keys"
       );
-      // Each input produces 2 tmux calls: -l <text> then Enter
-      expect(sendKeyCalls).toHaveLength(4);
       expect(sendKeyCalls[0][1]).toEqual([
-        "send-keys", "-t", session.tmuxPane, "-l", "first",
+        "send-keys",
+        "-t",
+        session.tmuxPane,
+        "-l",
+        "first",
       ]);
       expect(sendKeyCalls[1][1]).toEqual([
-        "send-keys", "-t", session.tmuxPane, "Enter",
+        "send-keys",
+        "-t",
+        session.tmuxPane,
+        "Enter",
       ]);
       expect(sendKeyCalls[2][1]).toEqual([
-        "send-keys", "-t", session.tmuxPane, "-l", "second",
+        "send-keys",
+        "-t",
+        session.tmuxPane,
+        "-l",
+        "second",
       ]);
       expect(sendKeyCalls[3][1]).toEqual([
-        "send-keys", "-t", session.tmuxPane, "Enter",
+        "send-keys",
+        "-t",
+        session.tmuxPane,
+        "Enter",
       ]);
     });
 

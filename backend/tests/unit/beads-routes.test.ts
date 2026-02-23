@@ -220,7 +220,7 @@ describe("beads routes", () => {
       );
     });
 
-    it("should return 500 on listAllBeads error (rig=all)", async () => {
+    it("should return 200 with empty array on listAllBeads error (rig=all)", async () => {
       vi.mocked(listAllBeads).mockResolvedValue({
         success: false,
         error: { code: "BD_ERROR", message: "Database not found" },
@@ -228,12 +228,12 @@ describe("beads routes", () => {
 
       const response = await request(app).get("/api/beads?rig=all");
 
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.error.message).toBe("Database not found");
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toEqual([]);
     });
 
-    it("should return 500 on listBeads error when rig specified", async () => {
+    it("should return 200 with empty array on listBeads error when rig specified", async () => {
       vi.mocked(listBeads).mockResolvedValue({
         success: false,
         error: { code: "BD_ERROR", message: "Rig database not found" },
@@ -241,12 +241,12 @@ describe("beads routes", () => {
 
       const response = await request(app).get("/api/beads?rig=gastown_boy");
 
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.error.message).toBe("Rig database not found");
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toEqual([]);
     });
 
-    it("should return 500 on listBeads error (default town)", async () => {
+    it("should return 200 with empty array on listBeads error (default town)", async () => {
       vi.mocked(listBeads).mockResolvedValue({
         success: false,
         error: undefined,
@@ -254,9 +254,9 @@ describe("beads routes", () => {
 
       const response = await request(app).get("/api/beads");
 
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.error.message).toBe("Failed to list beads");
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toEqual([]);
     });
   });
 

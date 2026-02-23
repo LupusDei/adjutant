@@ -657,7 +657,7 @@
 				CODE_SIGN_ENTITLEMENTS = Adjutant/Adjutant.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_ASSET_PATHS = "\"Adjutant/Preview Content\"";
 				DEVELOPMENT_TEAM = 2BRYAM5Q52;
 				ENABLE_PREVIEWS = YES;
@@ -687,7 +687,7 @@
 				CODE_SIGN_ENTITLEMENTS = Adjutant/Adjutant.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_ASSET_PATHS = "\"Adjutant/Preview Content\"";
 				DEVELOPMENT_TEAM = 2BRYAM5Q52;
 				ENABLE_PREVIEWS = YES;
@@ -715,7 +715,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 31;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
@@ -733,7 +733,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 31;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
@@ -750,7 +750,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 31;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gastown.AdjutantUITests;
@@ -766,7 +766,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 31;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gastown.AdjutantUITests;
@@ -786,7 +786,7 @@
 				CODE_SIGN_ENTITLEMENTS = AdjutantWidgets/AdjutantWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = 2BRYAM5Q52;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AdjutantWidgets/Info.plist;
@@ -816,7 +816,7 @@
 				CODE_SIGN_ENTITLEMENTS = AdjutantWidgets/AdjutantWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = 2BRYAM5Q52;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AdjutantWidgets/Info.plist;

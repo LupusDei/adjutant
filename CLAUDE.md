@@ -15,3 +15,10 @@ Full context is injected by `gt prime` at session start.
 
 The UI runs from `~/gt` and displays the complete state of Gas Town.
 See `.claude/rules/00-critical-scope.md` for details.
+
+## Active Technologies
+- TypeScript 5.x (strict mode) + React 18+, Express, Tailwind CSS, Zod (013-agent-task-assignment)
+- SQLite (message store), bd CLI (beads) (013-agent-task-assignment)
+
+## Recent Changes
+- 013-agent-task-assignment: Added TypeScript 5.x (strict mode) + React 18+, Express, Tailwind CSS, Zod
