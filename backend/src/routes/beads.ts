@@ -48,6 +48,7 @@ beadsRouter.get("/", async (req, res) => {
   const statusParam = req.query["status"] as string | undefined;
   const typeParam = req.query["type"] as string | undefined;
   const limitStr = req.query["limit"] as string | undefined;
+  const assigneeParam = req.query["assignee"] as string | undefined;
   const excludeTown = req.query["excludeTown"] === "true";
   // Higher default to show low-priority bugs (P3) which sort to the end
   const limit = limitStr ? parseInt(limitStr, 10) : 500;
@@ -63,6 +64,7 @@ beadsRouter.get("/", async (req, res) => {
     const excludePrefixes = excludeTown ? ["hq-"] : [];
     const result = await listAllBeads({
       ...(typeParam && { type: typeParam }),
+      ...(assigneeParam && { assignee: assigneeParam }),
       status,
       limit,
       excludePrefixes,
@@ -99,6 +101,7 @@ beadsRouter.get("/", async (req, res) => {
     // Don't pass rig for filtering - we want all beads from the database
     ...(rigPath && { rigPath }),
     ...(typeParam && { type: typeParam }),
+    ...(assigneeParam && { assignee: assigneeParam }),
     status,
     limit,
   });

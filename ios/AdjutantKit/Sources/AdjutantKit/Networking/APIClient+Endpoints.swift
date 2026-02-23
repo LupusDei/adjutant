@@ -377,6 +377,7 @@ extension APIClient {
         status: BeadStatusFilter? = nil,
         type: String? = nil,
         limit: Int? = nil,
+        assignee: String? = nil,
         excludeTown: Bool = false
     ) async throws -> [BeadInfo] {
         var queryItems: [URLQueryItem] = []
@@ -392,6 +393,9 @@ extension APIClient {
         }
         if let limit {
             queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
+        }
+        if let assignee {
+            queryItems.append(URLQueryItem(name: "assignee", value: assignee))
         }
         if excludeTown {
             queryItems.append(URLQueryItem(name: "excludeTown", value: "true"))

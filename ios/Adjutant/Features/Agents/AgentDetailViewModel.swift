@@ -168,16 +168,20 @@ final class AgentDetailViewModel: BaseViewModel {
         await loadTerminal()
     }
 
-    /// Loads beads assigned to this agent
+    /// Loads beads assigned to this agent (all statuses, server-side filtered)
     func loadBeads() async {
         isLoadingBeads = true
 
         do {
-            let allActive = try await apiClient.getBeads(rig: "all", status: .default)
-            let allClosed = try await apiClient.getBeads(rig: "all", status: .closed, limit: 50)
+            let allBeads = try await apiClient.getBeads(
+                rig: "all",
+                status: .all,
+                assignee: member.name
+            )
 
-            activeBeads = allActive.filter { assigneeMatches($0.assignee) }
-            completedBeads = allClosed.filter { assigneeMatches($0.assignee) }
+            let closedStatuses: Set<String> = ["closed"]
+            activeBeads = allBeads.filter { !closedStatuses.contains($0.status) }
+            completedBeads = allBeads.filter { closedStatuses.contains($0.status) }
             isLoadingBeads = false
         } catch {
             isLoadingBeads = false

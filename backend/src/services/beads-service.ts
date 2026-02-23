@@ -61,6 +61,8 @@ export interface ListBeadsOptions {
   status?: string;
   type?: string;
   limit?: number;
+  /** Filter beads by assignee (exact match on assignee field) */
+  assignee?: string;
   /** Prefixes to exclude (e.g., ["hq-"] to hide town-level system beads) */
   excludePrefixes?: string[];
 }
@@ -433,6 +435,19 @@ export async function listBeads(
       beads = beads.filter((b) => b.rig === options.rig);
     }
 
+    // Filter by assignee if specified
+    if (options.assignee) {
+      const target = options.assignee.toLowerCase();
+      beads = beads.filter((b) => {
+        if (!b.assignee) return false;
+        const a = b.assignee.toLowerCase();
+        if (a === target) return true;
+        // Match last path component: "rig/polecats/toast" matches "toast"
+        const lastComponent = a.split("/").pop();
+        return lastComponent === target;
+      });
+    }
+
     // Sort by priority (lower = higher priority), then by updated date
     beads.sort((a, b) => {
       if (a.priority !== b.priority) {
@@ -541,6 +556,18 @@ export async function listAllBeads(
     if (options.excludePrefixes && options.excludePrefixes.length > 0) {
       const prefixes = options.excludePrefixes;
       allBeads = allBeads.filter((b) => !prefixes.some((p) => b.id.startsWith(p)));
+    }
+
+    // Filter by assignee if specified
+    if (options.assignee) {
+      const target = options.assignee.toLowerCase();
+      allBeads = allBeads.filter((b) => {
+        if (!b.assignee) return false;
+        const a = b.assignee.toLowerCase();
+        if (a === target) return true;
+        const lastComponent = a.split("/").pop();
+        return lastComponent === target;
+      });
     }
 
     // Sort by priority, then by updated date
