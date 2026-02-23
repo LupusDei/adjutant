@@ -18,6 +18,7 @@ import { registerMessagingTools } from "./services/mcp-tools/messaging.js";
 import { registerStatusTools } from "./services/mcp-tools/status.js";
 import { registerBeadTools } from "./services/mcp-tools/beads.js";
 import { registerQueryTools } from "./services/mcp-tools/queries.js";
+import { initMessageDelivery } from "./services/message-delivery.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
@@ -111,6 +112,9 @@ const server = app.listen(PORT, () => {
     registerBeadTools(server);
     registerQueryTools(server, messageStore);
   });
+
+  // Initialize message delivery (flushes pending messages when agents connect)
+  initMessageDelivery(messageStore);
 
   // Initialize Session Bridge v2 (tmux session management)
   // init() loads persisted sessions, verifies tmux state, and auto-creates

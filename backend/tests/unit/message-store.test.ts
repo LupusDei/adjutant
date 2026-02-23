@@ -437,6 +437,77 @@ describe("message-store", () => {
     });
   });
 
+  describe("getPendingForRecipient", () => {
+    it("should return only pending messages for the given recipient", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      store.insertMessage({ agentId: "user", recipient: "agent-A", role: "user", body: "msg 1" });
+      store.insertMessage({ agentId: "user", recipient: "agent-A", role: "user", body: "msg 2" });
+      store.insertMessage({ agentId: "user", recipient: "agent-B", role: "user", body: "other" });
+
+      const pending = store.getPendingForRecipient("agent-A");
+      expect(pending).toHaveLength(2);
+      expect(pending[0]!.body).toBe("msg 1");
+      expect(pending[1]!.body).toBe("msg 2");
+    });
+
+    it("should not return delivered or read messages", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      const msg1 = store.insertMessage({ agentId: "user", recipient: "agent-A", role: "user", body: "pending" });
+      const msg2 = store.insertMessage({ agentId: "user", recipient: "agent-A", role: "user", body: "delivered" });
+      store.insertMessage({ agentId: "user", recipient: "agent-A", role: "user", body: "read" });
+
+      store.markDelivered(msg2.id);
+      store.markRead(msg1.id);
+
+      const pending = store.getPendingForRecipient("agent-A");
+      expect(pending).toHaveLength(1);
+      expect(pending[0]!.body).toBe("read"); // third message, still pending
+    });
+  });
+
+  describe("markDelivered", () => {
+    it("should transition pending to delivered", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      const msg = store.insertMessage({
+        id: "deliver-test",
+        agentId: "user",
+        recipient: "agent-A",
+        role: "user",
+        body: "Hello",
+      });
+      expect(msg.deliveryStatus).toBe("pending");
+
+      store.markDelivered("deliver-test");
+
+      const updated = store.getMessage("deliver-test");
+      expect(updated?.deliveryStatus).toBe("delivered");
+    });
+
+    it("should not change status if already read", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      store.insertMessage({
+        id: "already-read",
+        agentId: "user",
+        recipient: "agent-A",
+        role: "user",
+        body: "Hello",
+      });
+      store.markRead("already-read");
+      store.markDelivered("already-read");
+
+      const updated = store.getMessage("already-read");
+      expect(updated?.deliveryStatus).toBe("read");
+    });
+  });
+
   describe("searchMessages", () => {
     it("should return FTS5 results matching query", async () => {
       const { createMessageStore } = await import("../../src/services/message-store.js");
