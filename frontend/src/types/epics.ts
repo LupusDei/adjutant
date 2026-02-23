@@ -4,9 +4,7 @@ import { BeadInfo } from './index';
  * An epic bead - a container for related subtasks.
  * Epics have type: 'epic' and contain child beads via hierarchical IDs.
  */
-export interface Epic extends BeadInfo {
-  // type: 'epic' - inherited from BeadInfo
-}
+export type Epic = BeadInfo;
 
 /**
  * An epic with calculated progress information.
@@ -32,7 +30,4 @@ export interface EpicWithProgress {
  * Subtasks are linked to their parent epic via hierarchical IDs (parent.X)
  * or via labels containing parent:{epicId}.
  */
-export interface EpicSubtask extends BeadInfo {
-  // Subtasks linked via hierarchical ID pattern (epicId.1, epicId.2, etc.)
-  // or via labels containing parent:{epicId}
-}
+export type EpicSubtask = BeadInfo;

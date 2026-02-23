@@ -139,7 +139,7 @@ export function useOverseerNotifications(): UseOverseerNotificationsReturn {
 
       try {
         // Create notification text - read full message body, not just subject
-        const messageBody = msg.body?.trim() || msg.subject;
+        const messageBody = msg.body.trim() || msg.subject;
         const notificationText = `Message from ${msg.from}. ${messageBody}`;
         setLastNotification(`From ${msg.from}: ${msg.subject}`);
 

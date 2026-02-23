@@ -56,7 +56,7 @@ function useIsSmallScreen(breakpoint = 768) {
 function AppContent() {
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
   const [theme, setTheme] = useState<ThemeId>(
-    (localStorage.getItem('gt-theme') as ThemeId) || 'green'
+    (localStorage.getItem('gt-theme') as ThemeId | null) ?? 'green'
   );
   const isSmallScreen = useIsSmallScreen();
   const visibleTabs = useVisibleTabs();

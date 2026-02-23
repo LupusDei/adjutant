@@ -170,7 +170,7 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
       try {
         es = new EventSource('/api/events');
       } catch {
-        if (mounted) setConnectionStatus('polling');
+        setConnectionStatus('polling');
         return;
       }
 
@@ -186,7 +186,7 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
       // Subscribers that need the full message body can fetch it themselves.
       es.addEventListener('mail_received', (event: MessageEvent) => {
         try {
-          const data = JSON.parse(event.data) as {
+          const data = JSON.parse(event.data as string) as {
             id: string; from: string; to: string; subject: string; preview: string;
           };
           notify({
@@ -224,7 +224,7 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
         ws = new WebSocket(wsUrl);
       } catch {
         // WebSocket unavailable (e.g. test environment) — fall back to SSE
-        if (mounted) startSSE();
+        startSSE();
         return;
       }
 
@@ -359,6 +359,7 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
 /**
  * Hook to access communication context.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useCommunication(): CommunicationContextValue {
   const context = useContext(CommunicationContext);
   if (!context) {

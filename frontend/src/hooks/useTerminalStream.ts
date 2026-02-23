@@ -11,8 +11,11 @@ import { api } from '../services/api';
 /** Strip ANSI escape codes for clean text display. */
 function stripAnsi(str: string): string {
   return str
+    // eslint-disable-next-line no-control-regex
     .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
+    // eslint-disable-next-line no-control-regex
     .replace(/\x1b\][^\x07]*\x07/g, '')
+    // eslint-disable-next-line no-control-regex
     .replace(/\x1b[^[\]].?/g, '')
     .replace(/\r/g, '');
 }
@@ -95,8 +98,8 @@ export function useTerminalStream({ sessionId, enabled }: UseTerminalStreamOptio
       }
     };
 
-    fetchContent();
-    pollTimerRef.current = setInterval(fetchContent, POLL_INTERVAL_MS);
+    void fetchContent();
+    pollTimerRef.current = setInterval(() => { void fetchContent(); }, POLL_INTERVAL_MS);
   }, [sessionId]);
 
   const stopPolling = useCallback(() => {
@@ -141,7 +144,7 @@ export function useTerminalStream({ sessionId, enabled }: UseTerminalStreamOptio
             }
             case 'output': {
               const events = msg['events'] as { type: string; content?: string; tool?: string; output?: string; message?: string; data?: string }[];
-              if (events && events.length > 0) {
+              if (events.length > 0) {
                 const newText = eventsToText(events);
                 if (newText) {
                   setContent(prev => prev ? `${prev}\n${newText}` : newText);

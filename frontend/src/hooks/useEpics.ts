@@ -59,7 +59,7 @@ function findSubtasks(epicId: string, allBeads: BeadInfo[]): BeadInfo[] {
     }
 
     // Fallback: Check labels for parent:{epicId} pattern
-    if (bead.labels?.some((label) => label === `parent:${epicId}` || label.includes(epicId))) {
+    if (bead.labels.some((label) => label === `parent:${epicId}` || label.includes(epicId))) {
       return true;
     }
 

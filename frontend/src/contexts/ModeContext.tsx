@@ -138,7 +138,7 @@ export function ModeProvider({ children }: { children: ReactNode }) {
 
       eventSource.addEventListener('mode_changed', (event) => {
         try {
-          const data = JSON.parse(event.data) as { mode: DeploymentMode; features: string[]; action: string };
+          const data = JSON.parse(event.data as string) as { mode: DeploymentMode; features: string[]; action: string };
           applyModeInfo({ mode: data.mode, features: data.features });
         } catch {
           // Ignore parse errors
@@ -211,6 +211,7 @@ export function ModeProvider({ children }: { children: ReactNode }) {
  * Hook to access the deployment mode context.
  * Must be used within a ModeProvider.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useMode(): ModeContextValue {
   const context = useContext(ModeContext);
   if (!context) {
@@ -226,6 +227,7 @@ export function useMode(): ModeContextValue {
  * - GT Mode: all 7 tabs
  * - Swarm: chat, crew, epics, beads, settings
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useVisibleTabs(): Set<string> {
   const { mode } = useMode();
 

@@ -108,6 +108,7 @@ export function useCrewNotifications(
     try {
       const response = await api.mail.list({ all: true });
 
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
       if (!mountedRef.current) return;
 
       // Filter for crew messages
@@ -136,6 +137,7 @@ export function useCrewNotifications(
       setError(null);
       setLoading(false);
     } catch (err) {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
       if (mountedRef.current) {
         setError(err instanceof Error ? err : new Error(String(err)));
         setLoading(false);

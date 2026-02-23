@@ -86,7 +86,7 @@ export function useVoicePlayer(): UseVoicePlayerReturn {
       });
 
       if (!response.success || !response.data) {
-        const errorMessage = (response as { error?: { message: string } }).error?.message || 'Synthesis failed';
+        const errorMessage = (response as { error?: { message: string } }).error?.message ?? 'Synthesis failed';
         setState('error');
         setError(errorMessage);
         return;
@@ -131,7 +131,7 @@ export function useVoicePlayer(): UseVoicePlayerReturn {
       };
 
       const handleLoadedMetadata = () => {
-        if (audioRef.current && audioRef.current.duration) {
+        if (audioRef.current?.duration) {
           setDuration(audioRef.current.duration);
         }
       };
@@ -171,7 +171,7 @@ export function useVoicePlayer(): UseVoicePlayerReturn {
 
   // Resume playback
   const resume = useCallback(() => {
-    if (audioRef.current && audioRef.current.paused) {
+    if (audioRef.current?.paused) {
       audioRef.current.play().catch(() => {
         setState('error');
         setError('Failed to resume playback');
@@ -191,7 +191,7 @@ export function useVoicePlayer(): UseVoicePlayerReturn {
 
   // Seek to position
   const seek = useCallback((position: number) => {
-    if (audioRef.current && audioRef.current.duration) {
+    if (audioRef.current?.duration) {
       const newTime = (position / 100) * audioRef.current.duration;
       audioRef.current.currentTime = newTime;
       setCurrentTime(newTime);

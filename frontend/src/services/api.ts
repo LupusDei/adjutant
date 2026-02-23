@@ -380,7 +380,7 @@ export const api = {
     async getSubtasks(epicId: string): Promise<BeadInfo[]> {
       const all = await apiFetch<BeadInfo[]>('/beads?status=all');
       return all.filter(
-        (b) => b.labels?.some((l) => l.includes(epicId) || l.includes(`parent:${epicId}`))
+        (b) => b.labels.some((l) => l.includes(epicId) || l.includes(`parent:${epicId}`))
       );
     },
   },

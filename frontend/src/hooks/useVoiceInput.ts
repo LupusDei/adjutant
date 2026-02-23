@@ -136,7 +136,7 @@ export function useVoiceInput(): UseVoiceInputReturn {
             setState('idle');
           } else {
             const errorMessage =
-              (response as { error?: { message: string } }).error?.message ||
+              (response as { error?: { message: string } }).error?.message ??
               'Transcription failed';
             setError(errorMessage);
             setState('error');

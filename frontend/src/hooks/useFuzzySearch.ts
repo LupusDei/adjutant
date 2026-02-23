@@ -117,18 +117,14 @@ export function useFuzzySearch<T>(
 
   // Debounce input changes
   useEffect(() => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
+    clearTimeout(timeoutRef.current);
 
     timeoutRef.current = setTimeout(() => {
       setDebouncedQuery(inputValue.trim());
     }, debounceMs);
 
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
+      clearTimeout(timeoutRef.current);
     };
   }, [inputValue, debounceMs]);
 
