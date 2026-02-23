@@ -15,7 +15,7 @@ on:
 jobs:
   deploy:
     name: Build and Deploy to TestFlight
-    runs-on: macos-14
+    runs-on: macos-15
     defaults:
       run:
         working-directory: ios
