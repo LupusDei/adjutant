@@ -22,7 +22,7 @@ struct EpicsListView: View {
 
                         ForEach(viewModel.openEpics) { epic in
                             EpicRowView(epic: epic) {
-                                coordinator.navigate(to: .epicDetail(id: epic.id))
+                                coordinator.navigateReplacingPath(to: .epicDetail(id: epic.id))
                             }
                         }
                     }
@@ -34,7 +34,7 @@ struct EpicsListView: View {
 
                         ForEach(viewModel.completeEpics) { epic in
                             EpicRowView(epic: epic) {
-                                coordinator.navigate(to: .epicDetail(id: epic.id))
+                                coordinator.navigateReplacingPath(to: .epicDetail(id: epic.id))
                             }
                         }
                     }

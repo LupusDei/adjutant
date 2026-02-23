@@ -238,7 +238,7 @@ struct MailListView: View {
                         }
                     }
                     .onTapGesture {
-                        coordinator.navigate(to: .mailDetail(id: message.id))
+                        coordinator.navigateReplacingPath(to: .mailDetail(id: message.id))
                     }
             }
             .onDelete { offsets in

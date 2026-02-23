@@ -145,14 +145,14 @@ final class AppCoordinator: Coordinator, ObservableObject {
     /// - Parameter mailId: The ID of the mail to navigate to
     private func handleMailNotificationTap(mailId: String) {
         selectTab(.mail)
-        navigate(to: .mailDetail(id: mailId))
+        navigateReplacingPath(to: .mailDetail(id: mailId))
     }
 
     /// Handles navigation when a task notification is tapped
     /// - Parameter taskId: The ID of the task/bead to navigate to
     private func handleTaskNotificationTap(taskId: String) {
         selectTab(.beads)
-        navigate(to: .beadDetail(id: taskId))
+        navigateReplacingPath(to: .beadDetail(id: taskId))
     }
 
     /// The agent ID currently being viewed in chat (nil if not viewing a chat)
@@ -202,6 +202,15 @@ final class AppCoordinator: Coordinator, ObservableObject {
         case .themeSettings, .voiceSettings, .tunnelSettings:
             appendToCurrentPath(route)
         }
+    }
+
+    /// Replaces the current tab's navigation path with a single route.
+    /// Prevents stale path accumulation when dismiss() doesn't sync the
+    /// NavigationStack path binding (known iOS TabView + page style bug).
+    func navigateReplacingPath(to route: AppRoute) {
+        var newPath = NavigationPath()
+        newPath.append(route)
+        setPath(newPath, for: selectedTab)
     }
 
     /// Appends a route to the current tab's navigation path
@@ -264,7 +273,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
         case "mail":
             if let id = components.queryItems?.first(where: { $0.name == "id" })?.value {
                 selectTab(.mail)
-                navigate(to: .mailDetail(id: id))
+                navigateReplacingPath(to: .mailDetail(id: id))
             } else {
                 selectTab(.mail)
             }
@@ -280,7 +289,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
         case "beads":
             if let id = components.queryItems?.first(where: { $0.name == "id" })?.value {
                 selectTab(.beads)
-                navigate(to: .beadDetail(id: id))
+                navigateReplacingPath(to: .beadDetail(id: id))
             } else {
                 selectTab(.beads)
             }

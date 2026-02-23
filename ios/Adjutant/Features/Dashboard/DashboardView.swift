@@ -27,7 +27,7 @@ struct DashboardView: View {
                     recentClosedBeads: viewModel.recentClosedBeads,
                     onTap: { coordinator.navigate(to: .beads) },
                     onBeadTap: { bead in
-                        coordinator.navigate(to: .beadDetail(id: bead.id))
+                        coordinator.navigateReplacingPath(to: .beadDetail(id: bead.id))
                     }
                 )
                 .padding(.horizontal, CRTTheme.Spacing.md)
@@ -36,7 +36,7 @@ struct DashboardView: View {
                 ProjectsWidget(
                     rigs: viewModel.rigStatuses,
                     onTap: { rig in
-                        coordinator.navigate(to: .projectDetail(rig: rig))
+                        coordinator.navigateReplacingPath(to: .projectDetail(rig: rig))
                     }
                 )
                 .padding(.horizontal, CRTTheme.Spacing.md)
@@ -47,7 +47,7 @@ struct DashboardView: View {
                     unreadCount: viewModel.unreadCount,
                     onTap: { coordinator.navigate(to: .mail) },
                     onMessageTap: { message in
-                        coordinator.navigate(to: .mailDetail(id: message.id))
+                        coordinator.navigateReplacingPath(to: .mailDetail(id: message.id))
                     }
                 )
                 .padding(.horizontal, CRTTheme.Spacing.md)
@@ -58,7 +58,7 @@ struct DashboardView: View {
                     issueCount: viewModel.crewWithIssues,
                     onTap: { coordinator.navigate(to: .crew) },
                     onMemberTap: { member in
-                        coordinator.navigate(to: .agentDetail(member: member))
+                        coordinator.navigateReplacingPath(to: .agentDetail(member: member))
                     }
                 )
                 .padding(.horizontal, CRTTheme.Spacing.md)

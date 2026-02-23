@@ -64,7 +64,9 @@ struct EpicDetailView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                CRTBackButton()
+                CRTBackButton {
+                    coordinator.pop()
+                }
             }
             ToolbarItem(placement: .principal) {
                 CRTText("EPIC DETAIL", style: .subheader, glowIntensity: .subtle)

@@ -110,16 +110,16 @@ private struct TabContent: View {
             EpicsListView()
         case .crew:
             AgentListView(apiClient: AppState.shared.apiClient) { member in
-                coordinator.navigate(to: .agentDetail(member: member))
+                coordinator.navigateReplacingPath(to: .agentDetail(member: member))
             }
         case .projects:
             ProjectsListView(
                 apiClient: AppState.shared.apiClient,
                 onSelectRig: { rig in
-                    coordinator.navigate(to: .projectDetail(rig: rig))
+                    coordinator.navigateReplacingPath(to: .projectDetail(rig: rig))
                 },
                 onSelectProject: { project in
-                    coordinator.navigate(to: .swarmProjectDetail(project: project))
+                    coordinator.navigateReplacingPath(to: .swarmProjectDetail(project: project))
                 }
             )
         case .beads:

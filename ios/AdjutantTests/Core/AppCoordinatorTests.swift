@@ -109,6 +109,31 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertTrue(coordinator.path.isEmpty)
     }
 
+    // MARK: - Navigate Replacing Path Tests
+
+    func testNavigateReplacingPathClearsStaleEntries() {
+        // Simulate stale path accumulation (dismiss() not syncing)
+        coordinator.selectTab(.beads)
+        coordinator.navigate(to: .beadDetail(id: "bead-1"))
+        coordinator.navigate(to: .beadDetail(id: "bead-2"))
+
+        XCTAssertEqual(coordinator.path.count, 2)
+
+        // navigateReplacingPath should replace entire path with single entry
+        coordinator.navigateReplacingPath(to: .beadDetail(id: "bead-3"))
+
+        XCTAssertEqual(coordinator.path.count, 1)
+    }
+
+    func testNavigateReplacingPathFromEmptyPath() {
+        coordinator.selectTab(.beads)
+        XCTAssertTrue(coordinator.path.isEmpty)
+
+        coordinator.navigateReplacingPath(to: .beadDetail(id: "bead-1"))
+
+        XCTAssertEqual(coordinator.path.count, 1)
+    }
+
     // MARK: - Sheet Presentation Tests
 
     func testPresentSheet() {

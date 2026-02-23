@@ -54,7 +54,9 @@ struct BeadDetailView: View {
         #endif
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                CRTBackButton()
+                CRTBackButton {
+                    coordinator.pop()
+                }
             }
             ToolbarItem(placement: .principal) {
                 CRTText("BEAD DETAIL", style: .subheader, glowIntensity: .subtle)
