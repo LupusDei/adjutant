@@ -49,7 +49,7 @@ export function NuclearPowerButton({ comingSoon = true }: { comingSoon?: boolean
       setActionLoading(false);
       void refresh();
     }
-  }, [isTransitioning, actionLoading, powerState, isRunning, isStopped, refresh]);
+  }, [comingSoon, isTransitioning, actionLoading, powerState, isRunning, isStopped, refresh]);
 
   const statusClass = isRunning
     ? 'power-on'
@@ -73,7 +73,7 @@ export function NuclearPowerButton({ comingSoon = true }: { comingSoon?: boolean
       <button
         type="button"
         className="toggle-switch"
-        onClick={comingSoon ? () => {} : () => void handleToggle()}
+        onClick={comingSoon ? () => { /* noop */ } : () => void handleToggle()}
         disabled={comingSoon || isTransitioning || actionLoading || !powerState}
         aria-label={comingSoon ? "Power controls under maintenance" : `Power is ${statusLabel}. Click to ${isRunning ? 'shut down' : 'start'} Gastown.`}
         aria-pressed={isRunning}

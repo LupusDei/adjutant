@@ -4,7 +4,7 @@
  * Displays a list of available crew members for selection.
  */
 
-import { useState, useCallback, type CSSProperties, type FormEvent } from 'react';
+import React, { useState, useCallback, type CSSProperties } from 'react';
 import type { CrewMember, MessagePriority } from '../../types';
 import { useCrewMessaging, buildCrewAddress } from '../../hooks/useCrewMessaging';
 import { VoiceMicButton } from '../voice';
@@ -105,7 +105,7 @@ export function CrewMessageComposer({
   }, []);
 
   // Handle form submission
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!selectedMember || !subject.trim() || !body.trim()) {

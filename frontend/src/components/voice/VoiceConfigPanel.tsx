@@ -271,7 +271,7 @@ export const VoiceConfigPanel: React.FC<VoiceConfigPanelProps> = ({
                 placeholder="Agent ID..."
                 value={newAgentId}
                 onChange={(e) => { setNewAgentId(e.target.value); }}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddAgent()}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddAgent(); }}
               />
               <button
                 type="button"

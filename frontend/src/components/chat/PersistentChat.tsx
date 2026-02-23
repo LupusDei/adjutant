@@ -106,7 +106,7 @@ export const PersistentChat: React.FC<PersistentChatProps> = ({ agentId, isActiv
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting && hasMore && !loadingMore) {
+        if (entries[0].isIntersecting && !loadingMore) {
           setLoadingMore(true);
           void loadMore().finally(() => { setLoadingMore(false); });
         }
@@ -186,7 +186,7 @@ export const PersistentChat: React.FC<PersistentChatProps> = ({ agentId, isActiv
       </header>
 
       {/* Error banner */}
-      {(error || sendError) && (
+      {(error ?? sendError) && (
         <div className="chat-error" role="alert">
           {error?.message ?? sendError}
           <button
@@ -235,7 +235,7 @@ export const PersistentChat: React.FC<PersistentChatProps> = ({ agentId, isActiv
               >
                 <div className="chat-bubble-header">
                   <span className="chat-bubble-sender">
-                    {isUser ? 'YOU' : (msg.agentId ?? 'AGENT').toUpperCase()}
+                    {isUser ? 'YOU' : msg.agentId.toUpperCase()}
                   </span>
                 </div>
                 <div className="chat-bubble-content">

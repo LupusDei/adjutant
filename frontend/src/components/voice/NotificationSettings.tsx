@@ -3,7 +3,6 @@
  * Pip-Boy themed notification audio preferences panel
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import { api } from '../../services/api';
 import './voice.css';
 
 export interface NotificationSettingsProps {

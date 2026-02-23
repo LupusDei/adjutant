@@ -55,7 +55,7 @@ export const VoicePlayButton: React.FC<VoicePlayButtonProps> = ({
     } else if (state === 'paused') {
       resume();
     } else {
-      play(text, agentId);
+      void play(text, agentId);
     }
   }, [isLoading, isPlaying, state, pause, resume, play, text, agentId]);
 

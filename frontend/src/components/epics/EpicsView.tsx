@@ -11,7 +11,7 @@ export interface EpicsViewProps {
 }
 
 /** Rig options for filtering */
-type RigFilter = 'ALL' | string;
+type RigFilter = string;
 
 export function EpicsView({ isActive = true }: EpicsViewProps) {
   const { isGasTown } = useMode();
@@ -26,7 +26,7 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
   // Fetch bead sources on mount for filter options
   useEffect(() => {
     void api.beads.sources().then((result) => {
-      if (result.sources && result.sources.length > 0) {
+      if (result.sources.length > 0) {
         const names = result.sources.map((s) => s.name).sort();
         setRigOptions(names);
       }

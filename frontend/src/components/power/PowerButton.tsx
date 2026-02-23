@@ -189,7 +189,7 @@ export function PowerButton({ className = '', comingSoon = false }: PowerButtonP
               opacity: 0.4, // Dim the button when comingSoon
               cursor: 'not-allowed',
             }}
-            onClick={() => {}} // No-op when comingSoon
+            onClick={() => { /* noop */ }} // No-op when comingSoon
             disabled={true} // Always disabled when comingSoon
             aria-label="Power controls coming soon"
           >

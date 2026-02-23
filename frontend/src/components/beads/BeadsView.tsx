@@ -14,7 +14,7 @@ export interface BeadsViewProps {
 }
 
 /** Rig options for filtering */
-type RigFilter = 'ALL' | 'TOWN' | string;
+type RigFilter = string;
 
 /** Sort options matching iOS app */
 type BeadSort = 'lastUpdated' | 'priority' | 'createdDate' | 'alphabetical' | 'assignee';
@@ -47,7 +47,7 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
   });
   const [rigOptions, setRigOptions] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<BeadSort>(() => {
-    return (localStorage.getItem('beads-sort') as BeadSort) ?? 'priority';
+    return (localStorage.getItem('beads-sort') ?? 'priority') as BeadSort;
   });
   const [overseerView, setOverseerView] = useState(false);
   const [beads, setBeads] = useState<BeadInfo[]>([]);
@@ -56,7 +56,7 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
   // Fetch bead sources on mount for filter options
   useEffect(() => {
     void api.beads.sources().then((result) => {
-      if (result.sources && result.sources.length > 0) {
+      if (result.sources.length > 0) {
         const names = result.sources.map((s) => s.name).sort();
         setRigOptions(names);
       }
@@ -152,8 +152,8 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
     result = [...result].sort((a, b) => {
       switch (sortBy) {
         case 'lastUpdated': {
-          const dateA = new Date(a.updatedAt ?? a.createdAt ?? 0).getTime();
-          const dateB = new Date(b.updatedAt ?? b.createdAt ?? 0).getTime();
+          const dateA = new Date(a.updatedAt ?? a.createdAt).getTime();
+          const dateB = new Date(b.updatedAt ?? b.createdAt).getTime();
           return dateB - dateA; // Most recent first
         }
         case 'priority': {
@@ -161,13 +161,13 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
             return a.priority - b.priority; // Lower number = higher priority
           }
           // Tie-break by last updated
-          const dateA = new Date(a.updatedAt ?? a.createdAt ?? 0).getTime();
-          const dateB = new Date(b.updatedAt ?? b.createdAt ?? 0).getTime();
+          const dateA = new Date(a.updatedAt ?? a.createdAt).getTime();
+          const dateB = new Date(b.updatedAt ?? b.createdAt).getTime();
           return dateB - dateA;
         }
         case 'createdDate': {
-          const dateA = new Date(a.createdAt ?? 0).getTime();
-          const dateB = new Date(b.createdAt ?? 0).getTime();
+          const dateA = new Date(a.createdAt).getTime();
+          const dateB = new Date(b.createdAt).getTime();
           return dateB - dateA; // Newest first
         }
         case 'alphabetical':

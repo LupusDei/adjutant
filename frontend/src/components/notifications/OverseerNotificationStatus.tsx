@@ -44,7 +44,7 @@ export const OverseerNotificationStatus: React.FC<OverseerNotificationStatusProp
         <button
           type="button"
           className="notification-unlock-button"
-          onClick={handleUnlock}
+          onClick={() => { void handleUnlock(); }}
           title="Tap to enable audio on mobile"
           aria-label="Enable audio playback"
         >

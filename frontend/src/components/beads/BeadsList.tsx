@@ -152,7 +152,7 @@ function groupBeadsBySource(beads: BeadInfo[]): BeadGroup[] {
   const groupMap = new Map<string, BeadInfo[]>();
 
   for (const bead of beads) {
-    const source = bead.source ?? 'town';
+    const source = bead.source;
     const existing = groupMap.get(source);
     if (existing) {
       existing.push(bead);
@@ -253,11 +253,11 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
     if (overseerView) {
       filteredBeads = filteredBeads.filter((bead) => {
         const typeLower = bead.type.toLowerCase();
-        const sourceLower = (bead.source ?? '').toLowerCase();
+        const sourceLower = bead.source.toLowerCase();
         const titleLower = bead.title.toLowerCase();
         const idLower = bead.id.toLowerCase();
         const assigneeLower = (bead.assignee ?? '').toLowerCase();
-        const labelsLower = (bead.labels ?? []).map(l => l.toLowerCase());
+        const labelsLower = bead.labels.map(l => l.toLowerCase());
 
         // Exclude any bead with "wisp" anywhere in its data
         if (typeLower.includes('wisp')) return false;
@@ -350,7 +350,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
           priority: 1,
           type: 'notification',
         });
-      } else if (action === 'delete') {
+      } else {
         await api.mail.send({
           from: 'overseer',
           to: 'mayor/',
@@ -516,7 +516,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
                                   {canSling && (
                                     <button
                                       style={styles.dropdownItem}
-                                      onClick={() => handleAction(bead, 'sling')}
+                                      onClick={() => { void handleAction(bead, 'sling'); }}
                                     >
                                       SLING
                                     </button>
@@ -527,7 +527,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
                                         ...styles.dropdownItem,
                                         ...styles.dropdownItemDelete,
                                       }}
-                                      onClick={() => handleAction(bead, 'delete')}
+                                      onClick={() => { void handleAction(bead, 'delete'); }}
                                     >
                                       DELETE
                                     </button>

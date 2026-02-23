@@ -17,7 +17,7 @@ import { useVoicePlayer } from '../../hooks/useVoicePlayer';
 import { useMode } from '../../contexts/ModeContext';
 import { useCommunication } from '../../contexts/CommunicationContext';
 import { useChatWebSocket } from '../../hooks/useChatWebSocket';
-import type { WsChatMessage, WsDeliveryConfirmation, WsStreamToken, WsTypingIndicator, ChatWebSocketCallbacks } from '../../hooks/useChatWebSocket';
+import type { WsDeliveryConfirmation, WsStreamToken, WsTypingIndicator, ChatWebSocketCallbacks } from '../../hooks/useChatWebSocket';
 import './chat.css';
 
 export interface CommandChatProps {
@@ -151,10 +151,6 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
   const coordinatorName = agentId
     ? agentId.toUpperCase()
     : (isGasTown ? 'MAYOR' : 'SWARM');
-  const coordinatorAddress = agentId
-    ? agentId
-    : (isGasTown ? 'mayor/' : 'user');
-
   // Voice input hook for recording
   const voiceInput = useVoiceInput();
 
@@ -166,7 +162,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
 
   // WebSocket callbacks (stable refs via useMemo)
   const wsCallbacks: ChatWebSocketCallbacks = useMemo(() => ({
-    onMessage: (_msg: WsChatMessage) => {
+    onMessage: () => {
       // Messages from WebSocket are now handled by useChatMessages
       // via the CommunicationContext subscription. No-op here to avoid duplicates.
     },
@@ -231,6 +227,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
       voiceInput.clearTranscript();
       inputRef.current?.focus();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- voiceInput is a stable object ref
   }, [voiceInput.transcript, voiceInput.clearTranscript]);
 
   // Scroll to bottom when messages change
@@ -257,7 +254,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting && hasMore && !loadingMore) {
+        if (entries[0].isIntersecting && !loadingMore) {
           setLoadingMore(true);
           void loadMore().finally(() => { setLoadingMore(false); });
         }
@@ -455,7 +452,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
                 >
                   <div className="chat-bubble-header">
                     <span className="chat-bubble-sender">
-                      {isUser ? 'YOU' : (msg.agentId ?? coordinatorName).toUpperCase()}
+                      {isUser ? 'YOU' : msg.agentId.toUpperCase()}
                     </span>
                   </div>
                   <div className="chat-bubble-content">{msg.body}</div>
@@ -509,7 +506,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
               >
                 <div className="chat-bubble-header">
                   <span className="chat-bubble-sender">
-                    {isUser ? 'YOU' : (msg.agentId ?? coordinatorName).toUpperCase()}
+                    {isUser ? 'YOU' : msg.agentId.toUpperCase()}
                   </span>
                   <button
                     type="button"

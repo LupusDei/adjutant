@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, type CSSProperties } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { ThemeId } from '../../App';
 import { NotificationSettings, VoiceConfigPanel } from '../voice';
-import { getApiKey, setApiKey, clearApiKey, hasApiKey } from '../../services/api';
+import { setApiKey, clearApiKey, hasApiKey } from '../../services/api';
 import { useCommunication } from '../../contexts/CommunicationContext';
 import type { CommunicationPriority } from '../../types';
 import { useMode, type DeploymentMode } from '../../contexts/ModeContext';
@@ -167,7 +167,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
   // Fetch status when tab becomes active
   useEffect(() => {
     if (isActive) {
-      fetchTunnelStatus();
+      void fetchTunnelStatus();
     }
   }, [isActive, fetchTunnelStatus]);
 
@@ -200,7 +200,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
         } else if (state === 'starting') {
           setTunnelStatus('starting');
           // Poll for completion
-          setTimeout(() => fetchTunnelStatus(), 1000);
+          setTimeout(() => { void fetchTunnelStatus(); }, 1000);
         }
       } else {
         // Revert on error
@@ -229,7 +229,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
       input.value = urlToCopy;
       document.body.appendChild(input);
       input.select();
-      document.execCommand('copy');
+      document.execCommand('copy'); // eslint-disable-line @typescript-eslint/no-deprecated -- fallback for old browsers
       document.body.removeChild(input);
       setCopied(true);
       setTimeout(() => { setCopied(false); }, 2000);
@@ -283,7 +283,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                   ...(isToggleOn ? styles.toggleOn : styles.toggleOff),
                   ...((!canToggle) ? styles.toggleDisabled : {}),
                 }}
-                onClick={handleToggle}
+                onClick={() => { void handleToggle(); }}
                 disabled={!canToggle}
                 title={isOnNgrok ? 'Cannot toggle while accessed via tunnel' : undefined}
               >
@@ -316,7 +316,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                   <button
                     type="button"
                     style={styles.copyButtonInline}
-                    onClick={handleCopy}
+                    onClick={() => { void handleCopy(); }}
                     title={copied ? 'Copied!' : 'Copy URL'}
                   >
                     {copied ? (
@@ -401,11 +401,10 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                     cursor: isAvailable && !isActive && !modeSwitching ? 'pointer' : 'default',
                   }}
                   disabled={!isAvailable || isActive || modeSwitching}
-                  onClick={async () => {
+                  onClick={() => {
                     if (!isAvailable || isActive || modeSwitching) return;
                     setModeSwitching(true);
-                    await doSwitchMode(opt.mode);
-                    setModeSwitching(false);
+                    void doSwitchMode(opt.mode).finally(() => { setModeSwitching(false); });
                   }}
                 >
                   <div style={styles.modeCardHeader}>
@@ -454,7 +453,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                     onChange={(e) => { setApiKeyInput(e.target.value); }}
                     placeholder="Enter API key..."
                     style={styles.apiKeyInput}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSaveApiKey()}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveApiKey(); }}
                   />
                   <button
                     type="button"

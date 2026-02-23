@@ -32,12 +32,13 @@ function sortEpics(epics: EpicWithProgress[], sortBy: EpicSortOption): EpicWithP
         const bTime = b.epic.updatedAt ? new Date(b.epic.updatedAt).getTime() : 0;
         return bTime - aTime;
       }
-      case 'PROGRESS':
+      case 'PROGRESS': {
         if (a.progress !== b.progress) return a.progress - b.progress;
         // Secondary sort by activity
         const aTime = a.epic.updatedAt ? new Date(a.epic.updatedAt).getTime() : 0;
         const bTime = b.epic.updatedAt ? new Date(b.epic.updatedAt).getTime() : 0;
         return bTime - aTime;
+      }
       case 'ID':
         return a.epic.id.localeCompare(b.epic.id);
       default:

@@ -54,6 +54,7 @@ export function RigFilter({ className = '' }: RigFilterProps) {
 /**
  * Hook to sync available rigs from status data.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useRigSync(rigs: { name: string }[] | undefined) {
   const { setAvailableRigs } = useRigFilter();
 

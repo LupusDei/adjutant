@@ -66,7 +66,7 @@ export function KanbanBoard({ beads, onBeadsChange, onBeadClick }: KanbanBoardPr
             onDragEnd={handleDragEnd}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
+            onDrop={(e, columnId) => { void handleDrop(e, columnId); }}
             onBeadClick={onBeadClick}
           />
         ))}
