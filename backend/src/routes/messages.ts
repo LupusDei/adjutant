@@ -146,17 +146,14 @@ export function createMessagesRouter(store: MessageStore): Router {
       metadata: message.metadata ?? undefined,
     });
 
-    // Deliver to agent's tmux pane if they have an active session
+    // Deliver to agent's tmux pane — sendInput handles status-based routing
     try {
       const bridge = getSessionBridge();
       const sessions = bridge.registry.findByName(to);
       for (const session of sessions) {
-        if (session.status !== "offline") {
-          logInfo("Delivering message to agent tmux pane", { to, sessionId: session.id });
-          bridge.sendInput(session.id, body).then(() => {
-            store.markDelivered(message.id);
-          }).catch(() => {});
-        }
+        bridge.sendInput(session.id, body).then((sent) => {
+          if (sent) store.markDelivered(message.id);
+        }).catch(() => {});
       }
     } catch {
       // Session bridge not initialized — agent will pull via MCP

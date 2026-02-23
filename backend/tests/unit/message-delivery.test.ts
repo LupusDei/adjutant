@@ -114,7 +114,26 @@ describe("message-delivery", () => {
     expect(store.markDelivered).not.toHaveBeenCalled();
   });
 
-  it("should skip delivery when no active session found", async () => {
+  it("should skip delivery when no sessions found", async () => {
+    const { initMessageDelivery } = await import("../../src/services/message-delivery.js");
+    initMessageDelivery(store);
+
+    store.getPendingForRecipient.mockReturnValue([
+      { id: "msg-1", body: "Hello", deliveryStatus: "pending" },
+    ]);
+
+    mockBridge.registry.findByName.mockReturnValue([]);
+
+    const handler = handlers.get("mcp:agent_connected")!;
+    await handler({ agentId: "test-agent", sessionId: "mcp-session-1" });
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(mockBridge.sendInput).not.toHaveBeenCalled();
+    expect(store.markDelivered).not.toHaveBeenCalled();
+  });
+
+  it("should try next session when first fails", async () => {
     const { initMessageDelivery } = await import("../../src/services/message-delivery.js");
     initMessageDelivery(store);
 
@@ -124,15 +143,21 @@ describe("message-delivery", () => {
 
     mockBridge.registry.findByName.mockReturnValue([
       { id: "session-1", status: "offline" },
+      { id: "session-2", status: "idle" },
     ]);
+    mockBridge.sendInput
+      .mockResolvedValueOnce(false)   // session-1 fails (offline)
+      .mockResolvedValueOnce(true);   // session-2 succeeds
 
     const handler = handlers.get("mcp:agent_connected")!;
     await handler({ agentId: "test-agent", sessionId: "mcp-session-1" });
 
     await new Promise((r) => setTimeout(r, 50));
 
-    expect(mockBridge.sendInput).not.toHaveBeenCalled();
-    expect(store.markDelivered).not.toHaveBeenCalled();
+    expect(mockBridge.sendInput).toHaveBeenCalledTimes(2);
+    expect(mockBridge.sendInput).toHaveBeenCalledWith("session-1", "Hello");
+    expect(mockBridge.sendInput).toHaveBeenCalledWith("session-2", "Hello");
+    expect(store.markDelivered).toHaveBeenCalledWith("msg-1");
   });
 
   it("should do nothing when no pending messages exist", async () => {

@@ -41,14 +41,18 @@ async function deliverPendingMessages(store: MessageStore, agentId: string): Pro
   }
 
   const sessions = bridge.registry.findByName(agentId);
-  const activeSession = sessions.find((s) => s.status !== "offline");
-  if (!activeSession) return;
+  if (sessions.length === 0) return;
 
   for (const msg of pending) {
-    const sent = await bridge.sendInput(activeSession.id, msg.body);
-    if (sent) {
-      store.markDelivered(msg.id);
-      logInfo("Delivered pending message", { messageId: msg.id, agentId });
+    // Try each session until one succeeds — sendInput handles status-based
+    // routing (queues when working, delivers when idle, rejects when offline)
+    for (const session of sessions) {
+      const sent = await bridge.sendInput(session.id, msg.body);
+      if (sent) {
+        store.markDelivered(msg.id);
+        logInfo("Delivered pending message", { messageId: msg.id, agentId });
+        break;
+      }
     }
   }
 }
