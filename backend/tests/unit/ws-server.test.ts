@@ -133,7 +133,7 @@ function createMockStore(): MessageStore {
       role: input.role,
       body: input.body,
       metadata: input.metadata ?? null,
-      deliveryStatus: "pending",
+      deliveryStatus: "delivered",
       eventType: input.eventType ?? null,
       threadId: input.threadId ?? null,
       createdAt: "2026-02-21T10:00:00Z",
