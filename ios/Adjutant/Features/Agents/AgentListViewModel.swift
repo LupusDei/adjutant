@@ -2,10 +2,10 @@ import Foundation
 import Combine
 import AdjutantKit
 
-/// ViewModel for the Crew List feature.
+/// ViewModel for the Agent List feature.
 /// Handles loading agents, filtering by rig, and searching by name.
 @MainActor
-final class CrewListViewModel: BaseViewModel {
+final class AgentListViewModel: BaseViewModel {
     // MARK: - Published Properties
 
     /// All crew members from the API

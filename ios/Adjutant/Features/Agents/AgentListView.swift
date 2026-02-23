@@ -1,18 +1,19 @@
 import SwiftUI
 import AdjutantKit
 
-/// Main crew list view showing all agents organized hierarchically.
+/// Main agent list view showing all agents organized hierarchically.
 /// Features search, rig filtering, and navigation to detail views.
-struct CrewListView: View {
+struct AgentListView: View {
     @Environment(\.crtTheme) private var theme
-    @StateObject private var viewModel: CrewListViewModel
+    @StateObject private var viewModel: AgentListViewModel
     @State private var showingRigPicker = false
+    @State private var showingSpawnSheet = false
 
-    /// Callback when a crew member is selected
+    /// Callback when an agent is selected
     var onSelectMember: ((CrewMember) -> Void)?
 
     init(apiClient: APIClient, onSelectMember: ((CrewMember) -> Void)? = nil) {
-        _viewModel = StateObject(wrappedValue: CrewListViewModel(apiClient: apiClient))
+        _viewModel = StateObject(wrappedValue: AgentListViewModel(apiClient: apiClient))
         self.onSelectMember = onSelectMember
     }
 
@@ -37,6 +38,11 @@ struct CrewListView: View {
         .sheet(isPresented: $showingRigPicker) {
             rigPickerSheet
         }
+        .sheet(isPresented: $showingSpawnSheet) {
+            SpawnAgentSheet {
+                Task { await viewModel.refresh() }
+            }
+        }
     }
 
     // MARK: - Subviews
@@ -44,11 +50,21 @@ struct CrewListView: View {
     private var headerView: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                CRTText("CREW", style: .subheader, glowIntensity: .medium)
+                CRTText("AGENTS", style: .subheader, glowIntensity: .medium)
                 CRTText("\(viewModel.displayedCount) AGENTS", style: .caption, glowIntensity: .subtle, color: theme.dim)
             }
 
             Spacer()
+
+            // Spawn button
+            Button {
+                showingSpawnSheet = true
+            } label: {
+                Image(systemName: "plus.circle")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(theme.primary)
+            }
+            .accessibilityLabel("Spawn agent")
 
             // Refresh button
             Button {
@@ -169,14 +185,14 @@ struct CrewListView: View {
         } else if viewModel.groupedCrewMembers.isEmpty {
             emptyView
         } else {
-            crewList
+            agentList
         }
     }
 
     private var loadingView: some View {
         VStack(spacing: CRTTheme.Spacing.md) {
             LoadingIndicator(size: .large)
-            CRTText("LOADING CREW...", style: .caption, glowIntensity: .subtle, color: theme.dim)
+            CRTText("LOADING AGENTS...", style: .caption, glowIntensity: .subtle, color: theme.dim)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -220,13 +236,13 @@ struct CrewListView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var crewList: some View {
+    private var agentList: some View {
         ScrollView {
             LazyVStack(spacing: CRTTheme.Spacing.md, pinnedViews: .sectionHeaders) {
                 ForEach(viewModel.groupedCrewMembers) { group in
                     Section {
                         ForEach(group.members) { member in
-                            CrewRowView(member: member) {
+                            AgentRowView(member: member) {
                                 onSelectMember?(member)
                             }
                         }
@@ -255,7 +271,7 @@ struct CrewListView: View {
         }
     }
 
-    private func sectionHeader(for group: CrewListViewModel.AgentTypeGroup) -> some View {
+    private func sectionHeader(for group: AgentListViewModel.AgentTypeGroup) -> some View {
         HStack {
             CRTText(group.displayName, style: .caption, glowIntensity: .subtle, color: theme.dim)
 
@@ -340,19 +356,19 @@ extension View {
 
 // MARK: - Preview
 
-#Preview("CrewListView") {
+#Preview("AgentListView") {
     let config = APIClientConfiguration(baseURL: URL(string: "http://localhost:3000")!)
     let apiClient = APIClient(configuration: config)
 
-    return CrewListView(apiClient: apiClient) { member in
+    return AgentListView(apiClient: apiClient) { member in
         print("Selected: \(member.name)")
     }
 }
 
-#Preview("CrewListView Blue Theme") {
+#Preview("AgentListView Blue Theme") {
     let config = APIClientConfiguration(baseURL: URL(string: "http://localhost:3000")!)
     let apiClient = APIClient(configuration: config)
 
-    return CrewListView(apiClient: apiClient)
+    return AgentListView(apiClient: apiClient)
         .crtTheme(.blue)
 }

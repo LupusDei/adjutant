@@ -87,7 +87,7 @@ enum AppTab: Int, CaseIterable, Identifiable {
         case .mail: return "MAIL"
         case .chat: return "CHAT"
         case .epics: return "EPICS"
-        case .crew: return "CREW"
+        case .crew: return "AGENTS"
         case .projects: return "PROJECTS"
         case .beads: return "BEADS"
         case .settings: return "SETTINGS"

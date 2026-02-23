@@ -3,11 +3,11 @@ import XCTest
 @testable import AdjutantKit
 
 @MainActor
-final class CrewDetailViewModelTests: XCTestCase {
+final class AgentDetailViewModelTests: XCTestCase {
 
     // MARK: - Properties
 
-    private var sut: CrewDetailViewModel!
+    private var sut: AgentDetailViewModel!
     private var mockAPIClient: MockTerminalAPIClient!
 
     // MARK: - Setup
@@ -30,7 +30,7 @@ final class CrewDetailViewModelTests: XCTestCase {
         let member = createPolecatMember()
 
         // When
-        sut = CrewDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
 
         // Then
         XCTAssertTrue(sut.hasTerm)
@@ -41,7 +41,7 @@ final class CrewDetailViewModelTests: XCTestCase {
         let member = createMayorMember()
 
         // When
-        sut = CrewDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
 
         // Then
         XCTAssertFalse(sut.hasTerm)
@@ -52,7 +52,7 @@ final class CrewDetailViewModelTests: XCTestCase {
         let member = createPolecatMember()
 
         // When
-        sut = CrewDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
 
         // Then
         XCTAssertTrue(sut.autoScrollEnabled)
@@ -63,7 +63,7 @@ final class CrewDetailViewModelTests: XCTestCase {
         let member = createPolecatMember()
 
         // When
-        sut = CrewDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
 
         // Then
         XCTAssertNil(sut.terminalContent)
@@ -80,7 +80,7 @@ final class CrewDetailViewModelTests: XCTestCase {
             sessionName: "gt-greenplace-polecat-abc",
             timestamp: "2026-01-25T12:00:00Z"
         ))
-        sut = CrewDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
 
         // When
         await sut.loadTerminal()
@@ -95,7 +95,7 @@ final class CrewDetailViewModelTests: XCTestCase {
         // Given
         let member = createPolecatMember()
         mockAPIClient.terminalResult = .failure(APIClientError.networkError("Connection failed"))
-        sut = CrewDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
 
         // When
         await sut.loadTerminal()
@@ -113,7 +113,7 @@ final class CrewDetailViewModelTests: XCTestCase {
             sessionName: "test",
             timestamp: "2026-01-25T12:00:00Z"
         ))
-        sut = CrewDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
 
         // When
         await sut.loadTerminal()
@@ -133,7 +133,7 @@ final class CrewDetailViewModelTests: XCTestCase {
             status: .idle,
             unreadMail: 0
         )
-        sut = CrewDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
 
         // When
         await sut.loadTerminal()
@@ -150,7 +150,7 @@ final class CrewDetailViewModelTests: XCTestCase {
         let member = createPolecatMember(status: .idle)
 
         // When
-        sut = CrewDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
 
         // Then
         XCTAssertEqual(sut.statusDisplayText, "IDLE")
@@ -161,7 +161,7 @@ final class CrewDetailViewModelTests: XCTestCase {
         let member = createPolecatMember(status: .working)
 
         // When
-        sut = CrewDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
 
         // Then
         XCTAssertEqual(sut.statusDisplayText, "WORKING")
@@ -172,7 +172,7 @@ final class CrewDetailViewModelTests: XCTestCase {
         let member = createPolecatMember(status: .blocked)
 
         // When
-        sut = CrewDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
 
         // Then
         XCTAssertEqual(sut.statusDisplayText, "BLOCKED")
@@ -183,7 +183,7 @@ final class CrewDetailViewModelTests: XCTestCase {
         let member = createPolecatMember(status: .stuck)
 
         // When
-        sut = CrewDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
 
         // Then
         XCTAssertEqual(sut.statusDisplayText, "STUCK")
@@ -194,7 +194,7 @@ final class CrewDetailViewModelTests: XCTestCase {
         let member = createPolecatMember(status: .offline)
 
         // When
-        sut = CrewDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
 
         // Then
         XCTAssertEqual(sut.statusDisplayText, "OFFLINE")
@@ -210,7 +210,7 @@ final class CrewDetailViewModelTests: XCTestCase {
             sessionName: "test",
             timestamp: "2026-01-25T14:30:00Z"
         ))
-        sut = CrewDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
 
         // When
         await sut.loadTerminal()
@@ -222,7 +222,7 @@ final class CrewDetailViewModelTests: XCTestCase {
     func testFormattedTimestamp_noTimestamp_returnsEmpty() async {
         // Given
         let member = createPolecatMember()
-        sut = CrewDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
 
         // Then
         XCTAssertTrue(sut.formattedTimestamp.isEmpty)
@@ -233,7 +233,7 @@ final class CrewDetailViewModelTests: XCTestCase {
     func testAutoScrollEnabled_canToggle() async {
         // Given
         let member = createPolecatMember()
-        sut = CrewDetailViewModel(member: member, apiClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member, apiClient: mockAPIClient)
         XCTAssertTrue(sut.autoScrollEnabled)
 
         // When

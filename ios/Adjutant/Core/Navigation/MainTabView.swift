@@ -109,7 +109,7 @@ private struct TabContent: View {
         case .epics:
             EpicsListView()
         case .crew:
-            CrewListView(apiClient: AppState.shared.apiClient) { member in
+            AgentListView(apiClient: AppState.shared.apiClient) { member in
                 if AppState.shared.deploymentMode != .gastown,
                    let sessionId = member.sessionId {
                     // In swarm mode, tapping a crew member opens their session chat
@@ -149,7 +149,7 @@ private struct TabContent: View {
         case .epicDetail(let id):
             EpicDetailView(epicId: id)
         case .agentDetail(let member):
-            CrewDetailView(member: member)
+            AgentDetailView(member: member)
         case .beadDetail(let id):
             BeadDetailView(beadId: id)
         case .projectDetail(let rig):

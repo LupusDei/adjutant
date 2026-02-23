@@ -1,8 +1,8 @@
 import SwiftUI
 import AdjutantKit
 
-/// A row view for displaying a single crew member in the list.
-struct CrewRowView: View {
+/// A row view for displaying a single agent in the list.
+struct AgentRowView: View {
     @Environment(\.crtTheme) private var theme
 
     let member: CrewMember
@@ -124,9 +124,9 @@ struct CrewRowView: View {
 
 // MARK: - Preview
 
-#Preview("CrewRowView States") {
+#Preview("AgentRowView States") {
     VStack(spacing: 12) {
-        CrewRowView(
+        AgentRowView(
             member: CrewMember(
                 id: "mayor/",
                 name: "Mayor",
@@ -140,7 +140,7 @@ struct CrewRowView: View {
             onTap: {}
         )
 
-        CrewRowView(
+        AgentRowView(
             member: CrewMember(
                 id: "greenplace/witness",
                 name: "Witness",
@@ -152,7 +152,7 @@ struct CrewRowView: View {
             onTap: {}
         )
 
-        CrewRowView(
+        AgentRowView(
             member: CrewMember(
                 id: "greenplace/polecat-abc",
                 name: "polecat-abc",
@@ -165,7 +165,7 @@ struct CrewRowView: View {
             onTap: {}
         )
 
-        CrewRowView(
+        AgentRowView(
             member: CrewMember(
                 id: "oldforge/polecat-xyz",
                 name: "polecat-xyz",
@@ -178,7 +178,7 @@ struct CrewRowView: View {
             onTap: {}
         )
 
-        CrewRowView(
+        AgentRowView(
             member: CrewMember(
                 id: "offline/polecat",
                 name: "polecat-old",
