@@ -10,7 +10,7 @@ import { getEventBus } from "./event-bus.js";
 import { getSessionBridge } from "./session-bridge.js";
 import { wsBroadcast } from "./ws-server.js";
 import type { MessageStore } from "./message-store.js";
-import { logInfo, logWarn } from "../utils/index.js";
+import { logInfo } from "../utils/index.js";
 
 /**
  * Initialize the bead assignment notification service.
