@@ -231,7 +231,7 @@ export function CrewStats({ className = '', isActive = true }: CrewStatsProps) {
               <input
                 type="checkbox"
                 checked={showAllPolecats}
-                onChange={(e) => setShowAllPolecats(e.target.checked)}
+                onChange={(e) => { setShowAllPolecats(e.target.checked); }}
                 style={styles.toggleHiddenInput}
               />
               <span style={styles.toggleText}>SHOW ALL</span>
@@ -395,7 +395,7 @@ function SwarmSummaryPanel({ agents }: SwarmSummaryPanelProps) {
     try {
       await api.swarms.addAgent(swarmId);
       setSpawnState('success');
-      setTimeout(() => setSpawnState('idle'), 2000);
+      setTimeout(() => { setSpawnState('idle'); }, 2000);
     } catch (err) {
       setSpawnState('error');
       setSpawnError(err instanceof ApiError ? err.message : 'Failed to spawn agent');
@@ -505,7 +505,7 @@ function SwarmSection({ agents, gridStyle }: SwarmSectionProps) {
             <div key={group} style={styles.statusGroup}>
               <button
                 style={styles.offlineToggle}
-                onClick={() => setShowOffline(prev => !prev)}
+                onClick={() => { setShowOffline(prev => !prev); }}
                 aria-expanded={showOffline}
               >
                 <span style={{ color: getGroupColor(group) }}>
@@ -591,7 +591,7 @@ function RigSection({ name, agents, agentGridStyle, infraGridStyle, showAllPolec
       await api.agents.spawnPolecat(name);
       setSpawnState('success');
       // Reset to idle after showing success
-      setTimeout(() => setSpawnState('idle'), 2000);
+      setTimeout(() => { setSpawnState('idle'); }, 2000);
     } catch (err) {
       setSpawnState('error');
       if (err instanceof ApiError) {
@@ -675,7 +675,7 @@ function RigSection({ name, agents, agentGridStyle, infraGridStyle, showAllPolec
                   <PolecatCard
                     agent={agent}
                     isExpanded={isExpanded}
-                    onClick={() => onPolecatClick(isExpanded ? null : agent.id)}
+                    onClick={() => { onPolecatClick(isExpanded ? null : agent.id); }}
                     disabled={!isOnline}
                   />
                   {isExpanded && agent.rig && (
@@ -684,7 +684,7 @@ function RigSection({ name, agents, agentGridStyle, infraGridStyle, showAllPolec
                         rig={agent.rig}
                         polecat={agent.name}
                         pollInterval={2000}
-                        onClose={() => onPolecatClick(null)}
+                        onClose={() => { onPolecatClick(null); }}
                         style={{ height: '300px' }}
                       />
                     </div>

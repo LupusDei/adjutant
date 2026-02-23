@@ -207,7 +207,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
         setTypingFrom(indicator.from);
         // Clear typing after 5s if no update
         if (typingTimer.current) clearTimeout(typingTimer.current);
-        typingTimer.current = setTimeout(() => setTypingFrom(null), 5000);
+        typingTimer.current = setTimeout(() => { setTypingFrom(null); }, 5000);
       } else {
         setTypingFrom(null);
         if (typingTimer.current) {
@@ -259,14 +259,14 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
       (entries) => {
         if (entries[0]?.isIntersecting && hasMore && !loadingMore) {
           setLoadingMore(true);
-          void loadMore().finally(() => setLoadingMore(false));
+          void loadMore().finally(() => { setLoadingMore(false); });
         }
       },
       { threshold: 0.1 }
     );
 
     observer.observe(sentinel);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); };
   }, [hasMore, loadMore, loadingMore]);
 
   // Handle sending a message — always via HTTP (hookSendMessage).
@@ -408,7 +408,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
         <input
           type="text"
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(e) => { setSearchQuery(e.target.value); }}
           onKeyDown={handleSearchKeyDown}
           placeholder="SEARCH MESSAGES..."
           className="chat-search-input"
@@ -430,7 +430,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
       {displayError && (
         <div className="chat-error" role="alert">
           {displayError}
-          <button onClick={() => setSendError(null)} className="chat-error-dismiss">
+          <button onClick={() => { setSendError(null); }} className="chat-error-dismiss">
             x
           </button>
         </div>

@@ -28,7 +28,7 @@ export interface KanbanColumn {
 /**
  * All column definitions in workflow order (Gastown mode).
  */
-export const KANBAN_COLUMNS: Array<{ id: KanbanColumnId; title: string; color: string }> = [
+export const KANBAN_COLUMNS: { id: KanbanColumnId; title: string; color: string }[] = [
   { id: 'open', title: 'OPEN', color: '#00FF00' },
   { id: 'hooked', title: 'HOOKED', color: '#00FFFF' },
   { id: 'in_progress', title: 'IN PROGRESS', color: '#00FF88' },
@@ -40,7 +40,7 @@ export const KANBAN_COLUMNS: Array<{ id: KanbanColumnId; title: string; color: s
  * Column definitions for Swarm mode (no HOOKED column).
  * Hooked beads are mapped to IN PROGRESS.
  */
-export const KANBAN_COLUMNS_SWARM: Array<{ id: KanbanColumnId; title: string; color: string }> = [
+export const KANBAN_COLUMNS_SWARM: { id: KanbanColumnId; title: string; color: string }[] = [
   { id: 'open', title: 'OPEN', color: '#00FF00' },
   { id: 'in_progress', title: 'IN PROGRESS', color: '#00FF88' },
   { id: 'closed', title: 'CLOSED', color: '#444444' },
@@ -50,7 +50,7 @@ export const KANBAN_COLUMNS_SWARM: Array<{ id: KanbanColumnId; title: string; co
 /**
  * Returns the appropriate column definitions based on mode.
  */
-export function getKanbanColumns(isSwarm: boolean): Array<{ id: KanbanColumnId; title: string; color: string }> {
+export function getKanbanColumns(isSwarm: boolean): { id: KanbanColumnId; title: string; color: string }[] {
   return isSwarm ? KANBAN_COLUMNS_SWARM : KANBAN_COLUMNS;
 }
 

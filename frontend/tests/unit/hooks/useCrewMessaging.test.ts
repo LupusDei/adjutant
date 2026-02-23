@@ -308,7 +308,7 @@ describe("useCrewMessaging", () => {
 
     await act(async () => {
       const response = await result.current.sendToCrewMember({
-        to: mockCrew[0] as CrewMember,
+        to: mockCrew[0]!,
         subject: "Test subject",
         body: "Test body",
       });
@@ -343,7 +343,7 @@ describe("useCrewMessaging", () => {
     await act(async () => {
       try {
         await result.current.sendToCrewMember({
-          to: mockCrew[0] as CrewMember,
+          to: mockCrew[0]!,
           subject: "Test",
           body: "Test body",
         });
@@ -375,7 +375,7 @@ describe("useCrewMessaging", () => {
     await act(async () => {
       try {
         await result.current.sendToCrewMember({
-          to: mockCrew[0] as CrewMember,
+          to: mockCrew[0]!,
           subject: "Test",
           body: "Test body",
         });

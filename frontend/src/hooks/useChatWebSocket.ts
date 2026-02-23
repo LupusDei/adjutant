@@ -294,7 +294,7 @@ export function useChatWebSocket(
 
   const sendMessage = useCallback((body: string, to?: string, clientId?: string): string | null => {
     const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return null;
+    if (ws?.readyState !== WebSocket.OPEN) return null;
 
     const id = clientId ?? crypto.randomUUID();
     ws.send(JSON.stringify({
@@ -308,7 +308,7 @@ export function useChatWebSocket(
 
   const sendTyping = useCallback((state: 'started' | 'stopped') => {
     const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (ws?.readyState !== WebSocket.OPEN) return;
     ws.send(JSON.stringify({ type: 'typing', state }));
   }, []);
 

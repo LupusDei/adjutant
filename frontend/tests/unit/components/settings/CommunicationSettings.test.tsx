@@ -75,7 +75,7 @@ class MockEventSource {
 
   readyState = MockEventSource.CONNECTING;
   onerror: (() => void) | null = null;
-  private listeners: Record<string, Array<(event: { data: string }) => void>> = {};
+  private listeners: Record<string, ((event: { data: string }) => void)[]> = {};
 
   constructor(_url: string) {
     queueMicrotask(() => {
@@ -89,7 +89,7 @@ class MockEventSource {
 
   addEventListener(type: string, handler: (event: { data: string }) => void) {
     if (!this.listeners[type]) this.listeners[type] = [];
-    this.listeners[type]!.push(handler);
+    this.listeners[type].push(handler);
   }
 
   close() {

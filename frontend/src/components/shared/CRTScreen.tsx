@@ -44,11 +44,11 @@ export function CRTScreen({
     ];
 
     phases.forEach((phase, index) => {
-      setTimeout(() => setBootPhase(index + 1), phase.delay);
+      setTimeout(() => { setBootPhase(index + 1); }, phase.delay);
     });
 
     // End boot sequence
-    setTimeout(() => setIsBooting(false), 1500);
+    setTimeout(() => { setIsBooting(false); }, 1500);
   }, [showBootSequence]);
 
   return (

@@ -173,7 +173,7 @@ function groupBeadsBySource(beads: BeadInfo[]): BeadGroup[] {
     const sourceBeads = groupMap.get(source) ?? [];
     groups.push({
       source,
-      displayName: source === 'town' ? 'TOWN (hq-*)' : `${source.toUpperCase().replace(/_/g, ' ')}`,
+      displayName: source === 'town' ? 'TOWN (hq-*)' : source.toUpperCase().replace(/_/g, ' '),
       beads: sourceBeads,
     });
   }
@@ -332,7 +332,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => { document.removeEventListener('mousedown', handleClickOutside); };
   }, [openMenuId]);
 
   const handleAction = useCallback(async (bead: BeadInfo, action: ActionType) => {
@@ -361,10 +361,10 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
         });
       }
       setActionResult({ id: bead.id, type: action, success: true });
-      setTimeout(() => setActionResult(null), 2000);
+      setTimeout(() => { setActionResult(null); }, 2000);
     } catch {
       setActionResult({ id: bead.id, type: action, success: false });
-      setTimeout(() => setActionResult(null), 3000);
+      setTimeout(() => { setActionResult(null); }, 3000);
     } finally {
       setActionInProgress(null);
     }
@@ -413,7 +413,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
             {/* Group Header */}
             <button
               style={styles.groupHeader}
-              onClick={() => toggleGroup(group.source)}
+              onClick={() => { toggleGroup(group.source); }}
               aria-expanded={!isCollapsed}
             >
               <span style={styles.groupChevron}>
@@ -503,7 +503,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
                               ) : (
                                 <button
                                   style={styles.actionButton}
-                                  onClick={() => setOpenMenuId(isMenuOpen ? null : bead.id)}
+                                  onClick={() => { setOpenMenuId(isMenuOpen ? null : bead.id); }}
                                   title="Actions"
                                 >
                                   ⋮

@@ -45,7 +45,7 @@ describe('useDashboardCrew', () => {
     expect(result.current.error).toBeNull();
 
     // Wait for the hook to finish fetching
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => { expect(result.current.loading).toBe(false); });
 
     // Assert fetched data
     expect(result.current.totalCrew).toBe(3); // 3 crew/polecat agents
@@ -67,7 +67,7 @@ describe('useDashboardCrew', () => {
 
     const { result } = renderHook(() => useDashboardCrew());
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => { expect(result.current.loading).toBe(false); });
 
     expect(result.current.crewAlerts).toContain('Alice is STUCK');
     expect(result.current.crewAlerts).toContain('Bob is blocked');
@@ -80,7 +80,7 @@ describe('useDashboardCrew', () => {
 
     const { result } = renderHook(() => useDashboardCrew());
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => { expect(result.current.loading).toBe(false); });
 
     expect(result.current.error).toBe(errorMessage);
     expect(result.current.totalCrew).toBe(0);
@@ -98,7 +98,7 @@ describe('useDashboardCrew', () => {
 
     const { result } = renderHook(() => useDashboardCrew());
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => { expect(result.current.loading).toBe(false); });
 
     // Offline polecat excluded, offline crew included
     expect(result.current.totalCrew).toBe(2);

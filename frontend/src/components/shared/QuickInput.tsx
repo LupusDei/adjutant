@@ -21,7 +21,7 @@ export function QuickInput() {
   useEffect(() => {
     api.mail.getIdentity()
       .then(setIdentity)
-      .catch(() => setIdentity('overseer'));
+      .catch(() => { setIdentity('overseer'); });
   }, []);
 
   // Handle voice transcript - append to text with smart spacing
@@ -100,7 +100,7 @@ export function QuickInput() {
   if (!isExpanded) {
     return (
       <button
-        onClick={() => setIsExpanded(true)}
+        onClick={() => { setIsExpanded(true); }}
         style={styles.fab}
         title="Message Mayor"
         aria-label="Quick message to Mayor"
@@ -126,7 +126,7 @@ export function QuickInput() {
         </div>
         <button 
           style={styles.closeButton} 
-          onClick={() => setIsExpanded(false)}
+          onClick={() => { setIsExpanded(false); }}
           title="Collapse"
         >
           ✕
@@ -136,7 +136,7 @@ export function QuickInput() {
         <textarea
           ref={textareaRef}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => { setText(e.target.value); }}
           onKeyDown={handleKeyDown}
           placeholder={isMobile ? "Type message..." : "Type message to Mayor..."}
           style={styles.textarea}

@@ -321,7 +321,7 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
   // ---------------------------------------------------------------------------
   const sendMessage = useCallback(async (opts: SendMessageOptions) => {
     const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
+    if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
         type: 'message',
         id: crypto.randomUUID(),

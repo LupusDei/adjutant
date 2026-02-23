@@ -47,7 +47,7 @@ function useIsSmallScreen(breakpoint = 768) {
 
   useEffect(() => {
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    return () => { window.removeEventListener('resize', handleResize); };
   }, [handleResize]);
 
   return isSmall;

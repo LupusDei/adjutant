@@ -74,7 +74,7 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
           <span style={styles.filterLabel}>{isGasTown ? 'RIG:' : 'PROJECT:'}</span>
           <select
             value={rigFilter}
-            onChange={(e) => setRigFilter(e.target.value as RigFilter)}
+            onChange={(e) => { setRigFilter(e.target.value); }}
             style={styles.select}
           >
             <option value="ALL">{isGasTown ? 'ALL RIGS' : 'ALL PROJECTS'}</option>
@@ -89,7 +89,7 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
           <span style={styles.filterLabel}>SORT:</span>
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as EpicSortOption)}
+            onChange={(e) => { setSortBy(e.target.value as EpicSortOption); }}
             style={styles.select}
           >
             <option value="ACTIVITY">LATEST ACTIVITY</option>

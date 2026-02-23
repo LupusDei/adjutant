@@ -18,7 +18,7 @@ function stripAnsi(str: string): string {
 }
 
 /** Convert parsed output events to displayable text lines. */
-function eventsToText(events: Array<{ type: string; content?: string; tool?: string; output?: string; message?: string; data?: string }>): string {
+function eventsToText(events: { type: string; content?: string; tool?: string; output?: string; message?: string; data?: string }[]): string {
   const lines: string[] = [];
   for (const evt of events) {
     switch (evt.type) {
@@ -140,7 +140,7 @@ export function useTerminalStream({ sessionId, enabled }: UseTerminalStreamOptio
               break;
             }
             case 'output': {
-              const events = msg['events'] as Array<{ type: string; content?: string; tool?: string; output?: string; message?: string; data?: string }>;
+              const events = msg['events'] as { type: string; content?: string; tool?: string; output?: string; message?: string; data?: string }[];
               if (events && events.length > 0) {
                 const newText = eventsToText(events);
                 if (newText) {

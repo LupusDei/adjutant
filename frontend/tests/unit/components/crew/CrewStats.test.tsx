@@ -259,7 +259,7 @@ describe("CrewStats", () => {
 
       renderWithRigProvider(<CrewStats />);
 
-      const agentsStat = screen.getByText("AGENTS").parentElement as HTMLElement;
+      const agentsStat = screen.getByText("AGENTS").parentElement!;
       expect(agentsStat).toHaveTextContent("2");
     });
 
@@ -276,7 +276,7 @@ describe("CrewStats", () => {
 
       renderWithRigProvider(<CrewStats />);
 
-      const onlineStat = screen.getByText("ONLINE").parentElement as HTMLElement;
+      const onlineStat = screen.getByText("ONLINE").parentElement!;
       expect(onlineStat).toHaveTextContent("2");
     });
 
@@ -293,7 +293,7 @@ describe("CrewStats", () => {
 
       renderWithRigProvider(<CrewStats />);
 
-      const offlineStat = screen.getByText("OFFLINE").parentElement as HTMLElement;
+      const offlineStat = screen.getByText("OFFLINE").parentElement!;
       expect(offlineStat).toHaveTextContent("2");
     });
   });

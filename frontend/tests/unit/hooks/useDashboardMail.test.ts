@@ -70,7 +70,7 @@ describe('useDashboardMail', () => {
     expect(result.current.error).toBeNull();
 
     // Wait for the hook to finish fetching
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => { expect(result.current.loading).toBe(false); });
 
     // Assert fetched data
     expect(result.current.totalCount).toBe(3); // 3 unique threads
@@ -88,7 +88,7 @@ describe('useDashboardMail', () => {
 
     const { result } = renderHook(() => useDashboardMail());
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => { expect(result.current.loading).toBe(false); });
 
     expect(result.current.error).toBe(errorMessage);
     expect(result.current.recentMessages).toEqual([]);
@@ -101,7 +101,7 @@ describe('useDashboardMail', () => {
 
     const { result } = renderHook(() => useDashboardMail());
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => { expect(result.current.loading).toBe(false); });
 
     expect(result.current.recentMessages).toEqual([]);
     expect(result.current.totalCount).toBe(0);
@@ -133,7 +133,7 @@ describe('useDashboardMail', () => {
 
     const { result } = renderHook(() => useDashboardMail());
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => { expect(result.current.loading).toBe(false); });
 
     // Handoff message should be filtered out of recent messages
     expect(result.current.recentMessages).toHaveLength(3);

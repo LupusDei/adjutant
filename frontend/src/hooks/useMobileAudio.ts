@@ -37,7 +37,7 @@ export interface UseMobileAudioReturn {
 
 let globalAudioElement: HTMLAudioElement | null = null;
 let globalIsUnlocked = false;
-let globalUnlockListeners: Set<() => void> = new Set();
+const globalUnlockListeners = new Set<() => void>();
 
 /**
  * Check if device is mobile or tablet (has autoplay restrictions)
@@ -134,7 +134,7 @@ async function tryUnlockAudio(): Promise<boolean> {
   if (audioContextUnlocked || audioElementUnlocked) {
     globalIsUnlocked = true;
     // Notify all listeners
-    globalUnlockListeners.forEach(listener => listener());
+    globalUnlockListeners.forEach(listener => { listener(); });
     console.log('[MobileAudio] Audio unlocked successfully');
     return true;
   }
@@ -159,7 +159,7 @@ export function useMobileAudio(): UseMobileAudioReturn {
 
   // Subscribe to global unlock state
   useEffect(() => {
-    const handleUnlock = () => setIsUnlocked(true);
+    const handleUnlock = () => { setIsUnlocked(true); };
     globalUnlockListeners.add(handleUnlock);
 
     // Sync initial state

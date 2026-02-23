@@ -293,7 +293,7 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
       {canAssign && !showAssign && (
         <button
           style={styles.assignButton}
-          onClick={() => setShowAssign(true)}
+          onClick={() => { setShowAssign(true); }}
           aria-label={`Assign bead to ${agent.name}`}
         >
           ASSIGN BEAD
@@ -307,7 +307,7 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
             style={styles.assignInput}
             type="text"
             value={beadId}
-            onChange={(e) => setBeadId(e.target.value)}
+            onChange={(e) => { setBeadId(e.target.value); }}
             placeholder="BEAD ID..."
             autoFocus
             disabled={assignState === 'loading'}

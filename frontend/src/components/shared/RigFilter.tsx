@@ -54,7 +54,7 @@ export function RigFilter({ className = '' }: RigFilterProps) {
 /**
  * Hook to sync available rigs from status data.
  */
-export function useRigSync(rigs: Array<{ name: string }> | undefined) {
+export function useRigSync(rigs: { name: string }[] | undefined) {
   const { setAvailableRigs } = useRigFilter();
 
   useEffect(() => {

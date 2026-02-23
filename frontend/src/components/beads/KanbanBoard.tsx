@@ -19,7 +19,7 @@ export function KanbanBoard({ beads, onBeadsChange, onBeadClick }: KanbanBoardPr
 
   const handleError = useCallback((err: Error, beadId: string) => {
     setError(`Failed to update ${beadId}: ${err.message}`);
-    setTimeout(() => setError(null), 3000);
+    setTimeout(() => { setError(null); }, 3000);
   }, []);
 
   const {

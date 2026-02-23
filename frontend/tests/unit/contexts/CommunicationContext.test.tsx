@@ -73,7 +73,7 @@ class MockEventSource {
   readyState = MockEventSource.CONNECTING;
   onerror: (() => void) | null = null;
   url: string;
-  private listeners: Record<string, Array<(event: { data: string }) => void>> = {};
+  private listeners: Record<string, ((event: { data: string }) => void)[]> = {};
 
   constructor(url: string) {
     this.url = url;
@@ -88,7 +88,7 @@ class MockEventSource {
 
   addEventListener(type: string, handler: (event: { data: string }) => void) {
     if (!this.listeners[type]) this.listeners[type] = [];
-    this.listeners[type]!.push(handler);
+    this.listeners[type].push(handler);
   }
 
   /** Simulate receiving an SSE event (for test use) */
@@ -534,7 +534,7 @@ describe("CommunicationContext", () => {
   describe("WebSocket auth error handling", () => {
     it("should fall back to SSE on auth failure", async () => {
       // Create a WebSocket that rejects auth
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       globalThis.WebSocket = class AuthFailWs {
         static readonly OPEN = 1;
         readyState = 0;

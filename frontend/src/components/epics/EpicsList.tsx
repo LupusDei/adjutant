@@ -107,7 +107,7 @@ export function EpicsList({ sortBy, isActive = true, rig, overseerView = false, 
               <EpicCard
                 key={epic.epic.id}
                 epic={epic}
-                onClick={onEpicClick ? () => onEpicClick(epic.epic.id) : undefined}
+                onClick={onEpicClick ? () => { onEpicClick(epic.epic.id); } : undefined}
               />
             ))}
           </div>
@@ -126,7 +126,7 @@ export function EpicsList({ sortBy, isActive = true, rig, overseerView = false, 
               <EpicCard
                 key={epic.epic.id}
                 epic={epic}
-                onClick={onEpicClick ? () => onEpicClick(epic.epic.id) : undefined}
+                onClick={onEpicClick ? () => { onEpicClick(epic.epic.id); } : undefined}
               />
             ))}
           </div>
