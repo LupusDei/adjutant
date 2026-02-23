@@ -48,7 +48,7 @@ class MockWebSocket {
   }
 
   send(data: string) {
-    const msg = JSON.parse(data);
+    const msg = JSON.parse(data) as { type: string };
     if (msg.type === "auth_response") {
       queueMicrotask(() => {
         this.onmessage?.({
@@ -75,7 +75,7 @@ class MockEventSource {
 
   readyState = MockEventSource.CONNECTING;
   onerror: (() => void) | null = null;
-  private listeners: Record<string, Array<(event: { data: string }) => void>> = {};
+  private listeners: Record<string, ((event: { data: string }) => void)[]> = {};
 
   constructor(_url: string) {
     queueMicrotask(() => {
@@ -88,8 +88,8 @@ class MockEventSource {
   }
 
   addEventListener(type: string, handler: (event: { data: string }) => void) {
-    if (!this.listeners[type]) this.listeners[type] = [];
-    this.listeners[type]!.push(handler);
+    this.listeners[type] ??= [];
+    this.listeners[type].push(handler);
   }
 
   close() {
@@ -126,9 +126,9 @@ describe("Communication Settings", () => {
     localStorage.clear();
     originalWebSocket = globalThis.WebSocket;
     originalEventSource = globalThis.EventSource;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
     globalThis.WebSocket = MockWebSocket as any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
     globalThis.EventSource = MockEventSource as any;
 
     // Mock fetch for tunnel and mode API calls

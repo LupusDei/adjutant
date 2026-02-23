@@ -117,11 +117,9 @@ export function useSwarmAgents(): UseSwarmAgentsResult {
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data as string) as StatusChangeEvent;
-        if (msg.type === 'status_change' && msg.agent && msg.to) {
-          // Successful message — reset backoff since connection is stable
-          reconnectDelay.current = RECONNECT_BASE_MS;
-          applyStatusChange(msg);
-        }
+        // Successful message — reset backoff since connection is stable
+        reconnectDelay.current = RECONNECT_BASE_MS;
+        applyStatusChange(msg);
       } catch {
         // Ignore unparseable messages
       }

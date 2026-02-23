@@ -89,6 +89,7 @@ export function RigProvider({ children }: { children: ReactNode }) {
 /**
  * Hook to access rig filter context.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useRigFilter(): RigContextValue {
   const context = useContext(RigContext);
   if (!context) {
@@ -109,6 +110,7 @@ export function useRigFilteredItems<T>(
 export function useRigFilteredItems<T extends { rig?: string | null }>(
   items: T[]
 ): T[];
+// eslint-disable-next-line react-refresh/only-export-components
 export function useRigFilteredItems<T>(
   items: T[],
   getRig?: (item: T) => string | null

@@ -43,7 +43,7 @@ function createMockMediaQueryList(initialMatches: boolean): MockMediaQueryList {
     dispatchEvent: vi.fn(),
     triggerChange: (matches: boolean) => {
       const event = { matches } as MediaQueryListEvent;
-      listeners.forEach(listener => listener(event));
+      listeners.forEach(listener => { listener(event); });
     },
   };
 }

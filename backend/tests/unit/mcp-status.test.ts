@@ -291,6 +291,44 @@ describe("MCP Status Tools", () => {
       });
     });
 
+    it("should send APNS with correct announcement payload shape when configured", async () => {
+      const { isAPNsConfigured, sendNotificationToAll } = await import("../../src/services/apns-service.js");
+      const mockConfigured = vi.mocked(isAPNsConfigured);
+      const mockSend = vi.mocked(sendNotificationToAll);
+      mockConfigured.mockReturnValue(true);
+      mockSend.mockResolvedValue(undefined as any);
+
+      const tool = server.getTool("announce")!;
+      const result = (await tool.handler(
+        {
+          type: "completion",
+          title: "Deploy done",
+          body: "All services running",
+          beadId: "adj-99",
+        },
+        fakeExtra(),
+      )) as { content: Array<{ text: string }> };
+
+      const parsed = JSON.parse(result.content[0]!.text);
+
+      expect(mockSend).toHaveBeenCalledTimes(1);
+      const notification = mockSend.mock.calls[0]![0]!;
+
+      // Verify payload matches AnnouncementPayload contract
+      expect(notification.data.type).toBe("announcement");
+      expect(notification.data.agentId).toBe("agent-1");
+      expect(notification.data.body).toBe("All services running");
+      expect(notification.data.messageId).toBe(parsed.messageId);
+      expect(notification.data.announcementType).toBe("completion");
+      expect(notification.data.beadId).toBe("adj-99");
+      // Must NOT have old "from" field
+      expect(notification.data.from).toBeUndefined();
+
+      // Reset mocks
+      mockConfigured.mockReturnValue(false);
+      mockSend.mockReset();
+    });
+
     it("should not broadcast announcement via WebSocket (stored in SQLite, delivered via APNS)", async () => {
       const tool = server.getTool("announce")!;
       await tool.handler(

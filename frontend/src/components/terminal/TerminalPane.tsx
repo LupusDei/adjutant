@@ -139,7 +139,7 @@ export function TerminalPane({
     // Set up polling
     const intervalId = setInterval(() => void fetchContent(), pollInterval);
 
-    return () => clearInterval(intervalId);
+    return () => { clearInterval(intervalId); };
   }, [fetchContent, pollInterval, enabled]);
 
   return (

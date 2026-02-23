@@ -44,7 +44,7 @@ export const OverseerNotificationStatus: React.FC<OverseerNotificationStatusProp
         <button
           type="button"
           className="notification-unlock-button"
-          onClick={handleUnlock}
+          onClick={() => { void handleUnlock(); }}
           title="Tap to enable audio on mobile"
           aria-label="Enable audio playback"
         >
@@ -56,7 +56,7 @@ export const OverseerNotificationStatus: React.FC<OverseerNotificationStatusProp
       <button
         type="button"
         className={`notification-status-button ${enabled ? 'notification-enabled' : 'notification-disabled'} ${isPlaying ? 'notification-playing' : ''}`}
-        onClick={() => setEnabled(!enabled)}
+        onClick={() => { setEnabled(!enabled); }}
         title={enabled ? `Auto-notifications ON (${notificationCount} played)` : 'Auto-notifications OFF'}
         aria-label={enabled ? 'Disable auto-notifications' : 'Enable auto-notifications'}
       >
@@ -74,7 +74,7 @@ export const OverseerNotificationStatus: React.FC<OverseerNotificationStatusProp
             max="1"
             step="0.1"
             value={volume}
-            onChange={(e) => setVolume(parseFloat(e.target.value))}
+            onChange={(e) => { setVolume(parseFloat(e.target.value)); }}
             className="notification-volume-slider"
             title={`Volume: ${Math.round(volume * 100)}%`}
             aria-label="Notification volume"

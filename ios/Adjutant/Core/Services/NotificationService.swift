@@ -33,12 +33,24 @@ public final class NotificationService: NSObject, ObservableObject {
     /// Number of pending notifications
     @Published public private(set) var pendingNotificationCount: Int = 0
 
+    // MARK: - Foreground Suppression State
+
+    /// Whether the user is currently on the chat tab
+    public var isViewingChat: Bool = false
+
+    /// The agent ID the user is currently viewing in chat (nil if not viewing a chat)
+    public var activeViewingAgentId: String?
+
+    /// Pending agent ID from a notification tap that hasn't been consumed yet (for cold start deep linking)
+    public var pendingDeepLinkAgentId: String?
+
     // MARK: - Notification Categories
 
     /// Category identifiers for different notification types
     public enum Category: String {
         case newMail = "NEW_MAIL"
         case chatMessage = "CHAT_MESSAGE"
+        case agentMessage = "AGENT_MESSAGE"
         case taskUpdate = "TASK_UPDATE"
         case systemAlert = "SYSTEM_ALERT"
         case reminder = "REMINDER"
@@ -138,6 +150,13 @@ public final class NotificationService: NSObject, ObservableObject {
             options: []
         )
 
+        let agentMessageCategory = UNNotificationCategory(
+            identifier: Category.agentMessage.rawValue,
+            actions: [viewAction, dismissAction],
+            intentIdentifiers: [],
+            options: []
+        )
+
         let taskUpdateCategory = UNNotificationCategory(
             identifier: Category.taskUpdate.rawValue,
             actions: [viewAction, dismissAction],
@@ -162,6 +181,7 @@ public final class NotificationService: NSObject, ObservableObject {
         notificationCenter.setNotificationCategories([
             newMailCategory,
             chatMessageCategory,
+            agentMessageCategory,
             taskUpdateCategory,
             systemAlertCategory,
             reminderCategory
@@ -432,12 +452,37 @@ public final class NotificationService: NSObject, ObservableObject {
 
 extension NotificationService: UNUserNotificationCenterDelegate {
     /// Called when a notification is about to be presented while the app is in foreground.
+    /// Suppresses banner and sound when the user is already viewing the relevant agent's chat.
     nonisolated public func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        // Show notifications even when app is in foreground
+        let userInfo = notification.request.content.userInfo
+        let category = notification.request.content.categoryIdentifier
+        let type = userInfo["type"] as? String
+
+        // Check if this is a chat/agent message notification
+        let isChatNotification = type == "chat_message"
+            || category == Category.chatMessage.rawValue
+            || category == Category.agentMessage.rawValue
+
+        if isChatNotification, let agentId = userInfo["agentId"] as? String {
+            let shouldSuppress = await MainActor.run {
+                self.shouldSuppressBanner(forAgentId: agentId)
+            }
+
+            if shouldSuppress {
+                return [.badge]
+            }
+        }
+
         return [.banner, .sound, .badge]
+    }
+
+    /// Determines if a chat notification banner should be suppressed for the given agent.
+    /// Returns true when the user is currently viewing that agent's chat.
+    public func shouldSuppressBanner(forAgentId agentId: String) -> Bool {
+        return isViewingChat && activeViewingAgentId == agentId
     }
 
     /// Called when the user interacts with a notification.
@@ -499,6 +544,8 @@ extension NotificationService: UNUserNotificationCenterDelegate {
         case "chat_message":
             if let agentId = userInfo["agentId"] as? String {
                 await MainActor.run {
+                    // Store for cold start deep linking (consumed by AppCoordinator on init)
+                    self.pendingDeepLinkAgentId = agentId
                     NotificationCenter.default.post(
                         name: .navigateToChat,
                         object: nil,

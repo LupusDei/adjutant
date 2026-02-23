@@ -109,20 +109,8 @@ private struct TabContent: View {
         case .epics:
             EpicsListView()
         case .crew:
-            CrewListView(apiClient: AppState.shared.apiClient) { member in
-                if AppState.shared.deploymentMode != .gastown,
-                   let sessionId = member.sessionId {
-                    // In swarm mode, tapping a crew member opens their session chat
-                    coordinator.selectTab(.chat)
-                    // Notify the chat view to switch to this session
-                    NotificationCenter.default.post(
-                        name: .switchToSession,
-                        object: nil,
-                        userInfo: ["sessionId": sessionId]
-                    )
-                } else {
-                    coordinator.navigate(to: .agentDetail(member: member))
-                }
+            AgentListView(apiClient: AppState.shared.apiClient) { member in
+                coordinator.navigate(to: .agentDetail(member: member))
             }
         case .projects:
             ProjectsListView(
@@ -149,7 +137,7 @@ private struct TabContent: View {
         case .epicDetail(let id):
             EpicDetailView(epicId: id)
         case .agentDetail(let member):
-            CrewDetailView(member: member)
+            AgentDetailView(member: member)
         case .beadDetail(let id):
             BeadDetailView(beadId: id)
         case .projectDetail(let rig):

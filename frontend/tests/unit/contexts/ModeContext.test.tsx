@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ModeProvider, useMode, useVisibleTabs } from '../../../src/contexts/ModeContext';
 
@@ -259,7 +259,6 @@ describe('ModeContext', () => {
       const user = userEvent.setup();
 
       // Set up POST response
-      const originalFetch = global.fetch;
       global.fetch = vi.fn((url: string | URL | Request, init?: RequestInit) => {
         const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
         if (urlStr === '/api/mode' && init?.method === 'POST') {

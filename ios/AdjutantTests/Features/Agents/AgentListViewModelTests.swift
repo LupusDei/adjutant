@@ -3,11 +3,11 @@ import XCTest
 @testable import AdjutantKit
 
 @MainActor
-final class CrewListViewModelTests: XCTestCase {
+final class AgentListViewModelTests: XCTestCase {
 
     // MARK: - Properties
 
-    private var sut: CrewListViewModel!
+    private var sut: AgentListViewModel!
     private var mockAPIClient: MockAPIClient!
 
     // MARK: - Setup
@@ -27,7 +27,7 @@ final class CrewListViewModelTests: XCTestCase {
 
     func testInit_hasEmptyState() async {
         // Given/When
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
 
         // Then
         XCTAssertTrue(sut.allCrewMembers.isEmpty)
@@ -45,7 +45,7 @@ final class CrewListViewModelTests: XCTestCase {
         // Given
         let agents = createTestAgents()
         mockAPIClient.getAgentsResult = .success(agents)
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
 
         // When
         await sut.refresh()
@@ -58,7 +58,7 @@ final class CrewListViewModelTests: XCTestCase {
     func testRefresh_failure_setsError() async {
         // Given
         mockAPIClient.getAgentsResult = .failure(APIClientError.networkError("Connection failed"))
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
 
         // When
         await sut.refresh()
@@ -74,7 +74,7 @@ final class CrewListViewModelTests: XCTestCase {
         // Given
         let agents = createTestAgents()
         mockAPIClient.getAgentsResult = .success(agents)
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
 
         // When
         await sut.refresh()
@@ -91,7 +91,7 @@ final class CrewListViewModelTests: XCTestCase {
         // Given
         let agents = createTestAgents()
         mockAPIClient.getAgentsResult = .success(agents)
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
 
         // When
         await sut.refresh()
@@ -110,7 +110,7 @@ final class CrewListViewModelTests: XCTestCase {
             createCrewMember(name: "Beta", type: .polecat)
         ]
         mockAPIClient.getAgentsResult = .success(agents)
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
 
         // When
         await sut.refresh()
@@ -128,7 +128,7 @@ final class CrewListViewModelTests: XCTestCase {
         // Given
         let agents = createTestAgents()
         mockAPIClient.getAgentsResult = .success(agents)
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
         await sut.refresh()
 
         // When
@@ -145,7 +145,7 @@ final class CrewListViewModelTests: XCTestCase {
         // Given
         let agents = createTestAgents()
         mockAPIClient.getAgentsResult = .success(agents)
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
         await sut.refresh()
 
         // When
@@ -162,7 +162,7 @@ final class CrewListViewModelTests: XCTestCase {
             createCrewMember(name: "Worker2", type: .polecat, currentTask: "Fixing bug Y")
         ]
         mockAPIClient.getAgentsResult = .success(agents)
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
         await sut.refresh()
 
         // When
@@ -176,7 +176,7 @@ final class CrewListViewModelTests: XCTestCase {
         // Given
         let agents = createTestAgents()
         mockAPIClient.getAgentsResult = .success(agents)
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
         await sut.refresh()
 
         // When
@@ -197,7 +197,7 @@ final class CrewListViewModelTests: XCTestCase {
             createCrewMember(name: "Worker3", type: .polecat, rig: "greenplace")
         ]
         mockAPIClient.getAgentsResult = .success(agents)
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
         await sut.refresh()
 
         // When
@@ -215,7 +215,7 @@ final class CrewListViewModelTests: XCTestCase {
             createCrewMember(name: "Worker3", type: .witness, rig: "greenplace")
         ]
         mockAPIClient.getAgentsResult = .success(agents)
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
 
         // When
         await sut.refresh()
@@ -231,7 +231,7 @@ final class CrewListViewModelTests: XCTestCase {
             createCrewMember(name: "Worker", type: .polecat, rig: "greenplace")
         ]
         mockAPIClient.getAgentsResult = .success(agents)
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
 
         // When
         await sut.refresh()
@@ -250,7 +250,7 @@ final class CrewListViewModelTests: XCTestCase {
             createCrewMember(name: "Alpha", type: .polecat, rig: "oldforge")
         ]
         mockAPIClient.getAgentsResult = .success(agents)
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
         await sut.refresh()
 
         // When
@@ -265,7 +265,7 @@ final class CrewListViewModelTests: XCTestCase {
         // Given
         let agents = createTestAgents()
         mockAPIClient.getAgentsResult = .success(agents)
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
         await sut.refresh()
         sut.searchText = "test"
         sut.selectedRig = "greenplace"
@@ -284,7 +284,7 @@ final class CrewListViewModelTests: XCTestCase {
     func testHasActiveFilters_withSearch_returnsTrue() async {
         // Given
         mockAPIClient.getAgentsResult = .success([])
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
 
         // When
         sut.searchText = "test"
@@ -296,7 +296,7 @@ final class CrewListViewModelTests: XCTestCase {
     func testHasActiveFilters_withRig_returnsTrue() async {
         // Given
         mockAPIClient.getAgentsResult = .success([])
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
 
         // When
         sut.selectedRig = "greenplace"
@@ -308,7 +308,7 @@ final class CrewListViewModelTests: XCTestCase {
     func testHasActiveFilters_noFilters_returnsFalse() async {
         // Given
         mockAPIClient.getAgentsResult = .success([])
-        sut = CrewListViewModel(apiClient: mockAPIClient)
+        sut = AgentListViewModel(apiClient: mockAPIClient)
 
         // Then
         XCTAssertFalse(sut.hasActiveFilters)
@@ -329,7 +329,7 @@ final class CrewListViewModelTests: XCTestCase {
 
         // Then
         for (type, expectedName) in groups {
-            let group = CrewListViewModel.AgentTypeGroup(type: type, members: [])
+            let group = AgentListViewModel.AgentTypeGroup(type: type, members: [])
             XCTAssertEqual(group.displayName, expectedName)
         }
     }
@@ -340,7 +340,7 @@ final class CrewListViewModelTests: XCTestCase {
 
         // Then
         for (index, type) in types.enumerated() {
-            let group = CrewListViewModel.AgentTypeGroup(type: type, members: [])
+            let group = AgentListViewModel.AgentTypeGroup(type: type, members: [])
             XCTAssertEqual(group.sortOrder, index)
         }
     }

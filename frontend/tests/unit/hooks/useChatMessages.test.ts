@@ -53,7 +53,7 @@ function mockListResponse(items: ChatMessage[], hasMore = false): PaginatedRespo
 describe('useChatMessages', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+    vi.mocked(api.messages.list).mockResolvedValue(
       mockListResponse([])
     );
   });
@@ -65,7 +65,7 @@ describe('useChatMessages', () => {
   describe('initial fetch', () => {
     it('should fetch messages on mount', async () => {
       const msg = makeChatMessage({ agentId: 'agent-1' });
-      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+      vi.mocked(api.messages.list).mockResolvedValue(
         mockListResponse([msg])
       );
 
@@ -88,7 +88,7 @@ describe('useChatMessages', () => {
     });
 
     it('should set error on fetch failure', async () => {
-      (api.messages.list as ReturnType<typeof vi.fn>).mockRejectedValue(
+      vi.mocked(api.messages.list).mockRejectedValue(
         new Error('Network error')
       );
 
@@ -106,7 +106,7 @@ describe('useChatMessages', () => {
       const msg1 = makeChatMessage({ agentId: 'agent-1', body: 'From 1' });
       const msg2 = makeChatMessage({ agentId: 'agent-2', body: 'From 2' });
 
-      (api.messages.list as ReturnType<typeof vi.fn>)
+      vi.mocked(api.messages.list)
         .mockResolvedValueOnce(mockListResponse([msg1]))
         .mockResolvedValueOnce(mockListResponse([msg2]));
 
@@ -132,13 +132,13 @@ describe('useChatMessages', () => {
   describe('WebSocket real-time messages', () => {
     it('should append new messages from WebSocket subscription', async () => {
       const existingMsg = makeChatMessage({ id: 'msg-1', body: 'Old' });
-      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+      vi.mocked(api.messages.list).mockResolvedValue(
         mockListResponse([existingMsg])
       );
 
       // Capture the subscriber callback
-      let subscriberCallback: ((msg: any) => void) | undefined;
-      mockSubscribe.mockImplementation((cb: any) => {
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
         subscriberCallback = cb;
         return vi.fn();
       });
@@ -167,12 +167,12 @@ describe('useChatMessages', () => {
 
     it('should deduplicate messages by ID', async () => {
       const msg = makeChatMessage({ id: 'msg-dup', body: 'Original' });
-      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+      vi.mocked(api.messages.list).mockResolvedValue(
         mockListResponse([msg])
       );
 
-      let subscriberCallback: ((msg: any) => void) | undefined;
-      mockSubscribe.mockImplementation((cb: any) => {
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
         subscriberCallback = cb;
         return vi.fn();
       });
@@ -199,12 +199,12 @@ describe('useChatMessages', () => {
     });
 
     it('should filter WS messages by agentId scope (adj-jqs regression)', async () => {
-      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+      vi.mocked(api.messages.list).mockResolvedValue(
         mockListResponse([])
       );
 
-      let subscriberCallback: ((msg: any) => void) | undefined;
-      mockSubscribe.mockImplementation((cb: any) => {
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
         subscriberCallback = cb;
         return vi.fn();
       });
@@ -245,12 +245,12 @@ describe('useChatMessages', () => {
     });
 
     it('should accept all WS messages when no agentId is set', async () => {
-      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+      vi.mocked(api.messages.list).mockResolvedValue(
         mockListResponse([])
       );
 
-      let subscriberCallback: ((msg: any) => void) | undefined;
-      mockSubscribe.mockImplementation((cb: any) => {
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
         subscriberCallback = cb;
         return vi.fn();
       });
@@ -332,8 +332,8 @@ describe('useChatMessages', () => {
 
   describe('sendMessage (optimistic UI)', () => {
     it('should add optimistic message immediately before API call resolves', async () => {
-      let resolveApiSend: ((v: any) => void) | undefined;
-      (api.messages.send as ReturnType<typeof vi.fn>).mockImplementation(
+      let resolveApiSend: ((v: unknown) => void) | undefined;
+      vi.mocked(api.messages.send).mockImplementation(
         () => new Promise((resolve) => { resolveApiSend = resolve; })
       );
 
@@ -369,7 +369,7 @@ describe('useChatMessages', () => {
     });
 
     it('should mark optimistic message as failed on API error', async () => {
-      (api.messages.send as ReturnType<typeof vi.fn>).mockRejectedValue(
+      vi.mocked(api.messages.send).mockRejectedValue(
         new Error('Send failed')
       );
 
@@ -393,7 +393,7 @@ describe('useChatMessages', () => {
     });
 
     it('should call API with correct params', async () => {
-      (api.messages.send as ReturnType<typeof vi.fn>).mockResolvedValue({
+      vi.mocked(api.messages.send).mockResolvedValue({
         messageId: 'new-msg',
         timestamp: '2026-02-21T11:00:00Z',
       });
@@ -417,7 +417,7 @@ describe('useChatMessages', () => {
     });
 
     it('should send with threadId when provided', async () => {
-      (api.messages.send as ReturnType<typeof vi.fn>).mockResolvedValue({
+      vi.mocked(api.messages.send).mockResolvedValue({
         messageId: 'new-msg',
         timestamp: '2026-02-21T11:00:00Z',
       });
@@ -445,8 +445,8 @@ describe('useChatMessages', () => {
   describe('confirmDelivery', () => {
     it('should update optimistic message with server ID and delivered status', async () => {
       // Set up a message with 'sending' status
-      let resolveApiSend: ((v: any) => void) | undefined;
-      (api.messages.send as ReturnType<typeof vi.fn>).mockImplementation(
+      let resolveApiSend: ((v: unknown) => void) | undefined;
+      vi.mocked(api.messages.send).mockImplementation(
         () => new Promise((resolve) => { resolveApiSend = resolve; })
       );
 
@@ -479,8 +479,8 @@ describe('useChatMessages', () => {
 
   describe('markFailed', () => {
     it('should mark an optimistic message as failed by clientId', async () => {
-      let resolveApiSend: ((v: any) => void) | undefined;
-      (api.messages.send as ReturnType<typeof vi.fn>).mockImplementation(
+      let resolveApiSend: ((v: unknown) => void) | undefined;
+      vi.mocked(api.messages.send).mockImplementation(
         () => new Promise((resolve) => { resolveApiSend = resolve; })
       );
 
@@ -509,7 +509,7 @@ describe('useChatMessages', () => {
 
   describe('markRead', () => {
     it('should call API to mark message as read', async () => {
-      (api.messages.markRead as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+      vi.mocked(api.messages.markRead).mockResolvedValue(undefined);
 
       const { result } = renderHook(() => useChatMessages('agent-1'));
 
@@ -538,7 +538,7 @@ describe('useChatMessages', () => {
         body: 'Older',
       });
 
-      (api.messages.list as ReturnType<typeof vi.fn>)
+      vi.mocked(api.messages.list)
         .mockResolvedValueOnce(mockListResponse([initialMsg], true))
         .mockResolvedValueOnce(mockListResponse([olderMsg], false));
 
@@ -571,7 +571,7 @@ describe('useChatMessages', () => {
   describe('no agentId', () => {
     it('should fetch all messages when no agentId provided', async () => {
       const msg = makeChatMessage();
-      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+      vi.mocked(api.messages.list).mockResolvedValue(
         mockListResponse([msg])
       );
 
@@ -591,7 +591,7 @@ describe('useChatMessages', () => {
   describe('acceptance criteria', () => {
     it('uses /api/messages, not /api/mail', async () => {
       // Verify the hook calls api.messages.list, not api.mail.list
-      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+      vi.mocked(api.messages.list).mockResolvedValue(
         mockListResponse([])
       );
 
@@ -607,7 +607,7 @@ describe('useChatMessages', () => {
       const msg1 = makeChatMessage({ agentId: 'agent-1', body: 'Agent 1 msg' });
       const msg2 = makeChatMessage({ agentId: 'agent-2', body: 'Agent 2 msg' });
 
-      (api.messages.list as ReturnType<typeof vi.fn>)
+      vi.mocked(api.messages.list)
         .mockResolvedValueOnce(mockListResponse([msg1]))
         .mockResolvedValueOnce(mockListResponse([msg2]));
 
@@ -636,11 +636,11 @@ describe('useChatMessages', () => {
       const serverMsg = makeChatMessage({ id: 'server-1', body: 'From server' });
 
       // First call returns server message, second (refetch after send) also returns it
-      (api.messages.list as ReturnType<typeof vi.fn>)
+      vi.mocked(api.messages.list)
         .mockResolvedValue(mockListResponse([serverMsg]));
 
-      let resolveApiSend: ((v: any) => void) | undefined;
-      (api.messages.send as ReturnType<typeof vi.fn>).mockImplementation(
+      let resolveApiSend: ((v: unknown) => void) | undefined;
+      vi.mocked(api.messages.send).mockImplementation(
         () => new Promise((resolve) => { resolveApiSend = resolve; })
       );
 
@@ -676,7 +676,7 @@ describe('useChatMessages', () => {
 
       // Control the timing: first call resolves, second hangs initially
       let resolveSecondFetch: ((v: PaginatedResponse<ChatMessage>) => void) | undefined;
-      (api.messages.list as ReturnType<typeof vi.fn>)
+      vi.mocked(api.messages.list)
         .mockResolvedValueOnce(mockListResponse([msg1]))
         .mockImplementationOnce(
           () => new Promise((resolve) => { resolveSecondFetch = resolve; })
@@ -708,7 +708,7 @@ describe('useChatMessages', () => {
     });
 
     it('should reset hasMore when agentId changes', async () => {
-      (api.messages.list as ReturnType<typeof vi.fn>)
+      vi.mocked(api.messages.list)
         .mockResolvedValueOnce(mockListResponse([makeChatMessage()], true))  // hasMore=true for agent-1
         .mockResolvedValueOnce(mockListResponse([makeChatMessage()], false)); // hasMore=false for agent-2
 
@@ -731,7 +731,7 @@ describe('useChatMessages', () => {
 
   describe('iOS edge cases: optimistic + WS deduplication', () => {
     it('should replace optimistic message when real message arrives via WS', async () => {
-      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+      vi.mocked(api.messages.list).mockResolvedValue(
         mockListResponse([])
       );
 
@@ -797,7 +797,7 @@ describe('useChatMessages', () => {
         body: 'Older 2',
       });
 
-      (api.messages.list as ReturnType<typeof vi.fn>)
+      vi.mocked(api.messages.list)
         .mockResolvedValueOnce(mockListResponse([recentMsg], true))
         .mockResolvedValueOnce(mockListResponse([olderMsg1, olderMsg2], false));
 
@@ -825,7 +825,7 @@ describe('useChatMessages', () => {
         body: 'Recent',
       });
 
-      (api.messages.list as ReturnType<typeof vi.fn>)
+      vi.mocked(api.messages.list)
         .mockResolvedValueOnce(mockListResponse([recentMsg], true))
         .mockResolvedValueOnce(mockListResponse([], false));
 
@@ -848,7 +848,7 @@ describe('useChatMessages', () => {
       const mockUnsubscribe = vi.fn();
       mockSubscribe.mockImplementation(() => mockUnsubscribe);
 
-      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+      vi.mocked(api.messages.list).mockResolvedValue(
         mockListResponse([])
       );
 
@@ -870,7 +870,7 @@ describe('useChatMessages', () => {
         return vi.fn();
       });
 
-      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+      vi.mocked(api.messages.list).mockResolvedValue(
         mockListResponse([])
       );
 
@@ -898,7 +898,7 @@ describe('useChatMessages', () => {
 
   describe('iOS edge cases: loadMore guard', () => {
     it('should not fetch when hasMore is false', async () => {
-      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+      vi.mocked(api.messages.list).mockResolvedValue(
         mockListResponse([makeChatMessage()], false)
       );
 
@@ -908,18 +908,18 @@ describe('useChatMessages', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      const callCountBefore = (api.messages.list as ReturnType<typeof vi.fn>).mock.calls.length;
+      const callCountBefore = vi.mocked(api.messages.list).mock.calls.length;
 
       await act(async () => {
         await result.current.loadMore();
       });
 
       // Should not have made another API call
-      expect((api.messages.list as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callCountBefore);
+      expect(vi.mocked(api.messages.list).mock.calls.length).toBe(callCountBefore);
     });
 
     it('should not fetch when messages array is empty', async () => {
-      (api.messages.list as ReturnType<typeof vi.fn>).mockResolvedValue(
+      vi.mocked(api.messages.list).mockResolvedValue(
         mockListResponse([], true) // hasMore is true but no messages
       );
 
@@ -929,14 +929,14 @@ describe('useChatMessages', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      const callCountBefore = (api.messages.list as ReturnType<typeof vi.fn>).mock.calls.length;
+      const callCountBefore = vi.mocked(api.messages.list).mock.calls.length;
 
       await act(async () => {
         await result.current.loadMore();
       });
 
       // Should not have made another API call (no cursor to use)
-      expect((api.messages.list as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callCountBefore);
+      expect(vi.mocked(api.messages.list).mock.calls.length).toBe(callCountBefore);
     });
   });
 });

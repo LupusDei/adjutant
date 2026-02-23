@@ -56,7 +56,7 @@ export function EpicCard({ epic, onClick }: EpicCardProps) {
       style={cardStyle}
       className={onClick ? 'epic-card-clickable' : undefined}
       onClick={onClick}
-      onKeyDown={onClick ? (e) => e.key === 'Enter' && onClick() : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter') onClick(); } : undefined}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
     >

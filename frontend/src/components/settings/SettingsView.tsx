@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, type CSSProperties } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { ThemeId } from '../../App';
 import { NotificationSettings, VoiceConfigPanel } from '../voice';
-import { getApiKey, setApiKey, clearApiKey, hasApiKey } from '../../services/api';
+import { setApiKey, clearApiKey, hasApiKey } from '../../services/api';
 import { useCommunication } from '../../contexts/CommunicationContext';
 import type { CommunicationPriority } from '../../types';
 import { useMode, type DeploymentMode } from '../../contexts/ModeContext';
@@ -74,7 +74,7 @@ interface SettingsViewProps {
  * Settings view component.
  * Displays system settings and connection info including the public URL for remote access.
  */
-const MODE_OPTIONS: Array<{ mode: DeploymentMode; label: string; icon: string; description: string }> = [
+const MODE_OPTIONS: { mode: DeploymentMode; label: string; icon: string; description: string }[] = [
   { mode: 'gastown', label: 'GAS TOWN', icon: '🏭', description: 'Full multi-agent infrastructure with Mayor, Witness, Refinery' },
   { mode: 'swarm', label: 'SWARM', icon: '🐝', description: 'Multiple peer agents without formal hierarchy' },
 ];
@@ -104,7 +104,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
       setApiKey(apiKeyInput.trim());
       setApiKeyStatus('saved');
       setApiKeyInput('');
-      setTimeout(() => setApiKeyStatus('configured'), 2000);
+      setTimeout(() => { setApiKeyStatus('configured'); }, 2000);
     }
   }, [apiKeyInput]);
 
@@ -167,7 +167,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
   // Fetch status when tab becomes active
   useEffect(() => {
     if (isActive) {
-      fetchTunnelStatus();
+      void fetchTunnelStatus();
     }
   }, [isActive, fetchTunnelStatus]);
 
@@ -200,7 +200,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
         } else if (state === 'starting') {
           setTunnelStatus('starting');
           // Poll for completion
-          setTimeout(() => fetchTunnelStatus(), 1000);
+          setTimeout(() => { void fetchTunnelStatus(); }, 1000);
         }
       } else {
         // Revert on error
@@ -222,17 +222,17 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
     try {
       await navigator.clipboard.writeText(urlToCopy);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => { setCopied(false); }, 2000);
     } catch {
       // Fallback for browsers that don't support clipboard API
       const input = document.createElement('input');
       input.value = urlToCopy;
       document.body.appendChild(input);
       input.select();
-      document.execCommand('copy');
+      document.execCommand('copy'); // eslint-disable-line @typescript-eslint/no-deprecated -- fallback for old browsers
       document.body.removeChild(input);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => { setCopied(false); }, 2000);
     }
   }, [ngrokUrl, currentOrigin]);
 
@@ -283,7 +283,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                   ...(isToggleOn ? styles.toggleOn : styles.toggleOff),
                   ...((!canToggle) ? styles.toggleDisabled : {}),
                 }}
-                onClick={handleToggle}
+                onClick={() => { void handleToggle(); }}
                 disabled={!canToggle}
                 title={isOnNgrok ? 'Cannot toggle while accessed via tunnel' : undefined}
               >
@@ -306,7 +306,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                   <button
                     type="button"
                     style={styles.qrButtonInline}
-                    onClick={() => setShowQR(true)}
+                    onClick={() => { setShowQR(true); }}
                     title="Show QR Code"
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -316,7 +316,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                   <button
                     type="button"
                     style={styles.copyButtonInline}
-                    onClick={handleCopy}
+                    onClick={() => { void handleCopy(); }}
                     title={copied ? 'Copied!' : 'Copy URL'}
                   >
                     {copied ? (
@@ -337,8 +337,8 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
               </p>
 
               {showQR && (
-                <div style={styles.qrOverlay} onClick={() => setShowQR(false)}>
-                  <div style={styles.qrModal} onClick={(e) => e.stopPropagation()}>
+                <div style={styles.qrOverlay} onClick={() => { setShowQR(false); }}>
+                  <div style={styles.qrModal} onClick={(e) => { e.stopPropagation(); }}>
                     <h3 style={styles.qrTitle}>SCAN TO CONNECT</h3>
                     <div style={styles.qrContainer}>
                       <QRCodeSVG
@@ -353,7 +353,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                     <button
                       type="button"
                       style={styles.qrCloseButton}
-                      onClick={() => setShowQR(false)}
+                      onClick={() => { setShowQR(false); }}
                     >
                       CLOSE
                     </button>
@@ -401,11 +401,10 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                     cursor: isAvailable && !isActive && !modeSwitching ? 'pointer' : 'default',
                   }}
                   disabled={!isAvailable || isActive || modeSwitching}
-                  onClick={async () => {
+                  onClick={() => {
                     if (!isAvailable || isActive || modeSwitching) return;
                     setModeSwitching(true);
-                    await doSwitchMode(opt.mode);
-                    setModeSwitching(false);
+                    void doSwitchMode(opt.mode).finally(() => { setModeSwitching(false); });
                   }}
                 >
                   <div style={styles.modeCardHeader}>
@@ -451,10 +450,10 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                   <input
                     type="password"
                     value={apiKeyInput}
-                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    onChange={(e) => { setApiKeyInput(e.target.value); }}
                     placeholder="Enter API key..."
                     style={styles.apiKeyInput}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSaveApiKey()}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveApiKey(); }}
                   />
                   <button
                     type="button"
@@ -527,7 +526,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                     padding: isSelected ? '7px' : '8px',
                     boxShadow: isSelected ? '0 0 8px var(--crt-phosphor-glow)' : 'none',
                   }}
-                  onClick={() => setCommPriority(p.id)}
+                  onClick={() => { setCommPriority(p.id); }}
                 >
                   <span style={{
                     ...styles.priorityLabel,
@@ -557,7 +556,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                   backgroundColor: 'transparent',
                   boxShadow: theme === t.id ? '0 0 8px var(--crt-phosphor-glow)' : 'none',
                 }}
-                onClick={() => setTheme(t.id)}
+                onClick={() => { setTheme(t.id); }}
               >
                 <div style={{ ...styles.themePreview, backgroundColor: t.color }} />
                 <span style={{
@@ -586,7 +585,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
       <button
         type="button"
         style={styles.coffeeButton}
-        onClick={() => setShowCoffeeQR(true)}
+        onClick={() => { setShowCoffeeQR(true); }}
         title="Fuel the Developer"
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -599,8 +598,8 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
       </button>
 
       {showCoffeeQR && (
-        <div style={styles.qrOverlay} onClick={() => setShowCoffeeQR(false)}>
-          <div style={styles.qrModal} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.qrOverlay} onClick={() => { setShowCoffeeQR(false); }}>
+          <div style={styles.qrModal} onClick={(e) => { e.stopPropagation(); }}>
             <h3 style={{ ...styles.qrTitle, fontSize: '1.8rem' }}>WITNESS THE CAFFEINE</h3>
             <div style={styles.qrContainer}>
               <QRCodeSVG
@@ -618,7 +617,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
             <button
               type="button"
               style={{ ...styles.qrCloseButton, fontSize: '1.2rem', padding: '1rem 3rem' }}
-              onClick={() => setShowCoffeeQR(false)}
+              onClick={() => { setShowCoffeeQR(false); }}
             >
               VALHALLA!
             </button>

@@ -11,14 +11,17 @@ import { api } from '../services/api';
 /** Strip ANSI escape codes for clean text display. */
 function stripAnsi(str: string): string {
   return str
+    // eslint-disable-next-line no-control-regex
     .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
+    // eslint-disable-next-line no-control-regex
     .replace(/\x1b\][^\x07]*\x07/g, '')
+    // eslint-disable-next-line no-control-regex
     .replace(/\x1b[^[\]].?/g, '')
     .replace(/\r/g, '');
 }
 
 /** Convert parsed output events to displayable text lines. */
-function eventsToText(events: Array<{ type: string; content?: string; tool?: string; output?: string; message?: string; data?: string }>): string {
+function eventsToText(events: { type: string; content?: string; tool?: string; output?: string; message?: string; data?: string }[]): string {
   const lines: string[] = [];
   for (const evt of events) {
     switch (evt.type) {
@@ -95,8 +98,8 @@ export function useTerminalStream({ sessionId, enabled }: UseTerminalStreamOptio
       }
     };
 
-    fetchContent();
-    pollTimerRef.current = setInterval(fetchContent, POLL_INTERVAL_MS);
+    void fetchContent();
+    pollTimerRef.current = setInterval(() => { void fetchContent(); }, POLL_INTERVAL_MS);
   }, [sessionId]);
 
   const stopPolling = useCallback(() => {
@@ -140,8 +143,8 @@ export function useTerminalStream({ sessionId, enabled }: UseTerminalStreamOptio
               break;
             }
             case 'output': {
-              const events = msg['events'] as Array<{ type: string; content?: string; tool?: string; output?: string; message?: string; data?: string }>;
-              if (events && events.length > 0) {
+              const events = msg['events'] as { type: string; content?: string; tool?: string; output?: string; message?: string; data?: string }[];
+              if (events.length > 0) {
                 const newText = eventsToText(events);
                 if (newText) {
                   setContent(prev => prev ? `${prev}\n${newText}` : newText);

@@ -106,16 +106,16 @@ export const PersistentChat: React.FC<PersistentChatProps> = ({ agentId, isActiv
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting && hasMore && !loadingMore) {
+        if (entries[0].isIntersecting && !loadingMore) {
           setLoadingMore(true);
-          void loadMore().finally(() => setLoadingMore(false));
+          void loadMore().finally(() => { setLoadingMore(false); });
         }
       },
       { threshold: 0.1 }
     );
 
     observer.observe(sentinel);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); };
   }, [hasMore, loadMore, loadingMore]);
 
   // Handle sending a message
@@ -186,11 +186,11 @@ export const PersistentChat: React.FC<PersistentChatProps> = ({ agentId, isActiv
       </header>
 
       {/* Error banner */}
-      {(error || sendError) && (
+      {(error ?? sendError) && (
         <div className="chat-error" role="alert">
           {error?.message ?? sendError}
           <button
-            onClick={() => setSendError(null)}
+            onClick={() => { setSendError(null); }}
             className="chat-error-dismiss"
           >
             x
@@ -235,7 +235,7 @@ export const PersistentChat: React.FC<PersistentChatProps> = ({ agentId, isActiv
               >
                 <div className="chat-bubble-header">
                   <span className="chat-bubble-sender">
-                    {isUser ? 'YOU' : (msg.agentId ?? 'AGENT').toUpperCase()}
+                    {isUser ? 'YOU' : msg.agentId.toUpperCase()}
                   </span>
                 </div>
                 <div className="chat-bubble-content">
@@ -268,7 +268,7 @@ export const PersistentChat: React.FC<PersistentChatProps> = ({ agentId, isActiv
           ref={inputRef}
           type="text"
           value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={(e) => { setInputValue(e.target.value); }}
           onKeyDown={handleKeyDown}
           placeholder="TYPE MESSAGE..."
           className="chat-input"

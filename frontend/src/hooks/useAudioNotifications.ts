@@ -125,7 +125,7 @@ export function useAudioNotifications(): UseAudioNotificationsReturn {
       }
 
       // Create and play audio
-      const audio = new Audio(api.voice.getAudioUrl(result.data.audioUrl.split('/').pop() || ''));
+      const audio = new Audio(api.voice.getAudioUrl(result.data.audioUrl.split('/').pop() ?? ''));
       audio.volume = volume;
       audioRef.current = audio;
       currentIdRef.current = item.id;
@@ -186,10 +186,7 @@ export function useAudioNotifications(): UseAudioNotificationsReturn {
         // Re-add current item back to queue
         setQueue((prev) => {
           const filtered = prev.filter((q) => q.id !== currentId);
-          if (currentItem) {
-            return insertSorted(filtered, currentItem);
-          }
-          return filtered;
+          return insertSorted(filtered, currentItem);
         });
       }
     }

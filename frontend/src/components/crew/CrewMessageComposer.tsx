@@ -4,7 +4,7 @@
  * Displays a list of available crew members for selection.
  */
 
-import { useState, useCallback, type CSSProperties, type FormEvent } from 'react';
+import React, { useState, useCallback, type CSSProperties } from 'react';
 import type { CrewMember, MessagePriority } from '../../types';
 import { useCrewMessaging, buildCrewAddress } from '../../hooks/useCrewMessaging';
 import { VoiceMicButton } from '../voice';
@@ -105,7 +105,7 @@ export function CrewMessageComposer({
   }, []);
 
   // Handle form submission
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!selectedMember || !subject.trim() || !body.trim()) {
@@ -165,7 +165,7 @@ export function CrewMessageComposer({
           <input
             type="checkbox"
             checked={showOffline}
-            onChange={(e) => setShowOffline(e.target.checked)}
+            onChange={(e) => { setShowOffline(e.target.checked); }}
             style={styles.toggleInput}
           />
           <span style={styles.toggleText}>SHOW OFFLINE</span>
@@ -208,7 +208,7 @@ export function CrewMessageComposer({
                     : {}),
                   ...(member.status === 'offline' ? styles.crewCardOffline : {}),
                 }}
-                onClick={() => setSelectedMember(member)}
+                onClick={() => { setSelectedMember(member); }}
                 disabled={sending}
               >
                 <span style={styles.crewIcon}>{getAgentIcon(member.type)}</span>
@@ -253,7 +253,7 @@ export function CrewMessageComposer({
           type="text"
           style={styles.input}
           value={subject}
-          onChange={(e) => setSubject(e.target.value)}
+          onChange={(e) => { setSubject(e.target.value); }}
           placeholder="Enter subject..."
           disabled={sending}
           maxLength={200}
@@ -270,7 +270,7 @@ export function CrewMessageComposer({
           id="crew-priority"
           style={styles.select}
           value={priority}
-          onChange={(e) => setPriority(Number(e.target.value) as MessagePriority)}
+          onChange={(e) => { setPriority(Number(e.target.value) as MessagePriority); }}
           disabled={sending}
         >
           <option value={0}>!!! URGENT</option>
@@ -297,7 +297,7 @@ export function CrewMessageComposer({
           id="crew-body"
           style={styles.textarea}
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={(e) => { setBody(e.target.value); }}
           placeholder="Enter your message..."
           disabled={sending}
           rows={6}

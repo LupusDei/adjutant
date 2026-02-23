@@ -348,7 +348,7 @@ export const api = {
      * Get available bead sources (projects/rigs) and deployment mode.
      * Used to populate filter dropdowns in any deployment mode.
      */
-    async sources(): Promise<{ sources: Array<{ name: string; path: string; hasBeads: boolean }>; mode: string }> {
+    async sources(): Promise<{ sources: { name: string; path: string; hasBeads: boolean }[]; mode: string }> {
       return apiFetch('/beads/sources');
     },
   },
@@ -380,7 +380,7 @@ export const api = {
     async getSubtasks(epicId: string): Promise<BeadInfo[]> {
       const all = await apiFetch<BeadInfo[]>('/beads?status=all');
       return all.filter(
-        (b) => b.labels?.some((l) => l.includes(epicId) || l.includes(`parent:${epicId}`))
+        (b) => b.labels.some((l) => l.includes(epicId) || l.includes(`parent:${epicId}`))
       );
     },
   },

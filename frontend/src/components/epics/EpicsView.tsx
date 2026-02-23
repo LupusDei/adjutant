@@ -11,7 +11,7 @@ export interface EpicsViewProps {
 }
 
 /** Rig options for filtering */
-type RigFilter = 'ALL' | string;
+type RigFilter = string;
 
 export function EpicsView({ isActive = true }: EpicsViewProps) {
   const { isGasTown } = useMode();
@@ -26,7 +26,7 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
   // Fetch bead sources on mount for filter options
   useEffect(() => {
     void api.beads.sources().then((result) => {
-      if (result.sources && result.sources.length > 0) {
+      if (result.sources.length > 0) {
         const names = result.sources.map((s) => s.name).sort();
         setRigOptions(names);
       }
@@ -83,7 +83,7 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
           <span style={styles.filterLabel}>{isGasTown ? 'RIG:' : 'PROJECT:'}</span>
           <select
             value={rigFilter}
-            onChange={(e) => setRigFilter(e.target.value as RigFilter)}
+            onChange={(e) => { setRigFilter(e.target.value); }}
             style={styles.select}
           >
             <option value="ALL">{isGasTown ? 'ALL RIGS' : 'ALL PROJECTS'}</option>
@@ -98,7 +98,7 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
           <span style={styles.filterLabel}>SORT:</span>
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as EpicSortOption)}
+            onChange={(e) => { setSortBy(e.target.value as EpicSortOption); }}
             style={styles.select}
           >
             <option value="ACTIVITY">LATEST ACTIVITY</option>

@@ -1,4 +1,4 @@
-import { useState, useCallback, type CSSProperties, type FormEvent } from 'react';
+import React, { useState, useCallback, type CSSProperties } from 'react';
 import type { SendMessageRequest, MessagePriority } from '../../types';
 import { RecipientSelector } from './RecipientSelector';
 import { VoiceMicButton } from '../voice';
@@ -57,7 +57,7 @@ export function ComposeMessage({
     });
   }, []);
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!recipient || !subject.trim() || !body.trim()) {

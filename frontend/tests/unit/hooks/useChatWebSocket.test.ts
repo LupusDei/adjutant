@@ -61,6 +61,7 @@ beforeEach(() => {
   vi.stubGlobal('WebSocket', class extends MockWebSocket {
     constructor(url: string) {
       super(url);
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
       mockWs = this;
     }
   });
@@ -101,10 +102,10 @@ describe('useChatWebSocket', () => {
     it('should respond to auth challenge', async () => {
       renderHook(() => useChatWebSocket(true, emptyCallbacks));
 
-      await vi.waitFor(() => expect(mockWs).not.toBeNull());
+      await vi.waitFor(() => { expect(mockWs).not.toBeNull(); });
 
       // Wait for WS to open
-      await vi.waitFor(() => expect(mockWs!.readyState).toBe(MockWebSocket.OPEN));
+      await vi.waitFor(() => { expect(mockWs!.readyState).toBe(MockWebSocket.OPEN); });
 
       // Simulate auth challenge from server
       act(() => {
@@ -120,8 +121,8 @@ describe('useChatWebSocket', () => {
     it('should set connected=true after auth success', async () => {
       const { result } = renderHook(() => useChatWebSocket(true, emptyCallbacks));
 
-      await vi.waitFor(() => expect(mockWs).not.toBeNull());
-      await vi.waitFor(() => expect(mockWs!.readyState).toBe(MockWebSocket.OPEN));
+      await vi.waitFor(() => { expect(mockWs).not.toBeNull(); });
+      await vi.waitFor(() => { expect(mockWs!.readyState).toBe(MockWebSocket.OPEN); });
 
       expect(result.current.connected).toBe(false);
 
@@ -143,8 +144,8 @@ describe('useChatWebSocket', () => {
     it('should set disconnected on close', async () => {
       const { result } = renderHook(() => useChatWebSocket(true, emptyCallbacks));
 
-      await vi.waitFor(() => expect(mockWs).not.toBeNull());
-      await vi.waitFor(() => expect(mockWs!.readyState).toBe(MockWebSocket.OPEN));
+      await vi.waitFor(() => { expect(mockWs).not.toBeNull(); });
+      await vi.waitFor(() => { expect(mockWs!.readyState).toBe(MockWebSocket.OPEN); });
 
       // Auth flow
       act(() => {
@@ -168,7 +169,7 @@ describe('useChatWebSocket', () => {
         { initialProps: { enabled: true } },
       );
 
-      await vi.waitFor(() => expect(mockWs).not.toBeNull());
+      await vi.waitFor(() => { expect(mockWs).not.toBeNull(); });
 
       // Disable
       rerender({ enabled: false });
@@ -190,8 +191,8 @@ describe('useChatWebSocket', () => {
     it('should send message and return client ID when connected', async () => {
       const { result } = renderHook(() => useChatWebSocket(true, emptyCallbacks));
 
-      await vi.waitFor(() => expect(mockWs).not.toBeNull());
-      await vi.waitFor(() => expect(mockWs!.readyState).toBe(MockWebSocket.OPEN));
+      await vi.waitFor(() => { expect(mockWs).not.toBeNull(); });
+      await vi.waitFor(() => { expect(mockWs!.readyState).toBe(MockWebSocket.OPEN); });
 
       // Complete auth
       act(() => {
@@ -224,8 +225,8 @@ describe('useChatWebSocket', () => {
 
       renderHook(() => useChatWebSocket(true, callbacks));
 
-      await vi.waitFor(() => expect(mockWs).not.toBeNull());
-      await vi.waitFor(() => expect(mockWs!.readyState).toBe(MockWebSocket.OPEN));
+      await vi.waitFor(() => { expect(mockWs).not.toBeNull(); });
+      await vi.waitFor(() => { expect(mockWs!.readyState).toBe(MockWebSocket.OPEN); });
 
       // Auth flow
       act(() => {
@@ -262,8 +263,8 @@ describe('useChatWebSocket', () => {
 
       renderHook(() => useChatWebSocket(true, callbacks));
 
-      await vi.waitFor(() => expect(mockWs).not.toBeNull());
-      await vi.waitFor(() => expect(mockWs!.readyState).toBe(MockWebSocket.OPEN));
+      await vi.waitFor(() => { expect(mockWs).not.toBeNull(); });
+      await vi.waitFor(() => { expect(mockWs!.readyState).toBe(MockWebSocket.OPEN); });
 
       // Auth flow
       act(() => {
@@ -293,8 +294,8 @@ describe('useChatWebSocket', () => {
 
       renderHook(() => useChatWebSocket(true, callbacks));
 
-      await vi.waitFor(() => expect(mockWs).not.toBeNull());
-      await vi.waitFor(() => expect(mockWs!.readyState).toBe(MockWebSocket.OPEN));
+      await vi.waitFor(() => { expect(mockWs).not.toBeNull(); });
+      await vi.waitFor(() => { expect(mockWs!.readyState).toBe(MockWebSocket.OPEN); });
 
       act(() => {
         mockWs!.simulateMessage({ type: 'auth_challenge' });
@@ -323,8 +324,8 @@ describe('useChatWebSocket', () => {
 
       renderHook(() => useChatWebSocket(true, callbacks));
 
-      await vi.waitFor(() => expect(mockWs).not.toBeNull());
-      await vi.waitFor(() => expect(mockWs!.readyState).toBe(MockWebSocket.OPEN));
+      await vi.waitFor(() => { expect(mockWs).not.toBeNull(); });
+      await vi.waitFor(() => { expect(mockWs!.readyState).toBe(MockWebSocket.OPEN); });
 
       act(() => {
         mockWs!.simulateMessage({ type: 'auth_challenge' });
@@ -354,8 +355,8 @@ describe('useChatWebSocket', () => {
 
       renderHook(() => useChatWebSocket(true, callbacks));
 
-      await vi.waitFor(() => expect(mockWs).not.toBeNull());
-      await vi.waitFor(() => expect(mockWs!.readyState).toBe(MockWebSocket.OPEN));
+      await vi.waitFor(() => { expect(mockWs).not.toBeNull(); });
+      await vi.waitFor(() => { expect(mockWs!.readyState).toBe(MockWebSocket.OPEN); });
 
       act(() => {
         mockWs!.simulateMessage({ type: 'auth_challenge' });
@@ -381,8 +382,8 @@ describe('useChatWebSocket', () => {
     it('should send typing indicator when connected', async () => {
       const { result } = renderHook(() => useChatWebSocket(true, emptyCallbacks));
 
-      await vi.waitFor(() => expect(mockWs).not.toBeNull());
-      await vi.waitFor(() => expect(mockWs!.readyState).toBe(MockWebSocket.OPEN));
+      await vi.waitFor(() => { expect(mockWs).not.toBeNull(); });
+      await vi.waitFor(() => { expect(mockWs!.readyState).toBe(MockWebSocket.OPEN); });
 
       act(() => {
         mockWs!.simulateMessage({ type: 'auth_challenge' });

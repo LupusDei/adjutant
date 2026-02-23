@@ -40,7 +40,7 @@ function ModeTransitionTester() {
 const MODE_RESPONSES: Record<DeploymentMode, {
   mode: DeploymentMode;
   features: string[];
-  availableModes: Array<{ mode: DeploymentMode; available: boolean; reason?: string }>;
+  availableModes: { mode: DeploymentMode; available: boolean; reason?: string }[];
 }> = {
   gastown: {
     mode: 'gastown',
@@ -341,7 +341,7 @@ describe('mode transitions', () => {
 
   describe('SSE mode_changed events', () => {
     it('should update mode when SSE mode_changed event is received', async () => {
-      let sseHandlers: Record<string, (event: MessageEvent) => void> = {};
+      const sseHandlers: Record<string, (event: MessageEvent) => void> = {};
 
       vi.stubGlobal('EventSource', vi.fn(() => ({
         addEventListener: vi.fn((type: string, handler: (event: MessageEvent) => void) => {
@@ -380,7 +380,7 @@ describe('mode transitions', () => {
     });
 
     it('should update tabs when mode changes via SSE', async () => {
-      let sseHandlers: Record<string, (event: MessageEvent) => void> = {};
+      const sseHandlers: Record<string, (event: MessageEvent) => void> = {};
 
       vi.stubGlobal('EventSource', vi.fn(() => ({
         addEventListener: vi.fn((type: string, handler: (event: MessageEvent) => void) => {
@@ -418,7 +418,7 @@ describe('mode transitions', () => {
     });
 
     it('should handle rapid SSE mode changes without data loss', async () => {
-      let sseHandlers: Record<string, (event: MessageEvent) => void> = {};
+      const sseHandlers: Record<string, (event: MessageEvent) => void> = {};
 
       vi.stubGlobal('EventSource', vi.fn(() => ({
         addEventListener: vi.fn((type: string, handler: (event: MessageEvent) => void) => {

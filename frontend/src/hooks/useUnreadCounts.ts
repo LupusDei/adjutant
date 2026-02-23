@@ -9,7 +9,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 import { api } from '../services/api';
-import type { UnreadCount } from '../types';
 import { useCommunication, type IncomingChatMessage } from '../contexts/CommunicationContext';
 
 export interface UseUnreadCountsResult {

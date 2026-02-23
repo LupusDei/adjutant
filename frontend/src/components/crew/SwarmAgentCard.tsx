@@ -1,4 +1,4 @@
-import type { CSSProperties, FormEvent } from 'react';
+import type { CSSProperties } from 'react';
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { api, ApiError } from '../../services/api';
 import { useTerminalStream } from '../../hooks/useTerminalStream';
@@ -106,7 +106,7 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
   const [beadId, setBeadId] = useState('');
   const [assignState, setAssignState] = useState<AssignState>('idle');
 
-  const handleAssignSubmit = useCallback(async (e: FormEvent) => {
+  const handleAssignSubmit = useCallback(async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     const trimmed = beadId.trim();
     if (!trimmed || assignState === 'loading') return;
@@ -142,7 +142,7 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
     return formatRelativeTime(agent.lastActivity);
   }, [agent.lastActivity]);
 
-  const hasFooter = relativeTime || agent.worktreePath || agent.progress;
+  const hasFooter = (relativeTime ?? agent.worktreePath ?? agent.progress) != null;
 
   // Auto-scroll to bottom unless user scrolled up
   useEffect(() => {
@@ -234,7 +234,7 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
       {killState === 'confirm' && (
         <div style={styles.confirmRow}>
           <span style={styles.confirmText}>TERMINATE {agent.name.toUpperCase()}?</span>
-          <button style={styles.confirmYes} onClick={handleKillConfirm}>YES</button>
+          <button style={styles.confirmYes} onClick={() => { void handleKillConfirm(); }}>YES</button>
           <button style={styles.confirmNo} onClick={handleKillCancel}>NO</button>
         </div>
       )}
@@ -293,7 +293,7 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
       {canAssign && !showAssign && (
         <button
           style={styles.assignButton}
-          onClick={() => setShowAssign(true)}
+          onClick={() => { setShowAssign(true); }}
           aria-label={`Assign bead to ${agent.name}`}
         >
           ASSIGN BEAD
@@ -302,12 +302,12 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
 
       {/* D3: Assign bead inline form */}
       {showAssign && (
-        <form style={styles.assignForm} onSubmit={handleAssignSubmit}>
+        <form style={styles.assignForm} onSubmit={(e) => { void handleAssignSubmit(e); }}>
           <input
             style={styles.assignInput}
             type="text"
             value={beadId}
-            onChange={(e) => setBeadId(e.target.value)}
+            onChange={(e) => { setBeadId(e.target.value); }}
             placeholder="BEAD ID..."
             autoFocus
             disabled={assignState === 'loading'}
@@ -362,7 +362,7 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
               style={styles.terminalOutput}
               onScroll={handleTerminalScroll}
             >
-              {terminalContent || 'No output yet.'}
+              {terminalContent ?? 'No output yet.'}
             </pre>
           )}
         </div>

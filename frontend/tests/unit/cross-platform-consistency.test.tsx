@@ -42,11 +42,11 @@ const EXPECTED_TABS = {
 // =============================================================================
 
 let mockFetchResponses: Record<string, { ok: boolean; json: () => unknown }> = {};
-let mockEventSourceInstances: Array<{
+let mockEventSourceInstances: {
   addEventListener: ReturnType<typeof vi.fn>;
   close: ReturnType<typeof vi.fn>;
   onerror: ((event: Event) => void) | null;
-}> = [];
+}[] = [];
 
 beforeEach(() => {
   mockFetchResponses = {};
@@ -210,13 +210,13 @@ describe('cross-platform consistency', () => {
     it('uses "gastown" not "gas_town" or "GT"', async () => {
       setupModeResponse('gastown', []);
       render(<ModeProvider><ModeAndTabsDisplay /></ModeProvider>);
-      await waitFor(() => expect(screen.getByTestId('mode').textContent).toBe('gastown'));
+      await waitFor(() => { expect(screen.getByTestId('mode').textContent).toBe('gastown'); });
     });
 
     it('uses "swarm"', async () => {
       setupModeResponse('swarm', []);
       render(<ModeProvider><ModeAndTabsDisplay /></ModeProvider>);
-      await waitFor(() => expect(screen.getByTestId('mode').textContent).toBe('swarm'));
+      await waitFor(() => { expect(screen.getByTestId('mode').textContent).toBe('swarm'); });
     });
   });
 });

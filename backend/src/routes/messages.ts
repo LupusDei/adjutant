@@ -19,7 +19,7 @@ import { z } from "zod";
 import type { MessageStore } from "../services/message-store.js";
 import { wsBroadcast } from "../services/ws-server.js";
 import { getSessionBridge } from "../services/session-bridge.js";
-import { logInfo } from "../utils/index.js";
+
 import {
   success,
   notFound,
@@ -147,6 +147,11 @@ export function createMessagesRouter(store: MessageStore): Router {
       threadId: message.threadId ?? undefined,
       metadata: message.metadata ?? undefined,
     });
+
+    // NOTE: No APNs push here — this is the user→agent direction.
+    // The user is actively in the app when sending, so push is unnecessary.
+    // If agent-side push is needed in future, add sendNotificationToAgent(to, ...)
+    // here using the ChatMessagePayload contract from types/apns.ts.
 
     // Deliver to agent's tmux pane — sendInput handles status-based routing
     try {

@@ -236,7 +236,7 @@ export const VoiceConfigPanel: React.FC<VoiceConfigPanelProps> = ({
             <button
               type="button"
               className={`voice-config-agent-btn ${selectedAgent === null ? 'voice-config-agent-selected' : ''}`}
-              onClick={() => handleSelectAgent(null)}
+              onClick={() => { handleSelectAgent(null); }}
             >
               System Default
             </button>
@@ -249,7 +249,7 @@ export const VoiceConfigPanel: React.FC<VoiceConfigPanelProps> = ({
                 <button
                   type="button"
                   className={`voice-config-agent-btn ${selectedAgent === config.agentId ? 'voice-config-agent-selected' : ''}`}
-                  onClick={() => handleSelectAgent(config.agentId)}
+                  onClick={() => { handleSelectAgent(config.agentId); }}
                 >
                   {config.agentId}
                 </button>
@@ -270,8 +270,8 @@ export const VoiceConfigPanel: React.FC<VoiceConfigPanelProps> = ({
                 className="voice-config-input"
                 placeholder="Agent ID..."
                 value={newAgentId}
-                onChange={(e) => setNewAgentId(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddAgent()}
+                onChange={(e) => { setNewAgentId(e.target.value); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddAgent(); }}
               />
               <button
                 type="button"
@@ -296,7 +296,7 @@ export const VoiceConfigPanel: React.FC<VoiceConfigPanelProps> = ({
             <select
               className="voice-config-select"
               value={editForm.voiceId}
-              onChange={(e) => setEditForm((prev) => ({ ...prev, voiceId: e.target.value }))}
+              onChange={(e) => { setEditForm((prev) => ({ ...prev, voiceId: e.target.value })); }}
             >
               {AVAILABLE_VOICES.map((voice) => (
                 <option key={voice.id} value={voice.id}>
@@ -316,7 +316,7 @@ export const VoiceConfigPanel: React.FC<VoiceConfigPanelProps> = ({
               max="2.0"
               step="0.05"
               value={editForm.speed}
-              onChange={(e) => setEditForm((prev) => ({ ...prev, speed: parseFloat(e.target.value) }))}
+              onChange={(e) => { setEditForm((prev) => ({ ...prev, speed: parseFloat(e.target.value) })); }}
               className="voice-config-slider"
             />
           </div>
@@ -331,7 +331,7 @@ export const VoiceConfigPanel: React.FC<VoiceConfigPanelProps> = ({
               max="1"
               step="0.05"
               value={editForm.stability}
-              onChange={(e) => setEditForm((prev) => ({ ...prev, stability: parseFloat(e.target.value) }))}
+              onChange={(e) => { setEditForm((prev) => ({ ...prev, stability: parseFloat(e.target.value) })); }}
               className="voice-config-slider"
             />
           </div>
@@ -346,7 +346,7 @@ export const VoiceConfigPanel: React.FC<VoiceConfigPanelProps> = ({
               max="1"
               step="0.05"
               value={editForm.similarityBoost}
-              onChange={(e) => setEditForm((prev) => ({ ...prev, similarityBoost: parseFloat(e.target.value) }))}
+              onChange={(e) => { setEditForm((prev) => ({ ...prev, similarityBoost: parseFloat(e.target.value) })); }}
               className="voice-config-slider"
             />
           </div>

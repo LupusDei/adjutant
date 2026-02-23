@@ -152,7 +152,7 @@ function groupBeadsBySource(beads: BeadInfo[]): BeadGroup[] {
   const groupMap = new Map<string, BeadInfo[]>();
 
   for (const bead of beads) {
-    const source = bead.source ?? 'town';
+    const source = bead.source;
     const existing = groupMap.get(source);
     if (existing) {
       existing.push(bead);
@@ -173,7 +173,7 @@ function groupBeadsBySource(beads: BeadInfo[]): BeadGroup[] {
     const sourceBeads = groupMap.get(source) ?? [];
     groups.push({
       source,
-      displayName: source === 'town' ? 'TOWN (hq-*)' : `${source.toUpperCase().replace(/_/g, ' ')}`,
+      displayName: source === 'town' ? 'TOWN (hq-*)' : source.toUpperCase().replace(/_/g, ' '),
       beads: sourceBeads,
     });
   }
@@ -253,11 +253,11 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
     if (overseerView) {
       filteredBeads = filteredBeads.filter((bead) => {
         const typeLower = bead.type.toLowerCase();
-        const sourceLower = (bead.source ?? '').toLowerCase();
+        const sourceLower = bead.source.toLowerCase();
         const titleLower = bead.title.toLowerCase();
         const idLower = bead.id.toLowerCase();
         const assigneeLower = (bead.assignee ?? '').toLowerCase();
-        const labelsLower = (bead.labels ?? []).map(l => l.toLowerCase());
+        const labelsLower = bead.labels.map(l => l.toLowerCase());
 
         // Exclude any bead with "wisp" anywhere in its data
         if (typeLower.includes('wisp')) return false;
@@ -332,7 +332,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => { document.removeEventListener('mousedown', handleClickOutside); };
   }, [openMenuId]);
 
   const handleAction = useCallback(async (bead: BeadInfo, action: ActionType) => {
@@ -350,7 +350,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
           priority: 1,
           type: 'notification',
         });
-      } else if (action === 'delete') {
+      } else {
         await api.mail.send({
           from: 'overseer',
           to: 'mayor/',
@@ -361,10 +361,10 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
         });
       }
       setActionResult({ id: bead.id, type: action, success: true });
-      setTimeout(() => setActionResult(null), 2000);
+      setTimeout(() => { setActionResult(null); }, 2000);
     } catch {
       setActionResult({ id: bead.id, type: action, success: false });
-      setTimeout(() => setActionResult(null), 3000);
+      setTimeout(() => { setActionResult(null); }, 3000);
     } finally {
       setActionInProgress(null);
     }
@@ -413,7 +413,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
             {/* Group Header */}
             <button
               style={styles.groupHeader}
-              onClick={() => toggleGroup(group.source)}
+              onClick={() => { toggleGroup(group.source); }}
               aria-expanded={!isCollapsed}
             >
               <span style={styles.groupChevron}>
@@ -503,7 +503,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
                               ) : (
                                 <button
                                   style={styles.actionButton}
-                                  onClick={() => setOpenMenuId(isMenuOpen ? null : bead.id)}
+                                  onClick={() => { setOpenMenuId(isMenuOpen ? null : bead.id); }}
                                   title="Actions"
                                 >
                                   ⋮
@@ -516,7 +516,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
                                   {canSling && (
                                     <button
                                       style={styles.dropdownItem}
-                                      onClick={() => handleAction(bead, 'sling')}
+                                      onClick={() => { void handleAction(bead, 'sling'); }}
                                     >
                                       SLING
                                     </button>
@@ -527,7 +527,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
                                         ...styles.dropdownItem,
                                         ...styles.dropdownItemDelete,
                                       }}
-                                      onClick={() => handleAction(bead, 'delete')}
+                                      onClick={() => { void handleAction(bead, 'delete'); }}
                                     >
                                       DELETE
                                     </button>

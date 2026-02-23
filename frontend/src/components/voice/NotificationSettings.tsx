@@ -3,7 +3,6 @@
  * Pip-Boy themed notification audio preferences panel
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import { api } from '../../services/api';
 import './voice.css';
 
 export interface NotificationSettingsProps {
@@ -191,12 +190,12 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
         <div className="notification-setting-group">
           <span className="notification-setting-label">PRIORITY LEVELS:</span>
           <div className="notification-checkbox-group">
-            {(Object.keys(settings.priorities) as Array<keyof typeof settings.priorities>).map((priority) => (
+            {(Object.keys(settings.priorities) as (keyof typeof settings.priorities)[]).map((priority) => (
               <label key={priority} className="notification-checkbox-label">
                 <input
                   type="checkbox"
                   checked={settings.priorities[priority]}
-                  onChange={() => handlePriorityToggle(priority)}
+                  onChange={() => { handlePriorityToggle(priority); }}
                   disabled={!settings.enabled || isSaving}
                   className="notification-checkbox"
                 />
@@ -210,12 +209,12 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
         <div className="notification-setting-group">
           <span className="notification-setting-label">NOTIFICATION SOURCES:</span>
           <div className="notification-checkbox-group">
-            {(Object.keys(settings.sources) as Array<keyof typeof settings.sources>).map((source) => (
+            {(Object.keys(settings.sources) as (keyof typeof settings.sources)[]).map((source) => (
               <label key={source} className="notification-checkbox-label">
                 <input
                   type="checkbox"
                   checked={settings.sources[source]}
-                  onChange={() => handleSourceToggle(source)}
+                  onChange={() => { handleSourceToggle(source); }}
                   disabled={!settings.enabled || isSaving}
                   className="notification-checkbox"
                 />

@@ -36,7 +36,7 @@ export function useAgentStatus(): UseAgentStatusResult {
 
   const handleMessage = useCallback((incoming: IncomingWithMetadata) => {
     const meta = incoming.metadata;
-    if (!meta || meta.type !== 'agent_status') return;
+    if (meta?.type !== 'agent_status') return;
 
     const agentId = incoming.from;
     const info: AgentStatusInfo = {

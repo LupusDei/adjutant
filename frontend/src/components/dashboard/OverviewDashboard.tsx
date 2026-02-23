@@ -14,7 +14,7 @@ interface DashboardWidgetProps {
 }
 
 const DashboardWidget: React.FC<DashboardWidgetProps> = ({ title, children, className, headerRight }) => (
-  <div className={`dashboard-widget-container ${className || ''}`}>
+  <div className={`dashboard-widget-container ${className ?? ''}`}>
     <div className="dashboard-widget-header">
       <h3 className="dashboard-widget-title">{title}</h3>
       {headerRight && <div className="dashboard-widget-header-right">{headerRight}</div>}

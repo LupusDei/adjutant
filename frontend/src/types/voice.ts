@@ -17,9 +17,7 @@ export interface VoiceConfig {
 /**
  * Agent voice mapping.
  */
-export interface AgentVoiceMapping {
-  [agentOrRig: string]: VoiceConfig;
-}
+export type AgentVoiceMapping = Record<string, VoiceConfig>;
 
 /**
  * Complete voice configuration.

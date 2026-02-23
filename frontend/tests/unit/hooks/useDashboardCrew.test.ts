@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useDashboardCrew } from '../../../src/hooks/useDashboardCrew';
 import { api } from '../../../src/services/api';
-import type { CrewMember, AgentType, CrewMemberStatus } from '../../../src/types';
+import type { AgentType, CrewMemberStatus } from '../../../src/types';
 
 // Mock the API service
 vi.mock('../../../src/services/api', () => ({
@@ -33,7 +33,7 @@ describe('useDashboardCrew', () => {
   });
 
   it('should fetch crew data successfully', async () => {
-    (api.agents.list as vi.Mock).mockResolvedValue(mockAgents);
+    vi.mocked(api.agents.list).mockResolvedValue(mockAgents);
 
     const { result } = renderHook(() => useDashboardCrew());
 
@@ -45,7 +45,7 @@ describe('useDashboardCrew', () => {
     expect(result.current.error).toBeNull();
 
     // Wait for the hook to finish fetching
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => { expect(result.current.loading).toBe(false); });
 
     // Assert fetched data
     expect(result.current.totalCrew).toBe(3); // 3 crew/polecat agents
@@ -63,11 +63,11 @@ describe('useDashboardCrew', () => {
       { name: 'Bob', type: 'polecat', status: 'blocked', rig: 'rig2' },
       { name: 'Charlie', type: 'crew', status: 'working', rig: 'rig3' },
     ];
-    (api.agents.list as vi.Mock).mockResolvedValue(agentsWithIssues);
+    vi.mocked(api.agents.list).mockResolvedValue(agentsWithIssues);
 
     const { result } = renderHook(() => useDashboardCrew());
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => { expect(result.current.loading).toBe(false); });
 
     expect(result.current.crewAlerts).toContain('Alice is STUCK');
     expect(result.current.crewAlerts).toContain('Bob is blocked');
@@ -76,11 +76,11 @@ describe('useDashboardCrew', () => {
 
   it('should handle API errors gracefully', async () => {
     const errorMessage = 'Failed to fetch crew list';
-    (api.agents.list as vi.Mock).mockRejectedValue(new Error(errorMessage));
+    vi.mocked(api.agents.list).mockRejectedValue(new Error(errorMessage));
 
     const { result } = renderHook(() => useDashboardCrew());
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => { expect(result.current.loading).toBe(false); });
 
     expect(result.current.error).toBe(errorMessage);
     expect(result.current.totalCrew).toBe(0);
@@ -94,11 +94,11 @@ describe('useDashboardCrew', () => {
       { name: 'Offline', type: 'polecat', status: 'offline', rig: null },
       { name: 'Crew', type: 'crew', status: 'offline', rig: null }, // Offline crew still counted
     ];
-    (api.agents.list as vi.Mock).mockResolvedValue(agentsWithOffline);
+    vi.mocked(api.agents.list).mockResolvedValue(agentsWithOffline);
 
     const { result } = renderHook(() => useDashboardCrew());
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => { expect(result.current.loading).toBe(false); });
 
     // Offline polecat excluded, offline crew included
     expect(result.current.totalCrew).toBe(2);

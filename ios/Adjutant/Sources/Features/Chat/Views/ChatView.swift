@@ -72,16 +72,24 @@ struct ChatView: View {
         .background(CRTTheme.Background.screen)
         .onAppear {
             viewModel.onAppear()
+            coordinator.activeViewingAgentId = viewModel.selectedRecipient
+            NotificationService.shared.isViewingChat = true
+            NotificationService.shared.activeViewingAgentId = viewModel.selectedRecipient
             // Handle deep link from push notification
             if let agentId = coordinator.pendingChatAgentId {
                 coordinator.pendingChatAgentId = nil
                 Task {
                     await viewModel.setRecipient(agentId)
+                    coordinator.activeViewingAgentId = agentId
+                    NotificationService.shared.activeViewingAgentId = agentId
                 }
             }
         }
         .onDisappear {
             viewModel.onDisappear()
+            coordinator.activeViewingAgentId = nil
+            NotificationService.shared.isViewingChat = false
+            NotificationService.shared.activeViewingAgentId = nil
         }
         .onChange(of: viewModel.messages.last?.id) { oldId, newId in
             if newId != oldId { scrollToBottom() }
@@ -102,8 +110,14 @@ struct ChatView: View {
                 coordinator.pendingChatAgentId = nil
                 Task {
                     await viewModel.setRecipient(agentId)
+                    coordinator.activeViewingAgentId = agentId
+                    NotificationService.shared.activeViewingAgentId = agentId
                 }
             }
+        }
+        .onChange(of: viewModel.selectedRecipient) { _, newRecipient in
+            coordinator.activeViewingAgentId = newRecipient
+            NotificationService.shared.activeViewingAgentId = newRecipient
         }
         .onChange(of: viewModel.streamingText) { _, _ in
             scrollToBottom()
@@ -450,7 +464,8 @@ private struct TypingDots: View {
 
 // MARK: - Recipient Selector Sheet
 
-/// Sheet view for selecting a chat recipient
+/// Sheet view for selecting a chat recipient.
+/// Shows agent status, current task, and assigned beads for context.
 private struct RecipientSelectorSheet: View {
     @Environment(\.crtTheme) private var theme
     @Environment(\.dismiss) private var dismiss
@@ -461,6 +476,9 @@ private struct RecipientSelectorSheet: View {
     let onSelect: (String) -> Void
 
     @State private var searchText = ""
+    @State private var agentBeads: [String: [BeadInfo]] = [:]
+
+    private let apiClient = AppState.shared.apiClient
 
     private var filteredRecipients: [CrewMember] {
         if searchText.isEmpty {
@@ -480,9 +498,6 @@ private struct RecipientSelectorSheet: View {
                 CRTTextField("Search agents...", text: $searchText, icon: "magnifyingglass")
                     .padding(CRTTheme.Spacing.md)
 
-                // TODO: Consolidate Direct Channel recipient selector with Sessions switcher.
-                // In non-Gas Town modes, these serve overlapping purposes.
-
                 // Recipients list
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -492,6 +507,9 @@ private struct RecipientSelectorSheet: View {
                                 id: "mayor/",
                                 name: "Mayor",
                                 type: .mayor,
+                                status: nil,
+                                currentTask: nil,
+                                beads: agentBeads["mayor/"] ?? [],
                                 isSelected: selectedRecipient == "mayor/",
                                 unreadCount: unreadCounts["mayor/"] ?? 0
                             )
@@ -506,6 +524,9 @@ private struct RecipientSelectorSheet: View {
                                 id: crew.id,
                                 name: crew.name,
                                 type: crew.type,
+                                status: crew.status,
+                                currentTask: crew.currentTask,
+                                beads: agentBeads[crew.id] ?? [],
                                 isSelected: selectedRecipient == crew.id,
                                 unreadCount: unreadCounts[crew.id] ?? 0
                             )
@@ -534,28 +555,86 @@ private struct RecipientSelectorSheet: View {
                 }
             }
         }
+        .task {
+            await loadAgentBeads()
+        }
     }
 
     @ViewBuilder
-    private func recipientRow(id: String, name: String, type: AgentType, isSelected: Bool, unreadCount: Int = 0) -> some View {
+    private func recipientRow(
+        id: String,
+        name: String,
+        type: AgentType,
+        status: CrewMemberStatus?,
+        currentTask: String?,
+        beads: [BeadInfo],
+        isSelected: Bool,
+        unreadCount: Int = 0
+    ) -> some View {
         Button {
             onSelect(id)
         } label: {
             HStack {
-                // Agent icon
-                Image(systemName: iconForAgentType(type))
-                    .font(.system(size: 20))
-                    .foregroundColor(isSelected ? theme.primary : theme.dim)
-                    .frame(width: 32)
+                // Status dot + agent icon stack
+                ZStack(alignment: .bottomTrailing) {
+                    Image(systemName: iconForAgentType(type))
+                        .font(.system(size: 20))
+                        .foregroundColor(isSelected ? theme.primary : theme.dim)
+                        .frame(width: 32)
 
-                // Name and ID
+                    if let status {
+                        Circle()
+                            .fill(statusColor(status))
+                            .frame(width: 8, height: 8)
+                            .offset(x: 2, y: 2)
+                    }
+                }
+
+                // Name, status, and bead context
                 VStack(alignment: .leading, spacing: 2) {
-                    CRTText(name.uppercased(), style: .body, glowIntensity: isSelected ? .medium : .subtle)
-                    CRTText(id, style: .caption, glowIntensity: .none)
-                        .foregroundColor(theme.dim)
+                    HStack(spacing: CRTTheme.Spacing.xs) {
+                        CRTText(name.uppercased(), style: .body, glowIntensity: isSelected ? .medium : .subtle)
+
+                        if let status {
+                            CRTText(
+                                statusLabel(status),
+                                style: .caption,
+                                glowIntensity: .subtle,
+                                color: statusColor(status)
+                            )
+                        }
+                    }
+
+                    // Show current task or top assigned bead
+                    if let task = currentTask, !task.isEmpty {
+                        CRTText(task, style: .caption, glowIntensity: .none, color: theme.dim)
+                            .lineLimit(1)
+                    } else if let topBead = beads.first {
+                        HStack(spacing: CRTTheme.Spacing.xxs) {
+                            CRTText(topBead.id, style: .caption, glowIntensity: .subtle, color: theme.dim)
+                            CRTText(topBead.title, style: .caption, glowIntensity: .none, color: theme.dim)
+                                .lineLimit(1)
+                        }
+                    } else {
+                        CRTText(id, style: .caption, glowIntensity: .none)
+                            .foregroundColor(theme.dim)
+                    }
                 }
 
                 Spacer()
+
+                // Bead count badge (if assigned beads)
+                if !beads.isEmpty {
+                    Text("\(beads.count)")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(theme.dim)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(
+                            RoundedRectangle(cornerRadius: 3)
+                                .stroke(theme.dim.opacity(0.4), lineWidth: 1)
+                        )
+                }
 
                 // Unread count badge
                 if unreadCount > 0 {
@@ -592,6 +671,75 @@ private struct RecipientSelectorSheet: View {
         case .polecat: return "bolt"
         case .user: return "person.circle"
         case .agent: return "cpu"
+        }
+    }
+
+    private func statusColor(_ status: CrewMemberStatus) -> Color {
+        switch status {
+        case .working: return CRTTheme.State.info
+        case .idle: return CRTTheme.State.success
+        case .blocked: return CRTTheme.State.warning
+        case .stuck: return CRTTheme.State.error
+        case .offline: return CRTTheme.State.offline
+        }
+    }
+
+    private func statusLabel(_ status: CrewMemberStatus) -> String {
+        switch status {
+        case .working: return "WORKING"
+        case .idle: return "IDLE"
+        case .blocked: return "BLOCKED"
+        case .stuck: return "STUCK"
+        case .offline: return "OFFLINE"
+        }
+    }
+
+    /// Checks if a bead's assignee matches a given agent ID.
+    /// Handles format differences: assignee may be "rig/type/name" while agent ID could be just "name".
+    private func assigneeMatches(_ assignee: String?, agentId: String) -> Bool {
+        guard let assignee, !assignee.isEmpty else { return false }
+        if assignee == agentId { return true }
+        // Match last path component: "adjutant/polecats/toast" matches agent ID "toast"
+        if let lastComponent = assignee.split(separator: "/").last, String(lastComponent) == agentId {
+            return true
+        }
+        // Match agent ID as path prefix: agent "adjutant/polecats/toast" matches assignee "toast"
+        if let lastComponent = agentId.split(separator: "/").last, String(lastComponent) == assignee {
+            return true
+        }
+        return false
+    }
+
+    /// Loads beads and groups them by assignee for display in recipient rows
+    private func loadAgentBeads() async {
+        do {
+            // Fetch active beads (open, hooked, in_progress, blocked) + recently closed
+            let activeBeads = try await apiClient.getBeads(rig: "all", status: .default)
+            let closedBeads = try await apiClient.getBeads(rig: "all", status: .closed, limit: 50)
+
+            var mapping: [String: [BeadInfo]] = [:]
+            let allAgentIds = recipients.map(\.id)
+
+            // Group active beads by matching agent ID
+            for bead in activeBeads {
+                for agentId in allAgentIds {
+                    if assigneeMatches(bead.assignee, agentId: agentId) {
+                        mapping[agentId, default: []].append(bead)
+                        break
+                    }
+                }
+            }
+
+            // For agents with no active beads, show their last closed bead
+            for agentId in allAgentIds where mapping[agentId] == nil {
+                if let lastClosed = closedBeads.first(where: { assigneeMatches($0.assignee, agentId: agentId) }) {
+                    mapping[agentId] = [lastClosed]
+                }
+            }
+
+            agentBeads = mapping
+        } catch {
+            // Non-critical — just show recipients without bead context
         }
     }
 }

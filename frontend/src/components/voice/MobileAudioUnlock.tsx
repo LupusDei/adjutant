@@ -64,7 +64,7 @@ export const MobileAudioUnlock: React.FC<MobileAudioUnlockProps> = ({
         <button
           type="button"
           style={styles.unlockButton}
-          onClick={handleUnlock}
+          onClick={() => { void handleUnlock(); }}
           disabled={unlocking}
         >
           {unlocking ? 'ENABLING...' : 'ENABLE'}

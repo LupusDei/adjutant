@@ -139,7 +139,7 @@ export function useOverseerNotifications(): UseOverseerNotificationsReturn {
 
       try {
         // Create notification text - read full message body, not just subject
-        const messageBody = msg.body?.trim() || msg.subject;
+        const messageBody = msg.body.trim() || msg.subject;
         const notificationText = `Message from ${msg.from}. ${messageBody}`;
         setLastNotification(`From ${msg.from}: ${msg.subject}`);
 
@@ -187,8 +187,8 @@ export function useOverseerNotifications(): UseOverseerNotificationsReturn {
             const audio = new Audio(audioUrl);
             audio.volume = settings.volume;
             await new Promise<void>((resolve, reject) => {
-              audio.onended = () => resolve();
-              audio.onerror = () => reject(new Error('Audio playback failed'));
+              audio.onended = () => { resolve(); };
+              audio.onerror = () => { reject(new Error('Audio playback failed')); };
               audio.play().catch(reject);
             });
           }

@@ -54,7 +54,7 @@ export const AnnouncementBanner: React.FC = () => {
     const unsubscribe = subscribe((incoming: IncomingChatMessage) => {
       const msg = incoming as IncomingWithMetadata;
       const meta = msg.metadata;
-      if (!meta || meta.type !== 'announcement') return;
+      if (meta?.type !== 'announcement') return;
 
       const ann: Announcement = {
         id: msg.id,

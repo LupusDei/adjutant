@@ -171,6 +171,7 @@ export function useMail(options: UseMailOptions = {}): UseMailResult {
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         // If we have retries left and component is still mounted, wait and retry
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
         if (attempt < retries && mountedRef.current) {
           await new Promise((resolve) => setTimeout(resolve, retryDelay * (attempt + 1)));
         }

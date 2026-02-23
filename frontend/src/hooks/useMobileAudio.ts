@@ -37,7 +37,7 @@ export interface UseMobileAudioReturn {
 
 let globalAudioElement: HTMLAudioElement | null = null;
 let globalIsUnlocked = false;
-let globalUnlockListeners: Set<() => void> = new Set();
+const globalUnlockListeners = new Set<() => void>();
 
 /**
  * Check if device is mobile or tablet (has autoplay restrictions)
@@ -92,7 +92,9 @@ async function tryUnlockAudio(): Promise<boolean> {
 
   // Approach 1: Unlock via AudioContext (more reliable on newer iOS)
   try {
-    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- webkitAudioContext fallback for older iOS
+    const AudioContextClass = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- may be undefined on older browsers
     if (AudioContextClass) {
       const ctx = new AudioContextClass();
       if (ctx.state === 'suspended') {
@@ -134,7 +136,7 @@ async function tryUnlockAudio(): Promise<boolean> {
   if (audioContextUnlocked || audioElementUnlocked) {
     globalIsUnlocked = true;
     // Notify all listeners
-    globalUnlockListeners.forEach(listener => listener());
+    globalUnlockListeners.forEach(listener => { listener(); });
     console.log('[MobileAudio] Audio unlocked successfully');
     return true;
   }
@@ -159,7 +161,7 @@ export function useMobileAudio(): UseMobileAudioReturn {
 
   // Subscribe to global unlock state
   useEffect(() => {
-    const handleUnlock = () => setIsUnlocked(true);
+    const handleUnlock = () => { setIsUnlocked(true); };
     globalUnlockListeners.add(handleUnlock);
 
     // Sync initial state
@@ -205,12 +207,12 @@ export function useMobileAudio(): UseMobileAudioReturn {
         cleanup();
         // Get more details about the error
         const audioEl = e.target as HTMLAudioElement;
-        const errorCode = audioEl?.error?.code;
-        const errorMessage = audioEl?.error?.message || 'Unknown error';
+        const errorCode = audioEl.error?.code;
+        const errorMessage = audioEl.error?.message ?? 'Unknown error';
         console.error('[MobileAudio] Playback error:', {
           code: errorCode,
           message: errorMessage,
-          src: audioEl?.src
+          src: audioEl.src
         });
         reject(new Error(`Audio playback failed: ${errorMessage} (code: ${errorCode})`));
       };
@@ -234,9 +236,9 @@ export function useMobileAudio(): UseMobileAudioReturn {
           setIsPlaying(true);
           // Don't resolve here - wait for 'ended' event
         })
-        .catch((err) => {
+        .catch((err: unknown) => {
           cleanup();
-          reject(err);
+          reject(err instanceof Error ? err : new Error(String(err)));
         });
     });
   }, []);

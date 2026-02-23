@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MailDetail } from '../../../src/components/mail/MailDetail';
 import type { Message } from '../../../src/types';
@@ -42,7 +42,7 @@ function createMockMessage(overrides: Partial<Message> = {}): Message {
 describe('MailDetail', () => {
   beforeEach(() => {
     // Default mock for useIsMobile to return false
-    (useIsMobile as vi.Mock).mockReturnValue(false);
+    vi.mocked(useIsMobile).mockReturnValue(false);
   });
 
   describe('loading state', () => {
@@ -161,7 +161,7 @@ describe('MailDetail', () => {
   describe('close button', () => {
     beforeEach(() => {
       // Ensure useIsMobile returns true for these tests so the close button is rendered
-      (useIsMobile as vi.Mock).mockReturnValue(true);
+      vi.mocked(useIsMobile).mockReturnValue(true);
     });
 
     it('should show close button when onClose is provided', () => {

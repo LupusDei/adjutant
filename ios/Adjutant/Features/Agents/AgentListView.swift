@@ -1,18 +1,19 @@
 import SwiftUI
 import AdjutantKit
 
-/// Main crew list view showing all agents organized hierarchically.
+/// Main agent list view showing all agents organized hierarchically.
 /// Features search, rig filtering, and navigation to detail views.
-struct CrewListView: View {
+struct AgentListView: View {
     @Environment(\.crtTheme) private var theme
-    @StateObject private var viewModel: CrewListViewModel
+    @StateObject private var viewModel: AgentListViewModel
     @State private var showingRigPicker = false
+    @State private var showingSpawnSheet = false
 
-    /// Callback when a crew member is selected
+    /// Callback when an agent is selected
     var onSelectMember: ((CrewMember) -> Void)?
 
     init(apiClient: APIClient, onSelectMember: ((CrewMember) -> Void)? = nil) {
-        _viewModel = StateObject(wrappedValue: CrewListViewModel(apiClient: apiClient))
+        _viewModel = StateObject(wrappedValue: AgentListViewModel(apiClient: apiClient))
         self.onSelectMember = onSelectMember
     }
 
@@ -20,6 +21,11 @@ struct CrewListView: View {
         VStack(spacing: 0) {
             // Header
             headerView
+
+            // Workload summary
+            if !viewModel.allCrewMembers.isEmpty {
+                workloadSummary
+            }
 
             // Filter bar
             filterBar
@@ -37,6 +43,11 @@ struct CrewListView: View {
         .sheet(isPresented: $showingRigPicker) {
             rigPickerSheet
         }
+        .sheet(isPresented: $showingSpawnSheet) {
+            SpawnAgentSheet {
+                Task { await viewModel.refresh() }
+            }
+        }
     }
 
     // MARK: - Subviews
@@ -44,11 +55,21 @@ struct CrewListView: View {
     private var headerView: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                CRTText("CREW", style: .subheader, glowIntensity: .medium)
+                CRTText("AGENTS", style: .subheader, glowIntensity: .medium)
                 CRTText("\(viewModel.displayedCount) AGENTS", style: .caption, glowIntensity: .subtle, color: theme.dim)
             }
 
             Spacer()
+
+            // Spawn button
+            Button {
+                showingSpawnSheet = true
+            } label: {
+                Image(systemName: "plus.circle")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(theme.primary)
+            }
+            .accessibilityLabel("Spawn agent")
 
             // Refresh button
             Button {
@@ -75,6 +96,101 @@ struct CrewListView: View {
                     alignment: .bottom
                 )
         )
+    }
+
+    // MARK: - Workload Summary
+
+    private var workloadSummary: some View {
+        HStack(spacing: CRTTheme.Spacing.md) {
+            // Total agents
+            workloadStat(
+                value: "\(viewModel.allCrewMembers.count)",
+                label: "TOTAL"
+            )
+
+            Divider()
+                .frame(height: 20)
+                .background(theme.dim.opacity(0.3))
+
+            // Working
+            workloadStatWithDot(
+                value: "\(viewModel.statusCounts[.working] ?? 0)",
+                label: "ACTIVE",
+                dotColor: CRTTheme.State.success
+            )
+
+            // Idle
+            workloadStatWithDot(
+                value: "\(viewModel.statusCounts[.idle] ?? 0)",
+                label: "IDLE",
+                dotColor: CRTTheme.State.info
+            )
+
+            // Offline
+            workloadStatWithDot(
+                value: "\(viewModel.statusCounts[.offline] ?? 0)",
+                label: "OFF",
+                dotColor: CRTTheme.State.offline
+            )
+
+            Divider()
+                .frame(height: 20)
+                .background(theme.dim.opacity(0.3))
+
+            // Beads in progress
+            workloadStat(
+                value: "\(viewModel.totalBeadsInProgress)",
+                label: "BEADS",
+                icon: "circle.grid.3x3"
+            )
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
+        .padding(.vertical, CRTTheme.Spacing.xs)
+        .background(
+            CRTTheme.Background.panel.opacity(0.3)
+                .overlay(
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(theme.dim.opacity(0.15)),
+                    alignment: .bottom
+                )
+        )
+    }
+
+    private func workloadStat(value: String, label: String, icon: String? = nil) -> some View {
+        VStack(spacing: 1) {
+            HStack(spacing: 3) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 8))
+                        .foregroundColor(theme.dim)
+                }
+                Text(value)
+                    .font(CRTTheme.Typography.font(size: 14, weight: .bold))
+                    .foregroundColor(theme.primary)
+            }
+            Text(label)
+                .font(CRTTheme.Typography.font(size: 8, weight: .medium))
+                .tracking(CRTTheme.Typography.letterSpacing)
+                .foregroundColor(theme.dim)
+        }
+    }
+
+    private func workloadStatWithDot(value: String, label: String, dotColor: Color) -> some View {
+        VStack(spacing: 1) {
+            HStack(spacing: 3) {
+                Circle()
+                    .fill(dotColor)
+                    .frame(width: 5, height: 5)
+                Text(value)
+                    .font(CRTTheme.Typography.font(size: 14, weight: .bold))
+                    .foregroundColor(theme.primary)
+            }
+            Text(label)
+                .font(CRTTheme.Typography.font(size: 8, weight: .medium))
+                .tracking(CRTTheme.Typography.letterSpacing)
+                .foregroundColor(theme.dim)
+        }
     }
 
     private var filterBar: some View {
@@ -117,6 +233,9 @@ struct CrewListView: View {
                 RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
                     .stroke(theme.primary.opacity(0.3), lineWidth: 1)
             )
+
+            // Status filter chips
+            statusFilterBar
 
             // Rig filter button
             HStack {
@@ -162,6 +281,88 @@ struct CrewListView: View {
         .background(CRTTheme.Background.panel.opacity(0.5))
     }
 
+    // MARK: - Status Filter Bar
+
+    private var statusFilterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: CRTTheme.Spacing.xs) {
+                // ALL chip
+                statusFilterChip(label: "ALL", count: viewModel.allCrewMembers.count, isSelected: viewModel.selectedStatus == nil) {
+                    viewModel.selectedStatus = nil
+                }
+
+                // Per-status chips
+                ForEach(statusFilterOptions, id: \.status) { option in
+                    statusFilterChip(
+                        label: option.label,
+                        count: viewModel.statusCounts[option.status] ?? 0,
+                        isSelected: viewModel.selectedStatus == option.status,
+                        dotColor: option.color
+                    ) {
+                        if viewModel.selectedStatus == option.status {
+                            viewModel.selectedStatus = nil
+                        } else {
+                            viewModel.selectedStatus = option.status
+                        }
+                    }
+                }
+            }
+            .padding(.vertical, 2)
+        }
+    }
+
+    /// Status filter options with display metadata
+    private var statusFilterOptions: [(status: CrewMemberStatus, label: String, color: Color)] {
+        [
+            (.working, "WORKING", CRTTheme.State.success),
+            (.idle, "IDLE", CRTTheme.State.info),
+            (.blocked, "BLOCKED", CRTTheme.State.warning),
+            (.offline, "OFFLINE", CRTTheme.State.offline),
+        ]
+    }
+
+    private func statusFilterChip(
+        label: String,
+        count: Int,
+        isSelected: Bool,
+        dotColor: Color? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: CRTTheme.Spacing.xxs) {
+                if let dotColor {
+                    Circle()
+                        .fill(dotColor)
+                        .frame(width: 6, height: 6)
+                }
+
+                Text(label)
+                    .font(CRTTheme.Typography.font(size: 10, weight: isSelected ? .bold : .medium))
+                    .tracking(CRTTheme.Typography.letterSpacing)
+
+                Text("\(count)")
+                    .font(CRTTheme.Typography.font(size: 10, weight: .medium))
+                    .opacity(0.7)
+            }
+            .foregroundColor(isSelected ? theme.primary : theme.dim)
+            .padding(.horizontal, CRTTheme.Spacing.sm)
+            .padding(.vertical, CRTTheme.Spacing.xxs)
+            .background(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                    .fill(isSelected ? theme.primary.opacity(0.15) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                    .stroke(
+                        isSelected ? theme.primary.opacity(0.6) : theme.dim.opacity(0.2),
+                        lineWidth: 1
+                    )
+            )
+            .crtGlow(color: theme.primary, radius: isSelected ? 3 : 0, intensity: isSelected ? 0.3 : 0)
+        }
+        .buttonStyle(.plain)
+    }
+
     @ViewBuilder
     private var contentView: some View {
         if viewModel.isLoading && viewModel.allCrewMembers.isEmpty {
@@ -169,14 +370,14 @@ struct CrewListView: View {
         } else if viewModel.groupedCrewMembers.isEmpty {
             emptyView
         } else {
-            crewList
+            agentList
         }
     }
 
     private var loadingView: some View {
         VStack(spacing: CRTTheme.Spacing.md) {
             LoadingIndicator(size: .large)
-            CRTText("LOADING CREW...", style: .caption, glowIntensity: .subtle, color: theme.dim)
+            CRTText("LOADING AGENTS...", style: .caption, glowIntensity: .subtle, color: theme.dim)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -220,13 +421,16 @@ struct CrewListView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var crewList: some View {
+    private var agentList: some View {
         ScrollView {
             LazyVStack(spacing: CRTTheme.Spacing.md, pinnedViews: .sectionHeaders) {
                 ForEach(viewModel.groupedCrewMembers) { group in
                     Section {
                         ForEach(group.members) { member in
-                            CrewRowView(member: member) {
+                            AgentRowView(
+                                member: member,
+                                beadContext: viewModel.beadContext(for: member)
+                            ) {
                                 onSelectMember?(member)
                             }
                         }
@@ -255,7 +459,7 @@ struct CrewListView: View {
         }
     }
 
-    private func sectionHeader(for group: CrewListViewModel.AgentTypeGroup) -> some View {
+    private func sectionHeader(for group: AgentListViewModel.AgentTypeGroup) -> some View {
         HStack {
             CRTText(group.displayName, style: .caption, glowIntensity: .subtle, color: theme.dim)
 
@@ -340,19 +544,19 @@ extension View {
 
 // MARK: - Preview
 
-#Preview("CrewListView") {
+#Preview("AgentListView") {
     let config = APIClientConfiguration(baseURL: URL(string: "http://localhost:3000")!)
     let apiClient = APIClient(configuration: config)
 
-    return CrewListView(apiClient: apiClient) { member in
+    return AgentListView(apiClient: apiClient) { member in
         print("Selected: \(member.name)")
     }
 }
 
-#Preview("CrewListView Blue Theme") {
+#Preview("AgentListView Blue Theme") {
     let config = APIClientConfiguration(baseURL: URL(string: "http://localhost:3000")!)
     let apiClient = APIClient(configuration: config)
 
-    return CrewListView(apiClient: apiClient)
+    return AgentListView(apiClient: apiClient)
         .crtTheme(.blue)
 }

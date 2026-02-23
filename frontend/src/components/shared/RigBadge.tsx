@@ -16,6 +16,7 @@ export interface RigBadgeProps {
  * Extract rig name from an address like "gastown_boy/crew/carl" -> "gastown_boy"
  * or from a direct rig name.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function extractRigName(address: string | null): string | null {
   if (!address) return null;
 

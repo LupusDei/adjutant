@@ -100,7 +100,8 @@ function groupAgents(agents: CrewMember[]): AgentGroup {
         polecats: [],
       });
     }
-    const rigGroup = rigs.get(agent.rig)!;
+    const rigGroup = rigs.get(agent.rig);
+    if (!rigGroup) continue;
 
     // Sort into appropriate category
     switch (agent.type) {
@@ -143,7 +144,7 @@ function getEffectiveStatusGroup(agent: CrewMember): StatusGroup {
   if (agent.status === 'stuck') return 'stuck';
   if (agent.status === 'blocked') return 'blocked';
   if (agent.status === 'working') return 'working';
-  if (agent.status === 'idle' && agent.currentTask) return 'working';
+  if (agent.currentTask) return 'working';
   return 'idle';
 }
 
@@ -231,7 +232,7 @@ export function CrewStats({ className = '', isActive = true }: CrewStatsProps) {
               <input
                 type="checkbox"
                 checked={showAllPolecats}
-                onChange={(e) => setShowAllPolecats(e.target.checked)}
+                onChange={(e) => { setShowAllPolecats(e.target.checked); }}
                 style={styles.toggleHiddenInput}
               />
               <span style={styles.toggleText}>SHOW ALL</span>
@@ -395,7 +396,7 @@ function SwarmSummaryPanel({ agents }: SwarmSummaryPanelProps) {
     try {
       await api.swarms.addAgent(swarmId);
       setSpawnState('success');
-      setTimeout(() => setSpawnState('idle'), 2000);
+      setTimeout(() => { setSpawnState('idle'); }, 2000);
     } catch (err) {
       setSpawnState('error');
       setSpawnError(err instanceof ApiError ? err.message : 'Failed to spawn agent');
@@ -446,7 +447,7 @@ function SwarmSummaryPanel({ agents }: SwarmSummaryPanelProps) {
         <div style={styles.swarmSpawnContainer}>
           <button
             style={spawnBtnStyle}
-            onClick={handleSpawnAgent}
+            onClick={() => { void handleSpawnAgent(); }}
             disabled={spawnState === 'loading' || !swarmId}
             title={spawnError ?? (swarmId ? 'Spawn a new agent' : 'No active swarm')}
             aria-label="Spawn new agent"
@@ -505,7 +506,7 @@ function SwarmSection({ agents, gridStyle }: SwarmSectionProps) {
             <div key={group} style={styles.statusGroup}>
               <button
                 style={styles.offlineToggle}
-                onClick={() => setShowOffline(prev => !prev)}
+                onClick={() => { setShowOffline(prev => !prev); }}
                 aria-expanded={showOffline}
               >
                 <span style={{ color: getGroupColor(group) }}>
@@ -591,7 +592,7 @@ function RigSection({ name, agents, agentGridStyle, infraGridStyle, showAllPolec
       await api.agents.spawnPolecat(name);
       setSpawnState('success');
       // Reset to idle after showing success
-      setTimeout(() => setSpawnState('idle'), 2000);
+      setTimeout(() => { setSpawnState('idle'); }, 2000);
     } catch (err) {
       setSpawnState('error');
       if (err instanceof ApiError) {
@@ -634,7 +635,7 @@ function RigSection({ name, agents, agentGridStyle, infraGridStyle, showAllPolec
       )}
 
       {/* Witness | Refinery */}
-      {(agents.witness || agents.refinery) && (
+      {(agents.witness ?? agents.refinery) && (
         <div style={styles.subsection}>
           <div style={styles.subsectionHeader}>
             <span style={styles.subsectionIcon}>├─</span>
@@ -654,7 +655,7 @@ function RigSection({ name, agents, agentGridStyle, infraGridStyle, showAllPolec
           <span style={styles.subsectionTitle}>POLECATS</span>
           <SpawnPolecatButton
             state={spawnState}
-            onClick={handleSpawnPolecat}
+            onClick={() => { void handleSpawnPolecat(); }}
             error={spawnError}
           />
           <span style={styles.polecatCount}>
@@ -675,7 +676,7 @@ function RigSection({ name, agents, agentGridStyle, infraGridStyle, showAllPolec
                   <PolecatCard
                     agent={agent}
                     isExpanded={isExpanded}
-                    onClick={() => onPolecatClick(isExpanded ? null : agent.id)}
+                    onClick={() => { onPolecatClick(isExpanded ? null : agent.id); }}
                     disabled={!isOnline}
                   />
                   {isExpanded && agent.rig && (
@@ -684,7 +685,7 @@ function RigSection({ name, agents, agentGridStyle, infraGridStyle, showAllPolec
                         rig={agent.rig}
                         polecat={agent.name}
                         pollInterval={2000}
-                        onClose={() => onPolecatClick(null)}
+                        onClose={() => { onPolecatClick(null); }}
                         style={{ height: '300px' }}
                       />
                     </div>
@@ -906,46 +907,6 @@ function PolecatCard({ agent, isExpanded, onClick, disabled }: PolecatCardProps)
 // =============================================================================
 // Agent Chip - Compact display for polecats
 // =============================================================================
-
-interface AgentChipProps {
-  agent: CrewMember;
-}
-
-function AgentChip({ agent }: AgentChipProps) {
-  const isOnline = agent.status !== 'offline';
-  const statusColor = getStatusColor(agent.status);
-
-  // Extract short branch name (e.g., "polecat/dag-mkfuo827" -> "dag-mkfuo827")
-  const shortBranch = agent.branch?.replace(/^polecat\//, '');
-
-  return (
-    <div
-      style={{
-        ...styles.chip,
-        borderColor: isOnline ? colors.primaryDim : colors.offlineBorder,
-        opacity: isOnline ? 1 : 0.6,
-      }}
-      title={`${agent.name} - ${agent.status}${agent.branch ? ` (${agent.branch})` : ''}`}
-      role="listitem"
-      aria-label={`${agent.name} - ${agent.status}`}
-    >
-      <span
-        style={{
-          ...styles.chipIndicator,
-          backgroundColor: statusColor,
-          boxShadow: isOnline ? `0 0 4px ${statusColor}` : 'none',
-        }}
-      />
-      <span style={styles.chipName}>{agent.name}</span>
-      {shortBranch && (
-        <span style={styles.chipBranch}>{shortBranch}</span>
-      )}
-      {agent.unreadMail > 0 && (
-        <span style={styles.chipMail}>📬{agent.unreadMail}</span>
-      )}
-    </div>
-  );
-}
 
 // =============================================================================
 // Helpers

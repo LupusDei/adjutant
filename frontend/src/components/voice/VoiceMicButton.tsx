@@ -32,7 +32,6 @@ export const VoiceMicButton: React.FC<VoiceMicButtonProps> = ({
   className = '',
 }) => {
   const {
-    state,
     isRecording,
     isProcessing,
     transcript,
@@ -108,7 +107,7 @@ export const VoiceMicButton: React.FC<VoiceMicButtonProps> = ({
         className={`voice-mic-button ${isRecording ? 'voice-recording' : ''} ${
           isProcessing ? 'voice-loading' : ''
         }`}
-        onClick={handleClick}
+        onClick={() => { void handleClick(); }}
         disabled={disabled || isProcessing}
         aria-label={isRecording ? 'Stop recording' : 'Start recording'}
         title={isRecording ? 'Stop recording' : 'Start voice input'}

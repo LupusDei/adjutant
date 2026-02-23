@@ -17,7 +17,7 @@ import { useVoicePlayer } from '../../hooks/useVoicePlayer';
 import { useMode } from '../../contexts/ModeContext';
 import { useCommunication } from '../../contexts/CommunicationContext';
 import { useChatWebSocket } from '../../hooks/useChatWebSocket';
-import type { WsChatMessage, WsDeliveryConfirmation, WsStreamToken, WsTypingIndicator, ChatWebSocketCallbacks } from '../../hooks/useChatWebSocket';
+import type { WsDeliveryConfirmation, WsStreamToken, WsTypingIndicator, ChatWebSocketCallbacks } from '../../hooks/useChatWebSocket';
 import './chat.css';
 
 export interface CommandChatProps {
@@ -151,10 +151,6 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
   const coordinatorName = agentId
     ? agentId.toUpperCase()
     : (isGasTown ? 'MAYOR' : 'SWARM');
-  const coordinatorAddress = agentId
-    ? agentId
-    : (isGasTown ? 'mayor/' : 'user');
-
   // Voice input hook for recording
   const voiceInput = useVoiceInput();
 
@@ -166,7 +162,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
 
   // WebSocket callbacks (stable refs via useMemo)
   const wsCallbacks: ChatWebSocketCallbacks = useMemo(() => ({
-    onMessage: (_msg: WsChatMessage) => {
+    onMessage: () => {
       // Messages from WebSocket are now handled by useChatMessages
       // via the CommunicationContext subscription. No-op here to avoid duplicates.
     },
@@ -207,7 +203,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
         setTypingFrom(indicator.from);
         // Clear typing after 5s if no update
         if (typingTimer.current) clearTimeout(typingTimer.current);
-        typingTimer.current = setTimeout(() => setTypingFrom(null), 5000);
+        typingTimer.current = setTimeout(() => { setTypingFrom(null); }, 5000);
       } else {
         setTypingFrom(null);
         if (typingTimer.current) {
@@ -231,6 +227,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
       voiceInput.clearTranscript();
       inputRef.current?.focus();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- voiceInput is a stable object ref
   }, [voiceInput.transcript, voiceInput.clearTranscript]);
 
   // Scroll to bottom when messages change
@@ -257,16 +254,16 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting && hasMore && !loadingMore) {
+        if (entries[0].isIntersecting && !loadingMore) {
           setLoadingMore(true);
-          void loadMore().finally(() => setLoadingMore(false));
+          void loadMore().finally(() => { setLoadingMore(false); });
         }
       },
       { threshold: 0.1 }
     );
 
     observer.observe(sentinel);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); };
   }, [hasMore, loadMore, loadingMore]);
 
   // Handle sending a message — always via HTTP (hookSendMessage).
@@ -408,7 +405,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
         <input
           type="text"
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(e) => { setSearchQuery(e.target.value); }}
           onKeyDown={handleSearchKeyDown}
           placeholder="SEARCH MESSAGES..."
           className="chat-search-input"
@@ -430,7 +427,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
       {displayError && (
         <div className="chat-error" role="alert">
           {displayError}
-          <button onClick={() => setSendError(null)} className="chat-error-dismiss">
+          <button onClick={() => { setSendError(null); }} className="chat-error-dismiss">
             x
           </button>
         </div>
@@ -455,7 +452,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
                 >
                   <div className="chat-bubble-header">
                     <span className="chat-bubble-sender">
-                      {isUser ? 'YOU' : (msg.agentId ?? coordinatorName).toUpperCase()}
+                      {isUser ? 'YOU' : msg.agentId.toUpperCase()}
                     </span>
                   </div>
                   <div className="chat-bubble-content">{msg.body}</div>
@@ -509,7 +506,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
               >
                 <div className="chat-bubble-header">
                   <span className="chat-bubble-sender">
-                    {isUser ? 'YOU' : (msg.agentId ?? coordinatorName).toUpperCase()}
+                    {isUser ? 'YOU' : msg.agentId.toUpperCase()}
                   </span>
                   <button
                     type="button"

@@ -55,7 +55,7 @@ describe('useDashboardMail', () => {
   });
 
   it('should fetch and return mail data successfully', async () => {
-    (api.mail.list as vi.Mock).mockResolvedValue({
+    vi.mocked(api.mail.list).mockResolvedValue({
       items: mockMessages,
       total: mockMessages.length,
       limit: 100,
@@ -70,7 +70,7 @@ describe('useDashboardMail', () => {
     expect(result.current.error).toBeNull();
 
     // Wait for the hook to finish fetching
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => { expect(result.current.loading).toBe(false); });
 
     // Assert fetched data
     expect(result.current.totalCount).toBe(3); // 3 unique threads
@@ -84,11 +84,11 @@ describe('useDashboardMail', () => {
 
   it('should handle API errors gracefully', async () => {
     const errorMessage = 'Network error during mail fetch';
-    (api.mail.list as vi.Mock).mockRejectedValue(new Error(errorMessage));
+    vi.mocked(api.mail.list).mockRejectedValue(new Error(errorMessage));
 
     const { result } = renderHook(() => useDashboardMail());
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => { expect(result.current.loading).toBe(false); });
 
     expect(result.current.error).toBe(errorMessage);
     expect(result.current.recentMessages).toEqual([]);
@@ -97,11 +97,11 @@ describe('useDashboardMail', () => {
   });
 
   it('should return empty state if no messages are found', async () => {
-    (api.mail.list as vi.Mock).mockResolvedValue({ items: [], total: 0, limit: 100, offset: 0 });
+    vi.mocked(api.mail.list).mockResolvedValue({ items: [], total: 0, limit: 100, offset: 0 });
 
     const { result } = renderHook(() => useDashboardMail());
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => { expect(result.current.loading).toBe(false); });
 
     expect(result.current.recentMessages).toEqual([]);
     expect(result.current.totalCount).toBe(0);
@@ -124,7 +124,7 @@ describe('useDashboardMail', () => {
         threadId: 'thread4',
       },
     ];
-    (api.mail.list as vi.Mock).mockResolvedValue({
+    vi.mocked(api.mail.list).mockResolvedValue({
       items: messagesWithHandoff,
       total: 4,
       limit: 100,
@@ -133,7 +133,7 @@ describe('useDashboardMail', () => {
 
     const { result } = renderHook(() => useDashboardMail());
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => { expect(result.current.loading).toBe(false); });
 
     // Handoff message should be filtered out of recent messages
     expect(result.current.recentMessages).toHaveLength(3);

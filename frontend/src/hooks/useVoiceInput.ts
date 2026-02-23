@@ -61,7 +61,7 @@ export function useVoiceInput(): UseVoiceInputReturn {
 
     // Stop all tracks
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current.getTracks().forEach((track) => { track.stop(); });
       streamRef.current = null;
     }
 
@@ -136,7 +136,7 @@ export function useVoiceInput(): UseVoiceInputReturn {
             setState('idle');
           } else {
             const errorMessage =
-              (response as { error?: { message: string } }).error?.message ||
+              (response as { error?: { message: string } }).error?.message ??
               'Transcription failed';
             setError(errorMessage);
             setState('error');
@@ -172,8 +172,7 @@ export function useVoiceInput(): UseVoiceInputReturn {
   const stopRecording = useCallback(() => {
     isCancelledRef.current = false;
     if (
-      mediaRecorderRef.current &&
-      mediaRecorderRef.current.state === 'recording'
+      mediaRecorderRef.current?.state === 'recording'
     ) {
       mediaRecorderRef.current.stop();
     }
@@ -183,8 +182,7 @@ export function useVoiceInput(): UseVoiceInputReturn {
   const cancelRecording = useCallback(() => {
     isCancelledRef.current = true;
     if (
-      mediaRecorderRef.current &&
-      mediaRecorderRef.current.state === 'recording'
+      mediaRecorderRef.current?.state === 'recording'
     ) {
       mediaRecorderRef.current.stop();
     } else {

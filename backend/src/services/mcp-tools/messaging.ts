@@ -63,16 +63,18 @@ export function registerMessagingTools(server: McpServer, store: MessageStore): 
 
       // 3. Send APNS push if applicable (to "user" or "mayor/")
       if ((to === "user" || to === "mayor/") && isAPNsConfigured()) {
+        const truncatedBody = body.length > 200 ? body.slice(0, 197) + "..." : body;
         sendNotificationToAll({
           title: `Message from ${agentId}`,
-          body: body.length > 200 ? body.slice(0, 197) + "..." : body,
+          body: truncatedBody,
           sound: "default",
           category: "AGENT_MESSAGE",
           threadId: threadId ?? "messages",
           data: {
-            type: "agent_message",
+            type: "chat_message",
             messageId: message.id,
-            from: agentId,
+            agentId,
+            body: truncatedBody,
           },
         }).catch((err) => {
           logWarn("Failed to send APNS for agent message", { error: String(err) });

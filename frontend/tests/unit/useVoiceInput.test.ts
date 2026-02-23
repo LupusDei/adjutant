@@ -18,7 +18,7 @@ if (typeof Blob.prototype.arrayBuffer !== 'function') {
           reject(new Error('Failed to read blob as ArrayBuffer'));
         }
       };
-      reader.onerror = () => reject(reader.error);
+      reader.onerror = () => { reject(reader.error ?? new Error('FileReader error')); };
       reader.readAsArrayBuffer(this);
     });
   };
