@@ -123,7 +123,7 @@ export interface MessageStore {
 export function createMessageStore(db: Database.Database): MessageStore {
   const insertStmt = db.prepare(`
     INSERT INTO messages (id, session_id, agent_id, recipient, role, body, metadata, delivery_status, event_type, thread_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'delivered', ?, ?, datetime('now'), datetime('now'))
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, datetime('now'), datetime('now'))
   `);
 
   const getByIdStmt = db.prepare("SELECT * FROM messages WHERE id = ?");
@@ -139,7 +139,7 @@ export function createMessageStore(db: Database.Database): MessageStore {
 
   const unreadCountsStmt = db.prepare(`
     SELECT agent_id, COUNT(*) as count FROM messages
-    WHERE delivery_status = 'delivered'
+    WHERE delivery_status != 'read'
     GROUP BY agent_id
   `);
 

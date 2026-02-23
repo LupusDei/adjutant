@@ -47,7 +47,7 @@ describe("message-store", () => {
       expect(msg.recipient).toBeNull();
       expect(msg.role).toBe("user");
       expect(msg.body).toBe("Hello, world!");
-      expect(msg.deliveryStatus).toBe("delivered");
+      expect(msg.deliveryStatus).toBe("pending");
       expect(msg.createdAt).toBeTruthy();
       expect(msg.updatedAt).toBeTruthy();
     });
@@ -408,7 +408,7 @@ describe("message-store", () => {
         body: "Read me",
       });
 
-      expect(msg.deliveryStatus).toBe("delivered");
+      expect(msg.deliveryStatus).toBe("pending");
 
       store.markRead("mark-read-test");
 
@@ -433,7 +433,7 @@ describe("message-store", () => {
 
       // agent-B messages should be unaffected
       const agentBMsgs = store.getMessages({ agentId: "agent-B" });
-      expect(agentBMsgs[0]?.deliveryStatus).toBe("delivered");
+      expect(agentBMsgs[0]?.deliveryStatus).toBe("pending");
     });
   });
 

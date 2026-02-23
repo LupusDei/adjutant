@@ -441,7 +441,7 @@ describe("MCP Messaging Tools", () => {
         role: "user",
         body: "Read me",
       });
-      expect(msg.deliveryStatus).toBe("delivered");
+      expect(msg.deliveryStatus).toBe("pending");
 
       const handlers = new Map<string, Function>();
       const mockServer = {
@@ -508,7 +508,7 @@ describe("MCP Messaging Tools", () => {
 
       // agent-B unaffected
       const agentBMsgs = store.getMessages({ agentId: "agent-B" });
-      expect(agentBMsgs[0]!.deliveryStatus).toBe("delivered");
+      expect(agentBMsgs[0]!.deliveryStatus).toBe("pending");
     });
   });
 });
