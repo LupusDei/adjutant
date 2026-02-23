@@ -72,16 +72,24 @@ struct ChatView: View {
         .background(CRTTheme.Background.screen)
         .onAppear {
             viewModel.onAppear()
+            coordinator.activeViewingAgentId = viewModel.selectedRecipient
+            NotificationService.shared.isViewingChat = true
+            NotificationService.shared.activeViewingAgentId = viewModel.selectedRecipient
             // Handle deep link from push notification
             if let agentId = coordinator.pendingChatAgentId {
                 coordinator.pendingChatAgentId = nil
                 Task {
                     await viewModel.setRecipient(agentId)
+                    coordinator.activeViewingAgentId = agentId
+                    NotificationService.shared.activeViewingAgentId = agentId
                 }
             }
         }
         .onDisappear {
             viewModel.onDisappear()
+            coordinator.activeViewingAgentId = nil
+            NotificationService.shared.isViewingChat = false
+            NotificationService.shared.activeViewingAgentId = nil
         }
         .onChange(of: viewModel.messages.last?.id) { oldId, newId in
             if newId != oldId { scrollToBottom() }
@@ -102,8 +110,14 @@ struct ChatView: View {
                 coordinator.pendingChatAgentId = nil
                 Task {
                     await viewModel.setRecipient(agentId)
+                    coordinator.activeViewingAgentId = agentId
+                    NotificationService.shared.activeViewingAgentId = agentId
                 }
             }
+        }
+        .onChange(of: viewModel.selectedRecipient) { _, newRecipient in
+            coordinator.activeViewingAgentId = newRecipient
+            NotificationService.shared.activeViewingAgentId = newRecipient
         }
         .onChange(of: viewModel.streamingText) { _, _ in
             scrollToBottom()

@@ -86,6 +86,13 @@ final class AppCoordinator: Coordinator, ObservableObject {
         // Set up notification deep linking observers
         setupNotificationObservers()
         setupModeObserver()
+
+        // Check for pending deep link from cold start notification tap
+        if let agentId = NotificationService.shared.pendingDeepLinkAgentId {
+            NotificationService.shared.pendingDeepLinkAgentId = nil
+            pendingChatAgentId = agentId
+            selectedTab = .chat
+        }
     }
 
     // MARK: - Notification Deep Linking
@@ -147,6 +154,9 @@ final class AppCoordinator: Coordinator, ObservableObject {
         selectTab(.beads)
         navigate(to: .beadDetail(id: taskId))
     }
+
+    /// The agent ID currently being viewed in chat (nil if not viewing a chat)
+    @Published var activeViewingAgentId: String?
 
     /// The agent ID to select when the chat tab opens (set by push notification deep link)
     @Published var pendingChatAgentId: String?
