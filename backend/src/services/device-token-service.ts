@@ -119,7 +119,7 @@ export async function registerDeviceToken(
 
     const store = await loadTokens();
     const now = new Date().toISOString();
-    const bundleId = request.bundleId ?? process.env["APNS_BUNDLE_ID"] ?? "com.gastown.adjutant";
+    const bundleId = request.bundleId ?? process.env["APNS_BUNDLE_ID"] ?? "com.jmm.adjutant";
 
     // Check if token already exists
     const existingIndex = store.tokens.findIndex((t) => t.token === request.token);
