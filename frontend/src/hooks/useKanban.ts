@@ -97,7 +97,7 @@ export function useKanban(
   );
 
   const handleDragStart = useCallback(
-    (e: DragEvent<HTMLDivElement>, bead: BeadInfo) => {
+    (_e: DragEvent<HTMLDivElement>, bead: BeadInfo) => {
       const fromColumn = mapStatusToColumn(bead.status, isSwarm);
       setDragState({
         beadId: bead.id,

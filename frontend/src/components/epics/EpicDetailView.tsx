@@ -4,17 +4,20 @@
  */
 
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
+
 import { useEpicDetail } from '../../hooks';
+import { api } from '../../services/api';
 import type { BeadInfo } from '../../types';
+import { AgentAssignDropdown } from '../shared/AgentAssignDropdown';
 
 export interface EpicDetailViewProps {
   epicId: string | null;
   onClose: () => void;
   onBeadClick?: (beadId: string) => void;
-  /** Callback after a bead is assigned — triggers parent refresh */
-  onAssign?: () => void;
+  /** Callback after a bead is assigned -- triggers parent refresh */
+  onAssign?: (() => void) | undefined;
   /** Increment to trigger a data refresh (e.g., after assignment in sibling) */
-  refreshTrigger?: number;
+  refreshTrigger?: number | undefined;
 }
 
 /**
@@ -85,17 +88,28 @@ function getProgressColor(progress: number, isComplete: boolean): string {
 }
 
 /**
- * Subtask row component.
+ * Subtask row component with inline agent assignment.
  */
 function SubtaskRow({
   subtask,
   onClick,
+  onAssign,
 }: {
   subtask: BeadInfo;
   onClick: () => void;
+  onAssign?: (() => void) | undefined;
 }) {
   const priorityInfo = getPriorityInfo(subtask.priority);
   const isClosed = subtask.status === 'closed';
+
+  const handleAssign = useCallback(
+    (agentName: string) => {
+      void api.beads.update(subtask.id, { assignee: agentName }).then(() => {
+        onAssign?.();
+      });
+    },
+    [subtask.id, onAssign]
+  );
 
   return (
     <button style={styles.subtaskRow} onClick={onClick}>
@@ -114,9 +128,13 @@ function SubtaskRow({
         <span style={styles.subtaskTitle}>{subtask.title}</span>
         <div style={styles.subtaskMeta}>
           <span style={styles.subtaskId}>{subtask.id.toUpperCase()}</span>
-          {subtask.assignee && (
-            <span style={styles.subtaskAssignee}>{subtask.assignee}</span>
-          )}
+          <AgentAssignDropdown
+            beadId={subtask.id}
+            currentAssignee={subtask.assignee}
+            compact={true}
+            disabled={isClosed}
+            onAssign={handleAssign}
+          />
         </div>
       </div>
 
@@ -146,11 +164,13 @@ function SubtaskSection({
   count,
   subtasks,
   onSubtaskClick,
+  onAssign,
 }: {
   title: string;
   count: number;
   subtasks: BeadInfo[];
   onSubtaskClick: (id: string) => void;
+  onAssign?: (() => void) | undefined;
 }) {
   if (subtasks.length === 0) return null;
 
@@ -165,6 +185,7 @@ function SubtaskSection({
           key={subtask.id}
           subtask={subtask}
           onClick={() => { onSubtaskClick(subtask.id); }}
+          onAssign={onAssign}
         />
       ))}
     </div>
@@ -173,7 +194,6 @@ function SubtaskSection({
 
 export function EpicDetailView(props: EpicDetailViewProps) {
   const { epicId, onClose, onBeadClick, refreshTrigger = 0 } = props;
-  // props.onAssign available for AgentAssignDropdown integration (adj-c31)
   const {
     epic,
     openSubtasks,
@@ -195,6 +215,12 @@ export function EpicDetailView(props: EpicDetailViewProps) {
       void refresh();
     }
   }, [refreshTrigger, refresh]);
+
+  /** Handle assignment: refresh local data and notify parent */
+  const handleAssign = useCallback(() => {
+    void refresh();
+    props.onAssign?.();
+  }, [refresh, props]);
 
   const [copied, setCopied] = useState(false);
 
@@ -367,6 +393,7 @@ export function EpicDetailView(props: EpicDetailViewProps) {
                 count={openSubtasks.length}
                 subtasks={openSubtasks}
                 onSubtaskClick={handleSubtaskClick}
+                onAssign={handleAssign}
               />
 
               <SubtaskSection
@@ -374,6 +401,7 @@ export function EpicDetailView(props: EpicDetailViewProps) {
                 count={closedSubtasks.length}
                 subtasks={closedSubtasks}
                 onSubtaskClick={handleSubtaskClick}
+                onAssign={handleAssign}
               />
 
               {/* Empty state */}

@@ -12,12 +12,14 @@ import type { KanbanColumnId } from '../../types/kanban';
 export interface KanbanBoardProps {
   beads: BeadInfo[];
   onBeadsChange: (updater: (prev: BeadInfo[]) => BeadInfo[]) => void;
-  onBeadClick?: (bead: BeadInfo) => void;
+  onBeadClick?: ((bead: BeadInfo) => void) | undefined;
   /** Called when a bead needs agent assignment (drag to in_progress without assignee) */
-  onAssignRequest?: (beadId: string, targetColumn: KanbanColumnId) => Promise<string | null>;
+  onAssignRequest?: ((beadId: string, targetColumn: KanbanColumnId) => Promise<string | null>) | undefined;
+  /** Called when an agent is assigned to a bead via inline dropdown */
+  onAssign?: ((beadId: string, agentName: string) => void) | undefined;
 }
 
-export function KanbanBoard({ beads, onBeadsChange, onBeadClick, onAssignRequest }: KanbanBoardProps) {
+export function KanbanBoard({ beads, onBeadsChange, onBeadClick, onAssignRequest, onAssign }: KanbanBoardProps) {
   const [error, setError] = useState<string | null>(null);
 
   const handleError = useCallback((err: Error, beadId: string) => {
@@ -72,6 +74,7 @@ export function KanbanBoard({ beads, onBeadsChange, onBeadClick, onAssignRequest
             onDragLeave={handleDragLeave}
             onDrop={(e, columnId) => { void handleDrop(e, columnId); }}
             onBeadClick={onBeadClick}
+            onAssign={onAssign}
           />
         ))}
       </div>

@@ -236,6 +236,13 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
     setPendingAssign(null);
   }, []);
 
+  // Inline assign from KanbanCard dropdown
+  const handleAssign = useCallback((beadId: string, assignee: string) => {
+    void api.beads.update(beadId, { assignee }).then(() => {
+      void refresh();
+    });
+  }, [refresh]);
+
   if (loading && beads.length === 0) {
     return (
       <div style={styles.container}>
@@ -340,6 +347,7 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
         onBeadsChange={handleBeadsChange}
         onBeadClick={handleBeadClick}
         onAssignRequest={handleAssignRequest}
+        onAssign={handleAssign}
       />
 
       <BeadDetailView

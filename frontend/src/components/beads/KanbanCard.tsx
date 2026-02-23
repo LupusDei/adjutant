@@ -4,14 +4,17 @@
  */
 
 import { type CSSProperties, type DragEvent, useCallback } from 'react';
+
+import { AgentAssignDropdown } from '../shared/AgentAssignDropdown';
 import type { BeadInfo } from '../../types';
 
 export interface KanbanCardProps {
   bead: BeadInfo;
   onDragStart: (e: DragEvent<HTMLDivElement>, bead: BeadInfo) => void;
   onDragEnd: (e: DragEvent<HTMLDivElement>) => void;
-  onClick?: (bead: BeadInfo) => void;
-  isDragging?: boolean;
+  onClick?: ((bead: BeadInfo) => void) | undefined;
+  onAssign?: ((beadId: string, agentName: string) => void) | undefined;
+  isDragging?: boolean | undefined;
 }
 
 /**
@@ -43,7 +46,7 @@ function formatAssignee(assignee: string | null): string | null {
   return parts[parts.length - 1] ?? assignee;
 }
 
-export function KanbanCard({ bead, onDragStart, onDragEnd, onClick, isDragging = false }: KanbanCardProps) {
+export function KanbanCard({ bead, onDragStart, onDragEnd, onClick, onAssign, isDragging = false }: KanbanCardProps) {
   const priorityInfo = getPriorityInfo(bead.priority);
   const assignee = formatAssignee(bead.assignee);
 
@@ -87,7 +90,17 @@ export function KanbanCard({ bead, onDragStart, onDragEnd, onClick, isDragging =
       {/* Footer: Type + Assignee */}
       <div style={styles.footer}>
         <span style={styles.type}>{bead.type.toUpperCase()}</span>
-        {assignee && <span style={styles.assignee}>{assignee}</span>}
+        {onAssign ? (
+          <AgentAssignDropdown
+            beadId={bead.id}
+            currentAssignee={bead.assignee}
+            compact={true}
+            disabled={bead.status === 'closed'}
+            onAssign={(agentName) => { onAssign(bead.id, agentName); }}
+          />
+        ) : (
+          assignee && <span style={styles.assignee}>{assignee}</span>
+        )}
       </div>
     </div>
   );

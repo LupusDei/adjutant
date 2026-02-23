@@ -6,9 +6,9 @@ import type { EpicWithProgress } from '../types/epics';
 
 export interface UseEpicsOptions {
   /** Optional rig filter */
-  rig?: string;
+  rig?: string | undefined;
   /** Whether this hook is active (for tab switching) */
-  enabled?: boolean;
+  enabled?: boolean | undefined;
 }
 
 export interface UseEpicsResult {

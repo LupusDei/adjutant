@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef, type CSSProperties } from 'react';
+import { useMemo, type CSSProperties } from 'react';
 import { useEpics } from '../../hooks/useEpics';
 import type { EpicWithProgress } from '../../types/epics';
 import { EpicCard } from './EpicCard';
@@ -8,17 +8,17 @@ export type EpicSortOption = 'ACTIVITY' | 'PROGRESS' | 'ID';
 interface EpicsListProps {
   sortBy: EpicSortOption;
   /** Whether this tab is currently active */
-  isActive?: boolean;
+  isActive?: boolean | undefined;
   /** Optional rig filter */
-  rig?: string;
+  rig?: string | undefined;
   /** Whether to apply overseer filtering */
-  overseerView?: boolean;
+  overseerView?: boolean | undefined;
   /** Callback when an epic is clicked */
-  onEpicClick?: (epicId: string) => void;
-  /** Callback when a bead is assigned — passed down for AgentAssignDropdown */
-  onAssign?: () => void;
-  /** Increment to trigger a data refresh (e.g., after assignment in sibling) */
-  refreshTrigger?: number;
+  onEpicClick?: ((epicId: string) => void) | undefined;
+  /** Callback when an agent is assigned to an epic */
+  onAssign?: ((agentName: string) => void) | undefined;
+  /** Increment to trigger a refresh */
+  refreshTrigger?: number | undefined;
 }
 
 /** Title patterns for overseer filtering - filter out operational/internal items */
@@ -51,19 +51,8 @@ function sortEpics(epics: EpicWithProgress[], sortBy: EpicSortOption): EpicWithP
   });
 }
 
-export function EpicsList(props: EpicsListProps) {
-  const { sortBy, isActive = true, rig, overseerView = false, onEpicClick, refreshTrigger = 0 } = props;
-  // props.onAssign available for AgentAssignDropdown integration (adj-fes)
-  const { openEpics, completedEpics, loading, error, refresh } = useEpics({ enabled: isActive, rig });
-
-  // Refresh data when refreshTrigger changes (e.g., after assignment in EpicDetailView)
-  const prevTrigger = useRef(refreshTrigger);
-  useEffect(() => {
-    if (refreshTrigger > prevTrigger.current) {
-      prevTrigger.current = refreshTrigger;
-      void refresh();
-    }
-  }, [refreshTrigger, refresh]);
+export function EpicsList({ sortBy, isActive = true, rig, overseerView = false, onEpicClick, onAssign }: EpicsListProps) {
+  const { openEpics, completedEpics, loading, error } = useEpics({ enabled: isActive, rig });
 
   // Apply overseer filtering if enabled
   const filteredOpen = useMemo(() => {
@@ -124,6 +113,7 @@ export function EpicsList(props: EpicsListProps) {
                 key={epic.epic.id}
                 epic={epic}
                 onClick={onEpicClick ? () => { onEpicClick(epic.epic.id); } : undefined}
+                onAssign={onAssign}
               />
             ))}
           </div>
@@ -143,6 +133,7 @@ export function EpicsList(props: EpicsListProps) {
                 key={epic.epic.id}
                 epic={epic}
                 onClick={onEpicClick ? () => { onEpicClick(epic.epic.id); } : undefined}
+                onAssign={onAssign}
               />
             ))}
           </div>

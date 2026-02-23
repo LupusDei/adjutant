@@ -3,6 +3,7 @@ import { usePolling } from '../../hooks/usePolling';
 import { fuzzyMatch } from '../../hooks/useFuzzySearch';
 import { api } from '../../services/api';
 import { useMode } from '../../contexts/ModeContext';
+import { AgentAssignDropdown } from '../shared/AgentAssignDropdown';
 import type { BeadInfo } from '../../types';
 
 export type BeadsStatusFilter = 'default' | 'open' | 'hooked' | 'in_progress' | 'blocked' | 'closed' | 'all';
@@ -16,6 +17,8 @@ export interface BeadsListProps {
   searchQuery?: string;
   /** Filter to overseer-relevant beads only */
   overseerView?: boolean;
+  /** Callback when an agent is assigned to a bead via inline dropdown */
+  onAssign?: ((beadId: string, agentName: string) => void) | undefined;
 }
 
 /** Group of beads from a source database */
@@ -173,7 +176,7 @@ function groupBeadsBySource(beads: BeadInfo[]): BeadGroup[] {
     const sourceBeads = groupMap.get(source) ?? [];
     groups.push({
       source,
-      displayName: source === 'town' ? 'TOWN (hq-*)' : source.toUpperCase().replace(/_/g, ' '),
+      displayName: source === 'town' ? 'TOWN (hq-*)' : (source ?? 'UNKNOWN').toUpperCase().replace(/_/g, ' '),
       beads: sourceBeads,
     });
   }
@@ -181,7 +184,7 @@ function groupBeadsBySource(beads: BeadInfo[]): BeadGroup[] {
   return groups;
 }
 
-export function BeadsList({ statusFilter, isActive = true, searchQuery = '', overseerView = false }: BeadsListProps) {
+export function BeadsList({ statusFilter, isActive = true, searchQuery = '', overseerView = false, onAssign }: BeadsListProps) {
   const { isSwarm } = useMode();
   const [actionInProgress, setActionInProgress] = useState<{ id: string; type: ActionType } | null>(null);
   const [actionResult, setActionResult] = useState<{ id: string; type: ActionType; success: boolean } | null>(null);
@@ -475,11 +478,24 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
                         <td style={{ ...styles.cell, color: statusInfo.color, fontWeight: statusInfo.bgColor ? 'bold' : 'normal' }}>
                           {statusInfo.label}
                         </td>
-                        <td style={{
-                          ...styles.cell,
-                          ...(isActiveWork && bead.assignee ? styles.activeAssigneeCell : {}),
-                        }}>
-                          {highlightMatches(formatAssignee(bead.assignee), highlightQuery)}
+                        <td
+                          style={{
+                            ...styles.cell,
+                            ...(isActiveWork && bead.assignee ? styles.activeAssigneeCell : {}),
+                          }}
+                          onClick={onAssign ? (e) => { e.stopPropagation(); } : undefined}
+                        >
+                          {onAssign ? (
+                            <AgentAssignDropdown
+                              beadId={bead.id}
+                              currentAssignee={bead.assignee}
+                              onAssign={(agent) => { onAssign(bead.id, agent); }}
+                              compact
+                              disabled={isClosed}
+                            />
+                          ) : (
+                            highlightMatches(formatAssignee(bead.assignee), highlightQuery)
+                          )}
                         </td>
                         <td style={styles.dateCell}>
                           {formatDate(bead.updatedAt ?? bead.createdAt)}

@@ -1,9 +1,13 @@
-import type { CSSProperties } from 'react';
+import { useCallback, type CSSProperties } from 'react';
+
 import type { EpicWithProgress } from '../../types/epics';
+import { AgentAssignDropdown } from '../shared/AgentAssignDropdown';
+import { api } from '../../services/api';
 
 interface EpicCardProps {
   epic: EpicWithProgress;
-  onClick?: () => void;
+  onClick?: (() => void) | undefined;
+  onAssign?: ((agentName: string) => void) | undefined;
 }
 
 /**
@@ -42,10 +46,15 @@ function getStatusInfo(status: string, isComplete: boolean): { label: string; co
 /**
  * Display a single epic with its progress.
  */
-export function EpicCard({ epic, onClick }: EpicCardProps) {
+export function EpicCard({ epic, onClick, onAssign }: EpicCardProps) {
   const progressPercent = Math.round(epic.progress * 100);
   const progressColor = getProgressColor(epic.progress, epic.isComplete);
   const statusInfo = getStatusInfo(epic.epic.status, epic.isComplete);
+
+  const handleAssign = useCallback((agentName: string) => {
+    void api.beads.update(epic.epic.id, { assignee: agentName });
+    onAssign?.(agentName);
+  }, [epic.epic.id, onAssign]);
 
   const cardStyle = onClick
     ? { ...styles.card, ...styles.cardClickable }
@@ -62,16 +71,25 @@ export function EpicCard({ epic, onClick }: EpicCardProps) {
     >
       <div style={styles.header}>
         <span style={styles.id}>{epic.epic.id.toUpperCase()}</span>
-        <span
-          style={{
-            ...styles.status,
-            color: statusInfo.color,
-            borderColor: statusInfo.color,
-            backgroundColor: `${statusInfo.color}15`,
-          }}
-        >
-          {statusInfo.label}
-        </span>
+        <div style={styles.headerRight}>
+          <span
+            style={{
+              ...styles.status,
+              color: statusInfo.color,
+              borderColor: statusInfo.color,
+              backgroundColor: `${statusInfo.color}15`,
+            }}
+          >
+            {statusInfo.label}
+          </span>
+          <AgentAssignDropdown
+            beadId={epic.epic.id}
+            currentAssignee={epic.epic.assignee}
+            compact={true}
+            disabled={epic.isComplete}
+            onAssign={handleAssign}
+          />
+        </div>
       </div>
 
       <div style={styles.title}>{epic.epic.title}</div>
@@ -122,6 +140,11 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: '6px',
+  },
+  headerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
   },
   id: {
     fontSize: '11px',
