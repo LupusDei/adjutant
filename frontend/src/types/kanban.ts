@@ -26,7 +26,7 @@ export interface KanbanColumn {
 }
 
 /**
- * Column definitions in workflow order.
+ * All column definitions in workflow order (Gastown mode).
  */
 export const KANBAN_COLUMNS: Array<{ id: KanbanColumnId; title: string; color: string }> = [
   { id: 'open', title: 'OPEN', color: '#00FF00' },
@@ -37,17 +37,35 @@ export const KANBAN_COLUMNS: Array<{ id: KanbanColumnId; title: string; color: s
 ];
 
 /**
- * Maps bead statuses to Kanban columns.
- * Each status maps directly to its column.
+ * Column definitions for Swarm mode (no HOOKED column).
+ * Hooked beads are mapped to IN PROGRESS.
  */
-export function mapStatusToColumn(status: string): KanbanColumnId {
+export const KANBAN_COLUMNS_SWARM: Array<{ id: KanbanColumnId; title: string; color: string }> = [
+  { id: 'open', title: 'OPEN', color: '#00FF00' },
+  { id: 'in_progress', title: 'IN PROGRESS', color: '#00FF88' },
+  { id: 'closed', title: 'CLOSED', color: '#444444' },
+  { id: 'blocked', title: 'BLOCKED', color: '#FF6B35' },
+];
+
+/**
+ * Returns the appropriate column definitions based on mode.
+ */
+export function getKanbanColumns(isSwarm: boolean): Array<{ id: KanbanColumnId; title: string; color: string }> {
+  return isSwarm ? KANBAN_COLUMNS_SWARM : KANBAN_COLUMNS;
+}
+
+/**
+ * Maps bead statuses to Kanban columns.
+ * In Swarm mode, hooked maps to in_progress.
+ */
+export function mapStatusToColumn(status: string, isSwarm = false): KanbanColumnId {
   const normalized = status.toLowerCase();
 
   switch (normalized) {
     case 'open':
       return 'open';
     case 'hooked':
-      return 'hooked';
+      return isSwarm ? 'in_progress' : 'hooked';
     case 'in_progress':
       return 'in_progress';
     case 'blocked':

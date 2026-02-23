@@ -15,6 +15,16 @@ vi.mock('../../../src/services/api', () => ({
   },
 }));
 
+vi.mock('../../../src/contexts/ModeContext', () => ({
+  useMode: () => ({
+    mode: 'gastown',
+    isGasTown: true,
+    isSwarm: false,
+    availableModes: ['gastown'],
+    switchMode: vi.fn(),
+  }),
+}));
+
 const mockBeads = [
   {
     id: 'hq-001',

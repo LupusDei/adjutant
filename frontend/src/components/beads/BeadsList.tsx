@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef, type CSSProperties, 
 import { usePolling } from '../../hooks/usePolling';
 import { fuzzyMatch } from '../../hooks/useFuzzySearch';
 import { api } from '../../services/api';
+import { useMode } from '../../contexts/ModeContext';
 import type { BeadInfo } from '../../types';
 
 export type BeadsStatusFilter = 'default' | 'open' | 'hooked' | 'in_progress' | 'blocked' | 'closed' | 'all';
@@ -47,9 +48,11 @@ function getPriorityInfo(priority: number): { label: string; color: string } {
 /**
  * Gets status display info with distinct colors for each state.
  * Valid statuses: open, hooked, in_progress, blocked, closed
+ * In Swarm mode, hooked is displayed as ACTIVE (same as in_progress).
  */
-function getStatusInfo(status: string): { label: string; color: string; bgColor?: string } {
-  switch (status.toLowerCase()) {
+function getStatusInfo(status: string, isSwarm = false): { label: string; color: string; bgColor?: string } {
+  const normalized = isSwarm && status.toLowerCase() === 'hooked' ? 'in_progress' : status.toLowerCase();
+  switch (normalized) {
     case 'open':
       return { label: 'OPEN', color: 'var(--crt-phosphor)' };
     case 'hooked':
@@ -179,6 +182,7 @@ function groupBeadsBySource(beads: BeadInfo[]): BeadGroup[] {
 }
 
 export function BeadsList({ statusFilter, isActive = true, searchQuery = '', overseerView = false }: BeadsListProps) {
+  const { isSwarm } = useMode();
   const [actionInProgress, setActionInProgress] = useState<{ id: string; type: ActionType } | null>(null);
   const [actionResult, setActionResult] = useState<{ id: string; type: ActionType; success: boolean } | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -437,7 +441,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
                 <tbody>
                   {group.beads.map((bead) => {
                     const priorityInfo = getPriorityInfo(bead.priority);
-                    const statusInfo = getStatusInfo(bead.status);
+                    const statusInfo = getStatusInfo(bead.status, isSwarm);
                     const isClosed = bead.status.toLowerCase() === 'closed';
                     // Active work states where agent name should be prominently shown
                     const isActiveWork = ['hooked', 'in_progress', 'blocked'].includes(bead.status.toLowerCase());

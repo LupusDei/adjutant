@@ -7,6 +7,7 @@ import AdjutantKit
 /// Supports drag-and-drop between columns with optimistic updates.
 struct KanbanBoardView: View {
     @Environment(\.crtTheme) private var theme
+    @ObservedObject private var appState = AppState.shared
 
     let beads: [BeadInfo]
     let draggingBeadId: String?
@@ -14,11 +15,17 @@ struct KanbanBoardView: View {
     let onBeadTap: (BeadInfo) -> Void
     let onDrop: (BeadInfo, KanbanColumnId) -> Void
 
-    /// Groups beads into columns based on their status
+    private var isSwarm: Bool {
+        appState.deploymentMode == .swarm
+    }
+
+    /// Groups beads into columns based on their status.
+    /// In Swarm mode, hooked beads are mapped to inProgress.
     private var columns: [KanbanColumn] {
-        kanbanColumns.map { definition in
+        let definitions = getKanbanColumns(isSwarm: isSwarm)
+        return definitions.map { definition in
             let columnBeads = beads.filter { bead in
-                mapStatusToColumn(bead.status) == definition.id
+                mapStatusToColumn(bead.status, isSwarm: isSwarm) == definition.id
             }
             return KanbanColumn(
                 id: definition.id,
@@ -59,8 +66,9 @@ struct KanbanBoardView: View {
     /// Calculates column width based on available space.
     /// On larger screens (iPad), shows more columns. On iPhone, shows ~2-3 columns.
     private func columnWidth(for size: CGSize) -> CGFloat {
+        let definitions = getKanbanColumns(isSwarm: isSwarm)
         let availableWidth = size.width - (CRTTheme.Spacing.xs * 2)
-        let columnCount = CGFloat(kanbanColumns.count)
+        let columnCount = CGFloat(definitions.count)
         let spacing = CRTTheme.Spacing.xs * (columnCount - 1)
 
         // On iPhone (< 600pt width), show ~2.5 columns to hint scrolling

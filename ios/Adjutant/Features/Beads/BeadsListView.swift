@@ -296,7 +296,7 @@ struct BeadsListView: View {
     // MARK: - Drag & Drop Handling
 
     private func handleDrop(bead: BeadInfo, to targetColumn: KanbanColumnId) async {
-        let fromColumn = mapStatusToColumn(bead.status)
+        let fromColumn = mapStatusToColumn(bead.status, isSwarm: appState.deploymentMode == .swarm)
 
         // Don't process drop on same column
         guard fromColumn != targetColumn else {

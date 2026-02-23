@@ -4,9 +4,14 @@ import AdjutantKit
 /// A row view displaying a single bead in the list.
 struct BeadRowView: View {
     @Environment(\.crtTheme) private var theme
+    @ObservedObject private var appState = AppState.shared
 
     let bead: BeadInfo
     let onTap: () -> Void
+
+    private var isSwarm: Bool {
+        appState.deploymentMode == .swarm
+    }
 
     var body: some View {
         Button(action: onTap) {
@@ -97,7 +102,7 @@ struct BeadRowView: View {
             BadgeView("P\(bead.priority)", style: .priority(bead.priority))
 
             // Status text
-            Text(bead.status.uppercased().replacingOccurrences(of: "_", with: " "))
+            Text(displayStatus.uppercased().replacingOccurrences(of: "_", with: " "))
                 .font(CRTTheme.Typography.font(size: 9, weight: .medium))
                 .foregroundColor(statusType.color)
         }
@@ -105,9 +110,17 @@ struct BeadRowView: View {
 
     // MARK: - Helpers
 
+    /// Effective status for display — in Swarm mode, hooked is shown as in_progress.
+    private var displayStatus: String {
+        if isSwarm && bead.status.lowercased() == "hooked" {
+            return "in_progress"
+        }
+        return bead.status
+    }
+
     /// Valid statuses: open, hooked, in_progress, blocked, closed
     private var statusType: BadgeView.Style.StatusType {
-        switch bead.status.lowercased() {
+        switch displayStatus.lowercased() {
         case "closed":
             return .offline
         case "blocked":

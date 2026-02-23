@@ -88,12 +88,17 @@ struct DashboardView: View {
 
 private struct BeadsKanbanPreviewWidget: View {
     @Environment(\.crtTheme) private var theme
+    @ObservedObject private var appState = AppState.shared
 
     let inProgressBeads: [BeadInfo]
     let hookedBeads: [BeadInfo]
     let recentClosedBeads: [BeadInfo]
     let onTap: () -> Void
     let onBeadTap: (BeadInfo) -> Void
+
+    private var isSwarm: Bool {
+        appState.deploymentMode == .swarm
+    }
 
     var body: some View {
         CRTCard(style: .standard) {
@@ -133,15 +138,17 @@ private struct BeadsKanbanPreviewWidget: View {
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(alignment: .top, spacing: CRTTheme.Spacing.md) {
-                            // Hooked column (first - work to start)
-                            KanbanColumnPreview(
-                                title: "HOOKED",
-                                beads: hookedBeads,
-                                color: CRTTheme.State.info,
-                                onBeadTap: onBeadTap
-                            )
+                            // Hooked column (hidden in Swarm mode)
+                            if !isSwarm {
+                                KanbanColumnPreview(
+                                    title: "HOOKED",
+                                    beads: hookedBeads,
+                                    color: CRTTheme.State.info,
+                                    onBeadTap: onBeadTap
+                                )
+                            }
 
-                            // In Progress column (second - active work)
+                            // In Progress column
                             KanbanColumnPreview(
                                 title: "IN PROGRESS",
                                 beads: inProgressBeads,
@@ -149,7 +156,7 @@ private struct BeadsKanbanPreviewWidget: View {
                                 onBeadTap: onBeadTap
                             )
 
-                            // Closed column (third - completed work)
+                            // Closed column
                             KanbanColumnPreview(
                                 title: "CLOSED",
                                 beads: recentClosedBeads,

@@ -41,7 +41,7 @@ public struct KanbanColumnDefinition {
     }
 }
 
-/// Column definitions in workflow order with Pip-Boy theme colors.
+/// All column definitions in workflow order with Pip-Boy theme colors (Gastown mode).
 /// BLOCKED appears last as exceptional items needing attention.
 public let kanbanColumns: [KanbanColumnDefinition] = [
     KanbanColumnDefinition(id: .open, title: "OPEN", color: Color(hex: 0x00FF00)),
@@ -51,16 +51,30 @@ public let kanbanColumns: [KanbanColumnDefinition] = [
     KanbanColumnDefinition(id: .blocked, title: "BLOCKED", color: Color(hex: 0xFF6B35)),
 ]
 
+/// Column definitions for Swarm mode (no HOOKED column).
+/// Hooked beads are mapped to IN PROGRESS.
+public let kanbanColumnsSwarm: [KanbanColumnDefinition] = [
+    KanbanColumnDefinition(id: .open, title: "OPEN", color: Color(hex: 0x00FF00)),
+    KanbanColumnDefinition(id: .inProgress, title: "IN PROGRESS", color: Color(hex: 0x00FF88)),
+    KanbanColumnDefinition(id: .closed, title: "CLOSED", color: Color(hex: 0x444444)),
+    KanbanColumnDefinition(id: .blocked, title: "BLOCKED", color: Color(hex: 0xFF6B35)),
+]
+
+/// Returns the appropriate column definitions based on mode.
+public func getKanbanColumns(isSwarm: Bool) -> [KanbanColumnDefinition] {
+    return isSwarm ? kanbanColumnsSwarm : kanbanColumns
+}
+
 /// Maps bead statuses to Kanban columns.
-/// Each status maps directly to its column.
-public func mapStatusToColumn(_ status: String) -> KanbanColumnId {
+/// In Swarm mode, hooked maps to inProgress.
+public func mapStatusToColumn(_ status: String, isSwarm: Bool = false) -> KanbanColumnId {
     let normalized = status.lowercased()
 
     switch normalized {
     case "open":
         return .open
     case "hooked":
-        return .hooked
+        return isSwarm ? .inProgress : .hooked
     case "in_progress":
         return .inProgress
     case "blocked":

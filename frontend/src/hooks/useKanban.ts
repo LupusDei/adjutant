@@ -6,7 +6,8 @@
 import { useState, useCallback, useMemo, type DragEvent } from 'react';
 import { api } from '../services/api';
 import type { BeadInfo, KanbanColumnId, KanbanColumn, KanbanDragState } from '../types';
-import { KANBAN_COLUMNS, mapStatusToColumn } from '../types/kanban';
+import { getKanbanColumns, mapStatusToColumn } from '../types/kanban';
+import { useMode } from '../contexts/ModeContext';
 
 export interface UseKanbanOptions {
   /** Called after successful status update */
@@ -36,17 +37,20 @@ export interface UseKanbanResult {
 
 /**
  * Groups beads by status into Kanban columns.
+ * In Swarm mode, hooked beads are mapped to in_progress.
  */
-function groupBeadsIntoColumns(beads: BeadInfo[]): KanbanColumn[] {
+function groupBeadsIntoColumns(beads: BeadInfo[], isSwarm: boolean): KanbanColumn[] {
+  const columns = getKanbanColumns(isSwarm);
+
   // Initialize columns with empty bead arrays
   const columnMap = new Map<KanbanColumnId, BeadInfo[]>();
-  for (const col of KANBAN_COLUMNS) {
+  for (const col of columns) {
     columnMap.set(col.id, []);
   }
 
   // Group beads by status
   for (const bead of beads) {
-    const columnId = mapStatusToColumn(bead.status);
+    const columnId = mapStatusToColumn(bead.status, isSwarm);
     const column = columnMap.get(columnId);
     if (column) {
       column.push(bead);
@@ -54,7 +58,7 @@ function groupBeadsIntoColumns(beads: BeadInfo[]): KanbanColumn[] {
   }
 
   // Build column objects
-  return KANBAN_COLUMNS.map((col) => ({
+  return columns.map((col) => ({
     id: col.id,
     title: col.title,
     color: col.color,
@@ -68,6 +72,7 @@ export function useKanban(
   options: UseKanbanOptions = {}
 ): UseKanbanResult {
   const { onStatusUpdate, onError } = options;
+  const { isSwarm } = useMode();
 
   const [dragState, setDragState] = useState<KanbanDragState>({
     beadId: null,
@@ -77,8 +82,8 @@ export function useKanban(
 
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Group beads into columns
-  const columns = useMemo(() => groupBeadsIntoColumns(beads), [beads]);
+  // Group beads into columns (swarm mode hides HOOKED column)
+  const columns = useMemo(() => groupBeadsIntoColumns(beads, isSwarm), [beads, isSwarm]);
 
   // Find bead by ID
   const findBead = useCallback(
@@ -88,14 +93,14 @@ export function useKanban(
 
   const handleDragStart = useCallback(
     (e: DragEvent<HTMLDivElement>, bead: BeadInfo) => {
-      const fromColumn = mapStatusToColumn(bead.status);
+      const fromColumn = mapStatusToColumn(bead.status, isSwarm);
       setDragState({
         beadId: bead.id,
         fromColumn,
         overColumn: null,
       });
     },
-    []
+    [isSwarm]
   );
 
   const handleDragEnd = useCallback(() => {

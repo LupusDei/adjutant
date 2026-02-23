@@ -142,9 +142,14 @@ final class DashboardViewModel: BaseViewModel {
             .sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
         self.inProgressBeads = Array(inProgress.prefix(maxBeadsPerColumn))
 
-        let hooked = filtered.filter { $0.status == "hooked" }
-            .sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
-        self.hookedBeads = Array(hooked.prefix(maxBeadsPerColumn))
+        // In Swarm mode, hooked beads are not shown separately
+        if AppState.shared.deploymentMode == .swarm {
+            self.hookedBeads = []
+        } else {
+            let hooked = filtered.filter { $0.status == "hooked" }
+                .sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
+            self.hookedBeads = Array(hooked.prefix(maxBeadsPerColumn))
+        }
 
         let closed = filtered.filter { $0.status == "closed" }
             .sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
