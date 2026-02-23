@@ -68,7 +68,7 @@ describe("InputRouter", () => {
       );
     });
 
-    it("should queue input when session is working", async () => {
+    it("should deliver input immediately even when session is working", async () => {
       const session = registry.create({
         name: "test",
         tmuxSession: "adj-test",
@@ -76,14 +76,16 @@ describe("InputRouter", () => {
       });
       registry.updateStatus(session.id, "working");
 
-      const sent = await router.sendInput(session.id, "queued message");
+      const sent = await router.sendInput(session.id, "immediate message");
       expect(sent).toBe(true);
 
-      // Should NOT have called tmux
-      expect(mockExecFile).not.toHaveBeenCalled();
-
-      // Queue should have 1 item
-      expect(router.getQueueLength(session.id)).toBe(1);
+      // Should have called tmux directly, not queued
+      expect(mockExecFile).toHaveBeenCalledWith(
+        "tmux",
+        ["send-keys", "-t", session.tmuxPane, "-l", "immediate message"],
+        expect.anything(),
+        expect.any(Function)
+      );
     });
 
     it("should return false for unknown session", async () => {
@@ -215,15 +217,8 @@ describe("InputRouter", () => {
         tmuxSession: "adj-test",
         projectPath: "/tmp",
       });
-      registry.updateStatus(session.id, "working");
 
-      // Queue some messages
-      await router.sendInput(session.id, "msg1");
-      await router.sendInput(session.id, "msg2");
-      expect(router.getQueueLength(session.id)).toBe(2);
-
-      // Interrupt should clear queue
-      registry.updateStatus(session.id, "idle"); // so interrupt doesn't queue
+      // Interrupt should clear queue (queue is empty but should not error)
       await router.sendInterrupt(session.id);
       expect(router.getQueueLength(session.id)).toBe(0);
     });
@@ -261,124 +256,19 @@ describe("InputRouter", () => {
   // ==========================================================================
 
   describe("queue management", () => {
-    it("should flush queued input in FIFO order", async () => {
-      const session = registry.create({
-        name: "test",
-        tmuxSession: "adj-test",
-        projectPath: "/tmp",
-      });
-      registry.updateStatus(session.id, "working");
-
-      await router.sendInput(session.id, "first");
-      await router.sendInput(session.id, "second");
-      expect(router.getQueueLength(session.id)).toBe(2);
-
-      // Session becomes idle
-      registry.updateStatus(session.id, "idle");
-      const delivered = await router.flushQueue(session.id);
-      expect(delivered).toBe(2);
-      expect(router.getQueueLength(session.id)).toBe(0);
-
-      // Verify order: first, then second
-      const calls = mockExecFile.mock.calls;
-      const sendKeyCalls = calls.filter(
-        (call: unknown[]) => (call[1] as string[])[0] === "send-keys"
-      );
-      expect(sendKeyCalls[0][1]).toEqual([
-        "send-keys",
-        "-t",
-        session.tmuxPane,
-        "-l",
-        "first",
-      ]);
-      expect(sendKeyCalls[1][1]).toEqual([
-        "send-keys",
-        "-t",
-        session.tmuxPane,
-        "Enter",
-      ]);
-      expect(sendKeyCalls[2][1]).toEqual([
-        "send-keys",
-        "-t",
-        session.tmuxPane,
-        "-l",
-        "second",
-      ]);
-      expect(sendKeyCalls[3][1]).toEqual([
-        "send-keys",
-        "-t",
-        session.tmuxPane,
-        "Enter",
-      ]);
-    });
-
     it("should return 0 when no queue exists", async () => {
       const delivered = await router.flushQueue("any-id");
       expect(delivered).toBe(0);
     });
 
-    it("should clear queue for a session", () => {
-      const session = registry.create({
-        name: "test",
-        tmuxSession: "adj-test",
-        projectPath: "/tmp",
-      });
-      registry.updateStatus(session.id, "working");
-
-      // This won't call sendInput properly because sendInput is async
-      // so let's test clearQueue directly
-      router.clearQueue(session.id);
-      expect(router.getQueueLength(session.id)).toBe(0);
+    it("should clear queue for a session without error", () => {
+      router.clearQueue("any-id");
+      expect(router.getQueueLength("any-id")).toBe(0);
     });
 
-    it("should clear all queues", async () => {
-      const s1 = registry.create({
-        name: "a",
-        tmuxSession: "adj-a",
-        projectPath: "/tmp",
-      });
-      const s2 = registry.create({
-        name: "b",
-        tmuxSession: "adj-b",
-        projectPath: "/tmp",
-      });
-      registry.updateStatus(s1.id, "working");
-      registry.updateStatus(s2.id, "working");
-
-      await router.sendInput(s1.id, "msg1");
-      await router.sendInput(s2.id, "msg2");
-
+    it("should clear all queues without error", () => {
       router.clearAllQueues();
-      expect(router.getQueueLength(s1.id)).toBe(0);
-      expect(router.getQueueLength(s2.id)).toBe(0);
-    });
-
-    it("should stop flushing if delivery fails", async () => {
-      const session = registry.create({
-        name: "test",
-        tmuxSession: "adj-test",
-        projectPath: "/tmp",
-      });
-      registry.updateStatus(session.id, "working");
-
-      await router.sendInput(session.id, "first");
-      await router.sendInput(session.id, "second");
-
-      // Make tmux fail
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          _args: string[],
-          _opts: unknown,
-          cb: (err: Error | null, stdout: string, stderr: string) => void
-        ) => {
-          cb(new Error("fail"), "", "fail");
-        }
-      );
-
-      registry.updateStatus(session.id, "idle");
-      const delivered = await router.flushQueue(session.id);
-      expect(delivered).toBe(0); // first delivery failed, so 0
+      expect(router.getQueueLength("any")).toBe(0);
     });
 
     it("getQueueLength should return 0 for unknown session", () => {

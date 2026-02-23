@@ -62,13 +62,6 @@ export class InputRouter {
       return false;
     }
 
-    // Queue if session is busy
-    if (session.status === "working") {
-      this.enqueue(sessionId, text);
-      logInfo("Input queued (session busy)", { sessionId });
-      return true;
-    }
-
     return this.deliverInput(session.tmuxPane, text);
   }
 
