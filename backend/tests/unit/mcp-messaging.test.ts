@@ -207,6 +207,151 @@ describe("MCP Messaging Tools", () => {
       expect(mockSendNotificationToAll).not.toHaveBeenCalled();
     });
 
+    it("should send APNS with correct payload shape matching iOS expectations", async () => {
+      mockIsAPNsConfigured.mockReturnValue(true);
+
+      const { registerMessagingTools } = await import("../../src/services/mcp-tools/messaging.js");
+
+      const handlers = new Map<string, Function>();
+      const mockServer = {
+        tool: (name: string, _schema: any, handler: Function) => {
+          handlers.set(name, handler);
+        },
+      } as any;
+
+      registerMessagingTools(mockServer, store);
+
+      const handler = handlers.get("send_message")!;
+      const result = await handler(
+        { to: "user", body: "Test payload shape", threadId: "thread-1" },
+        { sessionId: "mcp-session-1" },
+      );
+
+      const data = JSON.parse(result.content[0].text);
+
+      expect(mockSendNotificationToAll).toHaveBeenCalledTimes(1);
+      const notification = mockSendNotificationToAll.mock.calls[0][0];
+
+      // Verify data payload matches iOS ChatMessagePayload contract
+      expect(notification.data.type).toBe("chat_message");
+      expect(notification.data.agentId).toBe("researcher");
+      expect(notification.data.body).toBe("Test payload shape");
+      expect(notification.data.messageId).toBe(data.messageId);
+      // Must NOT have the old "from" field
+      expect(notification.data.from).toBeUndefined();
+    });
+
+    it("should send APNS for messages to mayor/", async () => {
+      mockIsAPNsConfigured.mockReturnValue(true);
+
+      const { registerMessagingTools } = await import("../../src/services/mcp-tools/messaging.js");
+
+      const handlers = new Map<string, Function>();
+      const mockServer = {
+        tool: (name: string, _schema: any, handler: Function) => {
+          handlers.set(name, handler);
+        },
+      } as any;
+
+      registerMessagingTools(mockServer, store);
+
+      const handler = handlers.get("send_message")!;
+      await handler(
+        { to: "mayor/", body: "Mayor message" },
+        { sessionId: "mcp-session-1" },
+      );
+
+      expect(mockSendNotificationToAll).toHaveBeenCalledTimes(1);
+      expect(mockSendNotificationToAll.mock.calls[0][0].data.type).toBe("chat_message");
+    });
+
+    it("should NOT send APNS for agent-to-agent messages", async () => {
+      mockIsAPNsConfigured.mockReturnValue(true);
+
+      const { registerMessagingTools } = await import("../../src/services/mcp-tools/messaging.js");
+
+      const handlers = new Map<string, Function>();
+      const mockServer = {
+        tool: (name: string, _schema: any, handler: Function) => {
+          handlers.set(name, handler);
+        },
+      } as any;
+
+      registerMessagingTools(mockServer, store);
+
+      const handler = handlers.get("send_message")!;
+      await handler(
+        { to: "other-agent", body: "Agent to agent" },
+        { sessionId: "mcp-session-1" },
+      );
+
+      // Agent-to-agent messages should not trigger push
+      expect(mockSendNotificationToAll).not.toHaveBeenCalled();
+    });
+
+    it("should not break message delivery when APNS fails", async () => {
+      mockIsAPNsConfigured.mockReturnValue(true);
+      mockSendNotificationToAll.mockRejectedValue(new Error("APNs connection failed"));
+
+      const { registerMessagingTools } = await import("../../src/services/mcp-tools/messaging.js");
+
+      const handlers = new Map<string, Function>();
+      const mockServer = {
+        tool: (name: string, _schema: any, handler: Function) => {
+          handlers.set(name, handler);
+        },
+      } as any;
+
+      registerMessagingTools(mockServer, store);
+
+      const handler = handlers.get("send_message")!;
+      const result = await handler(
+        { to: "user", body: "Should still succeed" },
+        { sessionId: "mcp-session-1" },
+      );
+
+      // Message delivery should succeed despite APNS failure
+      const resultData = JSON.parse(result.content[0].text);
+      expect(resultData.messageId).toBeTruthy();
+      expect(resultData.timestamp).toBeTruthy();
+
+      // Verify message was stored
+      const stored = store.getMessage(resultData.messageId);
+      expect(stored).not.toBeNull();
+      expect(stored!.body).toBe("Should still succeed");
+    });
+
+    it("should truncate long message bodies in APNS data payload", async () => {
+      mockIsAPNsConfigured.mockReturnValue(true);
+
+      const { registerMessagingTools } = await import("../../src/services/mcp-tools/messaging.js");
+
+      const handlers = new Map<string, Function>();
+      const mockServer = {
+        tool: (name: string, _schema: any, handler: Function) => {
+          handlers.set(name, handler);
+        },
+      } as any;
+
+      registerMessagingTools(mockServer, store);
+
+      const longBody = "a".repeat(300);
+      const handler = handlers.get("send_message")!;
+      await handler(
+        { to: "user", body: longBody },
+        { sessionId: "mcp-session-1" },
+      );
+
+      expect(mockSendNotificationToAll).toHaveBeenCalledTimes(1);
+      const notification = mockSendNotificationToAll.mock.calls[0][0];
+
+      // Both alert body and data.body should be truncated
+      expect(notification.body.length).toBe(200);
+      expect(notification.body.endsWith("...")).toBe(true);
+      expect(notification.data.body.length).toBe(200);
+      expect(notification.data.body.endsWith("...")).toBe(true);
+    });
+
     it("should store metadata when provided", async () => {
       const { registerMessagingTools } = await import("../../src/services/mcp-tools/messaging.js");
 

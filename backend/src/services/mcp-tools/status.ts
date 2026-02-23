@@ -195,17 +195,20 @@ export function registerStatusTools(server: McpServer, store: MessageStore): voi
 
       // Send APNS push for announcements
       if (isAPNsConfigured()) {
+        const truncatedBody = body.length > 200 ? body.slice(0, 197) + "..." : body;
         sendNotificationToAll({
           title: `${type.toUpperCase()}: ${title}`,
-          body: body.length > 200 ? body.slice(0, 197) + "..." : body,
+          body: truncatedBody,
           sound: "default",
           category: "AGENT_ANNOUNCEMENT",
           threadId: "announcements",
           data: {
             type: "announcement",
             messageId: message.id,
-            from: agentId,
+            agentId,
+            body: truncatedBody,
             announcementType: type,
+            beadId,
           },
         }).catch((err) => {
           logWarn("Failed to send APNS for announcement", { error: String(err) });

@@ -81,6 +81,79 @@ export interface APNsNotification {
   data?: Record<string, unknown> | undefined;
 }
 
+// ============================================================================
+// Push Notification Data Payloads
+// ============================================================================
+
+/**
+ * APNs data payload for chat messages (agent → user).
+ *
+ * iOS mapping (AppDelegate.swift handleChatMessageNotification):
+ *   - type → switch case "chat_message"
+ *   - agentId → userInfo["agentId"]
+ *   - body → userInfo["body"]
+ *   - messageId → userInfo["messageId"]
+ */
+export interface ChatMessagePayload {
+  type: "chat_message";
+  /** ID of the stored message */
+  messageId: string;
+  /** Agent that sent the message (server-resolved, not client-supplied) */
+  agentId: string;
+  /** Message body text (truncated to 200 chars for push) */
+  body: string;
+}
+
+/**
+ * APNs data payload for agent announcements (completion, blocker, question).
+ *
+ * iOS mapping (AppDelegate.swift handleAnnouncementNotification):
+ *   - type → switch case "announcement"
+ *   - agentId → userInfo["agentId"]
+ *   - body → userInfo["body"]
+ *   - messageId → userInfo["messageId"]
+ *   - announcementType → userInfo["announcementType"]
+ *   - beadId → userInfo["beadId"] (optional)
+ */
+export interface AnnouncementPayload {
+  type: "announcement";
+  /** ID of the stored announcement message */
+  messageId: string;
+  /** Agent that made the announcement */
+  agentId: string;
+  /** Announcement body text (truncated to 200 chars for push) */
+  body: string;
+  /** Announcement category */
+  announcementType: "completion" | "blocker" | "question";
+  /** Related bead ID (optional) */
+  beadId?: string | undefined;
+}
+
+/**
+ * APNs data payload for legacy mail notifications.
+ *
+ * iOS mapping (AppDelegate.swift handleNewMailNotification):
+ *   - type → switch case "new_mail"
+ *   - from → userInfo["from"]
+ *   - subject → userInfo["subject"]
+ *   - messageId → userInfo["messageId"]
+ */
+export interface NewMailPayload {
+  type: "new_mail";
+  /** Mail message ID */
+  messageId: string;
+  /** Sender of the mail */
+  from: string;
+  /** Mail subject line */
+  subject: string;
+}
+
+/** Union of all push notification data payload types. */
+export type PushNotificationPayload =
+  | ChatMessagePayload
+  | AnnouncementPayload
+  | NewMailPayload;
+
 /** Result from sending a push notification. */
 export interface PushNotificationResult {
   /** Whether the notification was sent successfully */

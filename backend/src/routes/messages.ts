@@ -148,6 +148,11 @@ export function createMessagesRouter(store: MessageStore): Router {
       metadata: message.metadata ?? undefined,
     });
 
+    // NOTE: No APNs push here — this is the user→agent direction.
+    // The user is actively in the app when sending, so push is unnecessary.
+    // If agent-side push is needed in future, add sendNotificationToAgent(to, ...)
+    // here using the ChatMessagePayload contract from types/apns.ts.
+
     // Deliver to agent's tmux pane — sendInput handles status-based routing
     try {
       const bridge = getSessionBridge();

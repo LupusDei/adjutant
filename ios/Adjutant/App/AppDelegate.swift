@@ -200,6 +200,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
 
     /// Handles chat message notifications by scheduling a local notification with agent context.
+    /// When the app is active (foreground), skips local notification scheduling because
+    /// willPresent already handles the banner display — avoiding double notifications.
     @MainActor
     private func handleChatMessageNotification(userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
         guard let agentId = userInfo["agentId"] as? String,
@@ -210,11 +212,19 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         let messageId = userInfo["messageId"] as? String ?? UUID().uuidString
 
-        await NotificationService.shared.scheduleChatMessageNotification(
-            agentId: agentId,
-            body: body,
-            messageId: messageId
-        )
+        // Only schedule a local notification when the app is NOT active.
+        // When active, willPresent handles the remote notification banner directly,
+        // so scheduling a local notification here would cause a double banner.
+        let appState = UIApplication.shared.applicationState
+        if appState != .active {
+            await NotificationService.shared.scheduleChatMessageNotification(
+                agentId: agentId,
+                body: body,
+                messageId: messageId
+            )
+        } else {
+            print("[AppDelegate] Skipping local notification — app is active, willPresent handles banner")
+        }
 
         // Pre-fetch the message so it's available when the app opens
         do {
