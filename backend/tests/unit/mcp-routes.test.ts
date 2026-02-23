@@ -14,11 +14,13 @@ const {
   mockDisconnectAgent,
   mockResolveAgentId,
   mockGetTransportBySession,
+  mockRecoverSession,
 } = vi.hoisted(() => ({
   mockCreateSessionTransport: vi.fn(),
   mockDisconnectAgent: vi.fn(),
   mockResolveAgentId: vi.fn(),
   mockGetTransportBySession: vi.fn(),
+  mockRecoverSession: vi.fn(),
 }));
 
 vi.mock("../../src/services/mcp-server.js", () => ({
@@ -26,6 +28,7 @@ vi.mock("../../src/services/mcp-server.js", () => ({
   disconnectAgent: mockDisconnectAgent,
   resolveAgentId: mockResolveAgentId,
   getTransportBySession: mockGetTransportBySession,
+  recoverSession: mockRecoverSession,
 }));
 
 // Mock SDK types — use real isInitializeRequest logic
@@ -103,8 +106,34 @@ describe("MCP Routes", () => {
       expect(mockTransport.handleRequest).toHaveBeenCalledWith(req, res, req.body);
     });
 
-    it("should return 404 for unknown session ID", async () => {
+    it("should attempt recovery for unknown session ID", async () => {
+      const mockTransport = {
+        handleRequest: vi.fn().mockResolvedValue(undefined),
+      };
+
       mockGetTransportBySession.mockReturnValue(undefined);
+      mockResolveAgentId.mockReturnValue("recovered-agent");
+      mockRecoverSession.mockResolvedValue(mockTransport);
+
+      const req = createMockReq({
+        method: "POST",
+        headers: { "mcp-session-id": "stale-session", "x-agent-id": "recovered-agent" },
+        body: { jsonrpc: "2.0", method: "tools/list", id: 2 },
+      });
+      const res = createMockRes();
+
+      const handler = findRouteHandler(mcpRouter, "post", "/");
+      await handler!(req, res, vi.fn());
+
+      expect(mockRecoverSession).toHaveBeenCalledWith("stale-session", "recovered-agent");
+      expect(mockTransport.handleRequest).toHaveBeenCalledWith(req, res, req.body);
+      expect(res.status).not.toHaveBeenCalledWith(404);
+    });
+
+    it("should return 404 when recovery also fails", async () => {
+      mockGetTransportBySession.mockReturnValue(undefined);
+      mockResolveAgentId.mockReturnValue("some-agent");
+      mockRecoverSession.mockResolvedValue(undefined);
 
       const req = createMockReq({
         method: "POST",
@@ -116,6 +145,7 @@ describe("MCP Routes", () => {
       const handler = findRouteHandler(mcpRouter, "post", "/");
       await handler!(req, res, vi.fn());
 
+      expect(mockRecoverSession).toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({ error: expect.any(String) }),
@@ -191,8 +221,32 @@ describe("MCP Routes", () => {
       expect(res.status).toHaveBeenCalledWith(400);
     });
 
-    it("should return 404 for unknown session", async () => {
+    it("should attempt recovery for unknown GET session", async () => {
+      const mockTransport = {
+        handleRequest: vi.fn().mockResolvedValue(undefined),
+      };
+
       mockGetTransportBySession.mockReturnValue(undefined);
+      mockResolveAgentId.mockReturnValue("recovered-agent");
+      mockRecoverSession.mockResolvedValue(mockTransport);
+
+      const req = createMockReq({
+        method: "GET",
+        headers: { "mcp-session-id": "stale-session" },
+      });
+      const res = createMockRes();
+
+      const handler = findRouteHandler(mcpRouter, "get", "/");
+      await handler!(req, res, vi.fn());
+
+      expect(mockRecoverSession).toHaveBeenCalledWith("stale-session", "recovered-agent");
+      expect(mockTransport.handleRequest).toHaveBeenCalledWith(req, res);
+    });
+
+    it("should return 404 for unknown session when recovery fails", async () => {
+      mockGetTransportBySession.mockReturnValue(undefined);
+      mockResolveAgentId.mockReturnValue("some-agent");
+      mockRecoverSession.mockResolvedValue(undefined);
 
       const req = createMockReq({
         method: "GET",

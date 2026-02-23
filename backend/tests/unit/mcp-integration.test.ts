@@ -30,6 +30,11 @@ vi.mock("../../src/services/event-bus.js", () => ({
 }));
 
 // Mock SDK — capture transport options so we can trigger callbacks
+// Mock randomUUID to return deterministic session IDs
+vi.mock("node:crypto", () => ({
+  randomUUID: () => `smoke-session-${sessionIdState.counter}`,
+}));
+
 const { sessionIdState, createdTransports, mockConnect } = vi.hoisted(() => {
   const sessionIdState = { counter: 0 };
   const createdTransports: Array<{
@@ -73,7 +78,10 @@ vi.mock("@modelcontextprotocol/sdk/server/streamableHttp.js", () => ({
     },
   ) {
     sessionIdState.counter++;
-    const sessionId = `smoke-session-${sessionIdState.counter}`;
+    // Use the custom generator if provided (for session recovery), else default
+    const sessionId = options?.sessionIdGenerator
+      ? options.sessionIdGenerator()
+      : `smoke-session-${sessionIdState.counter}`;
     const transport = {
       sessionId: undefined as string | undefined,
       onclose: undefined as (() => void) | undefined,
@@ -194,18 +202,32 @@ describe("MCP Streamable HTTP Integration", () => {
     expect(getAgentBySession("smoke-session-2")).toBe("agent-beta");
   });
 
-  it("POST with invalid session returns 404", async () => {
+  it("POST with stale session recovers transparently", async () => {
+    const postHandler = findRouteHandler(mcpRouter, "post", "/");
+
+    // Send a tool call with a session ID that doesn't exist
     const req = createMockReq({
       method: "POST",
-      headers: { "mcp-session-id": "invalid-session" },
+      headers: {
+        "mcp-session-id": "stale-session-abc",
+        "x-agent-id": "recovery-agent",
+      },
       body: { jsonrpc: "2.0", method: "tools/list", id: 1 },
     });
     const res = createMockRes();
 
-    const postHandler = findRouteHandler(mcpRouter, "post", "/");
     await postHandler!(req, res, vi.fn());
 
-    expect(res.status).toHaveBeenCalledWith(404);
+    // Should NOT get 404 — session should be recovered
+    expect(res.status).not.toHaveBeenCalledWith(404);
+
+    // A new transport should have been created and the session tracked
+    expect(getAgentBySession("stale-session-abc")).toBe("recovery-agent");
+
+    // The transport's handleRequest should have been called:
+    // 1x for internal init, 1x for initialized notification, 1x for the actual request
+    const transport = createdTransports[createdTransports.length - 1]!;
+    expect(transport.handleRequest).toHaveBeenCalledTimes(3);
   });
 });
 

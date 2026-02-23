@@ -12,6 +12,7 @@ import {
   createSessionTransport,
   resolveAgentId,
   getTransportBySession,
+  recoverSession,
 } from "../services/mcp-server.js";
 import { logInfo, logError } from "../utils/index.js";
 
@@ -30,11 +31,23 @@ mcpRouter.post("/", async (req, res) => {
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
   if (sessionId) {
-    // Route to existing session
-    const transport = getTransportBySession(sessionId);
+    // Route to existing session, or recover if stale
+    let transport = getTransportBySession(sessionId);
+
     if (!transport) {
-      res.status(404).json({ error: "Session not found" });
-      return;
+      // Session not found — attempt transparent recovery
+      const agentId = resolveAgentId(
+        req.query as Record<string, unknown>,
+        req.headers as Record<string, unknown>,
+      );
+      transport = await recoverSession(sessionId, agentId);
+
+      if (!transport) {
+        res.status(404).json({ error: "Session not found" });
+        return;
+      }
+
+      logInfo("MCP session transparently recovered", { sessionId, agentId });
     }
 
     try {
@@ -94,10 +107,21 @@ mcpRouter.get("/", async (req, res) => {
     return;
   }
 
-  const transport = getTransportBySession(sessionId);
+  let transport = getTransportBySession(sessionId);
   if (!transport) {
-    res.status(404).json({ error: "Session not found" });
-    return;
+    // Attempt transparent recovery for SSE reconnects
+    const agentId = resolveAgentId(
+      req.query as Record<string, unknown>,
+      req.headers as Record<string, unknown>,
+    );
+    transport = await recoverSession(sessionId, agentId);
+
+    if (!transport) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+
+    logInfo("MCP SSE session transparently recovered", { sessionId, agentId });
   }
 
   try {

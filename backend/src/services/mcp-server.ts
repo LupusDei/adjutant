@@ -122,11 +122,14 @@ export function resolveAgentId(
  */
 export async function createSessionTransport(
   agentId: string,
+  options?: { reuseSessionId?: string },
 ): Promise<{ transport: StreamableHTTPServerTransport; server: McpServer }> {
   const server = createMcpServer();
 
   const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => randomUUID(),
+    sessionIdGenerator: options?.reuseSessionId
+      ? () => options.reuseSessionId!
+      : () => randomUUID(),
     onsessioninitialized: (sessionId: string) => {
       const connection: AgentConnection = {
         agentId,
@@ -227,4 +230,89 @@ export function getTransportBySession(
   sessionId: string,
 ): StreamableHTTPServerTransport | undefined {
   return connections.get(sessionId)?.transport;
+}
+
+// ============================================================================
+// Session recovery
+// ============================================================================
+
+/**
+ * Recover a stale session by creating a new transport with the same session ID.
+ *
+ * When a client sends a request with a session ID that no longer exists
+ * (e.g., after server restart), this creates a fresh transport+server pair,
+ * auto-initializes it via an internal handshake, and registers the connection
+ * so subsequent requests route normally.
+ *
+ * Returns the recovered transport, or undefined if recovery fails.
+ */
+export async function recoverSession(
+  sessionId: string,
+  agentId: string,
+): Promise<StreamableHTTPServerTransport | undefined> {
+  try {
+    const { transport } = await createSessionTransport(agentId, {
+      reuseSessionId: sessionId,
+    });
+
+    // Internal initialization handshake — mock req/res objects
+    const mockRes = createMockResponse();
+
+    const initBody = {
+      jsonrpc: "2.0" as const,
+      id: "session-recovery-init",
+      method: "initialize",
+      params: {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "session-recovery", version: "1.0.0" },
+      },
+    };
+
+    // Step 1: Initialize the transport
+    await transport.handleRequest(
+      createMockRequest(),
+      mockRes,
+      initBody,
+    );
+
+    // Step 2: Send initialized notification
+    const notifyRes = createMockResponse();
+    await transport.handleRequest(
+      createMockRequest(sessionId),
+      notifyRes,
+      { jsonrpc: "2.0", method: "notifications/initialized" },
+    );
+
+    logInfo("MCP session recovered", { agentId, sessionId });
+    return transport;
+  } catch (err) {
+    logWarn("MCP session recovery failed", {
+      sessionId,
+      agentId,
+      error: String(err),
+    });
+    return undefined;
+  }
+}
+
+/** Minimal mock response that discards output. */
+function createMockResponse() {
+  return {
+    writeHead: () => mockSelf,
+    setHeader: () => mockSelf,
+    write: () => true,
+    end: () => {},
+    headersSent: false,
+    statusCode: 200,
+  } as unknown as import("node:http").ServerResponse;
+}
+const mockSelf = createMockResponse();
+
+/** Minimal mock request for internal handshake. */
+function createMockRequest(sessionId?: string) {
+  return {
+    method: "POST",
+    headers: sessionId ? { "mcp-session-id": sessionId } : {},
+  } as unknown as import("node:http").IncomingMessage;
 }
