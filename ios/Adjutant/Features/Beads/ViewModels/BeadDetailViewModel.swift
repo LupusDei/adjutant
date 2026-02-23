@@ -15,6 +15,9 @@ final class BeadDetailViewModel: BaseViewModel {
     @Published private(set) var blockingBeads: [BeadInfo] = []
     @Published private(set) var blockedByBeads: [BeadInfo] = []
 
+    /// Controls the agent picker sheet
+    @Published var showingAgentPicker = false
+
     // MARK: - Private Properties
 
     private let beadId: String
@@ -54,6 +57,14 @@ final class BeadDetailViewModel: BaseViewModel {
         await performAsyncAction(showLoading: false) {
             _ = try await self.apiClient.updateBeadStatus(id: self.beadId, status: newStatus)
             // Reload to get updated data
+            await self.loadBead()
+        }
+    }
+
+    /// Assigns the bead to an agent
+    func assignBead(to agent: CrewMember) async {
+        await performAsyncAction(showLoading: false) {
+            _ = try await self.apiClient.assignBead(id: self.beadId, assignee: agent.id)
             await self.loadBead()
         }
     }

@@ -430,6 +430,25 @@ extension APIClient {
         let request = BeadStatusUpdateRequest(status: status)
         return try await requestWithEnvelope(.patch, path: "/beads/\(encodedId)", body: request)
     }
+
+    /// Assign a bead to an agent.
+    ///
+    /// ## Example
+    /// ```swift
+    /// let result = try await client.assignBead(id: "hq-vts8", assignee: "adjutant/polecats/toast")
+    /// print("Bead \(result.id) assigned to \(result.assignee ?? "unknown")")
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - id: Full bead ID (e.g., "hq-vts8", "gb-53tj")
+    ///   - assignee: Agent identifier to assign the bead to
+    /// - Returns: A ``BeadUpdateResponse`` confirming the assignment.
+    /// - Throws: ``APIClientError`` if the request fails.
+    public func assignBead(id: String, assignee: String) async throws -> BeadUpdateResponse {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let request = BeadAssignRequest(assignee: assignee)
+        return try await requestWithEnvelope(.patch, path: "/beads/\(encodedId)", body: request)
+    }
 }
 
 // MARK: - Tunnel Endpoints

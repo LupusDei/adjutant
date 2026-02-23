@@ -178,7 +178,7 @@ export class LifecycleManager {
       // before pipe-pane can attach to the pane.
       await this.waitForPane(tmuxPane);
 
-      this.registry.updateStatus(session.id, "working");
+      this.registry.updateStatus(session.id, "idle");
 
       logInfo("Session created", {
         sessionId: session.id,

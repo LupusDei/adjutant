@@ -8,7 +8,7 @@
  */
 
 import { Router } from "express";
-import { listBeads, listAllBeads, updateBeadStatus, getBead, listBeadSources, type BeadStatus } from "../services/beads-service.js";
+import { listBeads, listAllBeads, updateBead, getBead, listBeadSources, type BeadStatus } from "../services/beads-service.js";
 import { resolveRigPath } from "../services/workspace/index.js";
 import { listProjects } from "../services/projects-service.js";
 import { success, internalError, badRequest } from "../utils/responses.js";
@@ -152,33 +152,40 @@ beadsRouter.get("/:id", async (req, res) => {
 
 /**
  * PATCH /api/beads/:id
- * Updates a bead's status.
+ * Updates a bead's status and/or assignee.
  *
  * Path params:
  * - id: Full bead ID (e.g., "hq-vts8", "gb-53tj")
  *
  * Request body:
- * - status: New status value (backlog, open, in_progress, testing, merging, complete, closed, etc.)
+ * - status?: New status value (open, in_progress, blocked, closed, etc.)
+ * - assignee?: Agent name to assign the bead to
+ *
+ * At least one of status or assignee must be provided.
  *
  * Response:
- * - { success: true, data: { id: string, status: string } }
+ * - { success: true, data: { id: string, status?: string, assignee?: string } }
  */
 beadsRouter.patch("/:id", async (req, res) => {
   const beadId = req.params["id"];
-  const { status } = req.body as { status?: string };
+  const { status, assignee } = req.body as { status?: string; assignee?: string };
 
   if (!beadId) {
     return res.status(400).json(badRequest("Bead ID is required"));
   }
 
-  if (!status) {
-    return res.status(400).json(badRequest("Status is required in request body"));
+  if (!status && assignee === undefined) {
+    return res.status(400).json(badRequest("At least one of 'status' or 'assignee' is required in request body"));
   }
 
-  const result = await updateBeadStatus(beadId, status as BeadStatus);
+  const result = await updateBead(beadId, {
+    ...(status ? { status: status as BeadStatus } : {}),
+    ...(assignee !== undefined ? { assignee } : {}),
+  });
 
   if (!result.success) {
-    const statusCode = result.error?.code === "INVALID_STATUS" ? 400 : 500;
+    const code = result.error?.code;
+    const statusCode = (code === "INVALID_STATUS" || code === "INVALID_REQUEST") ? 400 : 500;
     return res.status(statusCode).json(
       statusCode === 400
         ? badRequest(result.error?.message ?? "Invalid request")

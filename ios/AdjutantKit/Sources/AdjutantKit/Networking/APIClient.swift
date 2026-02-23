@@ -374,13 +374,24 @@ public struct BeadStatusUpdateRequest: Codable, Equatable {
     }
 }
 
-/// Response from updating a bead's status
+/// Request body for assigning a bead to an agent
+public struct BeadAssignRequest: Codable, Equatable {
+    public let assignee: String
+
+    public init(assignee: String) {
+        self.assignee = assignee
+    }
+}
+
+/// Response from updating a bead
 public struct BeadUpdateResponse: Codable, Equatable {
     public let id: String
-    public let status: String
+    public let status: String?
+    public let assignee: String?
 
-    public init(id: String, status: String) {
+    public init(id: String, status: String? = nil, assignee: String? = nil) {
         self.id = id
         self.status = status
+        self.assignee = assignee
     }
 }

@@ -206,7 +206,7 @@ describe("LifecycleManager", () => {
       expect(result.error).toBeDefined();
     });
 
-    it("should set session status to working after creation", async () => {
+    it("should set session status to idle after creation", async () => {
       mockTmuxForCreate("adj-worker");
 
       const result = await lifecycle.createSession({
@@ -215,7 +215,7 @@ describe("LifecycleManager", () => {
       });
 
       const session = registry.get(result.sessionId!);
-      expect(session?.status).toBe("working");
+      expect(session?.status).toBe("idle");
     });
   });
 

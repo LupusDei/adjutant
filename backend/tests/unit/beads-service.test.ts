@@ -17,7 +17,7 @@ vi.mock("../../src/services/gastown-workspace.js", () => ({
 }));
 
 import { execBd, type BeadsIssue } from "../../src/services/bd-client.js";
-import { listBeads, getBead } from "../../src/services/beads-service.js";
+import { listBeads, getBead, updateBead } from "../../src/services/beads-service.js";
 import { listAllBeadsDirs } from "../../src/services/gastown-workspace.js";
 
 // =============================================================================
@@ -462,6 +462,113 @@ describe("beads-service", () => {
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe("GET_BEAD_ERROR");
       expect(result.error?.message).toBe("Database connection failed");
+    });
+  });
+
+  describe("updateBead", () => {
+    it("should update assignee only", async () => {
+      vi.mocked(execBd).mockResolvedValue({
+        success: true,
+        data: null,
+        exitCode: 0,
+      });
+
+      const result = await updateBead("hq-test", { assignee: "adjutant/polecats/toast" });
+
+      expect(result.success).toBe(true);
+      expect(result.data?.id).toBe("hq-test");
+      expect(result.data?.assignee).toBe("adjutant/polecats/toast");
+      expect(result.data?.status).toBeUndefined();
+
+      // Verify bd command args: should have --assignee but not --status
+      const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
+      expect(args).toContain("update");
+      expect(args).toContain("--assignee");
+      expect(args).toContain("adjutant/polecats/toast");
+      expect(args).not.toContain("--status");
+    });
+
+    it("should update status only", async () => {
+      vi.mocked(execBd).mockResolvedValue({
+        success: true,
+        data: null,
+        exitCode: 0,
+      });
+
+      const result = await updateBead("hq-test", { status: "in_progress" });
+
+      expect(result.success).toBe(true);
+      expect(result.data?.id).toBe("hq-test");
+      expect(result.data?.status).toBe("in_progress");
+      expect(result.data?.assignee).toBeUndefined();
+
+      const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
+      expect(args).toContain("--status");
+      expect(args).toContain("in_progress");
+      expect(args).not.toContain("--assignee");
+    });
+
+    it("should update both status and assignee", async () => {
+      vi.mocked(execBd).mockResolvedValue({
+        success: true,
+        data: null,
+        exitCode: 0,
+      });
+
+      const result = await updateBead("hq-test", { status: "in_progress", assignee: "gastown/crew/alice" });
+
+      expect(result.success).toBe(true);
+      expect(result.data?.id).toBe("hq-test");
+      expect(result.data?.status).toBe("in_progress");
+      expect(result.data?.assignee).toBe("gastown/crew/alice");
+
+      const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
+      expect(args).toContain("--status");
+      expect(args).toContain("in_progress");
+      expect(args).toContain("--assignee");
+      expect(args).toContain("gastown/crew/alice");
+    });
+
+    it("should reject when neither status nor assignee provided", async () => {
+      const result = await updateBead("hq-test", {});
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe("INVALID_REQUEST");
+    });
+
+    it("should reject invalid status", async () => {
+      // Type cast to bypass TS to simulate bad input from API
+      const result = await updateBead("hq-test", { status: "bogus" as "open" });
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe("INVALID_STATUS");
+    });
+
+    it("should handle bd command failure", async () => {
+      vi.mocked(execBd).mockResolvedValue({
+        success: false,
+        error: { code: "BD_ERROR", message: "bd update failed" },
+        exitCode: 1,
+      });
+
+      const result = await updateBead("hq-test", { assignee: "toast" });
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe("BD_ERROR");
+    });
+
+    it("should strip prefix for short ID in bd command", async () => {
+      vi.mocked(execBd).mockResolvedValue({
+        success: true,
+        data: null,
+        exitCode: 0,
+      });
+
+      await updateBead("hq-abc123", { assignee: "toast" });
+
+      const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
+      // bd update expects short ID: "abc123" not "hq-abc123"
+      expect(args[1]).toBe("abc123");
     });
   });
 });

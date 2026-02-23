@@ -38,6 +38,7 @@ export interface BeadUpdatedEvent {
   status: string;
   title: string;
   updatedAt: string;
+  assignee?: string;
 }
 
 export interface BeadClosedEvent {

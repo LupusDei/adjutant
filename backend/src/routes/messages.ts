@@ -79,10 +79,12 @@ export function createMessagesRouter(store: MessageStore): Router {
     if (beforeId !== undefined) opts.beforeId = beforeId;
     if (limit !== undefined) opts.limit = limit;
     const messages = store.getMessages(opts);
+    // DB returns DESC (newest first) for cursor pagination; reverse to ASC for display
+    const chronological = [...messages].reverse();
     return res.json(success({
-      items: messages,
-      total: messages.length,
-      hasMore: limit !== undefined && messages.length === limit,
+      items: chronological,
+      total: chronological.length,
+      hasMore: limit !== undefined && chronological.length === limit,
     }));
   });
 

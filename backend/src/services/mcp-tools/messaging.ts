@@ -115,9 +115,11 @@ export function registerMessagingTools(server: McpServer, store: MessageStore): 
       if (before !== undefined) opts.before = before;
       if (beforeId !== undefined) opts.beforeId = beforeId;
       const messages = store.getMessages(opts);
+      // DB returns DESC (newest first) for cursor pagination; reverse to ASC for display
+      const chronological = [...messages].reverse();
 
       // Mark pending messages as delivered since the agent just fetched them
-      for (const msg of messages) {
+      for (const msg of chronological) {
         if (msg.deliveryStatus === "pending") {
           store.markDelivered(msg.id);
         }
@@ -127,7 +129,7 @@ export function registerMessagingTools(server: McpServer, store: MessageStore): 
         content: [
           {
             type: "text" as const,
-            text: JSON.stringify({ messages }),
+            text: JSON.stringify({ messages: chronological }),
           },
         ],
       };

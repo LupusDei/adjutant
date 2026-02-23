@@ -77,6 +77,9 @@ export interface BeadsServiceResult<T> {
 /**
  * Valid bead status values for Kanban workflow.
  * Workflow: open -> hooked/in_progress/blocked -> closed
+ *
+ * NOTE: Epics cannot be closed directly. They auto-complete when all
+ * sub-beads are closed (via `bd epic close-eligible`).
  */
 export type BeadStatus =
   | "open"         // Ready to be picked up
@@ -570,18 +573,129 @@ export async function listAllBeads(
 }
 
 /**
- * Updates a bead's status.
+ * Resolves the working directory and beads directory for a given bead ID.
+ * Used by updateBeadStatus and other functions that need to route to the correct database.
+ */
+async function resolveBeadDatabase(beadId: string): Promise<
+  | { workDir: string; beadsDir: string }
+  | { error: { code: string; message: string } }
+> {
+  await ensurePrefixMap();
+
+  const prefix = beadId.split("-")[0];
+  if (!prefix) {
+    return { error: { code: "INVALID_BEAD_ID", message: `Invalid bead ID format: ${beadId}` } };
+  }
+
+  const map = loadPrefixMap();
+  const source = map.get(prefix);
+
+  if (!source || source === "town") {
+    const townRoot = resolveWorkspaceRoot();
+    return { workDir: townRoot, beadsDir: resolveBeadsDir(townRoot) };
+  }
+
+  const beadsDirs = await listAllBeadsDirs();
+  const rigDir = beadsDirs.find((d) => d.rig === source);
+  if (!rigDir) {
+    return { error: { code: "RIG_NOT_FOUND", message: `Cannot find rig database for prefix: ${prefix}` } };
+  }
+  return { workDir: rigDir.workDir, beadsDir: rigDir.path };
+}
+
+/**
+ * Checks if a bead is an epic by looking up its type.
+ * Returns true if the bead is type "epic", false otherwise.
+ */
+export async function isBeadEpic(
+  beadId: string,
+  dbInfo?: { workDir: string; beadsDir: string }
+): Promise<boolean> {
+  const db = dbInfo ?? await resolveBeadDatabase(beadId);
+  if ("error" in db) return false;
+
+  const result = await execBd<BeadsIssue[]>(["show", beadId, "--json"], {
+    cwd: db.workDir,
+    beadsDir: db.beadsDir,
+  });
+
+  if (!result.success || !result.data || result.data.length === 0) return false;
+  return result.data[0]?.issue_type === "epic";
+}
+
+/**
+ * Runs `bd epic close-eligible` to auto-close epics whose children are all done.
+ * Called after any task/bug is closed to propagate completion up the hierarchy.
+ *
+ * @returns Array of auto-closed epic IDs (may be empty)
+ */
+export async function autoCompleteEpics(
+  workDir: string,
+  beadsDir: string
+): Promise<string[]> {
+  const result = await execBd<Array<{ id: string; title?: string }>>(
+    ["epic", "close-eligible", "--json"],
+    { cwd: workDir, beadsDir }
+  );
+
+  if (!result.success || !result.data) return [];
+
+  // Emit events for any auto-closed epics
+  const closedIds: string[] = [];
+  for (const epic of result.data) {
+    const epicId = typeof epic === "string" ? epic : epic.id;
+    if (epicId) {
+      closedIds.push(epicId);
+      getEventBus().emit("bead:closed", {
+        id: epicId,
+        title: typeof epic === "object" ? (epic.title ?? "") : "",
+        closedAt: new Date().toISOString(),
+      });
+      logInfo("epic auto-completed", { epicId });
+    }
+  }
+
+  return closedIds;
+}
+
+/**
+ * Options for updating a bead. At least one field must be provided.
+ */
+export interface UpdateBeadOptions {
+  status?: BeadStatus;
+  assignee?: string;
+}
+
+/**
+ * Updates a bead's fields (status, assignee, or both).
+ *
+ * NOTE: Epics cannot be set to "closed" directly. They auto-complete
+ * when all sub-beads are closed (via `bd epic close-eligible`).
+ *
  * @param beadId Full bead ID (e.g., "hq-vts8" or "gb-53tj")
- * @param status New status value
+ * @param options Fields to update (status, assignee)
  * @returns Result with success/error info
  */
-export async function updateBeadStatus(
+export async function updateBead(
   beadId: string,
-  status: BeadStatus
-): Promise<BeadsServiceResult<{ id: string; status: string }>> {
+  options: UpdateBeadOptions
+): Promise<BeadsServiceResult<{ id: string; status?: string; assignee?: string; autoCompleted?: string[] }>> {
   try {
-    // Validate status
-    if (!ALL_STATUSES.includes(status)) {
+    const { status, assignee } = options;
+
+    // Validate that at least one field is provided
+    if (!status && assignee === undefined) {
+      return {
+        success: false,
+        error: {
+          code: "INVALID_REQUEST",
+          message: "At least one of 'status' or 'assignee' must be provided",
+        },
+      };
+    }
+
+    // Validate status if provided
+    if (status && !ALL_STATUSES.includes(status)) {
       return {
         success: false,
         error: {
@@ -591,70 +705,50 @@ export async function updateBeadStatus(
       };
     }
 
-    // Build prefix map to determine which database to use
-    await ensurePrefixMap();
-
-    // Get the prefix from the bead ID
-    const prefix = beadId.split("-")[0];
-    if (!prefix) {
-      return {
-        success: false,
-        error: {
-          code: "INVALID_BEAD_ID",
-          message: `Invalid bead ID format: ${beadId}`,
-        },
-      };
+    const db = await resolveBeadDatabase(beadId);
+    if ("error" in db) {
+      return { success: false, error: db.error };
     }
 
-    // Determine which database this bead belongs to
-    const map = loadPrefixMap();
-    const source = map.get(prefix);
-
-    let workDir: string;
-    let beadsDir: string;
-
-    if (!source || source === "town") {
-      // Town-level bead (hq-*)
-      const townRoot = resolveWorkspaceRoot();
-      workDir = townRoot;
-      beadsDir = resolveBeadsDir(townRoot);
-    } else {
-      // Rig-specific bead - need to find the rig path
-      const beadsDirs = await listAllBeadsDirs();
-      const rigDir = beadsDirs.find((d) => d.rig === source);
-      if (!rigDir) {
+    // Guard: epics cannot be closed directly — they auto-complete
+    if (status === "closed") {
+      const epic = await isBeadEpic(beadId, db);
+      if (epic) {
         return {
           success: false,
           error: {
-            code: "RIG_NOT_FOUND",
-            message: `Cannot find rig database for prefix: ${prefix}`,
+            code: "EPIC_CLOSE_BLOCKED",
+            message: `Epics cannot be closed directly. Epic ${beadId} will auto-complete when all its sub-beads are closed.`,
           },
         };
       }
-      workDir = rigDir.workDir;
-      beadsDir = rigDir.path;
     }
 
-    // Execute bd update command
-    // bd update expects the short ID (without prefix)
+    // Build bd update command args dynamically
     const shortId = beadId.includes("-") ? beadId.split("-").slice(1).join("-") : beadId;
-    const args = ["update", shortId, "--status", status];
+    const args = ["update", shortId];
 
-    const result = await execBd<void>(args, { cwd: workDir, beadsDir, parseJson: false });
+    if (status) {
+      args.push("--status", status);
+    }
+    if (assignee !== undefined) {
+      args.push("--assignee", assignee);
+    }
+
+    const result = await execBd<void>(args, { cwd: db.workDir, beadsDir: db.beadsDir, parseJson: false });
 
     if (!result.success) {
       return {
         success: false,
         error: {
           code: result.error?.code ?? "UPDATE_FAILED",
-          message: result.error?.message ?? "Failed to update bead status",
+          message: result.error?.message ?? "Failed to update bead",
         },
       };
     }
 
     // Emit bead event for SSE/WebSocket consumers
-    const eventType = status === "closed" ? "bead:closed" : "bead:updated";
-    if (eventType === "bead:closed") {
+    if (status === "closed") {
       getEventBus().emit("bead:closed", {
         id: beadId,
         title: "",
@@ -663,25 +757,59 @@ export async function updateBeadStatus(
     } else {
       getEventBus().emit("bead:updated", {
         id: beadId,
-        status,
+        status: status ?? "",
         title: "",
         updatedAt: new Date().toISOString(),
+        ...(assignee !== undefined ? { assignee } : {}),
       });
     }
 
-    return {
-      success: true,
-      data: { id: beadId, status },
-    };
+    // After closing a non-epic bead, auto-complete any eligible parent epics
+    let autoCompleted: string[] = [];
+    if (status === "closed") {
+      autoCompleted = await autoCompleteEpics(db.workDir, db.beadsDir);
+    }
+
+    const responseData: { id: string; status?: string; assignee?: string; autoCompleted?: string[] } = { id: beadId };
+    if (status) responseData.status = status;
+    if (assignee !== undefined) responseData.assignee = assignee;
+    if (autoCompleted.length > 0) responseData.autoCompleted = autoCompleted;
+
+    return { success: true, data: responseData };
   } catch (err) {
     return {
       success: false,
       error: {
         code: "UPDATE_ERROR",
-        message: err instanceof Error ? err.message : "Failed to update bead status",
+        message: err instanceof Error ? err.message : "Failed to update bead",
       },
     };
   }
+}
+
+/**
+ * Updates a bead's status. Backward-compatible wrapper around updateBead().
+ *
+ * @param beadId Full bead ID (e.g., "hq-vts8" or "gb-53tj")
+ * @param status New status value
+ * @returns Result with success/error info
+ */
+export async function updateBeadStatus(
+  beadId: string,
+  status: BeadStatus
+): Promise<BeadsServiceResult<{ id: string; status: string; autoCompleted?: string[] }>> {
+  const result = await updateBead(beadId, { status });
+  if (!result.success) return result as BeadsServiceResult<{ id: string; status: string; autoCompleted?: string[] }>;
+
+  // Ensure status is always present in the backward-compatible response
+  return {
+    success: true,
+    data: {
+      id: result.data!.id,
+      status: result.data!.status ?? status,
+      ...(result.data!.autoCompleted ? { autoCompleted: result.data!.autoCompleted } : {}),
+    },
+  };
 }
 
 /**

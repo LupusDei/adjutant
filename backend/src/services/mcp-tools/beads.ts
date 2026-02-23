@@ -8,8 +8,8 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { execBd, type BdResult } from "../bd-client.js";
-import { logError } from "../../utils/index.js";
+import { execBd, type BdResult, type BeadsIssue } from "../bd-client.js";
+import { logError, logInfo } from "../../utils/index.js";
 
 // =============================================================================
 // Mutex for serializing bd access
@@ -60,6 +60,37 @@ function errorResult(result: BdResult) {
     content: [{ type: "text" as const, text: `Error: ${msg}` }],
     isError: true,
   };
+}
+
+/**
+ * Checks if a bead is an epic by looking up its type via bd show.
+ * Must be called inside bdMutex to avoid concurrent bd access.
+ */
+async function isBeadEpic(id: string): Promise<boolean> {
+  const result = await execBd<BeadsIssue[]>(["show", id, "--json"]);
+  if (!result.success || !result.data || result.data.length === 0) return false;
+  return result.data[0]?.issue_type === "epic";
+}
+
+/**
+ * Runs `bd epic close-eligible` to auto-close epics whose children are all done.
+ * Returns list of auto-closed epic IDs.
+ */
+async function autoCompleteEpics(): Promise<string[]> {
+  const result = await execBd<Array<{ id: string; title?: string }>>(
+    ["epic", "close-eligible", "--json"]
+  );
+  if (!result.success || !result.data) return [];
+
+  const closedIds: string[] = [];
+  for (const epic of result.data) {
+    const epicId = typeof epic === "string" ? epic : epic.id;
+    if (epicId) {
+      closedIds.push(epicId);
+      logInfo("epic auto-completed via MCP", { epicId });
+    }
+  }
+  return closedIds;
 }
 
 // =============================================================================
@@ -122,6 +153,17 @@ export function registerBeadTools(server: McpServer): void {
     },
     async ({ id, status, title, description, assignee, priority }) => {
       return bdMutex.runExclusive(async () => {
+        // Guard: epics cannot be set to "closed" directly — they auto-complete
+        if (status === "closed" && await isBeadEpic(id)) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `Error: Epics cannot be closed directly. Epic ${id} will auto-complete when all its sub-beads are closed.`,
+            }],
+            isError: true,
+          };
+        }
+
         const args: string[] = ["update", id];
 
         if (status) args.push(`--status=${status}`);
@@ -136,8 +178,17 @@ export function registerBeadTools(server: McpServer): void {
           return errorResult(result);
         }
 
+        // After closing a task/bug via update, auto-complete any eligible parent epics
+        const messages = [`Updated bead ${id}`];
+        if (status === "closed") {
+          const autoCompleted = await autoCompleteEpics();
+          if (autoCompleted.length > 0) {
+            messages.push(`Auto-completed epics: ${autoCompleted.join(", ")}`);
+          }
+        }
+
         return {
-          content: [{ type: "text" as const, text: `Updated bead ${id}` }],
+          content: [{ type: "text" as const, text: messages.join("\n") }],
         };
       });
     },
@@ -154,6 +205,17 @@ export function registerBeadTools(server: McpServer): void {
     },
     async ({ id, reason }) => {
       return bdMutex.runExclusive(async () => {
+        // Guard: epics cannot be closed directly — they auto-complete
+        if (await isBeadEpic(id)) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `Error: Epics cannot be closed directly. Epic ${id} will auto-complete when all its sub-beads are closed.`,
+            }],
+            isError: true,
+          };
+        }
+
         const args: string[] = ["close", id];
         if (reason) {
           args.push("--reason", reason);
@@ -165,8 +227,16 @@ export function registerBeadTools(server: McpServer): void {
           return errorResult(result);
         }
 
+        // After closing a task/bug, auto-complete any eligible parent epics
+        const autoCompleted = await autoCompleteEpics();
+
+        const messages = [`Closed bead ${id}`];
+        if (autoCompleted.length > 0) {
+          messages.push(`Auto-completed epics: ${autoCompleted.join(", ")}`);
+        }
+
         return {
-          content: [{ type: "text" as const, text: `Closed bead ${id}` }],
+          content: [{ type: "text" as const, text: messages.join("\n") }],
         };
       });
     },

@@ -240,11 +240,25 @@ describe("MCP Bead Tools", () => {
     });
 
     it("should combine multiple update flags", async () => {
-      mockExecBd.mockResolvedValue({
-        success: true,
-        data: "Updated",
-        exitCode: 0,
-      });
+      // First call: show (epic check) — return non-epic task
+      // Second call: update — succeed
+      // Third call: epic close-eligible — return empty
+      mockExecBd
+        .mockResolvedValueOnce({
+          success: true,
+          data: [{ id: "adj-005", issue_type: "task" }],
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          data: "Updated",
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          data: [],
+          exitCode: 0,
+        });
 
       const handler = getToolHandler("update_bead");
       await handler({
@@ -254,12 +268,13 @@ describe("MCP Bead Tools", () => {
         priority: 0,
       });
 
-      const args = mockExecBd.mock.calls[0]![0] as string[];
-      expect(args).toContain("--status=closed");
-      expect(args).toContain("--title");
-      expect(args).toContain("Done");
-      expect(args).toContain("--priority");
-      expect(args).toContain("0");
+      // First call is the epic check (show), second is the update
+      const updateArgs = mockExecBd.mock.calls[1]![0] as string[];
+      expect(updateArgs).toContain("--status=closed");
+      expect(updateArgs).toContain("--title");
+      expect(updateArgs).toContain("Done");
+      expect(updateArgs).toContain("--priority");
+      expect(updateArgs).toContain("0");
     });
 
     it("should return error content when update fails", async () => {
@@ -284,27 +299,40 @@ describe("MCP Bead Tools", () => {
   // ===========================================================================
 
   describe("close_bead", () => {
+    /** Mock for closing a non-epic task: show (task) → close → close-eligible */
+    function mockCloseTask() {
+      mockExecBd
+        .mockResolvedValueOnce({
+          success: true,
+          data: [{ id: "adj-010", issue_type: "task" }],
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          data: "Closed",
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          data: [],
+          exitCode: 0,
+        });
+    }
+
     it("should call execBd with close command", async () => {
-      mockExecBd.mockResolvedValue({
-        success: true,
-        data: "Closed",
-        exitCode: 0,
-      });
+      mockCloseTask();
 
       const handler = getToolHandler("close_bead");
       await handler({ id: "adj-010" });
 
-      const args = mockExecBd.mock.calls[0]![0] as string[];
-      expect(args[0]).toBe("close");
-      expect(args).toContain("adj-010");
+      // First call is show (epic check), second is close
+      const closeArgs = mockExecBd.mock.calls[1]![0] as string[];
+      expect(closeArgs[0]).toBe("close");
+      expect(closeArgs).toContain("adj-010");
     });
 
     it("should return success content", async () => {
-      mockExecBd.mockResolvedValue({
-        success: true,
-        data: "Closed",
-        exitCode: 0,
-      });
+      mockCloseTask();
 
       const handler = getToolHandler("close_bead");
       const result = await handler({ id: "adj-010" });
@@ -315,42 +343,56 @@ describe("MCP Bead Tools", () => {
     });
 
     it("should pass --reason flag when reason is provided", async () => {
-      mockExecBd.mockResolvedValue({
-        success: true,
-        data: "Closed",
-        exitCode: 0,
-      });
+      mockExecBd
+        .mockResolvedValueOnce({
+          success: true,
+          data: [{ id: "adj-010", issue_type: "task" }],
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          data: "Closed",
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          data: [],
+          exitCode: 0,
+        });
 
       const handler = getToolHandler("close_bead");
       await handler({ id: "adj-010", reason: "All tasks completed" });
 
-      const args = mockExecBd.mock.calls[0]![0] as string[];
-      expect(args[0]).toBe("close");
-      expect(args).toContain("adj-010");
-      expect(args).toContain("--reason");
-      expect(args).toContain("All tasks completed");
+      const closeArgs = mockExecBd.mock.calls[1]![0] as string[];
+      expect(closeArgs[0]).toBe("close");
+      expect(closeArgs).toContain("adj-010");
+      expect(closeArgs).toContain("--reason");
+      expect(closeArgs).toContain("All tasks completed");
     });
 
     it("should not include --reason when reason is not provided", async () => {
-      mockExecBd.mockResolvedValue({
-        success: true,
-        data: "Closed",
-        exitCode: 0,
-      });
+      mockCloseTask();
 
       const handler = getToolHandler("close_bead");
       await handler({ id: "adj-010" });
 
-      const args = mockExecBd.mock.calls[0]![0] as string[];
-      expect(args).not.toContain("--reason");
+      const closeArgs = mockExecBd.mock.calls[1]![0] as string[];
+      expect(closeArgs).not.toContain("--reason");
     });
 
     it("should return error when close fails", async () => {
-      mockExecBd.mockResolvedValue({
-        success: false,
-        error: { code: "COMMAND_FAILED", message: "already closed" },
-        exitCode: 1,
-      });
+      // show returns task (not epic), then close fails
+      mockExecBd
+        .mockResolvedValueOnce({
+          success: true,
+          data: [{ id: "adj-010", issue_type: "task" }],
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: false,
+          error: { code: "COMMAND_FAILED", message: "already closed" },
+          exitCode: 1,
+        });
 
       const handler = getToolHandler("close_bead");
       const result = await handler({ id: "adj-010" });
@@ -359,6 +401,50 @@ describe("MCP Bead Tools", () => {
         content: [{ type: "text", text: expect.stringContaining("Error") }],
         isError: true,
       });
+    });
+
+    it("should block closing an epic directly", async () => {
+      // show returns epic
+      mockExecBd.mockResolvedValueOnce({
+        success: true,
+        data: [{ id: "adj-010", issue_type: "epic" }],
+        exitCode: 0,
+      });
+
+      const handler = getToolHandler("close_bead");
+      const result = await handler({ id: "adj-010" });
+
+      expect(result).toEqual({
+        content: [{ type: "text", text: expect.stringContaining("Epics cannot be closed directly") }],
+        isError: true,
+      });
+      // Should NOT have called close — only the show call
+      expect(mockExecBd).toHaveBeenCalledTimes(1);
+    });
+
+    it("should auto-complete parent epics after closing a task", async () => {
+      mockExecBd
+        .mockResolvedValueOnce({
+          success: true,
+          data: [{ id: "adj-010", issue_type: "task" }],
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          data: "Closed",
+          exitCode: 0,
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          data: [{ id: "adj-001", title: "Parent Epic" }],
+          exitCode: 0,
+        });
+
+      const handler = getToolHandler("close_bead");
+      const result = await handler({ id: "adj-010" });
+
+      expect(result.content[0].text).toContain("adj-010");
+      expect(result.content[0].text).toContain("Auto-completed epics: adj-001");
     });
   });
 

@@ -130,15 +130,6 @@ struct BeadDetailView: View {
                     .foregroundColor(statusColor(for: bead.status))
 
                 Spacer()
-
-                // Status action buttons (for future quick actions)
-                if bead.status == "open" {
-                    CRTButton("CLAIM", variant: .secondary, size: .small) {
-                        Task {
-                            await viewModel.updateStatus("hooked")
-                        }
-                    }
-                }
             }
         }
     }
@@ -158,6 +149,19 @@ struct BeadDetailView: View {
                     } else {
                         CRTText("Unassigned", style: .body, glowIntensity: .none)
                             .foregroundColor(theme.dim)
+                    }
+
+                    Spacer()
+
+                    // ASSIGN / REASSIGN button (hidden on closed beads)
+                    if bead.status != "closed" {
+                        CRTButton(
+                            viewModel.formattedAssignee != nil ? "REASSIGN" : "ASSIGN",
+                            variant: .secondary,
+                            size: .small
+                        ) {
+                            viewModel.showingAgentPicker = true
+                        }
                     }
                 }
 
@@ -179,6 +183,13 @@ struct BeadDetailView: View {
                             .foregroundColor(theme.dim)
                         CRTText(rig.uppercased(), style: .body, glowIntensity: .subtle)
                     }
+                }
+            }
+        }
+        .sheet(isPresented: $viewModel.showingAgentPicker) {
+            AgentPickerView { agent in
+                Task {
+                    await viewModel.assignBead(to: agent)
                 }
             }
         }
