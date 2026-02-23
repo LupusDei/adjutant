@@ -7,14 +7,17 @@ import { type CSSProperties, useCallback, useState } from 'react';
 import { KanbanColumn } from './KanbanColumn';
 import { useKanban } from '../../hooks/useKanban';
 import type { BeadInfo } from '../../types';
+import type { KanbanColumnId } from '../../types/kanban';
 
 export interface KanbanBoardProps {
   beads: BeadInfo[];
   onBeadsChange: (updater: (prev: BeadInfo[]) => BeadInfo[]) => void;
   onBeadClick?: (bead: BeadInfo) => void;
+  /** Called when a bead needs agent assignment (drag to in_progress without assignee) */
+  onAssignRequest?: (beadId: string, targetColumn: KanbanColumnId) => Promise<string | null>;
 }
 
-export function KanbanBoard({ beads, onBeadsChange, onBeadClick }: KanbanBoardProps) {
+export function KanbanBoard({ beads, onBeadsChange, onBeadClick, onAssignRequest }: KanbanBoardProps) {
   const [error, setError] = useState<string | null>(null);
 
   const handleError = useCallback((err: Error, beadId: string) => {
@@ -33,6 +36,7 @@ export function KanbanBoard({ beads, onBeadsChange, onBeadClick }: KanbanBoardPr
     handleDrop,
   } = useKanban(beads, onBeadsChange, {
     onError: handleError,
+    onAssignRequest,
   });
 
   return (

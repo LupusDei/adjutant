@@ -14,6 +14,11 @@ export interface UseKanbanOptions {
   onStatusUpdate?: (beadId: string, newStatus: KanbanColumnId) => void;
   /** Called on update error */
   onError?: (error: Error, beadId: string) => void;
+  /**
+   * Called when a bead is dropped on in_progress and has no assignee.
+   * Should return an agent name to assign, or null to cancel the drop.
+   */
+  onAssignRequest?: ((beadId: string, targetColumn: KanbanColumnId) => Promise<string | null>) | undefined;
 }
 
 export interface UseKanbanResult {
@@ -71,7 +76,7 @@ export function useKanban(
   onBeadsChange: (updater: (prev: BeadInfo[]) => BeadInfo[]) => void,
   options: UseKanbanOptions = {}
 ): UseKanbanResult {
-  const { onStatusUpdate, onError } = options;
+  const { onStatusUpdate, onError, onAssignRequest } = options;
   const { isSwarm } = useMode();
 
   const [dragState, setDragState] = useState<KanbanDragState>({
@@ -147,7 +152,38 @@ export function useKanban(
       const bead = findBead(beadId);
       if (!bead) return;
 
-      // Optimistic update
+      // If dropping to in_progress and bead has no assignee, request assignment
+      if (targetColumn === 'in_progress' && !bead.assignee && onAssignRequest) {
+        const assignee = await onAssignRequest(beadId, targetColumn);
+        if (!assignee) return; // User cancelled — abort the drop
+
+        // Optimistic update with both status and assignee
+        const previousStatus = bead.status;
+        const previousAssignee = bead.assignee;
+        onBeadsChange((prev) =>
+          prev.map((b) =>
+            b.id === beadId ? { ...b, status: targetColumn, assignee } : b
+          )
+        );
+
+        setIsUpdating(true);
+        try {
+          await api.beads.update(beadId, { status: targetColumn, assignee });
+          onStatusUpdate?.(beadId, targetColumn);
+        } catch (err) {
+          onBeadsChange((prev) =>
+            prev.map((b) =>
+              b.id === beadId ? { ...b, status: previousStatus, assignee: previousAssignee } : b
+            )
+          );
+          onError?.(err instanceof Error ? err : new Error('Failed to update status'), beadId);
+        } finally {
+          setIsUpdating(false);
+        }
+        return;
+      }
+
+      // Standard drop: optimistic update, then API call
       const previousStatus = bead.status;
       onBeadsChange((prev) =>
         prev.map((b) =>
@@ -155,7 +191,6 @@ export function useKanban(
         )
       );
 
-      // API call
       setIsUpdating(true);
       try {
         await api.beads.update(beadId, { status: targetColumn });
@@ -172,7 +207,7 @@ export function useKanban(
         setIsUpdating(false);
       }
     },
-    [dragState, findBead, onBeadsChange, onStatusUpdate, onError]
+    [dragState, findBead, onBeadsChange, onStatusUpdate, onError, onAssignRequest]
   );
 
   return {

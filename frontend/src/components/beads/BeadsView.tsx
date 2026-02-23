@@ -1,12 +1,14 @@
-import { useState, useCallback, useEffect, useMemo, type CSSProperties } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { KanbanBoard } from './KanbanBoard';
 import { BeadDetailView } from './BeadDetailView';
+import { AgentAssignModal } from './AgentAssignModal';
 import { OverseerToggle } from '../shared/OverseerToggle';
 import { usePolling } from '../../hooks/usePolling';
 import { fuzzyMatch } from '../../hooks/useFuzzySearch';
 import { api } from '../../services/api';
 import { useMode } from '../../contexts/ModeContext';
 import type { BeadInfo } from '../../types';
+import type { KanbanColumnId } from '../../types/kanban';
 
 export interface BeadsViewProps {
   /** Whether this tab is currently active */
@@ -208,6 +210,32 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
     setSelectedBeadId(null);
   }, []);
 
+  // Drag-to-assign modal state
+  const [pendingAssign, setPendingAssign] = useState<{ beadId: string; targetColumn: KanbanColumnId } | null>(null);
+  const pendingResolveRef = useRef<((agentName: string | null) => void) | null>(null);
+
+  const handleAssignRequest = useCallback(
+    (beadId: string, targetColumn: KanbanColumnId): Promise<string | null> => {
+      return new Promise((resolve) => {
+        pendingResolveRef.current = resolve;
+        setPendingAssign({ beadId, targetColumn });
+      });
+    },
+    []
+  );
+
+  const handleAssignConfirm = useCallback((agentName: string) => {
+    pendingResolveRef.current?.(agentName);
+    pendingResolveRef.current = null;
+    setPendingAssign(null);
+  }, []);
+
+  const handleAssignCancel = useCallback(() => {
+    pendingResolveRef.current?.(null);
+    pendingResolveRef.current = null;
+    setPendingAssign(null);
+  }, []);
+
   if (loading && beads.length === 0) {
     return (
       <div style={styles.container}>
@@ -311,12 +339,21 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
         beads={filteredBeads}
         onBeadsChange={handleBeadsChange}
         onBeadClick={handleBeadClick}
+        onAssignRequest={handleAssignRequest}
       />
 
       <BeadDetailView
         beadId={selectedBeadId}
         onClose={handleCloseDetail}
       />
+
+      {pendingAssign && (
+        <AgentAssignModal
+          beadId={pendingAssign.beadId}
+          onConfirm={handleAssignConfirm}
+          onCancel={handleAssignCancel}
+        />
+      )}
     </div>
   );
 }
