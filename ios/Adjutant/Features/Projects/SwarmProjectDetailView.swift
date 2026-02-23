@@ -9,6 +9,7 @@ struct SwarmProjectDetailView: View {
     @StateObject private var viewModel: SwarmProjectDetailViewModel
     @EnvironmentObject private var coordinator: AppCoordinator
     @State private var selectedSession: ManagedSession?
+    @State private var showCallsignPicker = false
 
     init(project: Project) {
         _viewModel = StateObject(wrappedValue: SwarmProjectDetailViewModel(project: project))
@@ -59,6 +60,16 @@ struct SwarmProjectDetailView: View {
                 apiKey: AppState.shared.apiKey
             )
             SessionChatView(session: session, wsClient: wsClient, showDismiss: true)
+        }
+        .sheet(isPresented: $showCallsignPicker) {
+            CallsignPickerView { callsignName in
+                Task {
+                    if let session = await viewModel.createSession(name: callsignName) {
+                        selectedSession = session
+                    }
+                }
+            }
+            .presentationDetents([.large])
         }
     }
 
@@ -286,7 +297,7 @@ struct SwarmProjectDetailView: View {
                 Divider()
                     .background(theme.dim.opacity(0.3))
 
-                // Start Agent button
+                // Start Agent button — tap for random callsign, long-press to choose
                 actionButton(
                     icon: "plus.circle",
                     label: "START AGENT",
@@ -298,6 +309,14 @@ struct SwarmProjectDetailView: View {
                         }
                     }
                 }
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.5)
+                        .onEnded { _ in
+                            let impact = UIImpactFeedbackGenerator(style: .heavy)
+                            impact.impactOccurred()
+                            showCallsignPicker = true
+                        }
+                )
 
                 // Start Team button
                 actionButton(

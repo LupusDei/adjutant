@@ -50,14 +50,16 @@ final class SwarmProjectDetailViewModel: BaseViewModel {
 
     // MARK: - Actions
 
-    /// Create a new swarm agent session for this project
-    func createSession() async -> ManagedSession? {
+    /// Create a new swarm agent session for this project.
+    /// Pass a name to choose a specific callsign; omit for random assignment.
+    func createSession(name: String? = nil) async -> ManagedSession? {
         isCreatingSession = true
         defer { isCreatingSession = false }
 
         let result = await performAsync(showLoading: false) {
             try await self.apiClient.createSession(
                 CreateSessionRequest(
+                    name: name,
                     projectPath: self.project.path,
                     mode: "swarm"
                 )

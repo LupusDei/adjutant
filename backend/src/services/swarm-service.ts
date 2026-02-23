@@ -8,6 +8,7 @@
 import { execFile } from "child_process";
 import { logInfo, logWarn } from "../utils/index.js";
 import { getSessionBridge } from "./session-bridge.js";
+import { pickRandomCallsigns } from "./callsign-service.js";
 
 // ============================================================================
 // Types
@@ -82,12 +83,21 @@ export async function createSwarm(config: SwarmConfig): Promise<CreateSwarmResul
 
   const bridge = getSessionBridge();
   const swarmId = `swarm-${++swarmCounter}`;
-  const base = baseName ?? `agent`;
   const agents: SwarmAgent[] = [];
   const errors: string[] = [];
 
+  // Pre-select callsigns for swarm agents when no baseName is provided
+  const callsignNames: string[] = [];
+  if (!baseName) {
+    const sessions = bridge.listSessions();
+    const picked = pickRandomCallsigns(sessions, agentCount);
+    callsignNames.push(...picked.map((c) => c.name));
+  }
+
   for (let i = 0; i < agentCount; i++) {
-    const name = `${base}-${i + 1}`;
+    const name = baseName
+      ? `${baseName}-${i + 1}`
+      : callsignNames[i] ?? `agent-${i + 1}`;
     const branch = `swarm/${swarmId}/${name}`;
     const isCoordinator = coordinatorIndex !== undefined && i === coordinatorIndex;
 

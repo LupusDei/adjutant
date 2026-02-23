@@ -214,6 +214,11 @@ extension APIClient {
     public func discoverSessions() async throws -> DiscoverSessionsResponse {
         try await requestWithEnvelope(.post, path: "/sessions/discover")
     }
+
+    /// Get all StarCraft callsigns with availability status
+    public func getCallsigns() async throws -> [Callsign] {
+        try await requestWithEnvelope(.get, path: "/sessions/callsigns")
+    }
 }
 
 // MARK: - Swarms Endpoints

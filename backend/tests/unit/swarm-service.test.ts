@@ -5,6 +5,7 @@ const mockBridge = {
   createSession: vi.fn(),
   killSession: vi.fn(),
   getSession: vi.fn(),
+  listSessions: vi.fn().mockReturnValue([]),
 };
 
 vi.mock("../../src/services/session-bridge.js", () => ({
@@ -61,7 +62,7 @@ describe("swarm-service", () => {
       expect(result.error).toContain("between 1 and 20");
     });
 
-    it("should create a single-agent swarm", async () => {
+    it("should create a single-agent swarm with callsign name", async () => {
       mockBridge.createSession.mockResolvedValue({
         success: true,
         sessionId: "sess-1",
@@ -75,7 +76,9 @@ describe("swarm-service", () => {
       expect(result.success).toBe(true);
       expect(result.swarm).toBeDefined();
       expect(result.swarm!.agents).toHaveLength(1);
-      expect(result.swarm!.agents[0].name).toBe("agent-1");
+      // Without baseName, agent gets a random callsign (not "agent-1")
+      expect(result.swarm!.agents[0].name).toBeTruthy();
+      expect(result.swarm!.agents[0].name).not.toMatch(/^agent-\d+$/);
       expect(result.swarm!.agents[0].branch).toBe("main");
       expect(result.swarm!.agents[0].isCoordinator).toBe(false);
     });
@@ -108,6 +111,7 @@ describe("swarm-service", () => {
       const result = await createSwarm({
         projectPath: "/tmp/project",
         agentCount: 2,
+        baseName: "worker",
         coordinatorIndex: 0,
       });
 
@@ -395,6 +399,7 @@ describe("swarm-service", () => {
       await createSwarm({
         projectPath: "/tmp/project",
         agentCount: 2,
+        baseName: "agent",
       });
 
       const branches = await getSwarmBranches("swarm-1");
@@ -415,6 +420,7 @@ describe("swarm-service", () => {
       await createSwarm({
         projectPath: "/tmp/project",
         agentCount: 1,
+        baseName: "agent",
       });
 
       const branches = await getSwarmBranches("swarm-1");
@@ -465,6 +471,7 @@ describe("swarm-service", () => {
       await createSwarm({
         projectPath: "/tmp/project",
         agentCount: 2,
+        baseName: "agent",
       });
 
       const branch = `swarm/swarm-1/agent-2`;

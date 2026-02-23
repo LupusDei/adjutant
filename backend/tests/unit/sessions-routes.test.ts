@@ -4,7 +4,7 @@ import request from "supertest";
 
 // Mock the session bridge before importing the router
 const mockBridge = {
-  listSessions: vi.fn(),
+  listSessions: vi.fn().mockReturnValue([]),
   getSession: vi.fn(),
   createSession: vi.fn(),
   connectClient: vi.fn(),
@@ -34,6 +34,43 @@ describe("sessions routes", () => {
   beforeEach(() => {
     app = createTestApp();
     vi.clearAllMocks();
+  });
+
+  // ==========================================================================
+  // GET /api/sessions/callsigns
+  // ==========================================================================
+
+  describe("GET /api/sessions/callsigns", () => {
+    it("should return all 44 callsigns as available when no sessions", async () => {
+      mockBridge.listSessions.mockReturnValue([]);
+
+      const response = await request(app).get("/api/sessions/callsigns");
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toHaveLength(44);
+      expect(response.body.data[0]).toHaveProperty("name");
+      expect(response.body.data[0]).toHaveProperty("race");
+      expect(response.body.data[0]).toHaveProperty("available");
+      expect(response.body.data.every((c: { available: boolean }) => c.available)).toBe(true);
+    });
+
+    it("should mark active session callsigns as unavailable", async () => {
+      mockBridge.listSessions.mockReturnValue([
+        { name: "raynor", status: "working" },
+        { name: "zeratul", status: "idle" },
+      ]);
+
+      const response = await request(app).get("/api/sessions/callsigns");
+      expect(response.status).toBe(200);
+
+      const raynor = response.body.data.find((c: { name: string }) => c.name === "raynor");
+      const zeratul = response.body.data.find((c: { name: string }) => c.name === "zeratul");
+      const nova = response.body.data.find((c: { name: string }) => c.name === "nova");
+
+      expect(raynor.available).toBe(false);
+      expect(zeratul.available).toBe(false);
+      expect(nova.available).toBe(true);
+    });
   });
 
   // ==========================================================================
@@ -127,14 +164,14 @@ describe("sessions routes", () => {
       expect(response.body.data.name).toBe("my-agent");
     });
 
-    it("should auto-generate name when name is missing", async () => {
+    it("should auto-generate name with callsign when name is missing", async () => {
       mockBridge.createSession.mockResolvedValue({
         success: true,
         sessionId: "auto-session-id",
       });
       mockBridge.getSession.mockReturnValue({
         id: "auto-session-id",
-        name: "tmp-agent",
+        name: "zeratul",
         status: "working",
       });
 
@@ -144,7 +181,44 @@ describe("sessions routes", () => {
 
       expect(response.status).toBe(201);
       expect(response.body.success).toBe(true);
-      expect(response.body.data.name).toBe("tmp-agent");
+      // Name is auto-assigned from callsign roster (we just verify it went through)
+      expect(response.body.data.name).toBeTruthy();
+    });
+
+    it("should return 409 when explicit name conflicts with active session", async () => {
+      mockBridge.listSessions.mockReturnValue([
+        { name: "raynor", status: "working" },
+      ]);
+
+      const response = await request(app)
+        .post("/api/sessions")
+        .send({ name: "raynor", projectPath: "/tmp" });
+
+      expect(response.status).toBe(409);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error.code).toBe("CONFLICT");
+    });
+
+    it("should allow reuse of offline session names", async () => {
+      mockBridge.listSessions.mockReturnValue([
+        { name: "raynor", status: "offline" },
+      ]);
+      mockBridge.createSession.mockResolvedValue({
+        success: true,
+        sessionId: "new-id",
+      });
+      mockBridge.getSession.mockReturnValue({
+        id: "new-id",
+        name: "raynor",
+        status: "idle",
+      });
+
+      const response = await request(app)
+        .post("/api/sessions")
+        .send({ name: "raynor", projectPath: "/tmp" });
+
+      expect(response.status).toBe(201);
+      expect(response.body.data.name).toBe("raynor");
     });
 
     it("should return 400 when projectPath is missing", async () => {

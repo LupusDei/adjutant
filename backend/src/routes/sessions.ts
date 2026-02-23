@@ -18,9 +18,15 @@ import { basename } from "path";
 import { z } from "zod";
 import { getSessionBridge } from "../services/session-bridge.js";
 import {
+  getCallsigns,
+  pickRandomCallsign,
+  isCallsignAvailable,
+} from "../services/callsign-service.js";
+import {
   success,
   notFound,
   badRequest,
+  conflict,
   validationError,
 } from "../utils/index.js";
 
@@ -54,6 +60,17 @@ const PermissionSchema = z.object({
 // ============================================================================
 // Routes
 // ============================================================================
+
+/**
+ * GET /api/sessions/callsigns
+ * List all StarCraft callsigns with availability status.
+ */
+sessionsRouter.get("/callsigns", (_req, res) => {
+  const bridge = getSessionBridge();
+  const sessions = bridge.listSessions();
+  const callsigns = getCallsigns(sessions);
+  return res.json(success(callsigns));
+});
 
 /**
  * GET /api/sessions
@@ -93,9 +110,26 @@ sessionsRouter.post("/", async (req, res) => {
   }
 
   const data = parsed.data;
-  const name = data.name || `${basename(data.projectPath)}-agent`;
-
   const bridge = getSessionBridge();
+
+  // If an explicit name was provided, check for conflicts with active sessions
+  if (data.name) {
+    const sessions = bridge.listSessions();
+    const nameInUse = sessions.some(
+      (s) => s.name === data.name && s.status !== "offline"
+    );
+    if (nameInUse) {
+      return res
+        .status(409)
+        .json(conflict(`Agent name '${data.name}' is already in use`));
+    }
+  }
+
+  // Auto-assign a callsign if no name provided
+  const sessions = bridge.listSessions();
+  const callsign = pickRandomCallsign(sessions);
+  const name = data.name || callsign?.name || `${basename(data.projectPath)}-agent`;
+
   const result = await bridge.createSession({
     name,
     projectPath: data.projectPath,
