@@ -298,16 +298,16 @@ export async function recoverSession(
 
 /** Minimal mock response that discards output. */
 function createMockResponse() {
-  return {
-    writeHead: () => mockSelf,
-    setHeader: () => mockSelf,
+  const res = {
+    writeHead: () => res,
+    setHeader: () => res,
     write: () => true,
     end: () => {},
     headersSent: false,
     statusCode: 200,
-  } as unknown as import("node:http").ServerResponse;
+  };
+  return res as unknown as import("node:http").ServerResponse;
 }
-const mockSelf = createMockResponse();
 
 /** Minimal mock request for internal handshake. */
 function createMockRequest(sessionId?: string) {
