@@ -22,6 +22,11 @@ struct AgentListView: View {
             // Header
             headerView
 
+            // Workload summary
+            if !viewModel.allCrewMembers.isEmpty {
+                workloadSummary
+            }
+
             // Filter bar
             filterBar
 
@@ -91,6 +96,101 @@ struct AgentListView: View {
                     alignment: .bottom
                 )
         )
+    }
+
+    // MARK: - Workload Summary
+
+    private var workloadSummary: some View {
+        HStack(spacing: CRTTheme.Spacing.md) {
+            // Total agents
+            workloadStat(
+                value: "\(viewModel.allCrewMembers.count)",
+                label: "TOTAL"
+            )
+
+            Divider()
+                .frame(height: 20)
+                .background(theme.dim.opacity(0.3))
+
+            // Working
+            workloadStatWithDot(
+                value: "\(viewModel.statusCounts[.working] ?? 0)",
+                label: "ACTIVE",
+                dotColor: CRTTheme.State.success
+            )
+
+            // Idle
+            workloadStatWithDot(
+                value: "\(viewModel.statusCounts[.idle] ?? 0)",
+                label: "IDLE",
+                dotColor: CRTTheme.State.info
+            )
+
+            // Offline
+            workloadStatWithDot(
+                value: "\(viewModel.statusCounts[.offline] ?? 0)",
+                label: "OFF",
+                dotColor: CRTTheme.State.offline
+            )
+
+            Divider()
+                .frame(height: 20)
+                .background(theme.dim.opacity(0.3))
+
+            // Beads in progress
+            workloadStat(
+                value: "\(viewModel.totalBeadsInProgress)",
+                label: "BEADS",
+                icon: "circle.grid.3x3"
+            )
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
+        .padding(.vertical, CRTTheme.Spacing.xs)
+        .background(
+            CRTTheme.Background.panel.opacity(0.3)
+                .overlay(
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(theme.dim.opacity(0.15)),
+                    alignment: .bottom
+                )
+        )
+    }
+
+    private func workloadStat(value: String, label: String, icon: String? = nil) -> some View {
+        VStack(spacing: 1) {
+            HStack(spacing: 3) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 8))
+                        .foregroundColor(theme.dim)
+                }
+                Text(value)
+                    .font(CRTTheme.Typography.font(size: 14, weight: .bold))
+                    .foregroundColor(theme.primary)
+            }
+            Text(label)
+                .font(CRTTheme.Typography.font(size: 8, weight: .medium))
+                .tracking(CRTTheme.Typography.letterSpacing)
+                .foregroundColor(theme.dim)
+        }
+    }
+
+    private func workloadStatWithDot(value: String, label: String, dotColor: Color) -> some View {
+        VStack(spacing: 1) {
+            HStack(spacing: 3) {
+                Circle()
+                    .fill(dotColor)
+                    .frame(width: 5, height: 5)
+                Text(value)
+                    .font(CRTTheme.Typography.font(size: 14, weight: .bold))
+                    .foregroundColor(theme.primary)
+            }
+            Text(label)
+                .font(CRTTheme.Typography.font(size: 8, weight: .medium))
+                .tracking(CRTTheme.Typography.letterSpacing)
+                .foregroundColor(theme.dim)
+        }
     }
 
     private var filterBar: some View {
@@ -327,7 +427,10 @@ struct AgentListView: View {
                 ForEach(viewModel.groupedCrewMembers) { group in
                     Section {
                         ForEach(group.members) { member in
-                            AgentRowView(member: member) {
+                            AgentRowView(
+                                member: member,
+                                beadContext: viewModel.beadContext(for: member)
+                            ) {
                                 onSelectMember?(member)
                             }
                         }

@@ -1,11 +1,22 @@
 import SwiftUI
 import AdjutantKit
 
+/// Context about an agent's bead workload for display in the row.
+struct AgentBeadContext {
+    /// Number of beads assigned to this agent
+    let assignedCount: Int
+    /// The ID of the current in-progress bead, if any
+    let currentBeadId: String?
+
+    static let empty = AgentBeadContext(assignedCount: 0, currentBeadId: nil)
+}
+
 /// A row view for displaying a single agent in the list.
 struct AgentRowView: View {
     @Environment(\.crtTheme) private var theme
 
     let member: CrewMember
+    var beadContext: AgentBeadContext = .empty
     let onTap: () -> Void
 
     var body: some View {
@@ -16,25 +27,59 @@ struct AgentRowView: View {
 
                 // Main content
                 VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxxs) {
-                    // Name and type
+                    // Name and bead badge row
                     HStack(spacing: CRTTheme.Spacing.xs) {
                         CRTText(member.name, style: .body, glowIntensity: .medium)
 
                         if let rig = member.rig {
                             CRTText("[\(rig)]", style: .caption, glowIntensity: .subtle, color: theme.dim)
                         }
+
+                        // Current bead ID badge
+                        if let beadId = beadContext.currentBeadId {
+                            Text(beadId)
+                                .font(CRTTheme.Typography.font(size: 9, weight: .bold))
+                                .tracking(0.5)
+                                .foregroundColor(theme.primary)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(theme.primary.opacity(0.12))
+                                .cornerRadius(3)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .stroke(theme.primary.opacity(0.3), lineWidth: 0.5)
+                                )
+                        }
                     }
 
                     // Status/task info
-                    if let task = member.currentTask {
-                        CRTText(task, style: .caption, glowIntensity: .subtle, color: theme.dim)
-                            .lineLimit(1)
-                    } else {
-                        statusText
+                    HStack(spacing: CRTTheme.Spacing.xs) {
+                        if let task = member.currentTask {
+                            CRTText(task, style: .caption, glowIntensity: .subtle, color: theme.dim)
+                                .lineLimit(1)
+                        } else {
+                            statusText
+                        }
                     }
                 }
 
                 Spacer()
+
+                // Bead count indicator
+                if beadContext.assignedCount > 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "circle.grid.3x3")
+                            .font(.system(size: 9))
+                            .foregroundColor(theme.dim)
+                        Text("\(beadContext.assignedCount)")
+                            .font(CRTTheme.Typography.font(size: 10, weight: .bold))
+                            .foregroundColor(theme.dim)
+                    }
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(theme.dim.opacity(0.1))
+                    .cornerRadius(3)
+                }
 
                 // Unread mail badge
                 if (member.unreadMail ?? 0) > 0 {

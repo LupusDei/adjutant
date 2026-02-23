@@ -35,6 +35,18 @@ final class AgentListViewModel: BaseViewModel {
     /// Count of agents per status (computed from allCrewMembers, ignoring filters)
     @Published private(set) var statusCounts: [CrewMemberStatus: Int] = [:]
 
+    /// Beads in progress grouped by assignee name
+    @Published private(set) var beadsInProgressByAgent: [String: Int] = [:]
+
+    /// Current in-progress bead ID per agent name
+    @Published private(set) var currentBeadByAgent: [String: String] = [:]
+
+    /// Total bead count (all statuses) per agent name
+    @Published private(set) var totalBeadsByAgent: [String: Int] = [:]
+
+    /// Total beads in progress across all agents
+    @Published private(set) var totalBeadsInProgress: Int = 0
+
     // MARK: - Types
 
     /// Grouped crew members by agent type
@@ -118,6 +130,7 @@ final class AgentListViewModel: BaseViewModel {
     override func onAppear() {
         super.onAppear()
         dataSync.subscribeCrew()
+        Task { await fetchBeadCounts() }
     }
 
     override func onDisappear() {
@@ -131,6 +144,52 @@ final class AgentListViewModel: BaseViewModel {
         await performAsync(showLoading: allCrewMembers.isEmpty) {
             await self.dataSync.refreshCrew()
         }
+        await fetchBeadCounts()
+    }
+
+    /// Fetches bead data for agent context display
+    private func fetchBeadCounts() async {
+        do {
+            // Fetch in-progress beads for workload summary
+            let inProgressBeads = try await apiClient.getBeads(status: .inProgress)
+            var ipCounts: [String: Int] = [:]
+            var currentBead: [String: String] = [:]
+            for bead in inProgressBeads {
+                if let assignee = bead.assignee, !assignee.isEmpty {
+                    let name = assignee.components(separatedBy: "/").last ?? assignee
+                    ipCounts[name, default: 0] += 1
+                    // Use the first in-progress bead as the "current" bead
+                    if currentBead[name] == nil {
+                        currentBead[name] = bead.id
+                    }
+                }
+            }
+            beadsInProgressByAgent = ipCounts
+            currentBeadByAgent = currentBead
+            totalBeadsInProgress = inProgressBeads.count
+
+            // Fetch all open beads for total counts per agent
+            let allBeads = try await apiClient.getBeads()
+            var totals: [String: Int] = [:]
+            for bead in allBeads {
+                if let assignee = bead.assignee, !assignee.isEmpty {
+                    let name = assignee.components(separatedBy: "/").last ?? assignee
+                    totals[name, default: 0] += 1
+                }
+            }
+            totalBeadsByAgent = totals
+        } catch {
+            // Non-critical: silently fail, leave counts at zero
+            print("[AgentListViewModel] Bead fetch failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Gets bead context for a specific agent
+    func beadContext(for member: CrewMember) -> AgentBeadContext {
+        AgentBeadContext(
+            assignedCount: totalBeadsByAgent[member.name] ?? 0,
+            currentBeadId: currentBeadByAgent[member.name]
+        )
     }
 
     // MARK: - Filtering
