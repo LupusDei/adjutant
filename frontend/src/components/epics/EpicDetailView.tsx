@@ -3,7 +3,7 @@
  * Pip-Boy terminal aesthetic matching the rest of the UI.
  */
 
-import { type CSSProperties, useCallback, useEffect, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 import { useEpicDetail } from '../../hooks';
 import type { BeadInfo } from '../../types';
 
@@ -11,6 +11,10 @@ export interface EpicDetailViewProps {
   epicId: string | null;
   onClose: () => void;
   onBeadClick?: (beadId: string) => void;
+  /** Callback after a bead is assigned — triggers parent refresh */
+  onAssign?: () => void;
+  /** Increment to trigger a data refresh (e.g., after assignment in sibling) */
+  refreshTrigger?: number;
 }
 
 /**
@@ -167,7 +171,9 @@ function SubtaskSection({
   );
 }
 
-export function EpicDetailView({ epicId, onClose, onBeadClick }: EpicDetailViewProps) {
+export function EpicDetailView(props: EpicDetailViewProps) {
+  const { epicId, onClose, onBeadClick, refreshTrigger = 0 } = props;
+  // props.onAssign available for AgentAssignDropdown integration (adj-c31)
   const {
     epic,
     openSubtasks,
@@ -180,6 +186,15 @@ export function EpicDetailView({ epicId, onClose, onBeadClick }: EpicDetailViewP
     error,
     refresh,
   } = useEpicDetail(epicId);
+
+  // Refresh data when refreshTrigger changes (e.g., after assignment in EpicsList)
+  const prevTrigger = useRef(refreshTrigger);
+  useEffect(() => {
+    if (refreshTrigger > prevTrigger.current) {
+      prevTrigger.current = refreshTrigger;
+      void refresh();
+    }
+  }, [refreshTrigger, refresh]);
 
   const [copied, setCopied] = useState(false);
 

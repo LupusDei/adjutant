@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, type CSSProperties } from 'react';
+import { useState, useCallback, useEffect, useRef, type CSSProperties } from 'react';
 import { OverseerToggle } from '../shared/OverseerToggle';
 import { EpicsList, type EpicSortOption } from './EpicsList';
 import { EpicDetailView } from './EpicDetailView';
@@ -50,6 +50,15 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
 
   const handleOverseerToggle = useCallback((enabled: boolean) => {
     setOverseerView(enabled);
+  }, []);
+
+  // Refresh trigger — incremented after assignment to refresh both list and detail
+  const refreshTriggerRef = useRef(0);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const handleAssign = useCallback(() => {
+    refreshTriggerRef.current += 1;
+    setRefreshTrigger(refreshTriggerRef.current);
   }, []);
 
   // Convert UI rig filter to API parameter
@@ -105,11 +114,15 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
         rig={apiRig}
         overseerView={overseerView}
         onEpicClick={handleEpicClick}
+        onAssign={handleAssign}
+        refreshTrigger={refreshTrigger}
       />
 
       <EpicDetailView
         epicId={selectedEpicId}
         onClose={handleCloseDetail}
+        onAssign={handleAssign}
+        refreshTrigger={refreshTrigger}
       />
     </div>
   );

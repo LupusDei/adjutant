@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from 'react';
+import { useMemo, useEffect, useRef, type CSSProperties } from 'react';
 import { useEpics } from '../../hooks/useEpics';
 import type { EpicWithProgress } from '../../types/epics';
 import { EpicCard } from './EpicCard';
@@ -15,6 +15,10 @@ interface EpicsListProps {
   overseerView?: boolean;
   /** Callback when an epic is clicked */
   onEpicClick?: (epicId: string) => void;
+  /** Callback when a bead is assigned — passed down for AgentAssignDropdown */
+  onAssign?: () => void;
+  /** Increment to trigger a data refresh (e.g., after assignment in sibling) */
+  refreshTrigger?: number;
 }
 
 /** Title patterns for overseer filtering - filter out operational/internal items */
@@ -46,8 +50,19 @@ function sortEpics(epics: EpicWithProgress[], sortBy: EpicSortOption): EpicWithP
   });
 }
 
-export function EpicsList({ sortBy, isActive = true, rig, overseerView = false, onEpicClick }: EpicsListProps) {
-  const { openEpics, completedEpics, loading, error } = useEpics({ enabled: isActive, rig });
+export function EpicsList(props: EpicsListProps) {
+  const { sortBy, isActive = true, rig, overseerView = false, onEpicClick, refreshTrigger = 0 } = props;
+  // props.onAssign available for AgentAssignDropdown integration (adj-fes)
+  const { openEpics, completedEpics, loading, error, refresh } = useEpics({ enabled: isActive, rig });
+
+  // Refresh data when refreshTrigger changes (e.g., after assignment in EpicDetailView)
+  const prevTrigger = useRef(refreshTrigger);
+  useEffect(() => {
+    if (refreshTrigger > prevTrigger.current) {
+      prevTrigger.current = refreshTrigger;
+      void refresh();
+    }
+  }, [refreshTrigger, refresh]);
 
   // Apply overseer filtering if enabled
   const filteredOpen = useMemo(() => {
