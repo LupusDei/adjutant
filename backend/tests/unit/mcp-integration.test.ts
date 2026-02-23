@@ -87,6 +87,10 @@ vi.mock("@modelcontextprotocol/sdk/server/streamableHttp.js", () => ({
       onclose: undefined as (() => void) | undefined,
       _onsessioninitialized: options?.onsessioninitialized,
       _onsessionclosed: options?.onsessionclosed,
+      _webStandardTransport: {
+        _initialized: false,
+        sessionId: undefined as string | undefined,
+      },
       handleRequest: vi.fn().mockImplementation(async () => {
         // Simulate the transport setting session ID and firing callback
         // on first call (initialization)
@@ -224,10 +228,11 @@ describe("MCP Streamable HTTP Integration", () => {
     // A new transport should have been created and the session tracked
     expect(getAgentBySession("stale-session-abc")).toBe("recovery-agent");
 
-    // The transport's handleRequest should have been called:
-    // 1x for internal init, 1x for initialized notification, 1x for the actual request
+    // The transport's handleRequest should have been called once for the actual request.
+    // Session recovery now directly initializes internal state instead of doing a
+    // mock handshake, so no extra handleRequest calls for init/notification.
     const transport = createdTransports[createdTransports.length - 1]!;
-    expect(transport.handleRequest).toHaveBeenCalledTimes(3);
+    expect(transport.handleRequest).toHaveBeenCalledTimes(1);
   });
 });
 

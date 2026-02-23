@@ -237,12 +237,29 @@ export function getTransportBySession(
 // ============================================================================
 
 /**
+ * Inner transport type — the Node.js StreamableHTTPServerTransport wraps
+ * a WebStandardStreamableHTTPServerTransport which holds the actual
+ * _initialized flag and sessionId. We need to set these directly because
+ * the mock handshake approach fails: @hono/node-server's request converter
+ * requires full Node.js HTTP objects (rawHeaders, host header, event
+ * emitters, streams) that are impractical to mock correctly.
+ */
+interface WebStandardTransportInternals {
+  _initialized: boolean;
+  sessionId: string | undefined;
+}
+
+interface TransportWithInternals {
+  _webStandardTransport: WebStandardTransportInternals;
+}
+
+/**
  * Recover a stale session by creating a new transport with the same session ID.
  *
  * When a client sends a request with a session ID that no longer exists
  * (e.g., after server restart), this creates a fresh transport+server pair,
- * auto-initializes it via an internal handshake, and registers the connection
- * so subsequent requests route normally.
+ * directly initializes the transport's internal state, and registers the
+ * connection so subsequent requests route normally.
  *
  * Returns the recovered transport, or undefined if recovery fails.
  */
@@ -251,40 +268,34 @@ export async function recoverSession(
   agentId: string,
 ): Promise<StreamableHTTPServerTransport | undefined> {
   try {
-    const { transport } = await createSessionTransport(agentId, {
+    const { transport, server } = await createSessionTransport(agentId, {
       reuseSessionId: sessionId,
     });
 
-    // Internal initialization handshake — mock req/res objects
-    const mockRes = createMockResponse();
+    // Directly initialize the inner WebStandard transport.
+    // The sessionIdGenerator was already configured to return the reused
+    // sessionId, but it only fires during handlePostRequest which we skip.
+    // Cast safe: StreamableHTTPServerTransport always wraps a
+    // WebStandardStreamableHTTPServerTransport (see SDK source).
+    const inner = (transport as unknown as TransportWithInternals)
+      ._webStandardTransport;
+    inner._initialized = true;
+    inner.sessionId = sessionId;
 
-    const initBody = {
-      jsonrpc: "2.0" as const,
-      id: "session-recovery-init",
-      method: "initialize",
-      params: {
-        protocolVersion: "2024-11-05",
-        capabilities: {},
-        clientInfo: { name: "session-recovery", version: "1.0.0" },
-      },
+    // Manually register the connection — the onsessioninitialized callback
+    // set up in createSessionTransport won't fire without handleRequest.
+    const connection: AgentConnection = {
+      agentId,
+      sessionId,
+      server,
+      transport,
+      connectedAt: new Date(),
     };
-
-    // Step 1: Initialize the transport
-    await transport.handleRequest(
-      createMockRequest(),
-      mockRes,
-      initBody,
-    );
-
-    // Step 2: Send initialized notification
-    const notifyRes = createMockResponse();
-    await transport.handleRequest(
-      createMockRequest(sessionId),
-      notifyRes,
-      { jsonrpc: "2.0", method: "notifications/initialized" },
-    );
+    connections.set(sessionId, connection);
 
     logInfo("MCP session recovered", { agentId, sessionId });
+    getEventBus().emit("mcp:agent_connected", { agentId, sessionId });
+
     return transport;
   } catch (err) {
     logWarn("MCP session recovery failed", {
@@ -294,25 +305,4 @@ export async function recoverSession(
     });
     return undefined;
   }
-}
-
-/** Minimal mock response that discards output. */
-function createMockResponse() {
-  const res = {
-    writeHead: () => res,
-    setHeader: () => res,
-    write: () => true,
-    end: () => {},
-    headersSent: false,
-    statusCode: 200,
-  };
-  return res as unknown as import("node:http").ServerResponse;
-}
-
-/** Minimal mock request for internal handshake. */
-function createMockRequest(sessionId?: string) {
-  return {
-    method: "POST",
-    headers: sessionId ? { "mcp-session-id": sessionId } : {},
-  } as unknown as import("node:http").IncomingMessage;
 }

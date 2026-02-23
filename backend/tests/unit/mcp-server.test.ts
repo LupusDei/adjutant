@@ -68,6 +68,10 @@ vi.mock("@modelcontextprotocol/sdk/server/streamableHttp.js", () => ({
       onclose: undefined as (() => void) | undefined,
       _onsessioninitialized: options?.onsessioninitialized,
       _onsessionclosed: options?.onsessionclosed,
+      _webStandardTransport: {
+        _initialized: false,
+        sessionId: undefined as string | undefined,
+      },
       handleRequest: vi.fn().mockResolvedValue(undefined),
       close: vi.fn().mockResolvedValue(undefined),
       start: vi.fn().mockResolvedValue(undefined),
@@ -87,6 +91,7 @@ import {
   resolveAgentId,
   createSessionTransport,
   setToolRegistrar,
+  recoverSession,
 } from "../../src/services/mcp-server.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getEventBus } from "../../src/services/event-bus.js";
@@ -414,6 +419,70 @@ describe("MCP Server", () => {
 
       disconnectAgent("session-abc");
       expect(() => transport.onclose!()).not.toThrow();
+    });
+  });
+
+  describe("recoverSession", () => {
+    it("should set _initialized on inner WebStandard transport", async () => {
+      const result = await recoverSession("stale-session", "researcher");
+
+      expect(result).toBeDefined();
+      const transport = createdTransports[0]!;
+      expect(transport._webStandardTransport._initialized).toBe(true);
+    });
+
+    it("should set sessionId on inner WebStandard transport", async () => {
+      await recoverSession("stale-session", "researcher");
+
+      const transport = createdTransports[0]!;
+      expect(transport._webStandardTransport.sessionId).toBe("stale-session");
+    });
+
+    it("should register connection in connections map", async () => {
+      await recoverSession("stale-session", "researcher");
+
+      expect(getAgentBySession("stale-session")).toBe("researcher");
+      expect(getConnectedAgents()).toHaveLength(1);
+    });
+
+    it("should emit mcp:agent_connected event", async () => {
+      const bus = getEventBus();
+      await recoverSession("stale-session", "researcher");
+
+      expect(bus.emit).toHaveBeenCalledWith(
+        "mcp:agent_connected",
+        expect.objectContaining({
+          agentId: "researcher",
+          sessionId: "stale-session",
+        }),
+      );
+    });
+
+    it("should return the transport on success", async () => {
+      const result = await recoverSession("stale-session", "researcher");
+
+      expect(result).toBeDefined();
+      expect(result).toBe(createdTransports[0]);
+    });
+
+    it("should return undefined if createSessionTransport fails", async () => {
+      // Make McpServer.connect throw
+      mockConnect.mockRejectedValueOnce(new Error("connect failed"));
+
+      const result = await recoverSession("stale-session", "researcher");
+
+      expect(result).toBeUndefined();
+    });
+
+    it("should pass reuseSessionId to createSessionTransport", async () => {
+      await recoverSession("reuse-me", "researcher");
+
+      const { StreamableHTTPServerTransport } = await import(
+        "@modelcontextprotocol/sdk/server/streamableHttp.js"
+      );
+      const callArgs = vi.mocked(StreamableHTTPServerTransport).mock
+        .calls[0]?.[0] as { sessionIdGenerator?: () => string } | undefined;
+      expect(callArgs?.sessionIdGenerator?.()).toBe("reuse-me");
     });
   });
 });
