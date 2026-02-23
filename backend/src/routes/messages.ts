@@ -19,7 +19,7 @@ import { z } from "zod";
 import type { MessageStore } from "../services/message-store.js";
 import { wsBroadcast } from "../services/ws-server.js";
 import { getSessionBridge } from "../services/session-bridge.js";
-import { logInfo } from "../utils/index.js";
+
 import {
   success,
   notFound,

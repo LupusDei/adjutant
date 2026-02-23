@@ -20,7 +20,6 @@ import { getSessionBridge } from "../services/session-bridge.js";
 import {
   getCallsigns,
   pickRandomCallsign,
-  isCallsignAvailable,
 } from "../services/callsign-service.js";
 import {
   success,

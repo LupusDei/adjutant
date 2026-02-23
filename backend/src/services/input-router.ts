@@ -157,16 +157,6 @@ export class InputRouter {
   // Private
   // --------------------------------------------------------------------------
 
-  private enqueue(sessionId: string, text: string): void {
-    if (!this.queues.has(sessionId)) {
-      this.queues.set(sessionId, []);
-    }
-    this.queues.get(sessionId)!.push({
-      text,
-      timestamp: new Date(),
-    });
-  }
-
   private async deliverInput(tmuxPane: string, text: string): Promise<boolean> {
     try {
       // Strip trailing newlines — we send Enter separately
