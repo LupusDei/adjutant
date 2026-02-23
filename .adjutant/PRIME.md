@@ -81,21 +81,33 @@ npm run build                           # Must exit 0 with no errors
 # 2. Run tests
 npm test                                # Must exit 0, all tests pass
 
-# 3. If both pass — commit and push your BRANCH
+# 3. If both pass — commit and push
 git add <files>
 bd sync
 git commit -m "task: <bead-id> <description>"
 bd sync
 git push -u origin <your-branch>
 
-# 4. Close the bead
+# 4. Merge to main (if permitted — see rules below)
+git checkout main && git pull origin main
+git merge <your-branch>
+npm run build && npm test              # Re-verify after merge
+git push origin main
+
+# 5. Close the bead
 bd close <id>
 bd sync
 ```
 
-### Rules
+### Merge-to-Main Rules
 
-- **Do NOT merge to main.** Push your branch only. The coordinator decides when to merge.
+- **Default**: Agents may merge to main after verification passes.
+- **After merging**: You MUST re-run `npm run build` + `npm test` on the merged result. If the merge introduced conflicts or broke something, fix it before pushing.
+- **If push fails** (another agent pushed first): `git pull --rebase origin main`, re-run build/tests, then push again.
+- **Coordinator may restrict this** in the spawn prompt (e.g., "push branch only, do not merge") for multi-agent scenarios where several agents touch overlapping files.
+
+### General Rules
+
 - If lint/build fails → fix the errors, re-run, do NOT skip or `--no-verify`.
 - If tests fail → fix the failing tests or the code, do NOT close the bead.
 - Report verification results via MCP: `announce({ type: "completion", title: "...", body: "Build + tests pass", beadId: "..." })`

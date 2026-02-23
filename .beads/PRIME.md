@@ -190,8 +190,9 @@ When assigning work to team agents, the **coordinator** must:
      2. npm test               (must pass)
      3. git add <files> && bd sync && git commit -m "task: <bead-id> <description>" && bd sync
      4. git push -u origin <your-branch>
-     5. bd close <id>
-   Do NOT merge to main — push your branch only. Coordinator merges.
+     5. Merge to main: git checkout main && git pull && git merge <branch> && npm run build && npm test && git push origin main
+     6. bd close <id>
+   If push to main fails (race), pull --rebase and retry.
    Do NOT close parent epics — they auto-close when all children are done.
    If build/tests fail, fix them before closing the bead.
    Before shutting down:        bd sync
