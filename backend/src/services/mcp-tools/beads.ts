@@ -8,7 +8,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { execBd, type BdResult, type BeadsIssue } from "../bd-client.js";
+import { execBd, type BdResult } from "../bd-client.js";
 import { logError, logInfo } from "../../utils/index.js";
 
 // =============================================================================
@@ -60,16 +60,6 @@ function errorResult(result: BdResult) {
     content: [{ type: "text" as const, text: `Error: ${msg}` }],
     isError: true,
   };
-}
-
-/**
- * Checks if a bead is an epic by looking up its type via bd show.
- * Must be called inside bdMutex to avoid concurrent bd access.
- */
-async function isBeadEpic(id: string): Promise<boolean> {
-  const result = await execBd<BeadsIssue[]>(["show", id, "--json"]);
-  if (!result.success || !result.data || result.data.length === 0) return false;
-  return result.data[0]?.issue_type === "epic";
 }
 
 /**
@@ -154,17 +144,6 @@ export function registerBeadTools(server: McpServer): void {
     },
     async ({ id, status, title, description, assignee, priority }) => {
       return bdMutex.runExclusive(async () => {
-        // Guard: epics cannot be set to "closed" directly — they auto-complete
-        if (status === "closed" && await isBeadEpic(id)) {
-          return {
-            content: [{
-              type: "text" as const,
-              text: `Error: Epics cannot be closed directly. Epic ${id} will auto-complete when all its sub-beads are closed.`,
-            }],
-            isError: true,
-          };
-        }
-
         const args: string[] = ["update", id, "--json"];
 
         if (status) args.push(`--status=${status}`);
@@ -206,17 +185,6 @@ export function registerBeadTools(server: McpServer): void {
     },
     async ({ id, reason }) => {
       return bdMutex.runExclusive(async () => {
-        // Guard: epics cannot be closed directly — they auto-complete
-        if (await isBeadEpic(id)) {
-          return {
-            content: [{
-              type: "text" as const,
-              text: `Error: Epics cannot be closed directly. Epic ${id} will auto-complete when all its sub-beads are closed.`,
-            }],
-            isError: true,
-          };
-        }
-
         const args: string[] = ["close", id, "--json"];
         if (reason) {
           args.push("--reason", reason);

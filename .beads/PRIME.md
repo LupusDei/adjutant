@@ -114,7 +114,7 @@ bd dep add bd-001.1 bd-001.1.2   # sub-epic depends on task 2
 - Every child bead must be linked to its parent via `bd dep add <parent> <child>`
 - Do this in the same step as `bd create`, not after
 - `bd show <parent>` must display all children — verify this
-- Parent epics auto-close when all children are closed (enforced by deps) — do NOT close them manually
+- Parent epics auto-close when all children are closed (enforced by deps), but you MAY also close them manually with `bd close <id>` when appropriate
 
 ## Identifier Format
 - Root epic: `bd-xxx` where `bd` represents the beads prefix for the project
@@ -136,7 +136,7 @@ Levels:
 - Reference IDs in commits/PRs/logs/comments
 - Improvements = quality artifacts only
 - Max depth ≈4
-- **Epics auto-close**: Do NOT manually `bd close` an epic — epics auto-complete when all children are closed (via `bd epic close-eligible`). Manually closing an epic will fail with EPIC_CLOSE_BLOCKED.
+- **Epics**: Epics auto-complete when all children are closed (via `bd epic close-eligible`). You may also close epics manually with `bd close <id>` when all work is done.
 - Always link dependencies when order matters
 
 ## Planning & Execution
@@ -193,7 +193,7 @@ When assigning work to team agents, the **coordinator** must:
      5. Merge to main: git checkout main && git pull && git merge <branch> && npm run build && npm test && git push origin main
      6. bd close <id>
    If push to main fails (race), pull --rebase and retry.
-   Do NOT close parent epics — they auto-close when all children are done.
+   You may close parent epics manually when all children are done, or let them auto-close.
    If build/tests fail, fix them before closing the bead.
    Before shutting down:        bd sync
    ```
@@ -202,7 +202,7 @@ When assigning work to team agents, the **coordinator** must:
 Each **team agent** must:
 1. Run `bd update <id> --status=in_progress` before starting each task
 2. Run `bd close <id>` after completing each task
-3. Do NOT manually close parent epics — they auto-close when all children are done
+3. You may close parent epics manually when all children are done, or let them auto-close
 4. Run `bd sync` before shutting down
 
 If an agent is not updating beads, that is a bug in the spawn prompt, not the agent's fault.
