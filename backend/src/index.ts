@@ -1,7 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, convoysRouter, costsRouter, createMessagesRouter, devicesRouter, eventsRouter, mailRouter, mcpRouter, modeRouter, permissionsRouter, powerRouter, projectsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, convoysRouter, costsRouter, createMessagesRouter, createProjectsRouter, devicesRouter, eventsRouter, mailRouter, mcpRouter, modeRouter, permissionsRouter, powerRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
@@ -51,7 +51,6 @@ app.use("/api/events", eventsRouter);
 app.use("/api/mail", mailRouter);
 app.use("/api/mode", modeRouter);
 app.use("/api/power", powerRouter);
-app.use("/api/projects", projectsRouter);
 app.use("/api/status", statusRouter);
 app.use("/api/tunnel", tunnelRouter);
 app.use("/api/voice", voiceRouter);
@@ -60,10 +59,11 @@ app.use("/api/swarms", swarmsRouter);
 app.use("/api/permissions", permissionsRouter);
 app.use("/api/costs", costsRouter);
 
-// Initialize message store and mount messages router
+// Initialize message store and mount messages/projects routers
 const messageDb = initDatabase();
 const messageStore = createMessageStore(messageDb);
 app.use("/api/messages", createMessagesRouter(messageStore));
+app.use("/api/projects", createProjectsRouter(messageStore));
 
 app.use("/mcp", mcpRouter);
 

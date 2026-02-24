@@ -1123,3 +1123,260 @@ export async function listRecentlyClosed(
     };
   }
 }
+
+// ============================================================================
+// Project Overview (adj-020)
+// ============================================================================
+
+/**
+ * Epic progress info for the project overview.
+ */
+export interface EpicProgress {
+  id: string;
+  title: string;
+  status: string;
+  totalChildren: number;
+  closedChildren: number;
+  completionPercent: number;
+  assignee: string | null;
+}
+
+/**
+ * Project overview data aggregated from beads.
+ */
+export interface ProjectBeadsOverview {
+  open: BeadInfo[];
+  inProgress: BeadInfo[];
+  recentlyClosed: BeadInfo[];
+}
+
+/**
+ * Gets a project-scoped beads overview: open, in-progress, and recently closed beads.
+ *
+ * @param projectPath Absolute path to the project directory
+ * @returns Beads grouped by status
+ */
+export async function getProjectOverview(
+  projectPath: string
+): Promise<BeadsServiceResult<ProjectBeadsOverview>> {
+  try {
+    const beadsDir = resolveBeadsDir(projectPath);
+
+    // Fetch open beads
+    const openResult = await execBd<BeadsIssue[]>(
+      ["list", "--json", "--status", "open"],
+      { cwd: projectPath, beadsDir }
+    );
+
+    // Fetch in-progress beads (includes hooked and blocked)
+    const inProgressResult = await execBd<BeadsIssue[]>(
+      ["list", "--json", "--status", "in_progress"],
+      { cwd: projectPath, beadsDir }
+    );
+
+    // Fetch closed beads for recently-closed (last 24h)
+    const closedResult = await execBd<BeadsIssue[]>(
+      ["list", "--all", "--json", "--status", "closed"],
+      { cwd: projectPath, beadsDir }
+    );
+
+    const cutoff24h = Date.now() - 24 * 3600 * 1000;
+
+    const filterWisps = (issues: BeadsIssue[]): BeadsIssue[] =>
+      issues.filter((i) => !i.wisp && !i.id.includes("-wisp-"));
+
+    const openBeads = (openResult.success && openResult.data)
+      ? filterWisps(openResult.data).map((i) => transformBead(i, "project"))
+      : [];
+
+    const inProgressBeads = (inProgressResult.success && inProgressResult.data)
+      ? filterWisps(inProgressResult.data).map((i) => transformBead(i, "project"))
+      : [];
+
+    const recentlyClosedBeads = (closedResult.success && closedResult.data)
+      ? filterWisps(closedResult.data)
+          .filter((i) => {
+            if (!i.closed_at) return false;
+            const closedTime = new Date(i.closed_at).getTime();
+            return !isNaN(closedTime) && closedTime >= cutoff24h;
+          })
+          .map((i) => transformBead(i, "project"))
+          .sort((a, b) => {
+            const aDate = a.updatedAt ?? a.createdAt;
+            const bDate = b.updatedAt ?? b.createdAt;
+            return bDate.localeCompare(aDate);
+          })
+      : [];
+
+    return {
+      success: true,
+      data: {
+        open: openBeads,
+        inProgress: inProgressBeads,
+        recentlyClosed: recentlyClosedBeads,
+      },
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: {
+        code: "PROJECT_OVERVIEW_ERROR",
+        message: err instanceof Error ? err.message : "Failed to get project overview",
+      },
+    };
+  }
+}
+
+/**
+ * Computes epic progress for a project.
+ * Lists all open/in-progress epics, then counts closed vs total children.
+ *
+ * @param projectPath Absolute path to the project directory
+ * @returns EpicProgress[] sorted by completion % descending
+ */
+export async function computeEpicProgress(
+  projectPath: string
+): Promise<BeadsServiceResult<EpicProgress[]>> {
+  try {
+    const beadsDir = resolveBeadsDir(projectPath);
+
+    // List open and in-progress epics
+    const epicsResult = await execBd<BeadsIssue[]>(
+      ["list", "--json", "--type", "epic", "--all"],
+      { cwd: projectPath, beadsDir }
+    );
+
+    if (!epicsResult.success || !epicsResult.data) {
+      return { success: true, data: [] };
+    }
+
+    // Filter to open/in_progress epics only
+    const activeEpics = epicsResult.data.filter(
+      (e) => e.status === "open" || e.status === "in_progress"
+    );
+
+    const progress: EpicProgress[] = [];
+
+    for (const epic of activeEpics) {
+      // Get epic details including dependencies (children)
+      const showResult = await execBd<BeadsIssue[]>(
+        ["show", epic.id, "--json"],
+        { cwd: projectPath, beadsDir }
+      );
+
+      if (!showResult.success || !showResult.data || showResult.data.length === 0) {
+        progress.push({
+          id: epic.id,
+          title: epic.title,
+          status: epic.status,
+          totalChildren: 0,
+          closedChildren: 0,
+          completionPercent: 0,
+          assignee: epic.assignee ?? null,
+        });
+        continue;
+      }
+
+      const detail = showResult.data[0]!;
+      const deps = detail.dependencies ?? [];
+      // In bd dependency model: if epic depends on child,
+      // then issue_id=epic.id and depends_on_id=child.id
+      const childIds = deps
+        .filter((d) => d.issue_id === epic.id)
+        .map((d) => d.depends_on_id);
+
+      // Count how many children are closed by checking each
+      let closedCount = 0;
+      for (const childId of childIds) {
+        const childResult = await execBd<BeadsIssue[]>(
+          ["show", childId, "--json"],
+          { cwd: projectPath, beadsDir }
+        );
+        if (childResult.success && childResult.data && childResult.data.length > 0) {
+          if (childResult.data[0]!.status === "closed") {
+            closedCount++;
+          }
+        }
+      }
+
+      const total = childIds.length;
+      const pct = total > 0 ? Math.round((closedCount / total) * 100) : 0;
+
+      progress.push({
+        id: epic.id,
+        title: epic.title,
+        status: epic.status,
+        totalChildren: total,
+        closedChildren: closedCount,
+        completionPercent: pct,
+        assignee: epic.assignee ?? null,
+      });
+    }
+
+    // Sort by completion % descending
+    progress.sort((a, b) => b.completionPercent - a.completionPercent);
+
+    return { success: true, data: progress };
+  } catch (err) {
+    return {
+      success: false,
+      error: {
+        code: "EPIC_PROGRESS_ERROR",
+        message: err instanceof Error ? err.message : "Failed to compute epic progress",
+      },
+    };
+  }
+}
+
+/**
+ * Gets recently completed epics for empty-state fallback.
+ *
+ * @param projectPath Absolute path to the project directory
+ * @param limit Max number of epics to return
+ * @returns Closed epics sorted by closedAt descending
+ */
+export async function getRecentlyCompletedEpics(
+  projectPath: string,
+  limit: number = 5
+): Promise<BeadsServiceResult<EpicProgress[]>> {
+  try {
+    const beadsDir = resolveBeadsDir(projectPath);
+
+    const result = await execBd<BeadsIssue[]>(
+      ["list", "--json", "--type", "epic", "--status", "closed"],
+      { cwd: projectPath, beadsDir }
+    );
+
+    if (!result.success || !result.data) {
+      return { success: true, data: [] };
+    }
+
+    const epics = result.data
+      .filter((e) => e.closed_at)
+      .sort((a, b) => {
+        const aTime = new Date(a.closed_at!).getTime();
+        const bTime = new Date(b.closed_at!).getTime();
+        return bTime - aTime;
+      })
+      .slice(0, limit)
+      .map((e): EpicProgress => ({
+        id: e.id,
+        title: e.title,
+        status: e.status,
+        totalChildren: 0,
+        closedChildren: 0,
+        completionPercent: 100,
+        assignee: e.assignee ?? null,
+      }));
+
+    return { success: true, data: epics };
+  } catch (err) {
+    return {
+      success: false,
+      error: {
+        code: "RECENT_EPICS_ERROR",
+        message: err instanceof Error ? err.message : "Failed to get recently completed epics",
+      },
+    };
+  }
+}
