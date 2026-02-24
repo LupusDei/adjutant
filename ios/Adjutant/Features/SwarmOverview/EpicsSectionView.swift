@@ -12,8 +12,12 @@ struct EpicsSectionView: View {
         VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
             if !epics.inProgress.isEmpty {
                 inProgressSection
-            } else {
-                emptyOrRecentlyCompleted
+            }
+            if !epics.recentlyCompleted.isEmpty {
+                recentlyCompletedSection
+            }
+            if epics.inProgress.isEmpty && epics.recentlyCompleted.isEmpty {
+                emptyState
             }
         }
     }
