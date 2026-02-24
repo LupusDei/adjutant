@@ -15,6 +15,23 @@ import AdjutantUI
 
 class AppDelegate: NSObject, UIApplicationDelegate {
 
+    // MARK: - API Client
+
+    /// Creates an APIClient using the persisted server URL from UserDefaults.
+    /// This avoids depending on AppState (which lives in a different compilation group)
+    /// and ensures push notification registration hits the real server, not localhost.
+    private func makeAPIClient() -> APIClient {
+        let baseURL: URL
+        if let urlString = UserDefaults.standard.string(forKey: "apiBaseURL"),
+           let url = URL(string: urlString) {
+            baseURL = url
+        } else {
+            baseURL = URL(string: "http://localhost:4201/api")!
+        }
+        let apiKey = UserDefaults.standard.string(forKey: "apiKey")
+        return APIClient(configuration: APIClientConfiguration(baseURL: baseURL, apiKey: apiKey))
+    }
+
     // MARK: - Application Lifecycle
 
     func application(
@@ -72,6 +89,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     @MainActor
     private func registerDeviceTokenWithBackend(_ token: String) async {
         do {
+            let apiClient = makeAPIClient()
             let request = RegisterDeviceTokenRequest(
                 token: token,
                 platform: .ios,
@@ -79,7 +97,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 bundleId: Bundle.main.bundleIdentifier
             )
 
-            let response = try await AppState.shared.apiClient.registerDeviceToken(request)
+            let response = try await apiClient.registerDeviceToken(request)
             print("[AppDelegate] Device token registered: \(response.isNew ? "new" : "updated")")
         } catch {
             print("[AppDelegate] Failed to register device token: \(error.localizedDescription)")
@@ -157,7 +175,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         // Fallback: fetch all mail and process (for incomplete push payloads)
         do {
-            let mailResponse = try await AppState.shared.apiClient.getMail()
+            let apiClient = makeAPIClient()
+            let mailResponse = try await apiClient.getMail()
             let messages = mailResponse.items
 
             let announcedCount = await OverseerMailAnnouncer.shared.processMessages(messages)
@@ -227,7 +246,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         // Pre-fetch the message so it's available when the app opens
         do {
-            _ = try await AppState.shared.apiClient.getMessages(agentId: agentId, limit: 1)
+            let apiClient = makeAPIClient()
+            _ = try await apiClient.getMessages(agentId: agentId, limit: 1)
         } catch {
             print("[AppDelegate] Failed to pre-fetch chat message: \(error.localizedDescription)")
         }

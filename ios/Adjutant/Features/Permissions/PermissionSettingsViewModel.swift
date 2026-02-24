@@ -14,7 +14,7 @@ final class PermissionSettingsViewModel: ObservableObject {
     private let apiClient: APIClient
 
     init(apiClient: APIClient? = nil) {
-        self.apiClient = apiClient ?? AppState.shared.apiClient
+        self.apiClient = apiClient ?? APIClient()
     }
 
     func onAppear() {
