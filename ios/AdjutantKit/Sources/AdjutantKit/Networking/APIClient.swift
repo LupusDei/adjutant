@@ -356,14 +356,16 @@ public struct IdentityResponse: Codable, Equatable {
 
 /// Spawn polecat response
 public struct SpawnPolecatResponse: Codable, Equatable {
-    public let rig: String
+    public let sessionId: String?
     public let callsign: String?
-    public let requested: Bool
+    public let projectPath: String?
+    public let spawned: Bool
 
-    public init(rig: String, callsign: String? = nil, requested: Bool) {
-        self.rig = rig
+    public init(sessionId: String? = nil, callsign: String? = nil, projectPath: String? = nil, spawned: Bool) {
+        self.sessionId = sessionId
         self.callsign = callsign
-        self.requested = requested
+        self.projectPath = projectPath
+        self.spawned = spawned
     }
 }
 

@@ -86,13 +86,13 @@ public struct AgentStatus: Codable, Equatable, Hashable {
 
 /// Request body for spawning a polecat
 public struct SpawnPolecatRequest: Encodable {
-    /// Rig name (required)
-    public let rig: String
+    /// Project path (required)
+    public let projectPath: String
     /// Agent callsign (optional)
     public let callsign: String?
 
-    public init(rig: String, callsign: String? = nil) {
-        self.rig = rig
+    public init(projectPath: String, callsign: String? = nil) {
+        self.projectPath = projectPath
         self.callsign = callsign
     }
 }

@@ -167,9 +167,9 @@ extension APIClient {
         try await requestWithEnvelope(.get, path: "/agents")
     }
 
-    /// Request polecat spawn for a rig
-    public func spawnPolecat(rig: String, callsign: String? = nil) async throws -> SpawnPolecatResponse {
-        let request = SpawnPolecatRequest(rig: rig, callsign: callsign)
+    /// Spawn a new agent session for a project
+    public func spawnPolecat(projectPath: String, callsign: String? = nil) async throws -> SpawnPolecatResponse {
+        let request = SpawnPolecatRequest(projectPath: projectPath, callsign: callsign)
         return try await requestWithEnvelope(.post, path: "/agents/spawn-polecat", body: request)
     }
 

@@ -77,11 +77,11 @@ struct SpawnAgentSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: CRTTheme.Spacing.lg) {
+                    // Agent name (first - most important choice)
+                    nameSection
+
                     // Project selection
                     projectSection
-
-                    // Agent name
-                    nameSection
                 }
                 .padding(.horizontal, CRTTheme.Spacing.md)
                 .padding(.vertical, CRTTheme.Spacing.md)
@@ -290,7 +290,7 @@ struct SpawnAgentSheet: View {
         errorMessage = nil
 
         do {
-            let response = try await apiClient.spawnPolecat(rig: project.name, callsign: agentName.isEmpty ? nil : agentName)
+            let response = try await apiClient.spawnPolecat(projectPath: project.path, callsign: agentName.isEmpty ? nil : agentName)
             isSpawning = false
 
             #if canImport(UIKit)

@@ -62,9 +62,9 @@ final class ProjectDetailViewModel: BaseViewModel {
         lastSpawnedCallsign = nil
 
         do {
-            let response = try await apiClient.spawnPolecat(rig: rigName, callsign: callsign)
+            let response = try await apiClient.spawnPolecat(projectPath: rig.path, callsign: callsign)
             lastSpawnedCallsign = response.callsign ?? callsign
-            spawnMessage = "Polecat spawn requested for \(response.rig)"
+            spawnMessage = "Agent spawned: \(response.callsign ?? "unknown")"
             await refresh()
         } catch {
             spawnMessage = "Spawn failed: \(error.localizedDescription)"

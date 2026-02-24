@@ -11,10 +11,10 @@
 import { Router } from "express";
 import { z } from "zod";
 import { getAgents } from "../services/agents-service.js";
-import { sendMail } from "../services/mail-service.js";
 import { getSessionBridge } from "../services/session-bridge.js";
+import { pickRandomCallsign } from "../services/callsign-service.js";
 import { captureTmuxPane, listTmuxSessions } from "../services/tmux.js";
-import { success, internalError, badRequest, notFound } from "../utils/responses.js";
+import { success, internalError, badRequest, notFound, conflict } from "../utils/responses.js";
 
 export const agentsRouter = Router();
 
@@ -39,13 +39,13 @@ agentsRouter.get("/", async (_req, res) => {
  * Request body schema for spawn polecat endpoint.
  */
 const spawnPolecatSchema = z.object({
-  rig: z.string().min(1, "Rig name is required"),
+  projectPath: z.string().min(1, "Project path is required"),
   callsign: z.string().optional(),
 });
 
 /**
  * POST /api/agents/spawn-polecat
- * Sends a task message to the mayor requesting a new polecat spawn for a rig.
+ * Creates a new agent session for the given project.
  */
 agentsRouter.post("/spawn-polecat", async (req, res) => {
   const parsed = spawnPolecatSchema.safeParse(req.body);
@@ -56,24 +56,48 @@ agentsRouter.post("/spawn-polecat", async (req, res) => {
     );
   }
 
-  const { rig, callsign } = parsed.data;
-  const callsignPart = callsign ? ` callsign=${callsign}` : "";
+  const { projectPath, callsign } = parsed.data;
+  const bridge = getSessionBridge();
 
-  const result = await sendMail({
-    to: "mayor/",
-    subject: `[spawn-polecat] ${rig}${callsignPart}`,
-    body: `Request from Adjutant UI to spawn a new polecat for rig: ${rig}${callsign ? `, callsign: ${callsign}` : ""}`,
-    type: "task",
-    priority: 1,
+  // Check for name conflicts with active sessions
+  if (callsign) {
+    const sessions = bridge.listSessions();
+    const nameInUse = sessions.some(
+      (s) => s.name === callsign && s.status !== "offline"
+    );
+    if (nameInUse) {
+      return res.status(409).json(
+        conflict(`Agent name '${callsign}' is already in use`)
+      );
+    }
+  }
+
+  // Auto-assign callsign if not provided
+  const sessions = bridge.listSessions();
+  const auto = pickRandomCallsign(sessions);
+  const name = callsign || auto?.name || "agent";
+
+  const result = await bridge.createSession({
+    name,
+    projectPath,
+    mode: "swarm",
+    workspaceType: "primary",
+    claudeArgs: [],
   });
 
   if (!result.success) {
-    return res.status(500).json(
-      internalError(result.error?.message ?? "Failed to send spawn request")
+    return res.status(400).json(
+      badRequest(result.error ?? "Failed to spawn agent")
     );
   }
 
-  return res.json(success({ rig, callsign: callsign ?? null, requested: true }));
+  const session = bridge.getSession(result.sessionId!);
+  return res.status(201).json(success({
+    sessionId: result.sessionId,
+    callsign: session?.name ?? name,
+    projectPath,
+    spawned: true,
+  }));
 });
 
 /**
