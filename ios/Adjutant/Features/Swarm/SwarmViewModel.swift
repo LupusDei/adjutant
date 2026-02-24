@@ -27,7 +27,7 @@ final class SwarmViewModel: ObservableObject {
     // MARK: - Init
 
     init(apiClient: APIClient? = nil) {
-        self.apiClient = apiClient ?? APIClient()
+        self.apiClient = apiClient ?? AppState.shared.apiClient
     }
 
     // MARK: - Lifecycle

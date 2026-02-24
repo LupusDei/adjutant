@@ -71,7 +71,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     /// Registers the device token with the backend for push notifications.
     private func registerDeviceTokenWithBackend(_ token: String) async {
         do {
-            let apiClient = APIClient()
             let request = RegisterDeviceTokenRequest(
                 token: token,
                 platform: .ios,
@@ -79,7 +78,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 bundleId: Bundle.main.bundleIdentifier
             )
 
-            let response = try await apiClient.registerDeviceToken(request)
+            let response = try await AppState.shared.apiClient.registerDeviceToken(request)
             print("[AppDelegate] Device token registered: \(response.isNew ? "new" : "updated")")
         } catch {
             print("[AppDelegate] Failed to register device token: \(error.localizedDescription)")
@@ -157,8 +156,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         // Fallback: fetch all mail and process (for incomplete push payloads)
         do {
-            let apiClient = APIClient()
-            let mailResponse = try await apiClient.getMail()
+            let mailResponse = try await AppState.shared.apiClient.getMail()
             let messages = mailResponse.items
 
             let announcedCount = await OverseerMailAnnouncer.shared.processMessages(messages)
@@ -228,8 +226,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         // Pre-fetch the message so it's available when the app opens
         do {
-            let apiClient = APIClient()
-            _ = try await apiClient.getMessages(agentId: agentId, limit: 1)
+            _ = try await AppState.shared.apiClient.getMessages(agentId: agentId, limit: 1)
         } catch {
             print("[AppDelegate] Failed to pre-fetch chat message: \(error.localizedDescription)")
         }
