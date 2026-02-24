@@ -168,8 +168,8 @@ extension APIClient {
     }
 
     /// Request polecat spawn for a rig
-    public func spawnPolecat(rig: String) async throws -> SpawnPolecatResponse {
-        let request = SpawnPolecatRequest(rig: rig)
+    public func spawnPolecat(rig: String, callsign: String? = nil) async throws -> SpawnPolecatResponse {
+        let request = SpawnPolecatRequest(rig: rig, callsign: callsign)
         return try await requestWithEnvelope(.post, path: "/agents/spawn-polecat", body: request)
     }
 
@@ -464,6 +464,24 @@ extension APIClient {
         let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
         let request = BeadAssignRequest(assignee: assignee)
         return try await requestWithEnvelope(.patch, path: "/beads/\(encodedId)", body: request)
+    }
+
+    /// Get recently closed beads within a time window.
+    ///
+    /// Fetches beads that were closed within the specified number of hours.
+    /// This endpoint may not be available on all backends; callers should
+    /// handle errors gracefully and fall back to an empty array.
+    ///
+    /// - Parameter hours: Number of hours to look back (default: 1)
+    /// - Returns: Array of recently closed ``BeadInfo`` items.
+    /// - Throws: ``APIClientError`` if the request fails.
+    public func getRecentlyClosedBeads(hours: Int = 1) async throws -> [BeadInfo] {
+        let queryItems = [URLQueryItem(name: "hours", value: String(hours))]
+        return try await requestWithEnvelope(
+            .get,
+            path: "/beads/recent-closed",
+            queryItems: queryItems
+        )
     }
 }
 

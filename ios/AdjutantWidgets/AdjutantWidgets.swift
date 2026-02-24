@@ -10,14 +10,14 @@ import WidgetKit
 
 /// Main entry point for the Adjutant widget extension bundle.
 /// This bundle contains Live Activity widgets and home screen widgets
-/// for displaying Gas Town status information.
+/// for displaying Adjutant status information.
 @main
 struct AdjutantWidgetsBundle: WidgetBundle {
     var body: some Widget {
-        // Live Activity for Gas Town status on Lock Screen and Dynamic Island
+        // Live Activity for Adjutant status on Lock Screen and Dynamic Island
         AdjutantLiveActivity()
 
-        // Home screen widget showing Gas Town status (small, medium, large)
-        GastownWidget()
+        // Home screen widget showing Adjutant status (small, medium, large)
+        AdjutantWidget()
     }
 }

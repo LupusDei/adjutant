@@ -88,9 +88,12 @@ public struct AgentStatus: Codable, Equatable, Hashable {
 public struct SpawnPolecatRequest: Encodable {
     /// Rig name (required)
     public let rig: String
+    /// Agent callsign (optional)
+    public let callsign: String?
 
-    public init(rig: String) {
+    public init(rig: String, callsign: String? = nil) {
         self.rig = rig
+        self.callsign = callsign
     }
 }
 

@@ -215,8 +215,6 @@ final class DashboardViewModel: BaseViewModel {
         #if os(iOS)
         guard #available(iOS 16.1, *) else { return }
 
-        let activeAgentCount = activeCrewMembers.count
-
         // Get the power state from AppState (convert local to AdjutantKit type)
         let localPowerState = AppState.shared.powerState
         let powerState: AdjutantKit.PowerState
@@ -231,12 +229,43 @@ final class DashboardViewModel: BaseViewModel {
             powerState = .stopping
         }
 
+        // Build agent summaries from active crew
+        let agentSummaries: [AgentSummary] = activeCrewMembers.prefix(4).map { member in
+            let statusStr: String
+            switch member.status {
+            case .working: statusStr = "working"
+            case .blocked: statusStr = "blocked"
+            case .stuck: statusStr = "blocked"
+            case .idle: statusStr = "idle"
+            case .offline: statusStr = "idle"
+            }
+            return AgentSummary(name: member.name, status: statusStr)
+        }
+
+        // Build bead summaries from in-progress beads
+        let beadSummaries: [BeadSummary] = inProgressBeads.prefix(5).map { bead in
+            BeadSummary(
+                id: bead.id,
+                title: bead.title,
+                assignee: bead.assignee?.components(separatedBy: "/").last
+            )
+        }
+
+        // Build recently completed bead summaries
+        let completedSummaries: [BeadSummary] = recentClosedBeads.prefix(3).map { bead in
+            BeadSummary(
+                id: bead.id,
+                title: bead.title,
+                assignee: bead.assignee?.components(separatedBy: "/").last
+            )
+        }
+
         let state = LiveActivityService.createState(
             powerState: powerState,
             unreadMailCount: unreadCount,
-            activeAgents: activeAgentCount,
-            beadsInProgress: beadsInProgress,
-            beadsHooked: beadsHooked
+            activeAgents: agentSummaries,
+            beadsInProgress: beadSummaries,
+            recentlyCompleted: completedSummaries
         )
 
         await LiveActivityService.shared.syncActivity(

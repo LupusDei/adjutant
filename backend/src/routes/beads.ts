@@ -9,7 +9,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { listBeads, listAllBeads, updateBead, getBead, listBeadSources, type BeadStatus } from "../services/beads-service.js";
+import { listBeads, listAllBeads, updateBead, getBead, listBeadSources, listRecentlyClosed, type BeadStatus } from "../services/beads-service.js";
 import { resolveRigPath } from "../services/workspace/index.js";
 import { listProjects } from "../services/projects-service.js";
 import { success, internalError, badRequest } from "../utils/responses.js";
@@ -132,6 +132,38 @@ beadsRouter.get("/sources", async (_req, res) => {
   if (!result.success) {
     return res.status(500).json(
       internalError(result.error?.message ?? "Failed to list bead sources")
+    );
+  }
+
+  return res.json(success(result.data));
+});
+
+/**
+ * GET /api/beads/recent-closed
+ * Returns beads closed within a configurable time window.
+ *
+ * Query params:
+ * - hours: Time window in hours (default: 1, max: 24)
+ *
+ * Response:
+ * - { success: true, data: RecentlyClosedBead[] }
+ *
+ * IMPORTANT: This route MUST be registered before /:id to prevent
+ * Express from matching "recent-closed" as a bead ID parameter.
+ */
+beadsRouter.get("/recent-closed", async (req, res) => {
+  const hoursStr = req.query["hours"] as string | undefined;
+  let hours = hoursStr ? parseInt(hoursStr, 10) : 1;
+
+  // Clamp to valid range (1-24)
+  if (isNaN(hours) || hours < 1) hours = 1;
+  if (hours > 24) hours = 24;
+
+  const result = await listRecentlyClosed(hours);
+
+  if (!result.success) {
+    return res.status(500).json(
+      internalError(result.error?.message ?? "Failed to list recently closed beads")
     );
   }
 

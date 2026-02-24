@@ -308,15 +308,17 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         guard #available(iOS 16.1, *) else { return }
 
         Task {
-            let initialState = GastownActivityAttributes.ContentState(
+            let initialState = AdjutantActivityAttributes.ContentState(
                 powerState: .stopped,
                 unreadMailCount: 0,
-                activeAgents: 0,
+                activeAgents: [],
+                beadsInProgress: [],
+                recentlyCompleted: [],
                 lastUpdated: Date()
             )
 
             await LiveActivityService.shared.startActivity(
-                townName: "Gastown",
+                townName: "Adjutant",
                 initialState: initialState
             )
         }

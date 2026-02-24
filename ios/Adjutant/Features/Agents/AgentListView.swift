@@ -65,10 +65,26 @@ struct AgentListView: View {
             Button {
                 showingSpawnSheet = true
             } label: {
-                Image(systemName: "plus.circle")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(theme.primary)
+                HStack(spacing: 6) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                    Text("SPAWN")
+                        .font(CRTTheme.Typography.font(size: 12, weight: .bold))
+                        .tracking(CRTTheme.Typography.letterSpacing)
+                }
+                .foregroundColor(theme.primary)
+                .padding(.horizontal, CRTTheme.Spacing.sm)
+                .padding(.vertical, CRTTheme.Spacing.xs)
+                .background(
+                    RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                        .fill(theme.primary.opacity(0.12))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                        .stroke(theme.primary.opacity(0.4), lineWidth: 1)
+                )
             }
+            .buttonStyle(.plain)
             .accessibilityLabel("Spawn agent")
 
             // Refresh button

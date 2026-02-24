@@ -6,6 +6,7 @@ import AdjutantKit
 struct SpawnAgentSheet: View {
     @Environment(\.crtTheme) private var theme
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var coordinator: AppCoordinator
 
     /// Callback when spawn completes successfully
     let onSpawned: () -> Void
@@ -289,7 +290,7 @@ struct SpawnAgentSheet: View {
         errorMessage = nil
 
         do {
-            _ = try await apiClient.spawnPolecat(rig: project.name)
+            let response = try await apiClient.spawnPolecat(rig: project.name, callsign: agentName.isEmpty ? nil : agentName)
             isSpawning = false
 
             #if canImport(UIKit)
@@ -298,6 +299,14 @@ struct SpawnAgentSheet: View {
             #endif
 
             onSpawned()
+
+            // Navigate to chat with the spawned agent
+            let chatAgentId = response.callsign ?? agentName
+            if !chatAgentId.isEmpty {
+                coordinator.pendingChatAgentId = chatAgentId
+                coordinator.selectTab(.chat)
+            }
+
             dismiss()
         } catch {
             isSpawning = false
@@ -310,4 +319,5 @@ struct SpawnAgentSheet: View {
 
 #Preview("SpawnAgentSheet") {
     SpawnAgentSheet(onSpawned: {})
+        .environmentObject(AppCoordinator())
 }

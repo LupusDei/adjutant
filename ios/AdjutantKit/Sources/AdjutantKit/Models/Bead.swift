@@ -212,6 +212,39 @@ public struct BeadSourcesResponse: Codable, Equatable {
     }
 }
 
+// MARK: - Agent Summary (for Widget & Live Activity)
+
+/// Lightweight agent summary for widget and Live Activity display.
+public struct AgentSummary: Codable, Hashable {
+    /// Agent callsign
+    public let name: String
+    /// Agent status: "working", "blocked", "idle"
+    public let status: String
+
+    public init(name: String, status: String) {
+        self.name = name
+        self.status = status
+    }
+}
+
+// MARK: - Bead Summary (for Widget & Live Activity)
+
+/// Lightweight bead summary for widget and Live Activity display.
+public struct BeadSummary: Codable, Hashable {
+    /// Bead identifier
+    public let id: String
+    /// Bead title
+    public let title: String
+    /// Short assignee name (callsign only, no rig prefix)
+    public let assignee: String?
+
+    public init(id: String, title: String, assignee: String?) {
+        self.id = id
+        self.title = title
+        self.assignee = assignee
+    }
+}
+
 // MARK: - Transferable for Drag & Drop
 
 extension BeadInfo: Transferable {

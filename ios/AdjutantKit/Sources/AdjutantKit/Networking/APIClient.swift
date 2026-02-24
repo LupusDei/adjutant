@@ -357,10 +357,12 @@ public struct IdentityResponse: Codable, Equatable {
 /// Spawn polecat response
 public struct SpawnPolecatResponse: Codable, Equatable {
     public let rig: String
+    public let callsign: String?
     public let requested: Bool
 
-    public init(rig: String, requested: Bool) {
+    public init(rig: String, callsign: String? = nil, requested: Bool) {
         self.rig = rig
+        self.callsign = callsign
         self.requested = requested
     }
 }

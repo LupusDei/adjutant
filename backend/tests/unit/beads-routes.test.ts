@@ -8,6 +8,7 @@ vi.mock("../../src/services/beads-service.js", () => ({
   listAllBeads: vi.fn(),
   getBead: vi.fn(),
   listBeadSources: vi.fn(),
+  listRecentlyClosed: vi.fn(),
 }));
 
 vi.mock("../../src/services/gastown-workspace.js", () => ({
@@ -16,8 +17,8 @@ vi.mock("../../src/services/gastown-workspace.js", () => ({
 }));
 
 import { beadsRouter } from "../../src/routes/beads.js";
-import { listBeads, listAllBeads, getBead, listBeadSources } from "../../src/services/beads-service.js";
-import type { BeadInfo, BeadDetail } from "../../src/services/beads-service.js";
+import { listBeads, listAllBeads, getBead, listBeadSources, listRecentlyClosed } from "../../src/services/beads-service.js";
+import type { BeadInfo, BeadDetail, RecentlyClosedBead } from "../../src/services/beads-service.js";
 
 /**
  * Creates a test Express app with the beads router mounted.
@@ -473,6 +474,158 @@ describe("beads routes", () => {
       expect(response.status).toBe(200);
       expect(listBeadSources).toHaveBeenCalled();
       expect(getBead).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("GET /api/beads/recent-closed", () => {
+    function createMockRecentlyClosed(overrides: Partial<RecentlyClosedBead> = {}): RecentlyClosedBead {
+      return {
+        id: "hq-done1",
+        title: "Completed Task",
+        assignee: "gastown_boy/polecats/ace",
+        closedAt: "2026-02-23T10:30:00Z",
+        type: "task",
+        priority: 2,
+        rig: "gastown_boy",
+        source: "town",
+        ...overrides,
+      };
+    }
+
+    it("should return recently closed beads with default hours=1", async () => {
+      const mockData = [
+        createMockRecentlyClosed({ id: "hq-a1", title: "First done" }),
+        createMockRecentlyClosed({ id: "hq-a2", title: "Second done" }),
+      ];
+
+      vi.mocked(listRecentlyClosed).mockResolvedValue({
+        success: true,
+        data: mockData,
+      });
+
+      const response = await request(app).get("/api/beads/recent-closed");
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toHaveLength(2);
+      expect(response.body.data[0].id).toBe("hq-a1");
+      expect(response.body.data[1].id).toBe("hq-a2");
+      expect(listRecentlyClosed).toHaveBeenCalledWith(1);
+    });
+
+    it("should pass hours query parameter", async () => {
+      vi.mocked(listRecentlyClosed).mockResolvedValue({
+        success: true,
+        data: [],
+      });
+
+      await request(app).get("/api/beads/recent-closed?hours=6");
+
+      expect(listRecentlyClosed).toHaveBeenCalledWith(6);
+    });
+
+    it("should clamp hours to minimum of 1", async () => {
+      vi.mocked(listRecentlyClosed).mockResolvedValue({
+        success: true,
+        data: [],
+      });
+
+      await request(app).get("/api/beads/recent-closed?hours=0");
+
+      expect(listRecentlyClosed).toHaveBeenCalledWith(1);
+    });
+
+    it("should clamp hours to maximum of 24", async () => {
+      vi.mocked(listRecentlyClosed).mockResolvedValue({
+        success: true,
+        data: [],
+      });
+
+      await request(app).get("/api/beads/recent-closed?hours=100");
+
+      expect(listRecentlyClosed).toHaveBeenCalledWith(24);
+    });
+
+    it("should default to 1 hour for non-numeric hours", async () => {
+      vi.mocked(listRecentlyClosed).mockResolvedValue({
+        success: true,
+        data: [],
+      });
+
+      await request(app).get("/api/beads/recent-closed?hours=abc");
+
+      expect(listRecentlyClosed).toHaveBeenCalledWith(1);
+    });
+
+    it("should return 500 on service error", async () => {
+      vi.mocked(listRecentlyClosed).mockResolvedValue({
+        success: false,
+        error: { code: "RECENT_CLOSED_ERROR", message: "Database failed" },
+      });
+
+      const response = await request(app).get("/api/beads/recent-closed");
+
+      expect(response.status).toBe(500);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error.message).toBe("Database failed");
+    });
+
+    it("should not conflict with GET /api/beads/:id route", async () => {
+      // Ensure "recent-closed" is handled as the /recent-closed route, not as a bead ID
+      vi.mocked(listRecentlyClosed).mockResolvedValue({
+        success: true,
+        data: [],
+      });
+
+      const response = await request(app).get("/api/beads/recent-closed");
+
+      expect(response.status).toBe(200);
+      expect(listRecentlyClosed).toHaveBeenCalled();
+      expect(getBead).not.toHaveBeenCalled();
+    });
+
+    it("should return empty array when no beads closed recently", async () => {
+      vi.mocked(listRecentlyClosed).mockResolvedValue({
+        success: true,
+        data: [],
+      });
+
+      const response = await request(app).get("/api/beads/recent-closed");
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toEqual([]);
+    });
+
+    it("should include all expected fields in response", async () => {
+      const mockBead = createMockRecentlyClosed({
+        id: "adj-done1",
+        title: "Build endpoint",
+        assignee: "adjutant/polecats/toast",
+        closedAt: "2026-02-23T11:00:00Z",
+        type: "task",
+        priority: 1,
+        rig: "adjutant",
+        source: "adjutant",
+      });
+
+      vi.mocked(listRecentlyClosed).mockResolvedValue({
+        success: true,
+        data: [mockBead],
+      });
+
+      const response = await request(app).get("/api/beads/recent-closed");
+
+      expect(response.status).toBe(200);
+      const data = response.body.data[0];
+      expect(data.id).toBe("adj-done1");
+      expect(data.title).toBe("Build endpoint");
+      expect(data.assignee).toBe("adjutant/polecats/toast");
+      expect(data.closedAt).toBe("2026-02-23T11:00:00Z");
+      expect(data.type).toBe("task");
+      expect(data.priority).toBe(1);
+      expect(data.rig).toBe("adjutant");
+      expect(data.source).toBe("adjutant");
     });
   });
 });

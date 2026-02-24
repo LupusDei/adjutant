@@ -4,33 +4,33 @@ import Foundation
 import ActivityKit
 #endif
 
-/// Activity attributes for Gas Town Live Activity on Lock Screen and Dynamic Island.
+/// Activity attributes for Adjutant Live Activity on Lock Screen and Dynamic Island.
 ///
 /// This struct defines the static attributes (unchanging data) and dynamic content state
-/// (data that updates in real-time) for the Gas Town system status Live Activity.
+/// (data that updates in real-time) for the Adjutant system status Live Activity.
 #if os(iOS)
 @available(iOS 16.1, *)
-public struct GastownActivityAttributes: ActivityAttributes {
+public struct AdjutantActivityAttributes: ActivityAttributes {
 
     /// Dynamic content state that updates during the Live Activity lifecycle.
     ///
     /// ContentState contains the real-time data displayed in the Live Activity,
-    /// including power state, unread mail count, and active agent information.
+    /// including power state, active agent summaries, and bead summaries.
     public struct ContentState: Codable, Hashable {
-        /// Current power state of the Gas Town system
+        /// Current power state of the system
         public let powerState: PowerState
 
         /// Number of unread mail messages for the operator
         public let unreadMailCount: Int
 
-        /// Number of currently active agents across all rigs
-        public let activeAgents: Int
+        /// Active agent summaries (up to 4 agents with status)
+        public let activeAgents: [AgentSummary]
 
-        /// Number of beads currently in progress
-        public let beadsInProgress: Int
+        /// Beads currently in progress with details
+        public let beadsInProgress: [BeadSummary]
 
-        /// Number of beads currently hooked (assigned to workers)
-        public let beadsHooked: Int
+        /// Beads recently completed (within last hour)
+        public let recentlyCompleted: [BeadSummary]
 
         /// Timestamp of the last status update
         public let lastUpdated: Date
@@ -38,24 +38,24 @@ public struct GastownActivityAttributes: ActivityAttributes {
         public init(
             powerState: PowerState,
             unreadMailCount: Int,
-            activeAgents: Int,
-            beadsInProgress: Int = 0,
-            beadsHooked: Int = 0,
+            activeAgents: [AgentSummary],
+            beadsInProgress: [BeadSummary] = [],
+            recentlyCompleted: [BeadSummary] = [],
             lastUpdated: Date
         ) {
             self.powerState = powerState
             self.unreadMailCount = unreadMailCount
             self.activeAgents = activeAgents
             self.beadsInProgress = beadsInProgress
-            self.beadsHooked = beadsHooked
+            self.recentlyCompleted = recentlyCompleted
             self.lastUpdated = lastUpdated
         }
     }
 
     /// Static identifier for this Live Activity type
-    public static let activityIdentifier = "com.gastown.adjutant.status"
+    public static let activityIdentifier = "com.adjutant.status"
 
-    /// Name of the Gas Town instance (static, doesn't change during activity)
+    /// Name of the instance (static, doesn't change during activity)
     public let townName: String
 
     public init(townName: String) {

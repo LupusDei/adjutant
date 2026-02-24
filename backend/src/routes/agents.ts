@@ -40,6 +40,7 @@ agentsRouter.get("/", async (_req, res) => {
  */
 const spawnPolecatSchema = z.object({
   rig: z.string().min(1, "Rig name is required"),
+  callsign: z.string().optional(),
 });
 
 /**
@@ -55,12 +56,13 @@ agentsRouter.post("/spawn-polecat", async (req, res) => {
     );
   }
 
-  const { rig } = parsed.data;
+  const { rig, callsign } = parsed.data;
+  const callsignPart = callsign ? ` callsign=${callsign}` : "";
 
   const result = await sendMail({
     to: "mayor/",
-    subject: `[spawn-polecat] ${rig}`,
-    body: `Request from Adjutant UI to spawn a new polecat for rig: ${rig}`,
+    subject: `[spawn-polecat] ${rig}${callsignPart}`,
+    body: `Request from Adjutant UI to spawn a new polecat for rig: ${rig}${callsign ? `, callsign: ${callsign}` : ""}`,
     type: "task",
     priority: 1,
   });
@@ -71,7 +73,7 @@ agentsRouter.post("/spawn-polecat", async (req, res) => {
     );
   }
 
-  return res.json(success({ rig, requested: true }));
+  return res.json(success({ rig, callsign: callsign ?? null, requested: true }));
 });
 
 /**

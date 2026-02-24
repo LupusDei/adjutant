@@ -62,25 +62,31 @@ final class LiveActivityServiceTests: XCTestCase {
     // MARK: - Content State Tests
 
     func testContentStateInitialization() {
-        let state = GastownActivityAttributes.ContentState(
+        let agents = [
+            AgentSummary(name: "obsidian", status: "working"),
+            AgentSummary(name: "onyx", status: "idle"),
+            AgentSummary(name: "slate", status: "blocked")
+        ]
+        let state = AdjutantActivityAttributes.ContentState(
             powerState: .running,
             unreadMailCount: 5,
-            activeAgents: 3,
+            activeAgents: agents,
             lastUpdated: Date()
         )
 
         XCTAssertEqual(state.powerState, .running)
         XCTAssertEqual(state.unreadMailCount, 5)
-        XCTAssertEqual(state.activeAgents, 3)
+        XCTAssertEqual(state.activeAgents.count, 3)
+        XCTAssertEqual(state.activeAgents[0].name, "obsidian")
         XCTAssertNotNil(state.lastUpdated)
     }
 
     func testContentStateWithExplicitDate() {
         let testDate = Date(timeIntervalSince1970: 0)
-        let state = GastownActivityAttributes.ContentState(
+        let state = AdjutantActivityAttributes.ContentState(
             powerState: .stopped,
             unreadMailCount: 0,
-            activeAgents: 0,
+            activeAgents: [],
             lastUpdated: testDate
         )
 
@@ -89,16 +95,20 @@ final class LiveActivityServiceTests: XCTestCase {
 
     func testContentStateEquality() {
         let date = Date()
-        let state1 = GastownActivityAttributes.ContentState(
+        let agents = [AgentSummary(name: "obsidian", status: "working")]
+        let beads = [BeadSummary(id: "adj-001", title: "Test", assignee: "obsidian")]
+        let state1 = AdjutantActivityAttributes.ContentState(
             powerState: .running,
             unreadMailCount: 5,
-            activeAgents: 3,
+            activeAgents: agents,
+            beadsInProgress: beads,
             lastUpdated: date
         )
-        let state2 = GastownActivityAttributes.ContentState(
+        let state2 = AdjutantActivityAttributes.ContentState(
             powerState: .running,
             unreadMailCount: 5,
-            activeAgents: 3,
+            activeAgents: agents,
+            beadsInProgress: beads,
             lastUpdated: date
         )
 
@@ -106,16 +116,16 @@ final class LiveActivityServiceTests: XCTestCase {
     }
 
     func testContentStateInequality() {
-        let state1 = GastownActivityAttributes.ContentState(
+        let state1 = AdjutantActivityAttributes.ContentState(
             powerState: .running,
             unreadMailCount: 5,
-            activeAgents: 3,
+            activeAgents: [AgentSummary(name: "obsidian", status: "working")],
             lastUpdated: Date()
         )
-        let state2 = GastownActivityAttributes.ContentState(
+        let state2 = AdjutantActivityAttributes.ContentState(
             powerState: .stopped,
             unreadMailCount: 5,
-            activeAgents: 3,
+            activeAgents: [AgentSummary(name: "obsidian", status: "working")],
             lastUpdated: Date()
         )
 
@@ -125,7 +135,7 @@ final class LiveActivityServiceTests: XCTestCase {
     // MARK: - Attributes Tests
 
     func testAttributesInitialization() {
-        let attributes = GastownActivityAttributes(townName: "test-town")
+        let attributes = AdjutantActivityAttributes(townName: "test-town")
         XCTAssertEqual(attributes.townName, "test-town")
     }
 
@@ -166,26 +176,30 @@ final class LiveActivityServiceTests: XCTestCase {
     // MARK: - Create State Helper Tests
 
     func testCreateStateWithParameters() {
+        let agents = [
+            AgentSummary(name: "obsidian", status: "working"),
+            AgentSummary(name: "onyx", status: "idle")
+        ]
         let state = LiveActivityService.createState(
             powerState: .running,
             unreadMailCount: 10,
-            activeAgents: 5
+            activeAgents: agents
         )
 
         XCTAssertEqual(state.powerState, .running)
         XCTAssertEqual(state.unreadMailCount, 10)
-        XCTAssertEqual(state.activeAgents, 5)
+        XCTAssertEqual(state.activeAgents.count, 2)
     }
 
     func testCreateStateWithStoppedState() {
         let state = LiveActivityService.createState(
             powerState: .stopped,
             unreadMailCount: 0,
-            activeAgents: 0
+            activeAgents: []
         )
 
         XCTAssertEqual(state.powerState, .stopped)
-        XCTAssertEqual(state.activeAgents, 0)
+        XCTAssertEqual(state.activeAgents.count, 0)
     }
 
     // MARK: - Published Property Tests
@@ -220,10 +234,10 @@ final class LiveActivityServiceTests: XCTestCase {
 
     func testUpdateActivityWithNoActiveActivity() async {
         // Should handle gracefully when trying to update non-existent activity
-        let state = GastownActivityAttributes.ContentState(
+        let state = AdjutantActivityAttributes.ContentState(
             powerState: .running,
             unreadMailCount: 1,
-            activeAgents: 2,
+            activeAgents: [AgentSummary(name: "obsidian", status: "working")],
             lastUpdated: Date()
         )
 

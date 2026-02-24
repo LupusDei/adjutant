@@ -40,7 +40,7 @@ public final class LiveActivityService: ObservableObject {
     // MARK: - Private Properties
 
     /// Reference to the current activity
-    private var currentActivity: Activity<GastownActivityAttributes>?
+    private var currentActivity: Activity<AdjutantActivityAttributes>?
 
     /// Cancellables for observation
     private var cancellables = Set<AnyCancellable>()
@@ -77,7 +77,7 @@ public final class LiveActivityService: ObservableObject {
     @discardableResult
     public func startActivity(
         townName: String,
-        initialState: GastownActivityAttributes.ContentState
+        initialState: AdjutantActivityAttributes.ContentState
     ) async -> String? {
         guard isSupported else {
             print("[LiveActivityService] Live Activities not supported")
@@ -87,7 +87,7 @@ public final class LiveActivityService: ObservableObject {
         // End any existing activity first
         await endActivity()
 
-        let attributes = GastownActivityAttributes(townName: townName)
+        let attributes = AdjutantActivityAttributes(townName: townName)
         let activityContent = ActivityContent(
             state: initialState,
             staleDate: Date().addingTimeInterval(60 * 15) // 15 minutes
@@ -115,7 +115,7 @@ public final class LiveActivityService: ObservableObject {
     /// Updates the current Live Activity with new state.
     ///
     /// - Parameter state: The new state to display
-    public func updateActivity(with state: GastownActivityAttributes.ContentState) async {
+    public func updateActivity(with state: AdjutantActivityAttributes.ContentState) async {
         guard let activity = currentActivity else {
             print("[LiveActivityService] No active activity to update")
             return
@@ -141,12 +141,12 @@ public final class LiveActivityService: ObservableObject {
         }
 
         // Create a final state to show
-        let finalState = GastownActivityAttributes.ContentState(
+        let finalState = AdjutantActivityAttributes.ContentState(
             powerState: .stopped,
             unreadMailCount: 0,
-            activeAgents: 0,
-            beadsInProgress: 0,
-            beadsHooked: 0,
+            activeAgents: [],
+            beadsInProgress: [],
+            recentlyCompleted: [],
             lastUpdated: Date()
         )
 
@@ -166,7 +166,7 @@ public final class LiveActivityService: ObservableObject {
 
     /// Ends all active Live Activities for this app.
     public func endAllActivities() async {
-        for activity in Activity<GastownActivityAttributes>.activities {
+        for activity in Activity<AdjutantActivityAttributes>.activities {
             await activity.end(nil, dismissalPolicy: .immediate)
         }
 
@@ -201,7 +201,7 @@ public final class LiveActivityService: ObservableObject {
 
     /// Checks for and resumes any existing activities
     private func checkForExistingActivities() async {
-        let activities = Activity<GastownActivityAttributes>.activities
+        let activities = Activity<AdjutantActivityAttributes>.activities
         if let existingActivity = activities.first {
             currentActivity = existingActivity
             currentActivityId = existingActivity.id
@@ -217,23 +217,23 @@ public final class LiveActivityService: ObservableObject {
     /// - Parameters:
     ///   - powerState: Current power state
     ///   - unreadMailCount: Number of unread mail messages
-    ///   - activeAgents: Number of active agents
-    ///   - beadsInProgress: Number of beads currently in progress
-    ///   - beadsHooked: Number of beads currently hooked
+    ///   - activeAgents: Active agent summaries
+    ///   - beadsInProgress: In-progress bead summaries
+    ///   - recentlyCompleted: Recently completed bead summaries
     /// - Returns: A ContentState populated with current values
     static func createState(
         powerState: AdjutantKit.PowerState,
         unreadMailCount: Int,
-        activeAgents: Int,
-        beadsInProgress: Int = 0,
-        beadsHooked: Int = 0
-    ) -> GastownActivityAttributes.ContentState {
-        return GastownActivityAttributes.ContentState(
+        activeAgents: [AgentSummary],
+        beadsInProgress: [BeadSummary] = [],
+        recentlyCompleted: [BeadSummary] = []
+    ) -> AdjutantActivityAttributes.ContentState {
+        return AdjutantActivityAttributes.ContentState(
             powerState: powerState,
             unreadMailCount: unreadMailCount,
             activeAgents: activeAgents,
             beadsInProgress: beadsInProgress,
-            beadsHooked: beadsHooked,
+            recentlyCompleted: recentlyCompleted,
             lastUpdated: Date()
         )
     }
@@ -247,7 +247,7 @@ public final class LiveActivityService: ObservableObject {
     ///   - state: The state to display
     public func syncActivity(
         townName: String,
-        state: GastownActivityAttributes.ContentState
+        state: AdjutantActivityAttributes.ContentState
     ) async {
         if hasActiveActivity {
             await updateActivity(with: state)

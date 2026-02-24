@@ -54,6 +54,20 @@ export interface BeadDetail extends BeadInfo {
   isPinned: boolean;
 }
 
+/**
+ * Recently closed bead info for the widget/activity feed.
+ */
+export interface RecentlyClosedBead {
+  id: string;
+  title: string;
+  assignee: string | null;
+  closedAt: string;
+  type: string;
+  priority: number;
+  rig: string | null;
+  source: string;
+}
+
 export interface ListBeadsOptions {
   rig?: string;
   /** Path to rig's directory containing .beads/ - if provided, queries that rig's beads database */
@@ -997,6 +1011,114 @@ export async function listBeadSources(): Promise<
       error: {
         code: "SOURCES_ERROR",
         message: err instanceof Error ? err.message : "Failed to list bead sources",
+      },
+    };
+  }
+}
+
+// ============================================================================
+// Recently Closed Beads
+// ============================================================================
+
+/**
+ * Max number of recently closed beads to return.
+ */
+const RECENT_CLOSED_LIMIT = 10;
+
+/**
+ * Lists beads closed within a configurable time window.
+ * Queries all databases (town + rigs), filters by closed_at timestamp,
+ * and excludes wisps/system beads (same OVERSEER scope as listAllBeads).
+ *
+ * @param hours Time window in hours (1-24, default 1)
+ * @returns Recently closed beads sorted by closedAt descending
+ */
+export async function listRecentlyClosed(
+  hours: number = 1
+): Promise<BeadsServiceResult<RecentlyClosedBead[]>> {
+  try {
+    await ensurePrefixMap();
+
+    const townRoot = resolveWorkspaceRoot();
+    const beadsDirs = await listAllBeadsDirs();
+
+    // Build list of all databases to query (same pattern as listAllBeads)
+    const townBeadsDir = join(townRoot, ".beads");
+    const databasesToQuery: Array<{ workDir: string; beadsDir: string; source: string }> = [
+      { workDir: townRoot, beadsDir: townBeadsDir, source: "town" },
+    ];
+
+    const rigDirs = beadsDirs.filter((dirInfo) => dirInfo.rig !== null);
+    for (const dirInfo of rigDirs) {
+      databasesToQuery.push({
+        workDir: dirInfo.workDir,
+        beadsDir: dirInfo.path,
+        source: dirInfo.rig!,
+      });
+    }
+
+    // Calculate the cutoff timestamp
+    const cutoffMs = Date.now() - hours * 3600 * 1000;
+
+    // Fetch closed beads from all databases sequentially (bd semaphore serializes)
+    const allClosed: RecentlyClosedBead[] = [];
+
+    for (const db of databasesToQuery) {
+      const result = await execBd<BeadsIssue[]>(
+        ["list", "--all", "--status", "closed", "--json"],
+        { cwd: db.workDir, beadsDir: db.beadsDir }
+      );
+
+      if (!result.success || !result.data) continue;
+
+      for (const issue of result.data) {
+        // Filter out wisps (same as fetchBeadsFromDatabase)
+        if (issue.wisp) continue;
+        if (issue.id.includes("-wisp-")) continue;
+
+        // Must have a closed_at timestamp
+        if (!issue.closed_at) continue;
+
+        // Parse closed_at and check against the time window
+        const closedTime = new Date(issue.closed_at).getTime();
+        if (isNaN(closedTime) || closedTime < cutoffMs) continue;
+
+        allClosed.push({
+          id: issue.id,
+          title: issue.title,
+          assignee: issue.assignee ?? null,
+          closedAt: issue.closed_at,
+          type: issue.issue_type,
+          priority: issue.priority,
+          rig: extractRig(issue.assignee),
+          source: prefixToSource(issue.id),
+        });
+      }
+    }
+
+    // Deduplicate by bead ID (same bead may exist in multiple databases)
+    const seenIds = new Set<string>();
+    const deduplicated = allClosed.filter((b) => {
+      if (seenIds.has(b.id)) return false;
+      seenIds.add(b.id);
+      return true;
+    });
+
+    // Sort by closedAt descending (most recent first)
+    deduplicated.sort((a, b) => {
+      return new Date(b.closedAt).getTime() - new Date(a.closedAt).getTime();
+    });
+
+    // Limit to max results
+    const limited = deduplicated.slice(0, RECENT_CLOSED_LIMIT);
+
+    return { success: true, data: limited };
+  } catch (err) {
+    return {
+      success: false,
+      error: {
+        code: "RECENT_CLOSED_ERROR",
+        message: err instanceof Error ? err.message : "Failed to list recently closed beads",
       },
     };
   }
