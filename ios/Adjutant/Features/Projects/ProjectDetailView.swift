@@ -219,9 +219,15 @@ struct ProjectDetailView: View {
                 Divider()
                     .background(theme.dim.opacity(0.3))
 
-                // Spawn polecat button
+                // Spawn polecat button — tap for quick spawn, long-press to choose callsign
                 Button {
-                    Task { await viewModel.spawnPolecat() }
+                    Task {
+                        await viewModel.spawnPolecat()
+                        if let spawnedCallsign = viewModel.lastSpawnedCallsign {
+                            coordinator.pendingChatAgentId = spawnedCallsign
+                            coordinator.selectTab(.chat)
+                        }
+                    }
                 } label: {
                     HStack {
                         if viewModel.isSpawning {
@@ -232,6 +238,12 @@ struct ProjectDetailView: View {
                         }
                         CRTText("SPAWN POLECAT", style: .body, glowIntensity: .medium)
                         Spacer()
+                        HStack(spacing: 4) {
+                            Image(systemName: "hand.tap")
+                                .font(.system(size: 10))
+                            CRTText("HOLD TO NAME", style: .caption, glowIntensity: .subtle, color: theme.dim.opacity(0.6))
+                        }
+                        .foregroundColor(theme.dim.opacity(0.6))
                     }
                     .padding(.vertical, CRTTheme.Spacing.xs)
                     .padding(.horizontal, CRTTheme.Spacing.sm)
@@ -244,6 +256,14 @@ struct ProjectDetailView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(viewModel.isSpawning)
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.5)
+                        .onEnded { _ in
+                            let impact = UIImpactFeedbackGenerator(style: .heavy)
+                            impact.impactOccurred()
+                            showCallsignPicker = true
+                        }
+                )
 
                 // Spawn message
                 if let message = viewModel.spawnMessage {
