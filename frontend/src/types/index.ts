@@ -341,5 +341,19 @@ export interface UnreadCount {
   count: number;
 }
 
+export type ProposalType = 'product' | 'engineering';
+export type ProposalStatus = 'pending' | 'accepted' | 'dismissed';
+
+export interface Proposal {
+  id: string;
+  author: string;
+  title: string;
+  description: string;
+  type: ProposalType;
+  status: ProposalStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export * from './epics';
 export * from './kanban';

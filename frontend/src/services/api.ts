@@ -15,6 +15,7 @@ import type {
   ChatMessage,
   ChatThread,
   UnreadCount,
+  Proposal,
 } from '../types';
 import type {
   SynthesizeRequest,
@@ -470,6 +471,34 @@ export const api = {
       if (params.limit) searchParams.set('limit', params.limit.toString());
 
       return apiFetch(`/messages/search?${searchParams}`);
+    },
+  },
+
+  /**
+   * Proposals operations.
+   */
+  proposals: {
+    async list(params?: {
+      status?: 'pending' | 'accepted' | 'dismissed';
+      type?: 'product' | 'engineering';
+    }): Promise<Proposal[]> {
+      const searchParams = new URLSearchParams();
+      if (params?.status) searchParams.set('status', params.status);
+      if (params?.type) searchParams.set('type', params.type);
+
+      const query = searchParams.toString();
+      return apiFetch(`/proposals${query ? `?${query}` : ''}`);
+    },
+
+    async get(id: string): Promise<Proposal> {
+      return apiFetch(`/proposals/${encodeURIComponent(id)}`);
+    },
+
+    async updateStatus(id: string, status: 'accepted' | 'dismissed'): Promise<Proposal> {
+      return apiFetch(`/proposals/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: { status },
+      });
     },
   },
 

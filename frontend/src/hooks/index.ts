@@ -48,3 +48,6 @@ export type { UseChatMessagesResult } from "./useChatMessages";
 
 export { useAgentStatus } from "./useAgentStatus";
 export type { AgentStatusInfo, UseAgentStatusResult } from "./useAgentStatus";
+
+export { useProposals } from "./useProposals";
+export type { UseProposalsResult } from "./useProposals";

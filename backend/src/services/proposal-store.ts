@@ -74,7 +74,7 @@ export function createProposalStore(db: Database.Database): ProposalStore {
       }
 
       const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-      const sql = `SELECT * FROM proposals ${where} ORDER BY created_at DESC`;
+      const sql = `SELECT * FROM proposals ${where} ORDER BY created_at DESC, rowid DESC`;
       const rows = db.prepare(sql).all(...params) as ProposalRow[];
       return rows.map(rowToProposal);
     },

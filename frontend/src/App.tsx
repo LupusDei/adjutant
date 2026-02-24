@@ -15,11 +15,12 @@ import { RigProvider } from "./contexts/RigContext";
 import { CommunicationProvider } from "./contexts/CommunicationContext";
 import { ModeProvider, useVisibleTabs } from "./contexts/ModeContext";
 import { DashboardView } from "./components/dashboard/OverviewDashboard";
+import { ProposalsView } from "./components/proposals/ProposalsView";
 import { useUnreadCounts } from "./hooks/useUnreadCounts";
 
 export type ThemeId = 'green' | 'red' | 'blue' | 'tan' | 'pink' | 'purple';
 
-type TabId = "dashboard" | "mail" | "chat" | "epics" | "crew" | "beads" | "settings";
+type TabId = "dashboard" | "mail" | "chat" | "epics" | "crew" | "beads" | "proposals" | "settings";
 
 interface Tab {
   id: TabId;
@@ -34,6 +35,7 @@ const TABS: Tab[] = [
   { id: "epics", label: "EPICS", icon: "📋" },
   { id: "crew", label: "CREW", icon: "👥" },
   { id: "beads", label: "BEADS", icon: "📿" },
+  { id: "proposals", label: "PROPOSALS", icon: "💡" },
   { id: "settings", label: "SETTINGS", icon: "⚙️" },
 ];
 
@@ -163,6 +165,15 @@ function AppContent() {
           >
             <BeadsView isActive={activeTab === "beads"} />
           </section>
+          {visibleTabs.has("proposals") && (
+            <section
+              className="tab-view"
+              hidden={activeTab !== "proposals"}
+              aria-hidden={activeTab !== "proposals"}
+            >
+              <ProposalsView isActive={activeTab === "proposals"} />
+            </section>
+          )}
           <section
             className="tab-view"
             hidden={activeTab !== "settings"}
