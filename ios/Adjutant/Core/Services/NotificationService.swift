@@ -486,6 +486,8 @@ extension NotificationService: UNUserNotificationCenterDelegate {
     }
 
     /// Called when the user interacts with a notification.
+    /// Must dispatch to MainActor explicitly since this is nonisolated (required by protocol)
+    /// and iOS may call it from a background thread (e.g., cold start from notification tap).
     nonisolated public func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
@@ -495,31 +497,33 @@ extension NotificationService: UNUserNotificationCenterDelegate {
 
         print("[NotificationService] Received action: \(actionId) for notification: \(response.notification.request.identifier)")
 
-        // Handle standard actions
-        switch actionId {
-        case UNNotificationDefaultActionIdentifier:
-            // User tapped the notification
-            await handleNotificationTap(userInfo: userInfo)
+        // Dispatch all handling to main actor to avoid "Call must be made on main thread" crashes
+        await MainActor.run {
+            Task { @MainActor in
+                switch actionId {
+                case UNNotificationDefaultActionIdentifier:
+                    await self.handleNotificationTap(userInfo: userInfo)
 
-        case UNNotificationDismissActionIdentifier:
-            // User dismissed the notification
-            break
+                case UNNotificationDismissActionIdentifier:
+                    break
 
-        case Action.view.rawValue:
-            await handleNotificationTap(userInfo: userInfo)
+                case Action.view.rawValue:
+                    await self.handleNotificationTap(userInfo: userInfo)
 
-        case Action.markRead.rawValue:
-            await handleMarkRead(userInfo: userInfo)
+                case Action.markRead.rawValue:
+                    await self.handleMarkRead(userInfo: userInfo)
 
-        case Action.snooze.rawValue:
-            await handleSnooze(originalNotification: response.notification)
+                case Action.snooze.rawValue:
+                    await self.handleSnooze(originalNotification: response.notification)
 
-        case Action.dismiss.rawValue:
-            // Explicit dismiss, no action needed
-            break
+                case Action.dismiss.rawValue:
+                    // Explicit dismiss, no action needed
+                    break
 
-        default:
-            print("[NotificationService] Unknown action: \(actionId)")
+                default:
+                    print("[NotificationService] Unknown action: \(actionId)")
+                }
+            }
         }
     }
 
