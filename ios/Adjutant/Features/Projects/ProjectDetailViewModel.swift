@@ -19,6 +19,9 @@ final class ProjectDetailViewModel: BaseViewModel {
     /// Spawn result message
     @Published var spawnMessage: String?
 
+    /// Callsign of the last successfully spawned agent
+    @Published private(set) var lastSpawnedCallsign: String?
+
     // MARK: - Properties
 
     let rigName: String
@@ -52,12 +55,15 @@ final class ProjectDetailViewModel: BaseViewModel {
     // MARK: - Actions
 
     /// Spawn a new polecat for this rig
-    func spawnPolecat() async {
+    /// - Parameter callsign: Optional callsign name for the new agent
+    func spawnPolecat(callsign: String? = nil) async {
         isSpawning = true
         spawnMessage = nil
+        lastSpawnedCallsign = nil
 
         do {
-            let response = try await apiClient.spawnPolecat(rig: rigName)
+            let response = try await apiClient.spawnPolecat(rig: rigName, callsign: callsign)
+            lastSpawnedCallsign = response.callsign ?? callsign
             spawnMessage = "Polecat spawn requested for \(response.rig)"
             await refresh()
         } catch {
