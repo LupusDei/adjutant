@@ -114,6 +114,7 @@ export function registerBeadTools(server: McpServer): void {
       return bdMutex.runExclusive(async () => {
         const args: string[] = [
           "create",
+          "--json",
           "--title", title,
           "--description", description,
           "--type", type,
@@ -164,7 +165,7 @@ export function registerBeadTools(server: McpServer): void {
           };
         }
 
-        const args: string[] = ["update", id];
+        const args: string[] = ["update", id, "--json"];
 
         if (status) args.push(`--status=${status}`);
         if (title) args.push("--title", title);
@@ -216,7 +217,7 @@ export function registerBeadTools(server: McpServer): void {
           };
         }
 
-        const args: string[] = ["close", id];
+        const args: string[] = ["close", id, "--json"];
         if (reason) {
           args.push("--reason", reason);
         }
