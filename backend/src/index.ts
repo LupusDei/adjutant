@@ -1,7 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, convoysRouter, costsRouter, createMessagesRouter, createProjectsRouter, devicesRouter, eventsRouter, mailRouter, mcpRouter, modeRouter, permissionsRouter, powerRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, convoysRouter, costsRouter, createMessagesRouter, createProjectsRouter, createProposalsRouter, devicesRouter, eventsRouter, mailRouter, mcpRouter, modeRouter, permissionsRouter, powerRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
@@ -18,6 +18,8 @@ import { registerMessagingTools } from "./services/mcp-tools/messaging.js";
 import { registerStatusTools } from "./services/mcp-tools/status.js";
 import { registerBeadTools } from "./services/mcp-tools/beads.js";
 import { registerQueryTools } from "./services/mcp-tools/queries.js";
+import { registerProposalTools } from "./services/mcp-tools/proposals.js";
+import { createProposalStore } from "./services/proposal-store.js";
 import { initMessageDelivery } from "./services/message-delivery.js";
 import { initBeadAssignNotification } from "./services/bead-assign-notification.js";
 
@@ -62,8 +64,10 @@ app.use("/api/costs", costsRouter);
 // Initialize message store and mount messages/projects routers
 const messageDb = initDatabase();
 const messageStore = createMessageStore(messageDb);
+const proposalStore = createProposalStore(messageDb);
 app.use("/api/messages", createMessagesRouter(messageStore));
 app.use("/api/projects", createProjectsRouter(messageStore));
+app.use("/api/proposals", createProposalsRouter(proposalStore));
 
 app.use("/mcp", mcpRouter);
 
@@ -112,6 +116,7 @@ const server = app.listen(PORT, () => {
     registerStatusTools(server, messageStore);
     registerBeadTools(server);
     registerQueryTools(server, messageStore);
+    registerProposalTools(server, proposalStore);
   });
 
   // Initialize message delivery (flushes pending messages when agents connect)

@@ -98,6 +98,29 @@ list_beads({ status: "open", assignee: "my-agent" })
 show_bead({ id: "adj-042" })
 ```
 
+### Proposal Tools
+
+Use these to generate and review improvement proposals when idle.
+
+**`create_proposal`** -- Create a new improvement proposal. Agent identity is resolved server-side.
+```
+create_proposal({
+  title: "Add keyboard shortcuts for common actions",
+  description: "What: Add keyboard shortcuts...\nWhy: Power users need faster navigation...\nHow: KeyboardShortcutManager component...\nImpact: Faster UX for power users",
+  type: "product"
+})
+```
+Types: `product` (UX/product improvements), `engineering` (refactoring/architecture)
+
+**`list_proposals`** -- List existing proposals. Use to check uniqueness before creating.
+```
+list_proposals()                           // All proposals
+list_proposals({ type: "engineering" })    // Only engineering proposals
+list_proposals({ status: "pending" })      // Only pending proposals
+```
+
+See `references/generate-proposal.md` for the full proposal generation protocol.
+
 ### Query Tools
 
 Read-only tools for system introspection.
@@ -153,6 +176,18 @@ Do NOT just print an answer to the terminal.
 - **`announce`**: Use for events that need dashboard attention. Completions, blockers, and questions.
   These are highlighted prominently in the UI. Requires both `title` and `body`.
 
+## Proposal Generation (Idle Agent Protocol)
+
+When your task queue is empty (`bd ready` returns no work), enter proposal mode:
+
+1. Spawn two teammates: a Product/UX analyst and a Staff Engineer
+2. Each teammate calls `list_proposals` first to check for duplicates
+3. Each creates one unique proposal via `create_proposal`
+4. Each announces the proposal via `announce`
+
+See `references/generate-proposal.md` for the complete protocol, spawn prompts, and guidelines.
+
 ## References
 
-See `references/tool-catalog.md` for complete input/output schemas for all tools.
+- `references/tool-catalog.md` -- Complete input/output schemas for all tools
+- `references/generate-proposal.md` -- Proposal generation protocol and spawn prompts

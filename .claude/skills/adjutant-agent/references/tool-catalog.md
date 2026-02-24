@@ -390,6 +390,83 @@ Dependencies:
 
 ---
 
+## Proposal Tools
+
+Tools for generating and reviewing improvement proposals. Agents use these
+when idle to submit product/UX or engineering improvement ideas.
+
+### create_proposal
+
+Create a new improvement proposal. Agent identity is resolved server-side
+from the MCP session and used as the author.
+
+**Input Schema:**
+
+| Field       | Type   | Required | Description                                                        |
+|-------------|--------|----------|--------------------------------------------------------------------|
+| title       | string | yes      | Concise proposal title                                             |
+| description | string | yes      | Deep description: what, why, how, and expected impact              |
+| type        | string | yes      | `"product"` (UX/product) or `"engineering"` (refactor/architecture)|
+
+**Example:**
+```json
+{
+  "title": "Add keyboard shortcuts for common actions",
+  "description": "What: Add keyboard shortcuts for tab navigation, message sending, and bead actions.\nWhy: Power users must currently use mouse for everything, slowing down workflows.\nHow: Create a KeyboardShortcutManager React context that registers global key handlers.\nImpact: Significantly faster navigation for experienced users.",
+  "type": "product"
+}
+```
+
+**Output:**
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440003",
+  "title": "Add keyboard shortcuts for common actions",
+  "type": "product",
+  "status": "pending",
+  "createdAt": "2026-02-24T12:00:00.000Z"
+}
+```
+
+### list_proposals
+
+List existing proposals with optional filters. Use this before creating
+a proposal to check for duplicates.
+
+**Input Schema:**
+
+| Field  | Type   | Required | Description                                                  |
+|--------|--------|----------|--------------------------------------------------------------|
+| status | string | no       | Filter: `"pending"`, `"accepted"`, `"dismissed"`             |
+| type   | string | no       | Filter: `"product"`, `"engineering"`                         |
+
+**Example:**
+```json
+{
+  "type": "engineering"
+}
+```
+
+**Output:**
+```json
+{
+  "proposals": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440003",
+      "author": "staff-engineer-agent",
+      "title": "Extract shared Zod validation into middleware",
+      "description": "What: ...",
+      "type": "engineering",
+      "status": "pending",
+      "createdAt": "2026-02-24T12:00:00.000Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+---
+
 ## Query Tools
 
 Read-only tools for system introspection. Agents can use these to understand

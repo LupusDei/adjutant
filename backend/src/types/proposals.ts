@@ -1,0 +1,53 @@
+import { z } from "zod";
+
+// =============================================================================
+// Zod Schemas
+// =============================================================================
+
+export const ProposalTypeSchema = z.enum(["product", "engineering"]);
+export const ProposalStatusSchema = z.enum(["pending", "accepted", "dismissed"]);
+
+export const CreateProposalSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  description: z.string().min(1, "Description is required"),
+  type: ProposalTypeSchema,
+});
+
+export const UpdateProposalStatusSchema = z.object({
+  status: z.enum(["accepted", "dismissed"]),
+});
+
+export const ProposalFilterSchema = z.object({
+  status: ProposalStatusSchema.optional(),
+  type: ProposalTypeSchema.optional(),
+});
+
+// =============================================================================
+// TypeScript Types
+// =============================================================================
+
+export type ProposalType = z.infer<typeof ProposalTypeSchema>;
+export type ProposalStatus = z.infer<typeof ProposalStatusSchema>;
+
+export interface Proposal {
+  id: string;
+  author: string;
+  title: string;
+  description: string;
+  type: ProposalType;
+  status: ProposalStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Raw row shape from SQLite before camelCase mapping */
+export interface ProposalRow {
+  id: string;
+  author: string;
+  title: string;
+  description: string;
+  type: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}

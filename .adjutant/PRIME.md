@@ -61,6 +61,20 @@ bd close <id>                          # After completing work
 bd sync                                # Before shutting down
 ```
 
+### Bead Self-Assignment (MANDATORY)
+
+**You MUST assign yourself to any bead you start working on.** This is non-negotiable.
+
+```bash
+bd update <id> --assignee=<your-agent-name> --status=in_progress
+```
+
+- Before touching any code for a bead, run `bd update <id> --assignee=<your-name>`
+- This applies even if you delegate subtasks to teammates — the **primary agent** who owns the work gets assigned to the parent bead
+- If you spawn teammates for child beads, assign yourself to the parent epic/sub-epic and assign each teammate to their specific child beads
+- Unassigned in-progress beads are a bug. Every `in_progress` bead must have an assignee.
+- The dashboard and other agents rely on assignee data for workload visibility. Without it, beads appear orphaned.
+
 **WARNING — MCP bead tools vs `bd` CLI:**
 - MCP bead tools (`create_bead`, `update_bead`, `close_bead`, `list_beads`, `show_bead`) always operate on the adjutant backend's database — they have NO project routing.
 - If you are working in a different project/repo that has its own `.beads/` database, MCP bead tools will hit the WRONG database.
