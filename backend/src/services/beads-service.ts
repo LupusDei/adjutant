@@ -1168,9 +1168,17 @@ export async function getProjectOverview(
       { cwd: projectPath, beadsDir }
     );
 
-    // Fetch in-progress beads (includes hooked and blocked)
+    // Fetch in-progress, hooked, and blocked beads (all active work statuses)
     const inProgressResult = await execBd<BeadsIssue[]>(
       ["list", "--json", "--status", "in_progress"],
+      { cwd: projectPath, beadsDir }
+    );
+    const hookedResult = await execBd<BeadsIssue[]>(
+      ["list", "--json", "--status", "hooked"],
+      { cwd: projectPath, beadsDir }
+    );
+    const blockedResult = await execBd<BeadsIssue[]>(
+      ["list", "--json", "--status", "blocked"],
       { cwd: projectPath, beadsDir }
     );
 
@@ -1189,9 +1197,13 @@ export async function getProjectOverview(
       ? filterWisps(openResult.data).map((i) => transformBead(i, "project"))
       : [];
 
-    const inProgressBeads = (inProgressResult.success && inProgressResult.data)
-      ? filterWisps(inProgressResult.data).map((i) => transformBead(i, "project"))
-      : [];
+    // Merge in_progress + hooked + blocked into a single list
+    const activeIssues: BeadsIssue[] = [
+      ...((inProgressResult.success && inProgressResult.data) ? inProgressResult.data : []),
+      ...((hookedResult.success && hookedResult.data) ? hookedResult.data : []),
+      ...((blockedResult.success && blockedResult.data) ? blockedResult.data : []),
+    ];
+    const inProgressBeads = filterWisps(activeIssues).map((i) => transformBead(i, "project"));
 
     const recentlyClosedBeads = (closedResult.success && closedResult.data)
       ? filterWisps(closedResult.data)

@@ -58,9 +58,7 @@ struct AgentsSectionView: View {
 
             // Unread badge
             if agent.unreadCount > 0 {
-                Text("\(agent.unreadCount)")
-                    .font(CRTTheme.Typography.font(size: 10, weight: .bold))
-                    .foregroundColor(.black)
+                CRTText("\(agent.unreadCount)", style: .caption, color: .black)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(theme.primary)
@@ -109,42 +107,6 @@ struct AgentsSectionView: View {
     }
 }
 
-// MARK: - StartAgentSection
-
-/// A prominent button for spawning a new agent.
-/// Tap for quick spawn (random callsign), long-press for callsign picker.
-struct StartAgentSection: View {
-    let onTap: () -> Void
-    let onLongPress: () -> Void
-    @Environment(\.crtTheme) private var theme
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: CRTTheme.Spacing.sm) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 20))
-                CRTText("START AGENT", style: .subheader, glowIntensity: .bright)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, CRTTheme.Spacing.md)
-            .background(
-                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
-                    .fill(theme.primary.opacity(0.15))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
-                    .stroke(theme.primary.opacity(0.5), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.5)
-                .onEnded { _ in onLongPress() }
-        )
-        .padding(.horizontal, CRTTheme.Spacing.md)
-    }
-}
-
 // MARK: - Previews
 
 #Preview("Agents Section - With Agents") {
@@ -176,10 +138,3 @@ struct StartAgentSection: View {
     .background(CRTTheme.Background.screen)
 }
 
-#Preview("Start Agent Button") {
-    VStack {
-        StartAgentSection(onTap: {}, onLongPress: {})
-    }
-    .padding(.vertical)
-    .background(CRTTheme.Background.screen)
-}
