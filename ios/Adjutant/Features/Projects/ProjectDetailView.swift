@@ -7,6 +7,7 @@ struct ProjectDetailView: View {
     @Environment(\.crtTheme) private var theme
     @StateObject private var viewModel: ProjectDetailViewModel
     @EnvironmentObject private var coordinator: AppCoordinator
+    @State private var showCallsignPicker = false
 
     init(rig: RigStatus) {
         _viewModel = StateObject(wrappedValue: ProjectDetailViewModel(rig: rig))
@@ -45,6 +46,18 @@ struct ProjectDetailView: View {
         }
         .onDisappear {
             viewModel.onDisappear()
+        }
+        .sheet(isPresented: $showCallsignPicker) {
+            CallsignPickerView { callsignName in
+                Task {
+                    await viewModel.spawnPolecat(callsign: callsignName)
+                    if let spawnedCallsign = viewModel.lastSpawnedCallsign {
+                        coordinator.pendingChatAgentId = spawnedCallsign
+                        coordinator.selectTab(.chat)
+                    }
+                }
+            }
+            .presentationDetents([.large])
         }
     }
 
