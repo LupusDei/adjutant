@@ -116,9 +116,10 @@ describe("database", () => {
         const migrations = db
           .prepare("SELECT * FROM migrations")
           .all() as Array<{ name: string }>;
-        // Should only have one entry for 001-initial.sql
-        expect(migrations).toHaveLength(1);
+        // Should have one entry per migration file, each applied exactly once
+        expect(migrations).toHaveLength(2);
         expect(migrations[0]?.name).toBe("001-initial.sql");
+        expect(migrations[1]?.name).toBe("002-device-tokens.sql");
       } finally {
         db.close();
       }
