@@ -9,6 +9,7 @@ import { NuclearPowerButton } from "./components/power/NuclearPowerButton";
 import { SettingsView } from "./components/settings/SettingsView";
 import { CRTScreen } from "./components/shared/CRTScreen";
 import { QuickInput } from "./components/shared/QuickInput";
+import { KeyboardDismiss } from "./components/shared/KeyboardDismiss";
 import { RigFilter } from "./components/shared/RigFilter";
 import { RigProvider } from "./contexts/RigContext";
 import { CommunicationProvider } from "./contexts/CommunicationContext";
@@ -172,6 +173,7 @@ function AppContent() {
         </main>
 
         <QuickInput />
+        <KeyboardDismiss />
       </div>
     </CRTScreen>
   );

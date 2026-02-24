@@ -592,3 +592,32 @@ html, body {
   flex-direction: column;
   overflow: hidden;
 }
+
+/* ============================================
+   iOS Keyboard Dismiss Button
+   ============================================ */
+.keyboard-dismiss-btn {
+  position: fixed;
+  bottom: env(safe-area-inset-bottom, 0px);
+  right: 12px;
+  z-index: 10000;
+  padding: 6px 16px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  color: #000;
+  background: var(--crt-phosphor, #00ff00);
+  border: none;
+  border-radius: 4px 4px 0 0;
+  box-shadow: 0 -2px 8px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.3));
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transform: translateY(0);
+  animation: kb-dismiss-slide-up 0.2s ease-out;
+}
+
+@keyframes kb-dismiss-slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
