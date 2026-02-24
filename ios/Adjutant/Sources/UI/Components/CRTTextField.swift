@@ -58,6 +58,14 @@ public struct CRTTextField: View {
                 .onSubmit {
                     onSubmit?()
                 }
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("DONE") { isFocused = false }
+                            .font(CRTTheme.Typography.font(size: 14))
+                            .foregroundColor(theme.primary)
+                    }
+                }
         }
         .padding(.horizontal, CRTTheme.Spacing.sm)
         .padding(.vertical, CRTTheme.Spacing.xs)
@@ -156,6 +164,14 @@ public struct CRTTextEditor: View {
                     .onChange(of: text) { _, newValue in
                         if let maxLength = maxLength, newValue.count > maxLength {
                             text = String(newValue.prefix(maxLength))
+                        }
+                    }
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Spacer()
+                            Button("DONE") { isFocused = false }
+                                .font(CRTTheme.Typography.font(size: 14))
+                                .foregroundColor(theme.primary)
                         }
                     }
             }

@@ -80,6 +80,14 @@ struct ChatInputView: View {
                         onSend()
                     }
                 }
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("DONE") { isTextFieldFocused = false }
+                            .font(CRTTheme.Typography.font(size: 14))
+                            .foregroundColor(theme.primary)
+                    }
+                }
         }
         .padding(.horizontal, CRTTheme.Spacing.sm)
         .padding(.vertical, CRTTheme.Spacing.xs)

@@ -324,6 +324,7 @@ struct ChatView: View {
                 }
                 .padding(.vertical, CRTTheme.Spacing.sm)
             }
+            .scrollDismissesKeyboard(.interactively)
             .refreshable {
                 await viewModel.refresh()
             }

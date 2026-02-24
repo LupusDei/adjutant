@@ -101,6 +101,7 @@ struct UnifiedChatView: View {
 /// Inner content view that owns the SessionChatViewModel for event streaming.
 private struct UnifiedChatContent: View {
     @Environment(\.crtTheme) private var theme
+    @FocusState private var isInputFocused: Bool
     @StateObject private var viewModel: SessionChatViewModel
     @ObservedObject var loader: SessionLoader
     @State private var showingFullSession = false
@@ -280,6 +281,7 @@ private struct UnifiedChatContent: View {
                 }
                 .padding(.vertical, CRTTheme.Spacing.sm)
             }
+            .scrollDismissesKeyboard(.interactively)
             .onAppear {
                 scrollProxy = proxy
             }
@@ -325,8 +327,17 @@ private struct UnifiedChatContent: View {
                 .padding(.vertical, CRTTheme.Spacing.xs)
                 .background(theme.dim.opacity(0.1))
                 .cornerRadius(8)
+                .focused($isInputFocused)
                 .onSubmit {
                     viewModel.sendInput()
+                }
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("DONE") { isInputFocused = false }
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(theme.primary)
+                    }
                 }
                 .disabled(!viewModel.isConnected)
 

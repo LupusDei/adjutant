@@ -6,6 +6,7 @@ import AdjutantKit
 struct SessionChatView: View {
     @Environment(\.crtTheme) private var theme
     @Environment(\.dismiss) private var dismiss
+    @FocusState private var isInputFocused: Bool
     @StateObject private var viewModel: SessionChatViewModel
     @State private var scrollProxy: ScrollViewProxy?
     @State private var autoScroll = true
@@ -176,6 +177,7 @@ struct SessionChatView: View {
                 }
                 .padding(CRTTheme.Spacing.sm)
             }
+            .scrollDismissesKeyboard(.interactively)
             .onAppear {
                 scrollProxy = proxy
             }
@@ -258,8 +260,17 @@ struct SessionChatView: View {
                 .padding(.vertical, CRTTheme.Spacing.xs)
                 .background(theme.dim.opacity(0.1))
                 .cornerRadius(8)
+                .focused($isInputFocused)
                 .onSubmit {
                     viewModel.sendInput()
+                }
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("DONE") { isInputFocused = false }
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(theme.primary)
+                    }
                 }
                 .disabled(!viewModel.isConnected)
 
