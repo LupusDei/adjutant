@@ -1,7 +1,9 @@
-import { type CSSProperties } from "react";
+import { type CSSProperties, useState, useCallback } from "react";
 import { useProposals } from "../../hooks/useProposals";
 import { ProposalCard } from "./ProposalCard";
-import type { ProposalStatus, ProposalType } from "../../types";
+import { ProposalDetailView } from "./ProposalDetailView";
+import { api } from "../../services/api";
+import type { Proposal, ProposalStatus, ProposalType } from "../../types";
 
 export interface ProposalsViewProps {
   isActive?: boolean;
@@ -33,6 +35,28 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
     dismiss,
     refresh,
   } = useProposals();
+
+  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
+
+  const handleAcceptFromDetail = useCallback(async (id: string) => {
+    await accept(id);
+    void refresh();
+  }, [accept, refresh]);
+
+  const handleDismissFromDetail = useCallback(async (id: string) => {
+    await dismiss(id);
+    void refresh();
+  }, [dismiss, refresh]);
+
+  const handleSendToAgent = useCallback((proposal: Proposal) => {
+    const prompt = `## Proposal: ${proposal.title}\n\n**Type:** ${proposal.type}\n**Author:** ${proposal.author}\n**Status:** ${proposal.status}\n\n### Description\n\n${proposal.description}\n\n---\n\nPlease use /speckit.specify to create a feature specification from this proposal, then /speckit.plan to generate an implementation plan, and /speckit.beads to create executable beads for orchestration.`;
+
+    void api.messages.send({
+      to: "user",
+      body: prompt,
+      threadId: `proposal-${proposal.id}`,
+    });
+  }, []);
 
   return (
     <div style={styles.container}>
@@ -97,6 +121,8 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
             proposal={p}
             onAccept={(id) => { void accept(id); }}
             onDismiss={(id) => { void dismiss(id); }}
+            onSendToAgent={handleSendToAgent}
+            onClick={setSelectedProposalId}
           />
         ))}
       </div>
@@ -104,6 +130,14 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
       <div style={styles.footer}>
         {proposals.length} PROPOSAL{proposals.length !== 1 ? "S" : ""}
       </div>
+
+      <ProposalDetailView
+        proposalId={selectedProposalId}
+        onClose={() => { setSelectedProposalId(null); }}
+        onAccept={(id) => { void handleAcceptFromDetail(id); }}
+        onDismiss={(id) => { void handleDismissFromDetail(id); }}
+        onSendToAgent={handleSendToAgent}
+      />
     </div>
   );
 }

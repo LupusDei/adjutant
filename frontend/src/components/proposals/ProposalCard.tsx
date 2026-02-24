@@ -5,9 +5,11 @@ export interface ProposalCardProps {
   proposal: Proposal;
   onAccept?: (id: string) => void;
   onDismiss?: (id: string) => void;
+  onSendToAgent?: (proposal: Proposal) => void;
+  onClick?: (id: string) => void;
 }
 
-export function ProposalCard({ proposal, onAccept, onDismiss }: ProposalCardProps) {
+export function ProposalCard({ proposal, onAccept, onDismiss, onSendToAgent, onClick }: ProposalCardProps) {
   const isPending = proposal.status === "pending";
   const isAccepted = proposal.status === "accepted";
   const isDismissed = proposal.status === "dismissed";
@@ -16,7 +18,8 @@ export function ProposalCard({ proposal, onAccept, onDismiss }: ProposalCardProp
     <div style={{
       ...styles.card,
       ...(isDismissed ? styles.dismissed : {}),
-    }}>
+      cursor: onClick ? 'pointer' : undefined,
+    }} onClick={() => onClick?.(proposal.id)}>
       <div style={styles.header}>
         <span style={styles.title}>{proposal.title}</span>
         <span style={{
@@ -51,20 +54,23 @@ export function ProposalCard({ proposal, onAccept, onDismiss }: ProposalCardProp
           <>
             <button
               style={styles.acceptBtn}
-              onClick={() => onAccept?.(proposal.id)}
+              onClick={(e) => { e.stopPropagation(); onAccept?.(proposal.id); }}
             >
               ACCEPT
             </button>
             <button
               style={styles.dismissBtn}
-              onClick={() => onDismiss?.(proposal.id)}
+              onClick={(e) => { e.stopPropagation(); onDismiss?.(proposal.id); }}
             >
               DISMISS
             </button>
           </>
         )}
         {isAccepted && (
-          <button style={styles.sendBtn}>
+          <button
+            style={styles.sendBtn}
+            onClick={(e) => { e.stopPropagation(); onSendToAgent?.(proposal); }}
+          >
             SEND TO AGENT
           </button>
         )}
