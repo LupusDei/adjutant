@@ -39,6 +39,7 @@ extension Coordinator {
 /// Defines all navigable routes in the application
 enum AppRoute: Hashable {
     // Tab routes
+    case overview
     case dashboard
     case mail
     case chat
@@ -70,6 +71,7 @@ enum AppRoute: Hashable {
 
 /// Defines the main tabs in the application
 enum AppTab: Int, CaseIterable, Identifiable {
+    case overview
     case dashboard
     case mail
     case chat
@@ -83,7 +85,8 @@ enum AppTab: Int, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .dashboard: return "OVERVIEW"
+        case .overview: return "OVERVIEW"
+        case .dashboard: return "DASHBOARD"
         case .mail: return "MAIL"
         case .chat: return "CHAT"
         case .epics: return "EPICS"
@@ -96,6 +99,7 @@ enum AppTab: Int, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
+        case .overview: return "rectangle.3.group"
         case .dashboard: return "square.grid.2x2"
         case .mail: return "envelope"
         case .chat: return "message"

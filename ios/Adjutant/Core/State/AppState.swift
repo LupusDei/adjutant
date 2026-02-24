@@ -65,9 +65,9 @@ final class AppState: ObservableObject {
     var visibleTabs: Set<AppTab> {
         switch deploymentMode {
         case .gastown:
-            return Set(AppTab.allCases).subtracting([.projects])
+            return Set(AppTab.allCases).subtracting([.projects, .overview])
         case .swarm:
-            return [.chat, .crew, .epics, .projects, .beads, .settings]
+            return [.overview, .chat, .crew, .epics, .projects, .beads, .settings]
         }
     }
 
@@ -543,9 +543,9 @@ enum DeploymentMode: String, CaseIterable, Identifiable {
     var visibleTabs: Set<AppTab> {
         switch self {
         case .gastown:
-            return Set(AppTab.allCases).subtracting([.projects])
+            return Set(AppTab.allCases).subtracting([.projects, .overview])
         case .swarm:
-            return [.chat, .crew, .epics, .projects, .beads, .settings]
+            return [.overview, .chat, .crew, .epics, .projects, .beads, .settings]
         }
     }
 
@@ -553,7 +553,7 @@ enum DeploymentMode: String, CaseIterable, Identifiable {
     var defaultTab: AppTab {
         switch self {
         case .gastown: return .dashboard
-        case .swarm: return .chat
+        case .swarm: return .overview
         }
     }
 }

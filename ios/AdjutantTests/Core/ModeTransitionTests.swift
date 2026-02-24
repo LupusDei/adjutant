@@ -63,22 +63,25 @@ final class ModeTransitionTests: XCTestCase {
 
     // MARK: - Tab Visibility per Mode
 
-    func testGastownShowsAllTabsExceptProjects() {
+    func testGastownShowsAllTabsExceptProjectsAndOverview() {
         appState.updateDeploymentMode(.gastown)
         let tabs = appState.visibleTabs
 
-        XCTAssertEqual(tabs.count, AppTab.allCases.count - 1, "Gastown shows all tabs except Projects")
+        let excluded: Set<AppTab> = [.projects, .overview]
+        XCTAssertEqual(tabs.count, AppTab.allCases.count - excluded.count, "Gastown shows all tabs except Projects and Overview")
         XCTAssertFalse(tabs.contains(.projects))
-        for tab in AppTab.allCases where tab != .projects {
+        XCTAssertFalse(tabs.contains(.overview))
+        for tab in AppTab.allCases where !excluded.contains(tab) {
             XCTAssertTrue(tabs.contains(tab), "Gastown should show \(tab)")
         }
     }
 
-    func testSwarmShowsChatCrewEpicsProjectsBeadsSettings() {
+    func testSwarmShowsOverviewChatCrewEpicsProjectsBeadsSettings() {
         appState.updateDeploymentMode(.swarm)
         let tabs = appState.visibleTabs
 
-        XCTAssertEqual(tabs.count, 6)
+        XCTAssertEqual(tabs.count, 7)
+        XCTAssertTrue(tabs.contains(.overview))
         XCTAssertTrue(tabs.contains(.chat))
         XCTAssertTrue(tabs.contains(.crew))
         XCTAssertTrue(tabs.contains(.epics))
@@ -91,22 +94,24 @@ final class ModeTransitionTests: XCTestCase {
 
     // MARK: - Tab Visibility Adapts on Transition
 
-    func testTabsReduceWhenSwitchingGastownToSwarm() {
+    func testTabsChangeWhenSwitchingGastownToSwarm() {
         appState.updateDeploymentMode(.gastown)
         XCTAssertEqual(appState.visibleTabs.count, 7)
 
         appState.updateDeploymentMode(.swarm)
-        XCTAssertEqual(appState.visibleTabs.count, 6)
+        XCTAssertEqual(appState.visibleTabs.count, 7)
         XCTAssertFalse(appState.visibleTabs.contains(.dashboard))
+        XCTAssertTrue(appState.visibleTabs.contains(.overview))
     }
 
-    func testTabsExpandWhenSwitchingSwarmToGastown() {
+    func testTabsChangeWhenSwitchingSwarmToGastown() {
         appState.updateDeploymentMode(.swarm)
-        XCTAssertEqual(appState.visibleTabs.count, 6)
+        XCTAssertEqual(appState.visibleTabs.count, 7)
 
         appState.updateDeploymentMode(.gastown)
         XCTAssertEqual(appState.visibleTabs.count, 7)
         XCTAssertTrue(appState.visibleTabs.contains(.dashboard))
+        XCTAssertFalse(appState.visibleTabs.contains(.overview))
     }
 
     func testCrewTabVisibleInSwarm() {

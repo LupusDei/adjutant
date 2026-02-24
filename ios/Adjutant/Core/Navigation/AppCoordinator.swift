@@ -20,6 +20,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
     // MARK: - Per-Tab Navigation Paths
 
     /// Navigation paths for each tab (each tab has its own independent path)
+    @Published var overviewPath = NavigationPath()
     @Published var dashboardPath = NavigationPath()
     @Published var mailPath = NavigationPath()
     @Published var chatPath = NavigationPath()
@@ -39,6 +40,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
     /// Returns the navigation path for a specific tab
     private func getPath(for tab: AppTab) -> NavigationPath {
         switch tab {
+        case .overview: return overviewPath
         case .dashboard: return dashboardPath
         case .mail: return mailPath
         case .chat: return chatPath
@@ -53,6 +55,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
     /// Sets the path for a specific tab
     private func setPath(_ newPath: NavigationPath, for tab: AppTab) {
         switch tab {
+        case .overview: overviewPath = newPath
         case .dashboard: dashboardPath = newPath
         case .mail: mailPath = newPath
         case .chat: chatPath = newPath
@@ -173,6 +176,8 @@ final class AppCoordinator: Coordinator, ObservableObject {
     func navigate(to route: AppRoute) {
         switch route {
         // Tab routes - switch to the tab
+        case .overview:
+            selectTab(.overview)
         case .dashboard:
             selectTab(.dashboard)
         case .mail:
@@ -216,6 +221,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
     /// Appends a route to the current tab's navigation path
     private func appendToCurrentPath(_ route: AppRoute) {
         switch selectedTab {
+        case .overview: overviewPath.append(route)
         case .dashboard: dashboardPath.append(route)
         case .mail: mailPath.append(route)
         case .chat: chatPath.append(route)

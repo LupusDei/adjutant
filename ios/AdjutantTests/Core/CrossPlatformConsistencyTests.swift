@@ -20,7 +20,7 @@ final class CrossPlatformConsistencyTests: XCTestCase {
 
     func testGasTownModeShowsAll7Tabs() {
         let tabs = DeploymentMode.gastown.visibleTabs
-        XCTAssertEqual(tabs.count, 7, "Gas Town mode should show all 7 tabs")
+        XCTAssertEqual(tabs.count, 7, "Gas Town mode should show 7 tabs")
         XCTAssertTrue(tabs.contains(.dashboard))
         XCTAssertTrue(tabs.contains(.mail))
         XCTAssertTrue(tabs.contains(.chat))
@@ -28,11 +28,13 @@ final class CrossPlatformConsistencyTests: XCTestCase {
         XCTAssertTrue(tabs.contains(.crew))
         XCTAssertTrue(tabs.contains(.beads))
         XCTAssertTrue(tabs.contains(.settings))
+        XCTAssertFalse(tabs.contains(.overview), "Overview is swarm-only")
     }
 
-    func testSwarmModeShows6Tabs() {
+    func testSwarmModeShows7Tabs() {
         let tabs = DeploymentMode.swarm.visibleTabs
-        XCTAssertEqual(tabs.count, 6, "Swarm mode should show 6 tabs")
+        XCTAssertEqual(tabs.count, 7, "Swarm mode should show 7 tabs")
+        XCTAssertTrue(tabs.contains(.overview))
         XCTAssertTrue(tabs.contains(.chat))
         XCTAssertTrue(tabs.contains(.crew))
         XCTAssertTrue(tabs.contains(.epics))

@@ -100,6 +100,8 @@ private struct TabContent: View {
     @ViewBuilder
     private func tabView(for tab: AppTab) -> some View {
         switch tab {
+        case .overview:
+            SwarmOverviewView()
         case .dashboard:
             DashboardView()
         case .mail:

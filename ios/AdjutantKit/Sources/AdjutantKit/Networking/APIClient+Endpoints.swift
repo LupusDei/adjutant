@@ -347,6 +347,20 @@ extension APIClient {
     }
 }
 
+// MARK: - Project Overview Endpoints
+
+extension APIClient {
+    /// Get aggregated project overview (beads, epics, agents) in a single request.
+    ///
+    /// - Parameter projectId: The project ID to fetch overview for.
+    /// - Returns: A ``ProjectOverviewResponse`` with beads, epics, and agent summaries.
+    /// - Throws: ``APIClientError`` if the request fails.
+    public func getProjectOverview(projectId: String) async throws -> ProjectOverviewResponse {
+        let encodedId = projectId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? projectId
+        return try await requestWithEnvelope(.get, path: "/projects/\(encodedId)/overview")
+    }
+}
+
 // MARK: - Convoys Endpoints
 
 extension APIClient {
