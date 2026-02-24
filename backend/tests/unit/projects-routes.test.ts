@@ -9,9 +9,22 @@ vi.mock("../../src/services/projects-service.js", () => ({
   createProject: vi.fn(),
   activateProject: vi.fn(),
   deleteProject: vi.fn(),
+  discoverLocalProjects: vi.fn(),
 }));
 
-import { projectsRouter } from "../../src/routes/projects.js";
+// Mock beads-service (used by overview endpoint)
+vi.mock("../../src/services/beads-service.js", () => ({
+  getProjectOverview: vi.fn(),
+  computeEpicProgress: vi.fn(),
+  getRecentlyCompletedEpics: vi.fn(),
+}));
+
+// Mock agents-service (used by overview endpoint)
+vi.mock("../../src/services/agents-service.js", () => ({
+  getAgents: vi.fn(),
+}));
+
+import { createProjectsRouter } from "../../src/routes/projects.js";
 import {
   listProjects,
   getProject,
@@ -20,11 +33,17 @@ import {
   deleteProject,
 } from "../../src/services/projects-service.js";
 import type { Project, ProjectsServiceResult } from "../../src/services/projects-service.js";
+import type { MessageStore } from "../../src/services/message-store.js";
+
+// Minimal mock MessageStore for the factory function
+const mockStore = {
+  getUnreadCounts: vi.fn().mockReturnValue([]),
+} as unknown as MessageStore;
 
 function createTestApp() {
   const app = express();
   app.use(express.json());
-  app.use("/api/projects", projectsRouter);
+  app.use("/api/projects", createProjectsRouter(mockStore));
   return app;
 }
 
