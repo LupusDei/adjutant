@@ -1267,6 +1267,19 @@ export async function computeEpicProgress(
       (e) => e.status === "open" || e.status === "in_progress"
     );
 
+    // Batch: fetch all beads once to build a status lookup map.
+    // This avoids O(n*m) individual `bd show` calls for child status checks.
+    const allBeadsResult = await execBd<BeadsIssue[]>(
+      ["list", "--all", "--json"],
+      { cwd: projectPath, beadsDir }
+    );
+    const statusMap = new Map<string, string>();
+    if (allBeadsResult.success && allBeadsResult.data) {
+      for (const bead of allBeadsResult.data) {
+        statusMap.set(bead.id, bead.status);
+      }
+    }
+
     const progress: EpicProgress[] = [];
 
     for (const epic of activeEpics) {
@@ -1297,20 +1310,8 @@ export async function computeEpicProgress(
         .filter((d) => d.issue_id === epic.id)
         .map((d) => d.depends_on_id);
 
-      // Count how many children are closed by checking each
-      let closedCount = 0;
-      for (const childId of childIds) {
-        const childResult = await execBd<BeadsIssue[]>(
-          ["show", childId, "--json"],
-          { cwd: projectPath, beadsDir }
-        );
-        if (childResult.success && childResult.data && childResult.data.length > 0) {
-          if (childResult.data[0]!.status === "closed") {
-            closedCount++;
-          }
-        }
-      }
-
+      // Count closed children using the pre-fetched status map
+      const closedCount = childIds.filter((id) => statusMap.get(id) === "closed").length;
       const total = childIds.length;
       const pct = total > 0 ? closedCount / total : 0;
 
