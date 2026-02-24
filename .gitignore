@@ -46,4 +46,4 @@ backend/.audio-cache/
 .beads/interactions.jsonl
 .logs/
 logs/
-CertificateSigningRequest.certSigningRequest
+AuthKey_*.p8
