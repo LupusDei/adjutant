@@ -28,6 +28,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
     @Published var agentsPath = NavigationPath()
     @Published var projectsPath = NavigationPath()
     @Published var beadsPath = NavigationPath()
+    @Published var proposalsPath = NavigationPath()
     @Published var settingsPath = NavigationPath()
 
     /// Current tab's path (required by Coordinator protocol)
@@ -48,6 +49,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
         case .crew: return agentsPath
         case .projects: return projectsPath
         case .beads: return beadsPath
+        case .proposals: return proposalsPath
         case .settings: return settingsPath
         }
     }
@@ -63,6 +65,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
         case .crew: agentsPath = newPath
         case .projects: projectsPath = newPath
         case .beads: beadsPath = newPath
+        case .proposals: proposalsPath = newPath
         case .settings: settingsPath = newPath
         }
     }
@@ -192,6 +195,8 @@ final class AppCoordinator: Coordinator, ObservableObject {
             selectTab(.projects)
         case .beads:
             selectTab(.beads)
+        case .proposals:
+            selectTab(.proposals)
         case .settings:
             selectTab(.settings)
 
@@ -229,6 +234,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
         case .crew: agentsPath.append(route)
         case .projects: projectsPath.append(route)
         case .beads: beadsPath.append(route)
+        case .proposals: proposalsPath.append(route)
         case .settings: settingsPath.append(route)
         }
     }

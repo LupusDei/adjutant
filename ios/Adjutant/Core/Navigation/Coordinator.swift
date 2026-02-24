@@ -47,6 +47,7 @@ enum AppRoute: Hashable {
     case crew
     case projects
     case beads
+    case proposals
     case settings
 
     // Detail routes
@@ -79,6 +80,7 @@ enum AppTab: Int, CaseIterable, Identifiable {
     case crew
     case projects
     case beads
+    case proposals
     case settings
 
     var id: Int { rawValue }
@@ -93,6 +95,7 @@ enum AppTab: Int, CaseIterable, Identifiable {
         case .crew: return "AGENTS"
         case .projects: return "PROJECTS"
         case .beads: return "BEADS"
+        case .proposals: return "PROPOSALS"
         case .settings: return "SETTINGS"
         }
     }
@@ -107,6 +110,7 @@ enum AppTab: Int, CaseIterable, Identifiable {
         case .crew: return "person.3"
         case .projects: return "folder"
         case .beads: return "circle.grid.3x3"
+        case .proposals: return "lightbulb"
         case .settings: return "gearshape"
         }
     }

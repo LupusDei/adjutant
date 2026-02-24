@@ -67,7 +67,7 @@ final class AppState: ObservableObject {
         case .gastown:
             return Set(AppTab.allCases).subtracting([.projects, .overview])
         case .swarm:
-            return [.overview, .chat, .crew, .epics, .projects, .beads, .settings]
+            return [.overview, .chat, .crew, .epics, .projects, .beads, .proposals, .settings]
         }
     }
 
@@ -545,7 +545,7 @@ enum DeploymentMode: String, CaseIterable, Identifiable {
         case .gastown:
             return Set(AppTab.allCases).subtracting([.projects, .overview])
         case .swarm:
-            return [.overview, .chat, .crew, .epics, .projects, .beads, .settings]
+            return [.overview, .chat, .crew, .epics, .projects, .beads, .proposals, .settings]
         }
     }
 

@@ -76,17 +76,18 @@ final class ModeTransitionTests: XCTestCase {
         }
     }
 
-    func testSwarmShowsOverviewChatCrewEpicsProjectsBeadsSettings() {
+    func testSwarmShowsOverviewChatCrewEpicsProjectsBeadsProposalsSettings() {
         appState.updateDeploymentMode(.swarm)
         let tabs = appState.visibleTabs
 
-        XCTAssertEqual(tabs.count, 7)
+        XCTAssertEqual(tabs.count, 8)
         XCTAssertTrue(tabs.contains(.overview))
         XCTAssertTrue(tabs.contains(.chat))
         XCTAssertTrue(tabs.contains(.crew))
         XCTAssertTrue(tabs.contains(.epics))
         XCTAssertTrue(tabs.contains(.projects))
         XCTAssertTrue(tabs.contains(.beads))
+        XCTAssertTrue(tabs.contains(.proposals))
         XCTAssertTrue(tabs.contains(.settings))
         XCTAssertFalse(tabs.contains(.dashboard))
         XCTAssertFalse(tabs.contains(.mail))
@@ -96,20 +97,20 @@ final class ModeTransitionTests: XCTestCase {
 
     func testTabsChangeWhenSwitchingGastownToSwarm() {
         appState.updateDeploymentMode(.gastown)
-        XCTAssertEqual(appState.visibleTabs.count, 7)
+        XCTAssertEqual(appState.visibleTabs.count, 8)
 
         appState.updateDeploymentMode(.swarm)
-        XCTAssertEqual(appState.visibleTabs.count, 7)
+        XCTAssertEqual(appState.visibleTabs.count, 8)
         XCTAssertFalse(appState.visibleTabs.contains(.dashboard))
         XCTAssertTrue(appState.visibleTabs.contains(.overview))
     }
 
     func testTabsChangeWhenSwitchingSwarmToGastown() {
         appState.updateDeploymentMode(.swarm)
-        XCTAssertEqual(appState.visibleTabs.count, 7)
+        XCTAssertEqual(appState.visibleTabs.count, 8)
 
         appState.updateDeploymentMode(.gastown)
-        XCTAssertEqual(appState.visibleTabs.count, 7)
+        XCTAssertEqual(appState.visibleTabs.count, 8)
         XCTAssertTrue(appState.visibleTabs.contains(.dashboard))
         XCTAssertFalse(appState.visibleTabs.contains(.overview))
     }
