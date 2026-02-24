@@ -172,10 +172,10 @@ struct ProposalsView: View {
                 ProposalCard(
                     proposal: proposal,
                     onAccept: proposal.status == .pending ? {
-                        Task { await viewModel.accept(id: proposal.id) }
+                        Task<Void, Never> { await viewModel.accept(id: proposal.id) }
                     } : nil,
                     onDismiss: proposal.status == .pending ? {
-                        Task { await viewModel.dismiss(id: proposal.id) }
+                        Task<Void, Never> { await viewModel.dismiss(id: proposal.id) }
                     } : nil
                 )
                 .listRowBackground(CRTTheme.Background.screen)
