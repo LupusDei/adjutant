@@ -486,8 +486,9 @@ extension NotificationService: UNUserNotificationCenterDelegate {
     }
 
     /// Called when the user interacts with a notification.
-    /// Must dispatch to MainActor explicitly since this is nonisolated (required by protocol)
-    /// and iOS may call it from a background thread (e.g., cold start from notification tap).
+    /// This is nonisolated (required by protocol) and iOS calls it from a background thread
+    /// on cold start. All UI work must happen synchronously on MainActor before returning,
+    /// otherwise SwiftUI crashes with "Call must be made on main thread".
     nonisolated public func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
@@ -497,76 +498,65 @@ extension NotificationService: UNUserNotificationCenterDelegate {
 
         print("[NotificationService] Received action: \(actionId) for notification: \(response.notification.request.identifier)")
 
-        // Dispatch all handling to main actor to avoid "Call must be made on main thread" crashes
+        // All handling runs synchronously on the main actor — no deferred Tasks
         await MainActor.run {
-            Task { @MainActor in
-                switch actionId {
-                case UNNotificationDefaultActionIdentifier:
-                    await self.handleNotificationTap(userInfo: userInfo)
+            switch actionId {
+            case UNNotificationDefaultActionIdentifier, Action.view.rawValue:
+                self.handleNotificationTapOnMain(userInfo: userInfo)
 
-                case UNNotificationDismissActionIdentifier:
-                    break
+            case Action.markRead.rawValue:
+                self.handleMarkReadOnMain(userInfo: userInfo)
 
-                case Action.view.rawValue:
-                    await self.handleNotificationTap(userInfo: userInfo)
-
-                case Action.markRead.rawValue:
-                    await self.handleMarkRead(userInfo: userInfo)
-
-                case Action.snooze.rawValue:
-                    await self.handleSnooze(originalNotification: response.notification)
-
-                case Action.dismiss.rawValue:
-                    // Explicit dismiss, no action needed
-                    break
-
-                default:
-                    print("[NotificationService] Unknown action: \(actionId)")
+            case Action.snooze.rawValue:
+                // Snooze needs async UNNotificationCenter.add — fire and forget
+                let notification = response.notification
+                Task { @MainActor in
+                    await self.handleSnooze(originalNotification: notification)
                 }
+
+            case UNNotificationDismissActionIdentifier, Action.dismiss.rawValue:
+                break
+
+            default:
+                print("[NotificationService] Unknown action: \(actionId)")
             }
         }
     }
 
-    // MARK: - Action Handlers
+    // MARK: - Synchronous Action Handlers (must be called on MainActor)
 
-    private func handleNotificationTap(userInfo: [AnyHashable: Any]) async {
+    /// Handles notification tap by posting navigation notifications.
+    /// Synchronous — safe to call from MainActor.run without deferring work.
+    private func handleNotificationTapOnMain(userInfo: [AnyHashable: Any]) {
         guard let type = userInfo["type"] as? String else { return }
 
         switch type {
         case "mail":
             if let mailId = userInfo["mailId"] as? String {
-                // Post notification for navigation
-                await MainActor.run {
-                    NotificationCenter.default.post(
-                        name: .navigateToMail,
-                        object: nil,
-                        userInfo: ["mailId": mailId]
-                    )
-                }
+                NotificationCenter.default.post(
+                    name: .navigateToMail,
+                    object: nil,
+                    userInfo: ["mailId": mailId]
+                )
             }
 
         case "chat_message":
             if let agentId = userInfo["agentId"] as? String {
-                await MainActor.run {
-                    // Store for cold start deep linking (consumed by AppCoordinator on init)
-                    self.pendingDeepLinkAgentId = agentId
-                    NotificationCenter.default.post(
-                        name: .navigateToChat,
-                        object: nil,
-                        userInfo: ["agentId": agentId]
-                    )
-                }
+                self.pendingDeepLinkAgentId = agentId
+                NotificationCenter.default.post(
+                    name: .navigateToChat,
+                    object: nil,
+                    userInfo: ["agentId": agentId]
+                )
             }
 
         case "task":
             if let taskId = userInfo["taskId"] as? String {
-                await MainActor.run {
-                    NotificationCenter.default.post(
-                        name: .navigateToTask,
-                        object: nil,
-                        userInfo: ["taskId": taskId]
-                    )
-                }
+                NotificationCenter.default.post(
+                    name: .navigateToTask,
+                    object: nil,
+                    userInfo: ["taskId": taskId]
+                )
             }
 
         default:
@@ -574,16 +564,15 @@ extension NotificationService: UNUserNotificationCenterDelegate {
         }
     }
 
-    private func handleMarkRead(userInfo: [AnyHashable: Any]) async {
+    /// Handles mark-read action by posting notification.
+    private func handleMarkReadOnMain(userInfo: [AnyHashable: Any]) {
         guard let mailId = userInfo["mailId"] as? String else { return }
 
-        await MainActor.run {
-            NotificationCenter.default.post(
-                name: .markMailAsRead,
-                object: nil,
-                userInfo: ["mailId": mailId]
-            )
-        }
+        NotificationCenter.default.post(
+            name: .markMailAsRead,
+            object: nil,
+            userInfo: ["mailId": mailId]
+        )
     }
 
     private func handleSnooze(originalNotification: UNNotification) async {
