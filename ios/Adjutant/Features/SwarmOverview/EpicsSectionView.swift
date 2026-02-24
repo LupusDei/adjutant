@@ -10,26 +10,12 @@ struct EpicsSectionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
-            sectionHeader
-
             if !epics.inProgress.isEmpty {
                 inProgressSection
             } else {
                 emptyOrRecentlyCompleted
             }
         }
-    }
-
-    // MARK: - Section Header
-
-    private var sectionHeader: some View {
-        HStack {
-            CRTText("EPICS", style: .subheader, glowIntensity: .medium)
-            Spacer()
-            let totalCount = epics.inProgress.count + epics.recentlyCompleted.count
-            CRTText("\(totalCount)", style: .caption, color: theme.dim)
-        }
-        .padding(.horizontal, CRTTheme.Spacing.md)
     }
 
     // MARK: - In-Progress Section
@@ -41,7 +27,6 @@ struct EpicsSectionView: View {
                 epicRow(epic)
             }
         }
-        .padding(.horizontal, CRTTheme.Spacing.md)
     }
 
     // MARK: - Epic Row
@@ -122,7 +107,6 @@ struct EpicsSectionView: View {
                 }
             }
         }
-        .padding(.horizontal, CRTTheme.Spacing.md)
     }
 
     private var emptyState: some View {
@@ -153,13 +137,13 @@ private struct CRTProgressBar: View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 // Background track
-                RoundedRectangle(cornerRadius: 2)
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
                     .fill(theme.dim.opacity(0.2))
 
                 // Filled portion
-                RoundedRectangle(cornerRadius: 2)
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
                     .fill(theme.primary.opacity(0.8))
-                    .frame(width: max(geometry.size.width * progress, 2))
+                    .frame(width: max(geometry.size.width * progress, CRTTheme.CornerRadius.sm))
             }
         }
         .frame(height: 4)

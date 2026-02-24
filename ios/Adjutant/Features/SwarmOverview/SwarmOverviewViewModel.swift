@@ -35,6 +35,8 @@ final class SwarmOverviewViewModel: ObservableObject {
             await loadActiveProject()
             await refresh()
         }
+        // Guard against duplicate timers if onAppear fires multiple times
+        refreshTimer?.invalidate()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in

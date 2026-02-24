@@ -18,14 +18,6 @@ struct AgentsSectionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
-            // Section header
-            HStack {
-                CRTText("AGENTS", style: .subheader, glowIntensity: .medium)
-                Spacer()
-                CRTText("\(agents.count)", style: .caption, color: theme.dim)
-            }
-            .padding(.horizontal, CRTTheme.Spacing.md)
-
             if agents.isEmpty {
                 emptyState
             } else {
@@ -48,7 +40,7 @@ struct AgentsSectionView: View {
                 .frame(width: 8, height: 8)
 
             // Name + current bead
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxxs) {
                 CRTText(agent.name.uppercased(), style: .body)
                 if let bead = agent.currentBead {
                     CRTText(bead, style: .caption, color: theme.dim)
@@ -85,7 +77,6 @@ struct AgentsSectionView: View {
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
                 .stroke(theme.dim.opacity(0.15), lineWidth: 1)
         )
-        .padding(.horizontal, CRTTheme.Spacing.md)
     }
 
     // MARK: - Empty State

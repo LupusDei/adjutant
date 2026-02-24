@@ -10,9 +10,7 @@ struct SwarmOverviewView: View {
     var body: some View {
         VStack(spacing: 0) {
             if viewModel.isLoading && viewModel.overview == nil {
-                ProgressView()
-                    .tint(theme.primary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                loadingSkeleton
             } else if let error = viewModel.errorMessage, viewModel.overview == nil {
                 errorView(error)
             } else if let overview = viewModel.overview {
@@ -45,6 +43,11 @@ struct SwarmOverviewView: View {
     private func overviewContent(_ overview: ProjectOverviewResponse) -> some View {
         ScrollView {
             VStack(spacing: CRTTheme.Spacing.lg) {
+                // Stale data banner
+                if viewModel.errorMessage != nil {
+                    staleDataBanner
+                }
+
                 startAgentSection
                 agentsSection(overview.agents)
                 beadsSection(overview.beads)
@@ -99,17 +102,70 @@ struct SwarmOverviewView: View {
 
     // MARK: - States
 
+    private var loadingSkeleton: some View {
+        VStack(spacing: CRTTheme.Spacing.lg) {
+            // Skeleton for Start Agent button
+            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
+                .fill(theme.dim.opacity(0.1))
+                .frame(height: 50)
+                .padding(.horizontal, CRTTheme.Spacing.md)
+
+            // Skeleton for sections
+            ForEach(0..<3, id: \.self) { _ in
+                VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
+                    RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                        .fill(theme.dim.opacity(0.1))
+                        .frame(width: 120, height: 16)
+                    ForEach(0..<2, id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                            .fill(theme.dim.opacity(0.05))
+                            .frame(height: 44)
+                    }
+                }
+                .padding(.horizontal, CRTTheme.Spacing.md)
+            }
+        }
+        .padding(.vertical, CRTTheme.Spacing.lg)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     @ViewBuilder
     private func errorView(_ error: String) -> some View {
         VStack(spacing: CRTTheme.Spacing.md) {
-            CRTText("ERROR", style: .subheader, color: CRTTheme.State.error)
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 48))
+                .foregroundColor(CRTTheme.State.warning)
+
+            CRTText("CONNECTION ERROR", style: .subheader, color: CRTTheme.State.warning)
             CRTText(error, style: .caption, color: theme.dim)
+                .multilineTextAlignment(.center)
+
             CRTButton("RETRY", variant: .secondary, size: .medium) {
                 viewModel.clearError()
                 Task { await viewModel.refresh() }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var staleDataBanner: some View {
+        HStack(spacing: CRTTheme.Spacing.xs) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(CRTTheme.State.warning)
+                .font(.system(size: 12))
+            CRTText("USING CACHED DATA", style: .caption, color: CRTTheme.State.warning)
+            Spacer()
+            Button {
+                viewModel.clearError()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10))
+                    .foregroundColor(theme.dim)
+            }
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
+        .padding(.vertical, CRTTheme.Spacing.xs)
+        .background(CRTTheme.State.warning.opacity(0.1))
     }
 
     private var emptyView: some View {
