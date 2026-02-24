@@ -185,6 +185,10 @@ struct ChatView: View {
                     }
                     CRTText("DIRECT CHANNEL", style: .caption, glowIntensity: .subtle, color: theme.dim)
                 }
+                .padding(.vertical, CRTTheme.Spacing.xs)
+                .padding(.trailing, CRTTheme.Spacing.md)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 

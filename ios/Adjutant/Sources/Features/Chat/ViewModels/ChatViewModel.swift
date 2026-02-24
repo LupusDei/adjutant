@@ -20,8 +20,14 @@ final class ChatViewModel: BaseViewModel {
     /// Current input text
     @Published var inputText: String = ""
 
-    /// Currently selected agent ID for scoped conversation
-    @Published private(set) var selectedRecipient: String = AppState.shared.deploymentMode == .gastown ? "mayor/" : ""
+    /// Currently selected agent ID for scoped conversation.
+    /// Restored from UserDefaults on launch; persisted whenever it changes.
+    @Published private(set) var selectedRecipient: String = {
+        if let persisted = UserDefaults.standard.string(forKey: "lastChatRecipient"), !persisted.isEmpty {
+            return persisted
+        }
+        return AppState.shared.deploymentMode == .gastown ? "mayor/" : ""
+    }()
 
     /// All available recipients (agents)
     @Published private(set) var availableRecipients: [CrewMember] = []
@@ -349,9 +355,16 @@ final class ChatViewModel: BaseViewModel {
             let agents = try await self.apiClient.getAgents()
             self.availableRecipients = agents
 
-            // In non-Gas Town modes, auto-select the first agent if no recipient is set
-            if self.selectedRecipient.isEmpty, let first = agents.first {
-                self.selectedRecipient = first.id
+            // Validate the current recipient exists in the loaded agents list.
+            // In Gastown mode, "mayor/" is always valid even if not in the agents array.
+            let recipientIsValid = self.selectedRecipient == "mayor/" ||
+                agents.contains(where: { $0.id == self.selectedRecipient })
+
+            if self.selectedRecipient.isEmpty || !recipientIsValid {
+                if let first = agents.first {
+                    self.selectedRecipient = first.id
+                    UserDefaults.standard.set(first.id, forKey: "lastChatRecipient")
+                }
             }
         }
         await loadUnreadCounts()
@@ -369,10 +382,11 @@ final class ChatViewModel: BaseViewModel {
         }
     }
 
-    /// Sets the current recipient and refreshes messages
+    /// Sets the current recipient, persists the choice, and refreshes messages
     func setRecipient(_ recipient: String) async {
         guard recipient != selectedRecipient else { return }
         selectedRecipient = recipient
+        UserDefaults.standard.set(recipient, forKey: "lastChatRecipient")
         messages = []
         pendingLocalMessages = [:]
         confirmedClientIds = []
