@@ -1300,7 +1300,7 @@ export async function computeEpicProgress(
       }
 
       const total = childIds.length;
-      const pct = total > 0 ? Math.round((closedCount / total) * 100) : 0;
+      const pct = total > 0 ? closedCount / total : 0;
 
       progress.push({
         id: epic.id,
@@ -1365,7 +1365,7 @@ export async function getRecentlyCompletedEpics(
         status: e.status,
         totalChildren: 0,
         closedChildren: 0,
-        completionPercent: 100,
+        completionPercent: 1.0,
         assignee: e.assignee ?? null,
       }));
 
