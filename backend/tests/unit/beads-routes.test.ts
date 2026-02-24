@@ -233,7 +233,7 @@ describe("beads routes", () => {
       expect(response.body.data).toEqual([]);
     });
 
-    it("should return 200 with empty array on listBeads error when rig specified", async () => {
+    it("should return 500 with error on listBeads failure when rig specified", async () => {
       vi.mocked(listBeads).mockResolvedValue({
         success: false,
         error: { code: "BD_ERROR", message: "Rig database not found" },
@@ -241,9 +241,9 @@ describe("beads routes", () => {
 
       const response = await request(app).get("/api/beads?rig=gastown_boy");
 
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual([]);
+      expect(response.status).toBe(500);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error.message).toBe("Rig database not found");
     });
 
     it("should return 200 with empty array on listBeads error (default town)", async () => {

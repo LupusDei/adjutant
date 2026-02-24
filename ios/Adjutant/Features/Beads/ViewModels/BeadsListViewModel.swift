@@ -144,10 +144,22 @@ final class BeadsListViewModel: BaseViewModel {
         dataSync.$beads
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newBeads in
-                guard let self = self, !newBeads.isEmpty else { return }
-                // Server already filtered by rig — use results directly
+                guard let self = self else { return }
+                // Server already filtered by rig — use results directly.
+                // Empty results are valid (project may have no beads or fetch failed).
                 self.beads = newBeads
                 self.applyFilter()
+            }
+            .store(in: &cancellables)
+
+        // Surface beads fetch errors to the UI
+        dataSync.$beadsError
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] error in
+                guard let self = self else { return }
+                if let error = error {
+                    self.errorMessage = "Failed to load beads: \(error)"
+                }
             }
             .store(in: &cancellables)
     }
@@ -158,11 +170,15 @@ final class BeadsListViewModel: BaseViewModel {
         AppState.shared.$selectedRig
             .dropFirst() // Skip initial value to avoid double-fetch on init
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] newRig in
+            .sink { [weak self] _ in
                 guard let self = self else { return }
-                // Rig changed — fetch beads for the new rig from the server
+                // Clear stale beads immediately so loading state shows
+                self.beads = []
+                self.filteredBeads = []
+                self.errorMessage = nil
+                // Fetch beads for the new rig via loadBeads (uses performAsync for error handling)
                 Task {
-                    await self.dataSync.refreshBeads(rig: newRig)
+                    await self.loadBeads()
                 }
             }
             .store(in: &cancellables)

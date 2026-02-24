@@ -31,6 +31,9 @@ public final class DataSyncService: ObservableObject {
     /// Published beads (all beads)
     @Published public private(set) var beads: [BeadInfo] = []
 
+    /// Error message from last beads fetch, nil on success
+    @Published public private(set) var beadsError: String?
+
     /// Last update timestamps
     @Published public private(set) var lastMailUpdate: Date?
     @Published public private(set) var lastCrewUpdate: Date?
@@ -500,6 +503,7 @@ public final class DataSyncService: ObservableObject {
                        ($1.updatedDate ?? $1.createdDate ?? Date.distantPast)
             }
             beads = sorted
+            beadsError = nil
             lastBeadsUpdate = Date()
 
             // Update cache
@@ -507,6 +511,9 @@ public final class DataSyncService: ObservableObject {
 
         } catch {
             print("[DataSyncService] Beads fetch failed: \(error.localizedDescription)")
+            // Clear stale data and surface error so UI doesn't show previous project's beads
+            beads = []
+            beadsError = error.localizedDescription
         }
     }
 

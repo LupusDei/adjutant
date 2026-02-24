@@ -107,7 +107,14 @@ beadsRouter.get("/", async (req, res) => {
   });
 
   if (!result.success) {
-    // Graceful degradation: return empty when bd unavailable
+    // For explicit rig/project selection, surface the error so the client
+    // can show a meaningful message (e.g., corrupted beads database)
+    if (rig !== "town") {
+      return res.status(500).json(
+        internalError(result.error?.message ?? "Failed to load beads for project")
+      );
+    }
+    // Default town view: graceful degradation — return empty
     return res.json(success([]));
   }
 
