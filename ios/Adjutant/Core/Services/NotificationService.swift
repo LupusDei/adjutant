@@ -453,10 +453,14 @@ public final class NotificationService: NSObject, ObservableObject {
 extension NotificationService: UNUserNotificationCenterDelegate {
     /// Called when a notification is about to be presented while the app is in foreground.
     /// Suppresses banner and sound when the user is already viewing the relevant agent's chat.
+    ///
+    /// Uses the completion handler version (not async) to guarantee correct main thread
+    /// dispatch via GCD, avoiding Swift concurrency threading issues.
     nonisolated public func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification
-    ) async -> UNNotificationPresentationOptions {
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
         let userInfo = notification.request.content.userInfo
         let category = notification.request.content.categoryIdentifier
         let type = userInfo["type"] as? String
@@ -467,16 +471,15 @@ extension NotificationService: UNUserNotificationCenterDelegate {
             || category == Category.agentMessage.rawValue
 
         if isChatNotification, let agentId = userInfo["agentId"] as? String {
-            let shouldSuppress = await MainActor.run {
-                self.shouldSuppressBanner(forAgentId: agentId)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    let shouldSuppress = self.shouldSuppressBanner(forAgentId: agentId)
+                    completionHandler(shouldSuppress ? [.badge] : [.banner, .sound, .badge])
+                }
             }
-
-            if shouldSuppress {
-                return [.badge]
-            }
+        } else {
+            completionHandler([.banner, .sound, .badge])
         }
-
-        return [.banner, .sound, .badge]
     }
 
     /// Determines if a chat notification banner should be suppressed for the given agent.
@@ -485,49 +488,52 @@ extension NotificationService: UNUserNotificationCenterDelegate {
         return isViewingChat && activeViewingAgentId == agentId
     }
 
-    /// Called when the user interacts with a notification.
-    /// This is nonisolated (required by protocol) and iOS calls it from a background thread
-    /// on cold start. All UI work must happen synchronously on MainActor before returning,
-    /// otherwise SwiftUI crashes with "Call must be made on main thread".
+    /// Called when the user interacts with a notification (tap, action button, etc.).
+    ///
+    /// Uses the completion handler version (not async) to guarantee correct main thread
+    /// dispatch via GCD. The async version runs on Swift's cooperative thread pool which
+    /// causes "Call must be made on main thread" crashes on cold start, even with
+    /// MainActor.run, because UIKit/SwiftUI check for the actual main dispatch queue.
     nonisolated public func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse
-    ) async {
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
         let userInfo = response.notification.request.content.userInfo
         let actionId = response.actionIdentifier
+        let notification = response.notification
 
         print("[NotificationService] Received action: \(actionId) for notification: \(response.notification.request.identifier)")
 
-        // All handling runs synchronously on the main actor — no deferred Tasks
-        await MainActor.run {
-            switch actionId {
-            case UNNotificationDefaultActionIdentifier, Action.view.rawValue:
-                self.handleNotificationTapOnMain(userInfo: userInfo)
+        // Dispatch to actual main queue — GCD guarantees this is the real main thread
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                switch actionId {
+                case UNNotificationDefaultActionIdentifier, Action.view.rawValue:
+                    self.handleNotificationTap(userInfo: userInfo)
 
-            case Action.markRead.rawValue:
-                self.handleMarkReadOnMain(userInfo: userInfo)
+                case Action.markRead.rawValue:
+                    self.handleMarkRead(userInfo: userInfo)
 
-            case Action.snooze.rawValue:
-                // Snooze needs async UNNotificationCenter.add — fire and forget
-                let notification = response.notification
-                Task { @MainActor in
-                    await self.handleSnooze(originalNotification: notification)
+                case Action.snooze.rawValue:
+                    self.handleSnoozeSync(originalNotification: notification)
+
+                case UNNotificationDismissActionIdentifier, Action.dismiss.rawValue:
+                    break
+
+                default:
+                    print("[NotificationService] Unknown action: \(actionId)")
                 }
-
-            case UNNotificationDismissActionIdentifier, Action.dismiss.rawValue:
-                break
-
-            default:
-                print("[NotificationService] Unknown action: \(actionId)")
             }
+
+            completionHandler()
         }
     }
 
-    // MARK: - Synchronous Action Handlers (must be called on MainActor)
+    // MARK: - Action Handlers
 
     /// Handles notification tap by posting navigation notifications.
-    /// Synchronous — safe to call from MainActor.run without deferring work.
-    private func handleNotificationTapOnMain(userInfo: [AnyHashable: Any]) {
+    private func handleNotificationTap(userInfo: [AnyHashable: Any]) {
         guard let type = userInfo["type"] as? String else { return }
 
         switch type {
@@ -565,7 +571,7 @@ extension NotificationService: UNUserNotificationCenterDelegate {
     }
 
     /// Handles mark-read action by posting notification.
-    private func handleMarkReadOnMain(userInfo: [AnyHashable: Any]) {
+    private func handleMarkRead(userInfo: [AnyHashable: Any]) {
         guard let mailId = userInfo["mailId"] as? String else { return }
 
         NotificationCenter.default.post(
@@ -575,8 +581,9 @@ extension NotificationService: UNUserNotificationCenterDelegate {
         )
     }
 
-    private func handleSnooze(originalNotification: UNNotification) async {
-        // Re-schedule the notification for 15 minutes later
+    /// Handles snooze by re-scheduling the notification for 15 minutes later.
+    /// Uses the callback-based API to avoid async context.
+    private func handleSnoozeSync(originalNotification: UNNotification) {
         let content = originalNotification.request.content.mutableCopy() as! UNMutableNotificationContent
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 15 * 60, repeats: false)
         let request = UNNotificationRequest(
@@ -585,10 +592,10 @@ extension NotificationService: UNUserNotificationCenterDelegate {
             trigger: trigger
         )
 
-        do {
-            try await notificationCenter.add(request)
-        } catch {
-            print("[NotificationService] Failed to snooze notification: \(error.localizedDescription)")
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("[NotificationService] Failed to snooze notification: \(error.localizedDescription)")
+            }
         }
     }
 }
