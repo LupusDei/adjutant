@@ -69,6 +69,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
 
     /// Registers the device token with the backend for push notifications.
+    @MainActor
     private func registerDeviceTokenWithBackend(_ token: String) async {
         do {
             let request = RegisterDeviceTokenRequest(
