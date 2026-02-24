@@ -144,6 +144,8 @@ private struct TabContent: View {
             AgentDetailView(member: member)
         case .beadDetail(let id):
             BeadDetailView(beadId: id)
+        case .proposalDetail(let id):
+            ProposalDetailView(proposalId: id)
         case .projectDetail(let rig):
             ProjectDetailView(rig: rig)
         case .swarmProjectDetail(let project):

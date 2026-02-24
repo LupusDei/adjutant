@@ -6,6 +6,7 @@ import AdjutantKit
 @MainActor
 struct ProposalsView: View {
     @Environment(\.crtTheme) private var theme
+    @EnvironmentObject private var coordinator: AppCoordinator
     @StateObject private var viewModel = ProposalsViewModel()
 
     var body: some View {
@@ -169,15 +170,20 @@ struct ProposalsView: View {
     private var proposalList: some View {
         List {
             ForEach(viewModel.proposals) { proposal in
-                ProposalCard(
-                    proposal: proposal,
-                    onAccept: proposal.status == .pending ? {
-                        Task<Void, Never> { await viewModel.accept(id: proposal.id) }
-                    } : nil,
-                    onDismiss: proposal.status == .pending ? {
-                        Task<Void, Never> { await viewModel.dismiss(id: proposal.id) }
-                    } : nil
-                )
+                Button {
+                    coordinator.navigate(to: .proposalDetail(id: proposal.id))
+                } label: {
+                    ProposalCard(
+                        proposal: proposal,
+                        onAccept: proposal.status == .pending ? {
+                            Task<Void, Never> { await viewModel.accept(id: proposal.id) }
+                        } : nil,
+                        onDismiss: proposal.status == .pending ? {
+                            Task<Void, Never> { await viewModel.dismiss(id: proposal.id) }
+                        } : nil
+                    )
+                }
+                .buttonStyle(.plain)
                 .listRowBackground(CRTTheme.Background.screen)
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(

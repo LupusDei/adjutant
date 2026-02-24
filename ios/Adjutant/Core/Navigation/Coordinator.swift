@@ -56,6 +56,7 @@ enum AppRoute: Hashable {
     case epicDetail(id: String)
     case agentDetail(member: CrewMember)
     case beadDetail(id: String)
+    case proposalDetail(id: String)
     case polecatTerminal(rig: String, polecat: String)
 
     // Project routes
