@@ -3,8 +3,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 /** Detect iOS (iPhone/iPad) including iPadOS which reports as Mac */
 function isIOS(): boolean {
   if (typeof navigator === 'undefined') return false;
-  return /iPhone|iPad|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const ua = navigator.userAgent;
+  return ua.includes('iPhone') || ua.includes('iPad') || ua.includes('iPod') ||
+    (ua.includes('Macintosh') && navigator.maxTouchPoints > 1);
 }
 
 /**
