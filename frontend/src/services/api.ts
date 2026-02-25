@@ -12,6 +12,7 @@ import type {
   PowerState,
   BeadInfo,
   BeadDetail,
+  BeadsGraphResponse,
   ChatMessage,
   ChatThread,
   UnreadCount,
@@ -351,6 +352,14 @@ export const api = {
      */
     async sources(): Promise<{ sources: { name: string; path: string; hasBeads: boolean }[]; mode: string }> {
       return apiFetch('/beads/sources');
+    },
+
+    /**
+     * Get beads dependency graph for visualization.
+     * Returns nodes and edges for React Flow rendering.
+     */
+    async graph(): Promise<BeadsGraphResponse> {
+      return apiFetch('/beads/graph');
     },
   },
 
