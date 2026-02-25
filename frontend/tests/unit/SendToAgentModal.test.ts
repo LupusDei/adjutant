@@ -9,6 +9,7 @@ const mockProposal: Proposal = {
   author: "agent-1",
   title: "Improve UX",
   description: "Add onboarding flow for new users",
+  project: "adjutant",
   type: "product",
   status: "accepted",
   createdAt: "2026-02-24T00:00:00Z",
@@ -34,11 +35,12 @@ const mockAgents: CrewMember[] = [
   } as CrewMember,
 ];
 
-const { mockAgentList, mockMessagesSend, mockSessionsCreate, mockSessionsSendInput } = vi.hoisted(() => ({
+const { mockAgentList, mockMessagesSend, mockSessionsCreate, mockSessionsSendInput, mockProjectsList } = vi.hoisted(() => ({
   mockAgentList: vi.fn(),
   mockMessagesSend: vi.fn(),
   mockSessionsCreate: vi.fn(),
   mockSessionsSendInput: vi.fn(),
+  mockProjectsList: vi.fn(),
 }));
 
 vi.mock("../../src/services/api", () => ({
@@ -49,6 +51,7 @@ vi.mock("../../src/services/api", () => ({
       create: mockSessionsCreate,
       sendInput: mockSessionsSendInput,
     },
+    projects: { list: mockProjectsList },
   },
   ApiError: class ApiError extends Error {},
 }));
@@ -60,6 +63,7 @@ describe("SendToAgentModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAgentList.mockResolvedValue(mockAgents);
+    mockProjectsList.mockResolvedValue([{ id: "proj-1", name: "adjutant", path: "/Users/Reason/code/ai/adjutant", mode: "swarm", active: true }]);
     mockMessagesSend.mockResolvedValue({ messageId: "m1", timestamp: "2026-02-24T00:00:00Z" });
     mockSessionsCreate.mockResolvedValue({
       id: "s1",

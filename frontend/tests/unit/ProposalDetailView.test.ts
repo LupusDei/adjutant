@@ -9,6 +9,7 @@ const mockProposal: Proposal = {
   author: "agent-1",
   title: "Improve UX",
   description: "Add onboarding flow for new users",
+  project: "adjutant",
   type: "product",
   status: "pending",
   createdAt: "2026-02-24T00:00:00Z",
