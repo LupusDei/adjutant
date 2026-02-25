@@ -10,7 +10,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { listBeads, listAllBeads, updateBead, getBead, listBeadSources, listRecentlyClosed, getBeadsGraph, type BeadStatus } from "../services/beads-service.js";
+import { listBeads, listAllBeads, updateBead, getBead, getEpicChildren, listEpicsWithProgress, listBeadSources, listRecentlyClosed, getBeadsGraph, type BeadStatus } from "../services/beads-service.js";
 import { BeadsGraphResponseSchema } from "../types/beads.js";
 import { resolveRigPath } from "../services/workspace/index.js";
 import { listProjects } from "../services/projects-service.js";
@@ -219,6 +219,65 @@ beadsRouter.get("/graph", async (req, res) => {
   }
 
   return res.json(success(validated.data));
+});
+
+/**
+ * GET /api/beads/epics-with-progress
+ * Returns all epics with server-computed progress using the dependency graph.
+ * Eliminates the need for frontend to fetch all beads for progress calculation.
+ *
+ * IMPORTANT: This route MUST be registered before /:id to prevent
+ * Express from matching "epics-with-progress" as a bead ID parameter.
+ *
+ * Query params:
+ * - status: Filter epics by status (default: "all")
+ *
+ * Response:
+ * - { success: true, data: EpicWithChildren[] }
+ */
+beadsRouter.get("/epics-with-progress", async (req, res) => {
+  const statusParam = req.query["status"] as string | undefined;
+
+  const result = await listEpicsWithProgress({
+    status: statusParam ?? "all",
+  });
+
+  if (!result.success) {
+    return res.status(500).json(
+      internalError(result.error?.message ?? "Failed to list epics with progress")
+    );
+  }
+
+  return res.json(success(result.data));
+});
+
+/**
+ * GET /api/beads/:id/children
+ * Returns all children of a bead using the dependency graph (`bd children`).
+ * Use this for epic detail pages instead of fetching all beads.
+ *
+ * Path params:
+ * - id: Full bead ID (e.g., "adj-020")
+ *
+ * Response:
+ * - { success: true, data: BeadInfo[] }
+ */
+beadsRouter.get("/:id/children", async (req, res) => {
+  const beadId = req.params["id"];
+
+  if (!beadId) {
+    return res.status(400).json(badRequest("Bead ID is required"));
+  }
+
+  const result = await getEpicChildren(beadId);
+
+  if (!result.success) {
+    return res.status(500).json(
+      internalError(result.error?.message ?? "Failed to get children")
+    );
+  }
+
+  return res.json(success(result.data));
 });
 
 /**

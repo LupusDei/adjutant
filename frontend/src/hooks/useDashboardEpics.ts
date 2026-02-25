@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../services/api';
-import type { BeadInfo } from '../types';
+import type { EpicWithProgressResponse } from '../types';
 import type { EpicWithProgress } from '../types/epics';
 
 const DASHBOARD_EPIC_LIMIT = 5;
@@ -19,25 +19,25 @@ interface DashboardEpics {
 }
 
 /**
- * Build EpicWithProgress from epic bead alone (no subtask fetch).
- * Uses the epic's own closed status as the progress signal.
- * This is a lightweight approximation that avoids fetching all beads.
+ * Transform server response to frontend EpicWithProgress type.
  */
-function buildLightweightEpicProgress(epic: BeadInfo): EpicWithProgress {
-  const isComplete = epic.status === 'closed';
+function toEpicWithProgress(item: EpicWithProgressResponse): EpicWithProgress {
+  const isComplete = item.epic.status === 'closed' ||
+    (item.totalCount > 0 && item.closedCount === item.totalCount);
   return {
-    epic,
-    completedCount: isComplete ? 1 : 0,
-    totalCount: 1,
-    progress: isComplete ? 1 : 0,
-    progressText: isComplete ? 'Done' : 'Active',
+    epic: item.epic,
+    completedCount: item.closedCount,
+    totalCount: item.totalCount,
+    progress: item.progress,
+    progressText: item.totalCount > 0 ? `${item.closedCount}/${item.totalCount}` : '0/0',
     isComplete,
   };
 }
 
 /**
  * Custom hook to fetch epic data for the dashboard.
- * Uses a single one-shot fetch of epics only (no polling, no all-beads fetch).
+ * Uses the server-side epics-with-progress endpoint (dependency graph based).
+ * Single one-shot fetch — no polling on the dashboard overview.
  * Returns in-progress and completed epics, limited to 5 per category.
  */
 export function useDashboardEpics(): DashboardEpics {
@@ -52,31 +52,25 @@ export function useDashboardEpics(): DashboardEpics {
       setLoading(true);
       setError(null);
       try {
-        // Fetch only epics (type=epic, status=all) - no need to fetch all beads
-        const epics = await api.epics.list();
+        const data = await api.epics.listWithProgress({ status: 'all' });
 
-        // Sort by updatedAt descending
-        const sorted = [...epics].sort((a, b) => {
-          const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-          const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-          return bTime - aTime;
-        });
-
-        const epicsWithProgress = sorted.map(buildLightweightEpicProgress);
+        const epicsWithProgress = data.map(toEpicWithProgress);
 
         const openEpics = epicsWithProgress.filter((e) => !e.isComplete);
         const closedEpics = epicsWithProgress.filter((e) => e.isComplete);
 
-        // For in-progress, show non-closed epics (they have active work)
+        // Sort in-progress by progress descending (closest to done first)
+        const sortedInProgress = [...openEpics].sort((a, b) => b.progress - a.progress);
+
         setInProgress({
-          items: openEpics.slice(0, DASHBOARD_EPIC_LIMIT),
+          items: sortedInProgress.slice(0, DASHBOARD_EPIC_LIMIT),
           totalCount: openEpics.length,
         });
         setCompleted({
           items: closedEpics.slice(0, DASHBOARD_EPIC_LIMIT),
           totalCount: closedEpics.length,
         });
-        setTotalCount(epics.length);
+        setTotalCount(data.length);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch epics');
       } finally {

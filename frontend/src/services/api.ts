@@ -13,6 +13,7 @@ import type {
   BeadInfo,
   BeadDetail,
   BeadsGraphResponse,
+  EpicWithProgressResponse,
   ChatMessage,
   ChatThread,
   UnreadCount,
@@ -387,7 +388,26 @@ export const api = {
     },
 
     /**
-     * Get subtasks for an epic.
+     * Get children of an epic using the dependency graph.
+     * Uses `bd children` on the backend - no need to fetch all beads.
+     */
+    async getChildren(epicId: string): Promise<BeadInfo[]> {
+      return apiFetch(`/beads/${encodeURIComponent(epicId)}/children`);
+    },
+
+    /**
+     * List epics with server-computed progress using the dependency graph.
+     * Returns epics with totalCount, closedCount, and progress fields.
+     */
+    async listWithProgress(params?: { status?: string }): Promise<EpicWithProgressResponse[]> {
+      const query = new URLSearchParams();
+      if (params?.status) query.set('status', params.status);
+      const qs = query.toString();
+      return apiFetch(`/beads/epics-with-progress${qs ? `?${qs}` : ''}`);
+    },
+
+    /**
+     * @deprecated Use getChildren() instead. This fetches all beads client-side.
      */
     async getSubtasks(epicId: string): Promise<BeadInfo[]> {
       const all = await apiFetch<BeadInfo[]>('/beads?status=all');

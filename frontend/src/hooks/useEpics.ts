@@ -1,7 +1,7 @@
 import { useMemo, useCallback, useEffect } from 'react';
 import { usePolling } from './usePolling';
 import { api } from '../services/api';
-import type { BeadInfo } from '../types';
+import type { BeadInfo, EpicWithProgressResponse } from '../types';
 import type { EpicWithProgress } from '../types/epics';
 
 export interface UseEpicsOptions {
@@ -20,80 +20,33 @@ export interface UseEpicsResult {
 }
 
 /**
- * Fetch epics and all beads, then compute progress for each epic.
- * Note: allBeads must use rig='all' to query ALL databases,
- * otherwise backend defaults to 'town' and misses subtasks in rig databases.
+ * Transform server response to frontend EpicWithProgress type.
  */
-async function fetchEpicsData(rig?: string): Promise<{
-  epics: BeadInfo[];
-  allBeads: BeadInfo[];
-}> {
-  const [epics, allBeads] = await Promise.all([
-    api.epics.list(rig ? { rig } : undefined),
-    // Must use rig='all' to get beads from all databases (town + rigs)
-    // Otherwise subtasks in rig databases (e.g., adj-*) won't be found
-    api.beads.list({ status: 'all', rig: 'all' }),
-  ]);
-  return { epics, allBeads };
-}
-
-/**
- * Find subtasks for an epic using hierarchical ID pattern.
- * Children are identified by: parent.X where X starts with a number.
- * Example: epic "adj-xyz123" has children "adj-xyz123.1", "adj-xyz123.2", etc.
- * Also checks labels as fallback for backwards compatibility.
- */
-function findSubtasks(epicId: string, allBeads: BeadInfo[]): BeadInfo[] {
-  const epicIdPrefix = epicId + '.';
-
-  return allBeads.filter((bead) => {
-    if (bead.id === epicId) return false;
-
-    // Primary: Check hierarchical ID pattern (matching iOS)
-    if (bead.id.startsWith(epicIdPrefix)) {
-      const suffix = bead.id.slice(epicIdPrefix.length);
-      // Direct children have a numeric prefix (e.g., "1", "1.2", "12")
-      if (suffix.length > 0 && /^\d/.test(suffix)) {
-        return true;
-      }
-    }
-
-    // Fallback: Check labels for parent:{epicId} pattern
-    if (bead.labels.some((label) => label === `parent:${epicId}` || label.includes(epicId))) {
-      return true;
-    }
-
-    return false;
-  });
-}
-
-/**
- * Build EpicWithProgress from epic and its subtasks.
- */
-function buildEpicWithProgress(epic: BeadInfo, subtasks: BeadInfo[]): EpicWithProgress {
-  const totalCount = subtasks.length;
-  const completedCount = subtasks.filter((s) => s.status === 'closed').length;
-  const progress = totalCount > 0 ? completedCount / totalCount : 0;
-  const isComplete = totalCount > 0 && completedCount === totalCount;
-
+function toEpicWithProgress(item: EpicWithProgressResponse): EpicWithProgress {
+  const isComplete = item.epic.status === 'closed' ||
+    (item.totalCount > 0 && item.closedCount === item.totalCount);
   return {
-    epic,
-    completedCount,
-    totalCount,
-    progress,
-    progressText: `${completedCount}/${totalCount}`,
+    epic: item.epic,
+    completedCount: item.closedCount,
+    totalCount: item.totalCount,
+    progress: item.progress,
+    progressText: item.totalCount > 0 ? `${item.closedCount}/${item.totalCount}` : '0/0',
     isComplete,
   };
 }
 
 /**
  * Hook for fetching and managing epics with progress calculation.
+ * Uses the server-side epics-with-progress endpoint (dependency graph based).
  * Polls every 30 seconds (matching iOS).
  */
 export function useEpics(options: UseEpicsOptions = {}): UseEpicsResult {
-  const { rig, enabled = true } = options;
+  const { rig: _rig, enabled = true } = options;
 
-  const fetchFn = useCallback(() => fetchEpicsData(rig), [rig]);
+  const fetchFn = useCallback(
+    () => api.epics.listWithProgress({ status: 'all' }),
+    []
+  );
 
   const { data, loading, error, refresh } = usePolling(fetchFn, {
     interval: 30000,
@@ -105,27 +58,14 @@ export function useEpics(options: UseEpicsOptions = {}): UseEpicsResult {
       return { openEpics: [], completedEpics: [] };
     }
 
-    const { epics, allBeads } = data;
-
-    // Build EpicWithProgress for each epic
-    const epicsWithProgress = epics.map((epic) => {
-      const subtasks = findSubtasks(epic.id, allBeads);
-      return buildEpicWithProgress(epic, subtasks);
-    });
-
-    // Sort by updatedAt descending
-    const sorted = [...epicsWithProgress].sort((a, b) => {
-      const aTime = a.epic.updatedAt ? new Date(a.epic.updatedAt).getTime() : 0;
-      const bTime = b.epic.updatedAt ? new Date(b.epic.updatedAt).getTime() : 0;
-      return bTime - aTime;
-    });
+    const epicsWithProgress = data.map(toEpicWithProgress);
 
     // Split into open and completed
     const open: EpicWithProgress[] = [];
     const completed: EpicWithProgress[] = [];
 
-    for (const ewp of sorted) {
-      if (ewp.epic.status === 'closed' || ewp.isComplete) {
+    for (const ewp of epicsWithProgress) {
+      if (ewp.isComplete) {
         completed.push(ewp);
       } else {
         open.push(ewp);
@@ -145,7 +85,7 @@ export function useEpics(options: UseEpicsOptions = {}): UseEpicsResult {
 }
 
 // =============================================================================
-// useEpicDetail - Single Epic with Subtasks
+// useEpicDetail - Single Epic with Subtasks (using dependency graph)
 // =============================================================================
 
 export interface UseEpicDetailOptions {
@@ -177,23 +117,23 @@ export interface UseEpicDetailResult {
 }
 
 /**
- * Fetch a single epic and all beads to find its subtasks.
- * Note: allBeads must use rig='all' to query ALL databases.
+ * Fetch a single epic and its children using the dependency graph endpoint.
+ * No longer fetches all beads — uses GET /api/beads/:id/children.
  */
 async function fetchEpicDetailData(epicId: string): Promise<{
   epic: BeadInfo | null;
-  allBeads: BeadInfo[];
+  children: BeadInfo[];
 }> {
-  const [epicResult, allBeads] = await Promise.all([
+  const [epicResult, children] = await Promise.all([
     api.epics.get(epicId),
-    // Must use rig='all' to get beads from all databases (town + rigs)
-    api.beads.list({ status: 'all', rig: 'all' }),
+    api.epics.getChildren(epicId),
   ]);
-  return { epic: epicResult, allBeads };
+  return { epic: epicResult, children };
 }
 
 /**
  * Hook for fetching a single epic and its subtasks.
+ * Uses the dependency graph via GET /api/beads/:id/children.
  * Polls every 30 seconds (matching iOS).
  */
 export function useEpicDetail(
@@ -203,7 +143,7 @@ export function useEpicDetail(
   const { enabled = true } = options;
 
   const fetchFn = useCallback(
-    () => (epicId ? fetchEpicDetailData(epicId) : Promise.resolve({ epic: null, allBeads: [] })),
+    () => (epicId ? fetchEpicDetailData(epicId) : Promise.resolve({ epic: null, children: [] })),
     [epicId]
   );
 
@@ -232,11 +172,10 @@ export function useEpicDetail(
       };
     }
 
-    const { epic, allBeads } = data;
-    const subtasks = findSubtasks(epic.id, allBeads);
+    const { epic, children } = data;
 
     // Sort by priority then by updatedAt
-    const sorted = [...subtasks].sort((a, b) => {
+    const sorted = [...children].sort((a, b) => {
       if (a.priority !== b.priority) {
         return a.priority - b.priority;
       }

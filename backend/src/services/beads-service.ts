@@ -973,6 +973,242 @@ export async function getBead(
 }
 
 // ============================================================================
+// Epic Children (Dependency Graph)
+// ============================================================================
+
+/**
+ * Gets all children of an epic using the dependency graph (`bd children`).
+ * This is the correct way to find sub-beads — uses deps, not naming conventions.
+ *
+ * @param epicId Full epic bead ID (e.g., "adj-020")
+ * @returns Array of child BeadInfo objects
+ */
+export async function getEpicChildren(
+  epicId: string
+): Promise<BeadsServiceResult<BeadInfo[]>> {
+  try {
+    await ensurePrefixMap();
+
+    // Determine which database this epic belongs to
+    const prefix = epicId.split("-")[0];
+    if (!prefix) {
+      return {
+        success: false,
+        error: { code: "INVALID_BEAD_ID", message: `Invalid bead ID format: ${epicId}` },
+      };
+    }
+
+    const map = loadPrefixMap();
+    const source = map.get(prefix) ?? "unknown";
+
+    let workDir: string;
+    let beadsDir: string;
+
+    if (!source || source === "town" || source === "unknown") {
+      const townRoot = resolveWorkspaceRoot();
+      workDir = townRoot;
+      beadsDir = resolveBeadsDir(townRoot);
+    } else {
+      const beadsDirs = await listAllBeadsDirs();
+      const rigDir = beadsDirs.find((d) => d.rig === source);
+      if (!rigDir) {
+        return {
+          success: false,
+          error: { code: "RIG_NOT_FOUND", message: `Cannot find rig database for prefix: ${prefix}` },
+        };
+      }
+      workDir = rigDir.workDir;
+      beadsDir = rigDir.path;
+    }
+
+    // Use `bd children <epicId> --json` to get all children via dependency graph
+    const result = await execBd<BeadsIssue[]>(
+      ["children", epicId, "--json"],
+      { cwd: workDir, beadsDir }
+    );
+
+    if (!result.success) {
+      return {
+        success: false,
+        error: {
+          code: result.error?.code ?? "CHILDREN_FETCH_ERROR",
+          message: result.error?.message ?? `Failed to fetch children for: ${epicId}`,
+        },
+      };
+    }
+
+    if (!result.data || result.data.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    // Filter out wisps and transform to BeadInfo
+    const children = result.data
+      .filter((issue) => !issue.wisp && !issue.id.includes("-wisp-"))
+      .map((issue) => transformBead(issue, source));
+
+    // Sort by priority then by updatedAt
+    children.sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      const aDate = a.updatedAt ?? a.createdAt;
+      const bDate = b.updatedAt ?? b.createdAt;
+      return bDate.localeCompare(aDate);
+    });
+
+    return { success: true, data: children };
+  } catch (err) {
+    return {
+      success: false,
+      error: {
+        code: "EPIC_CHILDREN_ERROR",
+        message: err instanceof Error ? err.message : "Failed to get epic children",
+      },
+    };
+  }
+}
+
+/**
+ * Epic with progress info computed server-side using dependency graph.
+ */
+export interface EpicWithChildren {
+  epic: BeadInfo;
+  children: BeadInfo[];
+  totalCount: number;
+  closedCount: number;
+  progress: number;
+}
+
+/**
+ * Gets all epics with their progress computed server-side.
+ * Uses `bd show` per epic to get dependency data (children with status).
+ * Much more efficient than having the frontend fetch all 600+ beads.
+ */
+export async function listEpicsWithProgress(
+  options: { rig?: string; status?: string } = {}
+): Promise<BeadsServiceResult<EpicWithChildren[]>> {
+  try {
+    await ensurePrefixMap();
+    const townRoot = resolveWorkspaceRoot();
+    const townBeadsDir = resolveBeadsDir(townRoot);
+
+    // Fetch epics from town database
+    const listArgs = ["list", "--json", "--type", "epic", "--all"];
+    const epicResult = await execBd<BeadsIssue[]>(listArgs, {
+      cwd: townRoot,
+      beadsDir: townBeadsDir,
+    });
+
+    if (!epicResult.success || !epicResult.data) {
+      return { success: true, data: [] };
+    }
+
+    // Also fetch from rig databases
+    const beadsDirs = await listAllBeadsDirs();
+    const rigDirs = beadsDirs.filter((d) => d.rig !== null);
+
+    const allEpicIssues = [...epicResult.data];
+    for (const rigDir of rigDirs) {
+      const rigResult = await execBd<BeadsIssue[]>(listArgs, {
+        cwd: rigDir.workDir,
+        beadsDir: rigDir.path,
+      });
+      if (rigResult.success && rigResult.data) {
+        allEpicIssues.push(...rigResult.data);
+      }
+    }
+
+    // Filter by status if requested
+    const statusFilter = options.status;
+    let filteredEpics = allEpicIssues.filter((e) => !e.wisp);
+    if (statusFilter && statusFilter !== "all") {
+      filteredEpics = filteredEpics.filter((e) => e.status === statusFilter);
+    }
+
+    // Build a map of epicId -> {workDir, beadsDir} for bd show lookups
+    const epicDbMap = new Map<string, { workDir: string; beadsDir: string }>();
+    for (const epic of filteredEpics) {
+      const prefix = epic.id.split("-")[0];
+      if (!prefix) continue;
+      const map = loadPrefixMap();
+      const source = map.get(prefix) ?? "town";
+      if (source === "town" || source === "unknown") {
+        epicDbMap.set(epic.id, { workDir: townRoot, beadsDir: townBeadsDir });
+      } else {
+        const rigDir = rigDirs.find((d) => d.rig === source);
+        if (rigDir) {
+          epicDbMap.set(epic.id, { workDir: rigDir.workDir, beadsDir: rigDir.path });
+        } else {
+          epicDbMap.set(epic.id, { workDir: townRoot, beadsDir: townBeadsDir });
+        }
+      }
+    }
+
+    // For each epic, use `bd show` to get dependencies with status
+    // bd show returns children as full objects in the dependencies array
+    const results: EpicWithChildren[] = [];
+    for (const epic of filteredEpics) {
+      const source = prefixToSource(epic.id);
+      const epicInfo = transformBead(epic, source);
+      const db = epicDbMap.get(epic.id);
+
+      if (!db) {
+        results.push({ epic: epicInfo, children: [], totalCount: 0, closedCount: 0, progress: 0 });
+        continue;
+      }
+
+      const showResult = await execBd<BeadsIssue[]>(
+        ["show", epic.id, "--json"],
+        { cwd: db.workDir, beadsDir: db.beadsDir }
+      );
+
+      if (!showResult.success || !showResult.data || showResult.data.length === 0) {
+        results.push({ epic: epicInfo, children: [], totalCount: 0, closedCount: 0, progress: 0 });
+        continue;
+      }
+
+      // bd show returns deps as full objects with status
+      const detail = showResult.data[0]!;
+      const deps = detail.dependencies ?? [];
+
+      // Children are deps where issue_id matches this epic
+      const childDeps = deps.filter((d) => d.issue_id === epic.id);
+      const totalCount = childDeps.length;
+      const closedCount = childDeps.filter((d) => d.depends_on_id).reduce((count, dep) => {
+        // The dep object in bd show output is actually a full issue object
+        // with a dependency_type field added. Check status field directly.
+        const depAsRecord = dep as Record<string, unknown>;
+        return count + (depAsRecord["status"] === "closed" ? 1 : 0);
+      }, 0);
+      const progress = totalCount > 0 ? closedCount / totalCount : 0;
+
+      results.push({
+        epic: epicInfo,
+        children: [], // Don't include full children in list view
+        totalCount,
+        closedCount,
+        progress,
+      });
+    }
+
+    // Sort by updatedAt descending
+    results.sort((a, b) => {
+      const aTime = a.epic.updatedAt ?? a.epic.createdAt;
+      const bTime = b.epic.updatedAt ?? b.epic.createdAt;
+      return bTime.localeCompare(aTime);
+    });
+
+    return { success: true, data: results };
+  } catch (err) {
+    return {
+      success: false,
+      error: {
+        code: "EPICS_PROGRESS_ERROR",
+        message: err instanceof Error ? err.message : "Failed to list epics with progress",
+      },
+    };
+  }
+}
+
+// ============================================================================
 // Bead Sources
 // ============================================================================
 

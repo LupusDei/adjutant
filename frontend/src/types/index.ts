@@ -268,6 +268,20 @@ export interface BeadDependency {
   type: string;
 }
 
+/** Epic with server-computed progress from dependency graph. */
+export interface EpicWithProgressResponse {
+  /** The epic bead info */
+  epic: BeadInfo;
+  /** Child beads (empty in list view, populated in detail view) */
+  children: BeadInfo[];
+  /** Total number of children */
+  totalCount: number;
+  /** Number of closed children */
+  closedCount: number;
+  /** Progress as a decimal (0-1) */
+  progress: number;
+}
+
 // ============================================================================
 // API Response Types
 // ============================================================================
