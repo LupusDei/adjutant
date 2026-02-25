@@ -2,7 +2,9 @@ import React from 'react';
 import { useDashboardMail } from '../../hooks/useDashboardMail';
 import { useDashboardEpics } from '../../hooks/useDashboardEpics';
 import { useDashboardCrew } from '../../hooks/useDashboardCrew';
+import { useDashboardBeads, priorityLabel } from '../../hooks/useDashboardBeads';
 import { EpicCard } from '../epics/EpicCard';
+import type { BeadInfo } from '../../types';
 import './DashboardView.css';
 
 // Simple widget wrapper for dashboard sections
@@ -42,10 +44,24 @@ function formatRelativeTime(timestamp: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+/** Render a compact bead row */
+function BeadRow({ bead }: { bead: BeadInfo }) {
+  return (
+    <div className="dashboard-bead-row">
+      <span className="dashboard-bead-id">{bead.id}</span>
+      <span className="dashboard-bead-title">{bead.title}</span>
+      <span className={`dashboard-bead-priority dashboard-bead-priority-${bead.priority}`}>
+        {priorityLabel(bead.priority)}
+      </span>
+    </div>
+  );
+}
+
 export function DashboardView() {
   const { recentMessages, totalCount: mailTotal, unreadCount, loading: mailLoading, error: mailError } = useDashboardMail();
   const { inProgress: epicsInProgress, completed: epicsCompleted, loading: epicsLoading, error: epicsError } = useDashboardEpics();
   const { totalCrew, activeCrew, recentCrew, crewAlerts, loading: crewLoading, error: crewError } = useDashboardCrew();
+  const { inProgress: beadsInProgress, open: beadsOpen, closed: beadsClosed, loading: beadsLoading, error: beadsError } = useDashboardBeads();
 
 
 
@@ -200,6 +216,63 @@ export function DashboardView() {
                     ))}
                   </div>
                 </>
+              )}
+            </>
+          )}
+        </DashboardWidget>
+
+        {/* Beads Widget */}
+        <DashboardWidget
+          title="BEADS"
+          className="dashboard-widget-full-width"
+          headerRight={
+            !beadsLoading && !beadsError && (
+              <div className="dashboard-header-stats">
+                <span className={`dashboard-header-stat ${beadsInProgress.totalCount > 0 ? 'dashboard-header-stat-highlight' : ''}`}>
+                  {beadsInProgress.totalCount} in progress
+                </span>
+                <span className="dashboard-header-stat">{beadsOpen.totalCount} open</span>
+                <span className="dashboard-header-stat">{beadsClosed.totalCount} closed</span>
+              </div>
+            )
+          }
+        >
+          {beadsLoading && <p>Loading beads...</p>}
+          {beadsError && <p className="dashboard-view-error-text">Error: {beadsError}</p>}
+          {!beadsLoading && !beadsError && (
+            <>
+              {beadsInProgress.items.length > 0 && (
+                <>
+                  <h4 className="dashboard-view-sub-title">IN PROGRESS</h4>
+                  <div className="dashboard-beads-list">
+                    {beadsInProgress.items.map((bead) => (
+                      <BeadRow key={bead.id} bead={bead} />
+                    ))}
+                  </div>
+                </>
+              )}
+              {beadsOpen.items.length > 0 && (
+                <>
+                  <h4 className="dashboard-view-sub-title">OPEN</h4>
+                  <div className="dashboard-beads-list">
+                    {beadsOpen.items.map((bead) => (
+                      <BeadRow key={bead.id} bead={bead} />
+                    ))}
+                  </div>
+                </>
+              )}
+              {beadsClosed.items.length > 0 && (
+                <>
+                  <h4 className="dashboard-view-sub-title">CLOSED</h4>
+                  <div className="dashboard-beads-list">
+                    {beadsClosed.items.map((bead) => (
+                      <BeadRow key={bead.id} bead={bead} />
+                    ))}
+                  </div>
+                </>
+              )}
+              {beadsInProgress.items.length === 0 && beadsOpen.items.length === 0 && beadsClosed.items.length === 0 && (
+                <p className="dashboard-empty-text">No beads</p>
               )}
             </>
           )}
