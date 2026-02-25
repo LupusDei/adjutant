@@ -711,3 +711,28 @@ html, body {
 .react-flow__background pattern circle {
   fill: #1a1a1a !important;
 }
+
+/* ============================================
+   Graph Detail Panel Animations
+   ============================================ */
+@keyframes graphPanelSlideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes graphPanelSlideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
