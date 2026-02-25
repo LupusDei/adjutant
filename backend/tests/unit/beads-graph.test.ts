@@ -18,7 +18,7 @@ vi.mock("../../src/services/workspace/index.js", () => ({
 
 import { execBd, type BeadsIssue } from "../../src/services/bd-client.js";
 import { listAllBeadsDirs } from "../../src/services/workspace/index.js";
-import { getBeadsGraph } from "../../src/services/beads-service.js";
+import { getBeadsGraph } from "../../src/services/beads/index.js";
 
 // =============================================================================
 // Test Fixtures

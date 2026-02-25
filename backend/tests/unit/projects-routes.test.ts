@@ -13,7 +13,7 @@ vi.mock("../../src/services/projects-service.js", () => ({
 }));
 
 // Mock beads-service (used by overview endpoint)
-vi.mock("../../src/services/beads-service.js", () => ({
+vi.mock("../../src/services/beads/index.js", () => ({
   getProjectOverview: vi.fn(),
   computeEpicProgress: vi.fn(),
   getRecentlyCompletedEpics: vi.fn(),

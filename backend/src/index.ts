@@ -5,7 +5,7 @@ import { agentsRouter, beadsRouter, convoysRouter, costsRouter, createMessagesRo
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
-import { startPrefixMapRefreshScheduler } from "./services/beads-service.js";
+import { startPrefixMapRefreshScheduler } from "./services/beads/index.js";
 import { initWebSocketServer } from "./services/ws-server.js";
 import { initAgentStatusStream } from "./services/agent-status-stream.js";
 import { initTerminalStream } from "./services/terminal-stream.js";

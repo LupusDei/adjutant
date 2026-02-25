@@ -24,8 +24,8 @@ import {
   getProjectOverview,
   computeEpicProgress,
   getRecentlyCompletedEpics,
-} from "../services/beads-service.js";
-import type { EpicProgress } from "../services/beads-service.js";
+} from "../services/beads/index.js";
+import type { EpicProgress } from "../services/beads/index.js";
 import { getAgents } from "../services/agents-service.js";
 import type { MessageStore } from "../services/message-store.js";
 import { success, badRequest, notFound, internalError } from "../utils/responses.js";

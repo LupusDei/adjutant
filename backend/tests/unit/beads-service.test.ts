@@ -17,7 +17,7 @@ vi.mock("../../src/services/gastown-workspace.js", () => ({
 }));
 
 import { execBd, type BeadsIssue } from "../../src/services/bd-client.js";
-import { listBeads, getBead, updateBead } from "../../src/services/beads-service.js";
+import { listBeads, getBead, updateBead } from "../../src/services/beads/index.js";
 import { listAllBeadsDirs } from "../../src/services/gastown-workspace.js";
 
 // =============================================================================
