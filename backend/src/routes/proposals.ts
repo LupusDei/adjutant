@@ -46,6 +46,7 @@ export function createProposalsRouter(store: ProposalStore): Router {
       title: bodyResult.data.title,
       description: bodyResult.data.description,
       type: bodyResult.data.type,
+      project: bodyResult.data.project,
     });
 
     res.status(201).json(success(proposal));

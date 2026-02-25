@@ -21,8 +21,9 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       title: z.string().describe("Concise proposal title"),
       description: z.string().describe("Deep description of the improvement: what, why, and how"),
       type: z.enum(["product", "engineering"]).describe("Proposal type: 'product' for UX/product improvements, 'engineering' for refactoring/architecture"),
+      project: z.string().describe("Project this proposal is for (e.g., 'adjutant', 'gastown')"),
     },
-    async ({ title, description, type }, extra) => {
+    async ({ title, description, type, project }, extra) => {
       const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
       if (!agentId) {
         return {
@@ -35,6 +36,7 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
         title,
         description,
         type,
+        project,
       });
 
       logInfo("create_proposal", { agentId, proposalId: proposal.id, type, title });
@@ -46,6 +48,7 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
             id: proposal.id,
             title: proposal.title,
             type: proposal.type,
+            project: proposal.project,
             status: proposal.status,
             createdAt: proposal.createdAt,
           }),
@@ -62,9 +65,10 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
     {
       status: z.enum(["pending", "accepted", "dismissed"]).optional().describe("Filter by status"),
       type: z.enum(["product", "engineering"]).optional().describe("Filter by type"),
+      project: z.string().optional().describe("Filter by project"),
     },
-    async ({ status, type }) => {
-      const proposals = store.getProposals({ status, type });
+    async ({ status, type, project }) => {
+      const proposals = store.getProposals({ status, type, project });
 
       return {
         content: [{
@@ -76,6 +80,7 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
               title: p.title,
               description: p.description,
               type: p.type,
+              project: p.project,
               status: p.status,
               createdAt: p.createdAt,
             })),

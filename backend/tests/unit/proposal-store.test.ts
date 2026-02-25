@@ -41,6 +41,7 @@ describe("proposal-store", () => {
         title: "Improve error handling",
         description: "Add structured error responses across all API routes.",
         type: "engineering",
+        project: "adjutant",
       });
 
       expect(proposal.id).toBeTruthy();
@@ -48,6 +49,7 @@ describe("proposal-store", () => {
       expect(proposal.title).toBe("Improve error handling");
       expect(proposal.description).toBe("Add structured error responses across all API routes.");
       expect(proposal.type).toBe("engineering");
+      expect(proposal.project).toBe("adjutant");
       expect(proposal.status).toBe("pending");
       expect(proposal.createdAt).toBeTruthy();
       expect(proposal.updatedAt).toBeTruthy();
@@ -57,8 +59,8 @@ describe("proposal-store", () => {
       const { createProposalStore } = await import("../../src/services/proposal-store.js");
       const store = createProposalStore(db);
 
-      const p1 = store.insertProposal({ author: "a", title: "T1", description: "D1", type: "product" });
-      const p2 = store.insertProposal({ author: "b", title: "T2", description: "D2", type: "engineering" });
+      const p1 = store.insertProposal({ author: "a", title: "T1", description: "D1", type: "product", project: "adjutant" });
+      const p2 = store.insertProposal({ author: "b", title: "T2", description: "D2", type: "engineering", project: "gastown" });
 
       expect(p1.id).not.toBe(p2.id);
     });
@@ -69,7 +71,7 @@ describe("proposal-store", () => {
       const { createProposalStore } = await import("../../src/services/proposal-store.js");
       const store = createProposalStore(db);
 
-      const created = store.insertProposal({ author: "agent-1", title: "Test", description: "Desc", type: "product" });
+      const created = store.insertProposal({ author: "agent-1", title: "Test", description: "Desc", type: "product", project: "adjutant" });
       const fetched = store.getProposal(created.id);
 
       expect(fetched).not.toBeNull();
@@ -90,8 +92,8 @@ describe("proposal-store", () => {
       const { createProposalStore } = await import("../../src/services/proposal-store.js");
       const store = createProposalStore(db);
 
-      store.insertProposal({ author: "a", title: "P1", description: "D1", type: "product" });
-      store.insertProposal({ author: "b", title: "P2", description: "D2", type: "engineering" });
+      store.insertProposal({ author: "a", title: "P1", description: "D1", type: "product", project: "adjutant" });
+      store.insertProposal({ author: "b", title: "P2", description: "D2", type: "engineering", project: "gastown" });
 
       const all = store.getProposals();
       expect(all).toHaveLength(2);
@@ -101,8 +103,8 @@ describe("proposal-store", () => {
       const { createProposalStore } = await import("../../src/services/proposal-store.js");
       const store = createProposalStore(db);
 
-      const p1 = store.insertProposal({ author: "a", title: "P1", description: "D1", type: "product" });
-      store.insertProposal({ author: "b", title: "P2", description: "D2", type: "engineering" });
+      const p1 = store.insertProposal({ author: "a", title: "P1", description: "D1", type: "product", project: "adjutant" });
+      store.insertProposal({ author: "b", title: "P2", description: "D2", type: "engineering", project: "adjutant" });
       store.updateProposalStatus(p1.id, "accepted");
 
       const pending = store.getProposals({ status: "pending" });
@@ -118,20 +120,56 @@ describe("proposal-store", () => {
       const { createProposalStore } = await import("../../src/services/proposal-store.js");
       const store = createProposalStore(db);
 
-      store.insertProposal({ author: "a", title: "P1", description: "D1", type: "product" });
-      store.insertProposal({ author: "b", title: "P2", description: "D2", type: "engineering" });
+      store.insertProposal({ author: "a", title: "P1", description: "D1", type: "product", project: "adjutant" });
+      store.insertProposal({ author: "b", title: "P2", description: "D2", type: "engineering", project: "adjutant" });
 
       const products = store.getProposals({ type: "product" });
       expect(products).toHaveLength(1);
       expect(products[0].type).toBe("product");
     });
 
+    it("should filter by project", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+
+      store.insertProposal({ author: "a", title: "P1", description: "D1", type: "product", project: "adjutant" });
+      store.insertProposal({ author: "b", title: "P2", description: "D2", type: "engineering", project: "gastown" });
+      store.insertProposal({ author: "c", title: "P3", description: "D3", type: "product", project: "adjutant" });
+
+      const adjutantProposals = store.getProposals({ project: "adjutant" });
+      expect(adjutantProposals).toHaveLength(2);
+      expect(adjutantProposals.every((p) => p.project === "adjutant")).toBe(true);
+
+      const gastownProposals = store.getProposals({ project: "gastown" });
+      expect(gastownProposals).toHaveLength(1);
+      expect(gastownProposals[0].project).toBe("gastown");
+    });
+
+    it("should store and return the project field correctly", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+
+      const proposal = store.insertProposal({
+        author: "agent-x",
+        title: "Add caching",
+        description: "Cache layer for API",
+        type: "engineering",
+        project: "gastown",
+      });
+
+      expect(proposal.project).toBe("gastown");
+
+      const fetched = store.getProposal(proposal.id);
+      expect(fetched).not.toBeNull();
+      expect(fetched!.project).toBe("gastown");
+    });
+
     it("should return newest first", async () => {
       const { createProposalStore } = await import("../../src/services/proposal-store.js");
       const store = createProposalStore(db);
 
-      store.insertProposal({ author: "a", title: "First", description: "D1", type: "product" });
-      store.insertProposal({ author: "b", title: "Second", description: "D2", type: "product" });
+      store.insertProposal({ author: "a", title: "First", description: "D1", type: "product", project: "adjutant" });
+      store.insertProposal({ author: "b", title: "Second", description: "D2", type: "product", project: "adjutant" });
 
       const all = store.getProposals();
       expect(all[0].title).toBe("Second");
@@ -144,7 +182,7 @@ describe("proposal-store", () => {
       const { createProposalStore } = await import("../../src/services/proposal-store.js");
       const store = createProposalStore(db);
 
-      const p = store.insertProposal({ author: "a", title: "T", description: "D", type: "product" });
+      const p = store.insertProposal({ author: "a", title: "T", description: "D", type: "product", project: "adjutant" });
       const updated = store.updateProposalStatus(p.id, "accepted");
 
       expect(updated).not.toBeNull();
@@ -155,7 +193,7 @@ describe("proposal-store", () => {
       const { createProposalStore } = await import("../../src/services/proposal-store.js");
       const store = createProposalStore(db);
 
-      const p = store.insertProposal({ author: "a", title: "T", description: "D", type: "engineering" });
+      const p = store.insertProposal({ author: "a", title: "T", description: "D", type: "engineering", project: "gastown" });
       const updated = store.updateProposalStatus(p.id, "dismissed");
 
       expect(updated).not.toBeNull();
