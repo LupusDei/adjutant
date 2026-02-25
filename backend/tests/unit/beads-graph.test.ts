@@ -17,6 +17,7 @@ vi.mock("../../src/services/workspace/index.js", () => ({
 }));
 
 import { execBd, type BeadsIssue } from "../../src/services/bd-client.js";
+import { listAllBeadsDirs } from "../../src/services/workspace/index.js";
 import { getBeadsGraph } from "../../src/services/beads-service.js";
 
 // =============================================================================
@@ -277,7 +278,8 @@ describe("getBeadsGraph", () => {
     );
   });
 
-  it("should call execBd with correct args (list --all --json)", async () => {
+  // adj-qwb5: Verify bd list is called with -v (verbose) flag to include dependencies
+  it("should call execBd with verbose flag (list --all --json -v)", async () => {
     vi.mocked(execBd).mockResolvedValue({
       success: true,
       data: [],
@@ -290,5 +292,256 @@ describe("getBeadsGraph", () => {
     expect(args).toContain("list");
     expect(args).toContain("--all");
     expect(args).toContain("--json");
+    // Critical: -v flag is required for dependencies to be included in output
+    expect(args).toContain("-v");
+  });
+
+  // adj-eiaf: Deduplicate edges from bidirectional dependencies
+  it("should deduplicate edges when same dependency appears on multiple beads", async () => {
+    vi.mocked(execBd).mockResolvedValue({
+      success: true,
+      data: [
+        createBead({
+          id: "hq-001",
+          title: "Epic",
+          issue_type: "epic",
+          dependencies: [
+            { issue_id: "hq-001", depends_on_id: "hq-002", type: "blocks" },
+          ],
+        }),
+        createBead({
+          id: "hq-002",
+          title: "Task",
+          issue_type: "task",
+          dependencies: [
+            // Same dependency appearing on the other bead (bidirectional)
+            { issue_id: "hq-001", depends_on_id: "hq-002", type: "blocks" },
+          ],
+        }),
+      ],
+      exitCode: 0,
+    });
+
+    const result = await getBeadsGraph();
+
+    expect(result.success).toBe(true);
+    // Should be 1 edge, not 2 (deduplicated)
+    expect(result.data!.edges).toHaveLength(1);
+    expect(result.data!.edges[0]).toEqual({
+      issueId: "hq-001",
+      dependsOnId: "hq-002",
+      type: "blocks",
+    });
+  });
+
+  it("should not deduplicate edges with different directions", async () => {
+    vi.mocked(execBd).mockResolvedValue({
+      success: true,
+      data: [
+        createBead({
+          id: "hq-001",
+          title: "Epic",
+          issue_type: "epic",
+          dependencies: [
+            { issue_id: "hq-001", depends_on_id: "hq-002", type: "blocks" },
+          ],
+        }),
+        createBead({
+          id: "hq-002",
+          title: "Task",
+          issue_type: "task",
+          dependencies: [
+            // Reverse direction: different edge
+            { issue_id: "hq-002", depends_on_id: "hq-001", type: "blocks" },
+          ],
+        }),
+      ],
+      exitCode: 0,
+    });
+
+    const result = await getBeadsGraph();
+
+    expect(result.success).toBe(true);
+    // Both edges are kept (different directions)
+    expect(result.data!.edges).toHaveLength(2);
+  });
+
+  // adj-cj4j: Query params support
+  it("should pass status filter to bd command", async () => {
+    vi.mocked(execBd).mockResolvedValue({
+      success: true,
+      data: [],
+      exitCode: 0,
+    });
+
+    await getBeadsGraph({ status: "open" });
+
+    const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
+    expect(args).toContain("--status");
+    expect(args).toContain("open");
+    // Should NOT contain --all when specific status is given
+    expect(args).not.toContain("--all");
+  });
+
+  it("should pass type filter to bd command", async () => {
+    vi.mocked(execBd).mockResolvedValue({
+      success: true,
+      data: [],
+      exitCode: 0,
+    });
+
+    await getBeadsGraph({ type: "epic" });
+
+    const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
+    expect(args).toContain("--type");
+    expect(args).toContain("epic");
+  });
+
+  it("should use --all flag with default status (shows active work)", async () => {
+    vi.mocked(execBd).mockResolvedValue({
+      success: true,
+      data: [
+        createBead({ id: "hq-001", status: "open" }),
+        createBead({ id: "hq-002", status: "closed" }),
+        createBead({ id: "hq-003", status: "in_progress" }),
+      ],
+      exitCode: 0,
+    });
+
+    const result = await getBeadsGraph({ status: "default" });
+
+    expect(result.success).toBe(true);
+    // "default" preset should filter to open + hooked + in_progress + blocked
+    // hq-002 (closed) should be filtered out client-side
+    expect(result.data!.nodes).toHaveLength(2);
+    expect(result.data!.nodes.map(n => n.id)).toEqual(
+      expect.arrayContaining(["hq-001", "hq-003"])
+    );
+  });
+
+  it("should query all when status=all and use --all flag", async () => {
+    vi.mocked(execBd).mockResolvedValue({
+      success: true,
+      data: [],
+      exitCode: 0,
+    });
+
+    await getBeadsGraph({ status: "all" });
+
+    const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
+    expect(args).toContain("--all");
+  });
+
+  // adj-jrrn: Multi-database support
+  it("should query all databases when rig=all", async () => {
+    vi.mocked(listAllBeadsDirs).mockResolvedValue([
+      { path: "/tmp/town/.beads", workDir: "/tmp/town", rig: null },
+      { path: "/tmp/town/adjutant/.beads", workDir: "/tmp/town/adjutant", rig: "adjutant" },
+    ]);
+
+    vi.mocked(execBd).mockResolvedValue({
+      success: true,
+      data: [createBead({ id: "hq-001" })],
+      exitCode: 0,
+    });
+
+    const result = await getBeadsGraph({ rig: "all" });
+
+    expect(result.success).toBe(true);
+    // Should have called execBd twice (once for town, once for adjutant rig)
+    expect(vi.mocked(execBd)).toHaveBeenCalledTimes(2);
+  });
+
+  it("should query only town database by default (rig=town)", async () => {
+    vi.mocked(execBd).mockResolvedValue({
+      success: true,
+      data: [],
+      exitCode: 0,
+    });
+
+    await getBeadsGraph();
+
+    // Should call execBd exactly once (town only)
+    expect(vi.mocked(execBd)).toHaveBeenCalledTimes(1);
+  });
+
+  it("should exclude hq- beads when excludeTown=true with rig=all", async () => {
+    vi.mocked(listAllBeadsDirs).mockResolvedValue([
+      { path: "/tmp/town/.beads", workDir: "/tmp/town", rig: null },
+      { path: "/tmp/town/adjutant/.beads", workDir: "/tmp/town/adjutant", rig: "adjutant" },
+    ]);
+
+    // First call returns town beads, second returns rig beads
+    vi.mocked(execBd)
+      .mockResolvedValueOnce({
+        success: true,
+        data: [createBead({ id: "hq-001", title: "Town Bead" })],
+        exitCode: 0,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: [createBead({ id: "adj-001", title: "Adjutant Bead" })],
+        exitCode: 0,
+      });
+
+    const result = await getBeadsGraph({ rig: "all", excludeTown: true });
+
+    expect(result.success).toBe(true);
+    // hq-001 should be excluded
+    expect(result.data!.nodes).toHaveLength(1);
+    expect(result.data!.nodes[0]!.id).toBe("adj-001");
+  });
+
+  it("should deduplicate nodes from multiple databases", async () => {
+    vi.mocked(listAllBeadsDirs).mockResolvedValue([
+      { path: "/tmp/town/.beads", workDir: "/tmp/town", rig: null },
+      { path: "/tmp/town/adjutant/.beads", workDir: "/tmp/town/adjutant", rig: "adjutant" },
+    ]);
+
+    // Same bead appears in both databases
+    const sharedBead = createBead({ id: "hq-001", title: "Shared Bead" });
+    vi.mocked(execBd)
+      .mockResolvedValueOnce({
+        success: true,
+        data: [sharedBead],
+        exitCode: 0,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: [sharedBead],
+        exitCode: 0,
+      });
+
+    const result = await getBeadsGraph({ rig: "all" });
+
+    expect(result.success).toBe(true);
+    // Should be 1 node, not 2 (deduplicated)
+    expect(result.data!.nodes).toHaveLength(1);
+  });
+
+  it("should handle partial database failures gracefully", async () => {
+    vi.mocked(listAllBeadsDirs).mockResolvedValue([
+      { path: "/tmp/town/.beads", workDir: "/tmp/town", rig: null },
+      { path: "/tmp/town/adjutant/.beads", workDir: "/tmp/town/adjutant", rig: "adjutant" },
+    ]);
+
+    // Town succeeds, adjutant fails
+    vi.mocked(execBd)
+      .mockResolvedValueOnce({
+        success: true,
+        data: [createBead({ id: "hq-001" })],
+        exitCode: 0,
+      })
+      .mockResolvedValueOnce({
+        success: false,
+        error: { code: "BD_PANIC", message: "crash" },
+        exitCode: 2,
+      });
+
+    const result = await getBeadsGraph({ rig: "all" });
+
+    // Should succeed with partial data
+    expect(result.success).toBe(true);
+    expect(result.data!.nodes).toHaveLength(1);
   });
 });

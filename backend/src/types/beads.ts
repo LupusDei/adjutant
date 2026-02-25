@@ -35,7 +35,7 @@ export const GraphNodeSchema = z.object({
   type: z.string(),
   priority: z.number(),
   assignee: z.string().nullable(),
-  source: z.string().optional(),
+  source: z.string(),
 });
 
 // ============================================================================

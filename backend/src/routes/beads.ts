@@ -11,6 +11,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { listBeads, listAllBeads, updateBead, getBead, listBeadSources, listRecentlyClosed, getBeadsGraph, type BeadStatus } from "../services/beads-service.js";
+import { BeadsGraphResponseSchema } from "../types/beads.js";
 import { resolveRigPath } from "../services/workspace/index.js";
 import { listProjects } from "../services/projects-service.js";
 import { success, internalError, badRequest } from "../utils/responses.js";
@@ -178,11 +179,30 @@ beadsRouter.get("/recent-closed", async (req, res) => {
  * IMPORTANT: This route MUST be registered before /:id to prevent
  * Express from matching "graph" as a bead ID parameter.
  *
+ * Query params:
+ * - rig: "town" (default), "all", or a specific rig name
+ * - status: "default" (default), "open", "in_progress", "blocked", "closed", "all"
+ * - type: Filter by bead type (e.g., "epic", "task", "bug")
+ * - epicId: Filter to a specific epic's sub-tree (client-side hint)
+ * - excludeTown: "true" to exclude hq-* beads when rig=all (default: false)
+ *
  * Response:
  * - { success: true, data: { nodes: GraphNode[], edges: GraphDependency[] } }
  */
-beadsRouter.get("/graph", async (_req, res) => {
-  const result = await getBeadsGraph();
+beadsRouter.get("/graph", async (req, res) => {
+  const rigParam = req.query["rig"] as string | undefined;
+  const statusParam = req.query["status"] as string | undefined;
+  const typeParam = req.query["type"] as string | undefined;
+  const epicIdParam = req.query["epicId"] as string | undefined;
+  const excludeTown = req.query["excludeTown"] === "true";
+
+  const result = await getBeadsGraph({
+    rig: rigParam,
+    status: statusParam,
+    type: typeParam,
+    epicId: epicIdParam,
+    excludeTown,
+  });
 
   if (!result.success) {
     return res.status(500).json(
@@ -190,7 +210,15 @@ beadsRouter.get("/graph", async (_req, res) => {
     );
   }
 
-  return res.json(success(result.data));
+  // Runtime validation of response shape using Zod (per code style rules)
+  const validated = BeadsGraphResponseSchema.safeParse(result.data);
+  if (!validated.success) {
+    return res.status(500).json(
+      internalError("Graph response validation failed: " + validated.error.message)
+    );
+  }
+
+  return res.json(success(validated.data));
 });
 
 /**

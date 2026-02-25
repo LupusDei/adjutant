@@ -736,3 +736,47 @@ html, body {
     opacity: 0;
   }
 }
+
+/* ============================================
+   Critical Path Highlighting
+   ============================================ */
+
+/* Critical path edges: bright green with animated pulse */
+.react-flow__edge.critical-path .react-flow__edge-path {
+  stroke: #00ff00 !important;
+  stroke-width: 3px !important;
+  animation: critical-edge-pulse 2s ease-in-out infinite;
+  filter: drop-shadow(0 0 4px rgba(0, 255, 0, 0.5));
+}
+
+@keyframes critical-edge-pulse {
+  0%, 100% { stroke-opacity: 1; }
+  50% { stroke-opacity: 0.6; }
+}
+
+/* Dimmed edges when critical path is shown */
+.react-flow__edge.dimmed-path .react-flow__edge-path {
+  stroke: #003300 !important;
+  stroke-width: 1px !important;
+  stroke-opacity: 0.4 !important;
+}
+
+/* Critical path node wrapper */
+.critical-path-node {
+  animation: critical-node-pulse 2s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgba(0, 255, 0, 0.4));
+}
+
+@keyframes critical-node-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px rgba(0, 255, 0, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 14px rgba(0, 255, 0, 0.7));
+  }
+}
+
+/* Dimmed node wrapper when critical path is shown */
+.dimmed-node {
+  opacity: 0.45;
+}

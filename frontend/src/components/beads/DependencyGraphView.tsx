@@ -1,7 +1,8 @@
 /**
  * Dependency graph visualization for beads.
  * Uses React Flow with dagre layout to render bead dependency relationships.
- * Supports node selection with detail panel, collapse/expand, and graph controls.
+ * Supports node selection, collapse/expand, critical path highlighting,
+ * and graph controls.
  */
 import { useState, useCallback, useMemo, type CSSProperties } from 'react';
 
@@ -13,7 +14,7 @@ import {
   MiniMap,
   BackgroundVariant,
 } from '@xyflow/react';
-import type { NodeMouseHandler } from '@xyflow/react';
+import type { Node, Edge, NodeMouseHandler } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import { BeadGraphNode } from './BeadGraphNode';
@@ -21,7 +22,7 @@ import { BeadGraphEdge } from './BeadGraphEdge';
 import { GraphDetailPanel } from './GraphDetailPanel';
 import { GraphControls } from './GraphControls';
 import { useBeadsGraph, type BeadNodeData } from '../../hooks/useBeadsGraph';
-import type { Node } from '@xyflow/react';
+import type { CriticalPathResult } from '../../utils/critical-path';
 
 /** Register custom node types for React Flow. */
 const nodeTypes = { beadNode: BeadGraphNode };
@@ -36,7 +37,57 @@ export interface DependencyGraphViewProps {
 }
 
 /**
+ * Build an edge ID matching the critical path format from React Flow edge data.
+ * The critical path uses "dependsOnId->issueId" format, which maps to "source->target".
+ */
+function edgeToCriticalPathId(edge: Edge): string {
+  return `${edge.source}->${edge.target}`;
+}
+
+/**
+ * Apply critical path classNames to edges for CSS-based highlighting.
+ */
+function applyEdgeHighlighting(
+  edges: Edge[],
+  criticalPath: CriticalPathResult,
+  showCriticalPath: boolean
+): Edge[] {
+  if (!showCriticalPath) {
+    return edges;
+  }
+  return edges.map((edge) => {
+    const cpId = edgeToCriticalPathId(edge);
+    const isCritical = criticalPath.edgeIds.has(cpId);
+    return {
+      ...edge,
+      className: isCritical ? 'critical-path' : 'dimmed-path',
+    };
+  });
+}
+
+/**
+ * Apply critical path classNames to nodes for CSS-based highlighting.
+ */
+function applyNodeHighlighting(
+  nodes: Node<BeadNodeData>[],
+  criticalPath: CriticalPathResult,
+  showCriticalPath: boolean
+): Node<BeadNodeData>[] {
+  if (!showCriticalPath) {
+    return nodes;
+  }
+  return nodes.map((node) => {
+    const isCritical = criticalPath.nodeIds.has(node.id);
+    return {
+      ...node,
+      className: isCritical ? 'critical-path-node' : 'dimmed-node',
+    };
+  });
+}
+
+/**
  * Inner component that uses useReactFlow (must be inside ReactFlowProvider).
+ * Combines node selection, collapse/expand, critical path, and graph controls.
  */
 function DependencyGraphInner({ isActive = true }: DependencyGraphViewProps) {
   const {
@@ -49,6 +100,10 @@ function DependencyGraphInner({ isActive = true }: DependencyGraphViewProps) {
     expandAll,
     collapsedNodes,
     epicIds,
+    showCriticalPath,
+    toggleCriticalPath,
+    criticalPath,
+    criticalPathLength,
   } = useBeadsGraph({
     pollInterval: 30000,
     enabled: isActive,
@@ -87,7 +142,6 @@ function DependencyGraphInner({ isActive = true }: DependencyGraphViewProps) {
   /** Filter nodes by epic sub-tree if epic filter is active. */
   const filteredNodes = useMemo(() => {
     if (!epicFilter) return nodes;
-    // Find all nodes that are descendants of the selected epic (or the epic itself)
     const epicNode = nodes.find((n: Node<BeadNodeData>) => n.id === epicFilter);
     if (!epicNode) return nodes;
 
@@ -126,10 +180,21 @@ function DependencyGraphInner({ isActive = true }: DependencyGraphViewProps) {
     return edges.filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target));
   }, [edges, epicFilter, filteredNodes]);
 
+  /** Apply critical path highlighting to filtered nodes and edges. */
+  const highlightedNodes = useMemo(
+    () => applyNodeHighlighting(filteredNodes, criticalPath, showCriticalPath),
+    [filteredNodes, criticalPath, showCriticalPath]
+  );
+
+  const highlightedEdges = useMemo(
+    () => applyEdgeHighlighting(filteredEdges, criticalPath, showCriticalPath),
+    [filteredEdges, criticalPath, showCriticalPath]
+  );
+
   /** Inject UI state into node data for BeadGraphNode rendering. */
   const nodesWithUIState = useMemo(
     () =>
-      filteredNodes.map((node: Node<BeadNodeData>) => ({
+      highlightedNodes.map((node: Node<BeadNodeData>) => ({
         ...node,
         data: {
           ...node.data,
@@ -137,7 +202,7 @@ function DependencyGraphInner({ isActive = true }: DependencyGraphViewProps) {
           onToggleCollapse: toggleCollapse,
         },
       })),
-    [filteredNodes, selectedNodeId, toggleCollapse]
+    [highlightedNodes, selectedNodeId, toggleCollapse]
   );
 
   /** Get the selected bead data for the detail panel. */
@@ -158,6 +223,24 @@ function DependencyGraphInner({ isActive = true }: DependencyGraphViewProps) {
     }),
     []
   );
+
+  /** MiniMap node color callback. */
+  const minimapNodeColor = useCallback((node: Node) => {
+    // Safe cast: node.data comes from our BeadNodeData type via useBeadsGraph
+    const data = node.data as Record<string, unknown>;
+    const status = data['status'] as string;
+    switch (status) {
+      case 'closed':
+        return '#00ff00';
+      case 'in_progress':
+      case 'hooked':
+        return '#ffaa00';
+      case 'blocked':
+        return '#ff4444';
+      default:
+        return '#666666';
+    }
+  }, []);
 
   if (loading && nodes.length === 0) {
     return (
@@ -194,7 +277,7 @@ function DependencyGraphInner({ isActive = true }: DependencyGraphViewProps) {
     <div style={styles.container}>
       <ReactFlow
         nodes={nodesWithUIState}
-        edges={filteredEdges}
+        edges={highlightedEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
@@ -221,22 +304,7 @@ function DependencyGraphInner({ isActive = true }: DependencyGraphViewProps) {
         />
         <MiniMap
           style={styles.minimap}
-          nodeColor={(node) => {
-            // Safe access: node.data comes from Record<string, unknown> index signature
-            const dataRecord = node.data as Record<string, unknown>;
-            const status = String(dataRecord['status'] ?? '');
-            switch (status) {
-              case 'closed':
-                return '#00ff00';
-              case 'in_progress':
-              case 'hooked':
-                return '#ffaa00';
-              case 'blocked':
-                return '#ff4444';
-              default:
-                return '#666666';
-            }
-          }}
+          nodeColor={minimapNodeColor}
           maskColor="rgba(0, 0, 0, 0.7)"
         />
         <GraphControls
@@ -248,6 +316,26 @@ function DependencyGraphInner({ isActive = true }: DependencyGraphViewProps) {
           hasCollapsedNodes={collapsedNodes.size > 0}
         />
       </ReactFlow>
+
+      {/* Critical Path Toggle */}
+      <button
+        type="button"
+        onClick={toggleCriticalPath}
+        style={{
+          ...styles.criticalPathToggle,
+          ...(showCriticalPath ? styles.criticalPathToggleActive : {}),
+        }}
+        title={showCriticalPath ? 'Hide critical path' : 'Show critical path'}
+      >
+        <span style={styles.criticalPathLabel}>
+          CRITICAL PATH
+        </span>
+        {criticalPathLength > 0 && (
+          <span style={styles.criticalPathCount}>
+            ({criticalPathLength})
+          </span>
+        )}
+      </button>
 
       <GraphDetailPanel
         bead={selectedBead}
@@ -323,5 +411,39 @@ const styles = {
     backgroundColor: '#0a0a0a',
     border: '1px solid #00aa0066',
     borderRadius: '2px',
+  } satisfies CSSProperties,
+  criticalPathToggle: {
+    position: 'absolute',
+    bottom: '10px',
+    right: '10px',
+    zIndex: 10,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '6px 12px',
+    background: '#0a0a0a',
+    border: '1px solid #00aa00',
+    borderRadius: '2px',
+    cursor: 'pointer',
+    fontFamily: '"Share Tech Mono", "Courier New", monospace',
+    fontSize: '0.7rem',
+    color: '#00aa00',
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase' as const,
+    transition: 'all 0.2s ease',
+    boxShadow: '0 0 4px rgba(0, 170, 0, 0.15)',
+  } satisfies CSSProperties,
+  criticalPathToggleActive: {
+    background: '#001a00',
+    borderColor: '#00ff00',
+    color: '#00ff00',
+    boxShadow: '0 0 10px rgba(0, 255, 0, 0.3)',
+  } satisfies CSSProperties,
+  criticalPathLabel: {
+    fontWeight: 'bold',
+  } satisfies CSSProperties,
+  criticalPathCount: {
+    fontSize: '0.65rem',
+    opacity: 0.8,
   } satisfies CSSProperties,
 };
