@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { KanbanBoard } from './KanbanBoard';
+import { DependencyGraphView } from './DependencyGraphView';
 import { BeadDetailView } from './BeadDetailView';
 import { AgentAssignModal } from './AgentAssignModal';
 import { OverseerToggle } from '../shared/OverseerToggle';
@@ -9,6 +10,9 @@ import { api } from '../../services/api';
 import { useMode } from '../../contexts/ModeContext';
 import type { BeadInfo } from '../../types';
 import type { KanbanColumnId } from '../../types/kanban';
+
+/** View mode for the beads tab. */
+type BeadsViewMode = 'kanban' | 'graph';
 
 export interface BeadsViewProps {
   /** Whether this tab is currently active */
@@ -50,6 +54,9 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
   const [rigOptions, setRigOptions] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<BeadSort>(() => {
     return (localStorage.getItem('beads-sort') ?? 'priority') as BeadSort;
+  });
+  const [viewMode, setViewMode] = useState<BeadsViewMode>(() => {
+    return (localStorage.getItem('beads-view-mode') ?? 'kanban') as BeadsViewMode;
   });
   const [overseerView, setOverseerView] = useState(false);
   const [beads, setBeads] = useState<BeadInfo[]>([]);
@@ -103,6 +110,11 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
   useEffect(() => {
     localStorage.setItem('beads-sort', sortBy);
   }, [sortBy]);
+
+  // Persist view mode to localStorage
+  useEffect(() => {
+    localStorage.setItem('beads-view-mode', viewMode);
+  }, [viewMode]);
 
   // Filter beads based on search and overseer view
   // Note: Rig filtering is now done server-side via API parameter
@@ -278,6 +290,32 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
         </h2>
 
         <div style={styles.controls}>
+          {/* View Mode Toggle */}
+          <div style={styles.viewToggle}>
+            <button
+              style={{
+                ...styles.viewToggleButton,
+                ...(viewMode === 'kanban' ? styles.viewToggleActive : {}),
+              }}
+              onClick={() => { setViewMode('kanban'); }}
+              aria-label="Kanban view"
+              title="KANBAN VIEW"
+            >
+              KANBAN
+            </button>
+            <button
+              style={{
+                ...styles.viewToggleButton,
+                ...(viewMode === 'graph' ? styles.viewToggleActive : {}),
+              }}
+              onClick={() => { setViewMode('graph'); }}
+              aria-label="Graph view"
+              title="DEPENDENCY GRAPH"
+            >
+              GRAPH
+            </button>
+          </div>
+
           {isGasTown && (
             <OverseerToggle
               storageKey="beads-overseer-view"
@@ -342,13 +380,17 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
         </div>
       </header>
 
-      <KanbanBoard
-        beads={filteredBeads}
-        onBeadsChange={handleBeadsChange}
-        onBeadClick={handleBeadClick}
-        onAssignRequest={handleAssignRequest}
-        onAssign={handleAssign}
-      />
+      {viewMode === 'graph' ? (
+        <DependencyGraphView isActive={isActive} />
+      ) : (
+        <KanbanBoard
+          beads={filteredBeads}
+          onBeadsChange={handleBeadsChange}
+          onBeadClick={handleBeadClick}
+          onAssignRequest={handleAssignRequest}
+          onAssign={handleAssign}
+        />
+      )}
 
       <BeadDetailView
         beadId={selectedBeadId}
@@ -463,5 +505,29 @@ const styles = {
     textAlign: 'center',
     fontFamily: '"Share Tech Mono", monospace',
     letterSpacing: '0.1em',
+  },
+  viewToggle: {
+    display: 'flex',
+    border: '1px solid var(--crt-phosphor-dim)',
+    borderRadius: '2px',
+    overflow: 'hidden',
+  },
+  viewToggleButton: {
+    background: 'transparent',
+    border: 'none',
+    borderRight: '1px solid var(--crt-phosphor-dim)',
+    color: 'var(--crt-phosphor-dim)',
+    fontFamily: '"Share Tech Mono", monospace',
+    fontSize: '0.7rem',
+    padding: '3px 10px',
+    cursor: 'pointer',
+    letterSpacing: '0.08em',
+    transition: 'all 0.15s ease',
+  },
+  viewToggleActive: {
+    background: 'var(--crt-phosphor)',
+    color: '#0a0a0a',
+    fontWeight: 'bold',
+    textShadow: 'none',
   },
 } satisfies Record<string, CSSProperties>;
