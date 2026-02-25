@@ -621,3 +621,93 @@ html, body {
   from { transform: translateY(100%); opacity: 0; }
   to   { transform: translateY(0);    opacity: 1; }
 }
+
+/* ============================================
+   React Flow / Dependency Graph Pip-Boy Overrides
+   ============================================ */
+
+/* Dark background for the React Flow canvas */
+.react-flow {
+  background-color: #0a0a0a !important;
+}
+
+/* Edge paths: green with subtle glow */
+.react-flow__edge-path {
+  stroke: #00aa00 !important;
+  stroke-width: 1.5px;
+}
+
+/* Edge labels */
+.react-flow__edge-text {
+  fill: #00aa00 !important;
+  font-family: var(--font-mono) !important;
+  font-size: 0.7rem !important;
+}
+
+/* Controls panel */
+.react-flow__controls {
+  background-color: #0a0a0a !important;
+  border: 1px solid #00aa00 !important;
+  border-radius: 2px !important;
+  box-shadow: 0 0 6px rgba(0, 170, 0, 0.2) !important;
+}
+
+.react-flow__controls-button {
+  background-color: #0a0a0a !important;
+  border-bottom: 1px solid #00550066 !important;
+  fill: #00aa00 !important;
+  color: #00aa00 !important;
+}
+
+.react-flow__controls-button:hover {
+  background-color: #001a00 !important;
+  fill: #00ff00 !important;
+}
+
+.react-flow__controls-button svg {
+  fill: #00aa00 !important;
+}
+
+.react-flow__controls-button:hover svg {
+  fill: #00ff00 !important;
+}
+
+/* MiniMap */
+.react-flow__minimap {
+  background-color: #050505 !important;
+  border: 1px solid #00550066 !important;
+  border-radius: 2px !important;
+}
+
+.react-flow__minimap-mask {
+  fill: rgba(0, 0, 0, 0.7) !important;
+}
+
+/* Attribution removal (we use proOptions.hideAttribution) */
+.react-flow__attribution {
+  display: none !important;
+}
+
+/* Panel (used by some React Flow built-in controls) */
+.react-flow__panel {
+  background-color: transparent !important;
+}
+
+/* Selection box */
+.react-flow__selection {
+  border: 1px solid #00aa00 !important;
+  background: rgba(0, 170, 0, 0.1) !important;
+}
+
+/* Handle (connection points) */
+.react-flow__handle {
+  background: #00aa00 !important;
+  border: none !important;
+  width: 6px !important;
+  height: 6px !important;
+}
+
+/* Background dots */
+.react-flow__background pattern circle {
+  fill: #1a1a1a !important;
+}
