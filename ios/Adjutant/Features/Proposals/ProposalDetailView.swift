@@ -6,6 +6,7 @@ struct ProposalDetailView: View {
     @Environment(\.crtTheme) private var theme
     @EnvironmentObject private var coordinator: AppCoordinator
     @StateObject private var viewModel: ProposalDetailViewModel
+    @State private var showingSendToAgent = false
 
     init(proposalId: String) {
         _viewModel = StateObject(wrappedValue: ProposalDetailViewModel(proposalId: proposalId))
@@ -54,6 +55,13 @@ struct ProposalDetailView: View {
             Button("OK") { }
         } message: {
             Text("Proposal has been sent to the agent for epic planning.")
+        }
+        .sheet(isPresented: $showingSendToAgent) {
+            if let proposal = viewModel.proposal {
+                SendToAgentSheet(proposal: proposal) { _ in
+                    viewModel.markSentToAgent()
+                }
+            }
         }
     }
 
@@ -183,7 +191,7 @@ struct ProposalDetailView: View {
                     }
 
                     CRTButton("SEND TO AGENT", variant: .primary, size: .large) {
-                        Task<Void, Never> { await viewModel.sendToAgent() }
+                        showingSendToAgent = true
                     }
                     .crtGlow(color: theme.primary, radius: 8, intensity: 0.4)
                 }

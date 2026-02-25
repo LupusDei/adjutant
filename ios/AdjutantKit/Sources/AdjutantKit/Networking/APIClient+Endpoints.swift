@@ -210,6 +210,13 @@ extension APIClient {
         return try await requestWithEnvelope(.delete, path: "/sessions/\(encodedId)")
     }
 
+    /// Send text input to a session's terminal
+    public func sendSessionInput(id: String, text: String) async throws -> SendSessionInputResponse {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let request = SendSessionInputRequest(text: text)
+        return try await requestWithEnvelope(.post, path: "/sessions/\(encodedId)/input", body: request)
+    }
+
     /// Trigger session discovery
     public func discoverSessions() async throws -> DiscoverSessionsResponse {
         try await requestWithEnvelope(.post, path: "/sessions/discover")

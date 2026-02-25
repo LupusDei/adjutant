@@ -132,3 +132,17 @@ public struct DiscoverSessionsResponse: Codable, Equatable {
     public let discovered: Int
     public let sessions: [ManagedSession]
 }
+
+/// Request body for sending input to a session
+public struct SendSessionInputRequest: Encodable {
+    public let text: String
+
+    public init(text: String) {
+        self.text = text
+    }
+}
+
+/// Response from sending input to a session
+public struct SendSessionInputResponse: Codable, Equatable {
+    public let sent: Bool
+}

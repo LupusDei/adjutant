@@ -59,33 +59,9 @@ final class ProposalDetailViewModel: BaseViewModel {
         }
     }
 
-    /// Sends the proposal to an agent for epic planning via chat message
-    func sendToAgent() async {
-        guard let proposal else { return }
-        let body = """
-        ## Proposal: \(proposal.title)
-
-        **Type:** \(proposal.type.rawValue)
-        **Author:** \(proposal.author)
-        **Status:** \(proposal.status.rawValue)
-
-        ### Description
-
-        \(proposal.description)
-
-        ---
-
-        Please use /speckit.specify to create a feature specification from this proposal, then /speckit.plan to generate an implementation plan, and /speckit.beads to create executable beads for orchestration.
-        """
-
-        await performAsyncAction(showLoading: false) { [self] in
-            _ = try await self.apiClient.sendChatMessage(
-                agentId: "user",
-                body: body,
-                threadId: "proposal-\(self.proposalId)"
-            )
-            self.sendSuccess = true
-        }
+    /// Called when proposal was sent via the SendToAgentSheet
+    func markSentToAgent() {
+        sendSuccess = true
     }
 
     // MARK: - Computed Properties
