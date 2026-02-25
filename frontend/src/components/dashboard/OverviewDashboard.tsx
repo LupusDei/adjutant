@@ -44,7 +44,7 @@ function formatRelativeTime(timestamp: string): string {
 
 export function DashboardView() {
   const { recentMessages, totalCount: mailTotal, unreadCount, loading: mailLoading, error: mailError } = useDashboardMail();
-  const { recentEpics, loading: epicsLoading, error: epicsError } = useDashboardEpics();
+  const { inProgress: epicsInProgress, completed: epicsCompleted, loading: epicsLoading, error: epicsError } = useDashboardEpics();
   const { totalCrew, activeCrew, recentCrew, crewAlerts, loading: crewLoading, error: crewError } = useDashboardCrew();
 
 
@@ -158,19 +158,48 @@ export function DashboardView() {
         </DashboardWidget>
 
         {/* Epics Widget */}
-        <DashboardWidget title="ACTIVE EPICS" className="dashboard-widget-full-width">
+        <DashboardWidget
+          title="ACTIVE EPICS"
+          className="dashboard-widget-full-width"
+          headerRight={
+            !epicsLoading && !epicsError && (
+              <div className="dashboard-header-stats">
+                <span className={`dashboard-header-stat ${epicsInProgress.totalCount > 0 ? 'dashboard-header-stat-highlight' : ''}`}>
+                  {epicsInProgress.items.length < epicsInProgress.totalCount
+                    ? `${epicsInProgress.items.length} of ${epicsInProgress.totalCount} in progress`
+                    : `${epicsInProgress.totalCount} in progress`}
+                </span>
+                <span className="dashboard-header-stat">
+                  {epicsCompleted.items.length < epicsCompleted.totalCount
+                    ? `${epicsCompleted.items.length} of ${epicsCompleted.totalCount} completed`
+                    : `${epicsCompleted.totalCount} completed`}
+                </span>
+              </div>
+            )
+          }
+        >
           {epicsLoading && <p>Loading epics...</p>}
           {epicsError && <p className="dashboard-view-error-text">Error: {epicsError}</p>}
           {!epicsLoading && !epicsError && (
             <>
-              {recentEpics.length > 0 ? (
+              {epicsInProgress.items.length > 0 ? (
                 <div className="dashboard-convoy-list">
-                  {recentEpics.map((epic) => (
+                  {epicsInProgress.items.map((epic) => (
                     <EpicCard key={epic.epic.id} epic={epic} />
                   ))}
                 </div>
               ) : (
                 <p className="dashboard-empty-text">No active epics</p>
+              )}
+              {epicsCompleted.items.length > 0 && (
+                <>
+                  <h4 className="dashboard-view-sub-title" style={{ marginTop: '16px' }}>COMPLETED</h4>
+                  <div className="dashboard-convoy-list">
+                    {epicsCompleted.items.map((epic) => (
+                      <EpicCard key={epic.epic.id} epic={epic} />
+                    ))}
+                  </div>
+                </>
               )}
             </>
           )}
