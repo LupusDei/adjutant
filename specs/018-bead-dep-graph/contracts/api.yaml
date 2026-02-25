@@ -1,0 +1,155 @@
+openapi: 3.0.3
+info:
+  title: Bead Dependency Graph API
+  version: 1.0.0
+  description: API endpoint for fetching bead dependency graph data
+
+paths:
+  /api/beads/graph:
+    get:
+      summary: Get beads dependency graph
+      description: |
+        Returns all beads with their dependency edges in a graph-optimized format.
+        Reuses the same filtering as GET /api/beads but includes dependency data.
+        Single bd CLI call per database — same cost as the list endpoint.
+      parameters:
+        - name: rig
+          in: query
+          schema:
+            type: string
+            enum: [town, all]
+            default: town
+          description: Filter by rig/database source
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [default, open, in_progress, blocked, closed, all]
+            default: default
+          description: Filter by bead status (default = open + in_progress + blocked)
+        - name: type
+          in: query
+          schema:
+            type: string
+          description: Filter by bead type (epic, task, bug)
+        - name: epicId
+          in: query
+          schema:
+            type: string
+          description: Filter to a specific epic's sub-tree (optional client-side hint)
+        - name: excludeTown
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Exclude hq-* beads when rig=all
+      responses:
+        '200':
+          description: Graph data with nodes and edges
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BeadsGraphResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    BeadsGraphResponse:
+      type: object
+      required:
+        - nodes
+        - edges
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/BeadInfo'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/GraphDependency'
+
+    BeadInfo:
+      type: object
+      required:
+        - id
+        - title
+        - status
+        - priority
+        - type
+        - source
+      properties:
+        id:
+          type: string
+          example: "hq-vts8"
+        title:
+          type: string
+          example: "Implement login flow"
+        status:
+          type: string
+          enum: [open, hooked, in_progress, blocked, closed]
+        priority:
+          type: integer
+          minimum: 0
+          maximum: 4
+        type:
+          type: string
+          enum: [epic, task, bug, feature]
+        assignee:
+          type: string
+          nullable: true
+        rig:
+          type: string
+          nullable: true
+        source:
+          type: string
+        labels:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    GraphDependency:
+      type: object
+      required:
+        - issueId
+        - dependsOnId
+        - type
+      properties:
+        issueId:
+          type: string
+          description: Bead that declared the dependency (parent)
+          example: "adj-021"
+        dependsOnId:
+          type: string
+          description: Bead that is depended on (child)
+          example: "adj-021.1"
+        type:
+          type: string
+          description: Relationship type
+          example: "depends_on"
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string

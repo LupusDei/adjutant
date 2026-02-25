@@ -10,6 +10,7 @@ final class SwarmOverviewViewModel: ObservableObject {
     @Published var overview: ProjectOverviewResponse?
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var lastSuccessfulRefresh: Date?
 
     /// Session ID after a successful agent spawn (for navigation)
     @Published var spawnedSessionId: String?
@@ -58,7 +59,8 @@ final class SwarmOverviewViewModel: ObservableObject {
             return
         }
 
-        if overview == nil {
+        let isFirstLoad = overview == nil
+        if isFirstLoad {
             isLoading = true
         }
         defer { isLoading = false }
@@ -66,9 +68,28 @@ final class SwarmOverviewViewModel: ObservableObject {
         do {
             overview = try await apiClient.getProjectOverview(projectId: projectId)
             errorMessage = nil
+            lastSuccessfulRefresh = Date()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = userFriendlyMessage(for: error)
         }
+    }
+
+    /// Convert network errors to user-friendly messages.
+    private func userFriendlyMessage(for error: Error) -> String {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            switch nsError.code {
+            case NSURLErrorTimedOut:
+                return "Request timed out. The server may be busy."
+            case NSURLErrorCannotConnectToHost, NSURLErrorCannotFindHost:
+                return "Cannot reach the server. Check your connection."
+            case NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost:
+                return "No internet connection."
+            default:
+                return "Network error. Pull down to retry."
+            }
+        }
+        return error.localizedDescription
     }
 
     // MARK: - Agent Spawning

@@ -6,6 +6,7 @@ struct SwarmOverviewView: View {
     @StateObject private var viewModel = SwarmOverviewViewModel()
     @EnvironmentObject private var coordinator: AppCoordinator
     @Environment(\.crtTheme) private var theme
+    @State private var skeletonPulse = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -104,26 +105,34 @@ struct SwarmOverviewView: View {
 
     private var loadingSkeleton: some View {
         VStack(spacing: CRTTheme.Spacing.lg) {
+            // Loading indicator text
+            CRTText("LOADING OVERVIEW...", style: .caption, color: theme.dim)
+                .opacity(skeletonPulse ? 0.8 : 0.3)
+                .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: skeletonPulse)
+                .onAppear { skeletonPulse = true }
+
             // Skeleton for Start Agent button
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
-                .fill(theme.dim.opacity(0.1))
+                .fill(theme.dim.opacity(skeletonPulse ? 0.12 : 0.06))
                 .frame(height: 50)
                 .padding(.horizontal, CRTTheme.Spacing.md)
+                .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: skeletonPulse)
 
             // Skeleton for sections
             ForEach(0..<3, id: \.self) { _ in
                 VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
                     RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                        .fill(theme.dim.opacity(0.1))
+                        .fill(theme.dim.opacity(skeletonPulse ? 0.12 : 0.06))
                         .frame(width: 120, height: 16)
                     ForEach(0..<2, id: \.self) { _ in
                         RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                            .fill(theme.dim.opacity(0.05))
+                            .fill(theme.dim.opacity(skeletonPulse ? 0.08 : 0.03))
                             .frame(height: 44)
                     }
                 }
                 .padding(.horizontal, CRTTheme.Spacing.md)
             }
+            .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: skeletonPulse)
         }
         .padding(.vertical, CRTTheme.Spacing.lg)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -153,14 +162,18 @@ struct SwarmOverviewView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundColor(CRTTheme.State.warning)
                 .font(.system(size: 12))
-            CRTText("USING CACHED DATA", style: .caption, color: CRTTheme.State.warning)
+            VStack(alignment: .leading, spacing: 2) {
+                CRTText("USING CACHED DATA", style: .caption, color: CRTTheme.State.warning)
+                if let error = viewModel.errorMessage {
+                    CRTText(error, style: .caption, color: theme.dim.opacity(0.6))
+                }
+            }
             Spacer()
             Button {
                 viewModel.clearError()
+                Task { await viewModel.refresh() }
             } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10))
-                    .foregroundColor(theme.dim)
+                CRTText("RETRY", style: .caption, color: CRTTheme.State.warning)
             }
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
@@ -170,8 +183,15 @@ struct SwarmOverviewView: View {
 
     private var emptyView: some View {
         VStack(spacing: CRTTheme.Spacing.md) {
+            Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                .font(.system(size: 40))
+                .foregroundColor(theme.dim)
             CRTText("NO DATA", style: .subheader, color: theme.dim)
-            CRTText("Pull to refresh or start an agent", style: .caption, color: theme.dim)
+            CRTText("Could not load overview", style: .caption, color: theme.dim.opacity(0.6))
+
+            CRTButton("RETRY", variant: .secondary, size: .medium) {
+                Task { await viewModel.refresh() }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
