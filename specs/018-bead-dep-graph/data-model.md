@@ -33,7 +33,7 @@ Represents a dependency relationship between two beads.
 | id | string | Derived: `${issueId}-${dependsOnId}` |
 | issueId | string | The bead that has this dependency (parent) |
 | dependsOnId | string | The bead it depends on (child) |
-| type | string | Relationship type from bd CLI |
+| type | string | Relationship type from bd CLI. Known values: `"blocks"` (parent depends on child) |
 | isCriticalPath | boolean | Whether this edge is on the critical path |
 
 ### BeadsGraphResponse (API)
@@ -42,7 +42,7 @@ Response shape from `GET /api/beads/graph`.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| nodes | BeadInfo[] | All beads matching filter criteria |
+| nodes | GraphNode[] | All beads matching filter criteria (subset of BeadInfo fields needed for visualization) |
 | edges | GraphDependency[] | All dependency relationships between returned beads |
 
 ### GraphDependency (API)
@@ -53,7 +53,7 @@ Individual dependency edge from API.
 |-------|------|-------------|
 | issueId | string | Bead that declared the dependency |
 | dependsOnId | string | Bead that is depended on |
-| type | string | Relationship type |
+| type | string | Relationship type. Known values: `"blocks"` |
 
 ## State Transitions
 

@@ -17,9 +17,12 @@ paths:
           in: query
           schema:
             type: string
-            enum: [town, all]
             default: town
-          description: Filter by rig/database source
+          description: |
+            Filter by rig/database source.
+            "town" (default) queries the town database only.
+            "all" queries all databases (town + all rigs).
+            Any other value queries that specific rig's database (e.g., "adjutant").
         - name: status
           in: query
           schema:
@@ -68,14 +71,18 @@ components:
         nodes:
           type: array
           items:
-            $ref: '#/components/schemas/BeadInfo'
+            $ref: '#/components/schemas/GraphNode'
         edges:
           type: array
           items:
             $ref: '#/components/schemas/GraphDependency'
 
-    BeadInfo:
+    GraphNode:
       type: object
+      description: |
+        A bead node in the dependency graph. Contains the subset of BeadInfo fields
+        needed for graph visualization. Additional fields (labels, createdAt, updatedAt,
+        rig) are available via GET /api/beads/:id for the detail panel.
       required:
         - id
         - title
@@ -103,22 +110,9 @@ components:
         assignee:
           type: string
           nullable: true
-        rig:
-          type: string
-          nullable: true
         source:
           type: string
-        labels:
-          type: array
-          items:
-            type: string
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-          nullable: true
+          description: '"town" for hq-* beads, or rig name for rig-specific beads'
 
     GraphDependency:
       type: object
@@ -137,8 +131,8 @@ components:
           example: "adj-021.1"
         type:
           type: string
-          description: Relationship type
-          example: "depends_on"
+          description: 'Relationship type. Known values: "blocks"'
+          example: "blocks"
 
     ErrorResponse:
       type: object
