@@ -5,19 +5,21 @@ export interface ProposalCardProps {
   proposal: Proposal;
   onAccept?: (id: string) => void;
   onDismiss?: (id: string) => void;
+  onComplete?: (id: string) => void;
   onSendToAgent?: (proposal: Proposal) => void;
   onClick?: (id: string) => void;
 }
 
-export function ProposalCard({ proposal, onAccept, onDismiss, onSendToAgent, onClick }: ProposalCardProps) {
+export function ProposalCard({ proposal, onAccept, onDismiss, onComplete, onSendToAgent, onClick }: ProposalCardProps) {
   const isPending = proposal.status === "pending";
   const isAccepted = proposal.status === "accepted";
   const isDismissed = proposal.status === "dismissed";
+  const isCompleted = proposal.status === "completed";
 
   return (
     <div style={{
       ...styles.card,
-      ...(isDismissed ? styles.dismissed : {}),
+      ...(isDismissed || isCompleted ? styles.dismissed : {}),
       cursor: onClick ? 'pointer' : undefined,
     }} onClick={() => onClick?.(proposal.id)}>
       <div style={styles.header}>
@@ -37,7 +39,9 @@ export function ProposalCard({ proposal, onAccept, onDismiss, onSendToAgent, onC
         {!isPending && (
           <span style={{
             ...styles.statusBadge,
-            ...(isAccepted ? styles.statusAccepted : styles.statusDismissed),
+            ...(isAccepted ? styles.statusAccepted
+              : isCompleted ? styles.statusCompleted
+              : styles.statusDismissed),
           }}>
             {proposal.status.toUpperCase()}
           </span>
@@ -68,12 +72,20 @@ export function ProposalCard({ proposal, onAccept, onDismiss, onSendToAgent, onC
           </>
         )}
         {isAccepted && (
-          <button
-            style={styles.sendBtn}
-            onClick={(e) => { e.stopPropagation(); onSendToAgent?.(proposal); }}
-          >
-            SEND TO AGENT
-          </button>
+          <>
+            <button
+              style={styles.completeBtn}
+              onClick={(e) => { e.stopPropagation(); onComplete?.(proposal.id); }}
+            >
+              COMPLETE
+            </button>
+            <button
+              style={styles.sendBtn}
+              onClick={(e) => { e.stopPropagation(); onSendToAgent?.(proposal); }}
+            >
+              SEND TO AGENT
+            </button>
+          </>
         )}
       </div>
     </div>
@@ -144,6 +156,10 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--pipboy-green, #00ff00)",
     border: "1px solid var(--pipboy-green, #00ff00)",
   },
+  statusCompleted: {
+    color: "#00ccff",
+    border: "1px solid #00ccff",
+  },
   statusDismissed: {
     color: "#666",
     border: "1px solid #666",
@@ -177,6 +193,17 @@ const styles: Record<string, CSSProperties> = {
     padding: "4px 12px",
     fontSize: "11px",
     fontFamily: "var(--font-mono, monospace)",
+    cursor: "pointer",
+    textTransform: "uppercase" as const,
+  },
+  completeBtn: {
+    background: "transparent",
+    border: "1px solid #00ccff",
+    color: "#00ccff",
+    padding: "4px 12px",
+    fontSize: "11px",
+    fontFamily: "var(--font-mono, monospace)",
+    fontWeight: "bold",
     cursor: "pointer",
     textTransform: "uppercase" as const,
   },

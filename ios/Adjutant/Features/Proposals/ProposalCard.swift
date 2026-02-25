@@ -9,15 +9,18 @@ struct ProposalCard: View {
     let proposal: Proposal
     let onAccept: (() -> Void)?
     let onDismiss: (() -> Void)?
+    let onComplete: (() -> Void)?
 
     init(
         proposal: Proposal,
         onAccept: (() -> Void)? = nil,
-        onDismiss: (() -> Void)? = nil
+        onDismiss: (() -> Void)? = nil,
+        onComplete: (() -> Void)? = nil
     ) {
         self.proposal = proposal
         self.onAccept = onAccept
         self.onDismiss = onDismiss
+        self.onComplete = onComplete
     }
 
     var body: some View {
@@ -61,6 +64,14 @@ struct ProposalCard: View {
                     Label("Accept", systemImage: "checkmark")
                 }
                 .tint(CRTTheme.State.success)
+            }
+            if proposal.status == .accepted, let onComplete {
+                Button {
+                    onComplete()
+                } label: {
+                    Label("Complete", systemImage: "checkmark.circle.fill")
+                }
+                .tint(CRTTheme.State.info)
             }
         }
         .accessibilityElement(children: .combine)
@@ -158,6 +169,8 @@ struct ProposalCard: View {
             return theme.primary
         case .accepted:
             return CRTTheme.State.success
+        case .completed:
+            return CRTTheme.State.info
         case .dismissed:
             return CRTTheme.State.error
         }
@@ -169,6 +182,8 @@ struct ProposalCard: View {
             return theme.dim
         case .accepted:
             return CRTTheme.State.success
+        case .completed:
+            return CRTTheme.State.info
         case .dismissed:
             return CRTTheme.State.error
         }

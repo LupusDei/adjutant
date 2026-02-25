@@ -190,10 +190,25 @@ struct ProposalDetailView: View {
                             .foregroundColor(CRTTheme.State.success)
                     }
 
-                    CRTButton("SEND TO AGENT", variant: .primary, size: .large) {
-                        showingSendToAgent = true
+                    HStack(spacing: CRTTheme.Spacing.md) {
+                        CRTButton("COMPLETE", variant: .secondary, size: .medium) {
+                            Task<Void, Never> { await viewModel.complete() }
+                        }
+
+                        CRTButton("SEND TO AGENT", variant: .primary, size: .large) {
+                            showingSendToAgent = true
+                        }
+                        .crtGlow(color: theme.primary, radius: 8, intensity: 0.4)
                     }
-                    .crtGlow(color: theme.primary, radius: 8, intensity: 0.4)
+                }
+
+            case .completed:
+                HStack(spacing: CRTTheme.Spacing.xs) {
+                    Circle()
+                        .fill(CRTTheme.State.info)
+                        .frame(width: 8, height: 8)
+                    CRTText("COMPLETED", style: .subheader, glowIntensity: .medium)
+                        .foregroundColor(CRTTheme.State.info)
                 }
 
             case .dismissed:
@@ -244,6 +259,8 @@ struct ProposalDetailView: View {
             return theme.primary
         case .accepted:
             return CRTTheme.State.success
+        case .completed:
+            return CRTTheme.State.info
         case .dismissed:
             return CRTTheme.State.error
         }

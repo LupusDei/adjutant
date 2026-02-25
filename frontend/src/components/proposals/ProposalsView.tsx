@@ -12,6 +12,7 @@ export interface ProposalsViewProps {
 const STATUS_OPTIONS: Array<{ value: ProposalStatus | "all"; label: string }> = [
   { value: "pending", label: "PENDING" },
   { value: "accepted", label: "ACCEPTED" },
+  { value: "completed", label: "COMPLETED" },
   { value: "dismissed", label: "DISMISSED" },
   { value: "all", label: "ALL" },
 ];
@@ -33,6 +34,7 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
     setTypeFilter,
     accept,
     dismiss,
+    complete,
     refresh,
   } = useProposals();
 
@@ -48,6 +50,11 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
     await dismiss(id);
     void refresh();
   }, [dismiss, refresh]);
+
+  const handleCompleteFromDetail = useCallback(async (id: string) => {
+    await complete(id);
+    void refresh();
+  }, [complete, refresh]);
 
   const handleSendToAgent = useCallback((proposal: Proposal) => {
     setSendToAgentProposal(proposal);
@@ -120,6 +127,7 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
             proposal={p}
             onAccept={(id) => { void accept(id); }}
             onDismiss={(id) => { void dismiss(id); }}
+            onComplete={(id) => { void complete(id); }}
             onSendToAgent={handleSendToAgent}
             onClick={setSelectedProposalId}
           />
@@ -135,6 +143,7 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
         onClose={() => { setSelectedProposalId(null); }}
         onAccept={(id) => { void handleAcceptFromDetail(id); }}
         onDismiss={(id) => { void handleDismissFromDetail(id); }}
+        onComplete={(id) => { void handleCompleteFromDetail(id); }}
         onSendToAgent={handleSendToAgent}
       />
 

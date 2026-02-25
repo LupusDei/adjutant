@@ -59,6 +59,14 @@ final class ProposalDetailViewModel: BaseViewModel {
         }
     }
 
+    /// Marks the proposal as completed
+    func complete() async {
+        await performAsyncAction(showLoading: false) { [self] in
+            let updated = try await self.apiClient.updateProposalStatus(id: self.proposalId, status: .completed)
+            self.proposal = updated
+        }
+    }
+
     /// Called when proposal was sent via the SendToAgentSheet
     func markSentToAgent() {
         sendSuccess = true

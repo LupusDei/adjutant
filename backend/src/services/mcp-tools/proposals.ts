@@ -63,7 +63,7 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
   server.tool(
     "list_proposals",
     {
-      status: z.enum(["pending", "accepted", "dismissed"]).optional().describe("Filter by status"),
+      status: z.enum(["pending", "accepted", "dismissed", "completed"]).optional().describe("Filter by status"),
       type: z.enum(["product", "engineering"]).optional().describe("Filter by type"),
       project: z.string().optional().describe("Filter by project"),
     },

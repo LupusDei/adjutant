@@ -12,6 +12,7 @@ export interface ProposalDetailViewProps {
   onClose: () => void;
   onAccept: (id: string) => void;
   onDismiss: (id: string) => void;
+  onComplete: (id: string) => void;
   onSendToAgent: (proposal: Proposal) => void;
 }
 
@@ -35,6 +36,7 @@ export function ProposalDetailView({
   onClose,
   onAccept,
   onDismiss,
+  onComplete,
   onSendToAgent,
 }: ProposalDetailViewProps) {
   const [proposal, setProposal] = useState<Proposal | null>(null);
@@ -81,6 +83,10 @@ export function ProposalDetailView({
   const handleDismiss = useCallback(() => {
     if (proposal) onDismiss(proposal.id);
   }, [proposal, onDismiss]);
+
+  const handleComplete = useCallback(() => {
+    if (proposal) onComplete(proposal.id);
+  }, [proposal, onComplete]);
 
   const handleSendToAgent = useCallback(() => {
     if (proposal) onSendToAgent(proposal);
@@ -138,6 +144,7 @@ export function ProposalDetailView({
                   ...styles.badge,
                   ...(proposal.status === 'pending' ? styles.statusPending
                     : proposal.status === 'accepted' ? styles.statusAccepted
+                    : proposal.status === 'completed' ? styles.statusCompleted
                     : styles.statusDismissed),
                 }}>
                   {proposal.status.toUpperCase()}
@@ -183,9 +190,14 @@ export function ProposalDetailView({
                   </>
                 )}
                 {isAccepted && (
-                  <button style={styles.sendBtn} onClick={handleSendToAgent}>
-                    SEND TO AGENT
-                  </button>
+                  <>
+                    <button style={styles.completeBtn} onClick={handleComplete}>
+                      COMPLETE
+                    </button>
+                    <button style={styles.sendBtn} onClick={handleSendToAgent}>
+                      SEND TO AGENT
+                    </button>
+                  </>
                 )}
               </div>
             </>
@@ -318,6 +330,11 @@ const styles = {
     borderColor: 'var(--pipboy-green, #00ff00)',
     backgroundColor: 'rgba(0, 255, 0, 0.1)',
   },
+  statusCompleted: {
+    color: '#00ccff',
+    borderColor: '#00ccff',
+    backgroundColor: 'rgba(0, 204, 255, 0.1)',
+  },
   statusDismissed: {
     color: '#666',
     borderColor: '#666',
@@ -379,6 +396,18 @@ const styles = {
     padding: '6px 16px',
     fontSize: '0.75rem',
     fontFamily: '"Share Tech Mono", monospace',
+    cursor: 'pointer',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  },
+  completeBtn: {
+    background: 'transparent',
+    border: '1px solid #00ccff',
+    color: '#00ccff',
+    padding: '6px 16px',
+    fontSize: '0.75rem',
+    fontFamily: '"Share Tech Mono", monospace',
+    fontWeight: 'bold',
     cursor: 'pointer',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',

@@ -11,6 +11,7 @@ public enum ProposalStatus: String, Codable, CaseIterable, Sendable {
     case pending
     case accepted
     case dismissed
+    case completed
 }
 
 /// A proposal submitted by an agent for review by the Mayor.

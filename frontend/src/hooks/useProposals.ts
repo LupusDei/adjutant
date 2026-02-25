@@ -12,6 +12,7 @@ export interface UseProposalsResult {
   setTypeFilter: (filter: ProposalType | "all") => void;
   accept: (id: string) => Promise<void>;
   dismiss: (id: string) => Promise<void>;
+  complete: (id: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -64,6 +65,17 @@ export function useProposals(): UseProposalsResult {
     }
   }, []);
 
+  const complete = useCallback(async (id: string) => {
+    try {
+      const updated = await api.proposals.updateStatus(id, "completed");
+      setProposals((prev) =>
+        prev.map((p) => (p.id === id ? updated : p))
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, []);
+
   return {
     proposals,
     loading,
@@ -74,6 +86,7 @@ export function useProposals(): UseProposalsResult {
     setTypeFilter,
     accept,
     dismiss,
+    complete,
     refresh: fetchProposals,
   };
 }

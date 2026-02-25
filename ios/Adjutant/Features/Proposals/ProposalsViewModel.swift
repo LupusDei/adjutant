@@ -75,6 +75,14 @@ final class ProposalsViewModel: BaseViewModel {
         await load()
     }
 
+    /// Marks a proposal as completed by ID and refreshes the list.
+    func complete(id: String) async {
+        await performAsyncAction(showLoading: false) { [self] in
+            _ = try await self.apiClient.updateProposalStatus(id: id, status: .completed)
+        }
+        await load()
+    }
+
     // MARK: - Computed Properties
 
     /// Whether the proposals list is empty

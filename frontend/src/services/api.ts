@@ -538,7 +538,7 @@ export const api = {
    */
   proposals: {
     async list(params?: {
-      status?: 'pending' | 'accepted' | 'dismissed';
+      status?: 'pending' | 'accepted' | 'dismissed' | 'completed';
       type?: 'product' | 'engineering';
       project?: string;
     }): Promise<Proposal[]> {
@@ -555,7 +555,7 @@ export const api = {
       return apiFetch(`/proposals/${encodeURIComponent(id)}`);
     },
 
-    async updateStatus(id: string, status: 'accepted' | 'dismissed'): Promise<Proposal> {
+    async updateStatus(id: string, status: 'accepted' | 'dismissed' | 'completed'): Promise<Proposal> {
       return apiFetch(`/proposals/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         body: { status },

@@ -180,6 +180,9 @@ struct ProposalsView: View {
                         } : nil,
                         onDismiss: proposal.status == .pending ? {
                             Task<Void, Never> { await viewModel.dismiss(id: proposal.id) }
+                        } : nil,
+                        onComplete: proposal.status == .accepted ? {
+                            Task<Void, Never> { await viewModel.complete(id: proposal.id) }
                         } : nil
                     )
                 }

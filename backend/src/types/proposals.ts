@@ -5,7 +5,7 @@ import { z } from "zod";
 // =============================================================================
 
 export const ProposalTypeSchema = z.enum(["product", "engineering"]);
-export const ProposalStatusSchema = z.enum(["pending", "accepted", "dismissed"]);
+export const ProposalStatusSchema = z.enum(["pending", "accepted", "dismissed", "completed"]);
 
 export const CreateProposalSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -15,7 +15,7 @@ export const CreateProposalSchema = z.object({
 });
 
 export const UpdateProposalStatusSchema = z.object({
-  status: z.enum(["accepted", "dismissed"]),
+  status: z.enum(["accepted", "dismissed", "completed"]),
 });
 
 export const ProposalFilterSchema = z.object({

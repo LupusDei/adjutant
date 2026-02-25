@@ -356,7 +356,7 @@ export interface UnreadCount {
 }
 
 export type ProposalType = 'product' | 'engineering';
-export type ProposalStatus = 'pending' | 'accepted' | 'dismissed';
+export type ProposalStatus = 'pending' | 'accepted' | 'dismissed' | 'completed';
 
 export interface Proposal {
   id: string;

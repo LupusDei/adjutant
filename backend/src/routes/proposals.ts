@@ -4,7 +4,7 @@
  * GET    /api/proposals      - List proposals (filter by status, type)
  * POST   /api/proposals      - Create a proposal
  * GET    /api/proposals/:id  - Get single proposal
- * PATCH  /api/proposals/:id  - Update proposal status (accept/dismiss)
+ * PATCH  /api/proposals/:id  - Update proposal status (accept/dismiss/complete)
  */
 
 import { Router } from "express";
