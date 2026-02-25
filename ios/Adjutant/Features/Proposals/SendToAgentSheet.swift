@@ -481,19 +481,26 @@ struct SendToAgentSheet: View {
                     )
                 )
 
-                // Wait for agent to initialize, then send proposal
+                // Send the full proposal as an MCP message for reference
                 let prompt = buildProposalPrompt()
-                try await Task.sleep(nanoseconds: 3_000_000_000)
+                _ = try? await apiClient.sendChatMessage(
+                    agentId: session.name,
+                    body: prompt,
+                    threadId: "proposal-\(proposal.id)"
+                )
 
-                do {
-                    _ = try await apiClient.sendSessionInput(id: session.id, text: prompt)
-                } catch {
-                    _ = try await apiClient.sendChatMessage(
-                        agentId: session.name,
-                        body: prompt,
-                        threadId: "proposal-\(proposal.id)"
-                    )
-                }
+                // Build a concise single-line trigger with proposal content inline.
+                // Multi-line text via tmux send-keys breaks (newlines trigger premature Enter),
+                // so we flatten the proposal into one line the agent can act on immediately.
+                let descriptionPreview = proposal.description
+                    .replacingOccurrences(of: "\n+", with: " ", options: .regularExpression)
+                    .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                    .trimmingCharacters(in: .whitespaces)
+                    .prefix(500)
+                let inlineTrigger = "Execute this \(proposal.type.rawValue) proposal: \"\(proposal.title)\" — \(descriptionPreview) — Use /epic-planner to create the epic hierarchy. Full proposal details are in your adjutant MCP messages (thread: proposal-\(proposal.id)). Send progress updates and questions to the user via the send_message MCP tool (to: \"user\")."
+
+                try await Task.sleep(nanoseconds: 5_000_000_000)
+                _ = try? await apiClient.sendSessionInput(id: session.id, text: inlineTrigger)
 
                 #if canImport(UIKit)
                 let feedback = UINotificationFeedbackGenerator()

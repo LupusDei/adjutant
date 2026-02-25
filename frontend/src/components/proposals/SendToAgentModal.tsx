@@ -116,7 +116,7 @@ export function SendToAgentModal({ proposal, onClose, onSent }: SendToAgentModal
         workspaceType: 'primary',
       });
 
-      // Send the full proposal as an MCP message (stored in SQLite immediately)
+      // Send the full proposal as an MCP message for reference
       const prompt = buildProposalPrompt(proposal);
       await api.messages.send({
         to: session.name,
@@ -124,14 +124,18 @@ export function SendToAgentModal({ proposal, onClose, onSent }: SendToAgentModal
         threadId: `proposal-${proposal.id}`,
       });
 
-      // After agent starts, send a short single-line trigger via terminal input.
-      // Multi-line text via tmux send-keys doesn't submit properly in Claude Code,
-      // so we only send a brief trigger here — the full proposal is in messages.
+      // Build a concise single-line trigger with the proposal content inline.
+      // Multi-line text via tmux send-keys breaks (newlines trigger premature Enter),
+      // so we flatten the proposal into one line the agent can act on immediately.
+      const descriptionPreview = proposal.description
+        .replace(/\n+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 500);
+      const inlineTrigger = `Execute this ${proposal.type} proposal: "${proposal.title}" — ${descriptionPreview} — Use /epic-planner to create the epic hierarchy. Full proposal details are in your adjutant MCP messages (thread: proposal-${proposal.id}). Send progress updates and questions to the user via the send_message MCP tool (to: "user").`;
+
       setTimeout(() => {
-        void api.sessions.sendInput(
-          session.id,
-          'Check your adjutant messages for a new proposal and execute it. Use /epic-planner to plan it. Send any questions to the user via adjutant messages.'
-        );
+        void api.sessions.sendInput(session.id, inlineTrigger);
       }, 5000);
 
       setSendState('success');
@@ -141,7 +145,7 @@ export function SendToAgentModal({ proposal, onClose, onSent }: SendToAgentModal
       setSendState('error');
       setError(err instanceof ApiError ? err.message : 'Failed to spawn agent');
     }
-  }, [callsign, proposal, onSent]);
+  }, [callsign, proposal, onSent, projectPath]);
 
   const isExistingTab = tab === 'existing';
   const canSend = isExistingTab ? !!selectedAgent : true;
