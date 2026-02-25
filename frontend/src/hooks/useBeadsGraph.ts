@@ -81,6 +81,12 @@ const NODE_HEIGHT = 60;
 const EPIC_NODE_WIDTH = 240;
 const EPIC_NODE_HEIGHT = 72;
 
+/** Layout constants for orphan (unlinked) node grid. */
+const ORPHAN_GRID_COLS = 4;
+const ORPHAN_GRID_GAP_X = 40;
+const ORPHAN_GRID_GAP_Y = 30;
+const ORPHAN_SECTION_GAP = 80;
+
 /**
  * Find all descendant node IDs of a given node in the dependency graph.
  * An edge goes from dependsOnId -> issueId, so descendants are nodes
@@ -123,8 +129,44 @@ function getHiddenNodeIds(
 }
 
 /**
+ * Build a BeadNodeData object from an API node.
+ */
+function buildNodeData(
+  node: GraphNodeData,
+  collapsedNodes: ReadonlySet<string>,
+  apiEdges: GraphDependency[]
+): BeadNodeData {
+  const isCollapsed = collapsedNodes.has(node.id);
+
+  let collapsedChildCount = 0;
+  if (isCollapsed) {
+    const descendants = getDescendantIds(node.id, apiEdges);
+    collapsedChildCount = descendants.size;
+  }
+
+  const nodeData: BeadNodeData = {
+    id: node.id,
+    title: node.title,
+    status: node.status,
+    beadType: node.type,
+    priority: node.priority,
+    assignee: node.assignee,
+    collapsed: isCollapsed,
+    collapsedChildCount,
+  };
+
+  // Only include source if defined (exactOptionalPropertyTypes compliance)
+  if (node.source != null) {
+    nodeData.source = node.source;
+  }
+
+  return nodeData;
+}
+
+/**
  * Transform API nodes into React Flow nodes with dagre-computed positions.
  * Filters out hidden nodes (collapsed sub-trees) and re-layouts.
+ * Orphan nodes (no visible edges) are grouped in a separate grid at the bottom.
  */
 function getLayoutedElements(
   apiNodes: GraphNodeData[],
@@ -145,77 +187,97 @@ function getLayoutedElements(
     return { nodes: [], edges: [] };
   }
 
-  const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: 'TB', ranksep: 60, nodesep: 40 });
-
-  // Add visible nodes to dagre
-  for (const node of visibleApiNodes) {
-    const isEpic = node.type === 'epic';
-    g.setNode(node.id, {
-      width: isEpic ? EPIC_NODE_WIDTH : NODE_WIDTH,
-      height: isEpic ? EPIC_NODE_HEIGHT : NODE_HEIGHT,
-    });
-  }
-
-  // Add edges only between visible nodes
+  // Determine which visible edges exist
   const visibleIds = new Set(visibleApiNodes.map((n) => n.id));
-  for (const edge of apiEdges) {
-    if (visibleIds.has(edge.dependsOnId) && visibleIds.has(edge.issueId)) {
+  const visibleEdges = apiEdges.filter(
+    (edge) => visibleIds.has(edge.dependsOnId) && visibleIds.has(edge.issueId)
+  );
+
+  // Identify orphan nodes (no visible edges at all)
+  const connectedIds = new Set<string>();
+  for (const edge of visibleEdges) {
+    connectedIds.add(edge.dependsOnId);
+    connectedIds.add(edge.issueId);
+  }
+  const connectedNodes = visibleApiNodes.filter((n) => connectedIds.has(n.id));
+  const orphanNodes = visibleApiNodes.filter((n) => !connectedIds.has(n.id));
+
+  // Layout connected nodes with dagre
+  let maxDagreY = 0;
+  const rfNodes: Node<BeadNodeData>[] = [];
+
+  if (connectedNodes.length > 0) {
+    const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+    g.setGraph({ rankdir: 'TB', ranksep: 60, nodesep: 40 });
+
+    for (const node of connectedNodes) {
+      const isEpic = node.type === 'epic';
+      g.setNode(node.id, {
+        width: isEpic ? EPIC_NODE_WIDTH : NODE_WIDTH,
+        height: isEpic ? EPIC_NODE_HEIGHT : NODE_HEIGHT,
+      });
+    }
+
+    for (const edge of visibleEdges) {
       g.setEdge(edge.dependsOnId, edge.issueId);
     }
+
+    Dagre.layout(g);
+
+    for (const node of connectedNodes) {
+      const pos = g.node(node.id);
+      const isEpic = node.type === 'epic';
+      const w = isEpic ? EPIC_NODE_WIDTH : NODE_WIDTH;
+      const h = isEpic ? EPIC_NODE_HEIGHT : NODE_HEIGHT;
+      const nodeData = buildNodeData(node, collapsedNodes, apiEdges);
+
+      const nodeY = pos.y + h / 2;
+      if (nodeY > maxDagreY) {
+        maxDagreY = nodeY;
+      }
+
+      rfNodes.push({
+        id: node.id,
+        type: 'beadNode' as const,
+        position: {
+          x: pos.x - w / 2,
+          y: pos.y - h / 2,
+        },
+        data: nodeData,
+      });
+    }
   }
 
-  Dagre.layout(g);
+  // Position orphan nodes in a grid below the main graph
+  if (orphanNodes.length > 0) {
+    const orphanStartY = maxDagreY + ORPHAN_SECTION_GAP;
 
-  // Transform to React Flow nodes
-  const rfNodes: Node<BeadNodeData>[] = visibleApiNodes.map((node) => {
-    const pos = g.node(node.id);
-    const isEpic = node.type === 'epic';
-    const w = isEpic ? EPIC_NODE_WIDTH : NODE_WIDTH;
-    const h = isEpic ? EPIC_NODE_HEIGHT : NODE_HEIGHT;
-    const isCollapsed = collapsedNodes.has(node.id);
+    for (let i = 0; i < orphanNodes.length; i++) {
+      const node = orphanNodes[i];
+      if (!node) continue;
 
-    // Count hidden descendants for this collapsed node
-    let collapsedChildCount = 0;
-    if (isCollapsed) {
-      const descendants = getDescendantIds(node.id, apiEdges);
-      collapsedChildCount = descendants.size;
+      const isEpic = node.type === 'epic';
+      const w = isEpic ? EPIC_NODE_WIDTH : NODE_WIDTH;
+      const h = isEpic ? EPIC_NODE_HEIGHT : NODE_HEIGHT;
+      const col = i % ORPHAN_GRID_COLS;
+      const row = Math.floor(i / ORPHAN_GRID_COLS);
+
+      const nodeData = buildNodeData(node, collapsedNodes, apiEdges);
+
+      rfNodes.push({
+        id: node.id,
+        type: 'beadNode' as const,
+        position: {
+          x: col * (w + ORPHAN_GRID_GAP_X),
+          y: orphanStartY + row * (h + ORPHAN_GRID_GAP_Y),
+        },
+        data: nodeData,
+      });
     }
+  }
 
-    const nodeData: BeadNodeData = {
-      id: node.id,
-      title: node.title,
-      status: node.status,
-      beadType: node.type,
-      priority: node.priority,
-      assignee: node.assignee,
-      collapsed: isCollapsed,
-      collapsedChildCount,
-    };
-
-    // Only include source if defined (exactOptionalPropertyTypes compliance)
-    if (node.source != null) {
-      nodeData.source = node.source;
-    }
-
-    return {
-      id: node.id,
-      type: 'beadNode' as const,
-      position: {
-        x: pos.x - w / 2,
-        y: pos.y - h / 2,
-      },
-      data: nodeData,
-    };
-  });
-
-  // Transform to React Flow edges (only between visible nodes)
-  const rfEdges: Edge[] = apiEdges
-    .filter(
-      (edge) =>
-        visibleIds.has(edge.dependsOnId) &&
-        visibleIds.has(edge.issueId)
-    )
+  // Transform to React Flow edges (only between visible connected nodes)
+  const rfEdges: Edge[] = visibleEdges
     .map((edge, index) => ({
       id: `edge-${index}-${edge.dependsOnId}-${edge.issueId}`,
       source: edge.dependsOnId,
