@@ -15,6 +15,8 @@ import { usePolling } from './usePolling';
 import type { GraphNodeData, GraphDependency } from '../types/beads-graph';
 import { computeCriticalPath } from '../utils/critical-path';
 import type { CriticalPathResult } from '../utils/critical-path';
+import { detectCycles } from '../utils/cycle-detection';
+import type { CycleDetectionResult } from '../utils/cycle-detection';
 
 /** Data carried by each React Flow node. */
 export interface BeadNodeData extends Record<string, unknown> {
@@ -69,6 +71,8 @@ export interface UseBeadsGraphResult {
   criticalPath: CriticalPathResult;
   /** Number of nodes on the critical path. */
   criticalPathLength: number;
+  /** Cycle detection result. */
+  cycleDetection: CycleDetectionResult;
 }
 
 /** Default node dimensions for layout computation. */
@@ -228,6 +232,14 @@ const EMPTY_CRITICAL_PATH: CriticalPathResult = {
   edgeIds: new Set<string>(),
 };
 
+/** Empty cycle detection result for initialization. */
+const EMPTY_CYCLE_DETECTION: CycleDetectionResult = {
+  hasCycles: false,
+  cycles: [],
+  nodesInCycles: new Set<string>(),
+  edgesInCycles: new Set<string>(),
+};
+
 /**
  * React hook for fetching bead dependency graph data with dagre layout.
  * Supports collapse/expand of sub-trees and critical path computation.
@@ -306,6 +318,14 @@ export function useBeadsGraph(
     return computeCriticalPath(data.nodes, data.edges);
   }, [data]);
 
+  // Detect circular dependencies when data changes
+  const cycleDetection = useMemo(() => {
+    if (!data || data.edges.length === 0) {
+      return EMPTY_CYCLE_DETECTION;
+    }
+    return detectCycles(data.edges);
+  }, [data]);
+
   const toggleCriticalPath = useCallback(() => {
     setShowCriticalPath((prev) => !prev);
   }, []);
@@ -325,5 +345,6 @@ export function useBeadsGraph(
     toggleCriticalPath,
     criticalPath,
     criticalPathLength: criticalPath.nodeIds.size,
+    cycleDetection,
   };
 }

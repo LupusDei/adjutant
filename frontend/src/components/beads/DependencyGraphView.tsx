@@ -105,6 +105,7 @@ function DependencyGraphInner({ isActive = true }: DependencyGraphViewProps) {
     toggleCriticalPath,
     criticalPath,
     criticalPathLength,
+    cycleDetection,
   } = useBeadsGraph({
     pollInterval: 30000,
     enabled: isActive,
@@ -336,6 +337,19 @@ function DependencyGraphInner({ isActive = true }: DependencyGraphViewProps) {
         )}
       </button>
 
+      {/* Circular Dependency Warning */}
+      {cycleDetection.hasCycles && (
+        <div
+          style={styles.cycleWarning}
+          title={`Circular dependencies detected involving: ${[...cycleDetection.nodesInCycles].join(', ')}`}
+        >
+          <span style={styles.cycleWarningIcon}>!</span>
+          <span style={styles.cycleWarningText}>
+            CIRCULAR DEPS ({cycleDetection.nodesInCycles.size})
+          </span>
+        </div>
+      )}
+
       <GraphDetailPanel
         bead={selectedBead}
         onClose={handleDetailClose}
@@ -435,5 +449,41 @@ const styles = {
   criticalPathCount: {
     fontSize: '0.65rem',
     opacity: 0.8,
+  } satisfies CSSProperties,
+  cycleWarning: {
+    position: 'absolute',
+    bottom: '10px',
+    left: '10px',
+    zIndex: 10,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '6px 12px',
+    background: '#1a0a0a',
+    border: '1px solid #ff4444',
+    borderRadius: '2px',
+    cursor: 'default',
+    fontFamily: '"Share Tech Mono", "Courier New", monospace',
+    fontSize: '0.7rem',
+    color: '#ff4444',
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase' as const,
+    boxShadow: '0 0 8px rgba(255, 68, 68, 0.2)',
+    animation: 'pulse-error 2s ease-in-out infinite',
+  } satisfies CSSProperties,
+  cycleWarningIcon: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '16px',
+    height: '16px',
+    border: '1px solid #ff4444',
+    borderRadius: '50%',
+    fontSize: '0.6rem',
+    fontWeight: 'bold',
+    lineHeight: 1,
+  } satisfies CSSProperties,
+  cycleWarningText: {
+    fontWeight: 'bold',
   } satisfies CSSProperties,
 };
