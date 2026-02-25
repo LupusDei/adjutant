@@ -10,6 +10,7 @@ function rowToProposal(row: ProposalRow): Proposal {
     description: row.description,
     type: row.type as ProposalType,
     status: row.status as ProposalStatus,
+    project: row.project,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -20,11 +21,13 @@ interface InsertProposalInput {
   title: string;
   description: string;
   type: ProposalType;
+  project: string;
 }
 
 interface GetProposalsOptions {
   status?: ProposalStatus | undefined;
   type?: ProposalType | undefined;
+  project?: string | undefined;
 }
 
 export interface ProposalStore {
@@ -36,8 +39,8 @@ export interface ProposalStore {
 
 export function createProposalStore(db: Database.Database): ProposalStore {
   const insertStmt = db.prepare(`
-    INSERT INTO proposals (id, author, title, description, type, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 'pending', datetime('now'), datetime('now'))
+    INSERT INTO proposals (id, author, title, description, type, project, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'pending', datetime('now'), datetime('now'))
   `);
 
   const getByIdStmt = db.prepare("SELECT * FROM proposals WHERE id = ?");
@@ -49,7 +52,7 @@ export function createProposalStore(db: Database.Database): ProposalStore {
   return {
     insertProposal(input: InsertProposalInput): Proposal {
       const id = randomUUID();
-      insertStmt.run(id, input.author, input.title, input.description, input.type);
+      insertStmt.run(id, input.author, input.title, input.description, input.type, input.project);
       const row = getByIdStmt.get(id) as ProposalRow;
       return rowToProposal(row);
     },
@@ -71,6 +74,11 @@ export function createProposalStore(db: Database.Database): ProposalStore {
       if (opts?.type !== undefined) {
         conditions.push("type = ?");
         params.push(opts.type);
+      }
+
+      if (opts?.project !== undefined) {
+        conditions.push("project = ?");
+        params.push(opts.project);
       }
 
       const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";

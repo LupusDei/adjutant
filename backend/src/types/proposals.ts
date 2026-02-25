@@ -11,6 +11,7 @@ export const CreateProposalSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().min(1, "Description is required"),
   type: ProposalTypeSchema,
+  project: z.string().min(1, "Project is required"),
 });
 
 export const UpdateProposalStatusSchema = z.object({
@@ -20,6 +21,7 @@ export const UpdateProposalStatusSchema = z.object({
 export const ProposalFilterSchema = z.object({
   status: ProposalStatusSchema.optional(),
   type: ProposalTypeSchema.optional(),
+  project: z.string().optional(),
 });
 
 // =============================================================================
@@ -36,6 +38,7 @@ export interface Proposal {
   description: string;
   type: ProposalType;
   status: ProposalStatus;
+  project: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -48,6 +51,7 @@ export interface ProposalRow {
   description: string;
   type: string;
   status: string;
+  project: string;
   created_at: string;
   updated_at: string;
 }

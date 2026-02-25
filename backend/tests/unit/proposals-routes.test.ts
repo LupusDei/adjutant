@@ -51,6 +51,7 @@ describe("proposals-routes", () => {
           title: "Improve caching",
           description: "Add Redis caching layer for frequently accessed data.",
           type: "engineering",
+          project: "adjutant",
         });
 
       expect(res.status).toBe(201);
@@ -64,6 +65,21 @@ describe("proposals-routes", () => {
       const res = await request(app)
         .post("/api/proposals")
         .send({
+          title: "Test",
+          description: "Desc",
+          type: "product",
+          project: "adjutant",
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it("should reject missing project with 400", async () => {
+      const res = await request(app)
+        .post("/api/proposals")
+        .send({
+          author: "agent",
           title: "Test",
           description: "Desc",
           type: "product",
@@ -81,6 +97,7 @@ describe("proposals-routes", () => {
           title: "Test",
           description: "Desc",
           type: "invalid",
+          project: "adjutant",
         });
 
       expect(res.status).toBe(400);
@@ -95,6 +112,7 @@ describe("proposals-routes", () => {
         title: "Proposal 1",
         description: "Desc 1",
         type: "product",
+        project: "adjutant",
       });
 
       const res = await request(app).get("/api/proposals");
@@ -110,6 +128,7 @@ describe("proposals-routes", () => {
         title: "P1",
         description: "D1",
         type: "product",
+        project: "adjutant",
       });
 
       await request(app)
@@ -125,15 +144,40 @@ describe("proposals-routes", () => {
 
     it("should filter by type", async () => {
       await request(app).post("/api/proposals").send({
-        author: "a", title: "P1", description: "D1", type: "product",
+        author: "a", title: "P1", description: "D1", type: "product", project: "adjutant",
       });
       await request(app).post("/api/proposals").send({
-        author: "b", title: "P2", description: "D2", type: "engineering",
+        author: "b", title: "P2", description: "D2", type: "engineering", project: "adjutant",
       });
 
       const res = await request(app).get("/api/proposals?type=engineering");
       expect(res.body.data).toHaveLength(1);
       expect(res.body.data[0].type).toBe("engineering");
+    });
+
+    it("should filter by project", async () => {
+      await request(app).post("/api/proposals").send({
+        author: "a", title: "P1", description: "D1", type: "product", project: "adjutant",
+      });
+      await request(app).post("/api/proposals").send({
+        author: "b", title: "P2", description: "D2", type: "engineering", project: "gastown",
+      });
+      await request(app).post("/api/proposals").send({
+        author: "c", title: "P3", description: "D3", type: "product", project: "adjutant",
+      });
+
+      const res = await request(app).get("/api/proposals?project=adjutant");
+      expect(res.body.data).toHaveLength(2);
+      expect(res.body.data.every((p: { project: string }) => p.project === "adjutant")).toBe(true);
+    });
+
+    it("should include project in response", async () => {
+      await request(app).post("/api/proposals").send({
+        author: "agent-1", title: "Test", description: "Desc", type: "product", project: "gastown",
+      });
+
+      const res = await request(app).get("/api/proposals");
+      expect(res.body.data[0].project).toBe("gastown");
     });
   });
 
@@ -144,6 +188,7 @@ describe("proposals-routes", () => {
         title: "Specific Proposal",
         description: "Details",
         type: "product",
+        project: "adjutant",
       });
 
       const res = await request(app).get(`/api/proposals/${createRes.body.data.id}`);
@@ -164,6 +209,7 @@ describe("proposals-routes", () => {
         title: "To Accept",
         description: "Will be accepted",
         type: "product",
+        project: "adjutant",
       });
 
       const res = await request(app)
@@ -180,6 +226,7 @@ describe("proposals-routes", () => {
         title: "To Dismiss",
         description: "Will be dismissed",
         type: "engineering",
+        project: "gastown",
       });
 
       const res = await request(app)
@@ -196,6 +243,7 @@ describe("proposals-routes", () => {
         title: "Test",
         description: "Desc",
         type: "product",
+        project: "adjutant",
       });
 
       const res = await request(app)
