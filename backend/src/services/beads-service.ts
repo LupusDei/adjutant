@@ -9,6 +9,7 @@ import { execBd, resolveBeadsDir, type BeadsIssue } from "./bd-client.js";
 import { listAllBeadsDirs, resolveWorkspaceRoot, getDeploymentMode } from "./workspace/index.js";
 import { getEventBus } from "./event-bus.js";
 import { logInfo } from "../utils/index.js";
+import type { BeadsGraphResponse, GraphDependency, GraphNode } from "../types/beads.js";
 
 // ============================================================================
 // Types
@@ -1389,6 +1390,90 @@ export async function getRecentlyCompletedEpics(
       error: {
         code: "RECENT_EPICS_ERROR",
         message: err instanceof Error ? err.message : "Failed to get recently completed epics",
+      },
+    };
+  }
+}
+
+// ============================================================================
+// Beads Dependency Graph (018-bead-dep-graph)
+// ============================================================================
+
+/**
+ * Builds a dependency graph of all beads for visualization.
+ *
+ * Fetches all beads (including closed) from the town database and extracts
+ * both node info and dependency edges. Wisps are filtered out.
+ *
+ * @returns { nodes, edges } suitable for graph rendering
+ */
+export async function getBeadsGraph(): Promise<BeadsServiceResult<BeadsGraphResponse>> {
+  try {
+    await ensurePrefixMap();
+
+    const townRoot = resolveWorkspaceRoot();
+    const beadsDir = resolveBeadsDir(townRoot);
+
+    // Fetch all beads with dependencies included
+    const result = await execBd<BeadsIssue[]>(
+      ["list", "--all", "--json"],
+      { cwd: townRoot, beadsDir }
+    );
+
+    if (!result.success) {
+      return {
+        success: false,
+        error: {
+          code: result.error?.code ?? "BD_EXEC_FAILED",
+          message: result.error?.message ?? "bd command failed",
+        },
+      };
+    }
+
+    // Handle empty database
+    if (!result.data) {
+      return { success: true, data: { nodes: [], edges: [] } };
+    }
+
+    // Filter out wisps (same logic as fetchBeadsFromDatabase)
+    const issues = result.data.filter((issue) => {
+      if (issue.wisp) return false;
+      if (issue.id.includes("-wisp-")) return false;
+      return true;
+    });
+
+    // Build nodes from beads
+    const nodes: GraphNode[] = issues.map((issue) => ({
+      id: issue.id,
+      title: issue.title,
+      status: issue.status,
+      type: issue.issue_type,
+      priority: issue.priority,
+      assignee: issue.assignee ?? null,
+      source: prefixToSource(issue.id),
+    }));
+
+    // Extract edges from dependency data across all beads
+    const edges: GraphDependency[] = [];
+    for (const issue of issues) {
+      if (issue.dependencies) {
+        for (const dep of issue.dependencies) {
+          edges.push({
+            issueId: dep.issue_id,
+            dependsOnId: dep.depends_on_id,
+            type: dep.type,
+          });
+        }
+      }
+    }
+
+    return { success: true, data: { nodes, edges } };
+  } catch (err) {
+    return {
+      success: false,
+      error: {
+        code: "GRAPH_ERROR",
+        message: err instanceof Error ? err.message : "Failed to build beads graph",
       },
     };
   }
