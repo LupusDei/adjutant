@@ -71,7 +71,7 @@ function BeadGraphEdgeInner({
       <BaseEdge
         id={id}
         path={edgePath}
-        markerEnd={markerEnd}
+        {...(markerEnd != null ? { markerEnd } : {})}
         style={edgeStyle}
       />
       {hovered && (

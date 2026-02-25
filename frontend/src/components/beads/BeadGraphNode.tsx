@@ -2,13 +2,22 @@
  * Custom React Flow node for bead dependency graph.
  * Renders a Pip-Boy themed bead card with status coloring,
  * type badge, ID, and title.
+ * Supports selected state and collapse/expand for epic nodes.
  */
-import React, { type CSSProperties } from 'react';
+import React, { useCallback, type CSSProperties } from 'react';
 
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 
 import type { BeadNodeData } from '../../hooks/useBeadsGraph';
+
+/** Extended node data with UI state injected by DependencyGraphView. */
+interface BeadGraphNodeUIData extends BeadNodeData {
+  /** Whether this node is currently selected. */
+  selected?: boolean;
+  /** Callback to toggle collapse state. */
+  onToggleCollapse?: (nodeId: string) => void;
+}
 
 /** Status-to-color mapping for Pip-Boy theme. */
 const STATUS_COLORS: Record<string, string> = {
@@ -35,15 +44,27 @@ function getStatusColor(status: string): string {
 /**
  * BeadGraphNode - Custom React Flow node component.
  * Renders a Pip-Boy styled bead card in the dependency graph.
- * Supports selected state with bright glow highlight.
+ * Supports selected state with bright glow highlight and
+ * collapse/expand for epic nodes with children.
  */
 function BeadGraphNodeInner({ data }: NodeProps) {
-  // Safe cast: data matches BeadNodeData with optional `selected` flag injected by DependencyGraphView
-  const nodeData = data as BeadNodeData & { selected?: boolean };
+  // Safe cast: data matches BeadNodeData with optional UI flags injected by DependencyGraphView
+  const nodeData = data as BeadGraphNodeUIData;
   const statusColor = getStatusColor(nodeData.status);
   const isEpic = nodeData.beadType === 'epic';
   const isSelected = nodeData.selected === true;
+  const isCollapsed = nodeData.collapsed === true;
+  const collapsedCount = nodeData.collapsedChildCount ?? 0;
+  const hasCollapseButton = isEpic && (isCollapsed || nodeData.onToggleCollapse != null);
   const typeLabel = TYPE_LABELS[nodeData.beadType] ?? nodeData.beadType.toUpperCase();
+
+  const handleCollapseClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      nodeData.onToggleCollapse?.(nodeData.id);
+    },
+    [nodeData]
+  );
 
   const selectedGlow = isSelected
     ? `0 0 12px #00ff00aa, 0 0 24px #00ff0044, inset 0 0 8px #00ff0022`
@@ -121,6 +142,35 @@ function BeadGraphNodeInner({ data }: NodeProps) {
     height: '6px',
   };
 
+  const collapseButtonStyle: CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    marginTop: '5px',
+    padding: '2px 6px',
+    background: 'transparent',
+    border: '1px solid #00aa0066',
+    borderRadius: '1px',
+    color: '#00aa00',
+    fontFamily: '"Share Tech Mono", monospace',
+    fontSize: '0.55rem',
+    cursor: 'pointer',
+    letterSpacing: '0.05em',
+    transition: 'all 0.15s ease',
+    width: 'fit-content',
+  };
+
+  const collapsedBadgeStyle: CSSProperties = {
+    fontSize: '0.5rem',
+    padding: '1px 4px',
+    background: '#00aa0022',
+    border: '1px solid #00aa0044',
+    borderRadius: '1px',
+    color: '#00ff00',
+    letterSpacing: '0.05em',
+    whiteSpace: 'nowrap',
+  };
+
   return (
     <div style={containerStyle}>
       <Handle type="target" position={Position.Top} style={handleStyle} />
@@ -134,6 +184,19 @@ function BeadGraphNodeInner({ data }: NodeProps) {
 
       {nodeData.assignee && (
         <div style={assigneeStyle}>{nodeData.assignee}</div>
+      )}
+
+      {hasCollapseButton && (
+        <button
+          style={collapseButtonStyle}
+          onClick={handleCollapseClick}
+          title={isCollapsed ? 'Expand sub-tree' : 'Collapse sub-tree'}
+        >
+          {isCollapsed ? '+ EXPAND' : '- COLLAPSE'}
+          {isCollapsed && collapsedCount > 0 && (
+            <span style={collapsedBadgeStyle}>+{collapsedCount}</span>
+          )}
+        </button>
       )}
 
       <Handle type="source" position={Position.Bottom} style={handleStyle} />

@@ -1,12 +1,13 @@
 /**
  * Dependency graph visualization for beads.
  * Uses React Flow with dagre layout to render bead dependency relationships.
- * Supports node selection with detail panel slide-out.
+ * Supports node selection with detail panel, collapse/expand, and graph controls.
  */
 import { useState, useCallback, useMemo, type CSSProperties } from 'react';
 
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   Controls,
   MiniMap,
@@ -18,6 +19,7 @@ import '@xyflow/react/dist/style.css';
 import { BeadGraphNode } from './BeadGraphNode';
 import { BeadGraphEdge } from './BeadGraphEdge';
 import { GraphDetailPanel } from './GraphDetailPanel';
+import { GraphControls } from './GraphControls';
 import { useBeadsGraph, type BeadNodeData } from '../../hooks/useBeadsGraph';
 import type { Node } from '@xyflow/react';
 
@@ -34,16 +36,26 @@ export interface DependencyGraphViewProps {
 }
 
 /**
- * DependencyGraphView renders the bead dependency graph using React Flow.
- * Supports pan/zoom, minimap, automatic dagre layout, and node selection.
+ * Inner component that uses useReactFlow (must be inside ReactFlowProvider).
  */
-export function DependencyGraphView({ isActive = true }: DependencyGraphViewProps) {
-  const { nodes, edges, loading, error } = useBeadsGraph({
+function DependencyGraphInner({ isActive = true }: DependencyGraphViewProps) {
+  const {
+    nodes,
+    edges,
+    loading,
+    error,
+    toggleCollapse,
+    collapseAll,
+    expandAll,
+    collapsedNodes,
+    epicIds,
+  } = useBeadsGraph({
     pollInterval: 30000,
     enabled: isActive,
   });
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [epicFilter, setEpicFilter] = useState<string | null>(null);
 
   /** Handle node click - select the node and show detail panel. */
   const onNodeClick: NodeMouseHandler = useCallback((_event, node) => {
@@ -67,17 +79,65 @@ export function DependencyGraphView({ isActive = true }: DependencyGraphViewProp
     setSelectedNodeId(null);
   }, []);
 
-  /** Inject selected state into node data so BeadGraphNode can render a highlight. */
-  const nodesWithSelection = useMemo(
+  /** Handle epic filter change from GraphControls. */
+  const handleEpicFilterChange = useCallback((id: string | null) => {
+    setEpicFilter(id);
+  }, []);
+
+  /** Filter nodes by epic sub-tree if epic filter is active. */
+  const filteredNodes = useMemo(() => {
+    if (!epicFilter) return nodes;
+    // Find all nodes that are descendants of the selected epic (or the epic itself)
+    const epicNode = nodes.find((n: Node<BeadNodeData>) => n.id === epicFilter);
+    if (!epicNode) return nodes;
+
+    // Collect all edges' source->target relationships
+    const childMap = new Map<string, Set<string>>();
+    for (const edge of edges) {
+      if (!childMap.has(edge.source)) {
+        childMap.set(edge.source, new Set());
+      }
+      childMap.get(edge.source)?.add(edge.target);
+    }
+
+    // BFS to find all descendants
+    const visible = new Set<string>([epicFilter]);
+    const queue = [epicFilter];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const children = childMap.get(current);
+      if (children) {
+        for (const child of children) {
+          if (!visible.has(child)) {
+            visible.add(child);
+            queue.push(child);
+          }
+        }
+      }
+    }
+
+    return nodes.filter((n: Node<BeadNodeData>) => visible.has(n.id));
+  }, [nodes, edges, epicFilter]);
+
+  /** Filter edges to only show those between visible nodes. */
+  const filteredEdges = useMemo(() => {
+    if (!epicFilter) return edges;
+    const visibleIds = new Set(filteredNodes.map((n: Node<BeadNodeData>) => n.id));
+    return edges.filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target));
+  }, [edges, epicFilter, filteredNodes]);
+
+  /** Inject UI state into node data for BeadGraphNode rendering. */
+  const nodesWithUIState = useMemo(
     () =>
-      nodes.map((node) => ({
+      filteredNodes.map((node: Node<BeadNodeData>) => ({
         ...node,
         data: {
           ...node.data,
           selected: node.id === selectedNodeId,
+          onToggleCollapse: toggleCollapse,
         },
       })),
-    [nodes, selectedNodeId]
+    [filteredNodes, selectedNodeId, toggleCollapse]
   );
 
   /** Get the selected bead data for the detail panel. */
@@ -133,8 +193,8 @@ export function DependencyGraphView({ isActive = true }: DependencyGraphViewProp
   return (
     <div style={styles.container}>
       <ReactFlow
-        nodes={nodesWithSelection}
-        edges={edges}
+        nodes={nodesWithUIState}
+        edges={filteredEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
@@ -162,7 +222,9 @@ export function DependencyGraphView({ isActive = true }: DependencyGraphViewProp
         <MiniMap
           style={styles.minimap}
           nodeColor={(node) => {
-            const status = (node.data as Record<string, unknown>).status as string;
+            // Safe access: node.data comes from Record<string, unknown> index signature
+            const dataRecord = node.data as Record<string, unknown>;
+            const status = String(dataRecord['status'] ?? '');
             switch (status) {
               case 'closed':
                 return '#00ff00';
@@ -177,6 +239,14 @@ export function DependencyGraphView({ isActive = true }: DependencyGraphViewProp
           }}
           maskColor="rgba(0, 0, 0, 0.7)"
         />
+        <GraphControls
+          epicIds={epicIds}
+          epicFilter={epicFilter}
+          onEpicFilterChange={handleEpicFilterChange}
+          onCollapseAll={collapseAll}
+          onExpandAll={expandAll}
+          hasCollapsedNodes={collapsedNodes.size > 0}
+        />
       </ReactFlow>
 
       <GraphDetailPanel
@@ -185,6 +255,18 @@ export function DependencyGraphView({ isActive = true }: DependencyGraphViewProp
         onAssign={handleAssign}
       />
     </div>
+  );
+}
+
+/**
+ * DependencyGraphView renders the bead dependency graph using React Flow.
+ * Wraps the inner component with ReactFlowProvider for useReactFlow access.
+ */
+export function DependencyGraphView(props: DependencyGraphViewProps) {
+  return (
+    <ReactFlowProvider>
+      <DependencyGraphInner {...props} />
+    </ReactFlowProvider>
   );
 }
 
