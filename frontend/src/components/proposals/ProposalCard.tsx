@@ -31,6 +31,7 @@ export function ProposalCard({ proposal, onAccept, onDismiss, onSendToAgent, onC
       </div>
 
       <div style={styles.meta}>
+        <span style={styles.project}>[{proposal.project.toUpperCase()}]</span>
         <span style={styles.author}>BY {proposal.author.toUpperCase()}</span>
         <span style={styles.date}>{new Date(proposal.createdAt).toLocaleDateString()}</span>
         {!isPending && (
@@ -125,6 +126,10 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: "8px",
     fontSize: "11px",
     color: "var(--pipboy-green-dim, #00aa00)",
+  },
+  project: {
+    letterSpacing: "0.5px",
+    fontWeight: "bold",
   },
   author: {
     letterSpacing: "0.5px",

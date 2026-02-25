@@ -10,6 +10,7 @@ const { mockList, mockUpdateStatus } = vi.hoisted(() => {
       author: "agent-1",
       title: "Improve UX",
       description: "Add onboarding flow",
+      project: "adjutant",
       type: "product",
       status: "pending",
       createdAt: "2026-02-24T00:00:00Z",
@@ -20,6 +21,7 @@ const { mockList, mockUpdateStatus } = vi.hoisted(() => {
       author: "agent-2",
       title: "Refactor services",
       description: "Extract shared logic",
+      project: "adjutant",
       type: "engineering",
       status: "pending",
       createdAt: "2026-02-24T01:00:00Z",
@@ -53,6 +55,7 @@ describe("useProposals", () => {
         author: "agent-1",
         title: "Improve UX",
         description: "Add onboarding flow",
+        project: "adjutant",
         type: "product",
         status: "pending",
         createdAt: "2026-02-24T00:00:00Z",
@@ -63,6 +66,7 @@ describe("useProposals", () => {
         author: "agent-2",
         title: "Refactor services",
         description: "Extract shared logic",
+        project: "adjutant",
         type: "engineering",
         status: "pending",
         createdAt: "2026-02-24T01:00:00Z",
@@ -71,8 +75,8 @@ describe("useProposals", () => {
     ]);
     mockUpdateStatus.mockImplementation((id: string, status: string) => {
       const proposals = [
-        { id: "p1", author: "agent-1", title: "Improve UX", description: "Add onboarding flow", type: "product", status: "pending", createdAt: "2026-02-24T00:00:00Z", updatedAt: "2026-02-24T00:00:00Z" },
-        { id: "p2", author: "agent-2", title: "Refactor services", description: "Extract shared logic", type: "engineering", status: "pending", createdAt: "2026-02-24T01:00:00Z", updatedAt: "2026-02-24T01:00:00Z" },
+        { id: "p1", author: "agent-1", title: "Improve UX", description: "Add onboarding flow", project: "adjutant", type: "product", status: "pending", createdAt: "2026-02-24T00:00:00Z", updatedAt: "2026-02-24T00:00:00Z" },
+        { id: "p2", author: "agent-2", title: "Refactor services", description: "Extract shared logic", project: "adjutant", type: "engineering", status: "pending", createdAt: "2026-02-24T01:00:00Z", updatedAt: "2026-02-24T01:00:00Z" },
       ];
       return Promise.resolve({ ...proposals.find((p) => p.id === id)!, status });
     });

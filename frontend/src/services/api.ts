@@ -511,10 +511,12 @@ export const api = {
     async list(params?: {
       status?: 'pending' | 'accepted' | 'dismissed';
       type?: 'product' | 'engineering';
+      project?: string;
     }): Promise<Proposal[]> {
       const searchParams = new URLSearchParams();
       if (params?.status) searchParams.set('status', params.status);
       if (params?.type) searchParams.set('type', params.type);
+      if (params?.project) searchParams.set('project', params.project);
 
       const query = searchParams.toString();
       return apiFetch(`/proposals${query ? `?${query}` : ''}`);
