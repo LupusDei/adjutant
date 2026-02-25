@@ -151,6 +151,9 @@ export function ProposalDetailView({
                   <span style={styles.infoLabel}>Author:</span>
                   <span style={styles.infoValue}>{proposal.author}</span>
 
+                  <span style={styles.infoLabel}>Project:</span>
+                  <span style={styles.infoValue}>{proposal.project.toUpperCase()}</span>
+
                   <span style={styles.infoLabel}>Created:</span>
                   <span style={styles.infoValue}>{formatTimestamp(proposal.createdAt)}</span>
 

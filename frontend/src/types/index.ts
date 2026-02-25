@@ -349,6 +349,7 @@ export interface Proposal {
   author: string;
   title: string;
   description: string;
+  project: string;
   type: ProposalType;
   status: ProposalStatus;
   createdAt: string;
