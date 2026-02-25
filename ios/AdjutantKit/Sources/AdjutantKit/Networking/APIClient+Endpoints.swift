@@ -504,6 +504,17 @@ extension APIClient {
             queryItems: queryItems
         )
     }
+
+    /// Get the beads dependency graph for visualization.
+    ///
+    /// Returns nodes (beads) and edges (dependency relationships) suitable
+    /// for rendering a dependency graph.
+    ///
+    /// - Returns: A ``BeadsGraphResponse`` containing nodes and edges.
+    /// - Throws: ``APIClientError`` if the request fails.
+    public func getBeadsGraph() async throws -> BeadsGraphResponse {
+        try await requestWithEnvelope(.get, path: "/beads/graph")
+    }
 }
 
 // MARK: - Tunnel Endpoints

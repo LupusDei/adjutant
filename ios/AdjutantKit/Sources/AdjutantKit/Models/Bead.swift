@@ -245,6 +245,65 @@ public struct BeadSummary: Codable, Hashable {
     }
 }
 
+// MARK: - Graph API Types
+
+/// A node in the beads dependency graph, as returned by GET /api/beads/graph.
+/// Contains essential bead info needed for visualization.
+public struct GraphNodeInfo: Codable, Identifiable, Equatable, Hashable {
+    public let id: String
+    public let title: String
+    public let status: String
+    public let type: String
+    public let priority: Int
+    public let assignee: String?
+    public let source: String?
+
+    public init(
+        id: String,
+        title: String,
+        status: String,
+        type: String,
+        priority: Int,
+        assignee: String?,
+        source: String?
+    ) {
+        self.id = id
+        self.title = title
+        self.status = status
+        self.type = type
+        self.priority = priority
+        self.assignee = assignee
+        self.source = source
+    }
+}
+
+/// A dependency edge between two beads in the graph.
+/// issueId depends on dependsOnId.
+public struct GraphEdgeInfo: Codable, Identifiable, Equatable, Hashable {
+    public let issueId: String
+    public let dependsOnId: String
+    public let type: String
+
+    public var id: String { "\(issueId)-\(dependsOnId)" }
+
+    public init(issueId: String, dependsOnId: String, type: String) {
+        self.issueId = issueId
+        self.dependsOnId = dependsOnId
+        self.type = type
+    }
+}
+
+/// Response from GET /api/beads/graph.
+public struct BeadsGraphResponse: Codable, Equatable {
+    public let nodes: [GraphNodeInfo]
+    public let edges: [GraphEdgeInfo]
+
+    public init(nodes: [GraphNodeInfo], edges: [GraphEdgeInfo]) {
+        self.nodes = nodes
+        self.edges = edges
+    }
+}
+
 // MARK: - Transferable for Drag & Drop
 
 extension BeadInfo: Transferable {
