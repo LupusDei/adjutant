@@ -34,7 +34,11 @@ function buildProposalPrompt(proposal: Proposal): string {
     '',
     '---',
     '',
-    'Please use /speckit.specify to create a feature specification from this proposal, then /speckit.plan to generate an implementation plan, and /speckit.beads to create executable beads for orchestration.',
+    '## Instructions',
+    '',
+    'Use /epic-planner to create a structured epic hierarchy for this proposal. This will generate specs, a plan, tasks, and beads for orchestration.',
+    '',
+    'If you have questions or need clarification, send them to the user via Adjutant messages using the `send_message` MCP tool (to: "user"). Do NOT block waiting for answers — send the question and continue with reasonable assumptions, noting them in the spec.',
   ].join('\n');
 }
 
@@ -112,22 +116,23 @@ export function SendToAgentModal({ proposal, onClose, onSent }: SendToAgentModal
         workspaceType: 'primary',
       });
 
-      // Wait briefly for agent to start, then send the proposal as initial prompt
+      // Send the full proposal as an MCP message (stored in SQLite immediately)
       const prompt = buildProposalPrompt(proposal);
+      await api.messages.send({
+        to: session.name,
+        body: prompt,
+        threadId: `proposal-${proposal.id}`,
+      });
+
+      // After agent starts, send a short single-line trigger via terminal input.
+      // Multi-line text via tmux send-keys doesn't submit properly in Claude Code,
+      // so we only send a brief trigger here — the full proposal is in messages.
       setTimeout(() => {
-        void (async () => {
-          try {
-            await api.sessions.sendInput(session.id, prompt);
-          } catch {
-            // If sendInput fails, send as a message instead
-            await api.messages.send({
-              to: session.name,
-              body: prompt,
-              threadId: `proposal-${proposal.id}`,
-            });
-          }
-        })();
-      }, 3000);
+        void api.sessions.sendInput(
+          session.id,
+          'Check your adjutant messages for a new proposal and execute it. Use /epic-planner to plan it. Send any questions to the user via adjutant messages.'
+        );
+      }, 5000);
 
       setSendState('success');
       const agentName = session.name;
