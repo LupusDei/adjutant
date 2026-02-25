@@ -4,6 +4,7 @@ import { DashboardView } from '../../../../src/components/dashboard/OverviewDash
 import { useDashboardMail } from '../../../../src/hooks/useDashboardMail';
 import { useDashboardEpics } from '../../../../src/hooks/useDashboardEpics';
 import { useDashboardCrew } from '../../../../src/hooks/useDashboardCrew';
+import { useDashboardBeads } from '../../../../src/hooks/useDashboardBeads';
 
 // Mock the custom hooks
 vi.mock('../../../../src/hooks/useDashboardMail', () => ({
@@ -14,6 +15,10 @@ vi.mock('../../../../src/hooks/useDashboardEpics', () => ({
 }));
 vi.mock('../../../../src/hooks/useDashboardCrew', () => ({
   useDashboardCrew: vi.fn(),
+}));
+vi.mock('../../../../src/hooks/useDashboardBeads', () => ({
+  useDashboardBeads: vi.fn(),
+  priorityLabel: vi.fn(() => 'MED'),
 }));
 
 describe('DashboardView', () => {
@@ -28,10 +33,9 @@ describe('DashboardView', () => {
       error: null,
     });
     (useDashboardEpics as ReturnType<typeof vi.fn>).mockReturnValue({
-      recentEpics: [],
+      inProgress: { items: [], totalCount: 0 },
+      completed: { items: [], totalCount: 0 },
       totalCount: 0,
-      activeCount: 0,
-      completedCount: 0,
       loading: false,
       error: null,
     });
@@ -40,6 +44,13 @@ describe('DashboardView', () => {
       activeCrew: 0,
       recentCrew: [],
       crewAlerts: [],
+      loading: false,
+      error: null,
+    });
+    (useDashboardBeads as ReturnType<typeof vi.fn>).mockReturnValue({
+      inProgress: { items: [], totalCount: 0 },
+      open: { items: [], totalCount: 0 },
+      closed: { items: [], totalCount: 0 },
       loading: false,
       error: null,
     });

@@ -52,6 +52,8 @@ export function usePolling<T>(
 
   // Track if component is mounted to prevent state updates after unmount
   const mountedRef = useRef(true);
+  // Guard against overlapping fetches (prevents request storms when fetch > interval)
+  const fetchingRef = useRef(false);
   // Store the latest fetchFn to avoid stale closures
   const fetchFnRef = useRef(fetchFn);
   fetchFnRef.current = fetchFn;
@@ -59,7 +61,10 @@ export function usePolling<T>(
   const executeFetch = useCallback(async () => {
     // mountedRef is modified in the cleanup function, so these checks are valid at runtime
     if (!mountedRef.current) return;
+    // Skip if a fetch is already in progress to prevent request pileup
+    if (fetchingRef.current) return;
 
+    fetchingRef.current = true;
     setLoading(true);
     try {
       const result = await fetchFnRef.current();
@@ -75,6 +80,7 @@ export function usePolling<T>(
         setError(err instanceof Error ? err : new Error(String(err)));
       }
     } finally {
+      fetchingRef.current = false;
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (mountedRef.current) {
         setLoading(false);
