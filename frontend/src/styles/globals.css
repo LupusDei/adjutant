@@ -780,3 +780,67 @@ html, body {
 .dimmed-node {
   opacity: 0.45;
 }
+
+/* ============================================
+   Node Status Change Animations
+   ============================================ */
+
+/* Brief glow flash when a node's status changes on refresh */
+@keyframes node-status-flash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 255, 0, 0);
+    filter: brightness(1);
+  }
+  20% {
+    box-shadow: 0 0 16px 4px rgba(0, 255, 0, 0.6);
+    filter: brightness(1.4);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 255, 0, 0);
+    filter: brightness(1);
+  }
+}
+
+/* Amber flash for transitioning to in_progress/hooked */
+@keyframes node-status-flash-amber {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 170, 0, 0);
+    filter: brightness(1);
+  }
+  20% {
+    box-shadow: 0 0 16px 4px rgba(255, 170, 0, 0.6);
+    filter: brightness(1.4);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 170, 0, 0);
+    filter: brightness(1);
+  }
+}
+
+/* Green flash for transitioning to closed */
+@keyframes node-status-flash-green {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 255, 0, 0);
+    filter: brightness(1);
+  }
+  20% {
+    box-shadow: 0 0 20px 6px rgba(0, 255, 0, 0.7);
+    filter: brightness(1.5);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 255, 0, 0);
+    filter: brightness(1);
+  }
+}
+
+.node-status-changed {
+  animation: node-status-flash 0.8s ease-out;
+}
+
+.node-status-changed-amber {
+  animation: node-status-flash-amber 0.8s ease-out;
+}
+
+.node-status-changed-green {
+  animation: node-status-flash-green 0.8s ease-out;
+}

@@ -4,7 +4,7 @@
  * type badge, ID, and title.
  * Supports selected state and collapse/expand for epic nodes.
  */
-import React, { useCallback, type CSSProperties } from 'react';
+import React, { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
@@ -41,6 +41,19 @@ function getStatusColor(status: string): string {
   return STATUS_COLORS[status] ?? '#666666';
 }
 
+/** Get the CSS animation class for a status change. */
+function getStatusChangeClass(newStatus: string): string {
+  switch (newStatus) {
+    case 'closed':
+      return 'node-status-changed-green';
+    case 'in_progress':
+    case 'hooked':
+      return 'node-status-changed-amber';
+    default:
+      return 'node-status-changed';
+  }
+}
+
 /**
  * BeadGraphNode - Custom React Flow node component.
  * Renders a Pip-Boy styled bead card in the dependency graph.
@@ -57,6 +70,25 @@ function BeadGraphNodeInner({ data }: NodeProps) {
   const collapsedCount = nodeData.collapsedChildCount ?? 0;
   const hasCollapseButton = isEpic && (isCollapsed || nodeData.onToggleCollapse != null);
   const typeLabel = TYPE_LABELS[nodeData.beadType] ?? nodeData.beadType.toUpperCase();
+
+  // Track previous status to detect changes and trigger animation
+  const prevStatusRef = useRef<string>(nodeData.status);
+  const [animClass, setAnimClass] = useState<string>('');
+
+  useEffect(() => {
+    if (prevStatusRef.current !== nodeData.status) {
+      const cls = getStatusChangeClass(nodeData.status);
+      setAnimClass(cls);
+      prevStatusRef.current = nodeData.status;
+
+      // Clear animation class after animation completes (800ms matches CSS)
+      const timer = setTimeout(() => {
+        setAnimClass('');
+      }, 800);
+      return () => { clearTimeout(timer); };
+    }
+    return undefined;
+  }, [nodeData.status]);
 
   const handleCollapseClick = useCallback(
     (e: React.MouseEvent) => {
@@ -172,7 +204,7 @@ function BeadGraphNodeInner({ data }: NodeProps) {
   };
 
   return (
-    <div style={containerStyle}>
+    <div style={containerStyle} className={animClass || undefined}>
       <Handle type="target" position={Position.Top} style={handleStyle} />
 
       <div style={headerStyle}>
