@@ -515,6 +515,36 @@ extension APIClient {
     public func getBeadsGraph() async throws -> BeadsGraphResponse {
         try await requestWithEnvelope(.get, path: "/beads/graph")
     }
+
+    /// Get children of an epic using the dependency graph.
+    ///
+    /// Uses the backend's `bd children` command to resolve sub-beads via
+    /// the dependency graph instead of hierarchical ID pattern matching.
+    ///
+    /// - Parameter epicId: Full epic bead ID (e.g., "adj-020")
+    /// - Returns: Array of child ``BeadInfo`` items.
+    /// - Throws: ``APIClientError`` if the request fails.
+    public func getEpicChildren(epicId: String) async throws -> [BeadInfo] {
+        let encodedId = epicId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? epicId
+        return try await requestWithEnvelope(.get, path: "/beads/\(encodedId)/children")
+    }
+
+    /// List epics with server-computed progress using the dependency graph.
+    ///
+    /// Returns epics with totalCount, closedCount, and progress fields
+    /// computed server-side. Eliminates the need to fetch all beads client-side.
+    ///
+    /// - Parameter status: Optional status filter (default: "all")
+    /// - Returns: Array of ``EpicWithProgressResponse`` items.
+    /// - Throws: ``APIClientError`` if the request fails.
+    public func getEpicsWithProgress(status: String = "all") async throws -> [EpicWithProgressResponse] {
+        let queryItems = [URLQueryItem(name: "status", value: status)]
+        return try await requestWithEnvelope(
+            .get,
+            path: "/beads/epics-with-progress",
+            queryItems: queryItems
+        )
+    }
 }
 
 // MARK: - Tunnel Endpoints

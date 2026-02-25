@@ -3,7 +3,7 @@ import Combine
 import AdjutantKit
 
 /// ViewModel for the Epic detail view.
-/// Handles loading epic details and its subtasks.
+/// Handles loading epic details and its subtasks using the dependency graph.
 @MainActor
 final class EpicDetailViewModel: BaseViewModel {
     // MARK: - Published Properties
@@ -39,36 +39,21 @@ final class EpicDetailViewModel: BaseViewModel {
         await loadEpicDetails()
     }
 
-    /// Loads the epic and its subtasks
+    /// Loads the epic and its children using the dependency graph endpoints
     func loadEpicDetails() async {
         await performAsyncAction { [weak self] in
             guard let self = self else { return }
 
-            // Fetch all beads to find the epic and its children
-            let allBeads = try await self.apiClient.getBeads(rig: "all", status: .all)
+            // Fetch epic detail and children in parallel
+            async let epicTask = self.apiClient.getBeadDetail(id: self.epicId)
+            async let childrenTask = self.apiClient.getEpicChildren(epicId: self.epicId)
 
-            // Find the epic
-            guard let epic = allBeads.first(where: { $0.id == self.epicId }) else {
-                throw EpicDetailError.epicNotFound
-            }
+            let (epicDetail, children) = try await (epicTask, childrenTask)
 
-            self.epic = epic
-
-            // Find subtasks that belong to this epic
-            // Children are identified by hierarchical ID pattern: parent.X where X is numeric
-            let epicIdPrefix = epic.id + "."
-            let subtasks = allBeads.filter { bead in
-                // Check hierarchical ID: child ID starts with parent ID followed by a dot
-                // but only direct children (one level deep)
-                guard bead.id.hasPrefix(epicIdPrefix) else { return false }
-                let suffix = String(bead.id.dropFirst(epicIdPrefix.count))
-                // Direct children have a simple numeric suffix (no more dots) or numeric.X pattern
-                // e.g., for epic "l2r-gs0duv.1", children are "l2r-gs0duv.1.1", "l2r-gs0duv.1.2", etc.
-                return !suffix.isEmpty && suffix.first?.isNumber == true
-            }
+            self.epic = epicDetail.asBeadInfo
 
             // Sort by priority then by updated date
-            let sorted = subtasks.sorted { a, b in
+            let sorted = children.sorted { a, b in
                 if a.priority != b.priority {
                     return a.priority < b.priority
                 }

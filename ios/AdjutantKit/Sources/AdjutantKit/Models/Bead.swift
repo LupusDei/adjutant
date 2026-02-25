@@ -304,6 +304,33 @@ public struct BeadsGraphResponse: Codable, Equatable {
     }
 }
 
+// MARK: - Epic with Server-Computed Progress
+
+/// Response from GET /api/beads/epics-with-progress.
+/// Epic progress computed server-side using the dependency graph.
+public struct EpicWithProgressResponse: Codable, Identifiable, Equatable {
+    /// The epic bead info
+    public let epic: BeadInfo
+    /// Child beads (empty in list view, populated in detail view)
+    public let children: [BeadInfo]
+    /// Total number of children
+    public let totalCount: Int
+    /// Number of closed children
+    public let closedCount: Int
+    /// Progress as a decimal (0-1)
+    public let progress: Double
+
+    public var id: String { epic.id }
+
+    public init(epic: BeadInfo, children: [BeadInfo], totalCount: Int, closedCount: Int, progress: Double) {
+        self.epic = epic
+        self.children = children
+        self.totalCount = totalCount
+        self.closedCount = closedCount
+        self.progress = progress
+    }
+}
+
 // MARK: - Transferable for Drag & Drop
 
 extension BeadInfo: Transferable {

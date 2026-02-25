@@ -16,7 +16,7 @@ struct EpicWithProgress: Identifiable, Equatable {
     }
 
     var isComplete: Bool {
-        totalCount > 0 && completedCount == totalCount
+        epic.status == "closed" || (totalCount > 0 && completedCount == totalCount)
     }
 
     var progressText: String {
@@ -26,6 +26,7 @@ struct EpicWithProgress: Identifiable, Equatable {
 
 /// ViewModel for the Epics list view.
 /// Handles loading epics, categorizing into Open/Complete, and calculating progress.
+/// Uses the server-side epics-with-progress endpoint (dependency graph based).
 @MainActor
 final class EpicsListViewModel: BaseViewModel {
     // MARK: - Published Properties
@@ -35,9 +36,6 @@ final class EpicsListViewModel: BaseViewModel {
 
     /// Complete epics (all subtasks closed)
     @Published private(set) var completeEpics: [EpicWithProgress] = []
-
-    /// All beads (used for calculating subtask progress)
-    private var allBeads: [BeadInfo] = []
 
     // MARK: - Dependencies
 
@@ -59,15 +57,6 @@ final class EpicsListViewModel: BaseViewModel {
         self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
         setupRigFilterObserver()
-        loadFromCache()
-    }
-
-    /// Loads cached epics for immediate display
-    private func loadFromCache() {
-        let cached = ResponseCache.shared.epics
-        if !cached.isEmpty {
-            processEpics(cached, allBeads: ResponseCache.shared.beads)
-        }
     }
 
     deinit {
@@ -105,63 +94,36 @@ final class EpicsListViewModel: BaseViewModel {
         await loadEpics()
     }
 
-    /// Loads epics and all beads from the API
+    /// Loads epics with server-computed progress from the dependency graph endpoint
     func loadEpics() async {
         await performAsyncAction { [weak self] in
             guard let self = self else { return }
 
-            // Fetch epics (type: epic)
-            let rigFilter = self.selectedRig ?? "all"
-            let epics = try await self.apiClient.getBeads(
-                rig: rigFilter,
-                status: .all,
-                type: "epic"
-            )
+            let response = try await self.apiClient.getEpicsWithProgress(status: "all")
 
-            // Fetch all beads to calculate subtask progress
-            let beads = try await self.apiClient.getBeads(
-                rig: rigFilter,
-                status: .all
-            )
+            self.processEpics(response)
 
-            self.allBeads = beads
-            self.processEpics(epics, allBeads: beads)
-
-            // Update cache
-            ResponseCache.shared.updateEpics(epics)
+            // Update cache with epic BeadInfo for other views
+            let epicInfos = response.map { $0.epic }
+            ResponseCache.shared.updateEpics(epicInfos)
         }
     }
 
     // MARK: - Processing
 
-    /// Process epics and categorize them into Open and Complete
-    private func processEpics(_ epics: [BeadInfo], allBeads: [BeadInfo]) {
+    /// Process server response and categorize epics into Open and Complete
+    private func processEpics(_ response: [EpicWithProgressResponse]) {
         var open: [EpicWithProgress] = []
         var complete: [EpicWithProgress] = []
 
-        for epic in epics {
-            // Find subtasks that belong to this epic
-            // Children are identified by hierarchical ID pattern: parent.X where X is numeric
-            let epicIdPrefix = epic.id + "."
-            let subtasks = allBeads.filter { bead in
-                // Check hierarchical ID: child ID starts with parent ID followed by a dot
-                guard bead.id.hasPrefix(epicIdPrefix) else { return false }
-                let suffix = String(bead.id.dropFirst(epicIdPrefix.count))
-                // Direct children have a numeric prefix (e.g., "1", "1.2", "12")
-                return !suffix.isEmpty && suffix.first?.isNumber == true
-            }
-
-            let completedCount = subtasks.filter { $0.status == "closed" }.count
-            let totalCount = subtasks.count
-
+        for item in response {
             let epicWithProgress = EpicWithProgress(
-                epic: epic,
-                completedCount: completedCount,
-                totalCount: totalCount
+                epic: item.epic,
+                completedCount: item.closedCount,
+                totalCount: item.totalCount
             )
 
-            // Categorize based on epic status and subtask completion
-            if epic.status == "closed" || (totalCount > 0 && completedCount == totalCount) {
+            if epicWithProgress.isComplete {
                 complete.append(epicWithProgress)
             } else {
                 open.append(epicWithProgress)
