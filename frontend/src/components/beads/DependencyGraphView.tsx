@@ -16,12 +16,16 @@ import type { NodeMouseHandler } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import { BeadGraphNode } from './BeadGraphNode';
+import { BeadGraphEdge } from './BeadGraphEdge';
 import { GraphDetailPanel } from './GraphDetailPanel';
 import { useBeadsGraph, type BeadNodeData } from '../../hooks/useBeadsGraph';
 import type { Node } from '@xyflow/react';
 
 /** Register custom node types for React Flow. */
 const nodeTypes = { beadNode: BeadGraphNode };
+
+/** Register custom edge types for React Flow. */
+const edgeTypes = { beadEdge: BeadGraphEdge };
 
 /** Props for DependencyGraphView. */
 export interface DependencyGraphViewProps {
@@ -132,6 +136,7 @@ export function DependencyGraphView({ isActive = true }: DependencyGraphViewProp
         nodes={nodesWithSelection}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}

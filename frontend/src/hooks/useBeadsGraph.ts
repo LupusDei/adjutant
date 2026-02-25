@@ -123,7 +123,7 @@ function getLayoutedElements(
       id: `edge-${index}-${edge.dependsOnId}-${edge.issueId}`,
       source: edge.dependsOnId,
       target: edge.issueId,
-      type: 'default',
+      type: 'beadEdge',
     }));
 
   return { nodes: rfNodes, edges: rfEdges };
