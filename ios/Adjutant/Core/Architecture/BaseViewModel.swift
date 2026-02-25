@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import AdjutantKit
 
 /// Base ViewModel class providing common functionality for all ViewModels.
 /// Subclass this to create feature-specific ViewModels with built-in
@@ -110,6 +111,11 @@ class BaseViewModel: ObservableObject, ViewModelProtocol {
     /// Override this method to provide custom error handling.
     /// - Parameter error: The error to handle
     func handleError(_ error: Error) {
+        // Suppress cancellation errors — these are expected during rapid
+        // view lifecycle transitions (e.g., refresh cancelled by a newer refresh)
+        if error is CancellationError { return }
+        if let apiError = error as? APIClientError, apiError == .cancelled { return }
+
         if let serviceError = error as? ServiceError {
             errorMessage = serviceError.errorDescription
         } else {
