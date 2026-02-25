@@ -137,55 +137,14 @@ final class ProposalDetailViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.proposal?.status, .dismissed)
     }
 
-    // MARK: - testSendToAgent
+    // MARK: - testMarkSentToAgent
 
-    func testSendToAgent() async {
-        // Load an accepted proposal first
-        mockProposalResponse(status: "accepted")
-        await viewModel.loadProposal()
+    func testMarkSentToAgent() {
         XCTAssertFalse(viewModel.sendSuccess)
 
-        // Mock the send message response
-        var capturedBody: [String: Any]?
-        MockURLProtocol.mockHandler = { request in
-            XCTAssertEqual(request.httpMethod, "POST")
-            XCTAssertTrue(request.url!.path.hasSuffix("/messages"))
-
-            if let body = request.httpBody {
-                capturedBody = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
-            }
-
-            let now = ISO8601DateFormatter().string(from: Date())
-            let envelope: [String: Any] = [
-                "success": true,
-                "data": ["messageId": "msg-new", "timestamp": now],
-                "timestamp": now
-            ]
-            let data = try JSONSerialization.data(withJSONObject: envelope)
-            let response = HTTPURLResponse(
-                url: request.url!, statusCode: 201, httpVersion: "HTTP/1.1",
-                headerFields: ["Content-Type": "application/json"]
-            )!
-            return (response, data)
-        }
-
-        await viewModel.sendToAgent()
+        viewModel.markSentToAgent()
 
         XCTAssertTrue(viewModel.sendSuccess)
-        XCTAssertEqual(capturedBody?["to"] as? String, "user")
-        XCTAssertTrue((capturedBody?["body"] as? String)?.contains("Add voice commands") ?? false)
-        XCTAssertEqual(capturedBody?["threadId"] as? String, "proposal-\(testProposalId)")
-    }
-
-    // MARK: - testSendToAgentWithoutProposal
-
-    func testSendToAgentWithoutProposal() async {
-        // Don't load proposal - should be a no-op
-        XCTAssertNil(viewModel.proposal)
-
-        await viewModel.sendToAgent()
-
-        XCTAssertFalse(viewModel.sendSuccess)
     }
 
     // MARK: - testErrorHandling
