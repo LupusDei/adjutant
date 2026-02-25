@@ -10,6 +10,8 @@ struct SessionChatView: View {
     @StateObject private var viewModel: SessionChatViewModel
     @State private var scrollProxy: ScrollViewProxy?
     @State private var autoScroll = true
+    @State private var newContentCount = 0
+    @State private var lastScrollTime: Date = .distantPast
 
     /// When true, shows an X button in the header for dismissing (used in fullScreenCover presentations)
     let showDismiss: Bool
@@ -56,14 +58,10 @@ struct SessionChatView: View {
             viewModel.onDisappear()
         }
         .onChange(of: viewModel.outputLines.count) { _, _ in
-            if autoScroll {
-                scrollToBottom()
-            }
+            scrollToBottomIfNeeded()
         }
         .onChange(of: viewModel.outputEvents.count) { _, _ in
-            if autoScroll {
-                scrollToBottom()
-            }
+            scrollToBottomIfNeeded()
         }
     }
 
@@ -146,42 +144,82 @@ struct SessionChatView: View {
     }
 
     private var outputArea: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    if hasStructuredEvents {
-                        // Structured chat view — parsed output events
-                        ForEach(viewModel.outputEvents) { event in
-                            OutputEventRenderer(event: event)
-                                .id(event.id)
+        ZStack(alignment: .bottom) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        if hasStructuredEvents {
+                            // Structured chat view — parsed output events
+                            ForEach(viewModel.outputEvents) { event in
+                                OutputEventRenderer(event: event)
+                                    .id(event.id)
+                            }
+                        } else {
+                            // Raw terminal view — fallback when no events parsed yet
+                            ForEach(viewModel.outputLines) { line in
+                                Text(line.text)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .foregroundColor(theme.primary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .id(line.id)
+                            }
                         }
-                    } else {
-                        // Raw terminal view — fallback when no events parsed yet
-                        ForEach(viewModel.outputLines) { line in
-                            Text(line.text)
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundColor(theme.primary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .id(line.id)
+
+                        if viewModel.outputLines.isEmpty && viewModel.outputEvents.isEmpty {
+                            emptyState
                         }
-                    }
 
-                    if viewModel.outputLines.isEmpty && viewModel.outputEvents.isEmpty {
-                        emptyState
+                        // Bottom anchor — visibility drives auto-scroll detection
+                        Color.clear
+                            .frame(height: 1)
+                            .id("bottom")
+                            .onAppear {
+                                autoScroll = true
+                                newContentCount = 0
+                            }
+                            .onDisappear {
+                                autoScroll = false
+                            }
                     }
-
-                    // Bottom anchor
-                    Color.clear
-                        .frame(height: 1)
-                        .id("bottom")
+                    .padding(CRTTheme.Spacing.sm)
                 }
-                .padding(CRTTheme.Spacing.sm)
+                .scrollDismissesKeyboard(.interactively)
+                .onAppear {
+                    scrollProxy = proxy
+                }
             }
-            .scrollDismissesKeyboard(.interactively)
-            .onAppear {
-                scrollProxy = proxy
+
+            // "Scroll to bottom" button when user has scrolled up
+            if !autoScroll && newContentCount > 0 {
+                scrollToBottomButton
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
+    }
+
+    private var scrollToBottomButton: some View {
+        Button {
+            autoScroll = true
+            newContentCount = 0
+            scrollToBottom()
+        } label: {
+            HStack(spacing: CRTTheme.Spacing.xs) {
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 12, weight: .bold))
+                Text("\(newContentCount) NEW")
+                    .font(.system(.caption2, design: .monospaced))
+            }
+            .foregroundColor(theme.primary)
+            .padding(.horizontal, CRTTheme.Spacing.sm)
+            .padding(.vertical, CRTTheme.Spacing.xs)
+            .background(CRTTheme.Background.panel)
+            .cornerRadius(CRTTheme.CornerRadius.md)
+            .overlay(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
+                    .stroke(theme.primary.opacity(0.5), lineWidth: 1)
+            )
+        }
+        .padding(.bottom, CRTTheme.Spacing.sm)
     }
 
     private var emptyState: some View {
@@ -300,6 +338,27 @@ struct SessionChatView: View {
     }
 
     // MARK: - Helpers
+
+    /// Scrolls to bottom only if user is already at bottom.
+    /// Skips animation for rapid updates to prevent flickering.
+    private func scrollToBottomIfNeeded() {
+        guard autoScroll else {
+            newContentCount += 1
+            return
+        }
+        let now = Date()
+        let elapsed = now.timeIntervalSince(lastScrollTime)
+        lastScrollTime = now
+
+        if elapsed < 0.3 {
+            // Rapid updates — scroll without animation to prevent flicker
+            scrollProxy?.scrollTo("bottom", anchor: .bottom)
+        } else {
+            withAnimation(.easeOut(duration: 0.2)) {
+                scrollProxy?.scrollTo("bottom", anchor: .bottom)
+            }
+        }
+    }
 
     private func scrollToBottom() {
         withAnimation(.easeOut(duration: 0.2)) {
