@@ -57,7 +57,11 @@ function BeadRow({ bead }: { bead: BeadInfo }) {
   );
 }
 
-export function DashboardView() {
+interface DashboardViewProps {
+  onNavigateToChat?: (agentName: string) => void;
+}
+
+export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
   const { recentMessages, totalCount: mailTotal, unreadCount, loading: mailLoading, error: mailError } = useDashboardMail();
   const { inProgress: epicsInProgress, completed: epicsCompleted, loading: epicsLoading, error: epicsError } = useDashboardEpics();
   const { totalCrew, activeCrew, recentCrew, crewAlerts, loading: crewLoading, error: crewError } = useDashboardCrew();
@@ -132,7 +136,7 @@ export function DashboardView() {
               {recentCrew.length > 0 ? (
                 <div className="dashboard-crew-cards">
                   {recentCrew.map((crew) => (
-                    <div key={crew.name} className="dashboard-crew-card">
+                    <div key={crew.name} className="dashboard-crew-card" style={{ cursor: onNavigateToChat ? 'pointer' : undefined }} onClick={() => onNavigateToChat?.(crew.name)} role={onNavigateToChat ? 'button' : undefined} tabIndex={onNavigateToChat ? 0 : undefined} onKeyDown={(e) => { if (onNavigateToChat && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onNavigateToChat(crew.name); } }}>
                       <div className="dashboard-crew-card-header">
                         <div className="dashboard-crew-card-name-row">
                           <span className="dashboard-crew-card-name">{crew.name.toUpperCase()}</span>

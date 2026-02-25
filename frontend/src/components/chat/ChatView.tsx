@@ -4,7 +4,7 @@
  * Renders a RecipientSelector at the top so the user can pick which agent
  * to chat with, then renders CommandChat scoped to that agent.
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 import { CommandChat } from './CommandChat';
 import { RecipientSelector } from '../mail/RecipientSelector';
@@ -12,11 +12,21 @@ import { useUnreadCounts } from '../../hooks/useUnreadCounts';
 
 export interface ChatViewProps {
   isActive?: boolean;
+  initialAgent?: string;
+  onInitialAgentConsumed?: () => void;
 }
 
-export function ChatView({ isActive = true }: ChatViewProps) {
+export function ChatView({ isActive = true, initialAgent, onInitialAgentConsumed }: ChatViewProps) {
   const [selectedAgent, setSelectedAgent] = useState('');
   const { counts } = useUnreadCounts();
+
+  // Navigate to agent when initialAgent changes (from dashboard crew card tap)
+  useEffect(() => {
+    if (initialAgent && initialAgent.length > 0) {
+      setSelectedAgent(initialAgent);
+      onInitialAgentConsumed?.();
+    }
+  }, [initialAgent, onInitialAgentConsumed]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>

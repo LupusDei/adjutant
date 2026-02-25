@@ -58,6 +58,7 @@ function useIsSmallScreen(breakpoint = 768) {
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
+  const [chatRecipient, setChatRecipient] = useState('');
   const [theme, setTheme] = useState<ThemeId>(
     (localStorage.getItem('gt-theme') as ThemeId | null) ?? 'green'
   );
@@ -121,7 +122,7 @@ function AppContent() {
               hidden={activeTab !== "dashboard"}
               aria-hidden={activeTab !== "dashboard"}
             >
-              <DashboardView />
+              <DashboardView onNavigateToChat={(agentName: string) => { setChatRecipient(agentName); setActiveTab('chat'); }} />
             </section>
           )}
           {visibleTabs.has("mail") && (
@@ -138,7 +139,7 @@ function AppContent() {
             hidden={activeTab !== "chat"}
             aria-hidden={activeTab !== "chat"}
           >
-            <ChatView isActive={activeTab === "chat"} />
+            <ChatView isActive={activeTab === "chat"} initialAgent={chatRecipient} onInitialAgentConsumed={() => setChatRecipient('')} />
           </section>
           {visibleTabs.has("epics") && (
             <section
