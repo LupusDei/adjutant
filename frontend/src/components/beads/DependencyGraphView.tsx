@@ -19,6 +19,7 @@ import '@xyflow/react/dist/style.css';
 
 import { BeadGraphNode } from './BeadGraphNode';
 import { BeadGraphEdge } from './BeadGraphEdge';
+import { GraphEmptyState } from './GraphEmptyState';
 import { GraphDetailPanel } from './GraphDetailPanel';
 import { GraphControls } from './GraphControls';
 import { useBeadsGraph, type BeadNodeData } from '../../hooks/useBeadsGraph';
@@ -266,9 +267,7 @@ function DependencyGraphInner({ isActive = true }: DependencyGraphViewProps) {
   if (nodes.length === 0) {
     return (
       <div style={styles.container}>
-        <div style={styles.emptyState}>
-          NO DEPENDENCY DATA AVAILABLE
-        </div>
+        <GraphEmptyState />
       </div>
     );
   }
@@ -390,15 +389,6 @@ const styles = {
     justifyContent: 'center',
     height: '100%',
     color: '#FF4444',
-    fontFamily: '"Share Tech Mono", monospace',
-    letterSpacing: '0.1em',
-  } satisfies CSSProperties,
-  emptyState: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    color: 'var(--crt-phosphor-dim)',
     fontFamily: '"Share Tech Mono", monospace',
     letterSpacing: '0.1em',
   } satisfies CSSProperties,
