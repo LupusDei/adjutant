@@ -25,8 +25,18 @@ vi.mock("../../src/services/event-bus.js", () => ({
   getEventBus: () => ({ emit: mockEmit }),
 }));
 
+vi.mock("../../src/services/mcp-server.js", () => ({
+  getConnectedAgents: vi.fn(() => []),
+}));
+
+vi.mock("../../src/services/mcp-tools/status.js", () => ({
+  getAgentStatuses: vi.fn(() => new Map()),
+}));
+
 import { collectAgentSnapshot, type AgentRuntimeInfo } from "../../src/services/agent-data.js";
 import { getAgents, resetAgentStatusCache } from "../../src/services/agents-service.js";
+import { getConnectedAgents } from "../../src/services/mcp-server.js";
+import { getAgentStatuses } from "../../src/services/mcp-tools/status.js";
 
 // =============================================================================
 // Test Fixtures
@@ -324,6 +334,113 @@ describe("agents-service", () => {
         agent: "rig/crew/bob",
         status: "offline",
       });
+    });
+  });
+
+  // ===========================================================================
+  // MCP Agent Merging
+  // ===========================================================================
+
+  describe("MCP agent merging", () => {
+    it("should include MCP-connected agents not in tmux/gastown list", async () => {
+      vi.mocked(collectAgentSnapshot).mockResolvedValue({
+        agents: [
+          createAgentInfo({ name: "alice", address: "rig/crew/alice" }),
+        ],
+        polecats: [],
+      });
+      vi.mocked(getConnectedAgents).mockReturnValue([
+        {
+          agentId: "mcp-agent-1",
+          sessionId: "sess-1",
+          server: {} as never,
+          transport: {} as never,
+          connectedAt: new Date(),
+        },
+      ]);
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      expect(result.data).toHaveLength(2);
+      const mcpAgent = result.data?.find((a) => a.id === "mcp-agent-1");
+      expect(mcpAgent).toBeDefined();
+      expect(mcpAgent?.type).toBe("agent");
+      expect(mcpAgent?.status).toBe("idle");
+    });
+
+    it("should not duplicate agents already in the list", async () => {
+      vi.mocked(collectAgentSnapshot).mockResolvedValue({
+        agents: [
+          createAgentInfo({ name: "alice", address: "alice" }),
+        ],
+        polecats: [],
+      });
+      vi.mocked(getConnectedAgents).mockReturnValue([
+        {
+          agentId: "alice",
+          sessionId: "sess-1",
+          server: {} as never,
+          transport: {} as never,
+          connectedAt: new Date(),
+        },
+      ]);
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      expect(result.data).toHaveLength(1);
+    });
+
+    it("should enrich existing agents with MCP status data", async () => {
+      vi.mocked(collectAgentSnapshot).mockResolvedValue({
+        agents: [
+          createAgentInfo({ name: "alice", address: "alice", state: "idle" }),
+        ],
+        polecats: [],
+      });
+      vi.mocked(getAgentStatuses).mockReturnValue(
+        new Map([
+          ["alice", { agentId: "alice", status: "working", task: "Fixing bug", updatedAt: new Date().toISOString() }],
+        ]),
+      );
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      const alice = result.data?.find((a) => a.id === "alice");
+      expect(alice?.status).toBe("working");
+      expect(alice?.currentTask).toBe("Fixing bug");
+    });
+
+    it("should use MCP status for new MCP-only agents", async () => {
+      vi.mocked(collectAgentSnapshot).mockResolvedValue({
+        agents: [],
+        polecats: [],
+      });
+      vi.mocked(getConnectedAgents).mockReturnValue([
+        {
+          agentId: "remote-agent",
+          sessionId: "sess-1",
+          server: {} as never,
+          transport: {} as never,
+          connectedAt: new Date(),
+        },
+      ]);
+      vi.mocked(getAgentStatuses).mockReturnValue(
+        new Map([
+          ["remote-agent", { agentId: "remote-agent", status: "working", task: "Building feature", updatedAt: new Date().toISOString() }],
+        ]),
+      );
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      const agent = result.data?.find((a) => a.id === "remote-agent");
+      expect(agent).toBeDefined();
+      expect(agent?.status).toBe("working");
+      expect(agent?.currentTask).toBe("Building feature");
+      expect(agent?.type).toBe("agent");
     });
   });
 });

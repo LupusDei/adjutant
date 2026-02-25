@@ -11,6 +11,8 @@ import { getTopology } from "./topology/index.js";
 import { getEventBus } from "./event-bus.js";
 import { listTmuxSessions } from "./tmux.js";
 import { getSessionBridge } from "./session-bridge.js";
+import { getConnectedAgents } from "./mcp-server.js";
+import { getAgentStatuses } from "./mcp-tools/status.js";
 import type { CrewMember, CrewMemberStatus, AgentType } from "../types/index.js";
 
 // ============================================================================
@@ -159,12 +161,70 @@ function emitStatusChanges(agents: CrewMember[]): void {
 }
 
 // ============================================================================
+// MCP Agent Merging
+// ============================================================================
+
+/**
+ * Merges MCP-connected agents into the CrewMember list.
+ * Agents connected via MCP that aren't already in the list
+ * (e.g., agents without tmux sessions) are added.
+ * Also enriches existing members with MCP status data (currentTask, status).
+ */
+function mergeMcpAgents(members: CrewMember[]): void {
+  const connected = getConnectedAgents();
+  const statuses = getAgentStatuses();
+  const memberIds = new Set(members.map((m) => m.id));
+
+  // Enrich existing members with MCP status data
+  for (const member of members) {
+    const mcpStatus = statuses.get(member.id) ?? statuses.get(member.name);
+    if (mcpStatus) {
+      if (mcpStatus.status === "working") {
+        member.status = "working";
+      } else if (mcpStatus.status === "blocked") {
+        member.status = "blocked";
+      }
+      if (mcpStatus.task && !member.currentTask) {
+        member.currentTask = mcpStatus.task;
+      }
+    }
+  }
+
+  // Add MCP-connected agents not already in the list
+  for (const conn of connected) {
+    if (memberIds.has(conn.agentId)) continue;
+
+    const mcpStatus = statuses.get(conn.agentId);
+    const status: CrewMemberStatus = mcpStatus
+      ? mcpStatus.status === "done"
+        ? "idle"
+        : (mcpStatus.status as CrewMemberStatus)
+      : "idle";
+
+    const member: CrewMember = {
+      id: conn.agentId,
+      name: conn.agentId,
+      type: "agent" as AgentType,
+      rig: null,
+      status,
+      unreadMail: 0,
+    };
+    if (mcpStatus?.task) {
+      member.currentTask = mcpStatus.task;
+    }
+    members.push(member);
+    memberIds.add(conn.agentId);
+  }
+}
+
+// ============================================================================
 // Service Functions
 // ============================================================================
 
 /**
  * Gets all agents as CrewMember list for the dashboard.
  * Uses gt status --json which includes mail counts.
+ * Merges MCP-connected agents so all active agents are visible.
  * Emits agent:status_changed events when agent statuses change.
  */
 export async function getAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
@@ -180,6 +240,7 @@ export async function getAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
     const { agents } = await collectAgentSnapshot(townRoot);
     const crewMembers = agents.map(transformAgent);
     enrichWithSessionData(crewMembers);
+    mergeMcpAgents(crewMembers);
     crewMembers.sort((a, b) => a.name.localeCompare(b.name));
     emitStatusChanges(crewMembers);
     return { success: true, data: crewMembers };
@@ -250,6 +311,7 @@ async function getTmuxAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
     }
 
     enrichWithSessionData(crewMembers);
+    mergeMcpAgents(crewMembers);
     crewMembers.sort((a, b) => a.name.localeCompare(b.name));
     emitStatusChanges(crewMembers);
     return { success: true, data: crewMembers };
