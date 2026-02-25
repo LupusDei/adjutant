@@ -35,24 +35,32 @@ function getStatusColor(status: string): string {
 /**
  * BeadGraphNode - Custom React Flow node component.
  * Renders a Pip-Boy styled bead card in the dependency graph.
+ * Supports selected state with bright glow highlight.
  */
 function BeadGraphNodeInner({ data }: NodeProps) {
-  const nodeData = data as BeadNodeData;
+  // Safe cast: data matches BeadNodeData with optional `selected` flag injected by DependencyGraphView
+  const nodeData = data as BeadNodeData & { selected?: boolean };
   const statusColor = getStatusColor(nodeData.status);
   const isEpic = nodeData.beadType === 'epic';
+  const isSelected = nodeData.selected === true;
   const typeLabel = TYPE_LABELS[nodeData.beadType] ?? nodeData.beadType.toUpperCase();
 
+  const selectedGlow = isSelected
+    ? `0 0 12px #00ff00aa, 0 0 24px #00ff0044, inset 0 0 8px #00ff0022`
+    : `0 0 6px ${statusColor}44, inset 0 0 4px ${statusColor}22`;
+
   const containerStyle: CSSProperties = {
-    background: '#0a0a0a',
-    border: `1px solid ${statusColor}`,
+    background: isSelected ? '#0d1a0d' : '#0a0a0a',
+    border: `${isSelected ? '2px' : '1px'} solid ${isSelected ? '#00ff00' : statusColor}`,
     borderRadius: '2px',
     padding: isEpic ? '10px 14px' : '8px 12px',
     minWidth: isEpic ? '220px' : '180px',
     maxWidth: isEpic ? '260px' : '220px',
     fontFamily: '"Share Tech Mono", "Courier New", monospace',
-    boxShadow: `0 0 6px ${statusColor}44, inset 0 0 4px ${statusColor}22`,
-    cursor: 'default',
+    boxShadow: selectedGlow,
+    cursor: 'pointer',
     position: 'relative',
+    transition: 'box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease',
   };
 
   const headerStyle: CSSProperties = {
