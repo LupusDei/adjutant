@@ -357,3 +357,4 @@ export interface Proposal {
 
 export * from './epics';
 export * from './kanban';
+export * from './beads-graph';
