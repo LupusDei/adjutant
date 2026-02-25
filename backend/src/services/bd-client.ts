@@ -65,6 +65,8 @@ export interface BeadsIssue {
   agent_state?: string | null;
   pinned?: boolean;
   wisp?: boolean;
+  dependency_count?: number;
+  dependent_count?: number;
   dependencies?: { issue_id: string; depends_on_id: string; type: string }[];
 }
 

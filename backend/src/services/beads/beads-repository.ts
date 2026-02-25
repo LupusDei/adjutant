@@ -1135,8 +1135,9 @@ export async function listEpicsWithProgress(
       }
     }
 
-    // For each epic, use `bd show` to get dependencies with status
-    // bd show returns children as full objects in the dependencies array
+    // For each epic, compute progress.
+    // Closed epics: use dependency_count from list output (all children are closed).
+    // Open epics: use `bd show` to get child statuses for accurate closed count.
     const results: EpicWithChildren[] = [];
     for (const epic of filteredEpics) {
       const source = prefixToSource(epic.id);
@@ -1148,6 +1149,21 @@ export async function listEpicsWithProgress(
         continue;
       }
 
+      // Closed epics: skip the expensive `bd show` call. The epic is done,
+      // so all children are effectively complete. Use dependency_count from list.
+      if (epic.status === "closed") {
+        const totalCount = epic.dependency_count ?? 0;
+        results.push({
+          epic: epicInfo,
+          children: [],
+          totalCount,
+          closedCount: totalCount,
+          progress: totalCount > 0 ? 1 : 0,
+        });
+        continue;
+      }
+
+      // Open/in-progress epics: fetch children via `bd show` for accurate status
       const showResult = await execBd<BeadsIssue[]>(
         ["show", epic.id, "--json"],
         { cwd: db.workDir, beadsDir: db.beadsDir }
