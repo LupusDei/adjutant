@@ -166,9 +166,19 @@ Keep hierarchy clean, shallow, and sequentially-rooted.
 ## 3. Team Strategy
 - Use team members regularly for complex tasks
 - Whenever there is a sequence of serial tasks, spin up a team member to tackle them one by one
-- If the work of two or more team members will edit similar files, **use git worktrees**
 - If there is ambiguity or uncertainty about the completeness or functioning of a new feature/epic, create a QA team member which focuses on thinking about edge cases and testing - that team member needs to create new beads for the epic that other team members will return to fix before an epic is closed
 - Create team members to regularly execute code reviews, from the eyes of a Staff level Engineer, to constantly improve the quality of the code
+
+### Worktree Isolation (MANDATORY)
+
+**ALWAYS spawn teammates with `isolation: "worktree"`.** This is non-negotiable.
+
+Multiple agents sharing the same working directory will silently overwrite each other's file edits. Claude Code caches file contents between tool calls — when agent A writes a file and agent B (with the old version cached) writes the same file, A's changes are permanently lost with no warning. Even agents working on "different" features often touch shared files (`types/index.ts`, `api.ts`, `App.tsx`, etc.).
+
+- **Default to worktree** for every teammate spawn, no exceptions
+- Do NOT spawn teammates without `isolation: "worktree"` unless they are read-only (Explore, Plan agents that will never edit files)
+- If a teammate needs access to `.beads/`, include the main repo path in the spawn prompt so they can run `bd --dir /path/to/main`
+- Ref: adj-osic — 7 concurrent agents sharing one directory caused 85+ silent file overwrites in a single session
 
 ### Team Agent Beads Protocol (MANDATORY)
 
@@ -176,7 +186,8 @@ Keep hierarchy clean, shallow, and sequentially-rooted.
 
 When assigning work to team agents, the **coordinator** must:
 1. **Assign beads before spawning** — use `bd update <id> --assignee=<agent-name>` for every bead the agent will own
-2. **Include this block verbatim** in every spawn prompt:
+2. **Use `isolation: "worktree"`** on the Task tool for every teammate that will edit files (see "Worktree Isolation" above)
+3. **Include this block verbatim** in every spawn prompt:
    ```
    ## Task Tracking (MANDATORY)
    Use the `bd` CLI for ALL task tracking. Do NOT use TaskCreate or TaskUpdate.
@@ -197,7 +208,7 @@ When assigning work to team agents, the **coordinator** must:
    If build/tests fail, fix them before closing the bead.
    Before shutting down:        bd sync
    ```
-3. **Include the working directory** — teammates in worktrees won't have `.beads/`, so tell them the path to the main repo if needed
+4. **Include the working directory** — teammates in worktrees won't have `.beads/`, so tell them the path to the main repo if needed
 
 Each **team agent** must:
 1. Run `bd update <id> --status=in_progress` before starting each task
