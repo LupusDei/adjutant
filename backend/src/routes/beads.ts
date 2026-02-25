@@ -3,13 +3,14 @@
  *
  * Endpoints:
  * - GET /api/beads - List beads for the rig
+ * - GET /api/beads/graph - Get dependency graph of all beads
  * - GET /api/beads/:id - Get detailed info for a single bead
  * - PATCH /api/beads/:id - Update a bead's status
  */
 
 import { Router } from "express";
 import { z } from "zod";
-import { listBeads, listAllBeads, updateBead, getBead, listBeadSources, listRecentlyClosed, type BeadStatus } from "../services/beads-service.js";
+import { listBeads, listAllBeads, updateBead, getBead, listBeadSources, listRecentlyClosed, getBeadsGraph, type BeadStatus } from "../services/beads-service.js";
 import { resolveRigPath } from "../services/workspace/index.js";
 import { listProjects } from "../services/projects-service.js";
 import { success, internalError, badRequest } from "../utils/responses.js";
@@ -164,6 +165,28 @@ beadsRouter.get("/recent-closed", async (req, res) => {
   if (!result.success) {
     return res.status(500).json(
       internalError(result.error?.message ?? "Failed to list recently closed beads")
+    );
+  }
+
+  return res.json(success(result.data));
+});
+
+/**
+ * GET /api/beads/graph
+ * Returns the dependency graph of all beads as { nodes, edges }.
+ *
+ * IMPORTANT: This route MUST be registered before /:id to prevent
+ * Express from matching "graph" as a bead ID parameter.
+ *
+ * Response:
+ * - { success: true, data: { nodes: GraphNode[], edges: GraphDependency[] } }
+ */
+beadsRouter.get("/graph", async (_req, res) => {
+  const result = await getBeadsGraph();
+
+  if (!result.success) {
+    return res.status(500).json(
+      internalError(result.error?.message ?? "Failed to build beads graph")
     );
   }
 
