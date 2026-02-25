@@ -24,6 +24,7 @@ function buildProposalPrompt(proposal: Proposal): string {
     `## Proposal: ${proposal.title}`,
     '',
     `**Type:** ${proposal.type}`,
+    `**Project:** ${proposal.project}`,
     `**Author:** ${proposal.author}`,
     `**Status:** ${proposal.status}`,
     '',
@@ -46,6 +47,8 @@ export function SendToAgentModal({ proposal, onClose, onSent }: SendToAgentModal
   const [sendState, setSendState] = useState<SendState>('idle');
   const [error, setError] = useState<string | null>(null);
 
+  const [projectPath, setProjectPath] = useState<string | null>(null);
+
   useEffect(() => {
     api.agents.list()
       .then((data) => {
@@ -56,7 +59,17 @@ export function SendToAgentModal({ proposal, onClose, onSent }: SendToAgentModal
         setAgents([]);
         setLoading(false);
       });
-  }, []);
+
+    // Look up the project path from the proposal's project field
+    if (proposal.project) {
+      api.projects.list()
+        .then((projects) => {
+          const match = projects.find((p) => p.name === proposal.project);
+          if (match) setProjectPath(match.path);
+        })
+        .catch(() => { /* fall back to default path */ });
+    }
+  }, [proposal.project]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -89,11 +102,11 @@ export function SendToAgentModal({ proposal, onClose, onSent }: SendToAgentModal
     setSendState('sending');
     setError(null);
     try {
-      const projectPath = '/Users/Reason/code/ai/adjutant';
+      const resolvedPath = projectPath ?? '/Users/Reason/code/ai/adjutant';
       const trimmedName = callsign.trim();
 
       const session = await api.sessions.create({
-        projectPath,
+        projectPath: resolvedPath,
         ...(trimmedName ? { name: trimmedName } : {}),
         mode: 'swarm',
         workspaceType: 'primary',

@@ -427,6 +427,15 @@ export const api = {
   },
 
   /**
+   * Project operations.
+   */
+  projects: {
+    async list(): Promise<{ id: string; name: string; path: string; mode: string; active: boolean }[]> {
+      return apiFetch('/projects');
+    },
+  },
+
+  /**
    * Swarm operations.
    */
   swarms: {

@@ -44,6 +44,7 @@ Call `create_proposal` with:
   - **How**: High-level approach to implementation
   - **Impact**: Expected benefit (performance, UX, maintainability, etc.)
 - **type**: `"product"` or `"engineering"`
+- **project**: The project this proposal applies to (e.g., `"adjutant"`, `"gastown"`). Must match a registered project name. Agents should use the name of the project they are currently working in.
 
 ### Step 4: Announce
 
@@ -71,7 +72,7 @@ Your task: Generate ONE unique, high-quality product/UX improvement proposal.
 2. Explore the codebase to understand current UX patterns and pain points
 3. Think deeply about what would make the biggest impact for users
 4. Ensure your idea is NOT a duplicate of any existing proposal
-5. Call `create_proposal` with type "product", a concise title, and a detailed description covering what/why/how/impact
+5. Call `create_proposal` with type "product", the project name, a concise title, and a detailed description covering what/why/how/impact
 6. Call `announce` to notify the dashboard
 
 ## Guidelines:
@@ -79,6 +80,7 @@ Your task: Generate ONE unique, high-quality product/UX improvement proposal.
 - Consider both the web frontend and iOS app
 - Proposals should be specific and actionable, not vague
 - Include enough detail that an agent could create an epic from it
+- Always include the `project` parameter — use the name of the project you are working in
 ```
 
 ### Staff Engineer Teammate Spawn Prompt
@@ -92,7 +94,7 @@ Your task: Generate ONE unique, high-quality engineering improvement proposal.
 2. Explore the codebase — look at architecture, patterns, test coverage, error handling
 3. Think deeply about what refactoring or improvement would have the most impact
 4. Ensure your idea is NOT a duplicate of any existing proposal
-5. Call `create_proposal` with type "engineering", a concise title, and a detailed description covering what/why/how/impact
+5. Call `create_proposal` with type "engineering", the project name, a concise title, and a detailed description covering what/why/how/impact
 6. Call `announce` to notify the dashboard
 
 ## Guidelines:
@@ -100,6 +102,7 @@ Your task: Generate ONE unique, high-quality engineering improvement proposal.
 - Consider: performance, reliability, maintainability, testability, security
 - Look for patterns that could be simplified or unified
 - Proposals should be specific with concrete file paths and approaches
+- Always include the `project` parameter — use the name of the project you are working in
 ```
 
 ## MCP Tools Reference
@@ -109,7 +112,8 @@ Your task: Generate ONE unique, high-quality engineering improvement proposal.
 create_proposal({
   title: "Add keyboard shortcuts for common actions",
   description: "What: Add keyboard shortcuts for navigating tabs, sending messages...\nWhy: Power users currently must use mouse for everything...\nHow: Add a KeyboardShortcutManager...\nImpact: Significantly faster navigation for power users",
-  type: "product"
+  type: "product",
+  project: "adjutant"
 })
 ```
 
