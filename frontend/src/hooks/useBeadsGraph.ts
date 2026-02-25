@@ -2,8 +2,9 @@
  * Hook for fetching and layouting bead dependency graph data.
  * Uses dagre for automatic graph layout and transforms API data
  * into React Flow nodes and edges.
+ * Supports critical path computation and highlighting.
  */
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import Dagre from '@dagrejs/dagre';
 import type { Node, Edge } from '@xyflow/react';
@@ -11,6 +12,8 @@ import type { Node, Edge } from '@xyflow/react';
 import { api } from '../services/api';
 import { usePolling } from './usePolling';
 import type { GraphNodeData, GraphDependency } from '../types/beads-graph';
+import { computeCriticalPath } from '../utils/critical-path';
+import type { CriticalPathResult } from '../utils/critical-path';
 
 /** Data carried by each React Flow node. */
 export interface BeadNodeData extends Record<string, unknown> {
@@ -43,6 +46,14 @@ export interface UseBeadsGraphResult {
   error: Error | null;
   /** Manually trigger a refresh. */
   refresh: () => Promise<void>;
+  /** Whether critical path highlighting is active. */
+  showCriticalPath: boolean;
+  /** Toggle critical path highlighting. */
+  toggleCriticalPath: () => void;
+  /** Critical path computation result (node/edge IDs). */
+  criticalPath: CriticalPathResult;
+  /** Number of nodes on the critical path. */
+  criticalPathLength: number;
 }
 
 /** Default node dimensions for layout computation. */
@@ -129,16 +140,25 @@ function getLayoutedElements(
   return { nodes: rfNodes, edges: rfEdges };
 }
 
+/** Empty critical path result for initialization. */
+const EMPTY_CRITICAL_PATH: CriticalPathResult = {
+  nodeIds: new Set<string>(),
+  edgeIds: new Set<string>(),
+};
+
 /**
  * React hook for fetching bead dependency graph data with dagre layout.
+ * Includes critical path computation and toggle state.
  *
  * @param options - Configuration options for polling behavior
- * @returns Graph nodes, edges, loading/error state, and refresh function
+ * @returns Graph nodes, edges, loading/error state, critical path data, and controls
  */
 export function useBeadsGraph(
   options: UseBeadsGraphOptions = {}
 ): UseBeadsGraphResult {
   const { pollInterval = 30000, enabled = true } = options;
+
+  const [showCriticalPath, setShowCriticalPath] = useState(false);
 
   const { data, loading, error, refresh } = usePolling(
     () => api.beads.graph(),
@@ -152,11 +172,27 @@ export function useBeadsGraph(
     return getLayoutedElements(data.nodes, data.edges);
   }, [data]);
 
+  // Compute critical path when data changes
+  const criticalPath = useMemo(() => {
+    if (!data || data.nodes.length === 0) {
+      return EMPTY_CRITICAL_PATH;
+    }
+    return computeCriticalPath(data.nodes, data.edges);
+  }, [data]);
+
+  const toggleCriticalPath = useCallback(() => {
+    setShowCriticalPath((prev) => !prev);
+  }, []);
+
   return {
     nodes,
     edges,
     loading,
     error,
     refresh,
+    showCriticalPath,
+    toggleCriticalPath,
+    criticalPath,
+    criticalPathLength: criticalPath.nodeIds.size,
   };
 }
