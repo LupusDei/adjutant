@@ -47,6 +47,15 @@ export function resetAgentStatuses(): void {
   agentStatuses.clear();
 }
 
+/**
+ * Remove a disconnected agent's status entry.
+ * Called when an MCP agent disconnects to prevent stale status data
+ * from persisting and being applied to future agent listings.
+ */
+export function clearAgentStatus(agentId: string): void {
+  agentStatuses.delete(agentId);
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================

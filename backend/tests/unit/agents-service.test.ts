@@ -338,41 +338,14 @@ describe("agents-service", () => {
   });
 
   // ===========================================================================
-  // MCP Agent Merging
+  // MCP Status Enrichment
   // ===========================================================================
 
-  describe("MCP agent merging", () => {
-    it("should include MCP-connected agents not in tmux/gastown list", async () => {
+  describe("MCP status enrichment", () => {
+    it("should enrich existing agents with MCP status when connected", async () => {
       vi.mocked(collectAgentSnapshot).mockResolvedValue({
         agents: [
-          createAgentInfo({ name: "alice", address: "rig/crew/alice" }),
-        ],
-        polecats: [],
-      });
-      vi.mocked(getConnectedAgents).mockReturnValue([
-        {
-          agentId: "mcp-agent-1",
-          sessionId: "sess-1",
-          server: {} as never,
-          transport: {} as never,
-          connectedAt: new Date(),
-        },
-      ]);
-
-      const result = await getAgents();
-
-      expect(result.success).toBe(true);
-      expect(result.data).toHaveLength(2);
-      const mcpAgent = result.data?.find((a) => a.id === "mcp-agent-1");
-      expect(mcpAgent).toBeDefined();
-      expect(mcpAgent?.type).toBe("agent");
-      expect(mcpAgent?.status).toBe("idle");
-    });
-
-    it("should not duplicate agents already in the list", async () => {
-      vi.mocked(collectAgentSnapshot).mockResolvedValue({
-        agents: [
-          createAgentInfo({ name: "alice", address: "alice" }),
+          createAgentInfo({ name: "alice", address: "alice", state: "idle" }),
         ],
         polecats: [],
       });
@@ -385,20 +358,6 @@ describe("agents-service", () => {
           connectedAt: new Date(),
         },
       ]);
-
-      const result = await getAgents();
-
-      expect(result.success).toBe(true);
-      expect(result.data).toHaveLength(1);
-    });
-
-    it("should enrich existing agents with MCP status data", async () => {
-      vi.mocked(collectAgentSnapshot).mockResolvedValue({
-        agents: [
-          createAgentInfo({ name: "alice", address: "alice", state: "idle" }),
-        ],
-        polecats: [],
-      });
       vi.mocked(getAgentStatuses).mockReturnValue(
         new Map([
           ["alice", { agentId: "alice", status: "working", task: "Fixing bug", updatedAt: new Date().toISOString() }],
@@ -413,14 +372,66 @@ describe("agents-service", () => {
       expect(alice?.currentTask).toBe("Fixing bug");
     });
 
-    it("should use MCP status for new MCP-only agents", async () => {
+    it("should not apply stale MCP status from disconnected agents", async () => {
       vi.mocked(collectAgentSnapshot).mockResolvedValue({
-        agents: [],
+        agents: [
+          createAgentInfo({ name: "alice", address: "alice", state: "idle" }),
+        ],
+        polecats: [],
+      });
+      // Agent has status data but NO active MCP connection
+      vi.mocked(getConnectedAgents).mockReturnValue([]);
+      vi.mocked(getAgentStatuses).mockReturnValue(
+        new Map([
+          ["alice", { agentId: "alice", status: "working", task: "Old task", updatedAt: new Date().toISOString() }],
+        ]),
+      );
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      const alice = result.data?.find((a) => a.id === "alice");
+      // Should keep original idle status, not stale "working"
+      expect(alice?.status).toBe("idle");
+      expect(alice?.currentTask).toBeUndefined();
+    });
+
+    it("should not add MCP-only agents that have no tmux session", async () => {
+      vi.mocked(collectAgentSnapshot).mockResolvedValue({
+        agents: [
+          createAgentInfo({ name: "alice", address: "rig/crew/alice" }),
+        ],
+        polecats: [],
+      });
+      // MCP-only agent with no corresponding tmux session
+      vi.mocked(getConnectedAgents).mockReturnValue([
+        {
+          agentId: "ghost-agent",
+          sessionId: "sess-1",
+          server: {} as never,
+          transport: {} as never,
+          connectedAt: new Date(),
+        },
+      ]);
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      // Should only have alice, not the ghost agent
+      expect(result.data).toHaveLength(1);
+      expect(result.data?.[0].name).toBe("alice");
+    });
+
+    it("should enrich by name when agent id differs from MCP agent id", async () => {
+      vi.mocked(collectAgentSnapshot).mockResolvedValue({
+        agents: [
+          createAgentInfo({ name: "bob", address: "rig/crew/bob", state: "idle" }),
+        ],
         polecats: [],
       });
       vi.mocked(getConnectedAgents).mockReturnValue([
         {
-          agentId: "remote-agent",
+          agentId: "bob",
           sessionId: "sess-1",
           server: {} as never,
           transport: {} as never,
@@ -429,18 +440,16 @@ describe("agents-service", () => {
       ]);
       vi.mocked(getAgentStatuses).mockReturnValue(
         new Map([
-          ["remote-agent", { agentId: "remote-agent", status: "working", task: "Building feature", updatedAt: new Date().toISOString() }],
+          ["bob", { agentId: "bob", status: "blocked", task: "Waiting for API", updatedAt: new Date().toISOString() }],
         ]),
       );
 
       const result = await getAgents();
 
       expect(result.success).toBe(true);
-      const agent = result.data?.find((a) => a.id === "remote-agent");
-      expect(agent).toBeDefined();
-      expect(agent?.status).toBe("working");
-      expect(agent?.currentTask).toBe("Building feature");
-      expect(agent?.type).toBe("agent");
+      const bob = result.data?.find((a) => a.name === "bob");
+      expect(bob?.status).toBe("blocked");
+      expect(bob?.currentTask).toBe("Waiting for API");
     });
   });
 });

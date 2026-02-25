@@ -165,55 +165,33 @@ function emitStatusChanges(agents: CrewMember[]): void {
 // ============================================================================
 
 /**
- * Merges MCP-connected agents into the CrewMember list.
- * Agents connected via MCP that aren't already in the list
- * (e.g., agents without tmux sessions) are added.
- * Also enriches existing members with MCP status data (currentTask, status).
+ * Enriches existing CrewMembers with MCP status data.
+ * Updates status and currentTask from the in-memory agentStatuses map
+ * populated by set_status MCP tool calls.
+ *
+ * Only enriches agents that have an active MCP connection to avoid
+ * applying stale status from disconnected agents.
  */
-function mergeMcpAgents(members: CrewMember[]): void {
-  const connected = getConnectedAgents();
+function enrichWithMcpStatus(members: CrewMember[]): void {
   const statuses = getAgentStatuses();
-  const memberIds = new Set(members.map((m) => m.id));
+  const connectedIds = new Set(getConnectedAgents().map((c) => c.agentId));
 
-  // Enrich existing members with MCP status data
   for (const member of members) {
     const mcpStatus = statuses.get(member.id) ?? statuses.get(member.name);
-    if (mcpStatus) {
-      if (mcpStatus.status === "working") {
-        member.status = "working";
-      } else if (mcpStatus.status === "blocked") {
-        member.status = "blocked";
-      }
-      if (mcpStatus.task && !member.currentTask) {
-        member.currentTask = mcpStatus.task;
-      }
+    if (!mcpStatus) continue;
+
+    // Only apply MCP status if the agent still has an active MCP connection
+    const isConnected = connectedIds.has(member.id) || connectedIds.has(member.name);
+    if (!isConnected) continue;
+
+    if (mcpStatus.status === "working") {
+      member.status = "working";
+    } else if (mcpStatus.status === "blocked") {
+      member.status = "blocked";
     }
-  }
-
-  // Add MCP-connected agents not already in the list
-  for (const conn of connected) {
-    if (memberIds.has(conn.agentId)) continue;
-
-    const mcpStatus = statuses.get(conn.agentId);
-    const status: CrewMemberStatus = mcpStatus
-      ? mcpStatus.status === "done"
-        ? "idle"
-        : (mcpStatus.status as CrewMemberStatus)
-      : "idle";
-
-    const member: CrewMember = {
-      id: conn.agentId,
-      name: conn.agentId,
-      type: "agent" as AgentType,
-      rig: null,
-      status,
-      unreadMail: 0,
-    };
-    if (mcpStatus?.task) {
+    if (mcpStatus.task && !member.currentTask) {
       member.currentTask = mcpStatus.task;
     }
-    members.push(member);
-    memberIds.add(conn.agentId);
   }
 }
 
@@ -240,7 +218,7 @@ export async function getAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
     const { agents } = await collectAgentSnapshot(townRoot);
     const crewMembers = agents.map(transformAgent);
     enrichWithSessionData(crewMembers);
-    mergeMcpAgents(crewMembers);
+    enrichWithMcpStatus(crewMembers);
     crewMembers.sort((a, b) => a.name.localeCompare(b.name));
     emitStatusChanges(crewMembers);
     return { success: true, data: crewMembers };
@@ -311,7 +289,7 @@ async function getTmuxAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
     }
 
     enrichWithSessionData(crewMembers);
-    mergeMcpAgents(crewMembers);
+    enrichWithMcpStatus(crewMembers);
     crewMembers.sort((a, b) => a.name.localeCompare(b.name));
     emitStatusChanges(crewMembers);
     return { success: true, data: crewMembers };

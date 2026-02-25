@@ -15,6 +15,7 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { randomUUID } from "node:crypto";
 import { logInfo, logWarn } from "../utils/index.js";
 import { getEventBus } from "./event-bus.js";
+import { clearAgentStatus } from "./mcp-tools/status.js";
 
 // ============================================================================
 // Types
@@ -151,6 +152,7 @@ export async function createSessionTransport(
 
       connections.delete(sessionId);
       connection.server.close().catch(() => {});
+      clearAgentStatus(connection.agentId);
 
       logInfo("MCP agent disconnected", {
         agentId: connection.agentId,
@@ -196,6 +198,10 @@ export function disconnectAgent(sessionId: string): void {
 
   // Close the per-connection server to release resources
   connection.server.close().catch(() => {});
+
+  // Clean up stale status data so disconnected agents
+  // don't appear as working/blocked in /api/agents listings
+  clearAgentStatus(connection.agentId);
 
   logInfo("MCP agent disconnected", {
     agentId: connection.agentId,
