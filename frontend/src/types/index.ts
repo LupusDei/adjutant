@@ -355,6 +355,21 @@ export interface Proposal {
   updatedAt: string;
 }
 
+export interface SessionInfo {
+  id: string;
+  name: string;
+  tmuxSession: string;
+  tmuxPane: string;
+  projectPath: string;
+  mode: string;
+  status: string;
+  workspaceType: string;
+  connectedClients: string[];
+  pipeActive: boolean;
+  createdAt: string;
+  lastActivity: string;
+}
+
 export * from './epics';
 export * from './kanban';
 export * from './beads-graph';

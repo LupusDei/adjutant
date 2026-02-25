@@ -2,7 +2,7 @@ import { type CSSProperties, useState, useCallback } from "react";
 import { useProposals } from "../../hooks/useProposals";
 import { ProposalCard } from "./ProposalCard";
 import { ProposalDetailView } from "./ProposalDetailView";
-import { api } from "../../services/api";
+import { SendToAgentModal } from "./SendToAgentModal";
 import type { Proposal, ProposalStatus, ProposalType } from "../../types";
 
 export interface ProposalsViewProps {
@@ -37,6 +37,7 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
   } = useProposals();
 
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
+  const [sendToAgentProposal, setSendToAgentProposal] = useState<Proposal | null>(null);
 
   const handleAcceptFromDetail = useCallback(async (id: string) => {
     await accept(id);
@@ -49,13 +50,11 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
   }, [dismiss, refresh]);
 
   const handleSendToAgent = useCallback((proposal: Proposal) => {
-    const prompt = `## Proposal: ${proposal.title}\n\n**Type:** ${proposal.type}\n**Author:** ${proposal.author}\n**Status:** ${proposal.status}\n\n### Description\n\n${proposal.description}\n\n---\n\nPlease use /speckit.specify to create a feature specification from this proposal, then /speckit.plan to generate an implementation plan, and /speckit.beads to create executable beads for orchestration.`;
+    setSendToAgentProposal(proposal);
+  }, []);
 
-    void api.messages.send({
-      to: "user",
-      body: prompt,
-      threadId: `proposal-${proposal.id}`,
-    });
+  const handleSendToAgentComplete = useCallback((_target: string) => {
+    setSendToAgentProposal(null);
   }, []);
 
   return (
@@ -138,6 +137,14 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
         onDismiss={(id) => { void handleDismissFromDetail(id); }}
         onSendToAgent={handleSendToAgent}
       />
+
+      {sendToAgentProposal && (
+        <SendToAgentModal
+          proposal={sendToAgentProposal}
+          onClose={() => { setSendToAgentProposal(null); }}
+          onSent={handleSendToAgentComplete}
+        />
+      )}
     </div>
   );
 }

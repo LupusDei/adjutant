@@ -17,6 +17,7 @@ import type {
   ChatThread,
   UnreadCount,
   Proposal,
+  SessionInfo,
 } from '../types';
 import type {
   SynthesizeRequest,
@@ -400,6 +401,26 @@ export const api = {
    * Session operations.
    */
   sessions: {
+    async list(): Promise<SessionInfo[]> {
+      return apiFetch('/sessions');
+    },
+
+    async create(params: {
+      projectPath: string;
+      name?: string;
+      mode?: 'swarm' | 'gastown';
+      workspaceType?: 'primary' | 'worktree' | 'copy';
+    }): Promise<SessionInfo> {
+      return apiFetch('/sessions', { method: 'POST', body: params });
+    },
+
+    async sendInput(sessionId: string, text: string): Promise<{ sent: boolean }> {
+      return apiFetch(`/sessions/${encodeURIComponent(sessionId)}/input`, {
+        method: 'POST',
+        body: { text },
+      });
+    },
+
     async kill(sessionId: string): Promise<{ killed: boolean }> {
       return apiFetch(`/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
     },
