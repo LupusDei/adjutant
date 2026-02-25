@@ -1400,47 +1400,175 @@ export async function getRecentlyCompletedEpics(
 // ============================================================================
 
 /**
+ * Options for querying the beads dependency graph.
+ * Mirrors the query params from GET /api/beads/graph.
+ */
+export interface BeadsGraphOptions {
+  /** Which database(s) to query: "town" (default), "all", or a specific rig name */
+  rig?: string | undefined;
+  /** Status filter: "default", "all", or specific status(es) */
+  status?: string | undefined;
+  /** Filter by bead type (e.g., "epic", "task", "bug") */
+  type?: string | undefined;
+  /** Filter to a specific epic's sub-tree (client-side hint) */
+  epicId?: string | undefined;
+  /** Exclude hq-* town beads when rig=all */
+  excludeTown?: boolean | undefined;
+}
+
+/**
+ * Fetches beads from a single database with verbose output (includes dependencies).
+ * Returns raw issues with dependency data for graph building.
+ */
+async function fetchGraphBeadsFromDatabase(
+  workDir: string,
+  beadsDir: string,
+  options: BeadsGraphOptions
+): Promise<{ issues: BeadsIssue[]; error?: { code: string; message: string } }> {
+  const args = ["list", "--json", "-v"];
+
+  const statusesToInclude = parseStatusFilter(options.status);
+  if (statusesToInclude === null) {
+    args.push("--all");
+  } else if (statusesToInclude.length === 1 && statusesToInclude[0]) {
+    args.push("--status", statusesToInclude[0]);
+  } else {
+    args.push("--all");
+  }
+
+  if (options.type) {
+    args.push("--type", options.type);
+  }
+
+  const result = await execBd<BeadsIssue[]>(args, { cwd: workDir, beadsDir });
+  if (!result.success) {
+    return {
+      issues: [],
+      error: {
+        code: result.error?.code ?? "BD_EXEC_FAILED",
+        message: result.error?.message ?? "bd command failed",
+      },
+    };
+  }
+
+  if (!result.data) {
+    return { issues: [] };
+  }
+
+  // Filter out wisps (same logic as fetchBeadsFromDatabase)
+  let issues = result.data.filter((issue) => {
+    if (issue.wisp) return false;
+    if (issue.id.includes("-wisp-")) return false;
+    return true;
+  });
+
+  // Client-side status filtering for multi-status presets (e.g., "default")
+  if (statusesToInclude !== null && statusesToInclude.length > 1) {
+    issues = issues.filter((issue) =>
+      statusesToInclude.includes(issue.status.toLowerCase() as BeadStatus)
+    );
+  }
+
+  return { issues };
+}
+
+/**
  * Builds a dependency graph of all beads for visualization.
  *
- * Fetches all beads (including closed) from the town database and extracts
- * both node info and dependency edges. Wisps are filtered out.
+ * Fetches beads with verbose output (includes dependencies) from one or more
+ * databases based on options. Deduplicates both nodes and edges. Wisps are
+ * filtered out.
  *
+ * NOTE: Uses `-v` (verbose) flag on `bd list` to include the `dependencies`
+ * array in output. Without this flag, `bd list` omits dependency data.
+ *
+ * @param options Query options for filtering (rig, status, type, epicId, excludeTown)
  * @returns { nodes, edges } suitable for graph rendering
  */
-export async function getBeadsGraph(): Promise<BeadsServiceResult<BeadsGraphResponse>> {
+export async function getBeadsGraph(
+  options: BeadsGraphOptions = {}
+): Promise<BeadsServiceResult<BeadsGraphResponse>> {
   try {
     await ensurePrefixMap();
 
     const townRoot = resolveWorkspaceRoot();
-    const beadsDir = resolveBeadsDir(townRoot);
+    const rig = options.rig?.trim() || "town";
 
-    // Fetch all beads with dependencies included
-    const result = await execBd<BeadsIssue[]>(
-      ["list", "--all", "--json"],
-      { cwd: townRoot, beadsDir }
-    );
+    // Determine which databases to query
+    const databasesToQuery: Array<{ workDir: string; beadsDir: string; source: string }> = [];
 
-    if (!result.success) {
+    if (rig === "all") {
+      // Query town + all discovered rig databases (same as listAllBeads)
+      const townBeadsDir = join(townRoot, ".beads");
+      databasesToQuery.push({ workDir: townRoot, beadsDir: townBeadsDir, source: "town" });
+
+      const beadsDirs = await listAllBeadsDirs();
+      const rigDirs = beadsDirs.filter((dirInfo) => dirInfo.rig !== null);
+      for (const dirInfo of rigDirs) {
+        databasesToQuery.push({
+          workDir: dirInfo.workDir,
+          beadsDir: dirInfo.path,
+          source: dirInfo.rig!,
+        });
+      }
+    } else if (rig === "town") {
+      // Only town database
+      const townBeadsDir = resolveBeadsDir(townRoot);
+      databasesToQuery.push({ workDir: townRoot, beadsDir: townBeadsDir, source: "town" });
+    } else {
+      // Specific rig - try to find its database
+      const beadsDirs = await listAllBeadsDirs();
+      const rigDir = beadsDirs.find((d) => d.rig === rig);
+      if (rigDir) {
+        databasesToQuery.push({
+          workDir: rigDir.workDir,
+          beadsDir: rigDir.path,
+          source: rigDir.rig!,
+        });
+      } else {
+        // Fallback: try town database if rig not found
+        const townBeadsDir = resolveBeadsDir(townRoot);
+        databasesToQuery.push({ workDir: townRoot, beadsDir: townBeadsDir, source: "town" });
+      }
+    }
+
+    // Fetch from all databases sequentially (bd semaphore serializes)
+    const allIssues: BeadsIssue[] = [];
+    const errors: Array<{ source: string; error: { code: string; message: string } }> = [];
+
+    for (const db of databasesToQuery) {
+      const fetchResult = await fetchGraphBeadsFromDatabase(db.workDir, db.beadsDir, options);
+      if (fetchResult.error) {
+        errors.push({ source: db.source, error: fetchResult.error });
+      }
+      allIssues.push(...fetchResult.issues);
+    }
+
+    // If ALL databases failed, return the first error
+    if (errors.length === databasesToQuery.length && databasesToQuery.length > 0) {
+      const firstError = errors[0]!;
       return {
         success: false,
         error: {
-          code: result.error?.code ?? "BD_EXEC_FAILED",
-          message: result.error?.message ?? "bd command failed",
+          code: firstError.error.code,
+          message: firstError.error.message,
         },
       };
     }
 
-    // Handle empty database
-    if (!result.data) {
-      return { success: true, data: { nodes: [], edges: [] } };
-    }
-
-    // Filter out wisps (same logic as fetchBeadsFromDatabase)
-    const issues = result.data.filter((issue) => {
-      if (issue.wisp) return false;
-      if (issue.id.includes("-wisp-")) return false;
+    // Deduplicate issues by bead ID (same bead may exist in multiple databases)
+    const seenIds = new Set<string>();
+    const uniqueIssues = allIssues.filter((issue) => {
+      if (seenIds.has(issue.id)) return false;
+      seenIds.add(issue.id);
       return true;
     });
+
+    // Filter out excluded prefixes when excludeTown is set
+    let issues = uniqueIssues;
+    if (options.excludeTown && rig === "all") {
+      issues = issues.filter((issue) => !issue.id.startsWith("hq-"));
+    }
 
     // Build nodes from beads
     const nodes: GraphNode[] = issues.map((issue) => ({
@@ -1453,16 +1581,23 @@ export async function getBeadsGraph(): Promise<BeadsServiceResult<BeadsGraphResp
       source: prefixToSource(issue.id),
     }));
 
-    // Extract edges from dependency data across all beads
+    // Extract edges from dependency data across all beads, with deduplication.
+    // Bidirectional deps (A->B on bead A and B->A on bead B) or duplicate entries
+    // across multiple databases must be deduplicated to prevent rendering duplicate edges.
+    const edgeKeys = new Set<string>();
     const edges: GraphDependency[] = [];
     for (const issue of issues) {
       if (issue.dependencies) {
         for (const dep of issue.dependencies) {
-          edges.push({
-            issueId: dep.issue_id,
-            dependsOnId: dep.depends_on_id,
-            type: dep.type,
-          });
+          const key = `${dep.issue_id}->${dep.depends_on_id}`;
+          if (!edgeKeys.has(key)) {
+            edgeKeys.add(key);
+            edges.push({
+              issueId: dep.issue_id,
+              dependsOnId: dep.depends_on_id,
+              type: dep.type,
+            });
+          }
         }
       }
     }

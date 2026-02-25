@@ -130,4 +130,73 @@ describe("GET /api/beads/graph", () => {
 
     expect(getBeadsGraph).toHaveBeenCalledTimes(1);
   });
+
+  // adj-cj4j: Query params are parsed and forwarded to service
+  it("should pass query params to getBeadsGraph service", async () => {
+    vi.mocked(getBeadsGraph).mockResolvedValue({
+      success: true,
+      data: { nodes: [], edges: [] },
+    });
+
+    await request(app).get("/api/beads/graph?rig=all&status=open&type=epic&epicId=hq-001&excludeTown=true");
+
+    expect(getBeadsGraph).toHaveBeenCalledWith({
+      rig: "all",
+      status: "open",
+      type: "epic",
+      epicId: "hq-001",
+      excludeTown: true,
+    });
+  });
+
+  it("should pass undefined for missing query params", async () => {
+    vi.mocked(getBeadsGraph).mockResolvedValue({
+      success: true,
+      data: { nodes: [], edges: [] },
+    });
+
+    await request(app).get("/api/beads/graph");
+
+    expect(getBeadsGraph).toHaveBeenCalledWith({
+      rig: undefined,
+      status: undefined,
+      type: undefined,
+      epicId: undefined,
+      excludeTown: false,
+    });
+  });
+
+  it("should treat excludeTown as false when not 'true'", async () => {
+    vi.mocked(getBeadsGraph).mockResolvedValue({
+      success: true,
+      data: { nodes: [], edges: [] },
+    });
+
+    await request(app).get("/api/beads/graph?excludeTown=false");
+
+    expect(getBeadsGraph).toHaveBeenCalledWith(
+      expect.objectContaining({ excludeTown: false })
+    );
+  });
+
+  // adj-jx67: Zod validation catches invalid response shapes
+  it("should return 500 when response fails Zod validation", async () => {
+    // Return data with missing required fields (invalid per schema)
+    vi.mocked(getBeadsGraph).mockResolvedValue({
+      success: true,
+      // nodes array has items missing required 'source' field
+      data: {
+        nodes: [
+          { id: "hq-001", title: "Test", status: "open", type: "task", priority: 2, assignee: null } as never,
+        ],
+        edges: [],
+      },
+    });
+
+    const response = await request(app).get("/api/beads/graph");
+
+    expect(response.status).toBe(500);
+    expect(response.body.success).toBe(false);
+    expect(response.body.error.message).toContain("Graph response validation failed");
+  });
 });
