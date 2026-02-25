@@ -14,6 +14,7 @@ import AdjutantKit
 /// Shows each agent's status, current bead, and unread message count.
 struct AgentsSectionView: View {
     let agents: [AgentOverview]
+    @EnvironmentObject private var coordinator: AppCoordinator
     @Environment(\.crtTheme) private var theme
 
     var body: some View {
@@ -23,7 +24,12 @@ struct AgentsSectionView: View {
             } else {
                 VStack(spacing: CRTTheme.Spacing.xs) {
                     ForEach(agents) { agent in
-                        agentRow(agent)
+                        Button {
+                            coordinator.navigate(to: .agentDetail(member: crewMember(from: agent)))
+                        } label: {
+                            agentRow(agent)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -64,6 +70,11 @@ struct AgentsSectionView: View {
                     .background(theme.primary)
                     .clipShape(Capsule())
             }
+
+            // Navigation chevron
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(theme.dim)
         }
         .padding(.vertical, CRTTheme.Spacing.xs)
         .padding(.horizontal, CRTTheme.Spacing.sm)
@@ -96,6 +107,19 @@ struct AgentsSectionView: View {
     }
 
     // MARK: - Helpers
+
+    private func crewMember(from agent: AgentOverview) -> CrewMember {
+        CrewMember(
+            id: agent.id,
+            name: agent.name,
+            type: .agent,
+            rig: nil,
+            status: CrewMemberStatus(rawValue: agent.status) ?? .idle,
+            currentTask: agent.currentBead,
+            unreadMail: agent.unreadCount,
+            sessionId: agent.sessionId
+        )
+    }
 
     private func statusColor(for status: String) -> Color {
         switch status.lowercased() {

@@ -4,7 +4,11 @@ import AdjutantKit
 /// Beads section for the Swarm Overview — shows beads grouped by status.
 struct BeadsSectionView: View {
     let beads: BeadsOverview
+    @EnvironmentObject private var coordinator: AppCoordinator
     @Environment(\.crtTheme) private var theme
+
+    /// Maximum beads shown per group before truncation.
+    private let maxPerGroup = 7
 
     var body: some View {
         VStack(alignment: .leading, spacing: CRTTheme.Spacing.md) {
@@ -53,9 +57,37 @@ struct BeadsSectionView: View {
                 CRTText("No beads \(label.lowercased())", style: .caption, color: theme.dim.opacity(0.4))
                     .padding(.leading, CRTTheme.Spacing.sm)
             } else {
+                let visible = Array(items.prefix(maxPerGroup))
+                let remaining = items.count - visible.count
+
                 VStack(spacing: CRTTheme.Spacing.xxs) {
-                    ForEach(items) { bead in
-                        beadRow(bead, dimmed: dimmed)
+                    ForEach(visible) { bead in
+                        Button {
+                            coordinator.navigate(to: .beadDetail(id: bead.id))
+                        } label: {
+                            beadRow(bead, dimmed: dimmed)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if remaining > 0 {
+                        Button {
+                            coordinator.navigate(to: .beads)
+                        } label: {
+                            HStack {
+                                Spacer()
+                                CRTText(
+                                    "\(remaining) more...",
+                                    style: .caption,
+                                    color: theme.dim.opacity(0.6)
+                                )
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(theme.dim.opacity(0.4))
+                            }
+                            .padding(.trailing, CRTTheme.Spacing.sm)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -66,31 +98,37 @@ struct BeadsSectionView: View {
 
     @ViewBuilder
     private func beadRow(_ bead: OverviewBeadSummary, dimmed: Bool) -> some View {
-        VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxxs) {
-            // Top line: ID + title
-            HStack(alignment: .top, spacing: CRTTheme.Spacing.xs) {
-                CRTText(bead.id, style: .caption, color: theme.dim.opacity(dimmed ? 0.4 : 0.7))
-                CRTText(bead.title, style: .body, color: dimmed ? theme.dim : theme.primary)
-                    .lineLimit(2)
-            }
-
-            // Bottom line: badges + metadata
-            HStack(spacing: CRTTheme.Spacing.xs) {
-                BadgeView(bead.type.uppercased(), style: .tag)
-                BadgeView("P\(bead.priority)", style: .priority(bead.priority))
-
-                if let assignee = bead.assignee {
-                    CRTText(assignee, style: .caption, color: theme.dim)
+        HStack(spacing: CRTTheme.Spacing.xs) {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxxs) {
+                // Top line: ID + title
+                HStack(alignment: .top, spacing: CRTTheme.Spacing.xs) {
+                    CRTText(bead.id, style: .caption, color: theme.dim.opacity(dimmed ? 0.4 : 0.7))
+                    CRTText(bead.title, style: .body, color: dimmed ? theme.dim : theme.primary)
+                        .lineLimit(2)
                 }
 
-                Spacer()
+                // Bottom line: badges + metadata
+                HStack(spacing: CRTTheme.Spacing.xs) {
+                    BadgeView(bead.type.uppercased(), style: .tag)
+                    BadgeView("P\(bead.priority)", style: .priority(bead.priority))
 
-                if bead.status == "closed", bead.closedAt != nil {
-                    CRTText("✓", style: .caption, color: CRTTheme.State.success)
+                    if let assignee = bead.assignee {
+                        CRTText(assignee, style: .caption, color: theme.dim)
+                    }
+
+                    Spacer()
+
+                    if bead.status == "closed", bead.closedAt != nil {
+                        CRTText("✓", style: .caption, color: CRTTheme.State.success)
+                    }
+
+                    CRTText(relativeTime(from: bead.updatedAt ?? bead.createdAt), style: .caption, color: theme.dim.opacity(0.5))
                 }
-
-                CRTText(relativeTime(from: bead.updatedAt ?? bead.createdAt), style: .caption, color: theme.dim.opacity(0.5))
             }
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(theme.dim.opacity(dimmed ? 0.3 : 0.5))
         }
         .padding(.horizontal, CRTTheme.Spacing.sm)
         .padding(.vertical, CRTTheme.Spacing.xs)

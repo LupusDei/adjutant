@@ -6,6 +6,7 @@ import AdjutantKit
 /// Displays epic progress overview with in-progress bars, recently completed, and empty state.
 struct EpicsSectionView: View {
     let epics: EpicsOverview
+    @EnvironmentObject private var coordinator: AppCoordinator
     @Environment(\.crtTheme) private var theme
 
     var body: some View {
@@ -28,7 +29,12 @@ struct EpicsSectionView: View {
         let sorted = epics.inProgress.sorted { $0.completionPercent > $1.completionPercent }
         return VStack(spacing: CRTTheme.Spacing.xs) {
             ForEach(sorted) { epic in
-                epicRow(epic)
+                Button {
+                    coordinator.navigate(to: .epicDetail(id: epic.id))
+                } label: {
+                    epicRow(epic)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -46,6 +52,9 @@ struct EpicsSectionView: View {
                     glowIntensity: epic.completionPercent > 0.8 ? .bright : .subtle,
                     color: epic.completionPercent > 0.8 ? theme.primary : theme.dim
                 )
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(theme.dim)
             }
 
             CRTProgressBar(progress: epic.completionPercent)
@@ -94,21 +103,30 @@ struct EpicsSectionView: View {
             CRTText("RECENTLY COMPLETED", style: .caption, color: theme.dim)
 
             ForEach(epics.recentlyCompleted.prefix(3)) { epic in
-                HStack(spacing: CRTTheme.Spacing.xs) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(CRTTheme.State.success.opacity(0.6))
-                        .font(.system(size: 14))
+                Button {
+                    coordinator.navigate(to: .epicDetail(id: epic.id))
+                } label: {
+                    HStack(spacing: CRTTheme.Spacing.xs) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(CRTTheme.State.success.opacity(0.6))
+                            .font(.system(size: 14))
 
-                    CRTText(epic.title, style: .body, color: theme.dim.opacity(0.6))
+                        CRTText(epic.title, style: .body, color: theme.dim.opacity(0.6))
 
-                    Spacer()
+                        Spacer()
 
-                    CRTText(
-                        "\(epic.totalChildren) tasks",
-                        style: .caption,
-                        color: theme.dim.opacity(0.4)
-                    )
+                        CRTText(
+                            "\(epic.totalChildren) tasks",
+                            style: .caption,
+                            color: theme.dim.opacity(0.4)
+                        )
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10))
+                            .foregroundColor(theme.dim.opacity(0.3))
+                    }
                 }
+                .buttonStyle(.plain)
             }
         }
     }

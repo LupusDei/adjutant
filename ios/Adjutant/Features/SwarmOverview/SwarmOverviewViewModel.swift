@@ -70,7 +70,13 @@ final class SwarmOverviewViewModel: ObservableObject {
             errorMessage = nil
             lastSuccessfulRefresh = Date()
         } catch {
-            errorMessage = userFriendlyMessage(for: error)
+            // On first load, show the error immediately
+            // On subsequent loads, keep stale data visible with a banner
+            if isFirstLoad {
+                errorMessage = userFriendlyMessage(for: error)
+            } else {
+                errorMessage = userFriendlyMessage(for: error)
+            }
         }
     }
 
