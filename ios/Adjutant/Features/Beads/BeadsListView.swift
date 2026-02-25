@@ -1,13 +1,24 @@
 import SwiftUI
 import AdjutantKit
 
+/// View mode for the beads screen: Kanban board or dependency graph.
+enum BeadsViewMode: String, CaseIterable {
+    case kanban = "BOARD"
+    case graph = "GRAPH"
+}
+
 /// Main beads view displaying all beads in a Kanban board with filtering and search.
 /// Supports drag-and-drop between columns with optimistic updates.
+/// Includes a toggle to switch to the dependency graph view.
 struct BeadsListView: View {
     @StateObject private var viewModel = BeadsListViewModel()
     @EnvironmentObject private var coordinator: AppCoordinator
     @ObservedObject private var appState = AppState.shared
     @Environment(\.crtTheme) private var theme
+
+    // MARK: - View Mode
+
+    @State private var viewMode: BeadsViewMode = .kanban
 
     // MARK: - Drag & Drop State
 
@@ -22,8 +33,10 @@ struct BeadsListView: View {
                 // Header
                 headerView
 
-                // Filter bar
-                filterBar
+                // Filter bar (only in kanban mode)
+                if viewMode == .kanban {
+                    filterBar
+                }
 
                 // Content
                 content
@@ -63,8 +76,13 @@ struct BeadsListView: View {
 
             Spacer()
 
-            // Sort dropdown
-            SortDropdown(currentSort: $viewModel.currentSort)
+            // View mode toggle (Board / Graph)
+            viewModeToggle
+
+            // Sort dropdown (only in kanban mode)
+            if viewMode == .kanban {
+                SortDropdown(currentSort: $viewModel.currentSort)
+            }
 
             // Count badge
             if viewModel.openCount > 0 {
@@ -99,6 +117,39 @@ struct BeadsListView: View {
                 .foregroundColor(theme.primary.opacity(0.3)),
             alignment: .bottom
         )
+    }
+
+    // MARK: - View Mode Toggle
+
+    /// CRT-styled segmented toggle for switching between Board and Graph views.
+    private var viewModeToggle: some View {
+        HStack(spacing: 0) {
+            ForEach(BeadsViewMode.allCases, id: \.self) { mode in
+                Button {
+                    withAnimation(.easeInOut(duration: CRTTheme.Animation.fast)) {
+                        viewMode = mode
+                    }
+                } label: {
+                    Text(mode.rawValue)
+                        .font(CRTTheme.Typography.font(size: 11, weight: .medium))
+                        .tracking(0.5)
+                        .foregroundColor(viewMode == mode ? theme.bright : theme.dim)
+                        .padding(.horizontal, CRTTheme.Spacing.sm)
+                        .padding(.vertical, CRTTheme.Spacing.xxs)
+                        .background(
+                            viewMode == mode
+                                ? theme.primary.opacity(0.15)
+                                : Color.clear
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                .stroke(theme.primary.opacity(0.4), lineWidth: 1)
+        )
+        .cornerRadius(CRTTheme.CornerRadius.sm)
     }
 
     // MARK: - Filter Bar
@@ -198,6 +249,16 @@ struct BeadsListView: View {
 
     @ViewBuilder
     private var content: some View {
+        switch viewMode {
+        case .kanban:
+            kanbanContent
+        case .graph:
+            DependencyGraphView()
+        }
+    }
+
+    @ViewBuilder
+    private var kanbanContent: some View {
         if viewModel.isLoading && viewModel.beads.isEmpty {
             loadingView
         } else if let errorMessage = viewModel.errorMessage {
