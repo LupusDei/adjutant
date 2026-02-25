@@ -22,6 +22,7 @@ final class SwarmOverviewViewModel: ObservableObject {
 
     private let apiClient: APIClient
     private var refreshTimer: Timer?
+    private var isRefreshing = false
 
     // MARK: - Init
 
@@ -38,7 +39,7 @@ final class SwarmOverviewViewModel: ObservableObject {
         }
         // Guard against duplicate timers if onAppear fires multiple times
         refreshTimer?.invalidate()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in
                 await self.refresh()
@@ -58,6 +59,11 @@ final class SwarmOverviewViewModel: ObservableObject {
             errorMessage = "No active project"
             return
         }
+
+        // Skip if a refresh is already in flight
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
 
         let isFirstLoad = overview == nil
         if isFirstLoad {
