@@ -2,7 +2,7 @@ import { type CSSProperties, useState, useCallback } from "react";
 import { useProposals } from "../../hooks/useProposals";
 import { ProposalCard } from "./ProposalCard";
 import { ProposalDetailView } from "./ProposalDetailView";
-import { SendToAgentModal } from "./SendToAgentModal";
+import { SendToAgentModal, type SendToAgentMode } from "./SendToAgentModal";
 import type { Proposal, ProposalStatus, ProposalType } from "../../types";
 
 export interface ProposalsViewProps {
@@ -40,6 +40,7 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
 
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   const [sendToAgentProposal, setSendToAgentProposal] = useState<Proposal | null>(null);
+  const [sendToAgentMode, setSendToAgentMode] = useState<SendToAgentMode>('execute');
 
   const handleAcceptFromDetail = useCallback(async (id: string) => {
     await accept(id);
@@ -57,6 +58,12 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
   }, [complete, refresh]);
 
   const handleSendToAgent = useCallback((proposal: Proposal) => {
+    setSendToAgentMode('execute');
+    setSendToAgentProposal(proposal);
+  }, []);
+
+  const handleDiscuss = useCallback((proposal: Proposal) => {
+    setSendToAgentMode('discuss');
     setSendToAgentProposal(proposal);
   }, []);
 
@@ -129,6 +136,7 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
             onDismiss={(id) => { void dismiss(id); }}
             onComplete={(id) => { void complete(id); }}
             onSendToAgent={handleSendToAgent}
+            onDiscuss={handleDiscuss}
             onClick={setSelectedProposalId}
           />
         ))}
@@ -145,11 +153,13 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
         onDismiss={(id) => { void handleDismissFromDetail(id); }}
         onComplete={(id) => { void handleCompleteFromDetail(id); }}
         onSendToAgent={handleSendToAgent}
+        onDiscuss={handleDiscuss}
       />
 
       {sendToAgentProposal && (
         <SendToAgentModal
           proposal={sendToAgentProposal}
+          mode={sendToAgentMode}
           onClose={() => { setSendToAgentProposal(null); }}
           onSent={handleSendToAgentComplete}
         />

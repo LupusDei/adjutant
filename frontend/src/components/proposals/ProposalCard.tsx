@@ -7,10 +7,11 @@ export interface ProposalCardProps {
   onDismiss?: (id: string) => void;
   onComplete?: (id: string) => void;
   onSendToAgent?: (proposal: Proposal) => void;
+  onDiscuss?: (proposal: Proposal) => void;
   onClick?: (id: string) => void;
 }
 
-export function ProposalCard({ proposal, onAccept, onDismiss, onComplete, onSendToAgent, onClick }: ProposalCardProps) {
+export function ProposalCard({ proposal, onAccept, onDismiss, onComplete, onSendToAgent, onDiscuss, onClick }: ProposalCardProps) {
   const isPending = proposal.status === "pending";
   const isAccepted = proposal.status === "accepted";
   const isDismissed = proposal.status === "dismissed";
@@ -62,6 +63,12 @@ export function ProposalCard({ proposal, onAccept, onDismiss, onComplete, onSend
               onClick={(e) => { e.stopPropagation(); onAccept?.(proposal.id); }}
             >
               ACCEPT
+            </button>
+            <button
+              style={styles.discussBtn}
+              onClick={(e) => { e.stopPropagation(); onDiscuss?.(proposal); }}
+            >
+              DISCUSS
             </button>
             <button
               style={styles.dismissBtn}
@@ -179,6 +186,17 @@ const styles: Record<string, CSSProperties> = {
     background: "transparent",
     border: "1px solid var(--pipboy-green, #00ff00)",
     color: "var(--pipboy-green, #00ff00)",
+    padding: "4px 12px",
+    fontSize: "11px",
+    fontFamily: "var(--font-mono, monospace)",
+    fontWeight: "bold",
+    cursor: "pointer",
+    textTransform: "uppercase" as const,
+  },
+  discussBtn: {
+    background: "transparent",
+    border: "1px solid #ffaa00",
+    color: "#ffaa00",
     padding: "4px 12px",
     fontSize: "11px",
     fontFamily: "var(--font-mono, monospace)",

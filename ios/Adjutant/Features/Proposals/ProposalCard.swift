@@ -10,17 +10,20 @@ struct ProposalCard: View {
     let onAccept: (() -> Void)?
     let onDismiss: (() -> Void)?
     let onComplete: (() -> Void)?
+    let onDiscuss: (() -> Void)?
 
     init(
         proposal: Proposal,
         onAccept: (() -> Void)? = nil,
         onDismiss: (() -> Void)? = nil,
-        onComplete: (() -> Void)? = nil
+        onComplete: (() -> Void)? = nil,
+        onDiscuss: (() -> Void)? = nil
     ) {
         self.proposal = proposal
         self.onAccept = onAccept
         self.onDismiss = onDismiss
         self.onComplete = onComplete
+        self.onDiscuss = onDiscuss
     }
 
     var body: some View {
@@ -64,6 +67,14 @@ struct ProposalCard: View {
                     Label("Accept", systemImage: "checkmark")
                 }
                 .tint(CRTTheme.State.success)
+            }
+            if proposal.status == .pending, let onDiscuss {
+                Button {
+                    onDiscuss()
+                } label: {
+                    Label("Discuss", systemImage: "bubble.left.and.bubble.right")
+                }
+                .tint(CRTTheme.State.warning)
             }
             if proposal.status == .accepted, let onComplete {
                 Button {
@@ -193,7 +204,7 @@ struct ProposalCard: View {
         var label = "\(proposal.title), \(proposal.type.rawValue) proposal by \(proposal.author)"
         label += ", \(proposal.status.rawValue)"
         if proposal.status == .pending {
-            label += ". Swipe right to accept, swipe left to dismiss."
+            label += ". Swipe right to accept or discuss, swipe left to dismiss."
         }
         return label
     }

@@ -1,6 +1,23 @@
 import SwiftUI
 import AdjutantKit
 
+/// Mode for the send-to-agent sheet.
+enum SendToAgentMode {
+    case execute
+    case discuss
+
+    var skillName: String {
+        switch self {
+        case .execute: return "execute-proposal"
+        case .discuss: return "discuss-proposal"
+        }
+    }
+
+    func trigger(proposalId: String) -> String {
+        "Use /\(skillName) \(proposalId)"
+    }
+}
+
 /// Sheet for choosing how to send an accepted proposal to an agent.
 /// Two paths: pick an existing active agent, or spawn a new one.
 struct SendToAgentSheet: View {
@@ -9,6 +26,7 @@ struct SendToAgentSheet: View {
     @EnvironmentObject private var coordinator: AppCoordinator
 
     let proposal: Proposal
+    var mode: SendToAgentMode = .execute
     let onSent: (String) -> Void
 
     enum Tab: String, CaseIterable {
@@ -48,7 +66,11 @@ struct SendToAgentSheet: View {
             .navigationTitle("")
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    CRTText("SEND TO AGENT", style: .subheader, glowIntensity: .medium)
+                    CRTText(
+                        mode == .discuss ? "DISCUSS WITH AGENT" : "SEND TO AGENT",
+                        style: .subheader,
+                        glowIntensity: .medium
+                    )
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
@@ -446,14 +468,15 @@ struct SendToAgentSheet: View {
         isSending = true
         errorMessage = nil
 
+        let trigger = mode.trigger(proposalId: proposal.id)
+
         do {
             switch selectedTab {
             case .existing:
                 guard let agentName = selectedAgent else { return }
-                let prompt = buildProposalPrompt()
                 _ = try await apiClient.sendChatMessage(
                     agentId: agentName,
-                    body: prompt,
+                    body: trigger,
                     threadId: "proposal-\(proposal.id)"
                 )
 
@@ -465,7 +488,6 @@ struct SendToAgentSheet: View {
                 isSending = false
                 onSent(agentName)
 
-                // Navigate to chat with the agent
                 coordinator.pendingChatAgentId = agentName
                 coordinator.selectTab(.chat)
                 dismiss()
@@ -481,26 +503,9 @@ struct SendToAgentSheet: View {
                     )
                 )
 
-                // Send the full proposal as an MCP message for reference
-                let prompt = buildProposalPrompt()
-                _ = try? await apiClient.sendChatMessage(
-                    agentId: session.name,
-                    body: prompt,
-                    threadId: "proposal-\(proposal.id)"
-                )
-
-                // Build a concise single-line trigger with proposal content inline.
-                // Multi-line text via tmux send-keys breaks (newlines trigger premature Enter),
-                // so we flatten the proposal into one line the agent can act on immediately.
-                let descriptionPreview = proposal.description
-                    .replacingOccurrences(of: "\n+", with: " ", options: .regularExpression)
-                    .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-                    .trimmingCharacters(in: .whitespaces)
-                    .prefix(500)
-                let inlineTrigger = "Execute this \(proposal.type.rawValue) proposal: \"\(proposal.title)\" — \(descriptionPreview) — Use /epic-planner to create the epic hierarchy. Full proposal details are in your adjutant MCP messages (thread: proposal-\(proposal.id)). Send progress updates and questions to the user via the send_message MCP tool (to: \"user\")."
-
+                // Send skill trigger as terminal input after session starts
                 try await Task.sleep(nanoseconds: 5_000_000_000)
-                _ = try? await apiClient.sendSessionInput(id: session.id, text: inlineTrigger)
+                _ = try? await apiClient.sendSessionInput(id: session.id, text: trigger)
 
                 #if canImport(UIKit)
                 let feedback = UINotificationFeedbackGenerator()
@@ -518,24 +523,6 @@ struct SendToAgentSheet: View {
             isSending = false
             errorMessage = error.localizedDescription
         }
-    }
-
-    private func buildProposalPrompt() -> String {
-        """
-        ## Proposal: \(proposal.title)
-
-        **Type:** \(proposal.type.rawValue)
-        **Author:** \(proposal.author)
-        **Status:** \(proposal.status.rawValue)
-
-        ### Description
-
-        \(proposal.description)
-
-        ---
-
-        Please use /speckit.specify to create a feature specification from this proposal, then /speckit.plan to generate an implementation plan, and /speckit.beads to create executable beads for orchestration.
-        """
     }
 
     // MARK: - Helpers
@@ -556,7 +543,7 @@ struct SendToAgentSheet: View {
 
 // MARK: - Preview
 
-#Preview("SendToAgentSheet") {
+#Preview("SendToAgentSheet - Execute") {
     SendToAgentSheet(
         proposal: Proposal(
             id: "test-1",
@@ -568,6 +555,25 @@ struct SendToAgentSheet: View {
             createdAt: "2026-02-24T00:00:00Z",
             updatedAt: "2026-02-24T01:00:00Z"
         ),
+        mode: .execute,
+        onSent: { _ in }
+    )
+    .environmentObject(AppCoordinator())
+}
+
+#Preview("SendToAgentSheet - Discuss") {
+    SendToAgentSheet(
+        proposal: Proposal(
+            id: "test-2",
+            author: "test-agent",
+            title: "Refactor database layer",
+            description: "Migrate to PostgreSQL",
+            type: .engineering,
+            status: .pending,
+            createdAt: "2026-02-24T00:00:00Z",
+            updatedAt: "2026-02-24T01:00:00Z"
+        ),
+        mode: .discuss,
         onSent: { _ in }
     )
     .environmentObject(AppCoordinator())

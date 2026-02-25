@@ -7,6 +7,7 @@ struct ProposalDetailView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
     @StateObject private var viewModel: ProposalDetailViewModel
     @State private var showingSendToAgent = false
+    @State private var sendToAgentMode: SendToAgentMode = .execute
 
     init(proposalId: String) {
         _viewModel = StateObject(wrappedValue: ProposalDetailViewModel(proposalId: proposalId))
@@ -58,7 +59,7 @@ struct ProposalDetailView: View {
         }
         .sheet(isPresented: $showingSendToAgent) {
             if let proposal = viewModel.proposal {
-                SendToAgentSheet(proposal: proposal) { _ in
+                SendToAgentSheet(proposal: proposal, mode: sendToAgentMode) { _ in
                     viewModel.markSentToAgent()
                 }
             }
@@ -174,6 +175,10 @@ struct ProposalDetailView: View {
                     CRTButton("ACCEPT", variant: .primary, size: .medium) {
                         Task<Void, Never> { await viewModel.accept() }
                     }
+                    CRTButton("DISCUSS", variant: .secondary, size: .medium) {
+                        sendToAgentMode = .discuss
+                        showingSendToAgent = true
+                    }
                     CRTButton("DISMISS", variant: .danger, size: .medium) {
                         Task<Void, Never> { await viewModel.dismiss() }
                     }
@@ -196,6 +201,7 @@ struct ProposalDetailView: View {
                         }
 
                         CRTButton("SEND TO AGENT", variant: .primary, size: .large) {
+                            sendToAgentMode = .execute
                             showingSendToAgent = true
                         }
                         .crtGlow(color: theme.primary, radius: 8, intensity: 0.4)

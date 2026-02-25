@@ -58,6 +58,54 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
   );
 
   // ---------------------------------------------------------------------------
+  // get_proposal
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "get_proposal",
+    {
+      id: z.string().describe("Proposal UUID to fetch"),
+    },
+    async ({ id }) => {
+      const proposal = store.getProposal(id);
+      if (!proposal) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Proposal not found" }) }],
+        };
+      }
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(proposal) }],
+      };
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // discuss_proposal
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "discuss_proposal",
+    {
+      id: z.string().describe("Proposal UUID to discuss"),
+    },
+    async ({ id }) => {
+      const proposal = store.getProposal(id);
+      if (!proposal) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Proposal not found" }) }],
+        };
+      }
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            proposal,
+            context: "You are reviewing this proposal with the user. Analyze strengths, weaknesses, feasibility, and suggest improvements. Ask clarifying questions via send_message to 'user'.",
+          }),
+        }],
+      };
+    },
+  );
+
+  // ---------------------------------------------------------------------------
   // list_proposals
   // ---------------------------------------------------------------------------
   server.tool(

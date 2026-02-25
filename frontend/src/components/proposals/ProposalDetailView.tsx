@@ -14,6 +14,7 @@ export interface ProposalDetailViewProps {
   onDismiss: (id: string) => void;
   onComplete: (id: string) => void;
   onSendToAgent: (proposal: Proposal) => void;
+  onDiscuss: (proposal: Proposal) => void;
 }
 
 function formatTimestamp(timestamp: string): string {
@@ -38,6 +39,7 @@ export function ProposalDetailView({
   onDismiss,
   onComplete,
   onSendToAgent,
+  onDiscuss,
 }: ProposalDetailViewProps) {
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [loading, setLoading] = useState(false);
@@ -91,6 +93,10 @@ export function ProposalDetailView({
   const handleSendToAgent = useCallback(() => {
     if (proposal) onSendToAgent(proposal);
   }, [proposal, onSendToAgent]);
+
+  const handleDiscuss = useCallback(() => {
+    if (proposal) onDiscuss(proposal);
+  }, [proposal, onDiscuss]);
 
   if (!proposalId) return null;
 
@@ -183,6 +189,9 @@ export function ProposalDetailView({
                   <>
                     <button style={styles.acceptBtn} onClick={handleAccept}>
                       ACCEPT
+                    </button>
+                    <button style={styles.discussBtn} onClick={handleDiscuss}>
+                      DISCUSS
                     </button>
                     <button style={styles.dismissBtn} onClick={handleDismiss}>
                       DISMISS
@@ -381,6 +390,18 @@ const styles = {
     background: 'transparent',
     border: '1px solid var(--pipboy-green, #00ff00)',
     color: 'var(--pipboy-green, #00ff00)',
+    padding: '6px 16px',
+    fontSize: '0.75rem',
+    fontFamily: '"Share Tech Mono", monospace',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  },
+  discussBtn: {
+    background: 'transparent',
+    border: '1px solid #ffaa00',
+    color: '#ffaa00',
     padding: '6px 16px',
     fontSize: '0.75rem',
     fontFamily: '"Share Tech Mono", monospace',

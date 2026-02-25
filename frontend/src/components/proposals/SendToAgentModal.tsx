@@ -10,8 +10,11 @@ import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../../services/api';
 import type { CrewMember, Proposal } from '../../types';
 
+export type SendToAgentMode = 'execute' | 'discuss';
+
 export interface SendToAgentModalProps {
   proposal: Proposal;
+  mode?: SendToAgentMode;
   onClose: () => void;
   onSent: (target: string) => void;
 }
@@ -19,30 +22,13 @@ export interface SendToAgentModalProps {
 type ModalTab = 'existing' | 'spawn';
 type SendState = 'idle' | 'sending' | 'success' | 'error';
 
-function buildProposalPrompt(proposal: Proposal): string {
-  return [
-    `## Proposal: ${proposal.title}`,
-    '',
-    `**Type:** ${proposal.type}`,
-    `**Project:** ${proposal.project}`,
-    `**Author:** ${proposal.author}`,
-    `**Status:** ${proposal.status}`,
-    '',
-    '### Description',
-    '',
-    proposal.description,
-    '',
-    '---',
-    '',
-    '## Instructions',
-    '',
-    'Use /epic-planner to create a structured epic hierarchy for this proposal. This will generate specs, a plan, tasks, and beads for orchestration.',
-    '',
-    'If you have questions or need clarification, send them to the user via Adjutant messages using the `send_message` MCP tool (to: "user"). Do NOT block waiting for answers — send the question and continue with reasonable assumptions, noting them in the spec.',
-  ].join('\n');
+
+function skillTrigger(mode: SendToAgentMode, proposalId: string): string {
+  const skill = mode === 'discuss' ? 'discuss-proposal' : 'execute-proposal';
+  return `Use /${skill} ${proposalId}`;
 }
 
-export function SendToAgentModal({ proposal, onClose, onSent }: SendToAgentModalProps) {
+export function SendToAgentModal({ proposal, mode = 'execute', onClose, onSent }: SendToAgentModalProps) {
   const [tab, setTab] = useState<ModalTab>('existing');
   const [agents, setAgents] = useState<CrewMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,10 +74,9 @@ export function SendToAgentModal({ proposal, onClose, onSent }: SendToAgentModal
     setSendState('sending');
     setError(null);
     try {
-      const prompt = buildProposalPrompt(proposal);
       await api.messages.send({
         to: selectedAgent,
-        body: prompt,
+        body: skillTrigger(mode, proposal.id),
         threadId: `proposal-${proposal.id}`,
       });
       setSendState('success');
@@ -100,7 +85,7 @@ export function SendToAgentModal({ proposal, onClose, onSent }: SendToAgentModal
       setSendState('error');
       setError(err instanceof ApiError ? err.message : 'Failed to send message');
     }
-  }, [selectedAgent, proposal, onSent]);
+  }, [selectedAgent, proposal, mode, onSent]);
 
   const handleSpawnAndSend = useCallback(async () => {
     setSendState('sending');
@@ -116,26 +101,12 @@ export function SendToAgentModal({ proposal, onClose, onSent }: SendToAgentModal
         workspaceType: 'primary',
       });
 
-      // Send the full proposal as an MCP message for reference
-      const prompt = buildProposalPrompt(proposal);
-      await api.messages.send({
-        to: session.name,
-        body: prompt,
-        threadId: `proposal-${proposal.id}`,
-      });
-
-      // Build a concise single-line trigger with the proposal content inline.
-      // Multi-line text via tmux send-keys breaks (newlines trigger premature Enter),
-      // so we flatten the proposal into one line the agent can act on immediately.
-      const descriptionPreview = proposal.description
-        .replace(/\n+/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 500);
-      const inlineTrigger = `Execute this ${proposal.type} proposal: "${proposal.title}" — ${descriptionPreview} — Use /epic-planner to create the epic hierarchy. Full proposal details are in your adjutant MCP messages (thread: proposal-${proposal.id}). Send progress updates and questions to the user via the send_message MCP tool (to: "user").`;
+      // Send a short skill invocation as the terminal trigger.
+      // The skill fetches the full proposal from the backend itself.
+      const trigger = skillTrigger(mode, proposal.id);
 
       setTimeout(() => {
-        void api.sessions.sendInput(session.id, inlineTrigger);
+        void api.sessions.sendInput(session.id, trigger);
       }, 5000);
 
       setSendState('success');
@@ -145,7 +116,7 @@ export function SendToAgentModal({ proposal, onClose, onSent }: SendToAgentModal
       setSendState('error');
       setError(err instanceof ApiError ? err.message : 'Failed to spawn agent');
     }
-  }, [callsign, proposal, onSent, projectPath]);
+  }, [callsign, proposal, mode, onSent, projectPath]);
 
   const isExistingTab = tab === 'existing';
   const canSend = isExistingTab ? !!selectedAgent : true;
@@ -155,7 +126,7 @@ export function SendToAgentModal({ proposal, onClose, onSent }: SendToAgentModal
       <div style={styles.backdrop} onClick={onClose} />
       <div style={styles.modal}>
         <div style={styles.header}>
-          <h3 style={styles.headerTitle}>SEND TO AGENT</h3>
+          <h3 style={styles.headerTitle}>{mode === 'discuss' ? 'DISCUSS WITH AGENT' : 'SEND TO AGENT'}</h3>
           <button style={styles.closeBtn} onClick={onClose} aria-label="Close">
             {'\u00D7'}
           </button>

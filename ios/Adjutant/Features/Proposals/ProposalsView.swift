@@ -8,6 +8,7 @@ struct ProposalsView: View {
     @Environment(\.crtTheme) private var theme
     @EnvironmentObject private var coordinator: AppCoordinator
     @StateObject private var viewModel = ProposalsViewModel()
+    @State private var discussProposal: Proposal?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,6 +44,11 @@ struct ProposalsView: View {
         }
         .onDisappear {
             viewModel.onDisappear()
+        }
+        .sheet(item: $discussProposal) { proposal in
+            SendToAgentSheet(proposal: proposal, mode: .discuss) { _ in
+                discussProposal = nil
+            }
         }
     }
 
@@ -183,6 +189,9 @@ struct ProposalsView: View {
                         } : nil,
                         onComplete: proposal.status == .accepted ? {
                             Task<Void, Never> { await viewModel.complete(id: proposal.id) }
+                        } : nil,
+                        onDiscuss: proposal.status == .pending ? {
+                            discussProposal = proposal
                         } : nil
                     )
                 }
