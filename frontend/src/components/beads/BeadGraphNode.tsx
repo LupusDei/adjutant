@@ -95,7 +95,7 @@ function BeadGraphNodeInner({ data }: NodeProps) {
       e.stopPropagation();
       nodeData.onToggleCollapse?.(nodeData.id);
     },
-    [nodeData]
+    [nodeData.id, nodeData.onToggleCollapse]
   );
 
   const selectedGlow = isSelected
@@ -236,5 +236,30 @@ function BeadGraphNodeInner({ data }: NodeProps) {
   );
 }
 
-/** Memoized BeadGraphNode for React Flow performance. */
-export const BeadGraphNode = React.memo(BeadGraphNodeInner);
+/**
+ * Custom equality check for BeadGraphNode memoization.
+ * Compares the data fields that affect rendering to avoid
+ * unnecessary re-renders when React Flow passes new props objects
+ * with identical data values.
+ */
+function areNodePropsEqual(prev: NodeProps, next: NodeProps): boolean {
+  // Safe cast: data matches BeadGraphNodeUIData
+  const prevData = prev.data as BeadGraphNodeUIData;
+  const nextData = next.data as BeadGraphNodeUIData;
+
+  return (
+    prevData.id === nextData.id &&
+    prevData.title === nextData.title &&
+    prevData.status === nextData.status &&
+    prevData.beadType === nextData.beadType &&
+    prevData.priority === nextData.priority &&
+    prevData.assignee === nextData.assignee &&
+    prevData.collapsed === nextData.collapsed &&
+    prevData.collapsedChildCount === nextData.collapsedChildCount &&
+    prevData.selected === nextData.selected &&
+    prevData.onToggleCollapse === nextData.onToggleCollapse
+  );
+}
+
+/** Memoized BeadGraphNode with custom equality for React Flow performance. */
+export const BeadGraphNode = React.memo(BeadGraphNodeInner, areNodePropsEqual);

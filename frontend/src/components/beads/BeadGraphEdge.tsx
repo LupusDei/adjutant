@@ -102,5 +102,26 @@ function BeadGraphEdgeInner({
   );
 }
 
-/** Memoized BeadGraphEdge for React Flow performance. */
-export const BeadGraphEdge = React.memo(BeadGraphEdgeInner);
+/**
+ * Custom equality check for BeadGraphEdge memoization.
+ * Compares position and identity props to avoid unnecessary re-renders
+ * when React Flow passes new props objects with identical values.
+ */
+function areEdgePropsEqual(prev: EdgeProps, next: EdgeProps): boolean {
+  return (
+    prev.id === next.id &&
+    prev.source === next.source &&
+    prev.target === next.target &&
+    prev.sourceX === next.sourceX &&
+    prev.sourceY === next.sourceY &&
+    prev.targetX === next.targetX &&
+    prev.targetY === next.targetY &&
+    prev.sourcePosition === next.sourcePosition &&
+    prev.targetPosition === next.targetPosition &&
+    prev.markerEnd === next.markerEnd &&
+    prev.style === next.style
+  );
+}
+
+/** Memoized BeadGraphEdge with custom equality for React Flow performance. */
+export const BeadGraphEdge = React.memo(BeadGraphEdgeInner, areEdgePropsEqual);
