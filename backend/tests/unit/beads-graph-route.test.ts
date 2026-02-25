@@ -3,7 +3,7 @@ import express from "express";
 import request from "supertest";
 
 // Mock the beads-service before importing the router
-vi.mock("../../src/services/beads-service.js", () => ({
+vi.mock("../../src/services/beads/index.js", () => ({
   listBeads: vi.fn(),
   listAllBeads: vi.fn(),
   getBead: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock("../../src/services/workspace/index.js", () => ({
 }));
 
 import { beadsRouter } from "../../src/routes/beads.js";
-import { getBeadsGraph, getBead } from "../../src/services/beads-service.js";
+import { getBeadsGraph, getBead } from "../../src/services/beads/index.js";
 import type { BeadsGraphResponse } from "../../src/types/beads.js";
 
 /**

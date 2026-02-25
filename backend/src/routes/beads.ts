@@ -10,7 +10,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { listBeads, listAllBeads, updateBead, getBead, getEpicChildren, listEpicsWithProgress, listBeadSources, listRecentlyClosed, getBeadsGraph, type BeadStatus } from "../services/beads-service.js";
+import { listBeads, listAllBeads, updateBead, getBead, getEpicChildren, listEpicsWithProgress, listBeadSources, listRecentlyClosed, getBeadsGraph, type BeadStatus } from "../services/beads/index.js";
 import { BeadsGraphResponseSchema } from "../types/beads.js";
 import { resolveRigPath } from "../services/workspace/index.js";
 import { listProjects } from "../services/projects-service.js";
