@@ -71,18 +71,20 @@ enum AppRoute: Hashable {
 
 // MARK: - Tab Definition
 
-/// Defines the main tabs in the application
+/// Defines the main tabs in the application.
+/// Case order determines tab bar display order (via CaseIterable).
 enum AppTab: Int, CaseIterable, Identifiable {
     case overview
-    case dashboard
-    case mail
     case chat
     case epics
+    case beads
     case crew
     case projects
-    case beads
     case proposals
     case settings
+    // Legacy tabs (gastown mode only, shown after primary tabs)
+    case dashboard
+    case mail
 
     var id: Int { rawValue }
 
