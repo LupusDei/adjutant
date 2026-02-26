@@ -61,6 +61,9 @@ final class SettingsViewModelTests: XCTestCase {
 
         viewModel.setTheme(.starcraft)
         XCTAssertEqual(viewModel.selectedTheme, .starcraft)
+
+        viewModel.setTheme(.friendly)
+        XCTAssertEqual(viewModel.selectedTheme, .friendly)
     }
 
     func testSetThemeUpdatesAppState() {
@@ -69,12 +72,13 @@ final class SettingsViewModelTests: XCTestCase {
     }
 
     func testAllThemesAvailable() {
-        // Verify all 3 themes are available
+        // Verify all 4 themes are available
         let allThemes = ThemeIdentifier.allCases
-        XCTAssertEqual(allThemes.count, 3)
+        XCTAssertEqual(allThemes.count, 4)
         XCTAssertTrue(allThemes.contains(.pipboy))
         XCTAssertTrue(allThemes.contains(.document))
         XCTAssertTrue(allThemes.contains(.starcraft))
+        XCTAssertTrue(allThemes.contains(.friendly))
     }
 
     // MARK: - Notification Tests
@@ -195,18 +199,35 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(ThemeIdentifier.pipboy.displayName, "PIP-BOY")
         XCTAssertEqual(ThemeIdentifier.document.displayName, "DOCUMENT")
         XCTAssertEqual(ThemeIdentifier.starcraft.displayName, "STARCRAFT")
+        XCTAssertEqual(ThemeIdentifier.friendly.displayName, "FRIENDLY")
     }
 
     func testThemeIdentifierRawValues() {
         XCTAssertEqual(ThemeIdentifier.pipboy.rawValue, "pipboy")
         XCTAssertEqual(ThemeIdentifier.document.rawValue, "document")
         XCTAssertEqual(ThemeIdentifier.starcraft.rawValue, "starcraft")
+        XCTAssertEqual(ThemeIdentifier.friendly.rawValue, "friendly")
     }
 
     func testThemeIdentifierColorThemeConversion() {
         XCTAssertEqual(ThemeIdentifier.pipboy.colorTheme, .pipboy)
         XCTAssertEqual(ThemeIdentifier.document.colorTheme, .document)
         XCTAssertEqual(ThemeIdentifier.starcraft.colorTheme, .starcraft)
+        XCTAssertEqual(ThemeIdentifier.friendly.colorTheme, .friendly)
+    }
+
+    func testFriendlyThemeProperties() {
+        let theme = CRTTheme.ColorTheme.friendly
+        XCTAssertEqual(theme.displayName, "FRIENDLY")
+        XCTAssertFalse(theme.crtEffectsEnabled, "Friendly should have CRT effects disabled")
+        XCTAssertFalse(theme.useMonospaceFont, "Friendly should use system font")
+        XCTAssertEqual(theme.preferredColorScheme, .light, "Friendly should use light mode")
+    }
+
+    func testFriendlyThemeSetViaAppState() {
+        viewModel.setTheme(.friendly)
+        XCTAssertEqual(AppState.shared.currentTheme, .friendly)
+        XCTAssertEqual(AppState.shared.currentTheme.colorTheme.displayName, "FRIENDLY")
     }
 
     func testLegacyThemeMigration() {

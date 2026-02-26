@@ -450,11 +450,12 @@ final class AppState: ObservableObject {
 
 // MARK: - Supporting Types
 
-/// Available theme identifiers matching the 3 app-wide color schemes
+/// Available theme identifiers matching the 4 app-wide color schemes
 enum ThemeIdentifier: String, CaseIterable, Identifiable {
     case pipboy = "pipboy"
     case document = "document"
     case starcraft = "starcraft"
+    case friendly = "friendly"
 
     var id: String { rawValue }
 
@@ -463,6 +464,7 @@ enum ThemeIdentifier: String, CaseIterable, Identifiable {
         case .pipboy: return "PIP-BOY"
         case .document: return "DOCUMENT"
         case .starcraft: return "STARCRAFT"
+        case .friendly: return "FRIENDLY"
         }
     }
 
@@ -472,6 +474,7 @@ enum ThemeIdentifier: String, CaseIterable, Identifiable {
         case .pipboy: return .pipboy
         case .document: return .document
         case .starcraft: return .starcraft
+        case .friendly: return .friendly
         }
     }
 }
