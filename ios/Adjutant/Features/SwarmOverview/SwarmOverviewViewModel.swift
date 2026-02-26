@@ -116,7 +116,7 @@ final class SwarmOverviewViewModel: ObservableObject {
 
         do {
             let response = try await apiClient.spawnPolecat(projectPath: projectPath, callsign: callsign)
-            spawnedSessionId = response.sessionId
+            spawnedSessionId = response.callsign ?? response.sessionId
             await refresh()
         } catch {
             errorMessage = "Spawn failed: \(error.localizedDescription)"
