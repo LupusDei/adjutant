@@ -21,6 +21,7 @@ struct AdjutantWidgetEntry: TimelineEntry {
     let beadsInProgress: [BeadSummary]
     let recentlyCompleted: [BeadSummary]
     let isPlaceholder: Bool
+    let isError: Bool
 
     /// Aggregate status: green if any agent working, yellow if all idle, red if any blocked
     var aggregateStatus: AggregateStatus {
@@ -71,7 +72,8 @@ struct AdjutantWidgetEntry: TimelineEntry {
             recentlyCompleted: [
                 BeadSummary(id: "adj-003", title: "Update models", assignee: "slate")
             ],
-            isPlaceholder: true
+            isPlaceholder: true,
+            isError: false
         )
     }
 }
@@ -223,10 +225,11 @@ struct AdjutantWidgetProvider: TimelineProvider {
                 activeAgents: activeAgentSummaries,
                 beadsInProgress: beadSummaries,
                 recentlyCompleted: recentlyClosedSummaries,
-                isPlaceholder: false
+                isPlaceholder: false,
+                isError: false
             )
         } catch {
-            // Return placeholder data on error
+            // Return error state so views can show an offline indicator
             return AdjutantWidgetEntry(
                 date: Date(),
                 powerState: .stopped,
@@ -234,7 +237,8 @@ struct AdjutantWidgetProvider: TimelineProvider {
                 activeAgents: [],
                 beadsInProgress: [],
                 recentlyCompleted: [],
-                isPlaceholder: false
+                isPlaceholder: false,
+                isError: true
             )
         }
     }
@@ -277,6 +281,40 @@ struct AdjutantWidgetView: View {
     }
 }
 
+// MARK: - Offline View
+
+/// Shown when the widget cannot reach the backend API.
+private struct OfflineView: View {
+    let date: Date
+    let compact: Bool
+
+    var body: some View {
+        VStack(spacing: compact ? 6 : 10) {
+            Image(systemName: "wifi.slash")
+                .font(compact ? .title3 : .title2)
+                .foregroundStyle(.secondary)
+
+            Text("OFFLINE")
+                .font(compact ? .caption : .subheadline)
+                .fontWeight(.bold)
+                .foregroundStyle(.primary)
+
+            if !compact {
+                Text("Cannot reach server")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(date, style: .time)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
+        .containerBackground(Color(.systemBackground), for: .widget)
+    }
+}
+
 // MARK: - Small Widget
 
 /// Compact view: aggregate status dot, active agent count, in-progress bead count.
@@ -284,6 +322,14 @@ private struct SmallWidgetView: View {
     let entry: AdjutantWidgetEntry
 
     var body: some View {
+        if entry.isError {
+            OfflineView(date: entry.date, compact: true)
+        } else {
+            normalContent
+        }
+    }
+
+    private var normalContent: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Aggregate status + title
             HStack {
@@ -343,6 +389,14 @@ private struct MediumWidgetView: View {
     }
 
     var body: some View {
+        if entry.isError {
+            OfflineView(date: entry.date, compact: false)
+        } else {
+            normalContent
+        }
+    }
+
+    private var normalContent: some View {
         HStack(spacing: 12) {
             // Left: Agent names with status dots
             VStack(alignment: .leading, spacing: 6) {
@@ -407,6 +461,14 @@ private struct LargeWidgetView: View {
     let entry: AdjutantWidgetEntry
 
     var body: some View {
+        if entry.isError {
+            OfflineView(date: entry.date, compact: false)
+        } else {
+            normalContent
+        }
+    }
+
+    private var normalContent: some View {
         VStack(alignment: .leading, spacing: 10) {
             // Header
             HStack {
