@@ -60,12 +60,6 @@ private struct TabContent: View {
     @ObservedObject var coordinator: AppCoordinator
     @ObservedObject private var appState = AppState.shared
     let visibleTabs: [AppTab]
-    @Environment(\.scenePhase) private var scenePhase
-
-    /// Used to force TabView to reset its internal paging state when app returns from background.
-    /// Without this, the page-style TabView can get stuck in an intermediate position between tabs.
-    @State private var tabViewId = UUID()
-
     var body: some View {
         TabView(selection: Binding(
             get: { selectedTab },
@@ -82,19 +76,9 @@ private struct TabContent: View {
             }
         }
         #if os(iOS)
-        .tabViewStyle(.page(indexDisplayMode: .never))
+        .toolbar(.hidden, for: .tabBar)
         #endif
         .animation(nil, value: selectedTab)
-        .id(tabViewId)
-        .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .active {
-                tabViewId = UUID()
-            }
-        }
-        .onChange(of: appState.deploymentMode) { _, _ in
-            // Force TabView rebuild when mode changes
-            tabViewId = UUID()
-        }
     }
 
     @ViewBuilder
