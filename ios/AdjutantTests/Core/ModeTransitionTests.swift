@@ -156,10 +156,10 @@ final class ModeTransitionTests: XCTestCase {
     }
 
     func testThemePreservedAcrossModeTransition() {
-        appState.currentTheme = .red
+        appState.currentTheme = .document
         appState.updateDeploymentMode(.swarm)
 
-        XCTAssertEqual(appState.currentTheme, .red)
+        XCTAssertEqual(appState.currentTheme, .document)
     }
 
     func testCommunicationPriorityPreservedAcrossModeTransition() {
@@ -195,7 +195,7 @@ final class ModeTransitionTests: XCTestCase {
         // Set up various state
         appState.updatePowerState(.running)
         appState.updateUnreadMailCount(42)
-        appState.currentTheme = .blue
+        appState.currentTheme = .starcraft
         appState.communicationPriority = .pollingOnly
         appState.isOverseerMode = false
         appState.selectedRig = "adjutant"
@@ -209,7 +209,7 @@ final class ModeTransitionTests: XCTestCase {
         XCTAssertEqual(appState.powerState, .running)
         XCTAssertTrue(appState.isPowerOn)
         XCTAssertEqual(appState.unreadMailCount, 42)
-        XCTAssertEqual(appState.currentTheme, .blue)
+        XCTAssertEqual(appState.currentTheme, .starcraft)
         XCTAssertEqual(appState.communicationPriority, .pollingOnly)
         XCTAssertFalse(appState.isOverseerMode)
         XCTAssertEqual(appState.selectedRig, "adjutant")

@@ -36,6 +36,7 @@ public struct ContentView: View {
             }
         }
 
+        .crtTheme(appState.currentTheme.colorTheme) // Inject theme into environment for all descendants
         .tint(themeColor) // Apply theme color to navigation back buttons and other tinted elements
         .preferredColorScheme(appState.currentTheme.colorTheme.preferredColorScheme)
         .task {

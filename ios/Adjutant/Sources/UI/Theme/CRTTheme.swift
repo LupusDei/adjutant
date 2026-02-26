@@ -47,7 +47,7 @@ public enum CRTTheme {
         public var dim: Color {
             switch self {
             case .pipboy: return Color(red: 0.039, green: 0.373, blue: 0.027)     // #0A5F07
-            case .document: return Color(red: 0.533, green: 0.533, blue: 0.533)   // #888888
+            case .document: return Color(red: 0.4, green: 0.4, blue: 0.4)           // #666666
             case .starcraft: return Color(red: 0.0, green: 0.522, blue: 0.467)    // #008577
             }
         }
@@ -105,7 +105,7 @@ public enum CRTTheme {
         public var textSecondary: Color {
             switch self {
             case .pipboy: return dim
-            case .document: return Color(red: 0.533, green: 0.533, blue: 0.533)   // #888888
+            case .document: return Color(red: 0.4, green: 0.4, blue: 0.4)           // #666666
             case .starcraft: return dim
             }
         }
