@@ -438,7 +438,8 @@ export const api = {
     },
 
     async create(params: {
-      projectPath: string;
+      projectPath?: string;
+      projectId?: string;
       name?: string;
       mode?: 'swarm' | 'gastown';
       workspaceType?: 'primary' | 'worktree' | 'copy';

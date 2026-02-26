@@ -21,6 +21,7 @@ import {
   getCallsigns,
   pickRandomCallsign,
 } from "../services/callsign-service.js";
+import { getProject } from "../services/projects-service.js";
 import {
   success,
   notFound,
@@ -37,11 +38,15 @@ export const sessionsRouter = Router();
 
 const CreateSessionSchema = z.object({
   name: z.string().min(1).optional(),
-  projectPath: z.string().min(1, "Project path is required"),
+  projectPath: z.string().min(1).optional(),
+  projectId: z.string().min(1).optional(),
   mode: z.enum(["swarm", "gastown"]).optional(),
   workspaceType: z.enum(["primary", "worktree", "copy"]).optional(),
   claudeArgs: z.array(z.string()).optional(),
-});
+}).refine(
+  (data) => data.projectPath || data.projectId,
+  { message: "Either projectPath or projectId is required" },
+);
 
 const ConnectSchema = z.object({
   clientId: z.string().min(1, "Client ID is required"),
@@ -111,6 +116,20 @@ sessionsRouter.post("/", async (req, res) => {
   const data = parsed.data;
   const bridge = getSessionBridge();
 
+  // Resolve projectPath from projectId if not provided directly
+  let projectPath = data.projectPath;
+  if (!projectPath && data.projectId) {
+    const projectResult = getProject(data.projectId);
+    if (!projectResult.success || !projectResult.data) {
+      return res.status(404).json(notFound("Project", data.projectId));
+    }
+    projectPath = projectResult.data.path;
+  }
+
+  if (!projectPath) {
+    return res.status(400).json(badRequest("Could not resolve project path"));
+  }
+
   // If an explicit name was provided, check for conflicts with active sessions
   if (data.name) {
     const sessions = bridge.listSessions();
@@ -127,11 +146,11 @@ sessionsRouter.post("/", async (req, res) => {
   // Auto-assign a callsign if no name provided
   const sessions = bridge.listSessions();
   const callsign = pickRandomCallsign(sessions);
-  const name = data.name || callsign?.name || `${basename(data.projectPath)}-agent`;
+  const name = data.name || callsign?.name || `${basename(projectPath)}-agent`;
 
   const result = await bridge.createSession({
     name,
-    projectPath: data.projectPath,
+    projectPath,
     mode: data.mode ?? "swarm",
     workspaceType: data.workspaceType ?? "primary",
     claudeArgs: data.claudeArgs ?? [],

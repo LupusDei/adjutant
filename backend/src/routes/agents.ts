@@ -14,6 +14,7 @@ import { getAgents } from "../services/agents-service.js";
 import { getSessionBridge } from "../services/session-bridge.js";
 import { pickRandomCallsign } from "../services/callsign-service.js";
 import { captureTmuxPane, listTmuxSessions } from "../services/tmux.js";
+import { getProject } from "../services/projects-service.js";
 import { success, internalError, badRequest, notFound, conflict } from "../utils/responses.js";
 
 export const agentsRouter = Router();
@@ -37,15 +38,21 @@ agentsRouter.get("/", async (_req, res) => {
 
 /**
  * Request body schema for spawn polecat endpoint.
+ * Accepts either projectPath (absolute) or projectId (resolved via registry).
  */
 const spawnPolecatSchema = z.object({
-  projectPath: z.string().min(1, "Project path is required"),
+  projectPath: z.string().min(1).optional(),
+  projectId: z.string().min(1).optional(),
   callsign: z.string().optional(),
-});
+}).refine(
+  (data) => data.projectPath || data.projectId,
+  { message: "Either projectPath or projectId is required" },
+);
 
 /**
  * POST /api/agents/spawn-polecat
  * Creates a new agent session for the given project.
+ * Accepts either projectPath or projectId (resolved via project registry).
  */
 agentsRouter.post("/spawn-polecat", async (req, res) => {
   const parsed = spawnPolecatSchema.safeParse(req.body);
@@ -56,7 +63,23 @@ agentsRouter.post("/spawn-polecat", async (req, res) => {
     );
   }
 
-  const { projectPath, callsign } = parsed.data;
+  // Resolve projectPath from projectId if not provided directly
+  let projectPath = parsed.data.projectPath;
+  if (!projectPath && parsed.data.projectId) {
+    const projectResult = getProject(parsed.data.projectId);
+    if (!projectResult.success || !projectResult.data) {
+      return res.status(404).json(
+        notFound("Project", parsed.data.projectId)
+      );
+    }
+    projectPath = projectResult.data.path;
+  }
+
+  if (!projectPath) {
+    return res.status(400).json(badRequest("Could not resolve project path"));
+  }
+
+  const { callsign } = parsed.data;
   const bridge = getSessionBridge();
 
   // Check for name conflicts with active sessions

@@ -8,6 +8,7 @@
 
 import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../../services/api';
+import { useProject } from '../../contexts/ProjectContext';
 import type { CrewMember, Proposal } from '../../types';
 
 export type SendToAgentMode = 'execute' | 'discuss';
@@ -36,8 +37,12 @@ export function SendToAgentModal({ proposal, mode = 'execute', onClose, onSent }
   const [callsign, setCallsign] = useState('');
   const [sendState, setSendState] = useState<SendState>('idle');
   const [error, setError] = useState<string | null>(null);
+  const { projects, selectedProject } = useProject();
 
-  const [projectPath, setProjectPath] = useState<string | null>(null);
+  // Resolve project path: proposal's project > selected project > fallback
+  const resolvedProject = proposal.project
+    ? projects.find((p) => p.name === proposal.project) ?? selectedProject
+    : selectedProject;
 
   useEffect(() => {
     api.agents.list()
@@ -49,17 +54,7 @@ export function SendToAgentModal({ proposal, mode = 'execute', onClose, onSent }
         setAgents([]);
         setLoading(false);
       });
-
-    // Look up the project path from the proposal's project field
-    if (proposal.project) {
-      api.projects.list()
-        .then((projects) => {
-          const match = projects.find((p) => p.name === proposal.project);
-          if (match) setProjectPath(match.path);
-        })
-        .catch(() => { /* fall back to default path */ });
-    }
-  }, [proposal.project]);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -91,11 +86,13 @@ export function SendToAgentModal({ proposal, mode = 'execute', onClose, onSent }
     setSendState('sending');
     setError(null);
     try {
-      const resolvedPath = projectPath ?? '/Users/Reason/code/ai/adjutant';
       const trimmedName = callsign.trim();
 
+      // Use projectId if available (resolved via registry), otherwise fall back to path
       const session = await api.sessions.create({
-        projectPath: resolvedPath,
+        ...(resolvedProject
+          ? { projectId: resolvedProject.id }
+          : { projectPath: '/Users/Reason/code/ai/adjutant' }),
         ...(trimmedName ? { name: trimmedName } : {}),
         mode: 'swarm',
         workspaceType: 'primary',
@@ -116,7 +113,7 @@ export function SendToAgentModal({ proposal, mode = 'execute', onClose, onSent }
       setSendState('error');
       setError(err instanceof ApiError ? err.message : 'Failed to spawn agent');
     }
-  }, [callsign, proposal, mode, onSent, projectPath]);
+  }, [callsign, proposal, mode, onSent, resolvedProject]);
 
   const isExistingTab = tab === 'existing';
   const canSend = isExistingTab ? !!selectedAgent : true;
