@@ -11,6 +11,8 @@ import AdjutantKit
 
 #if os(iOS)
 import BackgroundTasks
+import ActivityKit
+import WidgetKit
 #endif
 
 /// Manages background task scheduling and execution for app refresh and mail checking.
@@ -201,10 +203,20 @@ public final class BackgroundTaskService: ObservableObject {
             // Poll beads for status changes (triggers voice announcements)
             await BeadStatusMonitor.shared.pollNow()
 
+            // Update Live Activity with latest data
+            if #available(iOS 16.1, *) {
+                await updateLiveActivityFromBackground()
+            }
+
             // Record successful refresh
             lastRefreshDate = Date()
             successfulRefreshCount += 1
             saveLastRefreshDate()
+
+            // Reload widget timelines
+            #if os(iOS)
+            WidgetCenter.shared.reloadTimelines(ofKind: "AdjutantWidget")
+            #endif
 
             print("[BackgroundTaskService] Refresh complete - \(unreadCount) unread messages")
             return true
@@ -247,6 +259,11 @@ public final class BackgroundTaskService: ObservableObject {
             saveLastRefreshDate()
         }
 
+        // Reload widget timelines
+        #if os(iOS)
+        WidgetCenter.shared.reloadTimelines(ofKind: "AdjutantWidget")
+        #endif
+
         print("[BackgroundTaskService] Full sync complete (success: \(allSuccess))")
         return allSuccess
     }
@@ -264,6 +281,66 @@ public final class BackgroundTaskService: ObservableObject {
         let unreadCount = response.items.filter { !$0.read }.count
         return unreadCount
     }
+
+    // MARK: - Live Activity Update
+
+    #if os(iOS)
+    /// Updates the Live Activity with the latest data from cached sources.
+    @available(iOS 16.1, *)
+    private func updateLiveActivityFromBackground() async {
+        let dataSync = DataSyncService.shared
+        let appState = AppState.shared
+
+        // Build agent summaries from cached crew
+        let activeAgents: [AgentSummary] = dataSync.crew
+            .filter { $0.status != .offline }
+            .prefix(4)
+            .map { member in
+                let statusStr: String
+                switch member.status {
+                case .working: statusStr = "working"
+                case .blocked: statusStr = "blocked"
+                case .stuck: statusStr = "blocked"
+                case .idle: statusStr = "idle"
+                case .offline: statusStr = "idle"
+                }
+                return AgentSummary(name: member.name, status: statusStr)
+            }
+
+        // Build bead summaries from cached beads
+        let inProgressBeads = dataSync.beads
+            .filter { $0.status == "in_progress" }
+            .prefix(5)
+            .map { bead in
+                BeadSummary(
+                    id: bead.id,
+                    title: bead.title,
+                    assignee: bead.assignee?.components(separatedBy: "/").last
+                )
+            }
+
+        // Get power state
+        let powerState: AdjutantKit.PowerState
+        switch appState.powerState {
+        case .stopped: powerState = .stopped
+        case .starting: powerState = .starting
+        case .running: powerState = .running
+        case .stopping: powerState = .stopping
+        }
+
+        let state = LiveActivityService.createState(
+            powerState: powerState,
+            unreadMailCount: appState.unreadMailCount,
+            activeAgents: Array(activeAgents),
+            beadsInProgress: Array(inProgressBeads)
+        )
+
+        await LiveActivityService.shared.syncActivity(
+            townName: "Adjutant",
+            state: state
+        )
+    }
+    #endif
 
     // MARK: - Persistence
 

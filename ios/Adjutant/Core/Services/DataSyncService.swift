@@ -485,6 +485,18 @@ public final class DataSyncService: ObservableObject {
             ResponseCache.shared.updateCrewMembers(agents)
             WidgetCenter.shared.reloadTimelines(ofKind: "AdjutantWidget")
 
+            // Auto-adjust communication priority based on agent activity
+            let hasActiveAgents = agents.contains { $0.status == .working || $0.status == .blocked }
+            let currentPriority = AppState.shared.communicationPriority
+
+            if hasActiveAgents && currentPriority == .efficient {
+                // Switch to realTime when agents are active
+                AppState.shared.communicationPriority = .realTime
+            } else if !hasActiveAgents && currentPriority == .realTime {
+                // Switch back to efficient when all agents are idle/offline
+                AppState.shared.communicationPriority = .efficient
+            }
+
         } catch {
             print("[DataSyncService] Crew fetch failed: \(error.localizedDescription)")
         }
