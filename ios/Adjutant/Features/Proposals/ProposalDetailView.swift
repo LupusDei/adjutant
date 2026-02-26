@@ -60,7 +60,10 @@ struct ProposalDetailView: View {
         .sheet(isPresented: $showingSendToAgent) {
             if let proposal = viewModel.proposal {
                 SendToAgentSheet(proposal: proposal, mode: sendToAgentMode) { _ in
-                    viewModel.markSentToAgent()
+                    // For discuss mode, skip the alert — we navigate straight to chat
+                    if sendToAgentMode == .execute {
+                        viewModel.markSentToAgent()
+                    }
                 }
             }
         }

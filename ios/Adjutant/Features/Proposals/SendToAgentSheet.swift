@@ -16,6 +16,21 @@ enum SendToAgentMode {
     func trigger(proposalId: String) -> String {
         "Use /\(skillName) \(proposalId)"
     }
+
+    /// Build the message body for discuss mode (includes proposal content for agent context).
+    func discussMessage(proposal: Proposal) -> String {
+        """
+        Please review this proposal and prepare to discuss it with me. \
+        Do NOT execute or implement it — just read it, think about it critically, \
+        and be ready to discuss pros, cons, feasibility, and alternatives.
+
+        **Proposal: \(proposal.title)**
+        Type: \(proposal.type.rawValue)
+        Author: \(proposal.author)
+
+        \(proposal.description)
+        """
+    }
 }
 
 /// Sheet for choosing how to send an accepted proposal to an agent.
@@ -314,7 +329,9 @@ struct SendToAgentSheet: View {
             }
 
             CRTText(
-                "A new agent will be spawned and given this proposal as its initial task.",
+                mode == .discuss
+                    ? "A new agent will be spawned and asked to review this proposal for discussion."
+                    : "A new agent will be spawned and given this proposal as its initial task.",
                 style: .caption,
                 glowIntensity: .subtle,
                 color: theme.dim.opacity(0.7)
@@ -468,7 +485,13 @@ struct SendToAgentSheet: View {
         isSending = true
         errorMessage = nil
 
-        let trigger = mode.trigger(proposalId: proposal.id)
+        let messageBody: String
+        switch mode {
+        case .discuss:
+            messageBody = mode.discussMessage(proposal: proposal)
+        case .execute:
+            messageBody = mode.trigger(proposalId: proposal.id)
+        }
 
         do {
             switch selectedTab {
@@ -476,7 +499,7 @@ struct SendToAgentSheet: View {
                 guard let agentName = selectedAgent else { return }
                 _ = try await apiClient.sendChatMessage(
                     agentId: agentName,
-                    body: trigger,
+                    body: messageBody,
                     threadId: "proposal-\(proposal.id)"
                 )
 
@@ -503,9 +526,9 @@ struct SendToAgentSheet: View {
                     )
                 )
 
-                // Send skill trigger as terminal input after session starts
+                // Send message as terminal input after session starts
                 try await Task.sleep(nanoseconds: 5_000_000_000)
-                _ = try? await apiClient.sendSessionInput(id: session.id, text: trigger)
+                _ = try? await apiClient.sendSessionInput(id: session.id, text: messageBody)
 
                 #if canImport(UIKit)
                 let feedback = UINotificationFeedbackGenerator()
