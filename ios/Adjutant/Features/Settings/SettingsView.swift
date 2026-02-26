@@ -555,6 +555,8 @@ private struct SchemePreviewCard: View {
             documentContent
         case .starcraft:
             starcraftContent
+        case .friendly:
+            friendlyContent
         }
     }
 
@@ -717,6 +719,52 @@ private struct SchemePreviewCard: View {
                 .font(.crt(CRTTypography.sizeSM))
                 .foregroundColor(colorTheme.textSecondary)
         }
+    }
+
+    // MARK: - Friendly Content
+
+    /// Warm colorful aesthetic: multiple accent colors, soft rounded feel
+    private var friendlyContent: some View {
+        VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+            // Header with warm styling
+            HStack {
+                Text(scheme.displayName)
+                    .font(.system(size: CRTTypography.sizeLG, weight: .bold, design: .rounded))
+                    .foregroundColor(colorTheme.textPrimary)
+
+                Spacer()
+
+                selectionIndicator
+            }
+
+            // Colorful accent dots representing the variety palette
+            HStack(spacing: 8) {
+                ForEach(friendlyAccentColors, id: \.self) { color in
+                    Circle()
+                        .fill(color)
+                        .frame(width: 12, height: 12)
+                }
+
+                Spacer()
+            }
+
+            // Warm descriptive text
+            Text("Warm, colorful workspace")
+                .font(.system(size: CRTTypography.sizeSM, weight: .regular, design: .rounded))
+                .foregroundColor(colorTheme.textSecondary)
+        }
+    }
+
+    /// The variety of colors that make up the Friendly palette
+    private var friendlyAccentColors: [Color] {
+        [
+            Color(red: 1.0, green: 0.42, blue: 0.42),   // Coral #FF6B6B
+            Color(red: 1.0, green: 0.85, blue: 0.24),   // Yellow #FFD93D
+            Color(red: 0.42, green: 0.80, blue: 1.0),   // Sky blue #6BCBFF
+            Color(red: 0.42, green: 0.80, blue: 0.47),   // Green #6BCB77
+            Color(red: 1.0, green: 0.66, blue: 0.30),   // Orange #FFA94D
+            Color(red: 0.69, green: 0.59, blue: 0.99),   // Purple #B197FC
+        ]
     }
 
     // MARK: - Shared Selection Indicator
