@@ -54,7 +54,7 @@ import { execBd } from "../../../src/services/bd-client.js";
 import { listAllBeadsDirs } from "../../../src/services/workspace/index.js";
 import { getEventBus } from "../../../src/services/event-bus.js";
 
-// Import the repository module under test (will be created)
+// Import from the barrel (re-exports from decomposed modules)
 import {
   listBeads,
   listAllBeads,
@@ -77,9 +77,8 @@ import {
   // Exported for testing
   _extractRig,
   _prefixToSource,
-  _parseStatusFilter,
   _resetPrefixMap,
-} from "../../../src/services/beads/beads-repository.js";
+} from "../../../src/services/beads/index.js";
 
 // =============================================================================
 // Test Fixtures
@@ -171,43 +170,6 @@ describe("beads-repository", () => {
 
     it("should return 'unknown' for empty id", () => {
       expect(_prefixToSource("")).toBe("unknown");
-    });
-  });
-
-  // ===========================================================================
-  // parseStatusFilter
-  // ===========================================================================
-
-  describe("parseStatusFilter", () => {
-    it("should return null for undefined (show all)", () => {
-      expect(_parseStatusFilter(undefined)).toBeNull();
-    });
-
-    it("should return null for 'all'", () => {
-      expect(_parseStatusFilter("all")).toBeNull();
-    });
-
-    it("should return DEFAULT_STATUSES for 'default'", () => {
-      const result = _parseStatusFilter("default");
-      expect(result).toContain("open");
-      expect(result).toContain("in_progress");
-      expect(result).toContain("blocked");
-      expect(result).toContain("hooked");
-      expect(result).not.toContain("closed");
-    });
-
-    it("should parse comma-separated statuses", () => {
-      const result = _parseStatusFilter("open,closed");
-      expect(result).toEqual(["open", "closed"]);
-    });
-
-    it("should ignore invalid statuses", () => {
-      const result = _parseStatusFilter("open,invalid,closed");
-      expect(result).toEqual(["open", "closed"]);
-    });
-
-    it("should return null for all-invalid input", () => {
-      expect(_parseStatusFilter("invalid,bogus")).toBeNull();
     });
   });
 

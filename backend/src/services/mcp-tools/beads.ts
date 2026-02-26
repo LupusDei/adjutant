@@ -9,7 +9,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { execBd, type BdResult } from "../bd-client.js";
-import { logError, logInfo } from "../../utils/index.js";
+import { logError } from "../../utils/index.js";
+import { autoCompleteEpics } from "../beads/index.js";
 
 // =============================================================================
 // Mutex for serializing bd access
@@ -60,27 +61,6 @@ function errorResult(result: BdResult) {
     content: [{ type: "text" as const, text: `Error: ${msg}` }],
     isError: true,
   };
-}
-
-/**
- * Runs `bd epic close-eligible` to auto-close epics whose children are all done.
- * Returns list of auto-closed epic IDs.
- */
-async function autoCompleteEpics(): Promise<string[]> {
-  const result = await execBd<Array<{ id: string; title?: string }>>(
-    ["epic", "close-eligible", "--json"]
-  );
-  if (!result.success || !result.data) return [];
-
-  const closedIds: string[] = [];
-  for (const epic of result.data) {
-    const epicId = typeof epic === "string" ? epic : epic.id;
-    if (epicId) {
-      closedIds.push(epicId);
-      logInfo("epic auto-completed via MCP", { epicId });
-    }
-  }
-  return closedIds;
 }
 
 // =============================================================================

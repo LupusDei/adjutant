@@ -2,15 +2,20 @@
  * Barrel index for the beads service module.
  *
  * Re-exports everything from the sub-modules so consumers can import
- * from "services/beads/index.js" as a drop-in replacement for the
- * original monolithic "services/beads-service.js".
+ * from "services/beads/index.js" as a drop-in replacement.
  *
  * Sub-modules:
- *   - types.ts            — shared type definitions + constants
- *   - beads-repository.ts — CLI access, CRUD, prefix map, all I/O functions
- *   - beads-filter.ts     — pure filter functions
- *   - beads-sorter.ts     — pure sort functions
- *   - beads-dependency.ts — pure graph/epic logic
+ *   - types.ts              — shared type definitions + constants
+ *   - beads-prefix-map.ts   — prefix map state, lifecycle, helpers
+ *   - beads-transform.ts    — extractRig, transformBead
+ *   - beads-database.ts     — database resolution, fetching, sources
+ *   - beads-epics.ts        — epic type check, children, progress listing
+ *   - beads-mutations.ts    — autoCompleteEpics, updateBead, updateBeadStatus
+ *   - beads-queries.ts      — getBead, listBeads, listAllBeads, listRecentlyClosed, getBeadsGraph
+ *   - beads-project.ts      — getProjectOverview, computeEpicProgress, getRecentlyCompletedEpics
+ *   - beads-filter.ts       — pure filter functions
+ *   - beads-sorter.ts       — pure sort functions
+ *   - beads-dependency.ts   — pure graph/epic logic
  */
 
 // ============================================================================
@@ -40,34 +45,82 @@ export type {
 export { DEFAULT_STATUSES, ALL_STATUSES } from "./types.js";
 
 // ============================================================================
-// Repository (I/O functions — CLI access, CRUD, prefix map)
+// Prefix Map
 // ============================================================================
 
 export {
   refreshPrefixMap,
   startPrefixMapRefreshScheduler,
   stopPrefixMapRefreshScheduler,
+  prefixToSource,
+  // Test-only exports
+  _prefixToSource,
+  _resetPrefixMap,
+} from "./beads-prefix-map.js";
+
+// ============================================================================
+// Transform
+// ============================================================================
+
+export {
+  extractRig,
+  transformBead,
+  _extractRig,
+} from "./beads-transform.js";
+
+// ============================================================================
+// Database
+// ============================================================================
+
+export {
+  resolveBeadDatabase,
+  buildDatabaseList,
+  fetchBeadsFromDatabase,
+  fetchGraphBeadsFromDatabase,
   listBeadSources,
-  getBead,
+} from "./beads-database.js";
+
+// ============================================================================
+// Epics
+// ============================================================================
+
+export {
   isBeadEpic,
+  getEpicChildren,
+  listEpicsWithProgress,
+} from "./beads-epics.js";
+
+// ============================================================================
+// Mutations
+// ============================================================================
+
+export {
   autoCompleteEpics,
   updateBead,
   updateBeadStatus,
+} from "./beads-mutations.js";
+
+// ============================================================================
+// Queries
+// ============================================================================
+
+export {
+  getBead,
   listBeads,
   listAllBeads,
-  getEpicChildren,
-  listEpicsWithProgress,
   listRecentlyClosed,
+  getBeadsGraph,
+} from "./beads-queries.js";
+
+// ============================================================================
+// Project
+// ============================================================================
+
+export {
   getProjectOverview,
   computeEpicProgress,
   getRecentlyCompletedEpics,
-  getBeadsGraph,
-  // Test-only exports
-  _extractRig,
-  _prefixToSource,
-  _parseStatusFilter,
-  _resetPrefixMap,
-} from "./beads-repository.js";
+} from "./beads-project.js";
 
 // ============================================================================
 // Pure Filter Functions
