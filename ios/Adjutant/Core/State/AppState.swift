@@ -14,7 +14,7 @@ final class AppState: ObservableObject {
     // MARK: - Published Properties
 
     /// Current theme identifier
-    @Published var currentTheme: ThemeIdentifier = .green
+    @Published var currentTheme: ThemeIdentifier = .pipboy
 
     /// Whether the Gastown system is running
     @Published private(set) var isPowerOn = false
@@ -343,10 +343,19 @@ final class AppState: ObservableObject {
         UserDefaults(suiteName: appGroupIdentifier)
     }
 
+    /// Maps legacy theme raw values to the new ThemeIdentifier.
+    /// Old values (green, red, blue, tan, pink, purple) all map to .pipboy as the default fallback.
+    private static func migrateThemeIdentifier(_ rawValue: String) -> ThemeIdentifier {
+        if let theme = ThemeIdentifier(rawValue: rawValue) {
+            return theme
+        }
+        // Legacy values from old 6-theme system all map to pipboy
+        return .pipboy
+    }
+
     private func loadPersistedState() {
-        if let themeRaw = UserDefaults.standard.string(forKey: "selectedTheme"),
-           let theme = ThemeIdentifier(rawValue: themeRaw) {
-            currentTheme = theme
+        if let themeRaw = UserDefaults.standard.string(forKey: "selectedTheme") {
+            currentTheme = Self.migrateThemeIdentifier(themeRaw)
         }
 
         isOverseerMode = UserDefaults.standard.bool(forKey: "isOverseerMode")
@@ -441,25 +450,28 @@ final class AppState: ObservableObject {
 
 // MARK: - Supporting Types
 
-/// Available theme identifiers matching the web app
+/// Available theme identifiers matching the 3 app-wide color schemes
 enum ThemeIdentifier: String, CaseIterable, Identifiable {
-    case green = "green"
-    case red = "red"
-    case blue = "blue"
-    case tan = "tan"
-    case pink = "pink"
-    case purple = "purple"
+    case pipboy = "pipboy"
+    case document = "document"
+    case starcraft = "starcraft"
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .green: return "GAS-BOY"
-        case .red: return "BLOOD-BAG"
-        case .blue: return "VAULT-TEC"
-        case .tan: return "WASTELAND"
-        case .pink: return "PINK-MIST"
-        case .purple: return "RAD-STORM"
+        case .pipboy: return "PIP-BOY"
+        case .document: return "DOCUMENT"
+        case .starcraft: return "STARCRAFT"
+        }
+    }
+
+    /// Converts to the corresponding CRTTheme.ColorTheme
+    var colorTheme: CRTTheme.ColorTheme {
+        switch self {
+        case .pipboy: return .pipboy
+        case .document: return .document
+        case .starcraft: return .starcraft
         }
     }
 }

@@ -17,7 +17,7 @@ import AdjutantKit
 /// PowerButton()
 ///
 /// PowerButton()
-///     .crtTheme(.blue)
+///     .crtTheme(.starcraft)
 /// ```
 public struct PowerButton: View {
     @Environment(\.crtTheme) private var theme

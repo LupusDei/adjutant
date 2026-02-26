@@ -159,7 +159,7 @@ extension CRTText {
                 CRTText("monospace_code_text", style: .mono)
             }
 
-            Divider().background(CRTTheme.ColorTheme.green.dim)
+            Divider().background(CRTTheme.ColorTheme.pipboy.dim)
 
             Group {
                 CRTText("No Glow", glowIntensity: .none)
@@ -168,7 +168,7 @@ extension CRTText {
                 CRTText("Bright Glow", glowIntensity: .bright)
             }
 
-            Divider().background(CRTTheme.ColorTheme.green.dim)
+            Divider().background(CRTTheme.ColorTheme.pipboy.dim)
 
             Group {
                 CRTText("Success", color: CRTTheme.State.success)

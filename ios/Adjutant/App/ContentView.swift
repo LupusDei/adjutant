@@ -19,14 +19,7 @@ public struct ContentView: View {
 
     /// Converts ThemeIdentifier to the corresponding CRT theme primary color
     private var themeColor: Color {
-        switch appState.currentTheme {
-        case .green: return CRTTheme.ColorTheme.green.primary
-        case .red: return CRTTheme.ColorTheme.red.primary
-        case .blue: return CRTTheme.ColorTheme.blue.primary
-        case .tan: return CRTTheme.ColorTheme.tan.primary
-        case .pink: return CRTTheme.ColorTheme.pink.primary
-        case .purple: return CRTTheme.ColorTheme.purple.primary
-        }
+        appState.currentTheme.colorTheme.primary
     }
 
     public var body: some View {
@@ -44,7 +37,7 @@ public struct ContentView: View {
         }
 
         .tint(themeColor) // Apply theme color to navigation back buttons and other tinted elements
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(appState.currentTheme.colorTheme.preferredColorScheme)
         .task {
             async let voiceCheck: () = AppState.shared.checkVoiceAvailability()
             async let modeSync: () = AppState.shared.fetchDeploymentMode()

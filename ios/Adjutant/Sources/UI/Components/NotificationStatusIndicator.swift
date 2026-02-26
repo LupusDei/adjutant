@@ -206,7 +206,7 @@ public struct CompactNotificationStatusIndicator: View {
 
                 Image(systemName: "speaker.slash")
                     .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(CRTTheme.ColorTheme.green.dim)
+                    .foregroundColor(CRTTheme.ColorTheme.pipboy.dim)
             }
             .opacity(0.3)
             CRTText("Unavailable", style: .caption)
