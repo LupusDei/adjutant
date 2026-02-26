@@ -72,57 +72,21 @@ struct SettingsView: View {
 
     private var themeSection: some View {
         CRTCard(header: "THEME", headerBadge: viewModel.selectedTheme.displayName) {
-            VStack(spacing: CRTTheme.Spacing.md) {
-                // Theme preview
-                themePreview
-
-                // Theme selector
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: CRTTheme.Spacing.sm) {
-                    ForEach(ThemeIdentifier.allCases) { themeOption in
-                        ThemeButton(
-                            theme: themeOption,
-                            isSelected: viewModel.selectedTheme == themeOption,
-                            onTap: {
-                                withAnimation(.easeInOut(duration: CRTTheme.Animation.normal)) {
-                                    viewModel.setTheme(themeOption)
-                                }
+            VStack(spacing: CRTTheme.Spacing.sm) {
+                ForEach(ThemeIdentifier.allCases) { themeOption in
+                    SchemePreviewCard(
+                        scheme: themeOption,
+                        isSelected: viewModel.selectedTheme == themeOption,
+                        onTap: {
+                            withAnimation(.easeInOut(duration: CRTTheme.Animation.normal)) {
+                                viewModel.setTheme(themeOption)
                             }
-                        )
-                    }
+                        }
+                    )
                 }
             }
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
-    }
-
-    private var themePreview: some View {
-        HStack(spacing: CRTTheme.Spacing.md) {
-            // Sample text
-            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
-                CRTText("PREVIEW", style: .subheader)
-                CRTText("Sample body text", style: .body)
-                CRTText("Caption text", style: .caption, color: theme.dim)
-            }
-
-            Spacer()
-
-            // Sample button
-            VStack(spacing: CRTTheme.Spacing.xs) {
-                Circle()
-                    .fill(theme.primary)
-                    .frame(width: 32, height: 32)
-                    .crtGlow(color: theme.primary, radius: 8, intensity: 0.6)
-
-                CRTText("ACTIVE", style: .caption)
-            }
-        }
-        .padding(CRTTheme.Spacing.md)
-        .background(CRTTheme.Background.elevated.opacity(0.5))
-        .cornerRadius(CRTTheme.CornerRadius.md)
     }
 
     // MARK: - Tunnel Section
@@ -527,44 +491,109 @@ struct SettingsView: View {
     }
 }
 
-// MARK: - Theme Button
+// MARK: - Scheme Preview Card
 
-private struct ThemeButton: View {
-    @Environment(\.crtTheme) private var currentTheme
-
-    let theme: ThemeIdentifier
+/// A preview card that renders a mini-preview of a color scheme's aesthetic.
+/// Each card uses the scheme's own colors to communicate its look and feel.
+private struct SchemePreviewCard: View {
+    let scheme: ThemeIdentifier
     let isSelected: Bool
     let onTap: () -> Void
 
+    /// The color theme for this card's scheme
+    private var colorTheme: CRTTheme.ColorTheme { scheme.colorTheme }
+
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: CRTTheme.Spacing.xs) {
-                Circle()
-                    .fill(themeColor)
-                    .frame(width: 32, height: 32)
-                    .overlay(
-                        Circle()
-                            .stroke(isSelected ? themeColor : Color.clear, lineWidth: 2)
-                            .padding(-4)
-                    )
-                    .crtGlow(color: themeColor, radius: isSelected ? 8 : 0, intensity: isSelected ? 0.6 : 0)
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
+                // Header row with scheme name and selection indicator
+                HStack {
+                    Text(scheme.displayName)
+                        .font(headerFont)
+                        .foregroundColor(colorTheme.textPrimary)
+                        .tracking(CRTTypography.letterSpacingWider)
 
-                CRTText(
-                    theme.displayName,
-                    style: .caption,
-                    glowIntensity: isSelected ? .medium : .none,
-                    color: isSelected ? themeColor : currentTheme.dim
-                )
+                    Spacer()
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(colorTheme.accent)
+                            .crtGlow(
+                                color: colorTheme.accent,
+                                radius: colorTheme.crtEffectsEnabled ? 6 : 0,
+                                intensity: colorTheme.crtEffectsEnabled ? 0.5 : 0
+                            )
+                    }
+                }
+
+                // Divider line in theme color
+                Rectangle()
+                    .fill(colorTheme.dim.opacity(0.4))
+                    .frame(height: 1)
+
+                // Sample content lines
+                VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxs) {
+                    Text("System status: nominal")
+                        .font(bodyFont)
+                        .foregroundColor(colorTheme.textPrimary)
+
+                    Text("All subsystems operational")
+                        .font(bodyFont)
+                        .foregroundColor(colorTheme.textSecondary)
+                }
             }
-            .padding(.vertical, CRTTheme.Spacing.xs)
+            .padding(CRTTheme.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: 100)
+            .background(cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md))
+            .overlay(cardBorder)
+            .scaleEffect(isSelected ? 1.0 : 0.97)
+            .animation(.easeInOut(duration: CRTTheme.Animation.fast), value: isSelected)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(theme.displayName) theme")
+        .accessibilityLabel("\(scheme.displayName) theme")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityHint(isSelected ? "Currently selected" : "Double tap to select")
     }
 
-    private var themeColor: Color {
-        theme.colorTheme.primary
+    // MARK: - Fonts
+
+    /// Header font: monospace for CRT schemes, system for Document
+    private var headerFont: Font {
+        colorTheme.useMonospaceFont
+            ? .crt(CRTTypography.sizeLG)
+            : .system(size: CRTTypography.sizeLG, weight: .bold, design: .default)
+    }
+
+    /// Body font: monospace for CRT schemes, system for Document
+    private var bodyFont: Font {
+        colorTheme.useMonospaceFont
+            ? .crt(CRTTypography.sizeSM)
+            : .system(size: CRTTypography.sizeSM, weight: .regular, design: .default)
+    }
+
+    // MARK: - Card Styling
+
+    /// Background color using the scheme's own screen color
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
+            .fill(colorTheme.background.screen)
+    }
+
+    /// Border with glow effect when selected; CRT schemes get a glow, Document gets a clean border
+    private var cardBorder: some View {
+        RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
+            .stroke(
+                isSelected ? colorTheme.primary : colorTheme.dim.opacity(0.3),
+                lineWidth: isSelected ? 2 : 1
+            )
+            .crtGlow(
+                color: colorTheme.primary,
+                radius: (isSelected && colorTheme.crtEffectsEnabled) ? 8 : 0,
+                intensity: (isSelected && colorTheme.crtEffectsEnabled) ? 0.4 : 0
+            )
     }
 }
 
