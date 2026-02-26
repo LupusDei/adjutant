@@ -9,6 +9,7 @@ struct ChatView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
     @StateObject private var viewModel: ChatViewModel
     @State private var scrollProxy: ScrollViewProxy?
+    @StateObject private var keyboardObserver = KeyboardObserver()
     @State private var showRecipientSelector = false
     @State private var showConnectionDetails = false
     @State private var showSearch = false
@@ -50,6 +51,37 @@ struct ChatView: View {
                     onDismiss: { viewModel.clearSpeechError() }
                 )
                 .padding(.horizontal)
+            }
+
+            // Keyboard dismiss button (just above input area)
+            if keyboardObserver.isVisible {
+                HStack {
+                    Spacer()
+                    Button {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(theme.primary)
+                            .padding(8)
+                            .background(
+                                Circle()
+                                    .fill(CRTTheme.Background.panel)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(theme.primary.opacity(0.4), lineWidth: 1)
+                                    )
+                            )
+                            .crtGlow(color: theme.primary, radius: 4, intensity: 0.3)
+                    }
+                    .padding(.trailing, 12)
+                }
+                .padding(.vertical, 4)
+                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                .animation(.easeOut(duration: 0.15), value: keyboardObserver.isVisible)
             }
 
             // Input area
@@ -233,6 +265,18 @@ struct ChatView: View {
                         .foregroundColor(theme.dim.opacity(0.3)),
                     alignment: .bottom
                 )
+        )
+        .contentShape(Rectangle())
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                .onEnded { value in
+                    if value.translation.height > 30 {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
+                    }
+                }
         )
     }
 

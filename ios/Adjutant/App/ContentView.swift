@@ -42,7 +42,7 @@ public struct ContentView: View {
                     .environmentObject(dependencyContainer)
             }
         }
-        .keyboardDismissOverlay()
+
         .tint(themeColor) // Apply theme color to navigation back buttons and other tinted elements
         .preferredColorScheme(.dark)
         .task {
