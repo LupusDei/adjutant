@@ -20,6 +20,7 @@ import type {
   Proposal,
   SessionInfo,
 } from '../types';
+import type { DashboardResponse } from '../types/dashboard';
 import type {
   SynthesizeRequest,
   SynthesizeResponse,
@@ -181,6 +182,15 @@ export const api = {
    */
   async getStatus(): Promise<GastownStatus> {
     return apiFetch<GastownStatus>('/status');
+  },
+
+  /**
+   * Dashboard operations - batch endpoint for initial load.
+   */
+  dashboard: {
+    async get(): Promise<DashboardResponse> {
+      return apiFetch<DashboardResponse>('/dashboard');
+    },
   },
 
   /**
