@@ -10,6 +10,7 @@
 import Foundation
 import Combine
 import AdjutantKit
+import WidgetKit
 
 /// Centralized service for syncing data from the backend.
 /// Prefers SSE for real-time push updates; falls back to polling when SSE is disconnected.
@@ -457,6 +458,7 @@ public final class DataSyncService: ObservableObject {
 
             // Update cache
             ResponseCache.shared.updateMessages(sorted)
+            WidgetCenter.shared.reloadTimelines(ofKind: "AdjutantWidget")
 
             // Process notifications
             await NotificationService.shared.processNewMessages(response.items)
@@ -481,6 +483,7 @@ public final class DataSyncService: ObservableObject {
 
             // Update cache
             ResponseCache.shared.updateCrewMembers(agents)
+            WidgetCenter.shared.reloadTimelines(ofKind: "AdjutantWidget")
 
         } catch {
             print("[DataSyncService] Crew fetch failed: \(error.localizedDescription)")
@@ -508,6 +511,7 @@ public final class DataSyncService: ObservableObject {
 
             // Update cache
             ResponseCache.shared.updateBeads(sorted)
+            WidgetCenter.shared.reloadTimelines(ofKind: "AdjutantWidget")
 
         } catch {
             print("[DataSyncService] Beads fetch failed: \(error.localizedDescription)")

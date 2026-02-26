@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import AdjutantKit
 import ActivityKit
+import WidgetKit
 
 /// ViewModel for the Dashboard view, coordinating Beads, Crew, and Mail data.
 @MainActor
@@ -96,6 +97,9 @@ final class DashboardViewModel: BaseViewModel {
             .sink { [weak self] newCrew in
                 guard let self = self, !newCrew.isEmpty else { return }
                 self.crewMembers = newCrew
+                // Sync Live Activity when agent statuses change
+                Task { await self.syncLiveActivity() }
+                WidgetCenter.shared.reloadTimelines(ofKind: "AdjutantWidget")
             }
             .store(in: &cancellables)
 
@@ -127,6 +131,10 @@ final class DashboardViewModel: BaseViewModel {
             crew: self.crewMembers,
             convoys: []
         )
+
+        // Sync Live Activity when unread mail count changes
+        Task { await self.syncLiveActivity() }
+        WidgetCenter.shared.reloadTimelines(ofKind: "AdjutantWidget")
     }
 
     /// Handles beads updates from DataSyncService
@@ -159,6 +167,7 @@ final class DashboardViewModel: BaseViewModel {
 
         // Sync Live Activity
         Task { await self.syncLiveActivity() }
+        WidgetCenter.shared.reloadTimelines(ofKind: "AdjutantWidget")
     }
 
     deinit {
@@ -251,8 +260,13 @@ final class DashboardViewModel: BaseViewModel {
             )
         }
 
-        // Build recently completed bead summaries
-        let completedSummaries: [BeadSummary] = recentClosedBeads.prefix(3).map { bead in
+        // Build recently completed bead summaries (only from last hour)
+        let oneHourAgo = Date().addingTimeInterval(-3600)
+        let recentClosed = recentClosedBeads.filter { bead in
+            guard let updatedDate = bead.updatedDate else { return false }
+            return updatedDate > oneHourAgo
+        }
+        let completedSummaries: [BeadSummary] = recentClosed.prefix(3).map { bead in
             BeadSummary(
                 id: bead.id,
                 title: bead.title,
