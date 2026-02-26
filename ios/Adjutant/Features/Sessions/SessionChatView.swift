@@ -302,14 +302,7 @@ struct SessionChatView: View {
                 .onSubmit {
                     viewModel.sendInput()
                 }
-                .toolbar {
-                    ToolbarItemGroup(placement: .keyboard) {
-                        Spacer()
-                        Button("DONE") { isInputFocused = false }
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundColor(theme.primary)
-                    }
-                }
+                .keyboardDismissToolbar()
                 .disabled(!viewModel.isConnected)
 
             // Send button

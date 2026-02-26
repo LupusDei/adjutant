@@ -1,5 +1,38 @@
 import SwiftUI
 
+// MARK: - Keyboard Dismiss Toolbar
+
+/// Adds a small down-chevron button to the keyboard toolbar for dismissing the keyboard.
+/// Apply to any text input view to get a consistent, compact dismiss affordance.
+struct KeyboardDismissToolbar: ViewModifier {
+    @Environment(\.crtTheme) private var theme
+
+    func body(content: Content) -> some View {
+        content
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(theme.primary)
+                    }
+                }
+            }
+    }
+}
+
+extension View {
+    func keyboardDismissToolbar() -> some View {
+        modifier(KeyboardDismissToolbar())
+    }
+}
+
 // MARK: - CRTTextField
 
 /// A text input field styled with CRT phosphor effects.
@@ -58,14 +91,7 @@ public struct CRTTextField: View {
                 .onSubmit {
                     onSubmit?()
                 }
-                .toolbar {
-                    ToolbarItemGroup(placement: .keyboard) {
-                        Spacer()
-                        Button("DONE") { isFocused = false }
-                            .font(CRTTheme.Typography.font(size: 14))
-                            .foregroundColor(theme.primary)
-                    }
-                }
+                .keyboardDismissToolbar()
         }
         .padding(.horizontal, CRTTheme.Spacing.sm)
         .padding(.vertical, CRTTheme.Spacing.xs)
@@ -166,14 +192,7 @@ public struct CRTTextEditor: View {
                             text = String(newValue.prefix(maxLength))
                         }
                     }
-                    .toolbar {
-                        ToolbarItemGroup(placement: .keyboard) {
-                            Spacer()
-                            Button("DONE") { isFocused = false }
-                                .font(CRTTheme.Typography.font(size: 14))
-                                .foregroundColor(theme.primary)
-                        }
-                    }
+                    .keyboardDismissToolbar()
             }
             .frame(minHeight: minHeight)
             .background(

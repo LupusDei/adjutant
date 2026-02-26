@@ -293,7 +293,7 @@ final class ChatViewModel: BaseViewModel {
 
     private func performRefresh() async {
         await performAsyncAction(showLoading: messages.isEmpty) {
-            let response = try await self.apiClient.getMessages(agentId: self.selectedRecipient)
+            let response = try await self.apiClient.getMessages(agentId: self.selectedRecipient, limit: 50)
             self.markConnectionSuccess()
 
             var serverMessages = response.items.sorted { msg1, msg2 in
@@ -770,7 +770,7 @@ final class ChatViewModel: BaseViewModel {
                 guard !Task.isCancelled else { break }
 
                 if let response = await performAsync(showLoading: false, {
-                    try await self.apiClient.getMessages(agentId: self.selectedRecipient)
+                    try await self.apiClient.getMessages(agentId: self.selectedRecipient, limit: 1)
                 }) {
                     markConnectionSuccess()
                     if let newest = response.items.last, newest.id != lastMessageId {
