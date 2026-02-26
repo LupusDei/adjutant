@@ -25,6 +25,7 @@ If build or tests fail, fix the issues BEFORE committing — do NOT push broken 
 - **Default**: Use beads for ALL task tracking (`bd create`, `bd ready`, `bd close`)
 - **Prohibited**: Do NOT use TodoWrite, TaskCreate, or markdown files for task tracking. This applies to ALL agents — leader and teammates alike.
 - **Workflow**: Create beads issue BEFORE writing code, mark `in_progress` when starting, `close` when done
+- **Self-Assignment (MANDATORY)**: When you move ANY bead to `in_progress`, you MUST also set `--assignee=<your-name>` in the same command. Unassigned in-progress beads are a bug. Every `bd update <id> --status=in_progress` MUST include `--assignee=<your-name>`.
 - **Real-time updates**: Update bead status as you work, not in bulk at the end. Each task transitions: `open` → `in_progress` → `closed`
 - **Hierarchy first**: After creating beads, wire parent-child deps immediately (see "Hierarchy Wiring" section)
 - Persistence you don't need is more important than lost context
@@ -42,8 +43,8 @@ If build or tests fail, fix the issues BEFORE committing — do NOT push broken 
 ### Creating & Updating
 - `bd create --title="Summary of this issue" --description="Why this issue exists and what needs to be done" --type=task|bug|epic --priority=2` - New issue
   - Priority: 0-4 or P0-P4 (0=critical, 2=medium, 4=backlog). NOT "high"/"medium"/"low"
-- `bd update <id> --status=in_progress` - Claim work
-- `bd update <id> --assignee=username` - Assign to someone
+- `bd update <id> --assignee=<your-name> --status=in_progress` - Claim work (ALWAYS include --assignee)
+- `bd update <id> --assignee=username` - Assign to someone else
 - `bd update <id> --title/--description/--notes/--design` - Update fields inline
 - `bd close <id>` - Mark complete
 - `bd close <id1> <id2> ...` - Close multiple issues at once (more efficient)
@@ -69,7 +70,7 @@ If build or tests fail, fix the issues BEFORE committing — do NOT push broken 
 **Starting work (solo):**
 ```bash
 bd show <id>       # Review issue details
-bd update <id> --status=in_progress  # Claim it
+bd update <id> --assignee=<your-name> --status=in_progress  # Claim it (ALWAYS include --assignee)
 ```
 
 **Assigning work to a team agent:**
@@ -92,6 +93,19 @@ bd create --title="Write tests for X" --description="Why this issue exists and w
 bd dep add beads-yyy beads-xxx  # Tests depend on Phase 1 (Phase 1 blocks tests)
 ```
 
+
+**When a user tells you to work on a bead (via chat, message, or prompt):**
+
+When you receive a message referencing a bead ID (e.g., "work on adj-042", "fix adj-017.2", "execute this epic"),
+you MUST immediately self-assign before doing any work:
+
+```bash
+bd show <id>                                                    # Read the bead details
+bd update <id> --assignee=<your-name> --status=in_progress     # Self-assign + claim
+```
+
+If the bead is an epic with children, assign yourself to the **parent epic** and all child beads you will personally work on.
+If you spawn a team to handle children, still assign yourself to the parent — you are the coordinator and owner.
 
 **All work uses BEADS library with strictly hierarchical beads.**
 
@@ -169,6 +183,18 @@ Keep hierarchy clean, shallow, and sequentially-rooted.
 - If there is ambiguity or uncertainty about the completeness or functioning of a new feature/epic, create a QA team member which focuses on thinking about edge cases and testing - that team member needs to create new beads for the epic that other team members will return to fix before an epic is closed
 - Create team members to regularly execute code reviews, from the eyes of a Staff level Engineer, to constantly improve the quality of the code
 
+### Coordinator Self-Assignment (MANDATORY)
+
+When you are the coordinator agent that the user asked to execute on a bead or epic:
+
+1. **You are the owner.** Assign yourself to the parent epic/bead BEFORE spawning any teammates:
+   ```bash
+   bd update <parent-id> --assignee=<your-name> --status=in_progress
+   ```
+2. **All child beads default to you.** If you spawn teammates for child tasks, assign them to those specific children. But every bead that doesn't have a dedicated teammate is YOUR responsibility — assign yourself.
+3. **No orphaned beads.** Before spawning a team, run `bd update <id> --assignee=<your-name>` on EVERY bead you are about to move to `in_progress`. Then reassign specific children to teammates as you spawn them.
+4. **The dashboard tracks ownership.** Without assignee data, the user cannot see who is working on what. This is the #1 source of confusion.
+
 ### Worktree Isolation (MANDATORY)
 
 **ALWAYS spawn teammates with `isolation: "worktree"`.** This is non-negotiable.
@@ -192,10 +218,11 @@ When assigning work to team agents, the **coordinator** must:
    ## Task Tracking (MANDATORY)
    Use the `bd` CLI for ALL task tracking. Do NOT use TaskCreate or TaskUpdate.
 
+   Your name (for --assignee): <agent-name>
    Your assigned beads: <list their bead IDs here>
    Parent epic: <parent bead ID>
 
-   Before starting each task:  bd update <id> --status=in_progress
+   Before starting each task:  bd update <id> --assignee=<your-name> --status=in_progress
    After completing each task:
      1. npm run build          (must exit 0)
      2. npm test               (must pass)

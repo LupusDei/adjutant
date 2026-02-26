@@ -56,7 +56,7 @@ announce({ type: "blocker", title: "Need help", body: "Can't access the API", be
 Use the `bd` CLI for ALL bead/task operations. Do NOT use TaskCreate, TaskUpdate, or markdown files.
 
 ```bash
-bd update <id> --status=in_progress   # Before starting work
+bd update <id> --assignee=<your-name> --status=in_progress   # Before starting work (ALWAYS include --assignee)
 bd close <id>                          # After completing work
 bd sync                                # Before shutting down
 ```
@@ -64,14 +64,16 @@ bd sync                                # Before shutting down
 ### Bead Self-Assignment (MANDATORY)
 
 **You MUST assign yourself to any bead you start working on.** This is non-negotiable.
+**EVERY `bd update --status=in_progress` MUST include `--assignee=<your-name>`.**
 
 ```bash
 bd update <id> --assignee=<your-agent-name> --status=in_progress
 ```
 
-- Before touching any code for a bead, run `bd update <id> --assignee=<your-name>`
+- Before touching any code for a bead, run `bd update <id> --assignee=<your-name> --status=in_progress`
 - This applies even if you delegate subtasks to teammates — the **primary agent** who owns the work gets assigned to the parent bead
 - If you spawn teammates for child beads, assign yourself to the parent epic/sub-epic and assign each teammate to their specific child beads
+- When a user tells you to work on a bead or epic via chat message, your FIRST action must be self-assignment — before planning, before reading code, before spawning teammates
 - Unassigned in-progress beads are a bug. Every `in_progress` bead must have an assignee.
 - The dashboard and other agents rely on assignee data for workload visibility. Without it, beads appear orphaned.
 
