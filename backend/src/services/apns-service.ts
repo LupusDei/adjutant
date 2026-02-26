@@ -109,7 +109,7 @@ function getProvider(): apn.Provider | null {
         keyId: config.keyId,
         teamId: config.teamId,
       },
-      production: config.environment === "production",
+      production: true, // TODO: restore config.environment === "production" once .env is updated
     });
 
     logInfo("APNs provider initialized", {
