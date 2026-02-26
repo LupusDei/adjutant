@@ -1,17 +1,44 @@
 import SwiftUI
+import Combine
 
-// MARK: - Keyboard Dismiss Toolbar
+// MARK: - Global Keyboard Dismiss Overlay
 
-/// Adds a small down-chevron button to the keyboard toolbar for dismissing the keyboard.
-/// Apply to any text input view to get a consistent, compact dismiss affordance.
-struct KeyboardDismissToolbar: ViewModifier {
+/// Tracks keyboard visibility and height via UIKit notifications.
+/// Used by `KeyboardDismissOverlay` to position the floating dismiss button.
+final class KeyboardObserver: ObservableObject {
+    @Published var keyboardHeight: CGFloat = 0
+    @Published var isVisible: Bool = false
+    private var cancellables = Set<AnyCancellable>()
+
+    init() {
+        NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
+            .compactMap { ($0.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect)?.height }
+            .sink { [weak self] height in
+                self?.keyboardHeight = height
+                self?.isVisible = true
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
+            .sink { [weak self] _ in
+                self?.keyboardHeight = 0
+                self?.isVisible = false
+            }
+            .store(in: &cancellables)
+    }
+}
+
+/// A floating chevron button that appears above the keyboard for dismissal.
+/// Apply this ONCE at the app's root view (e.g., ContentView). It works regardless
+/// of NavigationStack/TabView context, bypassing SwiftUI's broken `.toolbar(placement: .keyboard)`.
+struct KeyboardDismissOverlay: ViewModifier {
     @Environment(\.crtTheme) private var theme
+    @StateObject private var keyboard = KeyboardObserver()
 
     func body(content: Content) -> some View {
         content
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
+            .overlay(alignment: .bottomTrailing) {
+                if keyboard.isVisible {
                     Button {
                         UIApplication.shared.sendAction(
                             #selector(UIResponder.resignFirstResponder),
@@ -19,17 +46,33 @@ struct KeyboardDismissToolbar: ViewModifier {
                         )
                     } label: {
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 16, weight: .medium))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(theme.primary)
+                            .padding(8)
+                            .background(
+                                Circle()
+                                    .fill(CRTTheme.Background.panel)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(theme.primary.opacity(0.4), lineWidth: 1)
+                                    )
+                            )
+                            .crtGlow(color: theme.primary, radius: 4, intensity: 0.3)
                     }
+                    .padding(.trailing, 12)
+                    .padding(.bottom, keyboard.keyboardHeight + 8)
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                    .animation(.easeOut(duration: 0.15), value: keyboard.isVisible)
                 }
             }
+            .animation(.easeOut(duration: 0.15), value: keyboard.isVisible)
     }
 }
 
 extension View {
-    func keyboardDismissToolbar() -> some View {
-        modifier(KeyboardDismissToolbar())
+    /// Adds a global floating keyboard dismiss button. Apply once at the app root.
+    func keyboardDismissOverlay() -> some View {
+        modifier(KeyboardDismissOverlay())
     }
 }
 
@@ -91,7 +134,6 @@ public struct CRTTextField: View {
                 .onSubmit {
                     onSubmit?()
                 }
-                .keyboardDismissToolbar()
         }
         .padding(.horizontal, CRTTheme.Spacing.sm)
         .padding(.vertical, CRTTheme.Spacing.xs)
@@ -192,8 +234,7 @@ public struct CRTTextEditor: View {
                             text = String(newValue.prefix(maxLength))
                         }
                     }
-                    .keyboardDismissToolbar()
-            }
+                }
             .frame(minHeight: minHeight)
             .background(
                 RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)

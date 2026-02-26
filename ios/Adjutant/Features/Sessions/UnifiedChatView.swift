@@ -331,7 +331,6 @@ private struct UnifiedChatContent: View {
                 .onSubmit {
                     viewModel.sendInput()
                 }
-                .keyboardDismissToolbar()
                 .disabled(!viewModel.isConnected)
 
             // Send button

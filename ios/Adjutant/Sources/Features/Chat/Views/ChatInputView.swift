@@ -80,7 +80,6 @@ struct ChatInputView: View {
                         onSend()
                     }
                 }
-                .keyboardDismissToolbar()
         }
         .padding(.horizontal, CRTTheme.Spacing.sm)
         .padding(.vertical, CRTTheme.Spacing.xs)

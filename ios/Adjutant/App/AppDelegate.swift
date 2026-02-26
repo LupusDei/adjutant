@@ -38,6 +38,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // Enable swipe-down to dismiss keyboard on all scrollable content
+        UIScrollView.appearance().keyboardDismissMode = .interactive
+
         registerForPushNotifications(application)
         registerBackgroundTasks()
         startLiveActivityOnLaunch()

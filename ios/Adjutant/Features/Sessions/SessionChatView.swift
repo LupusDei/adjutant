@@ -302,7 +302,6 @@ struct SessionChatView: View {
                 .onSubmit {
                     viewModel.sendInput()
                 }
-                .keyboardDismissToolbar()
                 .disabled(!viewModel.isConnected)
 
             // Send button
