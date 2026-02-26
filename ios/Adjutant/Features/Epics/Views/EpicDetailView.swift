@@ -15,7 +15,15 @@ struct EpicDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: CRTTheme.Spacing.md) {
-                if let epic = viewModel.epic {
+                if viewModel.isLoading && viewModel.epic == nil {
+                    // Loading state (only when no cached data)
+                    HStack {
+                        Spacer()
+                        LoadingIndicator(size: .medium)
+                        Spacer()
+                    }
+                    .padding()
+                } else if let epic = viewModel.epic {
                     // Epic header
                     epicHeader(epic)
 
@@ -34,27 +42,20 @@ struct EpicDetailView: View {
                     if viewModel.subtasks.isEmpty && !viewModel.isLoading {
                         noSubtasksView
                     }
-                }
 
-                // Loading indicator
-                if viewModel.isLoading {
-                    HStack {
-                        Spacer()
-                        LoadingIndicator(size: .medium)
-                        Spacer()
+                    // Non-fatal children error
+                    if let childrenError = viewModel.childrenErrorMessage {
+                        ErrorBanner(
+                            message: "Failed to load subtasks: \(childrenError)",
+                            onRetry: {
+                                Task { await viewModel.refresh() }
+                            },
+                            onDismiss: { viewModel.childrenErrorMessage = nil }
+                        )
                     }
-                    .padding()
-                }
-
-                // Error banner
-                if let error = viewModel.errorMessage {
-                    ErrorBanner(
-                        message: error,
-                        onRetry: {
-                            Task { await viewModel.refresh() }
-                        },
-                        onDismiss: { viewModel.clearError() }
-                    )
+                } else if let error = viewModel.errorMessage {
+                    // Full error state (no data at all)
+                    errorView(error)
                 }
             }
             .padding(CRTTheme.Spacing.md)
@@ -236,6 +237,23 @@ struct EpicDetailView: View {
 
     private func priorityBadge(_ priority: Int) -> some View {
         BadgeView("P\(priority)", style: .priority(priority))
+    }
+
+    @ViewBuilder
+    private func errorView(_ error: String) -> some View {
+        CRTCard {
+            VStack(spacing: CRTTheme.Spacing.md) {
+                CRTText("ERROR", style: .subheader, color: CRTTheme.State.error)
+                CRTText(error, style: .body, glowIntensity: .subtle)
+                    .foregroundColor(theme.dim)
+
+                CRTButton("RETRY", variant: .secondary) {
+                    Task {
+                        await viewModel.refresh()
+                    }
+                }
+            }
+        }
     }
 
     private var noSubtasksView: some View {

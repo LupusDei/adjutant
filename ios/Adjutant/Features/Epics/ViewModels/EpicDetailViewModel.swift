@@ -20,6 +20,9 @@ final class EpicDetailViewModel: BaseViewModel {
     /// Closed subtasks
     @Published private(set) var closedSubtasks: [BeadInfo] = []
 
+    /// Non-fatal error when children fail to load but epic is available
+    @Published var childrenErrorMessage: String?
+
     // MARK: - Dependencies
 
     private let apiClient: APIClient
@@ -36,33 +39,85 @@ final class EpicDetailViewModel: BaseViewModel {
     // MARK: - Data Loading
 
     override func refresh() async {
+        childrenErrorMessage = nil
         await loadEpicDetails()
     }
 
-    /// Loads the epic and its children using the dependency graph endpoints
+    /// Loads the epic and its children using the dependency graph endpoints.
+    /// Uses cached data for instant display, then fetches fresh data.
+    /// Epic detail and children are fetched independently so a children
+    /// failure doesn't prevent showing the epic header.
     func loadEpicDetails() async {
-        await performAsyncAction { [weak self] in
+        // Show cached epic immediately if available
+        if epic == nil, let cached = ResponseCache.shared.epics.first(where: { $0.id == epicId }) {
+            epic = cached
+        }
+
+        // Only show loading spinner if we have no cached data to display
+        await performAsyncAction(showLoading: epic == nil) { [weak self] in
             guard let self = self else { return }
 
-            // Fetch epic detail and children in parallel
-            async let epicTask = self.apiClient.getBeadDetail(id: self.epicId)
-            async let childrenTask = self.apiClient.getEpicChildren(epicId: self.epicId)
+            let client = self.apiClient
+            let id = self.epicId
 
-            let (epicDetail, children) = try await (epicTask, childrenTask)
-
-            self.epic = epicDetail.asBeadInfo
-
-            // Sort by priority then by updated date
-            let sorted = children.sorted { a, b in
-                if a.priority != b.priority {
-                    return a.priority < b.priority
-                }
-                return (a.updatedDate ?? .distantPast) > (b.updatedDate ?? .distantPast)
+            // Launch independent unstructured tasks so one failure
+            // doesn't cancel the other via structured concurrency
+            let epicHandle = Task<BeadDetail?, Error> {
+                try await client.getBeadDetail(id: id)
+            }
+            let childrenHandle = Task<[BeadInfo]?, Error> {
+                try await client.getEpicChildren(epicId: id)
             }
 
-            self.subtasks = sorted
-            self.openSubtasks = sorted.filter { $0.status != "closed" }
-            self.closedSubtasks = sorted.filter { $0.status == "closed" }
+            // Await both results independently
+            var epicResult: BeadDetail?
+            var childrenResult: [BeadInfo]?
+            var firstError: Error?
+
+            do {
+                epicResult = try await epicHandle.value
+            } catch {
+                if !(error is CancellationError) {
+                    firstError = error
+                }
+            }
+
+            do {
+                childrenResult = try await childrenHandle.value
+            } catch {
+                if firstError == nil, !(error is CancellationError) {
+                    firstError = error
+                }
+            }
+
+            // Update epic if we got fresh data
+            if let detail = epicResult {
+                self.epic = detail.asBeadInfo
+            }
+
+            // Update children if we got them
+            if let children = childrenResult {
+                let sorted = children.sorted { a, b in
+                    if a.priority != b.priority {
+                        return a.priority < b.priority
+                    }
+                    return (a.updatedDate ?? .distantPast) > (b.updatedDate ?? .distantPast)
+                }
+
+                self.subtasks = sorted
+                self.openSubtasks = sorted.filter { $0.status != "closed" }
+                self.closedSubtasks = sorted.filter { $0.status == "closed" }
+            }
+
+            // If we have no epic data at all, propagate the error
+            if epicResult == nil && self.epic == nil, let error = firstError {
+                throw error
+            }
+
+            // If only children failed but we have the epic, show a non-fatal error
+            if childrenResult == nil, let error = firstError, self.epic != nil {
+                self.childrenErrorMessage = error.localizedDescription
+            }
         }
     }
 
