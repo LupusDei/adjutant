@@ -3,7 +3,7 @@
 //  AdjutantWidgets
 //
 //  Live Activity widget for displaying Adjutant status on Lock Screen
-//  and Dynamic Island.
+//  and Dynamic Island. Works in swarm mode — no Gas Town dependency.
 //
 
 import SwiftUI
@@ -61,24 +61,35 @@ private func aggregateStatusColor(for agents: [AgentSummary]) -> Color {
 // MARK: - Lock Screen View
 
 /// Main Lock Screen presentation for the Live Activity.
-/// Shows top 2-3 active agent names with status dots, in-progress bead count,
-/// and last completed bead title.
+/// Shows agents, bead counts, unread messages, and recently completed beads.
 private struct LockScreenView: View {
     let context: ActivityViewContext<AdjutantActivityAttributes>
 
     private var agents: [AgentSummary] { context.state.activeAgents }
     private var beads: [BeadSummary] { context.state.beadsInProgress }
-    private var lastCompleted: BeadSummary? { context.state.recentlyCompleted.first }
+    private var completed: [BeadSummary] { context.state.recentlyCompleted }
 
     var body: some View {
         HStack(spacing: 12) {
             // Left: Aggregate status + agent list
             VStack(alignment: .leading, spacing: 4) {
-                Text(context.attributes.townName)
-                    .font(.headline)
-                    .fontWeight(.semibold)
+                HStack {
+                    Text(context.attributes.townName)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    if context.state.unreadMessageCount > 0 {
+                        HStack(spacing: 2) {
+                            Image(systemName: "envelope.fill")
+                                .font(.caption2)
+                            Text("\(context.state.unreadMessageCount)")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                        }
+                        .foregroundStyle(.orange)
+                    }
+                }
 
-                // Top 2-3 agents with status dots
+                // Top 3 agents with status dots
                 ForEach(Array(agents.prefix(3).enumerated()), id: \.offset) { _, agent in
                     HStack(spacing: 4) {
                         Circle()
@@ -93,7 +104,7 @@ private struct LockScreenView: View {
 
             Spacer()
 
-            // Right: Bead count + last completed
+            // Right: Bead count + recently completed
             VStack(alignment: .trailing, spacing: 4) {
                 // In-progress bead count
                 HStack(spacing: 4) {
@@ -107,13 +118,13 @@ private struct LockScreenView: View {
                 }
                 .font(.caption)
 
-                // Last completed bead
-                if let completed = lastCompleted {
+                // Recently completed beads (up to 3)
+                ForEach(Array(completed.prefix(3).enumerated()), id: \.offset) { _, bead in
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                             .font(.caption2)
-                        Text(completed.title)
+                        Text(bead.title)
                             .font(.caption2)
                             .lineLimit(1)
                             .foregroundStyle(.secondary)
@@ -129,18 +140,7 @@ private struct LockScreenView: View {
             }
         }
         .padding()
-        .activityBackgroundTint(backgroundTint(for: context.state.powerState))
-    }
-
-    private func backgroundTint(for powerState: PowerState) -> Color {
-        switch powerState {
-        case .running:
-            return .green.opacity(0.3)
-        case .starting, .stopping:
-            return .yellow.opacity(0.3)
-        case .stopped:
-            return .gray.opacity(0.3)
-        }
+        .activityBackgroundTint(aggregateStatusColor(for: agents).opacity(0.3))
     }
 }
 
@@ -151,9 +151,21 @@ private struct ExpandedLeadingView: View {
     let context: ActivityViewContext<AdjutantActivityAttributes>
 
     var body: some View {
-        Circle()
-            .fill(aggregateStatusColor(for: context.state.activeAgents))
-            .frame(width: 14, height: 14)
+        HStack(spacing: 4) {
+            Circle()
+                .fill(aggregateStatusColor(for: context.state.activeAgents))
+                .frame(width: 14, height: 14)
+            if context.state.unreadMessageCount > 0 {
+                HStack(spacing: 1) {
+                    Image(systemName: "envelope.fill")
+                        .font(.caption2)
+                    Text("\(context.state.unreadMessageCount)")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                }
+                .foregroundStyle(.orange)
+            }
+        }
     }
 }
 
@@ -190,13 +202,13 @@ private struct ExpandedCenterView: View {
     }
 }
 
-/// Bottom region: active bead titles.
+/// Bottom region: active bead titles + recently completed.
 private struct ExpandedBottomView: View {
     let context: ActivityViewContext<AdjutantActivityAttributes>
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            ForEach(Array(context.state.beadsInProgress.prefix(3).enumerated()), id: \.offset) { _, bead in
+            ForEach(Array(context.state.beadsInProgress.prefix(2).enumerated()), id: \.offset) { _, bead in
                 HStack(spacing: 4) {
                     Circle()
                         .fill(.blue)
@@ -218,13 +230,26 @@ private struct ExpandedBottomView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
+
+            // Show recently completed
+            ForEach(Array(context.state.recentlyCompleted.prefix(2).enumerated()), id: \.offset) { _, bead in
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.caption2)
+                    Text(bead.title)
+                        .font(.caption2)
+                        .lineLimit(1)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 }
 
 // MARK: - Dynamic Island Compact Views
 
-/// Compact leading: active agent count + in-progress bead count.
+/// Compact leading: active agent count + unread badge.
 private struct CompactLeadingView: View {
     let context: ActivityViewContext<AdjutantActivityAttributes>
 
@@ -239,12 +264,17 @@ private struct CompactLeadingView: View {
     }
 }
 
-/// Compact trailing: in-progress bead count.
+/// Compact trailing: in-progress bead count + unread indicator.
 private struct CompactTrailingView: View {
     let context: ActivityViewContext<AdjutantActivityAttributes>
 
     var body: some View {
         HStack(spacing: 3) {
+            if context.state.unreadMessageCount > 0 {
+                Image(systemName: "envelope.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+            }
             Image(systemName: "circle.fill")
                 .font(.caption2)
                 .foregroundStyle(.blue)
@@ -294,23 +324,22 @@ private let previewBeads: [BeadSummary] = [
 ]
 
 private let previewCompleted: [BeadSummary] = [
-    BeadSummary(id: "adj-003", title: "Update models", assignee: "slate")
+    BeadSummary(id: "adj-003", title: "Update models", assignee: "slate"),
+    BeadSummary(id: "adj-004", title: "Fix login flow", assignee: "onyx")
 ]
 
 #Preview("Lock Screen", as: .content, using: AdjutantActivityAttributes(townName: "Adjutant")) {
     AdjutantLiveActivity()
 } contentStates: {
     AdjutantActivityAttributes.ContentState(
-        powerState: .running,
-        unreadMailCount: 3,
+        unreadMessageCount: 5,
         activeAgents: previewAgents,
         beadsInProgress: previewBeads,
         recentlyCompleted: previewCompleted,
         lastUpdated: Date()
     )
     AdjutantActivityAttributes.ContentState(
-        powerState: .stopped,
-        unreadMailCount: 0,
+        unreadMessageCount: 0,
         activeAgents: [],
         beadsInProgress: [],
         recentlyCompleted: [],
@@ -322,8 +351,7 @@ private let previewCompleted: [BeadSummary] = [
     AdjutantLiveActivity()
 } contentStates: {
     AdjutantActivityAttributes.ContentState(
-        powerState: .running,
-        unreadMailCount: 3,
+        unreadMessageCount: 3,
         activeAgents: previewAgents,
         beadsInProgress: previewBeads,
         recentlyCompleted: previewCompleted,
@@ -335,8 +363,7 @@ private let previewCompleted: [BeadSummary] = [
     AdjutantLiveActivity()
 } contentStates: {
     AdjutantActivityAttributes.ContentState(
-        powerState: .running,
-        unreadMailCount: 3,
+        unreadMessageCount: 2,
         activeAgents: previewAgents,
         beadsInProgress: previewBeads,
         recentlyCompleted: previewCompleted,
@@ -348,8 +375,7 @@ private let previewCompleted: [BeadSummary] = [
     AdjutantLiveActivity()
 } contentStates: {
     AdjutantActivityAttributes.ContentState(
-        powerState: .running,
-        unreadMailCount: 3,
+        unreadMessageCount: 0,
         activeAgents: previewAgents,
         beadsInProgress: previewBeads,
         recentlyCompleted: previewCompleted,

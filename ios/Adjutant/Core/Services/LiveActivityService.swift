@@ -127,7 +127,7 @@ public final class LiveActivityService: ObservableObject {
         )
 
         await activity.update(activityContent)
-        print("[LiveActivityService] Updated activity with state: power=\(state.powerState)")
+        print("[LiveActivityService] Updated activity with state: agents=\(state.activeAgents.count), beads=\(state.beadsInProgress.count)")
     }
 
     /// Ends the current Live Activity.
@@ -142,8 +142,7 @@ public final class LiveActivityService: ObservableObject {
 
         // Create a final state to show
         let finalState = AdjutantActivityAttributes.ContentState(
-            powerState: .stopped,
-            unreadMailCount: 0,
+            unreadMessageCount: 0,
             activeAgents: [],
             beadsInProgress: [],
             recentlyCompleted: [],
@@ -215,22 +214,19 @@ public final class LiveActivityService: ObservableObject {
     /// Creates a ContentState from dashboard data.
     ///
     /// - Parameters:
-    ///   - powerState: Current power state
-    ///   - unreadMailCount: Number of unread mail messages
+    ///   - unreadMessageCount: Number of unread chat messages
     ///   - activeAgents: Active agent summaries
     ///   - beadsInProgress: In-progress bead summaries
     ///   - recentlyCompleted: Recently completed bead summaries
     /// - Returns: A ContentState populated with current values
     static func createState(
-        powerState: AdjutantKit.PowerState,
-        unreadMailCount: Int,
+        unreadMessageCount: Int,
         activeAgents: [AgentSummary],
         beadsInProgress: [BeadSummary] = [],
         recentlyCompleted: [BeadSummary] = []
     ) -> AdjutantActivityAttributes.ContentState {
         return AdjutantActivityAttributes.ContentState(
-            powerState: powerState,
-            unreadMailCount: unreadMailCount,
+            unreadMessageCount: unreadMessageCount,
             activeAgents: activeAgents,
             beadsInProgress: beadsInProgress,
             recentlyCompleted: recentlyCompleted,

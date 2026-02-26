@@ -17,11 +17,8 @@ public struct AdjutantActivityAttributes: ActivityAttributes {
     /// ContentState contains the real-time data displayed in the Live Activity,
     /// including power state, active agent summaries, and bead summaries.
     public struct ContentState: Codable, Hashable {
-        /// Current power state of the system
-        public let powerState: PowerState
-
-        /// Number of unread mail messages for the operator
-        public let unreadMailCount: Int
+        /// Number of unread chat messages for the user
+        public let unreadMessageCount: Int
 
         /// Active agent summaries (up to 4 agents with status)
         public let activeAgents: [AgentSummary]
@@ -29,22 +26,20 @@ public struct AdjutantActivityAttributes: ActivityAttributes {
         /// Beads currently in progress with details
         public let beadsInProgress: [BeadSummary]
 
-        /// Beads recently completed (within last hour)
+        /// Beads recently completed (within last hour, up to 3)
         public let recentlyCompleted: [BeadSummary]
 
         /// Timestamp of the last status update
         public let lastUpdated: Date
 
         public init(
-            powerState: PowerState,
-            unreadMailCount: Int,
+            unreadMessageCount: Int,
             activeAgents: [AgentSummary],
             beadsInProgress: [BeadSummary] = [],
             recentlyCompleted: [BeadSummary] = [],
             lastUpdated: Date
         ) {
-            self.powerState = powerState
-            self.unreadMailCount = unreadMailCount
+            self.unreadMessageCount = unreadMessageCount
             self.activeAgents = activeAgents
             self.beadsInProgress = beadsInProgress
             self.recentlyCompleted = recentlyCompleted

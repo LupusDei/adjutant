@@ -319,18 +319,8 @@ public final class BackgroundTaskService: ObservableObject {
                 )
             }
 
-        // Get power state
-        let powerState: AdjutantKit.PowerState
-        switch appState.powerState {
-        case .stopped: powerState = .stopped
-        case .starting: powerState = .starting
-        case .running: powerState = .running
-        case .stopping: powerState = .stopping
-        }
-
         let state = LiveActivityService.createState(
-            powerState: powerState,
-            unreadMailCount: appState.unreadMailCount,
+            unreadMessageCount: appState.unreadMailCount,
             activeAgents: Array(activeAgents),
             beadsInProgress: Array(inProgressBeads)
         )

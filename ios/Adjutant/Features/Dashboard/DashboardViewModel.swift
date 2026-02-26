@@ -238,8 +238,7 @@ final class DashboardViewModel: BaseViewModel {
         }
 
         let state = LiveActivityService.createState(
-            powerState: powerState,
-            unreadMailCount: unreadCount,
+            unreadMessageCount: unreadCount,
             activeAgents: agentSummaries,
             beadsInProgress: beadSummaries,
             recentlyCompleted: completedSummaries

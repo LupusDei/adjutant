@@ -330,8 +330,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         Task {
             let initialState = AdjutantActivityAttributes.ContentState(
-                powerState: .stopped,
-                unreadMailCount: 0,
+                unreadMessageCount: 0,
                 activeAgents: [],
                 beadsInProgress: [],
                 recentlyCompleted: [],

@@ -15,6 +15,7 @@ import AdjutantKit
 /// Timeline entry containing Adjutant status data for the widget.
 struct AdjutantWidgetEntry: TimelineEntry {
     let date: Date
+    let unreadMessageCount: Int
     let activeAgents: [AgentSummary]
     let beadsInProgress: [BeadSummary]
     let recentlyCompleted: [BeadSummary]
@@ -56,6 +57,7 @@ struct AdjutantWidgetEntry: TimelineEntry {
     static var placeholder: AdjutantWidgetEntry {
         AdjutantWidgetEntry(
             date: Date(),
+            unreadMessageCount: 3,
             activeAgents: [
                 AgentSummary(name: "obsidian", status: "working"),
                 AgentSummary(name: "onyx", status: "working"),
@@ -125,12 +127,15 @@ struct AdjutantWidgetProvider: TimelineProvider {
             let config = APIClientConfiguration(baseURL: baseURL)
             let client = APIClient(configuration: config)
 
-            // Fetch beads and agents in parallel (no status call needed)
+            // Fetch beads, agents, and unread counts in parallel
             async let inProgressTask = client.getBeads(status: .inProgress, limit: 10)
             async let agentsTask = client.getAgents()
+            async let unreadTask = client.getUnreadCounts()
 
             let inProgressBeads = try await inProgressTask
             let agents = try await agentsTask
+            let unreadCounts = (try? await unreadTask)?.counts ?? []
+            let totalUnread = unreadCounts.reduce(0) { $0 + $1.count }
 
             // Build agent summaries (up to 4 active agents)
             let activeAgentSummaries: [AgentSummary] = agents
@@ -178,6 +183,7 @@ struct AdjutantWidgetProvider: TimelineProvider {
 
             return AdjutantWidgetEntry(
                 date: Date(),
+                unreadMessageCount: totalUnread,
                 activeAgents: activeAgentSummaries,
                 beadsInProgress: beadSummaries,
                 recentlyCompleted: recentlyClosedSummaries,
@@ -188,6 +194,7 @@ struct AdjutantWidgetProvider: TimelineProvider {
             // Return error state so views can show an offline indicator
             return AdjutantWidgetEntry(
                 date: Date(),
+                unreadMessageCount: 0,
                 activeAgents: [],
                 beadsInProgress: [],
                 recentlyCompleted: [],
@@ -284,8 +291,8 @@ private struct SmallWidgetView: View {
     }
 
     private var normalContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Aggregate status + title
+        VStack(alignment: .leading, spacing: 6) {
+            // Aggregate status + title + unread badge
             HStack {
                 Circle()
                     .fill(entry.aggregateStatus.color)
@@ -294,12 +301,22 @@ private struct SmallWidgetView: View {
                     .font(.caption)
                     .fontWeight(.semibold)
                 Spacer()
+                if entry.unreadMessageCount > 0 {
+                    HStack(spacing: 2) {
+                        Image(systemName: "envelope.fill")
+                            .font(.caption2)
+                        Text("\(entry.unreadMessageCount)")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(.orange)
+                }
             }
 
             Spacer()
 
             // Key metrics
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 4) {
                     Image(systemName: "person.2.fill")
                         .foregroundStyle(.green)
@@ -322,6 +339,20 @@ private struct SmallWidgetView: View {
                     Text("in progress")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                }
+
+                if !entry.recentlyCompleted.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.caption2)
+                        Text("\(entry.recentlyCompleted.count)")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                        Text("completed")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
@@ -352,7 +383,7 @@ private struct MediumWidgetView: View {
 
     private var normalContent: some View {
         HStack(spacing: 12) {
-            // Left: Agent names with status dots
+            // Left: Agents + unread messages
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 4) {
                     Circle()
@@ -362,6 +393,17 @@ private struct MediumWidgetView: View {
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
+                    Spacer()
+                    if entry.unreadMessageCount > 0 {
+                        HStack(spacing: 2) {
+                            Image(systemName: "envelope.fill")
+                                .font(.caption2)
+                            Text("\(entry.unreadMessageCount)")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                        }
+                        .foregroundStyle(.orange)
+                    }
                 }
 
                 if workingOrBlockedAgents.isEmpty {
@@ -381,7 +423,7 @@ private struct MediumWidgetView: View {
 
             Divider()
 
-            // Right: Active beads with assignee
+            // Right: Active beads + recently completed
             VStack(alignment: .leading, spacing: 6) {
                 Text("Active Beads")
                     .font(.caption)
@@ -392,10 +434,15 @@ private struct MediumWidgetView: View {
                     Text("No active beads")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
-                        .frame(maxHeight: .infinity)
                 } else {
-                    ForEach(Array(entry.beadsInProgress.prefix(3).enumerated()), id: \.offset) { _, bead in
+                    ForEach(Array(entry.beadsInProgress.prefix(2).enumerated()), id: \.offset) { _, bead in
                         CompactBeadRow(bead: bead)
+                    }
+                }
+
+                if !entry.recentlyCompleted.isEmpty {
+                    ForEach(Array(entry.recentlyCompleted.prefix(2).enumerated()), id: \.offset) { _, bead in
+                        CompletedBeadRow(bead: bead)
                     }
                 }
 
@@ -436,6 +483,17 @@ private struct LargeWidgetView: View {
                 }
 
                 Spacer()
+
+                if entry.unreadMessageCount > 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "envelope.fill")
+                            .font(.caption)
+                        Text("\(entry.unreadMessageCount)")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(.orange)
+                }
 
                 Text(entry.date, style: .time)
                     .font(.caption)

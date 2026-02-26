@@ -68,14 +68,12 @@ final class LiveActivityServiceTests: XCTestCase {
             AgentSummary(name: "slate", status: "blocked")
         ]
         let state = AdjutantActivityAttributes.ContentState(
-            powerState: .running,
-            unreadMailCount: 5,
+            unreadMessageCount: 5,
             activeAgents: agents,
             lastUpdated: Date()
         )
 
-        XCTAssertEqual(state.powerState, .running)
-        XCTAssertEqual(state.unreadMailCount, 5)
+        XCTAssertEqual(state.unreadMessageCount, 5)
         XCTAssertEqual(state.activeAgents.count, 3)
         XCTAssertEqual(state.activeAgents[0].name, "obsidian")
         XCTAssertNotNil(state.lastUpdated)
@@ -84,8 +82,7 @@ final class LiveActivityServiceTests: XCTestCase {
     func testContentStateWithExplicitDate() {
         let testDate = Date(timeIntervalSince1970: 0)
         let state = AdjutantActivityAttributes.ContentState(
-            powerState: .stopped,
-            unreadMailCount: 0,
+            unreadMessageCount: 0,
             activeAgents: [],
             lastUpdated: testDate
         )
@@ -98,15 +95,13 @@ final class LiveActivityServiceTests: XCTestCase {
         let agents = [AgentSummary(name: "obsidian", status: "working")]
         let beads = [BeadSummary(id: "adj-001", title: "Test", assignee: "obsidian")]
         let state1 = AdjutantActivityAttributes.ContentState(
-            powerState: .running,
-            unreadMailCount: 5,
+            unreadMessageCount: 5,
             activeAgents: agents,
             beadsInProgress: beads,
             lastUpdated: date
         )
         let state2 = AdjutantActivityAttributes.ContentState(
-            powerState: .running,
-            unreadMailCount: 5,
+            unreadMessageCount: 5,
             activeAgents: agents,
             beadsInProgress: beads,
             lastUpdated: date
@@ -117,14 +112,12 @@ final class LiveActivityServiceTests: XCTestCase {
 
     func testContentStateInequality() {
         let state1 = AdjutantActivityAttributes.ContentState(
-            powerState: .running,
-            unreadMailCount: 5,
+            unreadMessageCount: 5,
             activeAgents: [AgentSummary(name: "obsidian", status: "working")],
             lastUpdated: Date()
         )
         let state2 = AdjutantActivityAttributes.ContentState(
-            powerState: .stopped,
-            unreadMailCount: 5,
+            unreadMessageCount: 10,
             activeAgents: [AgentSummary(name: "obsidian", status: "working")],
             lastUpdated: Date()
         )
@@ -181,24 +174,21 @@ final class LiveActivityServiceTests: XCTestCase {
             AgentSummary(name: "onyx", status: "idle")
         ]
         let state = LiveActivityService.createState(
-            powerState: .running,
-            unreadMailCount: 10,
+            unreadMessageCount: 10,
             activeAgents: agents
         )
 
-        XCTAssertEqual(state.powerState, .running)
-        XCTAssertEqual(state.unreadMailCount, 10)
+        XCTAssertEqual(state.unreadMessageCount, 10)
         XCTAssertEqual(state.activeAgents.count, 2)
     }
 
-    func testCreateStateWithStoppedState() {
+    func testCreateStateWithEmptyState() {
         let state = LiveActivityService.createState(
-            powerState: .stopped,
-            unreadMailCount: 0,
+            unreadMessageCount: 0,
             activeAgents: []
         )
 
-        XCTAssertEqual(state.powerState, .stopped)
+        XCTAssertEqual(state.unreadMessageCount, 0)
         XCTAssertEqual(state.activeAgents.count, 0)
     }
 
@@ -235,8 +225,7 @@ final class LiveActivityServiceTests: XCTestCase {
     func testUpdateActivityWithNoActiveActivity() async {
         // Should handle gracefully when trying to update non-existent activity
         let state = AdjutantActivityAttributes.ContentState(
-            powerState: .running,
-            unreadMailCount: 1,
+            unreadMessageCount: 1,
             activeAgents: [AgentSummary(name: "obsidian", status: "working")],
             lastUpdated: Date()
         )
