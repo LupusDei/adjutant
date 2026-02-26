@@ -193,8 +193,8 @@ export function createDashboardService(messageStore: MessageStore): DashboardSer
         listBeads({ status: "closed", limit: DASHBOARD_BEAD_LIMIT }),
         // 4: crew
         getAgents(),
-        // 5: unread counts (sync method, wrapped in promise)
-        Promise.resolve(messageStore.getUnreadCounts()),
+        // 5: unread counts (sync method — wrap in async to catch throws)
+        (async () => messageStore.getUnreadCounts())(),
         // 6: epics with progress
         listEpicsWithProgress({ status: "all" }),
         // 7: mail
