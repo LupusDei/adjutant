@@ -18,28 +18,30 @@ final class CrossPlatformConsistencyTests: XCTestCase {
 
     // MARK: - Tab Visibility Rules (must match Frontend useVisibleTabs)
 
-    func testGasTownModeShowsAll7Tabs() {
+    func testGasTownModeShowsAll8Tabs() {
         let tabs = DeploymentMode.gastown.visibleTabs
-        XCTAssertEqual(tabs.count, 7, "Gas Town mode should show 7 tabs")
+        XCTAssertEqual(tabs.count, 8, "Gas Town mode should show 8 tabs")
         XCTAssertTrue(tabs.contains(.dashboard))
         XCTAssertTrue(tabs.contains(.mail))
         XCTAssertTrue(tabs.contains(.chat))
         XCTAssertTrue(tabs.contains(.epics))
         XCTAssertTrue(tabs.contains(.crew))
         XCTAssertTrue(tabs.contains(.beads))
+        XCTAssertTrue(tabs.contains(.proposals))
         XCTAssertTrue(tabs.contains(.settings))
         XCTAssertFalse(tabs.contains(.overview), "Overview is swarm-only")
     }
 
-    func testSwarmModeShows7Tabs() {
+    func testSwarmModeShows8Tabs() {
         let tabs = DeploymentMode.swarm.visibleTabs
-        XCTAssertEqual(tabs.count, 7, "Swarm mode should show 7 tabs")
+        XCTAssertEqual(tabs.count, 8, "Swarm mode should show 8 tabs")
         XCTAssertTrue(tabs.contains(.overview))
         XCTAssertTrue(tabs.contains(.chat))
         XCTAssertTrue(tabs.contains(.crew))
         XCTAssertTrue(tabs.contains(.epics))
         XCTAssertTrue(tabs.contains(.projects))
         XCTAssertTrue(tabs.contains(.beads))
+        XCTAssertTrue(tabs.contains(.proposals))
         XCTAssertTrue(tabs.contains(.settings))
         // Hidden tabs
         XCTAssertFalse(tabs.contains(.dashboard))
@@ -223,7 +225,7 @@ final class CrossPlatformConsistencyTests: XCTestCase {
         XCTAssertEqual(DeploymentMode.gastown.defaultTab, .dashboard)
     }
 
-    func testSwarmDefaultTabIsChat() {
-        XCTAssertEqual(DeploymentMode.swarm.defaultTab, .chat)
+    func testSwarmDefaultTabIsOverview() {
+        XCTAssertEqual(DeploymentMode.swarm.defaultTab, .overview)
     }
 }

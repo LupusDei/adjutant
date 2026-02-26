@@ -61,10 +61,7 @@ private struct TabContent: View {
     @ObservedObject private var appState = AppState.shared
     let visibleTabs: [AppTab]
     var body: some View {
-        TabView(selection: Binding(
-            get: { selectedTab },
-            set: { coordinator.selectTab($0) }
-        )) {
+        ZStack {
             ForEach(visibleTabs) { tab in
                 NavigationStack(path: coordinator.pathBinding(for: tab)) {
                     tabView(for: tab)
@@ -72,12 +69,10 @@ private struct TabContent: View {
                             destinationView(for: route)
                         }
                 }
-                .tag(tab)
+                .opacity(selectedTab == tab ? 1 : 0)
+                .allowsHitTesting(selectedTab == tab)
             }
         }
-        #if os(iOS)
-        .toolbar(.hidden, for: .tabBar)
-        #endif
         .animation(nil, value: selectedTab)
     }
 
