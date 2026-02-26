@@ -15,8 +15,6 @@ import AdjutantKit
 /// Timeline entry containing Adjutant status data for the widget.
 struct AdjutantWidgetEntry: TimelineEntry {
     let date: Date
-    let powerState: PowerState
-    let unreadMailCount: Int
     let activeAgents: [AgentSummary]
     let beadsInProgress: [BeadSummary]
     let recentlyCompleted: [BeadSummary]
@@ -58,8 +56,6 @@ struct AdjutantWidgetEntry: TimelineEntry {
     static var placeholder: AdjutantWidgetEntry {
         AdjutantWidgetEntry(
             date: Date(),
-            powerState: .running,
-            unreadMailCount: 0,
             activeAgents: [
                 AgentSummary(name: "obsidian", status: "working"),
                 AgentSummary(name: "onyx", status: "working"),
@@ -121,56 +117,18 @@ struct AdjutantWidgetProvider: TimelineProvider {
         return URL(string: "http://localhost:4201/api")!
     }
 
-    /// Filter beads to OVERSEER scope (exclude wisp/internal operational beads)
-    private func filterToOverseerScope(_ beads: [BeadInfo]) -> [BeadInfo] {
-        let excludedTypes = ["message", "epic", "convoy", "agent", "role", "witness", "wisp", "infrastructure", "coordination", "sync"]
-        let excludedPatterns = ["witness", "wisp", "internal", "sync", "coordination", "mail delivery", "polecat", "crew assignment", "rig status", "heartbeat", "health check"]
-
-        return beads.filter { bead in
-            let typeLower = bead.type.lowercased()
-            let titleLower = bead.title.lowercased()
-            let idLower = bead.id.lowercased()
-            let assigneeLower = (bead.assignee ?? "").lowercased()
-
-            // Exclude wisp-related beads
-            if typeLower.contains("wisp") || titleLower.contains("wisp") ||
-                idLower.contains("wisp") || assigneeLower.contains("wisp") {
-                return false
-            }
-
-            // Exclude operational types
-            if excludedTypes.contains(typeLower) {
-                return false
-            }
-
-            // Exclude by title patterns
-            if excludedPatterns.contains(where: { titleLower.contains($0) }) {
-                return false
-            }
-
-            // Exclude merge beads
-            if titleLower.hasPrefix("merge:") {
-                return false
-            }
-
-            return true
-        }
-    }
-
-    /// Fetch current Adjutant status data
+    /// Fetch agents and beads directly from the backend.
+    /// No dependency on Gas Town system status — works in swarm mode.
     private func fetchWidgetData() async -> AdjutantWidgetEntry {
         do {
-            // Create client using the shared API URL from App Groups
             let baseURL = getSharedAPIBaseURL()
             let config = APIClientConfiguration(baseURL: baseURL)
             let client = APIClient(configuration: config)
 
-            // Fetch status, beads, and agents in parallel
-            async let statusTask = client.getStatus()
-            async let inProgressTask = client.getBeads(rig: "all", status: .inProgress, limit: 10)
+            // Fetch beads and agents in parallel (no status call needed)
+            async let inProgressTask = client.getBeads(status: .inProgress, limit: 10)
             async let agentsTask = client.getAgents()
 
-            let status = try await statusTask
             let inProgressBeads = try await inProgressTask
             let agents = try await agentsTask
 
@@ -190,8 +148,8 @@ struct AdjutantWidgetProvider: TimelineProvider {
                     return AgentSummary(name: agent.name, status: statusStr)
                 }
 
-            // Filter beads to OVERSEER scope
-            let filteredBeads = filterToOverseerScope(inProgressBeads)
+            // Exclude epics from the widget (show only actionable tasks/bugs)
+            let filteredBeads = inProgressBeads.filter { $0.type.lowercased() != "epic" }
 
             // Build bead summaries
             let beadSummaries: [BeadSummary] = filteredBeads.prefix(5).map { bead in
@@ -206,7 +164,7 @@ struct AdjutantWidgetProvider: TimelineProvider {
             var recentlyClosedSummaries: [BeadSummary] = []
             do {
                 let closedBeads = try await client.getRecentlyClosedBeads(hours: 1)
-                let filteredClosed = filterToOverseerScope(closedBeads)
+                let filteredClosed = closedBeads.filter { $0.type.lowercased() != "epic" }
                 recentlyClosedSummaries = filteredClosed.prefix(3).map { bead in
                     BeadSummary(
                         id: bead.id,
@@ -220,8 +178,6 @@ struct AdjutantWidgetProvider: TimelineProvider {
 
             return AdjutantWidgetEntry(
                 date: Date(),
-                powerState: status.powerState,
-                unreadMailCount: status.operator.unreadMail,
                 activeAgents: activeAgentSummaries,
                 beadsInProgress: beadSummaries,
                 recentlyCompleted: recentlyClosedSummaries,
@@ -232,8 +188,6 @@ struct AdjutantWidgetProvider: TimelineProvider {
             // Return error state so views can show an offline indicator
             return AdjutantWidgetEntry(
                 date: Date(),
-                powerState: .stopped,
-                unreadMailCount: 0,
                 activeAgents: [],
                 beadsInProgress: [],
                 recentlyCompleted: [],
@@ -372,7 +326,7 @@ private struct SmallWidgetView: View {
             }
         }
         .padding()
-        .containerBackground(backgroundGradient(for: entry.powerState), for: .widget)
+        .containerBackground(Color(.systemBackground), for: .widget)
     }
 }
 
@@ -450,7 +404,7 @@ private struct MediumWidgetView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding()
-        .containerBackground(backgroundGradient(for: entry.powerState), for: .widget)
+        .containerBackground(Color(.systemBackground), for: .widget)
     }
 }
 
@@ -560,7 +514,7 @@ private struct LargeWidgetView: View {
             Spacer()
         }
         .padding()
-        .containerBackground(backgroundGradient(for: entry.powerState), for: .widget)
+        .containerBackground(Color(.systemBackground), for: .widget)
     }
 }
 
@@ -665,20 +619,6 @@ private struct CompletedBeadRow: View {
                     .foregroundStyle(.secondary)
             }
         }
-    }
-}
-
-// MARK: - Helper Functions
-
-/// Background gradient based on power state.
-private func backgroundGradient(for powerState: PowerState) -> some ShapeStyle {
-    switch powerState {
-    case .running:
-        return Color(.systemBackground)
-    case .starting, .stopping:
-        return Color(.systemBackground)
-    case .stopped:
-        return Color(.secondarySystemBackground)
     }
 }
 
