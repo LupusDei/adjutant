@@ -13,6 +13,7 @@ public enum CRTTheme {
         case pipboy = "pipboy"        // Green CRT (default)
         case document = "document"    // Clean white/black
         case starcraft = "starcraft"  // Dark purple + teal
+        case friendly = "friendly"    // Warm coral/peach colorful
 
         public var id: String { rawValue }
 
@@ -22,6 +23,7 @@ public enum CRTTheme {
             case .pipboy: return "PIP-BOY"
             case .document: return "DOCUMENT"
             case .starcraft: return "STARCRAFT"
+            case .friendly: return "FRIENDLY"
             }
         }
 
@@ -29,8 +31,9 @@ public enum CRTTheme {
         public var primary: Color {
             switch self {
             case .pipboy: return Color(red: 0.125, green: 0.761, blue: 0.055)     // #20C20E
-            case .document: return Color(red: 0.102, green: 0.102, blue: 0.102)   // #1A1A1A
-            case .starcraft: return Color(red: 0.0, green: 0.898, blue: 0.8)      // #00E5CC
+            case .document: return Color(red: 0.067, green: 0.067, blue: 0.067)   // #111111
+            case .starcraft: return Color(red: 0.0, green: 1.0, blue: 0.835)      // #00FFD5
+            case .friendly: return Color(red: 1.0, green: 0.42, blue: 0.42)       // #FF6B6B
             }
         }
 
@@ -39,7 +42,8 @@ public enum CRTTheme {
             switch self {
             case .pipboy: return Color(red: 0.2, green: 1.0, blue: 0.2)           // #33FF33
             case .document: return Color.black                                      // #000000
-            case .starcraft: return Color(red: 0.2, green: 1.0, blue: 0.898)      // #33FFE5
+            case .starcraft: return Color(red: 0.4, green: 1.0, blue: 0.925)      // #66FFEC
+            case .friendly: return Color(red: 1.0, green: 0.278, blue: 0.341)     // #FF4757
             }
         }
 
@@ -47,8 +51,9 @@ public enum CRTTheme {
         public var dim: Color {
             switch self {
             case .pipboy: return Color(red: 0.039, green: 0.373, blue: 0.027)     // #0A5F07
-            case .document: return Color(red: 0.4, green: 0.4, blue: 0.4)           // #666666
-            case .starcraft: return Color(red: 0.0, green: 0.522, blue: 0.467)    // #008577
+            case .document: return Color(red: 0.463, green: 0.463, blue: 0.463)   // #767676 (WCAG AA on white)
+            case .starcraft: return Color(red: 0.0, green: 0.467, blue: 0.4)      // #007766
+            case .friendly: return Color(red: 0.882, green: 0.439, blue: 0.333)   // #E17055
             }
         }
 
@@ -63,15 +68,21 @@ public enum CRTTheme {
                 )
             case .document:
                 return BackgroundSet(
-                    screen: Color.white,                                         // #FFFFFF
-                    panel: Color(red: 0.961, green: 0.961, blue: 0.961),       // #F5F5F5
-                    elevated: Color(red: 0.922, green: 0.922, blue: 0.922)     // #EBEBEB
+                    screen: Color(red: 0.98, green: 0.98, blue: 0.973),        // #FAFAF8
+                    panel: Color.white,                                         // #FFFFFF
+                    elevated: Color(red: 0.941, green: 0.941, blue: 0.933)     // #F0F0EE
                 )
             case .starcraft:
                 return BackgroundSet(
-                    screen: Color(red: 0.039, green: 0.039, blue: 0.078),      // #0A0A14
-                    panel: Color(red: 0.102, green: 0.063, blue: 0.188),       // #1A1030
-                    elevated: Color(red: 0.133, green: 0.094, blue: 0.271)     // #221845
+                    screen: Color(red: 0.016, green: 0.016, blue: 0.102),      // #04041A
+                    panel: Color(red: 0.047, green: 0.031, blue: 0.125),       // #0C0820
+                    elevated: Color(red: 0.086, green: 0.055, blue: 0.188)     // #160E30
+                )
+            case .friendly:
+                return BackgroundSet(
+                    screen: Color(red: 1.0, green: 0.973, blue: 0.941),        // #FFF8F0
+                    panel: Color.white,                                         // #FFFFFF
+                    elevated: Color(red: 1.0, green: 0.953, blue: 0.902)       // #FFF3E6
                 )
             }
         }
@@ -80,7 +91,7 @@ public enum CRTTheme {
         public var crtEffectsEnabled: Bool {
             switch self {
             case .pipboy, .starcraft: return true
-            case .document: return false
+            case .document, .friendly: return false
             }
         }
 
@@ -88,7 +99,7 @@ public enum CRTTheme {
         public var useMonospaceFont: Bool {
             switch self {
             case .pipboy, .starcraft: return true
-            case .document: return false
+            case .document, .friendly: return false
             }
         }
 
@@ -96,8 +107,9 @@ public enum CRTTheme {
         public var textPrimary: Color {
             switch self {
             case .pipboy: return primary
-            case .document: return Color(red: 0.102, green: 0.102, blue: 0.102)   // #1A1A1A
+            case .document: return Color(red: 0.067, green: 0.067, blue: 0.067)   // #111111
             case .starcraft: return primary
+            case .friendly: return Color(red: 0.173, green: 0.173, blue: 0.173)   // #2C2C2C
             }
         }
 
@@ -105,8 +117,9 @@ public enum CRTTheme {
         public var textSecondary: Color {
             switch self {
             case .pipboy: return dim
-            case .document: return Color(red: 0.4, green: 0.4, blue: 0.4)           // #666666
+            case .document: return Color(red: 0.463, green: 0.463, blue: 0.463)   // #767676 (WCAG AA)
             case .starcraft: return dim
+            case .friendly: return Color(red: 0.42, green: 0.447, blue: 0.498)    // #6B7280
             }
         }
 
@@ -114,8 +127,9 @@ public enum CRTTheme {
         public var accent: Color {
             switch self {
             case .pipboy: return primary
-            case .document: return Color(red: 0.0, green: 0.4, blue: 0.8)         // #0066CC
+            case .document: return Color(red: 0.145, green: 0.388, blue: 0.922)   // #2563EB
             case .starcraft: return primary
+            case .friendly: return Color(red: 0.145, green: 0.388, blue: 0.922)   // #2563EB
             }
         }
 
@@ -123,7 +137,7 @@ public enum CRTTheme {
         public var preferredColorScheme: ColorScheme {
             switch self {
             case .pipboy, .starcraft: return .dark
-            case .document: return .light
+            case .document, .friendly: return .light
             }
         }
     }
