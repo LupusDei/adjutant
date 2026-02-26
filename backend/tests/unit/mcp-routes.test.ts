@@ -13,12 +13,14 @@ const {
   mockCreateSessionTransport,
   mockDisconnectAgent,
   mockResolveAgentId,
+  mockResolveProjectContext,
   mockGetTransportBySession,
   mockRecoverSession,
 } = vi.hoisted(() => ({
   mockCreateSessionTransport: vi.fn(),
   mockDisconnectAgent: vi.fn(),
   mockResolveAgentId: vi.fn(),
+  mockResolveProjectContext: vi.fn(),
   mockGetTransportBySession: vi.fn(),
   mockRecoverSession: vi.fn(),
 }));
@@ -27,6 +29,7 @@ vi.mock("../../src/services/mcp-server.js", () => ({
   createSessionTransport: mockCreateSessionTransport,
   disconnectAgent: mockDisconnectAgent,
   resolveAgentId: mockResolveAgentId,
+  resolveProjectContext: mockResolveProjectContext,
   getTransportBySession: mockGetTransportBySession,
   recoverSession: mockRecoverSession,
 }));
@@ -81,7 +84,9 @@ describe("MCP Routes", () => {
       await handler!(req, res, vi.fn());
 
       expect(mockResolveAgentId).toHaveBeenCalled();
-      expect(mockCreateSessionTransport).toHaveBeenCalledWith("researcher");
+      expect(mockCreateSessionTransport).toHaveBeenCalledWith("researcher", {
+        projectContext: undefined,
+      });
       expect(mockTransport.handleRequest).toHaveBeenCalledWith(req, res, req.body);
     });
 

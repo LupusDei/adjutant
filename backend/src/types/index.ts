@@ -209,6 +209,24 @@ export interface CrewMember {
 }
 
 // ============================================================================
+// Project Context Types
+// ============================================================================
+
+/**
+ * Project context carried through MCP sessions.
+ * Enables project-scoped bead operations for multi-project support.
+ * Null/undefined means legacy agent — fall back to workspace singleton.
+ */
+export interface ProjectContext {
+  /** Registered project ID */
+  projectId: string;
+  /** Absolute path to project root */
+  projectPath: string;
+  /** Resolved .beads/ directory for this project */
+  beadsDir: string;
+}
+
+// ============================================================================
 // API Response Types
 // ============================================================================
 
@@ -388,4 +406,10 @@ export const CrewMemberSchema = z.object({
     .optional(),
   swarmId: z.string().optional(),
   isCoordinator: z.boolean().optional(),
+});
+
+export const ProjectContextSchema = z.object({
+  projectId: z.string(),
+  projectPath: z.string(),
+  beadsDir: z.string(),
 });

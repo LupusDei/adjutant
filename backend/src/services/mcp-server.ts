@@ -16,6 +16,9 @@ import { randomUUID } from "node:crypto";
 import { logInfo, logWarn } from "../utils/index.js";
 import { getEventBus } from "./event-bus.js";
 import { clearAgentStatus } from "./mcp-tools/status.js";
+import type { ProjectContext } from "../types/index.js";
+import { resolveBeadsDir } from "./bd-client.js";
+import { getProject, listProjects } from "./projects-service.js";
 
 // ============================================================================
 // Types
@@ -27,6 +30,15 @@ export interface AgentConnection {
   server: McpServer;
   transport: StreamableHTTPServerTransport;
   connectedAt: Date;
+  /** Project context for multi-project bead scoping (undefined = legacy/unscoped) */
+  projectContext?: ProjectContext | undefined;
+}
+
+/** Options for creating a session transport. */
+export interface CreateSessionTransportOptions {
+  reuseSessionId?: string | undefined;
+  /** Project context to associate with this agent session */
+  projectContext?: ProjectContext | undefined;
 }
 
 /** Callback to register tools on a new McpServer instance. */
@@ -109,6 +121,71 @@ export function resolveAgentId(
   return `unknown-agent-${randomUUID().slice(0, 8)}`;
 }
 
+/**
+ * Resolve project context from request metadata.
+ *
+ * Looks for projectId in query params or X-Project-Id header, then
+ * resolves the full ProjectContext from the project registry.
+ * Returns undefined if no project context is available (legacy agent).
+ */
+export function resolveProjectContext(
+  query: Record<string, unknown>,
+  headers: Record<string, unknown>,
+): ProjectContext | undefined {
+  const projectId =
+    (typeof query["projectId"] === "string" && query["projectId"].length > 0
+      ? query["projectId"]
+      : undefined) ??
+    (typeof headers["x-project-id"] === "string" && (headers["x-project-id"] as string).length > 0
+      ? headers["x-project-id"] as string
+      : undefined);
+
+  if (!projectId) {
+    return undefined;
+  }
+
+  const result = getProject(projectId);
+  if (!result.success || !result.data) {
+    logWarn("MCP project context: project not found", { projectId });
+    return undefined;
+  }
+
+  const project = result.data;
+  try {
+    const beadsDir = resolveBeadsDir(project.path);
+    return { projectId: project.id, projectPath: project.path, beadsDir };
+  } catch {
+    logWarn("MCP project context: failed to resolve beadsDir", {
+      projectId,
+      projectPath: project.path,
+    });
+    return undefined;
+  }
+}
+
+/**
+ * Auto-detect project context from a filesystem path.
+ *
+ * Matches the given path against registered projects. Used when an agent
+ * connects without explicit project context but has a known working directory.
+ */
+export function resolveProjectContextFromPath(
+  projectPath: string,
+): ProjectContext | undefined {
+  const result = listProjects();
+  if (!result.success || !result.data) return undefined;
+
+  const match = result.data.find((p) => projectPath.startsWith(p.path));
+  if (!match) return undefined;
+
+  try {
+    const beadsDir = resolveBeadsDir(match.path);
+    return { projectId: match.id, projectPath: match.path, beadsDir };
+  } catch {
+    return undefined;
+  }
+}
+
 // ============================================================================
 // Session transport factory
 // ============================================================================
@@ -123,9 +200,10 @@ export function resolveAgentId(
  */
 export async function createSessionTransport(
   agentId: string,
-  options?: { reuseSessionId?: string },
+  options?: CreateSessionTransportOptions,
 ): Promise<{ transport: StreamableHTTPServerTransport; server: McpServer }> {
   const server = createMcpServer();
+  const projectContext = options?.projectContext;
 
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: options?.reuseSessionId
@@ -138,10 +216,15 @@ export async function createSessionTransport(
         server,
         transport,
         connectedAt: new Date(),
+        projectContext,
       };
       connections.set(sessionId, connection);
 
-      logInfo("MCP agent connected", { agentId, sessionId });
+      logInfo("MCP agent connected", {
+        agentId,
+        sessionId,
+        projectId: projectContext?.projectId,
+      });
       getEventBus().emit("mcp:agent_connected", { agentId, sessionId });
     },
     onsessionclosed: (sessionId: string) => {
@@ -230,6 +313,38 @@ export function getAgentBySession(sessionId: string): string | undefined {
 }
 
 /**
+ * Get the project context associated with an MCP session.
+ * Used by MCP tool handlers to scope bead operations to the agent's project.
+ * Returns undefined for legacy/unscoped agents — callers should fall back
+ * to workspace singleton behavior.
+ */
+export function getProjectContextBySession(
+  sessionId: string,
+): ProjectContext | undefined {
+  return connections.get(sessionId)?.projectContext;
+}
+
+/**
+ * Set the project context for an existing MCP session.
+ * Used when project context is resolved after initial connection
+ * (e.g., from session bridge lookup).
+ */
+export function setProjectContextForSession(
+  sessionId: string,
+  context: ProjectContext,
+): boolean {
+  const connection = connections.get(sessionId);
+  if (!connection) return false;
+  connection.projectContext = context;
+  logInfo("MCP session project context set", {
+    agentId: connection.agentId,
+    sessionId,
+    projectId: context.projectId,
+  });
+  return true;
+}
+
+/**
  * Get a transport by session ID (for routing requests).
  */
 export function getTransportBySession(
@@ -272,10 +387,12 @@ interface TransportWithInternals {
 export async function recoverSession(
   sessionId: string,
   agentId: string,
+  projectContext?: ProjectContext,
 ): Promise<StreamableHTTPServerTransport | undefined> {
   try {
     const { transport, server } = await createSessionTransport(agentId, {
       reuseSessionId: sessionId,
+      projectContext,
     });
 
     // Directly initialize the inner WebStandard transport.
@@ -296,10 +413,11 @@ export async function recoverSession(
       server,
       transport,
       connectedAt: new Date(),
+      projectContext,
     };
     connections.set(sessionId, connection);
 
-    logInfo("MCP session recovered", { agentId, sessionId });
+    logInfo("MCP session recovered", { agentId, sessionId, projectId: projectContext?.projectId });
     getEventBus().emit("mcp:agent_connected", { agentId, sessionId });
 
     return transport;

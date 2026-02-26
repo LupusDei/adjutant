@@ -4,13 +4,18 @@
  * Provides create, update, close, list, and show tools that wrap
  * the bd-client service. All calls are serialized through a mutex
  * to prevent concurrent bd access (SQLite SIGSEGV).
+ *
+ * When an agent has project context (from session metadata), bead
+ * operations are scoped to that project's .beads/ directory. Legacy
+ * agents without project context fall back to workspace-default behavior.
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { execBd, type BdResult } from "../bd-client.js";
+import { execBd, type BdExecOptions, type BdResult } from "../bd-client.js";
 import { logError } from "../../utils/index.js";
 import { autoCompleteEpics } from "../beads/index.js";
+import { getProjectContextBySession } from "../mcp-server.js";
 
 // =============================================================================
 // Mutex for serializing bd access
@@ -63,6 +68,18 @@ function errorResult(result: BdResult) {
   };
 }
 
+/**
+ * Resolve bd execution options from MCP session project context.
+ * If the agent has a project context, scopes bd to that project's .beads/.
+ * Otherwise returns empty options (workspace-default behavior).
+ */
+function resolveBdOptions(extra?: { sessionId?: string | undefined }): BdExecOptions {
+  if (!extra?.sessionId) return {};
+  const ctx = getProjectContextBySession(extra.sessionId);
+  if (!ctx) return {};
+  return { cwd: ctx.projectPath, beadsDir: ctx.beadsDir };
+}
+
 // =============================================================================
 // Tool registration
 // =============================================================================
@@ -80,7 +97,8 @@ export function registerBeadTools(server: McpServer): void {
       type: z.enum(["epic", "task", "bug"]).describe("Bead type"),
       priority: z.number().min(0).max(4).describe("Priority: 0=critical, 4=backlog"),
     },
-    async ({ id, title, description, type, priority }) => {
+    async ({ id, title, description, type, priority }, extra) => {
+      const bdOpts = resolveBdOptions(extra);
       return bdMutex.runExclusive(async () => {
         const args: string[] = [
           "create",
@@ -94,7 +112,7 @@ export function registerBeadTools(server: McpServer): void {
           args.push("--id", id);
         }
 
-        const result = await execBd(args);
+        const result = await execBd(args, bdOpts);
         if (!result.success) {
           logError("create_bead failed", { error: result.error });
           return errorResult(result);
@@ -122,7 +140,8 @@ export function registerBeadTools(server: McpServer): void {
       assignee: z.string().optional().describe("Assignee name"),
       priority: z.number().min(0).max(4).optional().describe("Priority: 0=critical, 4=backlog"),
     },
-    async ({ id, status, title, description, assignee, priority }) => {
+    async ({ id, status, title, description, assignee, priority }, extra) => {
+      const bdOpts = resolveBdOptions(extra);
       return bdMutex.runExclusive(async () => {
         const args: string[] = ["update", id, "--json"];
 
@@ -132,7 +151,7 @@ export function registerBeadTools(server: McpServer): void {
         if (assignee) args.push("--assignee", assignee);
         if (priority !== undefined && priority !== null) args.push("--priority", String(priority));
 
-        const result = await execBd(args);
+        const result = await execBd(args, bdOpts);
         if (!result.success) {
           logError("update_bead failed", { id, error: result.error });
           return errorResult(result);
@@ -163,14 +182,15 @@ export function registerBeadTools(server: McpServer): void {
       id: z.string().describe("Bead ID to close"),
       reason: z.string().optional().describe("Close reason"),
     },
-    async ({ id, reason }) => {
+    async ({ id, reason }, extra) => {
+      const bdOpts = resolveBdOptions(extra);
       return bdMutex.runExclusive(async () => {
         const args: string[] = ["close", id, "--json"];
         if (reason) {
           args.push("--reason", reason);
         }
 
-        const result = await execBd(args);
+        const result = await execBd(args, bdOpts);
         if (!result.success) {
           logError("close_bead failed", { id, error: result.error });
           return errorResult(result);
@@ -201,7 +221,8 @@ export function registerBeadTools(server: McpServer): void {
       assignee: z.string().optional().describe("Filter by assignee"),
       type: z.enum(["epic", "task", "bug"]).optional().describe("Filter by bead type"),
     },
-    async ({ status, assignee, type }) => {
+    async ({ status, assignee, type }, extra) => {
+      const bdOpts = resolveBdOptions(extra);
       return bdMutex.runExclusive(async () => {
         const args: string[] = ["list", "--json"];
 
@@ -213,7 +234,7 @@ export function registerBeadTools(server: McpServer): void {
         if (assignee) args.push("--assignee", assignee);
         if (type) args.push("--type", type);
 
-        const result = await execBd(args);
+        const result = await execBd(args, bdOpts);
         if (!result.success) {
           logError("list_beads failed", { error: result.error });
           return errorResult(result);
@@ -244,11 +265,12 @@ export function registerBeadTools(server: McpServer): void {
     {
       id: z.string().describe("Bead ID to show"),
     },
-    async ({ id }) => {
+    async ({ id }, extra) => {
+      const bdOpts = resolveBdOptions(extra);
       return bdMutex.runExclusive(async () => {
         const args: string[] = ["show", id, "--json"];
 
-        const result = await execBd(args);
+        const result = await execBd(args, bdOpts);
         if (!result.success) {
           logError("show_bead failed", { id, error: result.error });
           return errorResult(result);

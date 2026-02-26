@@ -11,6 +11,7 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import {
   createSessionTransport,
   resolveAgentId,
+  resolveProjectContext,
   getTransportBySession,
   recoverSession,
 } from "../services/mcp-server.js";
@@ -76,10 +77,21 @@ mcpRouter.post("/", async (req, res) => {
     req.headers as Record<string, unknown>,
   );
 
-  try {
-    const { transport } = await createSessionTransport(agentId);
+  // Resolve project context from query params or headers (optional)
+  const projectContext = resolveProjectContext(
+    req.query as Record<string, unknown>,
+    req.headers as Record<string, unknown>,
+  );
 
-    logInfo("MCP session transport created", { agentId });
+  try {
+    const { transport } = await createSessionTransport(agentId, {
+      projectContext,
+    });
+
+    logInfo("MCP session transport created", {
+      agentId,
+      projectId: projectContext?.projectId,
+    });
 
     // Let the transport handle the initialization request
     await transport.handleRequest(req, res, req.body);

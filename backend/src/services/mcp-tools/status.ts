@@ -8,7 +8,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { wsBroadcast } from "../ws-server.js";
-import { getAgentBySession } from "../mcp-server.js";
+import { getAgentBySession, getProjectContextBySession } from "../mcp-server.js";
 import { getSessionBridge } from "../session-bridge.js";
 import type { SessionStatus } from "../session-registry.js";
 import { isAPNsConfigured, sendNotificationToAll } from "../apns-service.js";
@@ -24,6 +24,8 @@ export interface AgentStatus {
   status: "working" | "blocked" | "idle" | "done";
   task?: string | undefined;
   beadId?: string | undefined;
+  /** Project this agent is scoped to (undefined = legacy/unscoped) */
+  projectId?: string | undefined;
   updatedAt: string;
 }
 
@@ -63,6 +65,11 @@ export function clearAgentStatus(agentId: string): void {
 function resolveAgent(extra: { sessionId?: string }): string | undefined {
   if (!extra.sessionId) return undefined;
   return getAgentBySession(extra.sessionId);
+}
+
+function resolveProjectId(extra?: { sessionId?: string }): string | undefined {
+  if (!extra?.sessionId) return undefined;
+  return getProjectContextBySession(extra.sessionId)?.projectId;
 }
 
 function unknownAgentError() {
@@ -121,6 +128,7 @@ export function registerStatusTools(server: McpServer, store: MessageStore): voi
       const agentId = resolveAgent(extra);
       if (!agentId) return unknownAgentError();
 
+      const projectId = resolveProjectId(extra);
       const now = new Date().toISOString();
 
       agentStatuses.set(agentId, {
@@ -128,6 +136,7 @@ export function registerStatusTools(server: McpServer, store: MessageStore): voi
         status,
         task,
         beadId,
+        projectId,
         updatedAt: now,
       });
 
@@ -138,7 +147,7 @@ export function registerStatusTools(server: McpServer, store: MessageStore): voi
         type: "typing",
         from: agentId,
         state: status,
-        metadata: { type: "agent_status", status, task, beadId },
+        metadata: { type: "agent_status", status, task, beadId, projectId },
       });
 
       return {
@@ -191,6 +200,7 @@ export function registerStatusTools(server: McpServer, store: MessageStore): voi
       const agentId = resolveAgent(extra);
       if (!agentId) return unknownAgentError();
 
+      const projectId = resolveProjectId(extra);
       const formattedBody = `[${type.toUpperCase()}] ${title}: ${body}`;
 
       const message = store.insertMessage({
@@ -199,7 +209,7 @@ export function registerStatusTools(server: McpServer, store: MessageStore): voi
         role: "announcement",
         body: formattedBody,
         eventType: "announcement",
-        metadata: { announcementType: type, beadId },
+        metadata: { announcementType: type, beadId, projectId },
       });
 
       // Send APNS push for announcements

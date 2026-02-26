@@ -16,10 +16,12 @@ vi.mock("../../src/services/ws-server.js", () => ({
   wsBroadcast: (...args: unknown[]) => mockWsBroadcast(...args),
 }));
 
-// Mock mcp-server to return agent identity from session
+// Mock mcp-server to return agent identity and project context from session
 const mockGetAgentBySession = vi.fn();
+const mockGetProjectContextBySession = vi.fn();
 vi.mock("../../src/services/mcp-server.js", () => ({
   getAgentBySession: (...args: unknown[]) => mockGetAgentBySession(...args),
+  getProjectContextBySession: (...args: unknown[]) => mockGetProjectContextBySession(...args),
 }));
 
 // Mock APNS service

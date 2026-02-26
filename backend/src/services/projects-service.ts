@@ -27,6 +27,8 @@ export interface Project {
   sessions: string[];
   createdAt: string;
   active: boolean;
+  /** Whether this project has a .beads/ directory */
+  hasBeads?: boolean | undefined;
 }
 
 export interface ProjectsStore {
