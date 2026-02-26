@@ -77,6 +77,10 @@ final class ChatViewModel: BaseViewModel {
     /// Text being streamed token-by-token (nil when no active stream)
     @Published private(set) var streamingText: String?
 
+    /// Fires after every refresh or incoming message to trigger scroll-to-bottom.
+    /// Observed by ChatView to ensure the scroll always happens after data loads.
+    @Published private(set) var scrollToBottomTrigger = UUID()
+
     /// Current search query text
     @Published var searchQuery: String = ""
 
@@ -341,6 +345,7 @@ final class ChatViewModel: BaseViewModel {
             self.hasMoreHistory = response.hasMore
             self.lastMessageId = serverMessages.filter { !$0.id.hasPrefix("local-") }.last?.id
             ResponseCache.shared.updateChatMessages(self.messages, forAgent: self.selectedRecipient)
+            self.scrollToBottomTrigger = UUID()
         }
     }
 
@@ -497,6 +502,7 @@ final class ChatViewModel: BaseViewModel {
         messages.append(message)
         messages.sort { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
         ResponseCache.shared.updateChatMessages(messages, forAgent: selectedRecipient)
+        scrollToBottomTrigger = UUID()
     }
 
     private func handleDeliveryConfirmation(_ confirmation: (clientId: String, serverId: String, timestamp: String)) {

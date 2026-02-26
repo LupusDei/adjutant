@@ -72,6 +72,7 @@ struct ChatView: View {
         .background(CRTTheme.Background.screen)
         .onAppear {
             viewModel.onAppear()
+            scrollToBottom()
             coordinator.activeViewingAgentId = viewModel.selectedRecipient
             NotificationService.shared.isViewingChat = true
             NotificationService.shared.activeViewingAgentId = viewModel.selectedRecipient
@@ -91,8 +92,8 @@ struct ChatView: View {
             NotificationService.shared.isViewingChat = false
             NotificationService.shared.activeViewingAgentId = nil
         }
-        .onChange(of: viewModel.messages.last?.id) { oldId, newId in
-            if newId != oldId { scrollToBottom() }
+        .onChange(of: viewModel.scrollToBottomTrigger) { _, _ in
+            scrollToBottom()
         }
         .sheet(isPresented: $showConnectionDetails) {
             ConnectionDetailsSheet(
@@ -145,7 +146,11 @@ struct ChatView: View {
         }
         .onChange(of: coordinator.selectedTab) { _, newTab in
             if newTab == .chat {
-                Task { await viewModel.loadRecipients() }
+                scrollToBottom()
+                Task {
+                    await viewModel.loadRecipients()
+                    await viewModel.refresh()
+                }
             }
         }
         .fullScreenCover(item: $selectedSession) { session in
