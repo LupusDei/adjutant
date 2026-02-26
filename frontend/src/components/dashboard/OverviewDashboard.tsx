@@ -1,10 +1,9 @@
-import React from 'react';
-import { useDashboardMail } from '../../hooks/useDashboardMail';
-import { useDashboardEpics } from '../../hooks/useDashboardEpics';
-import { useDashboardCrew } from '../../hooks/useDashboardCrew';
-import { useDashboardBeads, priorityLabel } from '../../hooks/useDashboardBeads';
+import React, { useMemo } from 'react';
+import { useDashboard } from '../../hooks/useDashboard';
+import { priorityLabel } from '../../hooks/useDashboardBeads';
 import { EpicCard } from '../epics/EpicCard';
-import type { BeadInfo } from '../../types';
+import type { BeadInfo, AgentType, CrewMemberStatus, EpicWithProgressResponse } from '../../types';
+import type { EpicWithProgress } from '../../types/epics';
 import './DashboardView.css';
 
 // Simple widget wrapper for dashboard sections
@@ -25,9 +24,6 @@ const DashboardWidget: React.FC<DashboardWidgetProps> = ({ title, children, clas
   </div>
 );
 
-/**
- * DashboardView component displays a snapshot of information from other tabs.
- */
 /** Format relative timestamp */
 function formatRelativeTime(timestamp: string): string {
   const date = new Date(timestamp);
@@ -57,17 +53,91 @@ function BeadRow({ bead }: { bead: BeadInfo }) {
   );
 }
 
+/** Agent types shown in the crew widget */
+const DASHBOARD_AGENT_TYPES: AgentType[] = ['crew', 'polecat'];
+
+/** Status priority for crew sorting (lower = more important) */
+const STATUS_PRIORITY: Record<CrewMemberStatus, number> = {
+  working: 0,
+  blocked: 1,
+  stuck: 2,
+  idle: 3,
+  offline: 4,
+};
+
+/** Transform server epic response to frontend EpicWithProgress type */
+function toEpicWithProgress(item: EpicWithProgressResponse): EpicWithProgress {
+  const isComplete = item.epic.status === 'closed' ||
+    (item.totalCount > 0 && item.closedCount === item.totalCount);
+  return {
+    epic: item.epic,
+    completedCount: item.closedCount,
+    totalCount: item.totalCount,
+    progress: item.progress,
+    progressText: item.totalCount > 0 ? `${item.closedCount}/${item.totalCount}` : '0/0',
+    isComplete,
+  };
+}
+
 interface DashboardViewProps {
   onNavigateToChat?: (agentName: string) => void;
 }
 
 export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
-  const { recentMessages, totalCount: mailTotal, unreadCount, loading: mailLoading, error: mailError } = useDashboardMail();
-  const { inProgress: epicsInProgress, completed: epicsCompleted, loading: epicsLoading, error: epicsError } = useDashboardEpics();
-  const { totalCrew, activeCrew, recentCrew, crewAlerts, loading: crewLoading, error: crewError } = useDashboardCrew();
-  const { inProgress: beadsInProgress, open: beadsOpen, closed: beadsClosed, loading: beadsLoading, error: beadsError } = useDashboardBeads();
+  const { data, loading } = useDashboard();
 
+  // --- Per-section errors ---
+  const mailError = data?.mail?.error;
+  const crewError = data?.crew?.error;
+  const epicsError = data?.epics?.error;
+  const beadsError = data?.beads?.error;
 
+  // --- Mail data ---
+  const mailData = data?.mail?.data ?? null;
+
+  // --- Beads data ---
+  const beadsData = data?.beads?.data ?? null;
+
+  // --- Epics data (transform EpicWithProgressResponse → EpicWithProgress) ---
+  const { epicsInProgress, epicsCompleted } = useMemo(() => {
+    const raw = data?.epics?.data;
+    if (!raw) return { epicsInProgress: null, epicsCompleted: null };
+    return {
+      epicsInProgress: {
+        items: raw.inProgress.items.map(toEpicWithProgress),
+        totalCount: raw.inProgress.totalCount,
+      },
+      epicsCompleted: {
+        items: raw.completed.items.map(toEpicWithProgress),
+        totalCount: raw.completed.totalCount,
+      },
+    };
+  }, [data?.epics?.data]);
+
+  // --- Crew data (filter, sort, derive stats) ---
+  const { totalCrew, activeCrew, recentCrew, crewAlerts } = useMemo(() => {
+    const rawCrew = data?.crew?.data;
+    if (!rawCrew) return { totalCrew: 0, activeCrew: 0, recentCrew: [] as typeof rawCrew, crewAlerts: [] as string[] };
+
+    const filtered = rawCrew.filter((m) =>
+      DASHBOARD_AGENT_TYPES.includes(m.type) &&
+      !(m.type === 'polecat' && m.status === 'offline')
+    );
+
+    const active = filtered.filter((m) => m.status === 'working' || m.status === 'idle').length;
+
+    const recent = [...filtered]
+      .sort((a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status])
+      .slice(0, 3);
+
+    const alerts: string[] = [];
+    for (const m of filtered) {
+      if (m.status === 'stuck') alerts.push(`${m.name} is STUCK`);
+      else if (m.status === 'blocked') alerts.push(`${m.name} is blocked`);
+    }
+
+    return { totalCrew: filtered.length, activeCrew: active, recentCrew: recent, crewAlerts: alerts };
+  }, [data?.crew?.data]);
 
   return (
     <div className="dashboard-view-container">
@@ -77,21 +147,21 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
         <DashboardWidget
           title="MAIL"
           headerRight={
-            !mailLoading && !mailError && (
+            !loading && !mailError && mailData && (
               <div className="dashboard-header-stats">
-                <span className="dashboard-header-stat">{mailTotal} total</span>
-                <span className={`dashboard-header-stat ${unreadCount > 0 ? 'dashboard-header-stat-highlight' : ''}`}>{unreadCount} unread</span>
+                <span className="dashboard-header-stat">{mailData.totalCount} total</span>
+                <span className={`dashboard-header-stat ${mailData.unreadCount > 0 ? 'dashboard-header-stat-highlight' : ''}`}>{mailData.unreadCount} unread</span>
               </div>
             )
           }
         >
-          {mailLoading && <p>Loading mail...</p>}
-          {mailError && <p className="dashboard-view-error-text">Error: {mailError}</p>}
-          {!mailLoading && !mailError && (
+          {loading && <p>Loading mail...</p>}
+          {!loading && mailError && <p className="dashboard-view-error-text">Error: {mailError}</p>}
+          {!loading && mailData && (
             <>
-              {recentMessages.length > 0 ? (
+              {mailData.recentMessages.length > 0 ? (
                 <ul className="dashboard-view-list">
-                  {recentMessages.map((msg) => (
+                  {mailData.recentMessages.map((msg) => (
                     <li key={msg.id} className="dashboard-view-list-item">
                       <div className="dashboard-mail-item">
                         <span className="dashboard-mail-subject">{msg.subject}</span>
@@ -114,7 +184,7 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
         <DashboardWidget
           title="CREW & POLECATS"
           headerRight={
-            !crewLoading && !crewError && (
+            !loading && !crewError && data?.crew?.data && (
               <div className="dashboard-header-stats">
                 <span className="dashboard-header-stat">{totalCrew} total</span>
                 <span className={`dashboard-header-stat ${activeCrew > 0 ? 'dashboard-header-stat-highlight' : ''}`}>{activeCrew} active</span>
@@ -122,9 +192,9 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
             )
           }
         >
-          {crewLoading && <p>Loading crew data...</p>}
-          {crewError && <p className="dashboard-view-error-text">Error: {crewError}</p>}
-          {!crewLoading && !crewError && (
+          {loading && <p>Loading crew data...</p>}
+          {!loading && crewError && <p className="dashboard-view-error-text">Error: {crewError}</p>}
+          {!loading && data?.crew?.data && (
             <>
               {crewAlerts.length > 0 && (
                 <div className="dashboard-crew-alerts">
@@ -182,7 +252,7 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
           title="ACTIVE EPICS"
           className="dashboard-widget-full-width"
           headerRight={
-            !epicsLoading && !epicsError && (
+            !loading && !epicsError && epicsInProgress && epicsCompleted && (
               <div className="dashboard-header-stats">
                 <span className={`dashboard-header-stat ${epicsInProgress.totalCount > 0 ? 'dashboard-header-stat-highlight' : ''}`}>
                   {epicsInProgress.items.length < epicsInProgress.totalCount
@@ -198,9 +268,9 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
             )
           }
         >
-          {epicsLoading && <p>Loading epics...</p>}
-          {epicsError && <p className="dashboard-view-error-text">Error: {epicsError}</p>}
-          {!epicsLoading && !epicsError && (
+          {loading && <p>Loading epics...</p>}
+          {!loading && epicsError && <p className="dashboard-view-error-text">Error: {epicsError}</p>}
+          {!loading && epicsInProgress && epicsCompleted && (
             <>
               {epicsInProgress.items.length > 0 ? (
                 <div className="dashboard-convoy-list">
@@ -230,52 +300,52 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
           title="BEADS"
           className="dashboard-widget-full-width"
           headerRight={
-            !beadsLoading && !beadsError && (
+            !loading && !beadsError && beadsData && (
               <div className="dashboard-header-stats">
-                <span className={`dashboard-header-stat ${beadsInProgress.totalCount > 0 ? 'dashboard-header-stat-highlight' : ''}`}>
-                  {beadsInProgress.totalCount} in progress
+                <span className={`dashboard-header-stat ${beadsData.inProgress.totalCount > 0 ? 'dashboard-header-stat-highlight' : ''}`}>
+                  {beadsData.inProgress.totalCount} in progress
                 </span>
-                <span className="dashboard-header-stat">{beadsOpen.totalCount} open</span>
-                <span className="dashboard-header-stat">{beadsClosed.totalCount} closed</span>
+                <span className="dashboard-header-stat">{beadsData.open.totalCount} open</span>
+                <span className="dashboard-header-stat">{beadsData.closed.totalCount} closed</span>
               </div>
             )
           }
         >
-          {beadsLoading && <p>Loading beads...</p>}
-          {beadsError && <p className="dashboard-view-error-text">Error: {beadsError}</p>}
-          {!beadsLoading && !beadsError && (
+          {loading && <p>Loading beads...</p>}
+          {!loading && beadsError && <p className="dashboard-view-error-text">Error: {beadsError}</p>}
+          {!loading && beadsData && (
             <>
-              {beadsInProgress.items.length > 0 && (
+              {beadsData.inProgress.items.length > 0 && (
                 <>
                   <h4 className="dashboard-view-sub-title">IN PROGRESS</h4>
                   <div className="dashboard-beads-list">
-                    {beadsInProgress.items.map((bead) => (
+                    {beadsData.inProgress.items.map((bead) => (
                       <BeadRow key={bead.id} bead={bead} />
                     ))}
                   </div>
                 </>
               )}
-              {beadsOpen.items.length > 0 && (
+              {beadsData.open.items.length > 0 && (
                 <>
                   <h4 className="dashboard-view-sub-title">OPEN</h4>
                   <div className="dashboard-beads-list">
-                    {beadsOpen.items.map((bead) => (
+                    {beadsData.open.items.map((bead) => (
                       <BeadRow key={bead.id} bead={bead} />
                     ))}
                   </div>
                 </>
               )}
-              {beadsClosed.items.length > 0 && (
+              {beadsData.closed.items.length > 0 && (
                 <>
                   <h4 className="dashboard-view-sub-title">CLOSED</h4>
                   <div className="dashboard-beads-list">
-                    {beadsClosed.items.map((bead) => (
+                    {beadsData.closed.items.map((bead) => (
                       <BeadRow key={bead.id} bead={bead} />
                     ))}
                   </div>
                 </>
               )}
-              {beadsInProgress.items.length === 0 && beadsOpen.items.length === 0 && beadsClosed.items.length === 0 && (
+              {beadsData.inProgress.items.length === 0 && beadsData.open.items.length === 0 && beadsData.closed.items.length === 0 && (
                 <p className="dashboard-empty-text">No beads</p>
               )}
             </>
