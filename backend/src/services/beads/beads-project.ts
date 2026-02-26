@@ -57,8 +57,12 @@ export async function getProjectOverview(
 
     const cutoff24h = Date.now() - 24 * 3600 * 1000;
 
+    // Filter out epics — they belong in the dedicated epics section
+    const excludeEpics = (issues: BeadsIssue[]) =>
+      issues.filter((i) => i.issue_type !== "epic");
+
     const openBeads = (openResult.success && openResult.data)
-      ? excludeWisps(openResult.data).map((i) => transformBead(i, "project"))
+      ? excludeEpics(excludeWisps(openResult.data)).map((i) => transformBead(i, "project"))
       : [];
 
     // Merge in_progress + hooked + blocked into a single list
@@ -67,10 +71,10 @@ export async function getProjectOverview(
       ...((hookedResult.success && hookedResult.data) ? hookedResult.data : []),
       ...((blockedResult.success && blockedResult.data) ? blockedResult.data : []),
     ];
-    const inProgressBeads = excludeWisps(activeIssues).map((i) => transformBead(i, "project"));
+    const inProgressBeads = excludeEpics(excludeWisps(activeIssues)).map((i) => transformBead(i, "project"));
 
     const recentlyClosedBeads = (closedResult.success && closedResult.data)
-      ? excludeWisps(closedResult.data)
+      ? excludeEpics(excludeWisps(closedResult.data))
           .filter((i) => {
             if (!i.closed_at) return false;
             const closedTime = new Date(i.closed_at).getTime();
