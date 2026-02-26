@@ -574,5 +574,5 @@ extension View {
     let apiClient = APIClient(configuration: config)
 
     return AgentListView(apiClient: apiClient)
-        .crtTheme(.blue)
+        .crtTheme(.starcraft)
 }

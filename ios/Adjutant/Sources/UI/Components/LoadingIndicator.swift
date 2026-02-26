@@ -14,7 +14,7 @@ import SwiftUI
 /// LoadingIndicator(size: .large, text: "LOADING...")
 ///
 /// LoadingIndicator(size: .small)
-///     .crtTheme(.red)
+///     .crtTheme(.starcraft)
 /// ```
 public struct LoadingIndicator: View {
     @Environment(\.crtTheme) private var theme

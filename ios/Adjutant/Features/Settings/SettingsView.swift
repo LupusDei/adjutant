@@ -564,14 +564,7 @@ private struct ThemeButton: View {
     }
 
     private var themeColor: Color {
-        switch theme {
-        case .green: return CRTTheme.ColorTheme.green.primary
-        case .red: return CRTTheme.ColorTheme.red.primary
-        case .blue: return CRTTheme.ColorTheme.blue.primary
-        case .tan: return CRTTheme.ColorTheme.tan.primary
-        case .pink: return CRTTheme.ColorTheme.pink.primary
-        case .purple: return CRTTheme.ColorTheme.purple.primary
-        }
+        theme.colorTheme.primary
     }
 }
 
@@ -917,8 +910,8 @@ private struct AboutRow: View {
         .environmentObject(AppCoordinator())
 }
 
-#Preview("Settings View - Blue Theme") {
+#Preview("Settings View - StarCraft Theme") {
     SettingsView()
         .environmentObject(AppCoordinator())
-        .crtTheme(.blue)
+        .crtTheme(.starcraft)
 }

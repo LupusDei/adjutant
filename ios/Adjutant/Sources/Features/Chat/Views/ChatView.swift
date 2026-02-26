@@ -919,5 +919,5 @@ private struct ChatSearchSheet: View {
     let apiClient = APIClient(configuration: config)
 
     return ChatView(apiClient: apiClient)
-        .crtTheme(.blue)
+        .crtTheme(.starcraft)
 }

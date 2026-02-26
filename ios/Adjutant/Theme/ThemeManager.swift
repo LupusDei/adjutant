@@ -21,7 +21,8 @@ public final class ThemeManager: ObservableObject {
            let theme = CRTTheme.ColorTheme(rawValue: savedTheme) {
             self.currentTheme = theme
         } else {
-            self.currentTheme = .green
+            // Legacy values (green, red, blue, tan, pink, purple) won't match — fall back to pipboy
+            self.currentTheme = .pipboy
         }
     }
 
@@ -62,13 +63,13 @@ extension View {
 /// Property wrapper for theme selection with AppStorage
 @propertyWrapper
 public struct ThemeStorage: DynamicProperty {
-    @AppStorage("selectedCRTTheme") private var themeRawValue: String = CRTTheme.ColorTheme.green.rawValue
+    @AppStorage("selectedCRTTheme") private var themeRawValue: String = CRTTheme.ColorTheme.pipboy.rawValue
 
     public init() {}
 
     public var wrappedValue: CRTTheme.ColorTheme {
         get {
-            CRTTheme.ColorTheme(rawValue: themeRawValue) ?? .green
+            CRTTheme.ColorTheme(rawValue: themeRawValue) ?? .pipboy
         }
         nonmutating set {
             themeRawValue = newValue.rawValue

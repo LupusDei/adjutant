@@ -8,63 +8,138 @@ public enum CRTTheme {
 
     // MARK: - Color Themes
 
-    /// Available CRT phosphor color themes
+    /// Available app-wide color schemes
     public enum ColorTheme: String, CaseIterable, Identifiable {
-        case green = "green"      // GAS-BOY (default)
-        case red = "red"          // BLOOD-BAG
-        case blue = "blue"        // VAULT-TEC
-        case tan = "tan"          // WASTELAND
-        case pink = "pink"        // PINK-MIST
-        case purple = "purple"    // RAD-STORM
+        case pipboy = "pipboy"        // Green CRT (default)
+        case document = "document"    // Clean white/black
+        case starcraft = "starcraft"  // Dark purple + teal
 
         public var id: String { rawValue }
 
         /// Display name for the theme
         public var displayName: String {
             switch self {
-            case .green: return "GAS-BOY"
-            case .red: return "BLOOD-BAG"
-            case .blue: return "VAULT-TEC"
-            case .tan: return "WASTELAND"
-            case .pink: return "PINK-MIST"
-            case .purple: return "RAD-STORM"
+            case .pipboy: return "PIP-BOY"
+            case .document: return "DOCUMENT"
+            case .starcraft: return "STARCRAFT"
             }
         }
 
-        /// Primary phosphor color for this theme
+        /// Primary accent color for this theme
         public var primary: Color {
             switch self {
-            case .green: return Color(red: 0.125, green: 0.761, blue: 0.055)   // #20C20E
-            case .red: return Color(red: 1.0, green: 0.2, blue: 0.2)           // #FF3333
-            case .blue: return Color(red: 0.0, green: 0.667, blue: 1.0)        // #00AAFF
-            case .tan: return Color(red: 0.824, green: 0.706, blue: 0.549)     // #D2B48C
-            case .pink: return Color(red: 1.0, green: 0.412, blue: 0.706)      // #FF69B4
-            case .purple: return Color(red: 0.749, green: 0.580, blue: 1.0)    // #BF94FF
+            case .pipboy: return Color(red: 0.125, green: 0.761, blue: 0.055)     // #20C20E
+            case .document: return Color(red: 0.102, green: 0.102, blue: 0.102)   // #1A1A1A
+            case .starcraft: return Color(red: 0.0, green: 0.898, blue: 0.8)      // #00E5CC
             }
         }
 
         /// Bright/highlighted variant of the primary color
         public var bright: Color {
             switch self {
-            case .green: return Color(red: 0.2, green: 1.0, blue: 0.2)         // #33FF33
-            case .red: return Color(red: 1.0, green: 0.4, blue: 0.4)           // #FF6666
-            case .blue: return Color(red: 0.2, green: 0.8, blue: 1.0)          // #33CCFF
-            case .tan: return Color(red: 0.96, green: 0.87, blue: 0.70)        // #F5DEB3
-            case .pink: return Color(red: 1.0, green: 0.714, blue: 0.757)      // #FFB6C1
-            case .purple: return Color(red: 0.855, green: 0.749, blue: 1.0)    // #DABFFF
+            case .pipboy: return Color(red: 0.2, green: 1.0, blue: 0.2)           // #33FF33
+            case .document: return Color.black                                      // #000000
+            case .starcraft: return Color(red: 0.2, green: 1.0, blue: 0.898)      // #33FFE5
             }
         }
 
         /// Dim/muted variant of the primary color
         public var dim: Color {
             switch self {
-            case .green: return Color(red: 0.039, green: 0.373, blue: 0.027)   // #0A5F07
-            case .red: return Color(red: 0.533, green: 0.0, blue: 0.0)         // #880000
-            case .blue: return Color(red: 0.0, green: 0.267, blue: 0.533)      // #004488
-            case .tan: return Color(red: 0.545, green: 0.271, blue: 0.075)     // #8B4513
-            case .pink: return Color(red: 0.78, green: 0.082, blue: 0.522)     // #C71585
-            case .purple: return Color(red: 0.416, green: 0.051, blue: 0.678)  // #6A0DAD
+            case .pipboy: return Color(red: 0.039, green: 0.373, blue: 0.027)     // #0A5F07
+            case .document: return Color(red: 0.533, green: 0.533, blue: 0.533)   // #888888
+            case .starcraft: return Color(red: 0.0, green: 0.522, blue: 0.467)    // #008577
             }
+        }
+
+        /// Theme-specific background colors
+        public var background: BackgroundSet {
+            switch self {
+            case .pipboy:
+                return BackgroundSet(
+                    screen: Color(red: 0.008, green: 0.02, blue: 0.008),       // #020502
+                    panel: Color(red: 0.016, green: 0.039, blue: 0.016),       // #040A04
+                    elevated: Color(red: 0.024, green: 0.059, blue: 0.024)     // #060F06
+                )
+            case .document:
+                return BackgroundSet(
+                    screen: Color.white,                                         // #FFFFFF
+                    panel: Color(red: 0.961, green: 0.961, blue: 0.961),       // #F5F5F5
+                    elevated: Color(red: 0.922, green: 0.922, blue: 0.922)     // #EBEBEB
+                )
+            case .starcraft:
+                return BackgroundSet(
+                    screen: Color(red: 0.039, green: 0.039, blue: 0.078),      // #0A0A14
+                    panel: Color(red: 0.102, green: 0.063, blue: 0.188),       // #1A1030
+                    elevated: Color(red: 0.133, green: 0.094, blue: 0.271)     // #221845
+                )
+            }
+        }
+
+        /// Whether CRT visual effects (scanlines, glow, flicker, noise) are enabled
+        public var crtEffectsEnabled: Bool {
+            switch self {
+            case .pipboy, .starcraft: return true
+            case .document: return false
+            }
+        }
+
+        /// Whether to use monospace font (true) or system font (false)
+        public var useMonospaceFont: Bool {
+            switch self {
+            case .pipboy, .starcraft: return true
+            case .document: return false
+            }
+        }
+
+        /// Primary text color for this theme
+        public var textPrimary: Color {
+            switch self {
+            case .pipboy: return primary
+            case .document: return Color(red: 0.102, green: 0.102, blue: 0.102)   // #1A1A1A
+            case .starcraft: return primary
+            }
+        }
+
+        /// Secondary/dim text color for this theme
+        public var textSecondary: Color {
+            switch self {
+            case .pipboy: return dim
+            case .document: return Color(red: 0.533, green: 0.533, blue: 0.533)   // #888888
+            case .starcraft: return dim
+            }
+        }
+
+        /// Accent color for interactive elements (buttons, links)
+        public var accent: Color {
+            switch self {
+            case .pipboy: return primary
+            case .document: return Color(red: 0.0, green: 0.4, blue: 0.8)         // #0066CC
+            case .starcraft: return primary
+            }
+        }
+
+        /// Preferred color scheme for system UI elements
+        public var preferredColorScheme: ColorScheme {
+            switch self {
+            case .pipboy, .starcraft: return .dark
+            case .document: return .light
+            }
+        }
+    }
+
+    // MARK: - Background Set
+
+    /// Theme-aware background color set
+    public struct BackgroundSet {
+        public let screen: Color
+        public let panel: Color
+        public let elevated: Color
+
+        public init(screen: Color, panel: Color, elevated: Color) {
+            self.screen = screen
+            self.panel = panel
+            self.elevated = elevated
         }
     }
 
@@ -185,7 +260,7 @@ public enum CRTTheme {
 
 /// Environment key for the current CRT color theme
 private struct CRTThemeKey: EnvironmentKey {
-    static let defaultValue: CRTTheme.ColorTheme = .green
+    static let defaultValue: CRTTheme.ColorTheme = .pipboy
 }
 
 extension EnvironmentValues {

@@ -56,28 +56,25 @@ final class SettingsViewModelTests: XCTestCase {
     // MARK: - Theme Tests
 
     func testSetThemeUpdatesSelectedTheme() {
-        viewModel.setTheme(.blue)
-        XCTAssertEqual(viewModel.selectedTheme, .blue)
+        viewModel.setTheme(.document)
+        XCTAssertEqual(viewModel.selectedTheme, .document)
 
-        viewModel.setTheme(.red)
-        XCTAssertEqual(viewModel.selectedTheme, .red)
+        viewModel.setTheme(.starcraft)
+        XCTAssertEqual(viewModel.selectedTheme, .starcraft)
     }
 
     func testSetThemeUpdatesAppState() {
-        viewModel.setTheme(.purple)
-        XCTAssertEqual(AppState.shared.currentTheme, .purple)
+        viewModel.setTheme(.starcraft)
+        XCTAssertEqual(AppState.shared.currentTheme, .starcraft)
     }
 
     func testAllThemesAvailable() {
-        // Verify all 6 themes are available
+        // Verify all 3 themes are available
         let allThemes = ThemeIdentifier.allCases
-        XCTAssertEqual(allThemes.count, 6)
-        XCTAssertTrue(allThemes.contains(.green))
-        XCTAssertTrue(allThemes.contains(.red))
-        XCTAssertTrue(allThemes.contains(.blue))
-        XCTAssertTrue(allThemes.contains(.tan))
-        XCTAssertTrue(allThemes.contains(.pink))
-        XCTAssertTrue(allThemes.contains(.purple))
+        XCTAssertEqual(allThemes.count, 3)
+        XCTAssertTrue(allThemes.contains(.pipboy))
+        XCTAssertTrue(allThemes.contains(.document))
+        XCTAssertTrue(allThemes.contains(.starcraft))
     }
 
     // MARK: - Notification Tests
@@ -195,21 +192,31 @@ final class SettingsViewModelTests: XCTestCase {
     // MARK: - ThemeIdentifier Tests
 
     func testThemeIdentifierDisplayNames() {
-        XCTAssertEqual(ThemeIdentifier.green.displayName, "GAS-BOY")
-        XCTAssertEqual(ThemeIdentifier.red.displayName, "BLOOD-BAG")
-        XCTAssertEqual(ThemeIdentifier.blue.displayName, "VAULT-TEC")
-        XCTAssertEqual(ThemeIdentifier.tan.displayName, "WASTELAND")
-        XCTAssertEqual(ThemeIdentifier.pink.displayName, "PINK-MIST")
-        XCTAssertEqual(ThemeIdentifier.purple.displayName, "RAD-STORM")
+        XCTAssertEqual(ThemeIdentifier.pipboy.displayName, "PIP-BOY")
+        XCTAssertEqual(ThemeIdentifier.document.displayName, "DOCUMENT")
+        XCTAssertEqual(ThemeIdentifier.starcraft.displayName, "STARCRAFT")
     }
 
     func testThemeIdentifierRawValues() {
-        XCTAssertEqual(ThemeIdentifier.green.rawValue, "green")
-        XCTAssertEqual(ThemeIdentifier.red.rawValue, "red")
-        XCTAssertEqual(ThemeIdentifier.blue.rawValue, "blue")
-        XCTAssertEqual(ThemeIdentifier.tan.rawValue, "tan")
-        XCTAssertEqual(ThemeIdentifier.pink.rawValue, "pink")
-        XCTAssertEqual(ThemeIdentifier.purple.rawValue, "purple")
+        XCTAssertEqual(ThemeIdentifier.pipboy.rawValue, "pipboy")
+        XCTAssertEqual(ThemeIdentifier.document.rawValue, "document")
+        XCTAssertEqual(ThemeIdentifier.starcraft.rawValue, "starcraft")
+    }
+
+    func testThemeIdentifierColorThemeConversion() {
+        XCTAssertEqual(ThemeIdentifier.pipboy.colorTheme, .pipboy)
+        XCTAssertEqual(ThemeIdentifier.document.colorTheme, .document)
+        XCTAssertEqual(ThemeIdentifier.starcraft.colorTheme, .starcraft)
+    }
+
+    func testLegacyThemeMigration() {
+        // Old theme values should gracefully fall back to .pipboy
+        XCTAssertNil(ThemeIdentifier(rawValue: "green"))
+        XCTAssertNil(ThemeIdentifier(rawValue: "red"))
+        XCTAssertNil(ThemeIdentifier(rawValue: "blue"))
+        XCTAssertNil(ThemeIdentifier(rawValue: "tan"))
+        XCTAssertNil(ThemeIdentifier(rawValue: "pink"))
+        XCTAssertNil(ThemeIdentifier(rawValue: "purple"))
     }
 
     // MARK: - Communication Priority Tests
