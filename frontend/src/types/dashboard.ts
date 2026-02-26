@@ -1,4 +1,4 @@
-import type { BeadInfo, CrewMember, GastownStatus, Message, EpicWithProgressResponse } from './index';
+import type { BeadInfo, CrewMember, GastownStatus, Message } from './index';
 
 /** Generic section wrapper — each section can independently succeed or fail */
 export interface DashboardSection<T> {
@@ -12,9 +12,18 @@ export interface BeadCategory {
   totalCount: number;
 }
 
+/** Epic progress item for dashboard (no children array — lighter than EpicWithProgressResponse). */
+export interface EpicWithProgressItem {
+  epic: BeadInfo;
+  totalCount: number;
+  closedCount: number;
+  /** 0–1 decimal */
+  progress: number;
+}
+
 /** Epic category for dashboard display */
 export interface EpicCategory {
-  items: EpicWithProgressResponse[];
+  items: EpicWithProgressItem[];
   totalCount: number;
 }
 

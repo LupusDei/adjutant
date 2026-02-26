@@ -6,7 +6,8 @@
  * entire response.
  */
 
-import type { GastownStatus, CrewMember, Message } from "./index.js";
+import type { CrewMember, Message } from "./index.js";
+import type { SystemStatus } from "../services/status/index.js";
 import type { BeadInfo } from "../services/beads/types.js";
 
 // ============================================================================
@@ -65,7 +66,7 @@ export interface MailSummary {
 
 /** The complete dashboard payload returned by GET /api/dashboard. */
 export interface DashboardResponse {
-  status: DashboardSection<GastownStatus>;
+  status: DashboardSection<SystemStatus>;
   beads: DashboardSection<{
     inProgress: BeadCategory;
     open: BeadCategory;

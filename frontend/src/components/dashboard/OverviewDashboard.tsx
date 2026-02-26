@@ -2,8 +2,9 @@ import React, { useMemo } from 'react';
 import { useDashboard } from '../../hooks/useDashboard';
 import { priorityLabel } from '../../hooks/useDashboardBeads';
 import { EpicCard } from '../epics/EpicCard';
-import type { BeadInfo, AgentType, CrewMemberStatus, EpicWithProgressResponse } from '../../types';
+import type { BeadInfo, AgentType, CrewMemberStatus } from '../../types';
 import type { EpicWithProgress } from '../../types/epics';
+import type { EpicWithProgressItem } from '../../types/dashboard';
 import './DashboardView.css';
 
 // Simple widget wrapper for dashboard sections
@@ -66,7 +67,7 @@ const STATUS_PRIORITY: Record<CrewMemberStatus, number> = {
 };
 
 /** Transform server epic response to frontend EpicWithProgress type */
-function toEpicWithProgress(item: EpicWithProgressResponse): EpicWithProgress {
+function toEpicWithProgress(item: EpicWithProgressItem): EpicWithProgress {
   const isComplete = item.epic.status === 'closed' ||
     (item.totalCount > 0 && item.closedCount === item.totalCount);
   return {

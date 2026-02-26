@@ -55,6 +55,9 @@ function extractServiceData<T>(
   if (result.success && result.data !== undefined) {
     return result.data;
   }
+  if (!result.success && result.error) {
+    throw new Error(result.error.message);
+  }
   return null;
 }
 
@@ -185,12 +188,12 @@ export function createDashboardService(messageStore: MessageStore): DashboardSer
       const results = await Promise.allSettled([
         // 0: status
         getStatusProvider().getStatus(),
-        // 1: beads in_progress
-        listBeads({ status: "in_progress", limit: DASHBOARD_BEAD_LIMIT }),
+        // 1: beads in_progress (no limit — totalCount needs full list; slice in toBeadCategory)
+        listBeads({ status: "in_progress" }),
         // 2: beads open
-        listBeads({ status: "open", limit: DASHBOARD_BEAD_LIMIT }),
+        listBeads({ status: "open" }),
         // 3: beads closed
-        listBeads({ status: "closed", limit: DASHBOARD_BEAD_LIMIT }),
+        listBeads({ status: "closed" }),
         // 4: crew
         getAgents(),
         // 5: unread counts (sync method — wrap in async to catch throws)
@@ -204,7 +207,7 @@ export function createDashboardService(messageStore: MessageStore): DashboardSer
       return {
         status: wrapResult(
           results[0] as PromiseSettledResult<{ success: boolean; data?: SystemStatus; error?: { message: string } }>,
-          (r) => extractServiceData(r) as DashboardResponse["status"]["data"],
+          (r) => extractServiceData(r),
         ),
         beads: wrapBeadsResult(
           results[1] as PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
