@@ -11,7 +11,9 @@ import { CRTScreen } from "./components/shared/CRTScreen";
 import { QuickInput } from "./components/shared/QuickInput";
 import { KeyboardDismiss } from "./components/shared/KeyboardDismiss";
 import { RigFilter } from "./components/shared/RigFilter";
+import { ProjectSelector } from "./components/shared/ProjectSelector";
 import { RigProvider } from "./contexts/RigContext";
+import { ProjectProvider } from "./contexts/ProjectContext";
 import { CommunicationProvider } from "./contexts/CommunicationContext";
 import { ModeProvider, useVisibleTabs } from "./contexts/ModeContext";
 import { DashboardView } from "./components/dashboard/OverviewDashboard";
@@ -92,6 +94,7 @@ function AppContent() {
           <h1 className="crt-glow">ADJUTANT</h1>
           <div className="header-controls">
             <OverseerNotificationStatus />
+            <ProjectSelector />
             <RigFilter />
             <NuclearPowerButton comingSoon={true} />
           </div>
@@ -194,11 +197,13 @@ function AppContent() {
 function App() {
   return (
     <ModeProvider>
-      <RigProvider>
-        <CommunicationProvider>
-          <AppContent />
-        </CommunicationProvider>
-      </RigProvider>
+      <ProjectProvider>
+        <RigProvider>
+          <CommunicationProvider>
+            <AppContent />
+          </CommunicationProvider>
+        </RigProvider>
+      </ProjectProvider>
     </ModeProvider>
   );
 }

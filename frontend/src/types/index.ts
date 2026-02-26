@@ -385,6 +385,33 @@ export interface SessionInfo {
   lastActivity: string;
 }
 
+// ============================================================================
+// Project Types
+// ============================================================================
+
+/** A registered project in the system. */
+export interface ProjectInfo {
+  id: string;
+  name: string;
+  path: string;
+  gitRemote?: string;
+  mode: 'swarm' | 'gastown';
+  sessions: string[];
+  createdAt: string;
+  active: boolean;
+  hasBeads?: boolean;
+}
+
+/** Health check result for a project. */
+export interface ProjectHealth {
+  projectId: string;
+  pathExists: boolean;
+  hasGit: boolean;
+  hasBeads: boolean;
+  gitRemote?: string;
+  status: 'healthy' | 'degraded' | 'stale';
+}
+
 export * from './epics';
 export * from './kanban';
 export * from './beads-graph';

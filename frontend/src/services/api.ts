@@ -19,6 +19,8 @@ import type {
   UnreadCount,
   Proposal,
   SessionInfo,
+  ProjectInfo,
+  ProjectHealth,
 } from '../types';
 import type { DashboardResponse } from '../types/dashboard';
 import type {
@@ -460,8 +462,27 @@ export const api = {
    * Project operations.
    */
   projects: {
-    async list(): Promise<{ id: string; name: string; path: string; mode: string; active: boolean }[]> {
+    async list(): Promise<ProjectInfo[]> {
       return apiFetch('/projects');
+    },
+
+    async get(id: string): Promise<ProjectInfo> {
+      return apiFetch(`/projects/${encodeURIComponent(id)}`);
+    },
+
+    async discover(maxDepth?: number): Promise<{ discovered: number; projects: ProjectInfo[] }> {
+      return apiFetch('/projects/discover', {
+        method: 'POST',
+        body: maxDepth !== undefined ? { maxDepth } : {},
+      });
+    },
+
+    async health(id: string): Promise<ProjectHealth> {
+      return apiFetch(`/projects/${encodeURIComponent(id)}/health`);
+    },
+
+    async activate(id: string): Promise<ProjectInfo> {
+      return apiFetch(`/projects/${encodeURIComponent(id)}/activate`, { method: 'POST' });
     },
   },
 
