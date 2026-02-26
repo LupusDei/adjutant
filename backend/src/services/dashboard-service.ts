@@ -1,0 +1,231 @@
+/**
+ * Dashboard service — fetches all dashboard sections in parallel.
+ *
+ * Uses Promise.allSettled so individual section failures don't
+ * kill the entire response.
+ */
+
+import { getStatusProvider } from "./status/index.js";
+import type { SystemStatus } from "./status/index.js";
+import { getAgents } from "./agents-service.js";
+import { listBeads, listEpicsWithProgress } from "./beads/index.js";
+import type { BeadInfo, EpicWithChildren, BeadsServiceResult } from "./beads/types.js";
+import { listMail } from "./mail-service.js";
+import type { MessageStore } from "./message-store.js";
+import type {
+  DashboardResponse,
+  DashboardSection,
+  BeadCategory,
+  EpicWithProgressItem,
+  MailSummary,
+} from "../types/dashboard.js";
+import type { CrewMember, Message } from "../types/index.js";
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const DASHBOARD_BEAD_LIMIT = 5;
+const DASHBOARD_EPIC_LIMIT = 5;
+const DASHBOARD_MAIL_LIMIT = 5;
+
+// ============================================================================
+// Result Wrappers
+// ============================================================================
+
+/** Wrap a fulfilled/rejected PromiseSettledResult into a DashboardSection. */
+function wrapResult<T, R>(
+  result: PromiseSettledResult<T>,
+  transform: (value: T) => R | null,
+): DashboardSection<R> {
+  if (result.status === "fulfilled") {
+    const data = transform(result.value);
+    return { data };
+  }
+  return {
+    data: null,
+    error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+  };
+}
+
+/** Extract data from a service result (success/data/error pattern). */
+function extractServiceData<T>(
+  result: { success: boolean; data?: T; error?: { message: string } },
+): T | null {
+  if (result.success && result.data !== undefined) {
+    return result.data;
+  }
+  return null;
+}
+
+/** Build a BeadCategory from a beads service result. */
+function toBeadCategory(result: BeadsServiceResult<BeadInfo[]>): BeadCategory {
+  const items = result.success && result.data ? result.data.slice(0, DASHBOARD_BEAD_LIMIT) : [];
+  const totalCount = result.success && result.data ? result.data.length : 0;
+  return { items, totalCount };
+}
+
+/** Wrap three bead results into the combined beads section. */
+function wrapBeadsResult(
+  inProgressResult: PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
+  openResult: PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
+  closedResult: PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
+): DashboardSection<{ inProgress: BeadCategory; open: BeadCategory; closed: BeadCategory }> {
+  // If any of the three promises rejected, report an error
+  const errors: string[] = [];
+  for (const r of [inProgressResult, openResult, closedResult]) {
+    if (r.status === "rejected") {
+      errors.push(r.reason instanceof Error ? r.reason.message : String(r.reason));
+    }
+  }
+  if (errors.length === 3) {
+    return { data: null, error: errors.join("; ") };
+  }
+
+  const inProgress =
+    inProgressResult.status === "fulfilled"
+      ? toBeadCategory(inProgressResult.value)
+      : { items: [], totalCount: 0 };
+  const open =
+    openResult.status === "fulfilled"
+      ? toBeadCategory(openResult.value)
+      : { items: [], totalCount: 0 };
+  const closed =
+    closedResult.status === "fulfilled"
+      ? toBeadCategory(closedResult.value)
+      : { items: [], totalCount: 0 };
+
+  return {
+    data: { inProgress, open, closed },
+    ...(errors.length > 0 ? { error: errors.join("; ") } : {}),
+  };
+}
+
+/** Wrap unread counts result. */
+function wrapUnreadCounts(
+  result: PromiseSettledResult<Array<{ agentId: string; count: number }>>,
+): DashboardSection<Record<string, number>> {
+  return wrapResult(result, (counts) => {
+    const map: Record<string, number> = {};
+    for (const c of counts) {
+      map[c.agentId] = c.count;
+    }
+    return map;
+  });
+}
+
+/** Wrap epics result — split into inProgress and completed. */
+function wrapEpicsResult(
+  result: PromiseSettledResult<BeadsServiceResult<EpicWithChildren[]>>,
+): DashboardSection<{ inProgress: { items: EpicWithProgressItem[]; totalCount: number }; completed: { items: EpicWithProgressItem[]; totalCount: number } }> {
+  return wrapResult(result, (serviceResult) => {
+    const epics = serviceResult.success && serviceResult.data ? serviceResult.data : [];
+
+    const toProgressItem = (e: EpicWithChildren): EpicWithProgressItem => ({
+      epic: e.epic,
+      totalCount: e.totalCount,
+      closedCount: e.closedCount,
+      progress: e.progress,
+    });
+
+    const inProgressEpics = epics.filter((e) => e.epic.status !== "closed");
+    const completedEpics = epics.filter((e) => e.epic.status === "closed");
+
+    return {
+      inProgress: {
+        items: inProgressEpics.slice(0, DASHBOARD_EPIC_LIMIT).map(toProgressItem),
+        totalCount: inProgressEpics.length,
+      },
+      completed: {
+        items: completedEpics.slice(0, DASHBOARD_EPIC_LIMIT).map(toProgressItem),
+        totalCount: completedEpics.length,
+      },
+    };
+  });
+}
+
+/** Wrap mail result — compute summary server-side. */
+function wrapMailResult(
+  result: PromiseSettledResult<{ success: boolean; data?: Message[]; error?: { message: string } }>,
+): DashboardSection<MailSummary> {
+  return wrapResult(result, (serviceResult) => {
+    const messages = serviceResult.success && serviceResult.data ? serviceResult.data : [];
+    if (!serviceResult.success) return null;
+
+    // Group by threadId to count threads
+    const threadIds = new Set<string>();
+    let unreadCount = 0;
+    for (const msg of messages) {
+      threadIds.add(msg.threadId);
+      if (!msg.read) unreadCount++;
+    }
+
+    // Get most recent messages (already sorted newest first by mail service)
+    const recentMessages = messages.slice(0, DASHBOARD_MAIL_LIMIT);
+
+    return {
+      recentMessages,
+      totalCount: threadIds.size,
+      unreadCount,
+    };
+  });
+}
+
+// ============================================================================
+// Service Factory
+// ============================================================================
+
+export interface DashboardService {
+  fetchDashboard(): Promise<DashboardResponse>;
+}
+
+export function createDashboardService(messageStore: MessageStore): DashboardService {
+  return {
+    async fetchDashboard(): Promise<DashboardResponse> {
+      const results = await Promise.allSettled([
+        // 0: status
+        getStatusProvider().getStatus(),
+        // 1: beads in_progress
+        listBeads({ status: "in_progress", limit: DASHBOARD_BEAD_LIMIT }),
+        // 2: beads open
+        listBeads({ status: "open", limit: DASHBOARD_BEAD_LIMIT }),
+        // 3: beads closed
+        listBeads({ status: "closed", limit: DASHBOARD_BEAD_LIMIT }),
+        // 4: crew
+        getAgents(),
+        // 5: unread counts (sync method, wrapped in promise)
+        Promise.resolve(messageStore.getUnreadCounts()),
+        // 6: epics with progress
+        listEpicsWithProgress({ status: "all" }),
+        // 7: mail
+        listMail(null),
+      ]);
+
+      return {
+        status: wrapResult(
+          results[0] as PromiseSettledResult<{ success: boolean; data?: SystemStatus; error?: { message: string } }>,
+          (r) => extractServiceData(r) as DashboardResponse["status"]["data"],
+        ),
+        beads: wrapBeadsResult(
+          results[1] as PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
+          results[2] as PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
+          results[3] as PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
+        ),
+        crew: wrapResult(
+          results[4] as PromiseSettledResult<{ success: boolean; data?: CrewMember[]; error?: { message: string } }>,
+          (r) => extractServiceData(r),
+        ),
+        unreadCounts: wrapUnreadCounts(
+          results[5] as PromiseSettledResult<Array<{ agentId: string; count: number }>>,
+        ),
+        epics: wrapEpicsResult(
+          results[6] as PromiseSettledResult<BeadsServiceResult<EpicWithChildren[]>>,
+        ),
+        mail: wrapMailResult(
+          results[7] as PromiseSettledResult<{ success: boolean; data?: Message[]; error?: { message: string } }>,
+        ),
+        timestamp: new Date().toISOString(),
+      };
+    },
+  };
+}
