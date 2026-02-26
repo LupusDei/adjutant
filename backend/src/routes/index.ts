@@ -21,3 +21,4 @@ export { permissionsRouter } from "./permissions.js";
 export { costsRouter } from "./costs.js";
 export { createMessagesRouter } from "./messages.js";
 export { createProposalsRouter } from "./proposals.js";
+export { createDashboardRouter } from "./dashboard.js";
