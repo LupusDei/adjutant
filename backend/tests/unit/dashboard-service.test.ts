@@ -169,9 +169,7 @@ describe("DashboardService", () => {
 
     expect(result.beads.data).toBeTruthy();
     expect(result.beads.data!.inProgress.items).toHaveLength(1);
-    // open category merges open + hooked beads
-    expect(result.beads.data!.open.items).toHaveLength(2);
-    expect(result.beads.data!.open.totalCount).toBe(2);
+    expect(result.beads.data!.open.items).toHaveLength(1);
     expect(result.beads.data!.closed.items).toHaveLength(1);
 
     expect(result.crew.data).toHaveLength(1);

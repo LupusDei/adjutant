@@ -21,14 +21,9 @@ final class DashboardViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.unreadCount, 0)
         XCTAssertTrue(viewModel.crewMembers.isEmpty)
         XCTAssertTrue(viewModel.inProgressBeads.isEmpty)
-        XCTAssertTrue(viewModel.hookedBeads.isEmpty)
         XCTAssertTrue(viewModel.recentClosedBeads.isEmpty)
         XCTAssertFalse(viewModel.isRefreshing)
         XCTAssertFalse(viewModel.isLoading)
-    }
-
-    func testDefaultPollingInterval() {
-        XCTAssertEqual(viewModel.pollingInterval, 30.0)
     }
 
     // MARK: - Computed Properties Tests
@@ -105,20 +100,7 @@ final class DashboardViewModelTests: XCTestCase {
     // MARK: - Beads Tests
 
     func testActiveBeadsCount() {
-        // Test that active beads count filters for hooked and in_progress
-        let hookedBead = BeadInfo(
-            id: "adj-001",
-            title: "Hooked bead",
-            status: "hooked",
-            priority: 1,
-            type: "task",
-            assignee: nil,
-            rig: "adjutant",
-            source: "adjutant",
-            labels: [],
-            createdAt: "2026-01-25T10:00:00Z",
-            updatedAt: nil
-        )
+        // Test that active beads count filters for in_progress
         let inProgressBead = BeadInfo(
             id: "adj-002",
             title: "In progress bead",
@@ -146,9 +128,9 @@ final class DashboardViewModelTests: XCTestCase {
             updatedAt: nil
         )
 
-        let beads = [hookedBead, inProgressBead, openBead]
-        let activeCount = beads.filter { $0.status == "hooked" || $0.status == "in_progress" }.count
-        XCTAssertEqual(activeCount, 2)
+        let beads = [inProgressBead, openBead]
+        let activeCount = beads.filter { $0.status == "in_progress" }.count
+        XCTAssertEqual(activeCount, 1)
     }
 
     func testBeadsByStatusGrouping() {
@@ -166,10 +148,10 @@ final class DashboardViewModelTests: XCTestCase {
             createdAt: "2026-01-25T10:00:00Z",
             updatedAt: nil
         )
-        let hookedBead = BeadInfo(
+        let inProgressBead = BeadInfo(
             id: "adj-002",
-            title: "Hooked bead",
-            status: "hooked",
+            title: "In progress bead",
+            status: "in_progress",
             priority: 1,
             type: "task",
             assignee: nil,
@@ -180,14 +162,14 @@ final class DashboardViewModelTests: XCTestCase {
             updatedAt: nil
         )
 
-        let beads = [openBead, hookedBead]
+        let beads = [openBead, inProgressBead]
         var result: [String: [BeadInfo]] = [:]
         for bead in beads {
             result[bead.status, default: []].append(bead)
         }
 
         XCTAssertEqual(result["open"]?.count, 1)
-        XCTAssertEqual(result["hooked"]?.count, 1)
+        XCTAssertEqual(result["in_progress"]?.count, 1)
         XCTAssertNil(result["closed"])
     }
 

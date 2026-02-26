@@ -68,37 +68,19 @@ function toBeadCategory(result: BeadsServiceResult<BeadInfo[]>): BeadCategory {
   return { items, totalCount };
 }
 
-/** Merge two bead service results into a single BeadCategory. */
-function mergeBeadCategories(
-  ...results: Array<PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>>
-): BeadCategory {
-  const allItems: BeadInfo[] = [];
-  for (const r of results) {
-    if (r.status === "fulfilled" && r.value.success && r.value.data) {
-      allItems.push(...r.value.data);
-    }
-  }
-  return {
-    items: allItems.slice(0, DASHBOARD_BEAD_LIMIT),
-    totalCount: allItems.length,
-  };
-}
-
-/** Wrap bead results into the combined beads section. */
+/** Wrap three bead results into the combined beads section. */
 function wrapBeadsResult(
   inProgressResult: PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
   openResult: PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
-  hookedResult: PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
   closedResult: PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
 ): DashboardSection<{ inProgress: BeadCategory; open: BeadCategory; closed: BeadCategory }> {
-  const allResults = [inProgressResult, openResult, hookedResult, closedResult];
   const errors: string[] = [];
-  for (const r of allResults) {
+  for (const r of [inProgressResult, openResult, closedResult]) {
     if (r.status === "rejected") {
       errors.push(r.reason instanceof Error ? r.reason.message : String(r.reason));
     }
   }
-  if (errors.length === allResults.length) {
+  if (errors.length === 3) {
     return { data: null, error: errors.join("; ") };
   }
 
@@ -106,8 +88,10 @@ function wrapBeadsResult(
     inProgressResult.status === "fulfilled"
       ? toBeadCategory(inProgressResult.value)
       : { items: [], totalCount: 0 };
-  // Merge open + hooked into the "open" category — iOS filters by status string
-  const open = mergeBeadCategories(openResult, hookedResult);
+  const open =
+    openResult.status === "fulfilled"
+      ? toBeadCategory(openResult.value)
+      : { items: [], totalCount: 0 };
   const closed =
     closedResult.status === "fulfilled"
       ? toBeadCategory(closedResult.value)
@@ -207,17 +191,15 @@ export function createDashboardService(messageStore: MessageStore): DashboardSer
         listBeads({ status: "in_progress" }),
         // 2: beads open
         listBeads({ status: "open" }),
-        // 3: beads hooked (merged into open category for clients that filter by status)
-        listBeads({ status: "hooked" }),
-        // 4: beads closed
+        // 3: beads closed
         listBeads({ status: "closed" }),
-        // 5: crew
+        // 4: crew
         getAgents(),
-        // 6: unread counts (sync method — wrap in async to catch throws)
+        // 5: unread counts (sync method — wrap in async to catch throws)
         (async () => messageStore.getUnreadCounts())(),
-        // 7: epics with progress
+        // 6: epics with progress
         listEpicsWithProgress({ status: "all" }),
-        // 8: mail
+        // 7: mail
         listMail(null),
       ]);
 
@@ -230,20 +212,19 @@ export function createDashboardService(messageStore: MessageStore): DashboardSer
           results[1] as PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
           results[2] as PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
           results[3] as PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
-          results[4] as PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
         ),
         crew: wrapResult(
-          results[5] as PromiseSettledResult<{ success: boolean; data?: CrewMember[]; error?: { message: string } }>,
+          results[4] as PromiseSettledResult<{ success: boolean; data?: CrewMember[]; error?: { message: string } }>,
           (r) => extractServiceData(r),
         ),
         unreadCounts: wrapUnreadCounts(
-          results[6] as PromiseSettledResult<Array<{ agentId: string; count: number }>>,
+          results[5] as PromiseSettledResult<Array<{ agentId: string; count: number }>>,
         ),
         epics: wrapEpicsResult(
-          results[7] as PromiseSettledResult<BeadsServiceResult<EpicWithChildren[]>>,
+          results[6] as PromiseSettledResult<BeadsServiceResult<EpicWithChildren[]>>,
         ),
         mail: wrapMailResult(
-          results[8] as PromiseSettledResult<{ success: boolean; data?: Message[]; error?: { message: string } }>,
+          results[7] as PromiseSettledResult<{ success: boolean; data?: Message[]; error?: { message: string } }>,
         ),
         timestamp: new Date().toISOString(),
       };

@@ -25,9 +25,6 @@ final class DashboardViewModel: BaseViewModel {
     /// Beads that are in progress
     @Published private(set) var inProgressBeads: [BeadInfo] = []
 
-    /// Beads that are hooked
-    @Published private(set) var hookedBeads: [BeadInfo] = []
-
     /// Recently closed beads
     @Published private(set) var recentClosedBeads: [BeadInfo] = []
 
@@ -165,14 +162,6 @@ final class DashboardViewModel: BaseViewModel {
             .sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
         self.inProgressBeads = Array(inProgress.prefix(maxBeadsPerColumn))
 
-        if AppState.shared.deploymentMode == .swarm {
-            self.hookedBeads = []
-        } else {
-            let hooked = filtered.filter { $0.status == "hooked" }
-                .sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
-            self.hookedBeads = Array(hooked.prefix(maxBeadsPerColumn))
-        }
-
         let closed = filtered.filter { $0.status == "closed" }
             .sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
         self.recentClosedBeads = Array(closed.prefix(maxBeadsPerColumn))
@@ -280,19 +269,14 @@ final class DashboardViewModel: BaseViewModel {
         crewMembers.filter { $0.status == .stuck || $0.status == .blocked }.count
     }
 
-    /// Total count of active beads (in progress + hooked)
+    /// Total count of active beads (in progress)
     var activeBeadsCount: Int {
-        inProgressBeads.count + hookedBeads.count
+        inProgressBeads.count
     }
 
     /// Count of beads in progress (for Live Activity)
     var beadsInProgress: Int {
         inProgressBeads.count
-    }
-
-    /// Count of beads hooked (for Live Activity)
-    var beadsHooked: Int {
-        hookedBeads.count
     }
 
     // MARK: - Private Helpers

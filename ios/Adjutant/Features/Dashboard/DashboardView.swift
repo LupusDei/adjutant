@@ -23,7 +23,6 @@ struct DashboardView: View {
                 // Beads Kanban Preview (full width at top)
                 BeadsKanbanPreviewWidget(
                     inProgressBeads: viewModel.inProgressBeads,
-                    hookedBeads: viewModel.hookedBeads,
                     recentClosedBeads: viewModel.recentClosedBeads,
                     onTap: { coordinator.navigate(to: .beads) },
                     onBeadTap: { bead in
@@ -88,17 +87,11 @@ struct DashboardView: View {
 
 private struct BeadsKanbanPreviewWidget: View {
     @Environment(\.crtTheme) private var theme
-    @ObservedObject private var appState = AppState.shared
 
     let inProgressBeads: [BeadInfo]
-    let hookedBeads: [BeadInfo]
     let recentClosedBeads: [BeadInfo]
     let onTap: () -> Void
     let onBeadTap: (BeadInfo) -> Void
-
-    private var isSwarm: Bool {
-        appState.deploymentMode == .swarm
-    }
 
     var body: some View {
         CRTCard(style: .standard) {
@@ -112,9 +105,8 @@ private struct BeadsKanbanPreviewWidget: View {
 
                         Spacer()
 
-                        let totalActive = inProgressBeads.count + hookedBeads.count
-                        if totalActive > 0 {
-                            BadgeView("\(totalActive) ACTIVE", style: .status(.success))
+                        if inProgressBeads.count > 0 {
+                            BadgeView("\(inProgressBeads.count) ACTIVE", style: .status(.success))
                         }
 
                         Image(systemName: "chevron.right")
@@ -128,7 +120,7 @@ private struct BeadsKanbanPreviewWidget: View {
                     .background(theme.dim.opacity(0.3))
 
                 // Horizontally scrollable kanban columns
-                if inProgressBeads.isEmpty && hookedBeads.isEmpty && recentClosedBeads.isEmpty {
+                if inProgressBeads.isEmpty && recentClosedBeads.isEmpty {
                     EmptyStateView(
                         title: "NO ACTIVE BEADS",
                         icon: "tray"
@@ -138,16 +130,6 @@ private struct BeadsKanbanPreviewWidget: View {
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(alignment: .top, spacing: CRTTheme.Spacing.md) {
-                            // Hooked column (hidden in Swarm mode)
-                            if !isSwarm {
-                                KanbanColumnPreview(
-                                    title: "HOOKED",
-                                    beads: hookedBeads,
-                                    color: CRTTheme.State.info,
-                                    onBeadTap: onBeadTap
-                                )
-                            }
-
                             // In Progress column
                             KanbanColumnPreview(
                                 title: "IN PROGRESS",
