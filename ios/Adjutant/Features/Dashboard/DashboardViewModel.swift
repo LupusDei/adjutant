@@ -83,8 +83,9 @@ final class DashboardViewModel: BaseViewModel {
 
     override func onAppear() {
         // Don't call super.onAppear() — we manage our own single fetch
-        Task<Void, Never> {
-            await refresh()
+        // Use startTrackedTask so the task is cancelled on onDisappear
+        startTrackedTask {
+            await self.refresh()
         }
     }
 
@@ -104,9 +105,13 @@ final class DashboardViewModel: BaseViewModel {
     private func fetchDashboard() async {
         do {
             let response = try await apiClient.getDashboard()
+            errorMessage = nil
             processDashboardResponse(response)
+        } catch is CancellationError {
+            // Task was cancelled (e.g., view disappeared), don't update state
         } catch {
-            // Keep existing data on error
+            // Keep existing data but surface the error
+            handleError(error)
         }
     }
 
