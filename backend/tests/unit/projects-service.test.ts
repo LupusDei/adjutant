@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
 import { execSync } from "child_process";
 import { join } from "path";
 import { homedir } from "os";
@@ -10,6 +10,8 @@ vi.mock("fs", () => ({
   mkdirSync: vi.fn(),
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
+  readdirSync: vi.fn(),
+  statSync: vi.fn(),
 }));
 
 vi.mock("child_process", () => ({
@@ -33,6 +35,8 @@ import {
   createProject,
   activateProject,
   deleteProject,
+  discoverLocalProjects,
+  checkProjectHealth,
 } from "../../src/services/projects-service.js";
 import type { Project, ProjectsStore } from "../../src/services/projects-service.js";
 
@@ -302,6 +306,200 @@ describe("projects-service", () => {
       const result = deleteProject("nonexistent");
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("NOT_FOUND");
+    });
+  });
+
+  // ===========================================================================
+  // discoverLocalProjects
+  // ===========================================================================
+
+  describe("discoverLocalProjects", () => {
+    const PROJECT_ROOT = process.cwd();
+
+    function mockDiscoverFs(dirs: Record<string, { hasGit?: boolean; hasBeads?: boolean; children?: string[] }>) {
+      vi.mocked(existsSync).mockImplementation((p: unknown) => {
+        const ps = String(p);
+        if (ps === ADJUTANT_DIR || ps === PROJECT_ROOT) return true;
+        if (ps === PROJECTS_FILE) return false;
+        // Check .git and .beads/beads.db
+        for (const [dir, opts] of Object.entries(dirs)) {
+          const absDir = join(PROJECT_ROOT, dir);
+          if (ps === absDir) return true;
+          if (ps === join(absDir, ".git") && opts.hasGit) return true;
+          if (ps === join(absDir, ".beads", "beads.db") && opts.hasBeads) return true;
+        }
+        // Root git and beads
+        if (ps === join(PROJECT_ROOT, ".git")) return true;
+        if (ps === join(PROJECT_ROOT, ".beads", "beads.db")) return false;
+        return false;
+      });
+
+      vi.mocked(readdirSync).mockImplementation((p: unknown) => {
+        const ps = String(p);
+        if (ps === PROJECT_ROOT) return Object.keys(dirs) as unknown as ReturnType<typeof readdirSync>;
+        // Check if any dir has children
+        for (const [dir, opts] of Object.entries(dirs)) {
+          if (ps === join(PROJECT_ROOT, dir) && opts.children) {
+            return opts.children as unknown as ReturnType<typeof readdirSync>;
+          }
+        }
+        return [] as unknown as ReturnType<typeof readdirSync>;
+      });
+
+      vi.mocked(statSync).mockImplementation((_p: unknown) => {
+        return { isDirectory: () => true } as ReturnType<typeof statSync>;
+      });
+    }
+
+    it("should discover directories with .git", () => {
+      mockDiscoverFs({
+        "project-a": { hasGit: true },
+        "not-a-project": {},
+      });
+
+      const result = discoverLocalProjects();
+      expect(result.success).toBe(true);
+      // Root + project-a discovered (not-a-project skipped)
+      const names = result.data!.map((p) => p.name);
+      expect(names).toContain("project-a");
+      expect(names).not.toContain("not-a-project");
+    });
+
+    it("should discover directories with .beads/beads.db", () => {
+      mockDiscoverFs({
+        "beads-only-project": { hasBeads: true },
+      });
+
+      const result = discoverLocalProjects();
+      expect(result.success).toBe(true);
+      const names = result.data!.map((p) => p.name);
+      expect(names).toContain("beads-only-project");
+    });
+
+    it("should set hasBeads on projects with .beads/beads.db", () => {
+      mockDiscoverFs({
+        "with-beads": { hasGit: true, hasBeads: true },
+        "without-beads": { hasGit: true },
+      });
+
+      const result = discoverLocalProjects();
+      expect(result.success).toBe(true);
+
+      const withBeads = result.data!.find((p) => p.name === "with-beads");
+      const withoutBeads = result.data!.find((p) => p.name === "without-beads");
+      expect(withBeads?.hasBeads).toBe(true);
+      expect(withoutBeads?.hasBeads).toBe(false);
+    });
+
+    it("should respect maxDepth option", () => {
+      // With maxDepth 0, should only register root, not scan children
+      mockDiscoverFs({
+        "child-project": { hasGit: true },
+      });
+
+      const result = discoverLocalProjects({ maxDepth: 0 });
+      expect(result.success).toBe(true);
+      // Only root should be discovered, not child-project
+      const names = result.data!.map((p) => p.name);
+      expect(names).not.toContain("child-project");
+    });
+
+    it("should clamp maxDepth to MAX_SCAN_DEPTH (3)", () => {
+      mockDiscoverFs({
+        "child": { hasGit: true },
+      });
+
+      // maxDepth 100 should be clamped to 3 (but still work)
+      const result = discoverLocalProjects({ maxDepth: 100 });
+      expect(result.success).toBe(true);
+    });
+  });
+
+  // ===========================================================================
+  // checkProjectHealth
+  // ===========================================================================
+
+  describe("checkProjectHealth", () => {
+    it("should return healthy for project with path and git", () => {
+      const project = createMockProject({ id: "h1", path: "/Users/test/code/healthy" });
+      mockStoreExists({ projects: [project] });
+      vi.mocked(existsSync).mockImplementation((p: unknown) => {
+        const ps = String(p);
+        if (ps === ADJUTANT_DIR || ps === PROJECTS_FILE) return true;
+        if (ps === "/Users/test/code/healthy") return true;
+        if (ps === "/Users/test/code/healthy/.git") return true;
+        if (ps === join("/Users/test/code/healthy", ".beads", "beads.db")) return false;
+        return false;
+      });
+
+      const result = checkProjectHealth("h1");
+      expect(result.success).toBe(true);
+      expect(result.data!.status).toBe("healthy");
+      expect(result.data!.pathExists).toBe(true);
+      expect(result.data!.hasGit).toBe(true);
+      expect(result.data!.hasBeads).toBe(false);
+    });
+
+    it("should return stale for project with missing path", () => {
+      const project = createMockProject({ id: "s1", path: "/Users/test/code/gone" });
+      mockStoreExists({ projects: [project] });
+      vi.mocked(existsSync).mockImplementation((p: unknown) => {
+        const ps = String(p);
+        if (ps === ADJUTANT_DIR || ps === PROJECTS_FILE) return true;
+        if (ps === "/Users/test/code/gone") return false;
+        return false;
+      });
+
+      const result = checkProjectHealth("s1");
+      expect(result.success).toBe(true);
+      expect(result.data!.status).toBe("stale");
+      expect(result.data!.pathExists).toBe(false);
+    });
+
+    it("should return degraded for project without git", () => {
+      const project = createMockProject({ id: "d1", path: "/Users/test/code/no-git" });
+      mockStoreExists({ projects: [project] });
+      vi.mocked(existsSync).mockImplementation((p: unknown) => {
+        const ps = String(p);
+        if (ps === ADJUTANT_DIR || ps === PROJECTS_FILE) return true;
+        if (ps === "/Users/test/code/no-git") return true;
+        if (ps === "/Users/test/code/no-git/.git") return false;
+        if (ps === join("/Users/test/code/no-git", ".beads", "beads.db")) return true;
+        return false;
+      });
+
+      const result = checkProjectHealth("d1");
+      expect(result.success).toBe(true);
+      expect(result.data!.status).toBe("degraded");
+      expect(result.data!.hasBeads).toBe(true);
+    });
+
+    it("should return NOT_FOUND for unknown project", () => {
+      mockStoreExists({ projects: [] });
+
+      const result = checkProjectHealth("unknown");
+      expect(result.success).toBe(false);
+      expect(result.error!.code).toBe("NOT_FOUND");
+    });
+
+    it("should update hasBeads in store when it changes", () => {
+      const project = createMockProject({ id: "u1", path: "/Users/test/code/proj", hasBeads: false });
+      mockStoreExists({ projects: [project] });
+      vi.mocked(existsSync).mockImplementation((p: unknown) => {
+        const ps = String(p);
+        if (ps === ADJUTANT_DIR || ps === PROJECTS_FILE) return true;
+        if (ps === "/Users/test/code/proj") return true;
+        if (ps === "/Users/test/code/proj/.git") return true;
+        if (ps === join("/Users/test/code/proj", ".beads", "beads.db")) return true;
+        return false;
+      });
+
+      const result = checkProjectHealth("u1");
+      expect(result.success).toBe(true);
+      expect(result.data!.hasBeads).toBe(true);
+
+      // Verify store was saved (hasBeads changed from false to true)
+      expect(writeFileSync).toHaveBeenCalled();
     });
   });
 });

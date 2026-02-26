@@ -12,7 +12,7 @@ import { execSync } from "child_process";
 import { join, resolve, basename } from "path";
 import { randomUUID } from "crypto";
 import { homedir } from "os";
-import { logInfo, logError } from "../utils/index.js";
+import { logInfo, logError, logDebug } from "../utils/index.js";
 
 // ============================================================================
 // Types
@@ -48,6 +48,22 @@ export interface CreateProjectInput {
   empty?: boolean | undefined;
 }
 
+export interface DiscoverOptions {
+  /** Max directory depth to scan (default 1, max 3). Depth 0 = root only. */
+  maxDepth?: number | undefined;
+}
+
+export interface ProjectHealth {
+  projectId: string;
+  pathExists: boolean;
+  hasGit: boolean;
+  hasBeads: boolean;
+  /** Git remote URL, if available */
+  gitRemote?: string | undefined;
+  /** Overall health: "healthy" if path + git exist, "stale" if path missing, "degraded" if path exists but git missing */
+  status: "healthy" | "degraded" | "stale";
+}
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -55,6 +71,9 @@ export interface CreateProjectInput {
 const ADJUTANT_DIR = join(homedir(), ".adjutant");
 const PROJECTS_FILE = join(ADJUTANT_DIR, "projects.json");
 const DEFAULT_PROJECTS_BASE = join(homedir(), "projects");
+const DEFAULT_SCAN_DEPTH = 1;
+const MAX_SCAN_DEPTH = 3;
+const SKIP_DIRS = new Set(["node_modules", ".git", ".beads", "dist", "build", ".next", "__pycache__"]);
 
 // ============================================================================
 // Persistence
@@ -124,6 +143,68 @@ function nameFromCloneUrl(url: string): string {
 }
 
 // ============================================================================
+// Project Detection Helpers
+// ============================================================================
+
+/**
+ * Check if a directory contains a beads database (.beads/beads.db).
+ */
+function hasBeadsDb(dirPath: string): boolean {
+  return existsSync(join(dirPath, ".beads", "beads.db"));
+}
+
+/**
+ * Check if a directory qualifies as a project.
+ * A directory is a project if it has a `.git/` directory OR a `.beads/beads.db`.
+ */
+function isProjectDir(dirPath: string): boolean {
+  return existsSync(join(dirPath, ".git")) || hasBeadsDb(dirPath);
+}
+
+/**
+ * Recursively scan directories for projects up to maxDepth.
+ * Returns absolute paths of discovered project directories.
+ */
+function scanForProjects(
+  rootPath: string,
+  maxDepth: number,
+  currentDepth: number = 0,
+): string[] {
+  if (currentDepth > maxDepth) return [];
+
+  let entries: string[];
+  try {
+    entries = readdirSync(rootPath);
+  } catch {
+    return [];
+  }
+
+  const found: string[] = [];
+
+  for (const entry of entries) {
+    if (entry.startsWith(".") || SKIP_DIRS.has(entry)) continue;
+
+    const childPath = join(rootPath, entry);
+    try {
+      const stat = statSync(childPath);
+      if (!stat.isDirectory()) continue;
+    } catch {
+      continue;
+    }
+
+    if (isProjectDir(childPath)) {
+      found.push(childPath);
+      // Don't recurse into discovered projects — their children are their own concern
+    } else if (currentDepth < maxDepth) {
+      // Not a project, but may contain projects at deeper levels
+      found.push(...scanForProjects(childPath, maxDepth, currentDepth + 1));
+    }
+  }
+
+  return found;
+}
+
+// ============================================================================
 // Service Functions
 // ============================================================================
 
@@ -132,17 +213,37 @@ function nameFromCloneUrl(url: string): string {
  *
  * Auto-registers:
  * 1. The project root itself (marked as active)
- * 2. Immediate child directories that contain a `.git/` directory
+ * 2. Child directories that contain a `.git/` directory or `.beads/beads.db`
  *
- * Skips: node_modules, .git, hidden dirs (`.` prefix), non-directories.
+ * Detection criteria: A directory is a project if it has `.git/` OR `.beads/beads.db`.
+ * The `hasBeads` field is set on all discovered projects.
+ *
+ * Skips: node_modules, .git, .beads, dist, build, hidden dirs (`.` prefix), non-directories.
  * De-duplicates against already-registered paths.
+ *
+ * @param options.maxDepth - How deep to scan (default 1, max 3). Depth 0 = root only.
  */
-export function discoverLocalProjects(): ProjectsServiceResult<Project[]> {
+export function discoverLocalProjects(options?: DiscoverOptions): ProjectsServiceResult<Project[]> {
   try {
     const projectRoot = resolve(process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd());
+    const requestedDepth = options?.maxDepth ?? DEFAULT_SCAN_DEPTH;
+    const maxDepth = Math.min(Math.max(0, requestedDepth), MAX_SCAN_DEPTH);
+
     const store = loadStore();
     const existingPaths = new Set(store.projects.map((p) => p.path));
     const discovered: Project[] = [];
+
+    // Update hasBeads on existing projects (may have changed since last scan)
+    let existingUpdated = false;
+    for (const project of store.projects) {
+      if (existsSync(project.path)) {
+        const beads = hasBeadsDb(project.path);
+        if (project.hasBeads !== beads) {
+          project.hasBeads = beads;
+          existingUpdated = true;
+        }
+      }
+    }
 
     // Register the project root itself if not already registered
     if (!existingPaths.has(projectRoot) && existsSync(projectRoot)) {
@@ -155,11 +256,12 @@ export function discoverLocalProjects(): ProjectsServiceResult<Project[]> {
         sessions: [],
         createdAt: new Date().toISOString(),
         active: true,
+        hasBeads: hasBeadsDb(projectRoot),
       };
       store.projects.push(rootProject);
       existingPaths.add(projectRoot);
       discovered.push(rootProject);
-      logInfo("discovered project root", { id: rootProject.id, name: rootProject.name, path: projectRoot });
+      logInfo("discovered project root", { id: rootProject.id, name: rootProject.name, path: projectRoot, hasBeads: rootProject.hasBeads });
     } else {
       // Mark the existing root project as active
       const existing = store.projects.find((p) => p.path === projectRoot);
@@ -170,32 +272,13 @@ export function discoverLocalProjects(): ProjectsServiceResult<Project[]> {
       }
     }
 
-    // Scan immediate child directories for git repos
-    if (existsSync(projectRoot)) {
-      const SKIP_DIRS = new Set(["node_modules", ".git"]);
-      let entries: string[];
-      try {
-        entries = readdirSync(projectRoot);
-      } catch {
-        entries = [];
-      }
+    // Scan child directories for projects (git repos or beads repos)
+    // maxDepth 0 = root only, no child scan
+    if (maxDepth > 0 && existsSync(projectRoot)) {
+      const projectPaths = scanForProjects(projectRoot, maxDepth - 1);
+      logDebug("project scan complete", { root: projectRoot, maxDepth, found: projectPaths.length });
 
-      for (const entry of entries) {
-        // Skip hidden dirs and known non-project dirs
-        if (entry.startsWith(".") || SKIP_DIRS.has(entry)) continue;
-
-        const childPath = join(projectRoot, entry);
-        try {
-          const stat = statSync(childPath);
-          if (!stat.isDirectory()) continue;
-        } catch {
-          continue;
-        }
-
-        // Only register if it has a .git directory
-        if (!existsSync(join(childPath, ".git"))) continue;
-
-        // Skip if already registered
+      for (const childPath of projectPaths) {
         if (existingPaths.has(childPath)) continue;
 
         const project: Project = {
@@ -207,16 +290,17 @@ export function discoverLocalProjects(): ProjectsServiceResult<Project[]> {
           sessions: [],
           createdAt: new Date().toISOString(),
           active: false,
+          hasBeads: hasBeadsDb(childPath),
         };
 
         store.projects.push(project);
         existingPaths.add(childPath);
         discovered.push(project);
-        logInfo("discovered child project", { id: project.id, name: project.name, path: childPath });
+        logInfo("discovered child project", { id: project.id, name: project.name, path: childPath, hasBeads: project.hasBeads });
       }
     }
 
-    if (discovered.length > 0) {
+    if (discovered.length > 0 || existingUpdated) {
       saveStore(store);
     }
 
@@ -461,6 +545,54 @@ export function deleteProject(id: string): ProjectsServiceResult<{ id: string; d
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to delete project";
     logError("deleteProject failed", { error: message });
+    return { success: false, error: { code: "INTERNAL_ERROR", message } };
+  }
+}
+
+/**
+ * Check the health of a registered project.
+ *
+ * Verifies: path exists, .git/ valid, .beads/ present.
+ * Returns a health status: "healthy", "degraded", or "stale".
+ *
+ * Also updates the stored project's hasBeads field if it changed.
+ */
+export function checkProjectHealth(id: string): ProjectsServiceResult<ProjectHealth> {
+  try {
+    const store = loadStore();
+    const project = store.projects.find((p) => p.id === id);
+    if (!project) {
+      return { success: false, error: { code: "NOT_FOUND", message: `Project '${id}' not found` } };
+    }
+
+    const pathExists = existsSync(project.path);
+    const hasGit = pathExists && existsSync(join(project.path, ".git"));
+    const beads = pathExists && hasBeadsDb(project.path);
+
+    // Update hasBeads in store if changed
+    if (project.hasBeads !== beads) {
+      project.hasBeads = beads;
+      saveStore(store);
+    }
+
+    let status: ProjectHealth["status"];
+    if (!pathExists) {
+      status = "stale";
+    } else if (!hasGit) {
+      status = "degraded";
+    } else {
+      status = "healthy";
+    }
+
+    const gitRemote = hasGit ? detectGitRemote(project.path) : undefined;
+
+    return {
+      success: true,
+      data: { projectId: id, pathExists, hasGit, hasBeads: beads, gitRemote, status },
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to check project health";
+    logError("checkProjectHealth failed", { error: message });
     return { success: false, error: { code: "INTERNAL_ERROR", message } };
   }
 }

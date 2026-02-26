@@ -4,8 +4,10 @@
  * Endpoints:
  * - GET    /api/projects              - List all projects
  * - POST   /api/projects              - Create project (from path, clone URL, or empty)
+ * - POST   /api/projects/discover     - Scan for and auto-register projects
  * - GET    /api/projects/:id          - Get single project
  * - GET    /api/projects/:id/overview - Get project overview (beads, epics, agents)
+ * - GET    /api/projects/:id/health   - Check project health (path, git, beads)
  * - POST   /api/projects/:id/activate - Activate a project
  * - DELETE /api/projects/:id          - Delete project registration (not files)
  */
@@ -19,6 +21,7 @@ import {
   activateProject,
   deleteProject,
   discoverLocalProjects,
+  checkProjectHealth,
 } from "../services/projects-service.js";
 import {
   getProjectOverview,
@@ -208,10 +211,14 @@ export function createProjectsRouter(store: MessageStore): Router {
 
   /**
    * POST /api/projects/discover
-   * Scan the project root for git repos and auto-register them.
+   * Scan the project root for git repos and beads repos and auto-register them.
+   * Accepts optional { maxDepth: number } in body (default 1, max 3).
    */
-  router.post("/discover", (_req, res) => {
-    const result = discoverLocalProjects();
+  router.post("/discover", (req, res) => {
+    const maxDepth = typeof req.body?.maxDepth === "number"
+      ? req.body.maxDepth as number
+      : undefined;
+    const result = discoverLocalProjects(maxDepth !== undefined ? { maxDepth } : undefined);
 
     if (!result.success) {
       return res.status(500).json(
@@ -225,6 +232,26 @@ export function createProjectsRouter(store: MessageStore): Router {
       discovered: discovered.length,
       projects: allResult.success ? allResult.data : discovered,
     }));
+  });
+
+  /**
+   * GET /api/projects/:id/health
+   * Check health of a registered project (path exists, git valid, beads present).
+   */
+  router.get("/:id/health", (req, res) => {
+    const { id } = req.params;
+    const result = checkProjectHealth(id);
+
+    if (!result.success) {
+      if (result.error?.code === "NOT_FOUND") {
+        return res.status(404).json(notFound("Project", id));
+      }
+      return res.status(500).json(
+        internalError(result.error?.message ?? "Failed to check project health")
+      );
+    }
+
+    return res.json(success(result.data));
   });
 
   /**
