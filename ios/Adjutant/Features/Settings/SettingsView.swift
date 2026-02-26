@@ -46,7 +46,7 @@ struct SettingsView: View {
             }
             .padding(.vertical, CRTTheme.Spacing.md)
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .onAppear {
             viewModel.onAppear()
         }
@@ -121,7 +121,7 @@ struct SettingsView: View {
             }
         }
         .padding(CRTTheme.Spacing.md)
-        .background(CRTTheme.Background.elevated.opacity(0.5))
+        .background(theme.background.elevated.opacity(0.5))
         .cornerRadius(CRTTheme.CornerRadius.md)
     }
 
@@ -225,7 +225,7 @@ struct SettingsView: View {
                     .padding(CRTTheme.Spacing.sm)
                     .background(
                         RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
-                            .fill(CRTTheme.Background.panel)
+                            .fill(theme.background.panel)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
@@ -307,7 +307,7 @@ struct SettingsView: View {
                     .padding(CRTTheme.Spacing.sm)
                     .background(
                         RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
-                            .fill(CRTTheme.Background.panel)
+                            .fill(theme.background.panel)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)

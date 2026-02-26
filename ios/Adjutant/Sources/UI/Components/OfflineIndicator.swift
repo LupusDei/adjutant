@@ -165,7 +165,7 @@ extension View {
         OfflineIndicator()
         Spacer()
     }
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
     .preferredColorScheme(.dark)
     .onAppear {
         // Simulate offline state for preview
@@ -181,7 +181,7 @@ extension View {
         CompactOfflineIndicator()
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
     .preferredColorScheme(.dark)
     .onAppear {
         AppState.shared.updateNetworkAvailability(false)
@@ -194,7 +194,7 @@ extension View {
             .foregroundColor(.white)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
     .offlineOverlay()
     .preferredColorScheme(.dark)
     .onAppear {

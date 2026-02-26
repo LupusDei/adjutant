@@ -4,6 +4,8 @@ import SwiftUI
 
 /// CRT-style horizontal scanline overlay
 public struct ScanlineOverlay: View {
+    @Environment(\.crtTheme) private var theme
+
     let opacity: Double
     let lineHeight: CGFloat
     let animated: Bool
@@ -21,23 +23,25 @@ public struct ScanlineOverlay: View {
     }
 
     public var body: some View {
-        GeometryReader { geometry in
-            Canvas { context, size in
-                let lineCount = Int(size.height / (lineHeight * 2)) + 1
-                for i in 0..<lineCount {
-                    let y = CGFloat(i) * lineHeight * 2 + lineHeight + (animated ? offset : 0)
-                    let rect = CGRect(x: 0, y: y, width: size.width, height: lineHeight)
-                    context.fill(Path(rect), with: .color(.black.opacity(opacity)))
+        if theme.crtEffectsEnabled {
+            GeometryReader { geometry in
+                Canvas { context, size in
+                    let lineCount = Int(size.height / (lineHeight * 2)) + 1
+                    for i in 0..<lineCount {
+                        let y = CGFloat(i) * lineHeight * 2 + lineHeight + (animated ? offset : 0)
+                        let rect = CGRect(x: 0, y: y, width: size.width, height: lineHeight)
+                        context.fill(Path(rect), with: .color(.black.opacity(opacity)))
+                    }
+                }
+                .onAppear {
+                    guard animated else { return }
+                    withAnimation(.linear(duration: 0.05).repeatForever(autoreverses: false)) {
+                        offset = lineHeight * 2
+                    }
                 }
             }
-            .onAppear {
-                guard animated else { return }
-                withAnimation(.linear(duration: 0.05).repeatForever(autoreverses: false)) {
-                    offset = lineHeight * 2
-                }
-            }
+            .allowsHitTesting(false)
         }
-        .allowsHitTesting(false)
     }
 }
 
@@ -52,27 +56,29 @@ public struct ScanBarOverlay: View {
     public init() {}
 
     public var body: some View {
-        GeometryReader { geometry in
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0),
-                    .init(color: theme.primary.opacity(0.1), location: 0.4),
-                    .init(color: theme.primary.opacity(0.15), location: 0.5),
-                    .init(color: theme.primary.opacity(0.1), location: 0.6),
-                    .init(color: .clear, location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 8)
-            .offset(y: position)
-            .onAppear {
-                withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) {
-                    position = geometry.size.height
+        if theme.crtEffectsEnabled {
+            GeometryReader { geometry in
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: theme.primary.opacity(0.1), location: 0.4),
+                        .init(color: theme.primary.opacity(0.15), location: 0.5),
+                        .init(color: theme.primary.opacity(0.1), location: 0.6),
+                        .init(color: .clear, location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 8)
+                .offset(y: position)
+                .onAppear {
+                    withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) {
+                        position = geometry.size.height
+                    }
                 }
             }
+            .allowsHitTesting(false)
         }
-        .allowsHitTesting(false)
     }
 }
 
@@ -80,6 +86,7 @@ public struct ScanBarOverlay: View {
 
 /// CRT screen flicker effect modifier
 public struct FlickerEffect: ViewModifier {
+    @Environment(\.crtTheme) private var theme
     @State private var opacity: Double = 1.0
     @State private var timer: Timer?
 
@@ -92,10 +99,11 @@ public struct FlickerEffect: ViewModifier {
     }
 
     public func body(content: Content) -> some View {
+        let effectivelyEnabled = enabled && theme.crtEffectsEnabled
         content
-            .opacity(enabled ? opacity : 1.0)
+            .opacity(effectivelyEnabled ? opacity : 1.0)
             .onAppear {
-                guard enabled else { return }
+                guard effectivelyEnabled else { return }
                 startFlicker()
             }
             .onDisappear {
@@ -133,9 +141,13 @@ public struct PhosphorGlow: ViewModifier {
     }
 
     public func body(content: Content) -> some View {
-        content
-            .shadow(color: theme.bright, radius: radius / 2, x: 0, y: 0)
-            .shadow(color: theme.bright, radius: radius, x: 0, y: 0)
+        if theme.crtEffectsEnabled {
+            content
+                .shadow(color: theme.bright, radius: radius / 2, x: 0, y: 0)
+                .shadow(color: theme.bright, radius: radius, x: 0, y: 0)
+        } else {
+            content
+        }
     }
 }
 
@@ -173,9 +185,13 @@ public struct TextGlow: ViewModifier {
     }
 
     public func body(content: Content) -> some View {
-        content
-            .shadow(color: theme.primary, radius: size.radii.inner, x: 0, y: 0)
-            .shadow(color: theme.bright, radius: size.radii.outer, x: 0, y: 0)
+        if theme.crtEffectsEnabled {
+            content
+                .shadow(color: theme.primary, radius: size.radii.inner, x: 0, y: 0)
+                .shadow(color: theme.bright, radius: size.radii.outer, x: 0, y: 0)
+        } else {
+            content
+        }
     }
 }
 
@@ -190,6 +206,8 @@ extension View {
 
 /// Static noise overlay for CRT effect
 public struct NoiseOverlay: View {
+    @Environment(\.crtTheme) private var theme
+
     let opacity: Double
 
     @State private var phase: Int = 0
@@ -200,25 +218,27 @@ public struct NoiseOverlay: View {
     }
 
     public var body: some View {
-        Canvas { context, size in
-            for _ in 0..<Int(size.width * size.height * 0.001) {
-                let x = CGFloat.random(in: 0..<size.width)
-                let y = CGFloat.random(in: 0..<size.height)
-                let noiseOpacity = Double.random(in: 0...opacity)
-                let rect = CGRect(x: x, y: y, width: 1, height: 1)
-                context.fill(Path(rect), with: .color(.white.opacity(noiseOpacity)))
+        if theme.crtEffectsEnabled {
+            Canvas { context, size in
+                for _ in 0..<Int(size.width * size.height * 0.001) {
+                    let x = CGFloat.random(in: 0..<size.width)
+                    let y = CGFloat.random(in: 0..<size.height)
+                    let noiseOpacity = Double.random(in: 0...opacity)
+                    let rect = CGRect(x: x, y: y, width: 1, height: 1)
+                    context.fill(Path(rect), with: .color(.white.opacity(noiseOpacity)))
+                }
             }
-        }
-        .allowsHitTesting(false)
-        .id(phase)
-        .onAppear {
-            timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-                phase = (phase + 1) % 5
+            .allowsHitTesting(false)
+            .id(phase)
+            .onAppear {
+                timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                    phase = (phase + 1) % 5
+                }
             }
-        }
-        .onDisappear {
-            timer?.invalidate()
-            timer = nil
+            .onDisappear {
+                timer?.invalidate()
+                timer = nil
+            }
         }
     }
 }
@@ -227,6 +247,8 @@ public struct NoiseOverlay: View {
 
 /// Edge darkening vignette for CRT screen edges
 public struct VignetteOverlay: View {
+    @Environment(\.crtTheme) private var theme
+
     let intensity: Double
 
     public init(intensity: Double = 0.4) {
@@ -234,20 +256,22 @@ public struct VignetteOverlay: View {
     }
 
     public var body: some View {
-        GeometryReader { geometry in
-            RadialGradient(
-                stops: [
-                    .init(color: .clear, location: 0),
-                    .init(color: .clear, location: 0.5),
-                    .init(color: .black.opacity(intensity), location: 0.8),
-                    .init(color: .black.opacity(intensity * 2), location: 1)
-                ],
-                center: .center,
-                startRadius: 0,
-                endRadius: geometry.size.width * 0.8
-            )
+        if theme.crtEffectsEnabled {
+            GeometryReader { geometry in
+                RadialGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .clear, location: 0.5),
+                        .init(color: .black.opacity(intensity), location: 0.8),
+                        .init(color: .black.opacity(intensity * 2), location: 1)
+                    ],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: geometry.size.width * 0.8
+                )
+            }
+            .allowsHitTesting(false)
         }
-        .allowsHitTesting(false)
     }
 }
 
@@ -279,24 +303,24 @@ public struct CRTScreenContainer<Content: View>: View {
 
     public var body: some View {
         ZStack {
-            // Background
-            CRTTheme.Background.screen
+            // Background - scheme-aware
+            theme.background.screen
                 .ignoresSafeArea()
 
             // Content with glow border
             content()
 
-            // Effect overlays
-            if enableScanlines {
+            // Effect overlays - AND with theme.crtEffectsEnabled
+            if enableScanlines && theme.crtEffectsEnabled {
                 ScanlineOverlay(animated: true)
                 ScanBarOverlay()
             }
 
-            if enableNoise {
+            if enableNoise && theme.crtEffectsEnabled {
                 NoiseOverlay()
             }
 
-            if enableVignette {
+            if enableVignette && theme.crtEffectsEnabled {
                 VignetteOverlay()
             }
         }
@@ -308,20 +332,24 @@ public struct CRTScreenContainer<Content: View>: View {
 
 /// Subtle glass reflection effect
 public struct ScreenGlare: View {
+    @Environment(\.crtTheme) private var theme
+
     public init() {}
 
     public var body: some View {
-        LinearGradient(
-            stops: [
-                .init(color: .white.opacity(0.03), location: 0),
-                .init(color: .clear, location: 0.3),
-                .init(color: .clear, location: 0.7),
-                .init(color: .white.opacity(0.01), location: 1)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .allowsHitTesting(false)
+        if theme.crtEffectsEnabled {
+            LinearGradient(
+                stops: [
+                    .init(color: .white.opacity(0.03), location: 0),
+                    .init(color: .clear, location: 0.3),
+                    .init(color: .clear, location: 0.7),
+                    .init(color: .white.opacity(0.01), location: 1)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .allowsHitTesting(false)
+        }
     }
 }
 
@@ -338,13 +366,19 @@ public struct PulsingGlow: ViewModifier {
     }
 
     public func body(content: Content) -> some View {
-        content
-            .shadow(color: theme.bright.opacity(isPulsing ? 0.8 : 0.4), radius: isPulsing ? 8 : 4)
-            .onAppear {
-                withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
-                    isPulsing = true
+        if theme.crtEffectsEnabled {
+            content
+                .shadow(color: theme.bright.opacity(isPulsing ? 0.8 : 0.4), radius: isPulsing ? 8 : 4)
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) {
+                        isPulsing = true
+                    }
                 }
-            }
+        } else {
+            // Document: subtle static shadow instead of pulsing
+            content
+                .shadow(color: theme.dim.opacity(0.2), radius: 2)
+        }
     }
 }
 

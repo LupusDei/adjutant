@@ -46,7 +46,7 @@ struct CallsignPickerView: View {
                     callsignList
                 }
             }
-            .background(CRTTheme.Background.screen)
+            .background(theme.background.screen)
             .navigationTitle("")
             .toolbar {
                 ToolbarItem(placement: .principal) {

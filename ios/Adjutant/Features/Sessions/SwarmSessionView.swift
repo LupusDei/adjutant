@@ -82,7 +82,7 @@ struct SwarmSessionView: View {
             CRTText("CONNECTING TO SESSION...", style: .caption, glowIntensity: .subtle, color: theme.dim)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
     }
 
     private var emptyView: some View {
@@ -125,6 +125,6 @@ struct SwarmSessionView: View {
         }
         .padding(CRTTheme.Spacing.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
     }
 }

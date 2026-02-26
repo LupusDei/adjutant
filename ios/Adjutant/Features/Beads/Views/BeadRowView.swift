@@ -35,7 +35,7 @@ struct BeadRowView: View {
             }
             .padding(.horizontal, CRTTheme.Spacing.md)
             .padding(.vertical, CRTTheme.Spacing.sm)
-            .background(CRTTheme.Background.panel)
+            .background(theme.background.panel)
             .overlay(
                 Rectangle()
                     .stroke(theme.primary.opacity(0.2), lineWidth: 1)
@@ -224,5 +224,5 @@ struct BeadRowView: View {
             onTap: {}
         )
     }
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

@@ -76,7 +76,7 @@ public struct PowerButton: View {
             HStack {
                 // OFF label
                 Text("OFF")
-                    .font(CRTTheme.Typography.font(size: 9, weight: .bold))
+                    .font(CRTTheme.Typography.font(size: 9, weight: .bold, theme: theme))
                     .tracking(0.5)
                     .foregroundColor(viewModel.powerState == .stopped ? theme.dim : theme.dim.opacity(0.3))
                     .frame(width: 28)
@@ -85,7 +85,7 @@ public struct PowerButton: View {
 
                 // ON label
                 Text("ON")
-                    .font(CRTTheme.Typography.font(size: 9, weight: .bold))
+                    .font(CRTTheme.Typography.font(size: 9, weight: .bold, theme: theme))
                     .tracking(0.5)
                     .foregroundColor(viewModel.powerState == .running ? theme.primary : theme.dim.opacity(0.3))
                     .frame(width: 28)
@@ -344,7 +344,7 @@ final class PowerButtonViewModel: ObservableObject {
             .foregroundColor(.gray)
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("PowerButton Themes") {
@@ -355,5 +355,5 @@ final class PowerButtonViewModel: ObservableObject {
         }
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

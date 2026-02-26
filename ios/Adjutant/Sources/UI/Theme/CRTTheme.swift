@@ -280,17 +280,24 @@ extension View {
 
 // MARK: - Glow Effect Modifier
 
-/// Adds a phosphor glow effect to any view
+/// Adds a phosphor glow effect to any view.
+/// Scheme-aware: disables glow when CRT effects are disabled (e.g., Document theme).
 public struct CRTGlowModifier: ViewModifier {
+    @Environment(\.crtTheme) private var theme
+
     let color: Color
     let radius: CGFloat
     let intensity: Double
 
     public func body(content: Content) -> some View {
-        content
-            .shadow(color: color.opacity(intensity), radius: radius / 2)
-            .shadow(color: color.opacity(intensity * 0.6), radius: radius)
-            .shadow(color: color.opacity(intensity * 0.3), radius: radius * 2)
+        if theme.crtEffectsEnabled {
+            content
+                .shadow(color: color.opacity(intensity), radius: radius / 2)
+                .shadow(color: color.opacity(intensity * 0.6), radius: radius)
+                .shadow(color: color.opacity(intensity * 0.3), radius: radius * 2)
+        } else {
+            content
+        }
     }
 }
 

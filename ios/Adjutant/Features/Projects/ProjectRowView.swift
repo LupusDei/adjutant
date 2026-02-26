@@ -62,7 +62,7 @@ struct ProjectRowView: View {
             }
             .padding(.vertical, CRTTheme.Spacing.sm)
             .padding(.horizontal, CRTTheme.Spacing.md)
-            .background(CRTTheme.Background.panel.opacity(0.3))
+            .background(theme.background.panel.opacity(0.3))
             .overlay(
                 RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
                     .stroke(theme.primary.opacity(0.2), lineWidth: 1)
@@ -136,5 +136,5 @@ struct ProjectRowView: View {
         )
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

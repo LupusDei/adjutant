@@ -190,7 +190,7 @@ private struct CRTProgressBar: View {
             )
         )
     }
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("Epics - Recently Completed") {
@@ -207,7 +207,7 @@ private struct CRTProgressBar: View {
             )
         )
     }
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("Epics - Empty") {
@@ -216,5 +216,5 @@ private struct CRTProgressBar: View {
             epics: EpicsOverview(inProgress: [], recentlyCompleted: [])
         )
     }
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

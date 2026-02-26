@@ -179,7 +179,7 @@ struct ConnectionDetailsSheet: View {
                     .padding(CRTTheme.Spacing.md)
                 }
             }
-            .background(CRTTheme.Background.screen)
+            .background(theme.background.screen)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -276,7 +276,7 @@ struct ConnectionDetailsSheet: View {
         ConnectionStatusBadge(method: .websocket, state: .connected, isStreaming: true)
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
     .preferredColorScheme(.dark)
 }
 
@@ -288,6 +288,6 @@ struct ConnectionDetailsSheet: View {
         ConnectionStatusBadge(method: .http, state: .disconnected, isStreaming: false)
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
     .preferredColorScheme(.dark)
 }

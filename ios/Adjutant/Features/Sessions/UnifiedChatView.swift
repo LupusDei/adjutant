@@ -49,7 +49,7 @@ struct UnifiedChatView: View {
             CRTText("CONNECTING TO SESSION...", style: .caption, glowIntensity: .subtle, color: theme.dim)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
     }
 
     private var emptyView: some View {
@@ -92,7 +92,7 @@ struct UnifiedChatView: View {
         }
         .padding(CRTTheme.Spacing.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
     }
 }
 
@@ -159,7 +159,7 @@ private struct UnifiedChatContent: View {
             // Input area
             inputArea
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .onAppear {
             viewModel.onAppear()
         }
@@ -249,7 +249,7 @@ private struct UnifiedChatContent: View {
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
         .background(
-            CRTTheme.Background.panel
+            theme.background.panel
                 .overlay(
                     Rectangle()
                         .frame(height: 1)
@@ -348,7 +348,7 @@ private struct UnifiedChatContent: View {
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
         .background(
-            CRTTheme.Background.panel
+            theme.background.panel
                 .overlay(
                     Rectangle()
                         .frame(height: 1)

@@ -27,7 +27,7 @@ struct ChatInputView: View {
         .padding(.vertical, CRTTheme.Spacing.xs)
         .background(
             Rectangle()
-                .fill(CRTTheme.Background.panel)
+                .fill(theme.background.panel)
                 .overlay(
                     Rectangle()
                         .frame(height: 1)
@@ -85,7 +85,7 @@ struct ChatInputView: View {
         .padding(.vertical, CRTTheme.Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.lg)
-                .fill(CRTTheme.Background.elevated.opacity(isTextFieldFocused ? 0.8 : 0.5))
+                .fill(theme.background.elevated.opacity(isTextFieldFocused ? 0.8 : 0.5))
         )
         .overlay(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.lg)
@@ -146,7 +146,7 @@ struct ChatInputView: View {
                     onVoiceToggle: { isRecording.toggle() }
                 )
             }
-            .background(CRTTheme.Background.screen)
+            .background(CRTTheme.ColorTheme.pipboy.background.screen)
         }
     }
 
@@ -170,7 +170,7 @@ struct ChatInputView: View {
                     onVoiceToggle: { }
                 )
             }
-            .background(CRTTheme.Background.screen)
+            .background(CRTTheme.ColorTheme.pipboy.background.screen)
         }
     }
 

@@ -47,7 +47,7 @@ struct DependencyGraphNodeView: View {
         )
         .background(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
-                .fill(CRTTheme.Background.panel)
+                .fill(theme.background.panel)
         )
         .overlay(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
@@ -144,5 +144,5 @@ struct DependencyGraphNodeView: View {
         }
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

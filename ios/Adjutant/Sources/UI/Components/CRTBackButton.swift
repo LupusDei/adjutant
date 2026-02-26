@@ -41,10 +41,10 @@ public struct CRTBackButton: View {
 
                 // Label
                 Text(label.uppercased())
-                    .font(CRTTheme.Typography.font(size: 12, weight: .bold))
+                    .font(CRTTheme.Typography.font(size: 12, weight: .bold, theme: theme))
                     .tracking(CRTTheme.Typography.letterSpacing)
             }
-            .foregroundColor(theme.primary)
+            .foregroundColor(theme.accent)
             .padding(.vertical, 6)
             .padding(.horizontal, 10)
             .background(
@@ -129,7 +129,7 @@ extension View {
             CRTText("Detail View", style: .header)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(CRTTheme.Background.screen)
+        .background(CRTTheme.ColorTheme.pipboy.background.screen)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 CRTBackButton()
@@ -147,5 +147,5 @@ extension View {
         CRTBackButton("CLOSE")
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

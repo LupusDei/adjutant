@@ -35,7 +35,7 @@ struct ProposalsView: View {
                 proposalList
             }
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         #if os(iOS)
         .navigationBarHidden(true)
         #endif
@@ -66,7 +66,7 @@ struct ProposalsView: View {
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
-        .background(CRTTheme.Background.panel.opacity(0.5))
+        .background(theme.background.panel.opacity(0.5))
         .overlay(
             Rectangle()
                 .frame(height: 1)
@@ -196,7 +196,7 @@ struct ProposalsView: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .listRowBackground(CRTTheme.Background.screen)
+                .listRowBackground(theme.background.screen)
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(
                     top: CRTTheme.Spacing.xs,
@@ -208,7 +208,7 @@ struct ProposalsView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .refreshable {
             await viewModel.load()
         }

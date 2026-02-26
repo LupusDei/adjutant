@@ -134,7 +134,7 @@ struct BeadsSectionView: View {
         .padding(.vertical, CRTTheme.Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                .fill(CRTTheme.Background.panel.opacity(dimmed ? 0.2 : 0.4))
+                .fill(theme.background.panel.opacity(dimmed ? 0.2 : 0.4))
         )
         .overlay(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)

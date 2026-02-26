@@ -34,7 +34,7 @@ struct ProjectsListView: View {
             // Content
             contentView
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .onAppear {
             viewModel.onAppear()
         }
@@ -90,7 +90,7 @@ struct ProjectsListView: View {
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
         .background(
-            CRTTheme.Background.panel
+            theme.background.panel
                 .overlay(
                     Rectangle()
                         .frame(height: 1)
@@ -132,7 +132,7 @@ struct ProjectsListView: View {
         }
         .padding(.horizontal, CRTTheme.Spacing.sm)
         .padding(.vertical, CRTTheme.Spacing.xs)
-        .background(CRTTheme.Background.elevated)
+        .background(theme.background.elevated)
         .cornerRadius(CRTTheme.CornerRadius.sm)
         .overlay(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
@@ -140,7 +140,7 @@ struct ProjectsListView: View {
         )
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
-        .background(CRTTheme.Background.panel.opacity(0.5))
+        .background(theme.background.panel.opacity(0.5))
     }
 
     @ViewBuilder
@@ -322,7 +322,7 @@ struct ProjectsListView: View {
             Spacer()
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .presentationDetents([.medium])
     }
 
@@ -393,7 +393,7 @@ private struct SwarmProjectRow: View {
             }
             .padding(.vertical, CRTTheme.Spacing.sm)
             .padding(.horizontal, CRTTheme.Spacing.md)
-            .background(CRTTheme.Background.panel.opacity(0.3))
+            .background(theme.background.panel.opacity(0.3))
             .overlay(
                 RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
                     .stroke(

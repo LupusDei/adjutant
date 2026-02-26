@@ -37,7 +37,7 @@ struct ComposeMailView: View {
                 }
                 .padding(CRTTheme.Spacing.md)
             }
-            .background(CRTTheme.Background.screen)
+            .background(theme.background.screen)
             #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -149,7 +149,7 @@ struct ComposeMailView: View {
                 }
             }
         }
-        .background(CRTTheme.Background.elevated.opacity(0.8))
+        .background(theme.background.elevated.opacity(0.8))
         .overlay(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
                 .stroke(theme.dim.opacity(0.5), lineWidth: 1)

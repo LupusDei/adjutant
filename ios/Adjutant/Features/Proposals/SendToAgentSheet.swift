@@ -77,7 +77,7 @@ struct SendToAgentSheet: View {
                 }
                 actionBar
             }
-            .background(CRTTheme.Background.screen)
+            .background(theme.background.screen)
             .navigationTitle("")
             .toolbar {
                 ToolbarItem(placement: .principal) {

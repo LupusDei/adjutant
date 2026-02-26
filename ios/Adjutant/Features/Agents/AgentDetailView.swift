@@ -26,7 +26,7 @@ struct AgentDetailView: View {
             // Tab content
             tabContent
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -119,7 +119,7 @@ struct AgentDetailView: View {
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
         .background(
-            CRTTheme.Background.panel
+            theme.background.panel
                 .overlay(
                     Rectangle()
                         .frame(height: 1)
@@ -137,7 +137,7 @@ struct AgentDetailView: View {
                 tabButton(tab)
             }
         }
-        .background(CRTTheme.Background.panel.opacity(0.5))
+        .background(theme.background.panel.opacity(0.5))
         .overlay(
             Rectangle()
                 .frame(height: 1)
@@ -186,7 +186,7 @@ struct AgentDetailView: View {
     private func tabBadge(_ count: Int) -> some View {
         Text("\(count)")
             .font(.system(size: 9, weight: .bold, design: .monospaced))
-            .foregroundColor(CRTTheme.Background.screen)
+            .foregroundColor(theme.background.screen)
             .padding(.horizontal, 4)
             .padding(.vertical, 1)
             .background(theme.dim)
@@ -314,7 +314,7 @@ struct AgentDetailView: View {
                             .textSelection(.enabled)
                     }
                     .frame(maxHeight: 200)
-                    .background(CRTTheme.Background.screen.opacity(0.5))
+                    .background(theme.background.screen.opacity(0.5))
                     .cornerRadius(CRTTheme.CornerRadius.sm)
                 } else if let error = viewModel.errorMessage {
                     CRTText(error, style: .caption, glowIntensity: .subtle, color: CRTTheme.State.warning)
@@ -479,7 +479,7 @@ struct AgentDetailView: View {
             }
             .padding(.vertical, CRTTheme.Spacing.sm)
             .padding(.horizontal, CRTTheme.Spacing.sm)
-            .background(CRTTheme.Background.panel.opacity(0.3))
+            .background(theme.background.panel.opacity(0.3))
             .overlay(
                 RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
                     .stroke(theme.primary.opacity(0.15), lineWidth: 1)
@@ -578,7 +578,7 @@ struct AgentDetailView: View {
                     .padding(.vertical, CRTTheme.Spacing.xs)
                     .background(
                         RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.lg)
-                            .fill(isOutgoing ? theme.primary.opacity(0.2) : CRTTheme.Background.elevated)
+                            .fill(isOutgoing ? theme.primary.opacity(0.2) : theme.background.elevated)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.lg)
@@ -623,7 +623,7 @@ struct AgentDetailView: View {
                 .padding(.vertical, CRTTheme.Spacing.xs)
                 .background(
                     RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.lg)
-                        .fill(CRTTheme.Background.elevated.opacity(0.5))
+                        .fill(theme.background.elevated.opacity(0.5))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.lg)
@@ -650,7 +650,7 @@ struct AgentDetailView: View {
         .padding(.vertical, CRTTheme.Spacing.xs)
         .background(
             Rectangle()
-                .fill(CRTTheme.Background.panel)
+                .fill(theme.background.panel)
                 .overlay(
                     Rectangle()
                         .frame(height: 1)
@@ -721,7 +721,7 @@ struct AgentDetailView: View {
                 }
                 .padding(.horizontal, CRTTheme.Spacing.md)
                 .padding(.vertical, CRTTheme.Spacing.sm)
-                .background(CRTTheme.Background.panel)
+                .background(theme.background.panel)
                 .cornerRadius(CRTTheme.CornerRadius.md)
                 .overlay(
                     RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
@@ -834,7 +834,7 @@ private struct BeadPickerSheet: View {
                     beadList
                 }
             }
-            .background(CRTTheme.Background.screen)
+            .background(theme.background.screen)
             .navigationTitle("")
             .toolbar {
                 ToolbarItem(placement: .principal) {

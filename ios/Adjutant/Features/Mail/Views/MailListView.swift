@@ -47,7 +47,7 @@ struct MailListView: View {
                 messageList
             }
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         #if os(iOS)
         .navigationBarHidden(true)
         #endif
@@ -89,7 +89,7 @@ struct MailListView: View {
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
-        .background(CRTTheme.Background.panel.opacity(0.5))
+        .background(theme.background.panel.opacity(0.5))
         .overlay(
             Rectangle()
                 .frame(height: 1)
@@ -154,7 +154,7 @@ struct MailListView: View {
             }
         }
         .padding(CRTTheme.Spacing.sm)
-        .background(CRTTheme.Background.elevated)
+        .background(theme.background.elevated)
         .overlay(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
                 .stroke(theme.primary.opacity(0.3), lineWidth: 1)
@@ -207,7 +207,7 @@ struct MailListView: View {
         List {
             ForEach(viewModel.filteredMessages) { message in
                 MailRowView(message: message)
-                    .listRowBackground(CRTTheme.Background.screen)
+                    .listRowBackground(theme.background.screen)
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(
                         top: CRTTheme.Spacing.xs,
@@ -249,7 +249,7 @@ struct MailListView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .refreshable {
             await viewModel.loadMessages()
         }
@@ -328,10 +328,10 @@ private struct FilterChip: View {
                             Capsule()
                                 .fill(isSelected ? theme.bright : theme.primary.opacity(0.3))
                         )
-                        .foregroundColor(isSelected ? CRTTheme.Background.screen : theme.primary)
+                        .foregroundColor(isSelected ? theme.background.screen : theme.primary)
                 }
             }
-            .foregroundColor(isSelected ? CRTTheme.Background.screen : theme.primary)
+            .foregroundColor(isSelected ? theme.background.screen : theme.primary)
             .padding(.horizontal, CRTTheme.Spacing.sm)
             .padding(.vertical, CRTTheme.Spacing.xs)
             .background(
@@ -415,7 +415,7 @@ struct MailRowView: View {
         .padding(CRTTheme.Spacing.sm)
         .background(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
-                .fill(CRTTheme.Background.panel.opacity(message.read ? 0.3 : 0.5))
+                .fill(theme.background.panel.opacity(message.read ? 0.3 : 0.5))
         )
         .overlay(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
@@ -492,6 +492,6 @@ struct MailRowView: View {
         MailRowView(message: MailListViewModel.mockMessages[3])
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
     .preferredColorScheme(.dark)
 }

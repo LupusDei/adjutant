@@ -72,8 +72,13 @@ public enum CRTTypography {
 // MARK: - Font Extension
 
 extension Font {
-    /// CRT terminal font at specified size
-    public static func crt(_ size: CGFloat) -> Font {
+    /// CRT terminal font at specified size.
+    /// When `monospace` is true (default), uses ShareTechMono or system monospace.
+    /// When false (e.g., Document theme), uses the standard system font.
+    public static func crt(_ size: CGFloat, monospace: Bool = true) -> Font {
+        guard monospace else {
+            return .system(size: size)
+        }
         #if os(iOS)
         if let _ = UIFont(name: CRTTypography.fontFamily, size: size) {
             return .custom(CRTTypography.fontFamily, size: size)
@@ -114,35 +119,49 @@ extension Font {
     public static var crt5XL: Font { .crt(CRTTypography.size5XL) }
 }
 
+// MARK: - Scheme-Aware Font Helpers
+
+extension CRTTheme.Typography {
+    /// Scheme-aware font that respects `useMonospaceFont`.
+    /// Returns monospace for Pip-Boy/StarCraft, system font for Document.
+    public static func font(size: CGFloat, weight: Font.Weight = .regular, theme: CRTTheme.ColorTheme) -> Font {
+        if theme.useMonospaceFont {
+            return .system(size: size, weight: weight, design: .monospaced)
+        } else {
+            return .system(size: size, weight: weight)
+        }
+    }
+}
+
 // MARK: - Text Style Modifiers
 
 extension View {
-    /// Apply CRT text styling with glow effect
+    /// Apply CRT text styling with glow effect (scheme-aware)
     public func crtTextStyle(
         _ theme: CRTTheme.ColorTheme,
         size: CGFloat = CRTTypography.sizeBase,
         letterSpacing: CGFloat = CRTTypography.letterSpacingWide
     ) -> some View {
         self
-            .font(.crt(size))
-            .foregroundColor(theme.primary)
+            .font(.crt(size, monospace: theme.useMonospaceFont))
+            .foregroundColor(theme.textPrimary)
             .tracking(letterSpacing)
     }
 
-    /// Apply CRT header styling (uppercase, wide tracking)
+    /// Apply CRT header styling (uppercase, wide tracking, scheme-aware)
     public func crtHeaderStyle(_ theme: CRTTheme.ColorTheme, size: CGFloat = CRTTypography.sizeLG) -> some View {
         self
-            .font(.crt(size))
-            .foregroundColor(theme.primary)
+            .font(.crt(size, monospace: theme.useMonospaceFont))
+            .foregroundColor(theme.textPrimary)
             .tracking(CRTTypography.letterSpacingWider)
             .textCase(.uppercase)
     }
 
-    /// Apply CRT label styling (smaller, uppercase)
+    /// Apply CRT label styling (smaller, uppercase, scheme-aware)
     public func crtLabelStyle(_ theme: CRTTheme.ColorTheme) -> some View {
         self
-            .font(.crt(CRTTypography.sizeXS))
-            .foregroundColor(theme.dim)
+            .font(.crt(CRTTypography.sizeXS, monospace: theme.useMonospaceFont))
+            .foregroundColor(theme.textSecondary)
             .tracking(CRTTypography.letterSpacingWider)
             .textCase(.uppercase)
     }
@@ -158,8 +177,8 @@ extension AttributedString {
         size: CGFloat = CRTTypography.sizeBase
     ) -> AttributedString {
         var attributed = AttributedString(string)
-        attributed.font = .crt(size)
-        attributed.foregroundColor = theme.primary
+        attributed.font = .crt(size, monospace: theme.useMonospaceFont)
+        attributed.foregroundColor = theme.textPrimary
         attributed.kern = CRTTypography.letterSpacingWide
         return attributed
     }

@@ -213,7 +213,7 @@ public struct CompactNotificationStatusIndicator: View {
         }
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("CompactNotificationStatusIndicator") {
@@ -225,5 +225,5 @@ public struct CompactNotificationStatusIndicator: View {
         }
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

@@ -92,17 +92,17 @@ public struct CRTCard<Content: View>: View {
         }
         .background(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
-                .fill(CRTTheme.Background.panel.opacity(style.backgroundOpacity))
+                .fill(theme.background.panel.opacity(style.backgroundOpacity))
         )
         .overlay(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
-                .stroke(theme.primary.opacity(style.borderOpacity), lineWidth: 1)
+                .stroke(theme.dim.opacity(style.borderOpacity), lineWidth: 1)
         )
         .overlay(
             cornerBracketsOverlay
         )
         .crtGlow(
-            color: theme.primary,
+            color: theme.accent,
             radius: 8,
             intensity: style.glowIntensity
         )
@@ -238,7 +238,7 @@ extension CRTCard {
         }
         .padding()
     }
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("CRTCard Themes") {
@@ -254,5 +254,5 @@ extension CRTCard {
         }
         .padding()
     }
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

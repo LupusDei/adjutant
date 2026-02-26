@@ -132,6 +132,6 @@ struct RigFilterDropdown: View {
         RigFilterDropdown(availableRigs: [])
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
     .preferredColorScheme(.dark)
 }

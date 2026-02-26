@@ -29,7 +29,7 @@ public struct OnboardingView: View {
     public var body: some View {
         ZStack {
             // Background
-            CRTTheme.Background.screen
+            theme.background.screen
                 .ignoresSafeArea()
 
             VStack(spacing: CRTTheme.Spacing.xl) {
@@ -82,7 +82,7 @@ public struct OnboardingView: View {
                     .padding(CRTTheme.Spacing.md)
                     .background(
                         RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
-                            .fill(CRTTheme.Background.panel)
+                            .fill(theme.background.panel)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)

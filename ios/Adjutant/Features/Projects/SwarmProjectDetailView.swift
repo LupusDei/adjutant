@@ -26,7 +26,7 @@ struct SwarmProjectDetailView: View {
             .padding(.horizontal, CRTTheme.Spacing.md)
             .padding(.vertical, CRTTheme.Spacing.md)
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .navigationTitle("")
         .toolbar {
             ToolbarItem(placement: .principal) {

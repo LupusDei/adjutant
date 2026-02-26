@@ -68,6 +68,6 @@ struct SortDropdown: View {
         SortDropdown(currentSort: .constant(.alphabetical))
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
     .preferredColorScheme(.dark)
 }

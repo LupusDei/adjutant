@@ -68,7 +68,7 @@ struct EpicsListView: View {
                 await viewModel.refresh()
             }
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .onAppear {
             viewModel.onAppear()
         }
@@ -94,7 +94,7 @@ struct EpicsListView: View {
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
         .background(
-            CRTTheme.Background.panel
+            theme.background.panel
                 .overlay(
                     Rectangle()
                         .frame(height: 1)

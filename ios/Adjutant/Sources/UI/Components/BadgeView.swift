@@ -62,7 +62,7 @@ public struct BadgeView: View {
 
     public var body: some View {
         Text(text.uppercased())
-            .font(CRTTheme.Typography.font(size: fontSize, weight: fontWeight))
+            .font(CRTTheme.Typography.font(size: fontSize, weight: fontWeight, theme: theme))
             .tracking(letterSpacing)
             .foregroundColor(foregroundColor)
             .padding(.horizontal, horizontalPadding)
@@ -117,7 +117,7 @@ public struct BadgeView: View {
     private var foregroundColor: Color {
         switch style {
         case .count:
-            return CRTTheme.Background.screen
+            return theme.background.screen
         case .label, .tag:
             return theme.primary
         case .status(let type):
@@ -299,8 +299,8 @@ public struct UnreadBadge: View {
     public var body: some View {
         if count > 0 {
             Text(count > 99 ? "99+" : "\(count)")
-                .font(CRTTheme.Typography.font(size: 10, weight: .bold))
-                .foregroundColor(CRTTheme.Background.screen)
+                .font(CRTTheme.Typography.font(size: 10, weight: .bold, theme: theme))
+                .foregroundColor(theme.background.screen)
                 .padding(.horizontal, count > 9 ? 5 : 4)
                 .padding(.vertical, 2)
                 .background(Capsule().fill(CRTTheme.State.error))
@@ -342,7 +342,7 @@ public struct UnreadBadge: View {
         }
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("StatusDot") {
@@ -374,7 +374,7 @@ public struct UnreadBadge: View {
     }
     .foregroundColor(.white)
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("UnreadBadge") {
@@ -386,5 +386,5 @@ public struct UnreadBadge: View {
         UnreadBadge(150)
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

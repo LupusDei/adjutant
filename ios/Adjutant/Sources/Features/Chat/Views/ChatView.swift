@@ -69,7 +69,7 @@ struct ChatView: View {
                             .padding(8)
                             .background(
                                 Circle()
-                                    .fill(CRTTheme.Background.panel)
+                                    .fill(theme.background.panel)
                                     .overlay(
                                         Circle()
                                             .stroke(theme.primary.opacity(0.4), lineWidth: 1)
@@ -101,7 +101,7 @@ struct ChatView: View {
                 }
             )
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .onAppear {
             viewModel.onAppear()
             scrollToBottom()
@@ -258,7 +258,7 @@ struct ChatView: View {
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
         .background(
-            CRTTheme.Background.panel
+            theme.background.panel
                 .overlay(
                     Rectangle()
                         .frame(height: 1)
@@ -593,7 +593,7 @@ private struct RecipientSelectorSheet: View {
                     }
                 }
             }
-            .background(CRTTheme.Background.screen)
+            .background(theme.background.screen)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -694,7 +694,7 @@ private struct RecipientSelectorSheet: View {
                 if unreadCount > 0 {
                     Text("\(unreadCount)")
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(CRTTheme.Background.screen)
+                        .foregroundColor(theme.background.screen)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(theme.primary)
@@ -859,7 +859,7 @@ private struct ChatSearchSheet: View {
                     Spacer()
                 }
             }
-            .background(CRTTheme.Background.screen)
+            .background(theme.background.screen)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif

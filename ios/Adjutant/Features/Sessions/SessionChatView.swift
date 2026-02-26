@@ -50,7 +50,7 @@ struct SessionChatView: View {
             // Input area
             inputArea
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .onAppear {
             viewModel.onAppear()
         }
@@ -117,7 +117,7 @@ struct SessionChatView: View {
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
         .background(
-            CRTTheme.Background.panel
+            theme.background.panel
                 .overlay(
                     Rectangle()
                         .frame(height: 1)
@@ -212,7 +212,7 @@ struct SessionChatView: View {
             .foregroundColor(theme.primary)
             .padding(.horizontal, CRTTheme.Spacing.sm)
             .padding(.vertical, CRTTheme.Spacing.xs)
-            .background(CRTTheme.Background.panel)
+            .background(theme.background.panel)
             .cornerRadius(CRTTheme.CornerRadius.md)
             .overlay(
                 RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
@@ -319,7 +319,7 @@ struct SessionChatView: View {
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
         .background(
-            CRTTheme.Background.panel
+            theme.background.panel
                 .overlay(
                     Rectangle()
                         .frame(height: 1)

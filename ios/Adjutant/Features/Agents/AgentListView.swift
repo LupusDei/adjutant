@@ -33,7 +33,7 @@ struct AgentListView: View {
             // Content
             contentView
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .onAppear {
             viewModel.onAppear()
         }
@@ -104,7 +104,7 @@ struct AgentListView: View {
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
         .background(
-            CRTTheme.Background.panel
+            theme.background.panel
                 .overlay(
                     Rectangle()
                         .frame(height: 1)
@@ -163,7 +163,7 @@ struct AgentListView: View {
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.xs)
         .background(
-            CRTTheme.Background.panel.opacity(0.3)
+            theme.background.panel.opacity(0.3)
                 .overlay(
                     Rectangle()
                         .frame(height: 1)
@@ -243,7 +243,7 @@ struct AgentListView: View {
             }
             .padding(.horizontal, CRTTheme.Spacing.sm)
             .padding(.vertical, CRTTheme.Spacing.xs)
-            .background(CRTTheme.Background.elevated)
+            .background(theme.background.elevated)
             .cornerRadius(CRTTheme.CornerRadius.sm)
             .overlay(
                 RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
@@ -294,7 +294,7 @@ struct AgentListView: View {
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
-        .background(CRTTheme.Background.panel.opacity(0.5))
+        .background(theme.background.panel.opacity(0.5))
     }
 
     // MARK: - Status Filter Bar
@@ -487,7 +487,7 @@ struct AgentListView: View {
         }
         .padding(.vertical, CRTTheme.Spacing.xxs)
         .padding(.horizontal, CRTTheme.Spacing.xxs)
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
     }
 
     private var rigPickerSheet: some View {
@@ -526,7 +526,7 @@ struct AgentListView: View {
                 }
             }
             .listStyle(.plain)
-            .background(CRTTheme.Background.screen)
+            .background(theme.background.screen)
             .navigationTitle("Filter by Rig")
             #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

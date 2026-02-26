@@ -42,9 +42,9 @@ public struct CRTButton: View {
         func backgroundColor(theme: CRTTheme.ColorTheme, isPressed: Bool) -> Color {
             switch self {
             case .primary:
-                return isPressed ? theme.bright : theme.primary
+                return isPressed ? theme.bright : theme.accent
             case .secondary, .ghost:
-                return isPressed ? theme.primary.opacity(0.1) : .clear
+                return isPressed ? theme.accent.opacity(0.1) : .clear
             case .danger:
                 return isPressed ? CRTTheme.State.error.opacity(0.2) : .clear
             }
@@ -53,9 +53,9 @@ public struct CRTButton: View {
         func foregroundColor(theme: CRTTheme.ColorTheme) -> Color {
             switch self {
             case .primary:
-                return CRTTheme.Background.screen
+                return theme.background.screen
             case .secondary, .ghost:
-                return theme.primary
+                return theme.textPrimary
             case .danger:
                 return CRTTheme.State.error
             }
@@ -64,9 +64,9 @@ public struct CRTButton: View {
         func borderColor(theme: CRTTheme.ColorTheme, isPressed: Bool) -> Color {
             switch self {
             case .primary:
-                return isPressed ? theme.bright : theme.primary
+                return isPressed ? theme.bright : theme.accent
             case .secondary:
-                return isPressed ? theme.bright : theme.primary
+                return isPressed ? theme.bright : theme.accent
             case .ghost:
                 return .clear
             case .danger:
@@ -135,7 +135,7 @@ public struct CRTButton: View {
                 }
 
                 Text(title.uppercased())
-                    .font(CRTTheme.Typography.font(size: size.fontSize, weight: .bold))
+                    .font(CRTTheme.Typography.font(size: size.fontSize, weight: .bold, theme: theme))
                     .tracking(CRTTheme.Typography.wideLetterSpacing)
             }
             .padding(.vertical, size.verticalPadding)
@@ -241,7 +241,7 @@ extension CRTButton {
             .disabled(true)
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("CRTButton Sizes") {
@@ -253,7 +253,7 @@ extension CRTButton {
         CRTButton("Large", size: .large) { }
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("CRTButton Themes") {
@@ -264,5 +264,5 @@ extension CRTButton {
         }
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

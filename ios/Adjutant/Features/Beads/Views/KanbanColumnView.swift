@@ -21,7 +21,7 @@ struct KanbanColumnView: View {
             // Cards container
             cardsContainer
         }
-        .background(CRTTheme.Background.panel)
+        .background(theme.background.panel)
         .overlay(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
                 .stroke(isDropTarget ? column.color : theme.primary.opacity(0.2), lineWidth: isDropTarget ? 2 : 1)
@@ -59,7 +59,7 @@ struct KanbanColumnView: View {
         }
         .padding(.horizontal, CRTTheme.Spacing.xs)
         .padding(.vertical, CRTTheme.Spacing.xs)
-        .background(CRTTheme.Background.elevated)
+        .background(theme.background.elevated)
         .overlay(
             Rectangle()
                 .fill(column.color)
@@ -152,5 +152,5 @@ struct KanbanColumnView: View {
     }
     .padding()
     .frame(height: 400)
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

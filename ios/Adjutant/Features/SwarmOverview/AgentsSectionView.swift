@@ -151,7 +151,7 @@ struct AgentsSectionView: View {
         ])
         .padding(.vertical)
     }
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("Agents Section - Empty") {
@@ -159,6 +159,6 @@ struct AgentsSectionView: View {
         AgentsSectionView(agents: [])
             .padding(.vertical)
     }
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 

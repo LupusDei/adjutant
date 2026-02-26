@@ -254,7 +254,7 @@ public struct EmptyStateView: View {
         )
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("InlineError") {
@@ -263,7 +263,7 @@ public struct EmptyStateView: View {
         InlineError("Invalid email format")
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("EmptyStateView") {
@@ -282,5 +282,5 @@ public struct EmptyStateView: View {
             action: { }
         )
     }
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

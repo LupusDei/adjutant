@@ -60,7 +60,7 @@ struct EpicDetailView: View {
             }
             .padding(CRTTheme.Spacing.md)
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
@@ -123,7 +123,7 @@ struct EpicDetailView: View {
         .padding(CRTTheme.Spacing.md)
         .background(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
-                .fill(CRTTheme.Background.elevated)
+                .fill(theme.background.elevated)
         )
         .overlay(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
@@ -170,7 +170,7 @@ struct EpicDetailView: View {
         .padding(CRTTheme.Spacing.md)
         .background(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
-                .fill(CRTTheme.Background.elevated)
+                .fill(theme.background.elevated)
         )
     }
 
@@ -225,7 +225,7 @@ struct EpicDetailView: View {
             .padding(CRTTheme.Spacing.sm)
             .background(
                 RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                    .fill(CRTTheme.Background.elevated)
+                    .fill(theme.background.elevated)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)

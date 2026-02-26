@@ -51,7 +51,7 @@ struct KanbanCardView: View {
             footerRow
         }
         .padding(CRTTheme.Spacing.xs)
-        .background(CRTTheme.Background.panel)
+        .background(theme.background.panel)
         .overlay(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
                 .stroke(theme.dim.opacity(0.5), lineWidth: 1)
@@ -187,7 +187,7 @@ struct KanbanCardView: View {
     }
     .padding()
     .frame(width: 200)
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("KanbanCard - Dragging") {
@@ -228,7 +228,7 @@ struct KanbanCardView: View {
     }
     .padding()
     .frame(width: 400)
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("KanbanCard - All Priorities") {
@@ -253,5 +253,5 @@ struct KanbanCardView: View {
     }
     .padding()
     .frame(width: 180)
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

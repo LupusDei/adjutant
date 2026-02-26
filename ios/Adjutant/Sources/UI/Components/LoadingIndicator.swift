@@ -115,13 +115,13 @@ public struct LoadingIndicator: View {
     private func animatedTextView(text: String) -> some View {
         HStack(spacing: 0) {
             Text(text.uppercased())
-                .font(CRTTheme.Typography.font(size: size.fontSize, weight: .medium))
+                .font(CRTTheme.Typography.font(size: size.fontSize, weight: .medium, theme: theme))
                 .tracking(CRTTheme.Typography.letterSpacing)
                 .foregroundColor(theme.primary)
 
             // Animated dots
             Text(String(repeating: ".", count: dotCount))
-                .font(CRTTheme.Typography.font(size: size.fontSize, weight: .medium))
+                .font(CRTTheme.Typography.font(size: size.fontSize, weight: .medium, theme: theme))
                 .foregroundColor(theme.primary)
                 .frame(width: 24, alignment: .leading)
         }
@@ -225,7 +225,7 @@ public struct SkeletonView: View {
         LoadingIndicator(size: .large)
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("LoadingIndicator with Text") {
@@ -234,7 +234,7 @@ public struct SkeletonView: View {
         LoadingIndicator(size: .large, text: "PLEASE WAIT")
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("LoadingIndicator Themes") {
@@ -245,7 +245,7 @@ public struct SkeletonView: View {
         }
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("Skeleton Views") {
@@ -256,5 +256,5 @@ public struct SkeletonView: View {
         SkeletonView(height: 80)
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

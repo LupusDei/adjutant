@@ -43,7 +43,7 @@ struct ProposalCard: View {
             }
         }
         .padding(CRTTheme.Spacing.sm)
-        .background(CRTTheme.Background.elevated)
+        .background(theme.background.elevated)
         .overlay(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
                 .stroke(borderColor.opacity(0.4), lineWidth: 1)
@@ -228,7 +228,7 @@ struct ProposalCard: View {
         onDismiss: {}
     )
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("ProposalCard - Accepted Engineering") {
@@ -245,7 +245,7 @@ struct ProposalCard: View {
         )
     )
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("ProposalCard - Dismissed") {
@@ -262,5 +262,5 @@ struct ProposalCard: View {
         )
     )
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

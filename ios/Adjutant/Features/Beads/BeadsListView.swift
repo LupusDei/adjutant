@@ -52,7 +52,7 @@ struct BeadsListView: View {
                 updatingIndicator
             }
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .onAppear {
             viewModel.onAppear()
             Task {
@@ -110,7 +110,7 @@ struct BeadsListView: View {
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
-        .background(CRTTheme.Background.panel)
+        .background(theme.background.panel)
         .overlay(
             Rectangle()
                 .frame(height: 1)
@@ -176,7 +176,7 @@ struct BeadsListView: View {
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
-        .background(CRTTheme.Background.elevated)
+        .background(theme.background.elevated)
     }
 
     private var overseerToggle: some View {
@@ -238,7 +238,7 @@ struct BeadsListView: View {
         }
         .padding(.horizontal, CRTTheme.Spacing.sm)
         .padding(.vertical, CRTTheme.Spacing.xs)
-        .background(CRTTheme.Background.panel)
+        .background(theme.background.panel)
         .overlay(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
                 .stroke(theme.primary.opacity(0.3), lineWidth: 1)

@@ -63,7 +63,7 @@ struct SessionRowView: View {
             .background(
                 isActive
                     ? theme.primary.opacity(0.08)
-                    : CRTTheme.Background.panel.opacity(0.3)
+                    : theme.background.panel.opacity(0.3)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
@@ -181,5 +181,5 @@ struct SessionRowView: View {
         )
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

@@ -33,7 +33,7 @@ struct ChatBubble: View {
         if isOutgoing {
             return theme.primary.opacity(0.2)
         } else {
-            return CRTTheme.Background.elevated
+            return theme.background.elevated
         }
     }
 
@@ -199,6 +199,6 @@ struct ChatBubble_Previews: PreviewProvider {
             ChatBubble(message: outgoingMessage, isOutgoing: true)
         }
         .padding()
-        .background(CRTTheme.Background.screen)
+        .background(CRTTheme.ColorTheme.pipboy.background.screen)
     }
 }

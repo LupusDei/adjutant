@@ -45,7 +45,7 @@ struct SpawnAgentSheet: View {
                     spawnForm
                 }
             }
-            .background(CRTTheme.Background.screen)
+            .background(theme.background.screen)
             .navigationTitle("")
             .toolbar {
                 ToolbarItem(placement: .principal) {

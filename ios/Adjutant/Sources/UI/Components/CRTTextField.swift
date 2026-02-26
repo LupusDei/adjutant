@@ -51,7 +51,7 @@ struct KeyboardDismissOverlay: ViewModifier {
                             .padding(8)
                             .background(
                                 Circle()
-                                    .fill(CRTTheme.Background.panel)
+                                    .fill(theme.background.panel)
                                     .overlay(
                                         Circle()
                                             .stroke(theme.primary.opacity(0.4), lineWidth: 1)
@@ -127,9 +127,9 @@ public struct CRTTextField: View {
             }
 
             TextField("", text: $text, prompt: promptText)
-                .font(CRTTheme.Typography.font(size: 14))
-                .foregroundColor(theme.primary)
-                .tint(theme.primary)
+                .font(CRTTheme.Typography.font(size: 14, theme: theme))
+                .foregroundColor(theme.textPrimary)
+                .tint(theme.accent)
                 .focused($isFocused)
                 .onSubmit {
                     onSubmit?()
@@ -139,7 +139,7 @@ public struct CRTTextField: View {
         .padding(.vertical, CRTTheme.Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                .fill(CRTTheme.Background.elevated.opacity(isFocused ? 0.8 : 0.5))
+                .fill(theme.background.elevated.opacity(isFocused ? 0.8 : 0.5))
         )
         .overlay(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
@@ -216,16 +216,16 @@ public struct CRTTextEditor: View {
             ZStack(alignment: .topLeading) {
                 if text.isEmpty {
                     Text(placeholder.uppercased())
-                        .font(CRTTheme.Typography.font(size: 14))
+                        .font(CRTTheme.Typography.font(size: 14, theme: theme))
                         .foregroundColor(theme.dim.opacity(0.6))
                         .padding(.horizontal, CRTTheme.Spacing.xs)
                         .padding(.vertical, CRTTheme.Spacing.xs)
                 }
 
                 TextEditor(text: $text)
-                    .font(CRTTheme.Typography.font(size: 14))
-                    .foregroundColor(theme.primary)
-                    .tint(theme.primary)
+                    .font(CRTTheme.Typography.font(size: 14, theme: theme))
+                    .foregroundColor(theme.textPrimary)
+                    .tint(theme.accent)
                     .focused($isFocused)
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, CRTTheme.Spacing.xxs)
@@ -238,7 +238,7 @@ public struct CRTTextEditor: View {
             .frame(minHeight: minHeight)
             .background(
                 RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                    .fill(CRTTheme.Background.elevated.opacity(isFocused ? 0.8 : 0.5))
+                    .fill(theme.background.elevated.opacity(isFocused ? 0.8 : 0.5))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
@@ -304,7 +304,7 @@ public struct CRTTextEditor: View {
                     .disabled(true)
             }
             .padding()
-            .background(CRTTheme.Background.screen)
+            .background(CRTTheme.ColorTheme.pipboy.background.screen)
         }
     }
 
@@ -328,7 +328,7 @@ public struct CRTTextEditor: View {
                 )
             }
             .padding()
-            .background(CRTTheme.Background.screen)
+            .background(CRTTheme.ColorTheme.pipboy.background.screen)
         }
     }
 

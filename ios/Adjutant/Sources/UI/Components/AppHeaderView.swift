@@ -163,7 +163,7 @@ struct AppHeaderView: View {
         )
         Spacer()
     }
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
     .preferredColorScheme(.dark)
     .onAppear {
         AppState.shared.updatePowerState(.running)
@@ -179,7 +179,7 @@ struct AppHeaderView: View {
         )
         Spacer()
     }
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
     .preferredColorScheme(.dark)
     .onAppear {
         AppState.shared.updatePowerState(.stopped)

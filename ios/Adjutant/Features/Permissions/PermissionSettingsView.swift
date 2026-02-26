@@ -11,7 +11,7 @@ struct PermissionSettingsView: View {
             headerView
             settingsContent
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .onAppear { viewModel.onAppear() }
     }
 
@@ -28,7 +28,7 @@ struct PermissionSettingsView: View {
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
         .background(
-            CRTTheme.Background.panel
+            theme.background.panel
                 .overlay(
                     Rectangle()
                         .frame(height: 1)
@@ -302,7 +302,7 @@ struct PermissionDialog: View {
             }
         }
         .padding(CRTTheme.Spacing.lg)
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .cornerRadius(16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)

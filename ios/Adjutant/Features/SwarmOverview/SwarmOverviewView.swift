@@ -20,7 +20,7 @@ struct SwarmOverviewView: View {
                 emptyView
             }
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .onAppear { viewModel.onAppear() }
         .onDisappear { viewModel.onDisappear() }
         .onChange(of: viewModel.spawnedSessionId) { _, newId in

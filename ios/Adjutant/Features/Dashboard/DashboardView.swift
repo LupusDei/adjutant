@@ -64,7 +64,7 @@ struct DashboardView: View {
             }
             .padding(.vertical, CRTTheme.Spacing.md)
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .refreshable {
             await viewModel.refresh()
         }

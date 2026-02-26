@@ -11,7 +11,7 @@ struct SwarmView: View {
             headerView
             contentView
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .onAppear { viewModel.onAppear() }
         .onDisappear { viewModel.onDisappear() }
         .sheet(isPresented: $viewModel.showingCreateSheet) {
@@ -53,7 +53,7 @@ struct SwarmView: View {
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
         .background(
-            CRTTheme.Background.panel
+            theme.background.panel
                 .overlay(
                     Rectangle()
                         .frame(height: 1)
@@ -416,7 +416,7 @@ struct SwarmView: View {
             Spacer()
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .presentationDetents([.medium])
     }
 

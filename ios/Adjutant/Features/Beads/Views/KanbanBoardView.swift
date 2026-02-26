@@ -160,5 +160,5 @@ struct KanbanBoardView: View {
         onBeadTap: { _ in },
         onDrop: { _, _ in }
     )
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

@@ -102,6 +102,6 @@ struct SourceFilterDropdown: View {
         SourceFilterDropdown(sources: [])
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
     .preferredColorScheme(.dark)
 }

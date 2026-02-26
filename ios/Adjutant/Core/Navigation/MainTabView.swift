@@ -35,7 +35,7 @@ struct MainTabView: View {
                 visibleTabs: visibleTabs
             )
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         .environmentObject(coordinator)
         .onAppear {
             // Start network monitoring
@@ -165,7 +165,7 @@ struct CRTTabBar: View {
     }
 
     private var tabBarBackground: some View {
-        CRTTheme.Background.panel
+        theme.background.panel
             .overlay(
                 Rectangle()
                     .frame(height: 1)
@@ -247,7 +247,7 @@ typealias BeadsView = BeadsListView
         Spacer()
         CRTTabBar(selectedTab: .constant(.dashboard), unreadCount: 5)
     }
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("Tab Bar - Mail Selected") {
@@ -255,5 +255,5 @@ typealias BeadsView = BeadsListView
         Spacer()
         CRTTabBar(selectedTab: .constant(.mail), unreadCount: 12)
     }
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

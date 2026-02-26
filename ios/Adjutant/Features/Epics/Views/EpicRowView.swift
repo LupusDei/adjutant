@@ -63,7 +63,7 @@ struct EpicRowView: View {
             .padding(CRTTheme.Spacing.sm)
             .background(
                 RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
-                    .fill(CRTTheme.Background.elevated)
+                    .fill(theme.background.elevated)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
@@ -129,7 +129,7 @@ struct EpicRowView: View {
 
     return EpicRowView(epic: epic) {}
         .padding()
-        .background(CRTTheme.Background.screen)
+        .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("Epic Row - Complete") {
@@ -153,5 +153,5 @@ struct EpicRowView: View {
 
     return EpicRowView(epic: epic) {}
         .padding()
-        .background(CRTTheme.Background.screen)
+        .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

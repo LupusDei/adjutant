@@ -16,7 +16,7 @@ struct DependencyGraphView: View {
 
     var body: some View {
         ZStack {
-            CRTTheme.Background.screen
+            theme.background.screen
 
             if viewModel.isLoading && viewModel.graphNodes.isEmpty {
                 loadingView
@@ -101,7 +101,7 @@ struct DependencyGraphView: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(theme.primary)
                     .frame(width: 32, height: 32)
-                    .background(CRTTheme.Background.panel.opacity(0.9))
+                    .background(theme.background.panel.opacity(0.9))
                     .overlay(
                         RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
                             .stroke(theme.primary.opacity(0.4), lineWidth: 1)
@@ -131,7 +131,7 @@ struct DependencyGraphView: View {
                     .background(
                         viewModel.showCriticalPath
                             ? theme.primary.opacity(0.15)
-                            : CRTTheme.Background.panel.opacity(0.9)
+                            : theme.background.panel.opacity(0.9)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
@@ -153,7 +153,7 @@ struct DependencyGraphView: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(theme.primary)
                     .frame(width: 32, height: 32)
-                    .background(CRTTheme.Background.panel.opacity(0.9))
+                    .background(theme.background.panel.opacity(0.9))
                     .overlay(
                         RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
                             .stroke(theme.primary.opacity(0.4), lineWidth: 1)

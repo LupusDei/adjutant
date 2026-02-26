@@ -111,7 +111,7 @@ public struct CRTText: View {
 
     public var body: some View {
         Text(style.isUppercased ? text.uppercased() : text)
-            .font(CRTTheme.Typography.font(size: style.fontSize, weight: style.fontWeight))
+            .font(CRTTheme.Typography.font(size: style.fontSize, weight: style.fontWeight, theme: theme))
             .tracking(style.letterSpacing)
             .foregroundColor(resolvedColor)
             .crtGlow(
@@ -123,7 +123,7 @@ public struct CRTText: View {
     }
 
     private var resolvedColor: Color {
-        color ?? theme.primary
+        color ?? theme.textPrimary
     }
 }
 
@@ -178,7 +178,7 @@ extension CRTText {
         }
         .padding()
     }
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }
 
 #Preview("CRTText Themes") {
@@ -192,5 +192,5 @@ extension CRTText {
         }
     }
     .padding()
-    .background(CRTTheme.Background.screen)
+    .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

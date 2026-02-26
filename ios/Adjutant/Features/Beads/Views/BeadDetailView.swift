@@ -69,7 +69,7 @@ struct BeadDetailView: View {
             }
             .padding(CRTTheme.Spacing.md)
         }
-        .background(CRTTheme.Background.screen)
+        .background(theme.background.screen)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)

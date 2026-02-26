@@ -56,7 +56,7 @@ struct QuickInputFAB: View {
 
                 Image(systemName: "bubble.left.fill")
                     .font(.system(size: 24))
-                    .foregroundColor(CRTTheme.Background.screen)
+                    .foregroundColor(theme.background.screen)
             }
             .crtGlow(color: theme.primary, radius: 12, intensity: 0.5)
         }
@@ -83,7 +83,7 @@ struct QuickInputFAB: View {
             // Action bar
             actionBar
         }
-        .background(CRTTheme.Background.panel)
+        .background(theme.background.panel)
         .clipShape(RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.lg))
         .overlay(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.lg)
@@ -262,7 +262,7 @@ struct QuickInputFAB: View {
                 }
                 .padding(.vertical, 10)
                 .padding(.horizontal, 16)
-                .foregroundColor(CRTTheme.Background.screen)
+                .foregroundColor(theme.background.screen)
                 .background(viewModel.canSend ? theme.primary : theme.dim)
                 .clipShape(RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md))
                 .overlay(
@@ -281,7 +281,7 @@ struct QuickInputFAB: View {
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
-        .background(CRTTheme.Background.elevated.opacity(0.5))
+        .background(theme.background.elevated.opacity(0.5))
     }
 }
 
@@ -304,7 +304,7 @@ extension QuickInputFAB {
 
 #Preview("QuickInputFAB - Collapsed") {
     ZStack {
-        CRTTheme.Background.screen
+        CRTTheme.ColorTheme.pipboy.background.screen
             .ignoresSafeArea()
 
         QuickInputFAB()
@@ -317,7 +317,7 @@ extension QuickInputFAB {
 
         var body: some View {
             ZStack {
-                CRTTheme.Background.screen
+                CRTTheme.ColorTheme.pipboy.background.screen
                     .ignoresSafeArea()
 
                 VStack {
