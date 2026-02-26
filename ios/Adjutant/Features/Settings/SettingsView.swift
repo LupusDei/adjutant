@@ -494,7 +494,8 @@ struct SettingsView: View {
 // MARK: - Scheme Preview Card
 
 /// A preview card that renders a mini-preview of a color scheme's aesthetic.
-/// Each card uses the scheme's own colors to communicate its look and feel.
+/// Each card uses the scheme's own colors and a distinctive visual treatment
+/// so users can identify each theme at a glance without reading the name.
 private struct SchemePreviewCard: View {
     let scheme: ThemeIdentifier
     let isSelected: Bool
@@ -503,52 +504,37 @@ private struct SchemePreviewCard: View {
     /// The color theme for this card's scheme
     private var colorTheme: CRTTheme.ColorTheme { scheme.colorTheme }
 
+    /// Corner radius: larger for non-CRT themes, tight for CRT themes
+    private var cornerRadius: CGFloat {
+        colorTheme.crtEffectsEnabled ? CRTTheme.CornerRadius.md : CRTTheme.CornerRadius.lg
+    }
+
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
-                // Header row with scheme name and selection indicator
-                HStack {
-                    Text(scheme.displayName)
-                        .font(headerFont)
-                        .foregroundColor(colorTheme.textPrimary)
-                        .tracking(CRTTypography.letterSpacingWider)
+            ZStack(alignment: .topLeading) {
+                // Theme-specific content
+                cardContent
+                    .padding(CRTTheme.Spacing.md)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(minHeight: 120)
 
-                    Spacer()
-
-                    if isSelected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(colorTheme.accent)
-                            .crtGlow(
-                                color: colorTheme.accent,
-                                radius: colorTheme.crtEffectsEnabled ? 6 : 0,
-                                intensity: colorTheme.crtEffectsEnabled ? 0.5 : 0
-                            )
-                    }
-                }
-
-                // Divider line in theme color
-                Rectangle()
-                    .fill(colorTheme.dim.opacity(0.4))
-                    .frame(height: 1)
-
-                // Sample content lines
-                VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxs) {
-                    Text("System status: nominal")
-                        .font(bodyFont)
-                        .foregroundColor(colorTheme.textPrimary)
-
-                    Text("All subsystems operational")
-                        .font(bodyFont)
-                        .foregroundColor(colorTheme.textSecondary)
+                // Scanline overlay for CRT themes
+                if colorTheme.crtEffectsEnabled {
+                    CardScanlineOverlay(lineColor: colorTheme.primary)
+                        .opacity(0.06)
+                        .allowsHitTesting(false)
                 }
             }
-            .padding(CRTTheme.Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(minHeight: 100)
             .background(cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md))
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .overlay(cardBorder)
+            .compositingGroup()
+            .shadow(
+                color: cardShadowColor,
+                radius: cardShadowRadius,
+                x: 0,
+                y: cardShadowY
+            )
             .scaleEffect(isSelected ? 1.0 : 0.97)
             .animation(.easeInOut(duration: CRTTheme.Animation.fast), value: isSelected)
         }
@@ -558,42 +544,326 @@ private struct SchemePreviewCard: View {
         .accessibilityHint(isSelected ? "Currently selected" : "Double tap to select")
     }
 
-    // MARK: - Fonts
+    // MARK: - Card Content (per-theme)
 
-    /// Header font: monospace for CRT schemes, system for Document
-    private var headerFont: Font {
-        colorTheme.useMonospaceFont
-            ? .crt(CRTTypography.sizeLG)
-            : .system(size: CRTTypography.sizeLG, weight: .bold, design: .default)
+    @ViewBuilder
+    private var cardContent: some View {
+        switch scheme {
+        case .pipboy:
+            pipboyContent
+        case .document:
+            documentContent
+        case .starcraft:
+            starcraftContent
+        }
     }
 
-    /// Body font: monospace for CRT schemes, system for Document
-    private var bodyFont: Font {
-        colorTheme.useMonospaceFont
-            ? .crt(CRTTypography.sizeSM)
-            : .system(size: CRTTypography.sizeSM, weight: .regular, design: .default)
+    // MARK: - Pip-Boy Content
+
+    /// Retro terminal aesthetic: monospace header, cursor blink, system readout lines
+    private var pipboyContent: some View {
+        VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+            // Header with terminal prompt feel
+            HStack(spacing: CRTTheme.Spacing.xs) {
+                Text(">")
+                    .font(.crt(CRTTypography.sizeLG))
+                    .foregroundColor(colorTheme.bright)
+                    .crtGlow(color: colorTheme.bright, radius: 3, intensity: 0.4)
+
+                Text(scheme.displayName)
+                    .font(.crt(CRTTypography.sizeLG))
+                    .foregroundColor(colorTheme.textPrimary)
+                    .tracking(CRTTypography.letterSpacingWider)
+                    .crtGlow(color: colorTheme.primary, radius: 2, intensity: 0.3)
+
+                // Blinking cursor
+                BlinkingCursor(color: colorTheme.bright)
+
+                Spacer()
+
+                selectionIndicator
+            }
+
+            // Thin green divider with glow
+            Rectangle()
+                .fill(colorTheme.primary.opacity(0.5))
+                .frame(height: 1)
+                .crtGlow(color: colorTheme.primary, radius: 3, intensity: 0.3)
+
+            // System readout lines
+            HStack(spacing: CRTTheme.Spacing.xs) {
+                Text("STATUS")
+                    .font(.crt(CRTTypography.sizeXS))
+                    .foregroundColor(colorTheme.dim)
+                    .tracking(CRTTypography.letterSpacingWider)
+
+                Rectangle()
+                    .fill(colorTheme.dim.opacity(0.3))
+                    .frame(width: 1, height: 10)
+
+                Text("NOMINAL")
+                    .font(.crt(CRTTypography.sizeXS))
+                    .foregroundColor(colorTheme.bright)
+                    .crtGlow(color: colorTheme.bright, radius: 2, intensity: 0.3)
+            }
+
+            Text("All subsystems operational")
+                .font(.crt(CRTTypography.sizeSM))
+                .foregroundColor(colorTheme.textSecondary)
+        }
+    }
+
+    // MARK: - Document Content
+
+    /// Clean professional aesthetic: serif-like hierarchy, paragraph lines, subtle shadow
+    private var documentContent: some View {
+        VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+            // Clean header with proper typographic hierarchy
+            HStack {
+                Text(scheme.displayName)
+                    .font(.system(size: CRTTypography.sizeLG, weight: .semibold, design: .default))
+                    .foregroundColor(colorTheme.textPrimary)
+                    .tracking(CRTTypography.letterSpacingWide)
+
+                Spacer()
+
+                selectionIndicator
+            }
+
+            // Clean thin divider
+            Rectangle()
+                .fill(colorTheme.dim.opacity(0.2))
+                .frame(height: 1)
+
+            // Document-style paragraph lines (abstract text representation)
+            VStack(alignment: .leading, spacing: 6) {
+                DocumentLine(widthFraction: 1.0, color: colorTheme.dim.opacity(0.15))
+                DocumentLine(widthFraction: 0.85, color: colorTheme.dim.opacity(0.12))
+                DocumentLine(widthFraction: 0.92, color: colorTheme.dim.opacity(0.10))
+                DocumentLine(widthFraction: 0.6, color: colorTheme.dim.opacity(0.08))
+            }
+
+            // Subtle body text
+            Text("Clean, focused reading")
+                .font(.system(size: CRTTypography.sizeSM, weight: .regular, design: .default))
+                .foregroundColor(colorTheme.textSecondary)
+        }
+    }
+
+    // MARK: - StarCraft Content
+
+    /// Sci-fi electric aesthetic: teal accents, geometric decorations, gradient feel
+    private var starcraftContent: some View {
+        VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+            // Header with electric accent
+            HStack(spacing: CRTTheme.Spacing.xs) {
+                // Small geometric accent
+                Diamond(color: colorTheme.bright)
+                    .frame(width: 8, height: 8)
+                    .crtGlow(color: colorTheme.bright, radius: 4, intensity: 0.6)
+
+                Text(scheme.displayName)
+                    .font(.crt(CRTTypography.sizeLG))
+                    .foregroundColor(colorTheme.textPrimary)
+                    .tracking(CRTTypography.letterSpacingWider)
+                    .crtGlow(color: colorTheme.primary, radius: 2, intensity: 0.3)
+
+                Spacer()
+
+                selectionIndicator
+            }
+
+            // Electric teal gradient divider
+            GeometryReader { geometry in
+                LinearGradient(
+                    colors: [
+                        colorTheme.primary.opacity(0.0),
+                        colorTheme.primary.opacity(0.8),
+                        colorTheme.bright,
+                        colorTheme.primary.opacity(0.8),
+                        colorTheme.primary.opacity(0.0)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: geometry.size.width, height: 1)
+                .crtGlow(color: colorTheme.bright, radius: 4, intensity: 0.5)
+            }
+            .frame(height: 1)
+
+            // Sci-fi status readout with teal accents
+            HStack(spacing: CRTTheme.Spacing.sm) {
+                // Mini status bars
+                HStack(spacing: 3) {
+                    ForEach(0..<4, id: \.self) { index in
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(index < 3 ? colorTheme.bright : colorTheme.dim.opacity(0.3))
+                            .frame(width: 12, height: 4)
+                            .crtGlow(
+                                color: colorTheme.bright,
+                                radius: index < 3 ? 2 : 0,
+                                intensity: index < 3 ? 0.4 : 0
+                            )
+                    }
+                }
+
+                Text("PSIONIC LINK ACTIVE")
+                    .font(.crt(CRTTypography.sizeXS))
+                    .foregroundColor(colorTheme.dim)
+                    .tracking(CRTTypography.letterSpacingWider)
+            }
+
+            Text("Protoss neural interface online")
+                .font(.crt(CRTTypography.sizeSM))
+                .foregroundColor(colorTheme.textSecondary)
+        }
+    }
+
+    // MARK: - Shared Selection Indicator
+
+    @ViewBuilder
+    private var selectionIndicator: some View {
+        if isSelected {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(colorTheme.accent)
+                .crtGlow(
+                    color: colorTheme.accent,
+                    radius: colorTheme.crtEffectsEnabled ? 6 : 0,
+                    intensity: colorTheme.crtEffectsEnabled ? 0.5 : 0
+                )
+        }
     }
 
     // MARK: - Card Styling
 
-    /// Background color using the scheme's own screen color
+    /// Background: uses scheme screen color; StarCraft gets a subtle gradient overlay
+    @ViewBuilder
     private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
-            .fill(colorTheme.background.screen)
+        switch scheme {
+        case .starcraft:
+            ZStack {
+                colorTheme.background.screen
+                // Subtle purple-to-deeper gradient
+                LinearGradient(
+                    colors: [
+                        colorTheme.background.panel.opacity(0.3),
+                        colorTheme.background.screen
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+        default:
+            colorTheme.background.screen
+        }
     }
 
-    /// Border with glow effect when selected; CRT schemes get a glow, Document gets a clean border
+    /// Border styling: CRT schemes get glow, Document gets clean subtle border with shadow
     private var cardBorder: some View {
-        RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
+        RoundedRectangle(cornerRadius: cornerRadius)
             .stroke(
                 isSelected ? colorTheme.primary : colorTheme.dim.opacity(0.3),
                 lineWidth: isSelected ? 2 : 1
             )
             .crtGlow(
                 color: colorTheme.primary,
-                radius: (isSelected && colorTheme.crtEffectsEnabled) ? 8 : 0,
-                intensity: (isSelected && colorTheme.crtEffectsEnabled) ? 0.4 : 0
+                radius: (isSelected && colorTheme.crtEffectsEnabled) ? 10 : 0,
+                intensity: (isSelected && colorTheme.crtEffectsEnabled) ? 0.5 : 0
             )
+    }
+
+    // MARK: - Shadow Properties
+
+    /// Shadow color: Document gets a real shadow, CRT themes get colored glow-shadow
+    private var cardShadowColor: Color {
+        if !isSelected { return .clear }
+        if colorTheme.crtEffectsEnabled {
+            return colorTheme.primary.opacity(0.2)
+        } else {
+            return Color.black.opacity(0.12)
+        }
+    }
+
+    private var cardShadowRadius: CGFloat {
+        isSelected ? (colorTheme.crtEffectsEnabled ? 12 : 6) : 0
+    }
+
+    private var cardShadowY: CGFloat {
+        isSelected ? (colorTheme.crtEffectsEnabled ? 0 : 3) : 0
+    }
+}
+
+// MARK: - Blinking Cursor
+
+/// A terminal-style blinking cursor block for the Pip-Boy card
+private struct BlinkingCursor: View {
+    let color: Color
+    @State private var isVisible = true
+
+    var body: some View {
+        Rectangle()
+            .fill(color)
+            .frame(width: 8, height: 14)
+            .opacity(isVisible ? 1.0 : 0.0)
+            .crtGlow(color: color, radius: 2, intensity: 0.3)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+                    isVisible = false
+                }
+            }
+    }
+}
+
+// MARK: - Card Scanline Overlay
+
+/// Lightweight scanline texture for preview cards. Unlike the full ScanlineOverlay
+/// in CRTEffects.swift, this draws colored lines matching the card's own scheme
+/// rather than reading from the environment theme.
+private struct CardScanlineOverlay: View {
+    let lineColor: Color
+
+    var body: some View {
+        Canvas { context, size in
+            let spacing: CGFloat = 3
+            let lineCount = Int(size.height / spacing)
+            for i in 0..<lineCount {
+                let y = CGFloat(i) * spacing
+                let rect = CGRect(x: 0, y: y, width: size.width, height: 1)
+                context.fill(Path(rect), with: .color(lineColor))
+            }
+        }
+    }
+}
+
+// MARK: - Document Line
+
+/// A horizontal bar representing a line of text in a document preview
+private struct DocumentLine: View {
+    let widthFraction: CGFloat
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geometry in
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(color)
+                .frame(width: geometry.size.width * widthFraction, height: 3)
+        }
+        .frame(height: 3)
+    }
+}
+
+// MARK: - Diamond Shape
+
+/// A small diamond/rhombus decoration for sci-fi themed cards
+private struct Diamond: View {
+    let color: Color
+
+    var body: some View {
+        Rectangle()
+            .fill(color)
+            .rotationEffect(.degrees(45))
+            .scaleEffect(x: 0.7, y: 0.7)
     }
 }
 
@@ -943,4 +1213,10 @@ private struct AboutRow: View {
     SettingsView()
         .environmentObject(AppCoordinator())
         .crtTheme(.starcraft)
+}
+
+#Preview("Settings View - Document Theme") {
+    SettingsView()
+        .environmentObject(AppCoordinator())
+        .crtTheme(.document)
 }
