@@ -5,6 +5,7 @@ import ActivityKit
 import WidgetKit
 
 /// ViewModel for the Dashboard view, coordinating Beads, Crew, and Mail data.
+/// Uses a single GET /api/dashboard batch endpoint instead of multiple individual requests.
 @MainActor
 final class DashboardViewModel: BaseViewModel {
     // MARK: - Published Properties
@@ -50,14 +51,12 @@ final class DashboardViewModel: BaseViewModel {
     // MARK: - Private Properties
 
     private let apiClient: APIClient
-    private let dataSync = DataSyncService.shared
 
     // MARK: - Initialization
 
     init(apiClient: APIClient? = nil) {
         self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
-        setupDataSyncObservers()
         loadFromCache()
     }
 
@@ -65,92 +64,102 @@ final class DashboardViewModel: BaseViewModel {
     private func loadFromCache() {
         let cache = ResponseCache.shared
         if cache.hasCache(for: .dashboard) {
-            // Filter out Wisp and Deacon sources for OVERSEER view
-            let cachedMail = cache.dashboardMail.filter { message in
-                let fromLower = message.from.lowercased()
-                return !fromLower.hasPrefix("wisp/") && !fromLower.hasPrefix("deacon/")
-            }
+            let cachedMail = cache.dashboardMail.filter { isOverseerMail($0) }
             recentMail = cachedMail
             crewMembers = cache.dashboardCrew
             unreadCount = recentMail.filter { !$0.read }.count
         }
-        // Load cached beads
         let cachedBeads = cache.beads
         if !cachedBeads.isEmpty {
             recentBeads = sortBeadsByRecency(cachedBeads)
         }
     }
 
-    /// Sets up observation of DataSyncService updates
-    private func setupDataSyncObservers() {
-        // Observe mail updates
-        dataSync.$mail
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] newMail in
-                self?.handleMailUpdate(newMail)
-            }
-            .store(in: &cancellables)
-
-        // Observe crew updates
-        dataSync.$crew
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] newCrew in
-                guard let self = self, !newCrew.isEmpty else { return }
-                self.crewMembers = newCrew
-                // Sync Live Activity when agent statuses change
-                Task { await self.syncLiveActivity() }
-                WidgetCenter.shared.reloadTimelines(ofKind: "AdjutantWidget")
-            }
-            .store(in: &cancellables)
-
-        // Observe beads updates
-        dataSync.$beads
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] newBeads in
-                self?.handleBeadsUpdate(newBeads)
-            }
-            .store(in: &cancellables)
+    deinit {
+        // Cleanup handled by cancellables
     }
 
-    /// Handles mail updates from DataSyncService
-    private func handleMailUpdate(_ newMail: [Message]) {
-        guard !newMail.isEmpty else { return }
+    // MARK: - Lifecycle
 
-        // Filter out Wisp and Deacon sources for OVERSEER view
-        let filteredMail = newMail.filter { message in
-            let fromLower = message.from.lowercased()
-            return !fromLower.hasPrefix("wisp/") && !fromLower.hasPrefix("deacon/")
+    override func onAppear() {
+        // Don't call super.onAppear() — we manage our own single fetch
+        Task<Void, Never> {
+            await refresh()
         }
-        self.recentMail = Array(filteredMail.prefix(maxRecentMail))
-        self.unreadCount = filteredMail.filter { !$0.read }.count
-        AppState.shared.updateUnreadMailCount(self.unreadCount)
+    }
 
-        // Update cache
+    override func onDisappear() {
+        super.onDisappear()
+    }
+
+    // MARK: - Data Loading
+
+    override func refresh() async {
+        isRefreshing = true
+        await fetchDashboard()
+        isRefreshing = false
+    }
+
+    /// Fetches all dashboard data in a single batch request
+    private func fetchDashboard() async {
+        do {
+            let response = try await apiClient.getDashboard()
+            processDashboardResponse(response)
+        } catch {
+            // Keep existing data on error
+        }
+    }
+
+    /// Processes the batch dashboard response, updating all published properties
+    private func processDashboardResponse(_ response: DashboardResponse) {
+        // Status section → rig statuses
+        if let statusData = response.status.data {
+            rigStatuses = statusData.rigs.sorted { $0.name.lowercased() < $1.name.lowercased() }
+
+            // Update AppState power state from status data
+            let localState = PowerState(rawValue: statusData.powerState.rawValue)
+            if let localState {
+                AppState.shared.updatePowerState(localState)
+            }
+        }
+
+        // Beads section
+        if let beadsData = response.beads.data {
+            processBeadsData(beadsData)
+        }
+
+        // Mail section
+        if let mailData = response.mail.data {
+            processMailData(mailData)
+        }
+
+        // Crew section
+        if let crew = response.crew.data {
+            crewMembers = crew
+        }
+
+        // Update cache for other views
         ResponseCache.shared.updateDashboard(
-            mail: self.recentMail,
-            crew: self.crewMembers,
+            mail: recentMail,
+            crew: crewMembers,
             convoys: []
         )
 
-        // Sync Live Activity when unread mail count changes
-        Task { await self.syncLiveActivity() }
+        // Sync Live Activity + Widgets
+        Task<Void, Never> { await syncLiveActivity() }
         WidgetCenter.shared.reloadTimelines(ofKind: "AdjutantWidget")
     }
 
-    /// Handles beads updates from DataSyncService
-    private func handleBeadsUpdate(_ newBeads: [BeadInfo]) {
-        guard !newBeads.isEmpty else { return }
-
-        let selectedRig = AppState.shared.selectedRig
-
-        // Filter and sort beads by status
-        let filtered = newBeads.filter { isOverseerRelevant($0) }
+    /// Processes beads data from the dashboard response
+    private func processBeadsData(_ data: DashboardBeadsData) {
+        // Combine all beads for filtering
+        let allBeads = data.inProgress.items + data.open.items + data.closed.items
+        let filtered = allBeads.filter { isOverseerRelevant($0) }
 
         let inProgress = filtered.filter { $0.status == "in_progress" }
             .sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
         self.inProgressBeads = Array(inProgress.prefix(maxBeadsPerColumn))
 
-        // In Swarm mode, hooked beads are not shown separately
         if AppState.shared.deploymentMode == .swarm {
             self.hookedBeads = []
         } else {
@@ -165,56 +174,16 @@ final class DashboardViewModel: BaseViewModel {
 
         self.recentBeads = sortBeadsByRecency(filtered)
 
-        // Sync Live Activity
-        Task { await self.syncLiveActivity() }
-        WidgetCenter.shared.reloadTimelines(ofKind: "AdjutantWidget")
+        // Update beads cache
+        ResponseCache.shared.updateBeads(allBeads)
     }
 
-    deinit {
-        // Cleanup handled by cancellables
-    }
-
-    // MARK: - Lifecycle
-
-    override func onAppear() {
-        super.onAppear()
-        dataSync.subscribeMail()
-        dataSync.subscribeCrew()
-        dataSync.subscribeBeads()
-    }
-
-    override func onDisappear() {
-        super.onDisappear()
-        dataSync.unsubscribeMail()
-        dataSync.unsubscribeCrew()
-        dataSync.unsubscribeBeads()
-    }
-
-    // MARK: - Data Loading
-
-    override func refresh() async {
-        isRefreshing = true
-
-        // Refresh all data via centralized service
-        await dataSync.refreshAll()
-
-        // Also fetch available rigs and rig statuses
-        await AppState.shared.fetchAvailableRigs()
-        await fetchRigStatuses()
-
-        isRefreshing = false
-    }
-
-    // MARK: - Rig Statuses
-
-    /// Fetches rig statuses from the status API
-    private func fetchRigStatuses() async {
-        do {
-            let status = try await apiClient.getStatus()
-            rigStatuses = status.rigs.sorted { $0.name.lowercased() < $1.name.lowercased() }
-        } catch {
-            // Keep existing data on error
-        }
+    /// Processes mail data from the dashboard response
+    private func processMailData(_ data: DashboardMailSummary) {
+        let filteredMail = data.recentMessages.filter { isOverseerMail($0) }
+        self.recentMail = Array(filteredMail.prefix(maxRecentMail))
+        self.unreadCount = data.unreadCount
+        AppState.shared.updateUnreadMailCount(self.unreadCount)
     }
 
     // MARK: - Live Activity
@@ -330,6 +299,12 @@ final class DashboardViewModel: BaseViewModel {
             let dateB = b.updatedDate ?? b.createdDate ?? Date.distantPast
             return dateA > dateB
         }
+    }
+
+    /// Filters mail messages for OVERSEER view (excludes internal wisp/deacon sources)
+    private func isOverseerMail(_ message: Message) -> Bool {
+        let fromLower = message.from.lowercased()
+        return !fromLower.hasPrefix("wisp/") && !fromLower.hasPrefix("deacon/")
     }
 
     /// Filters beads to only those relevant for OVERSEER view.

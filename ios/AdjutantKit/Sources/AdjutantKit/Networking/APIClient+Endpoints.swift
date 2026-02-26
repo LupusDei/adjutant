@@ -566,6 +566,21 @@ extension APIClient {
     }
 }
 
+// MARK: - Dashboard Endpoints
+
+extension APIClient {
+    /// Fetch all dashboard data in a single request.
+    ///
+    /// Returns status, beads, crew, unread counts, epics, and mail
+    /// in one response. Each section can independently succeed or fail.
+    ///
+    /// - Returns: A ``DashboardResponse`` with all dashboard sections.
+    /// - Throws: ``APIClientError`` if the request fails.
+    public func getDashboard() async throws -> DashboardResponse {
+        try await requestWithEnvelope(.get, path: "/dashboard")
+    }
+}
+
 // MARK: - Mode Endpoints
 
 extension APIClient {
