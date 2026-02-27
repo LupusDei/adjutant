@@ -72,9 +72,8 @@ struct ChatBubble: View {
 
                 // Message content with optional play button
                 HStack(alignment: .bottom, spacing: CRTTheme.Spacing.xs) {
-                    // Message bubble
-                    Text(message.body)
-                        .font(CRTTheme.Typography.font(size: 14))
+                    // Message bubble with markdown rendering
+                    MarkdownTextView(message.body, fontSize: 14)
                         .foregroundColor(theme.primary)
                         .padding(.horizontal, CRTTheme.Spacing.sm)
                         .padding(.vertical, CRTTheme.Spacing.xs)
@@ -199,9 +198,21 @@ struct ChatBubble_Previews: PreviewProvider {
             updatedAt: now
         )
 
+        let markdownMessage = PersistentMessage(
+            id: "test-3",
+            agentId: "zagara",
+            recipient: "user",
+            role: .agent,
+            body: "**What changed:**\n- Timestamps appear beside the bubble\n- Format: `8:02pm` for today, `2/26 8:02pm` for this year\n\n> This was a *complex* task but it's **done** now.",
+            deliveryStatus: .delivered,
+            createdAt: now,
+            updatedAt: now
+        )
+
         VStack(spacing: 16) {
             ChatBubble(message: incomingMessage, isOutgoing: false)
             ChatBubble(message: outgoingMessage, isOutgoing: true)
+            ChatBubble(message: markdownMessage, isOutgoing: false)
         }
         .padding()
         .background(CRTTheme.ColorTheme.pipboy.background.screen)
