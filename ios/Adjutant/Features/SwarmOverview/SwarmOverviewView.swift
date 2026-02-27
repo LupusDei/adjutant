@@ -7,6 +7,8 @@ struct SwarmOverviewView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
     @Environment(\.crtTheme) private var theme
     @State private var skeletonPulse = false
+    /// Tracks whether a long-press gesture fired, to suppress the button's tap action on release.
+    @State private var longPressTriggered = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -76,12 +78,18 @@ struct SwarmOverviewView: View {
         CRTCard(header: "AGENTS", headerBadge: "\(agents.count)") {
             VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
                 // Start Agent button
+                // Tap = spawn with random callsign; Long-press = show callsign picker
                 CRTButton("START AGENT", variant: .secondary, size: .medium) {
+                    if longPressTriggered {
+                        longPressTriggered = false
+                        return
+                    }
                     Task<Void, Never> { await viewModel.startAgent() }
                 }
                 .simultaneousGesture(
                     LongPressGesture(minimumDuration: 0.5)
                         .onEnded { _ in
+                            longPressTriggered = true
                             viewModel.showingCallsignPicker = true
                         }
                 )
