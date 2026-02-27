@@ -112,6 +112,23 @@ public enum CRTTheme {
             }
         }
 
+        /// Multi-color palette for themes that support color variety (currently Friendly only)
+        public var colorPalette: FriendlyColorPalette? {
+            switch self {
+            case .friendly:
+                return FriendlyColorPalette(
+                    blue: Color(red: 0.255, green: 0.522, blue: 0.957),    // #4185F4
+                    red: Color(red: 0.918, green: 0.306, blue: 0.208),     // #EA4E35
+                    yellow: Color(red: 0.984, green: 0.737, blue: 0.020),  // #FBBC05
+                    green: Color(red: 0.204, green: 0.659, blue: 0.325),   // #34A853
+                    purple: Color(red: 0.675, green: 0.345, blue: 0.847),  // #AC58D8
+                    orange: Color(red: 1.0, green: 0.435, blue: 0.259)     // #FF6F42
+                )
+            default:
+                return nil
+            }
+        }
+
         /// Primary text color for this theme
         public var textPrimary: Color {
             switch self {
@@ -163,6 +180,30 @@ public enum CRTTheme {
             self.screen = screen
             self.panel = panel
             self.elevated = elevated
+        }
+    }
+
+    // MARK: - Friendly Color Palette
+
+    /// Multi-color palette for the Friendly theme's playful variety.
+    /// Provides 6 named accent colors for components that want color diversity.
+    public struct FriendlyColorPalette {
+        public let blue: Color      // #4185F4
+        public let red: Color       // #EA4E35
+        public let yellow: Color    // #FBBC05
+        public let green: Color     // #34A853
+        public let purple: Color    // #AC58D8
+        public let orange: Color    // #FF6F42
+
+        /// All colors in display order
+        public var allColors: [Color] {
+            [blue, red, yellow, green, purple, orange]
+        }
+
+        /// Returns a consistent color for a given string (e.g. agent name)
+        public func color(for identifier: String) -> Color {
+            let hash = abs(identifier.hashValue)
+            return allColors[hash % allColors.count]
         }
     }
 
