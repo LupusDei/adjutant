@@ -34,6 +34,14 @@ export interface MailSummary {
   unreadCount: number;
 }
 
+/** Unread messages from a single agent, for the overview widget. */
+export interface UnreadAgentSummary {
+  agentId: string;
+  unreadCount: number;
+  latestBody: string;
+  latestCreatedAt: string;
+}
+
 /** Full dashboard response from GET /api/dashboard */
 export interface DashboardResponse {
   status: DashboardSection<GastownStatus>;
@@ -44,6 +52,7 @@ export interface DashboardResponse {
   }>;
   crew: DashboardSection<CrewMember[]>;
   unreadCounts: DashboardSection<Record<string, number>>;
+  unreadMessages: DashboardSection<UnreadAgentSummary[]>;
   epics: DashboardSection<{
     inProgress: EpicCategory;
     completed: EpicCategory;

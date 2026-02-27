@@ -19,6 +19,7 @@ import type {
   EpicWithProgressItem,
   MailSummary,
 } from "../types/dashboard.js";
+import type { UnreadAgentSummary } from "./message-store.js";
 import type { CrewMember, Message } from "../types/index.js";
 
 // ============================================================================
@@ -201,6 +202,8 @@ export function createDashboardService(messageStore: MessageStore): DashboardSer
         listEpicsWithProgress({ status: "all" }),
         // 7: mail
         listMail(null),
+        // 8: unread message summaries grouped by agent (max 8)
+        (async () => messageStore.getUnreadSummaries(8))(),
       ]);
 
       return {
@@ -219,6 +222,10 @@ export function createDashboardService(messageStore: MessageStore): DashboardSer
         ),
         unreadCounts: wrapUnreadCounts(
           results[5] as PromiseSettledResult<Array<{ agentId: string; count: number }>>,
+        ),
+        unreadMessages: wrapResult(
+          results[8] as PromiseSettledResult<UnreadAgentSummary[]>,
+          (summaries) => summaries,
         ),
         epics: wrapEpicsResult(
           results[6] as PromiseSettledResult<BeadsServiceResult<EpicWithChildren[]>>,

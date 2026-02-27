@@ -684,6 +684,87 @@
   border: 1px solid #333;
 }
 
+/* Bead completion timestamp */
+.dashboard-bead-timestamp {
+  font-size: 0.65rem;
+  color: var(--crt-phosphor-dim);
+  opacity: 0.7;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Epic completed row with timestamp beside card */
+.dashboard-epic-completed-row {
+  position: relative;
+}
+
+.dashboard-epic-completed-time {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 0.65rem;
+  color: var(--crt-phosphor-dim);
+  opacity: 0.7;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Unread messages widget */
+.dashboard-unread-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dashboard-unread-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid rgba(0, 255, 0, 0.15);
+  background: rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.dashboard-unread-row:hover {
+  border-color: var(--crt-phosphor-dim);
+  background: rgba(0, 255, 0, 0.05);
+}
+
+.dashboard-unread-agent {
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: var(--crt-phosphor);
+  flex-shrink: 0;
+  min-width: 70px;
+}
+
+.dashboard-unread-preview {
+  font-size: 0.75rem;
+  color: var(--crt-phosphor-dim);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.dashboard-unread-count {
+  font-size: 0.7rem;
+  color: var(--crt-phosphor-bright, var(--crt-phosphor));
+  background: rgba(0, 255, 0, 0.15);
+  border: 1px solid var(--crt-phosphor-dim);
+  padding: 1px 6px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  min-width: 18px;
+  text-align: center;
+}
+
 @media (max-width: 768px) {
   .dashboard-bead-id {
     min-width: 55px;
@@ -692,5 +773,14 @@
 
   .dashboard-bead-title {
     font-size: 0.7rem;
+  }
+
+  .dashboard-unread-agent {
+    min-width: 50px;
+    font-size: 0.7rem;
+  }
+
+  .dashboard-unread-preview {
+    font-size: 0.65rem;
   }
 }

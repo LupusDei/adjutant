@@ -58,6 +58,13 @@ interface UnreadCount {
   count: number;
 }
 
+export interface UnreadAgentSummary {
+  agentId: string;
+  unreadCount: number;
+  latestBody: string;
+  latestCreatedAt: string;
+}
+
 /** Raw row shape from SQLite before camelCase mapping */
 interface MessageRow {
   id: string;
@@ -119,6 +126,7 @@ export interface MessageStore {
   markAllRead(agentId: string): void;
   searchMessages(query: string, opts?: SearchOptions): Message[];
   getUnreadCounts(): UnreadCount[];
+  getUnreadSummaries(limit?: number): UnreadAgentSummary[];
   getThreads(agentId?: string): Thread[];
 }
 
@@ -289,6 +297,35 @@ export function createMessageStore(db: Database.Database): MessageStore {
     getUnreadCounts(): UnreadCount[] {
       const rows = unreadCountsStmt.all() as Array<{ agent_id: string; count: number }>;
       return rows.map((r) => ({ agentId: r.agent_id, count: r.count }));
+    },
+
+    getUnreadSummaries(limit = 8): UnreadAgentSummary[] {
+      const sql = `
+        SELECT
+          agent_id,
+          COUNT(*) as unread_count,
+          (SELECT body FROM messages m2
+           WHERE m2.agent_id = m.agent_id AND m2.delivery_status != 'read'
+           ORDER BY m2.created_at DESC LIMIT 1) as latest_body,
+          MAX(created_at) as latest_created_at
+        FROM messages m
+        WHERE delivery_status != 'read' AND role != 'user'
+        GROUP BY agent_id
+        ORDER BY latest_created_at DESC
+        LIMIT ?
+      `;
+      const rows = db.prepare(sql).all(limit) as Array<{
+        agent_id: string;
+        unread_count: number;
+        latest_body: string;
+        latest_created_at: string;
+      }>;
+      return rows.map((r) => ({
+        agentId: r.agent_id,
+        unreadCount: r.unread_count,
+        latestBody: r.latest_body,
+        latestCreatedAt: r.latest_created_at,
+      }));
     },
 
     getThreads(agentId?: string): Thread[] {

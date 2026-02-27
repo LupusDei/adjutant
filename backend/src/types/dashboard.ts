@@ -9,6 +9,7 @@
 import type { CrewMember, Message } from "./index.js";
 import type { SystemStatus } from "../services/status/index.js";
 import type { BeadInfo } from "../services/beads/types.js";
+import type { UnreadAgentSummary } from "../services/message-store.js";
 
 // ============================================================================
 // Generic Section Wrapper
@@ -61,6 +62,13 @@ export interface MailSummary {
 }
 
 // ============================================================================
+// Unread Messages (grouped by agent)
+// ============================================================================
+
+/** Unread messages from a single agent, for the overview widget. */
+export type { UnreadAgentSummary } from "../services/message-store.js";
+
+// ============================================================================
 // Full Dashboard Response
 // ============================================================================
 
@@ -74,6 +82,7 @@ export interface DashboardResponse {
   }>;
   crew: DashboardSection<CrewMember[]>;
   unreadCounts: DashboardSection<Record<string, number>>;
+  unreadMessages: DashboardSection<UnreadAgentSummary[]>;
   epics: DashboardSection<{
     inProgress: EpicCategory;
     completed: EpicCategory;

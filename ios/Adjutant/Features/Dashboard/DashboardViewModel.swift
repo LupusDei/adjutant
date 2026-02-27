@@ -31,6 +31,21 @@ final class DashboardViewModel: BaseViewModel {
     /// Rig statuses from the status API
     @Published private(set) var rigStatuses: [RigStatus] = []
 
+    /// Unread messages grouped by agent (max 8)
+    @Published private(set) var unreadMessages: [UnreadAgentSummary] = []
+
+    /// In-progress tasks (non-epic beads)
+    @Published private(set) var inProgressTasks: [BeadInfo] = []
+
+    /// Recently completed tasks (non-epic beads)
+    @Published private(set) var recentCompletedTasks: [BeadInfo] = []
+
+    /// In-progress epics
+    @Published private(set) var inProgressEpics: [DashboardEpicItem] = []
+
+    /// Recently completed epics
+    @Published private(set) var completedEpics: [DashboardEpicItem] = []
+
     /// Whether the dashboard is currently refreshing (includes background polling)
     @Published private(set) var isRefreshing = false
 
@@ -130,6 +145,17 @@ final class DashboardViewModel: BaseViewModel {
             processBeadsData(beadsData)
         }
 
+        // Unread messages grouped by agent
+        if let summaries = response.unreadMessages.data {
+            unreadMessages = summaries
+        }
+
+        // Epics section
+        if let epicsData = response.epics.data {
+            inProgressEpics = epicsData.inProgress.items
+            completedEpics = epicsData.completed.items
+        }
+
         // Mail section
         if let mailData = response.mail.data {
             processMailData(mailData)
@@ -167,6 +193,14 @@ final class DashboardViewModel: BaseViewModel {
         self.recentClosedBeads = Array(closed.prefix(maxBeadsPerColumn))
 
         self.recentBeads = sortBeadsByRecency(filtered)
+
+        // Tasks (non-epic beads) for the overview widget
+        let tasks = allBeads.filter { $0.type != "epic" }
+        self.inProgressTasks = tasks.filter { $0.status == "in_progress" }
+            .sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
+        self.recentCompletedTasks = Array(tasks.filter { $0.status == "closed" }
+            .sorted { ($0.updatedDate ?? .distantPast) > ($1.updatedDate ?? .distantPast) }
+            .prefix(maxBeadsPerColumn))
 
         // Update beads cache
         ResponseCache.shared.updateBeads(allBeads)

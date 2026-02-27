@@ -99,6 +99,25 @@ public struct DashboardMailSummary: Decodable, Equatable {
     }
 }
 
+// MARK: - Unread Messages (grouped by agent)
+
+/// Unread messages from a single agent, for the overview widget.
+public struct UnreadAgentSummary: Decodable, Equatable, Identifiable {
+    public let agentId: String
+    public let unreadCount: Int
+    public let latestBody: String
+    public let latestCreatedAt: String
+
+    public var id: String { agentId }
+
+    public init(agentId: String, unreadCount: Int, latestBody: String, latestCreatedAt: String) {
+        self.agentId = agentId
+        self.unreadCount = unreadCount
+        self.latestBody = latestBody
+        self.latestCreatedAt = latestCreatedAt
+    }
+}
+
 // MARK: - Full Dashboard Response
 
 /// The complete dashboard payload returned by GET /api/dashboard.
@@ -109,6 +128,7 @@ public struct DashboardResponse: Decodable {
     public let beads: DashboardSection<DashboardBeadsData>
     public let crew: DashboardSection<[CrewMember]>
     public let unreadCounts: DashboardSection<[String: Int]>
+    public let unreadMessages: DashboardSection<[UnreadAgentSummary]>
     public let epics: DashboardSection<DashboardEpicsData>
     public let mail: DashboardSection<DashboardMailSummary>
     public let timestamp: String
@@ -118,6 +138,7 @@ public struct DashboardResponse: Decodable {
         beads: DashboardSection<DashboardBeadsData>,
         crew: DashboardSection<[CrewMember]>,
         unreadCounts: DashboardSection<[String: Int]>,
+        unreadMessages: DashboardSection<[UnreadAgentSummary]>,
         epics: DashboardSection<DashboardEpicsData>,
         mail: DashboardSection<DashboardMailSummary>,
         timestamp: String
@@ -126,6 +147,7 @@ public struct DashboardResponse: Decodable {
         self.beads = beads
         self.crew = crew
         self.unreadCounts = unreadCounts
+        self.unreadMessages = unreadMessages
         self.epics = epics
         self.mail = mail
         self.timestamp = timestamp
