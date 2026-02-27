@@ -328,8 +328,8 @@ final class ChatViewModel: BaseViewModel {
             var seen = Set<String>()
             serverMessages = serverMessages.filter { seen.insert($0.id).inserted }
 
-            // Filter out non-chat messages (announcements, system events)
-            serverMessages = serverMessages.filter { $0.role == .user || $0.role == .agent }
+            // Filter out system events but keep announcements
+            serverMessages = serverMessages.filter { $0.role == .user || $0.role == .agent || $0.role == .announcement }
 
             // Merge server messages with any remaining local-only messages
             let serverIds = Set(serverMessages.map { $0.id })
@@ -483,8 +483,8 @@ final class ChatViewModel: BaseViewModel {
     // MARK: - WebSocket Message Handling
 
     private func handleIncomingMessage(_ message: PersistentMessage) {
-        // Only show chat messages (user/agent), not announcements or system events
-        guard message.role == .user || message.role == .agent else { return }
+        // Only show chat messages and announcements, not system events
+        guard message.role == .user || message.role == .agent || message.role == .announcement else { return }
 
         // Only show messages for the current agent conversation
         guard message.agentId == selectedRecipient || message.recipient == selectedRecipient else {

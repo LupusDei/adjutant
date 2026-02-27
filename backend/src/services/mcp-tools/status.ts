@@ -217,6 +217,17 @@ export function registerStatusTools(server: McpServer, store: MessageStore): voi
         metadata: { announcementType: type, beadId, projectId },
       });
 
+      // Broadcast via WebSocket so real-time clients receive announcements
+      wsBroadcast({
+        type: "chat_message",
+        id: message.id,
+        from: agentId,
+        to: "user",
+        body: message.body,
+        timestamp: message.createdAt,
+        metadata: message.metadata ?? undefined,
+      });
+
       // Send APNS push for announcements
       if (isAPNsConfigured()) {
         const truncatedBody = body.length > 200 ? body.slice(0, 197) + "..." : body;
