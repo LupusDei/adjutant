@@ -13,7 +13,7 @@ public enum CRTTheme {
         case pipboy = "pipboy"        // Green CRT (default)
         case document = "document"    // Clean white/black
         case starcraft = "starcraft"  // Dark purple + teal
-        case friendly = "friendly"    // Warm coral/peach colorful
+        case friendly = "friendly"    // Colorful blue-primary palette
 
         public var id: String { rawValue }
 
@@ -33,7 +33,7 @@ public enum CRTTheme {
             case .pipboy: return Color(red: 0.125, green: 0.761, blue: 0.055)     // #20C20E
             case .document: return Color(red: 0.067, green: 0.067, blue: 0.067)   // #111111
             case .starcraft: return Color(red: 0.0, green: 1.0, blue: 0.835)      // #00FFD5
-            case .friendly: return Color(red: 1.0, green: 0.42, blue: 0.42)       // #FF6B6B
+            case .friendly: return Color(red: 0.231, green: 0.478, blue: 1.0)      // #3B7AFF
             }
         }
 
@@ -43,7 +43,7 @@ public enum CRTTheme {
             case .pipboy: return Color(red: 0.2, green: 1.0, blue: 0.2)           // #33FF33
             case .document: return Color.black                                      // #000000
             case .starcraft: return Color(red: 0.4, green: 1.0, blue: 0.925)      // #66FFEC
-            case .friendly: return Color(red: 1.0, green: 0.278, blue: 0.341)     // #FF4757
+            case .friendly: return Color(red: 0.145, green: 0.388, blue: 0.922)    // #2563EB
             }
         }
 
@@ -53,7 +53,7 @@ public enum CRTTheme {
             case .pipboy: return Color(red: 0.039, green: 0.373, blue: 0.027)     // #0A5F07
             case .document: return Color(red: 0.463, green: 0.463, blue: 0.463)   // #767676 (WCAG AA on white)
             case .starcraft: return Color(red: 0.0, green: 0.467, blue: 0.4)      // #007766
-            case .friendly: return Color(red: 0.882, green: 0.439, blue: 0.333)   // #E17055
+            case .friendly: return Color(red: 0.576, green: 0.651, blue: 0.784)    // #93A6C8
             }
         }
 
@@ -80,9 +80,9 @@ public enum CRTTheme {
                 )
             case .friendly:
                 return BackgroundSet(
-                    screen: Color(red: 1.0, green: 0.973, blue: 0.941),        // #FFF8F0
+                    screen: Color(red: 0.957, green: 0.965, blue: 0.988),      // #F4F7FC
                     panel: Color.white,                                         // #FFFFFF
-                    elevated: Color(red: 1.0, green: 0.953, blue: 0.902)       // #FFF3E6
+                    elevated: Color(red: 0.929, green: 0.941, blue: 0.973)     // #EDF0F8
                 )
             }
         }

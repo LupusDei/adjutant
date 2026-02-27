@@ -749,7 +749,7 @@ private struct SchemePreviewCard: View {
             }
 
             // Warm descriptive text
-            Text("Warm, colorful workspace")
+            Text("Colorful, friendly workspace")
                 .font(.system(size: CRTTypography.sizeSM, weight: .regular, design: .rounded))
                 .foregroundColor(colorTheme.textSecondary)
         }
@@ -758,12 +758,12 @@ private struct SchemePreviewCard: View {
     /// The variety of colors that make up the Friendly palette
     private var friendlyAccentColors: [Color] {
         [
-            Color(red: 1.0, green: 0.42, blue: 0.42),   // Coral #FF6B6B
-            Color(red: 1.0, green: 0.85, blue: 0.24),   // Yellow #FFD93D
-            Color(red: 0.42, green: 0.80, blue: 1.0),   // Sky blue #6BCBFF
-            Color(red: 0.42, green: 0.80, blue: 0.47),   // Green #6BCB77
-            Color(red: 1.0, green: 0.66, blue: 0.30),   // Orange #FFA94D
-            Color(red: 0.69, green: 0.59, blue: 0.99),   // Purple #B197FC
+            Color(red: 0.231, green: 0.478, blue: 1.0),   // Blue #3B7AFF
+            Color(red: 0.42, green: 0.80, blue: 1.0),     // Sky blue #6BCBFF
+            Color(red: 0.42, green: 0.80, blue: 0.47),    // Green #6BCB77
+            Color(red: 1.0, green: 0.85, blue: 0.24),     // Yellow #FFD93D
+            Color(red: 1.0, green: 0.42, blue: 0.42),     // Coral #FF6B6B
+            Color(red: 0.69, green: 0.59, blue: 0.99),    // Purple #B197FC
         ]
     }
 
