@@ -5,6 +5,14 @@ import AdjutantKit
 enum BeadsViewMode: String, CaseIterable {
     case kanban = "BOARD"
     case graph = "GRAPH"
+
+    /// SF Symbol icon representing this view mode.
+    var iconName: String {
+        switch self {
+        case .kanban: return "rectangle.split.3x1"
+        case .graph: return "point.3.connected.trianglepath.dotted"
+        }
+    }
 }
 
 /// Main beads view displaying all beads in a Kanban board with filtering and search.
@@ -130,12 +138,10 @@ struct BeadsListView: View {
                         viewMode = mode
                     }
                 } label: {
-                    Text(mode.rawValue)
-                        .font(CRTTheme.Typography.font(size: 11, weight: .medium))
-                        .tracking(0.5)
+                    Image(systemName: mode.iconName)
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(viewMode == mode ? theme.bright : theme.dim)
-                        .padding(.horizontal, CRTTheme.Spacing.sm)
-                        .padding(.vertical, CRTTheme.Spacing.xxs)
+                        .frame(width: 32, height: 28)
                         .background(
                             viewMode == mode
                                 ? theme.primary.opacity(0.15)
