@@ -35,6 +35,7 @@ export function transformBead(issue: BeadsIssue, _dbSource: string): BeadInfo {
   return {
     id: issue.id,
     title: issue.title,
+    description: issue.description ?? "",
     status: issue.status,
     priority: issue.priority,
     type: issue.issue_type,

@@ -272,6 +272,7 @@ final class BeadsListViewModel: BaseViewModel {
             result = result.filter { bead in
                 bead.title.lowercased().contains(query) ||
                 bead.id.lowercased().contains(query) ||
+                (bead.description?.lowercased().contains(query) ?? false) ||
                 (bead.assignee?.lowercased().contains(query) ?? false) ||
                 bead.labels.contains { $0.lowercased().contains(query) }
             }
@@ -342,6 +343,7 @@ final class BeadsListViewModel: BaseViewModel {
                 return BeadInfo(
                     id: bead.id,
                     title: bead.title,
+                    description: bead.description,
                     status: newStatus,
                     priority: bead.priority,
                     type: bead.type,

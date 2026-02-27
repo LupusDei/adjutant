@@ -8,6 +8,8 @@ public struct BeadInfo: Codable, Identifiable, Equatable, Hashable {
     public let id: String
     /// Bead title
     public let title: String
+    /// Description text (may be empty in list responses)
+    public let description: String?
     /// Status (open, closed, etc.)
     public let status: String
     /// Priority (0-4, lower = higher priority)
@@ -30,6 +32,7 @@ public struct BeadInfo: Codable, Identifiable, Equatable, Hashable {
     public init(
         id: String,
         title: String,
+        description: String? = nil,
         status: String,
         priority: Int,
         type: String,
@@ -42,6 +45,7 @@ public struct BeadInfo: Codable, Identifiable, Equatable, Hashable {
     ) {
         self.id = id
         self.title = title
+        self.description = description
         self.status = status
         self.priority = priority
         self.type = type
@@ -171,9 +175,10 @@ public struct BeadDetail: Codable, Identifiable, Equatable {
     /// Convert to BeadInfo for compatibility
     public var asBeadInfo: BeadInfo {
         BeadInfo(
-            id: id, title: title, status: status, priority: priority,
-            type: type, assignee: assignee, rig: rig, source: source,
-            labels: labels, createdAt: createdAt, updatedAt: updatedAt
+            id: id, title: title, description: description, status: status,
+            priority: priority, type: type, assignee: assignee, rig: rig,
+            source: source, labels: labels, createdAt: createdAt,
+            updatedAt: updatedAt
         )
     }
 }

@@ -453,6 +453,7 @@ struct BeadsListView: View {
             result = result.filter { bead in
                 bead.title.lowercased().contains(query) ||
                 bead.id.lowercased().contains(query) ||
+                (bead.description?.lowercased().contains(query) ?? false) ||
                 (bead.assignee?.lowercased().contains(query) ?? false) ||
                 bead.labels.contains { $0.lowercased().contains(query) }
             }

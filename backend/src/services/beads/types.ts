@@ -21,6 +21,7 @@ export type { BeadsGraphResponse, GraphDependency, GraphNode } from "../../types
 export interface BeadInfo {
   id: string;
   title: string;
+  description: string;
   status: string;
   priority: number;
   type: string;
@@ -69,6 +70,14 @@ export interface RecentlyClosedBead {
   source: string;
 }
 
+/**
+ * Valid sort fields accepted by `bd list --sort`.
+ */
+export const VALID_SORT_FIELDS = [
+  "priority", "created", "updated", "closed", "status", "id", "title", "type", "assignee",
+] as const;
+export type BeadSortField = typeof VALID_SORT_FIELDS[number];
+
 export interface ListBeadsOptions {
   rig?: string;
   /** Path to rig's directory containing .beads/ - if provided, queries that rig's beads database */
@@ -80,6 +89,10 @@ export interface ListBeadsOptions {
   assignee?: string;
   /** Prefixes to exclude (e.g., ["hq-"] to hide town-level system beads) */
   excludePrefixes?: string[];
+  /** Sort field passed to `bd list --sort` */
+  sort?: BeadSortField;
+  /** Sort order: "asc" (default) or "desc" (adds --reverse to bd args) */
+  order?: "asc" | "desc";
 }
 
 export interface BeadsServiceResult<T> {
