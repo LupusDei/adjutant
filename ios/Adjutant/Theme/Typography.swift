@@ -136,34 +136,44 @@ extension CRTTheme.Typography {
 // MARK: - Text Style Modifiers
 
 extension View {
-    /// Apply CRT text styling with glow effect (scheme-aware)
+    /// Apply CRT text styling with glow effect (scheme-aware).
+    /// Friendly theme: normal tracking, no uppercase. CRT themes: wide tracking.
     public func crtTextStyle(
         _ theme: CRTTheme.ColorTheme,
         size: CGFloat = CRTTypography.sizeBase,
         letterSpacing: CGFloat = CRTTypography.letterSpacingWide
     ) -> some View {
-        self
+        let effectiveSpacing = theme.colorPalette != nil ? CRTTypography.letterSpacingNormal : letterSpacing
+        return self
             .font(.crt(size, monospace: theme.useMonospaceFont, design: theme.fontDesign))
             .foregroundColor(theme.textPrimary)
-            .tracking(letterSpacing)
+            .tracking(effectiveSpacing)
     }
 
-    /// Apply CRT header styling (uppercase, wide tracking, scheme-aware)
+    /// Apply CRT header styling (scheme-aware).
+    /// Friendly theme: title case, normal tracking, heavier weight. CRT themes: uppercase, wide tracking.
     public func crtHeaderStyle(_ theme: CRTTheme.ColorTheme, size: CGFloat = CRTTypography.sizeLG) -> some View {
-        self
-            .font(.crt(size, monospace: theme.useMonospaceFont, design: theme.fontDesign))
+        let isFriendly = theme.colorPalette != nil
+        return self
+            .font(isFriendly
+                ? .system(size: size, weight: .bold, design: .rounded)
+                : .crt(size, monospace: theme.useMonospaceFont, design: theme.fontDesign))
             .foregroundColor(theme.textPrimary)
-            .tracking(CRTTypography.letterSpacingWider)
-            .textCase(.uppercase)
+            .tracking(isFriendly ? CRTTypography.letterSpacingNormal : CRTTypography.letterSpacingWider)
+            .textCase(isFriendly ? nil : .uppercase)
     }
 
-    /// Apply CRT label styling (smaller, uppercase, scheme-aware)
+    /// Apply CRT label styling (scheme-aware).
+    /// Friendly theme: sentence case, rounded font. CRT themes: uppercase, wide tracking.
     public func crtLabelStyle(_ theme: CRTTheme.ColorTheme) -> some View {
-        self
-            .font(.crt(CRTTypography.sizeXS, monospace: theme.useMonospaceFont, design: theme.fontDesign))
+        let isFriendly = theme.colorPalette != nil
+        return self
+            .font(isFriendly
+                ? .system(size: CRTTypography.sizeXS, weight: .medium, design: .rounded)
+                : .crt(CRTTypography.sizeXS, monospace: theme.useMonospaceFont, design: theme.fontDesign))
             .foregroundColor(theme.textSecondary)
-            .tracking(CRTTypography.letterSpacingWider)
-            .textCase(.uppercase)
+            .tracking(isFriendly ? CRTTypography.letterSpacingNormal : CRTTypography.letterSpacingWider)
+            .textCase(isFriendly ? nil : .uppercase)
     }
 }
 

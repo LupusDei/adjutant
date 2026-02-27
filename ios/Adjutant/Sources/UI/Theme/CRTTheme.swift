@@ -33,7 +33,7 @@ public enum CRTTheme {
             case .pipboy: return Color(red: 0.125, green: 0.761, blue: 0.055)     // #20C20E
             case .document: return Color(red: 0.067, green: 0.067, blue: 0.067)   // #111111
             case .starcraft: return Color(red: 0.0, green: 1.0, blue: 0.835)      // #00FFD5
-            case .friendly: return Color(red: 0.918, green: 0.306, blue: 0.208)      // #EA4E35 (warm red-orange)
+            case .friendly: return Color(red: 0.345, green: 0.337, blue: 0.839)      // #5856D6 (playful indigo)
             }
         }
 
