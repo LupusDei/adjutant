@@ -323,6 +323,12 @@ public struct CRTScreenContainer<Content: View>: View {
             if enableVignette && theme.crtEffectsEnabled {
                 VignetteOverlay()
             }
+
+            // StarCraft-specific dynamic effects
+            if theme == .starcraft {
+                LightningOverlay()
+                AmbientGlowOverlay()
+            }
         }
         .crtFlicker(enabled: enableFlicker)
     }
@@ -386,5 +392,168 @@ extension View {
     /// Apply pulsing glow for active states
     public func pulsingGlow(_ theme: CRTTheme.ColorTheme) -> some View {
         modifier(PulsingGlow(theme: theme))
+    }
+}
+
+// MARK: - StarCraft Lightning Strike Effect
+
+/// Occasional subtle electrical discharge across the screen — StarCraft only.
+/// Renders brief forking lightning bolts that flash and fade at random intervals.
+public struct LightningOverlay: View {
+    @Environment(\.crtTheme) private var theme
+
+    @State private var bolts: [LightningBolt] = []
+    @State private var timer: Timer?
+
+    public init() {}
+
+    public var body: some View {
+        if theme == .starcraft {
+            GeometryReader { geometry in
+                ZStack {
+                    ForEach(bolts) { bolt in
+                        LightningBoltShape(bolt: bolt, bounds: geometry.size)
+                            .stroke(theme.bright.opacity(bolt.opacity), lineWidth: bolt.width)
+                            .shadow(color: theme.primary.opacity(bolt.opacity * 0.6), radius: 8)
+                            .shadow(color: theme.bright.opacity(bolt.opacity * 0.3), radius: 16)
+                    }
+                }
+                .onAppear { startLightning(bounds: geometry.size) }
+                .onDisappear { stopLightning() }
+            }
+            .allowsHitTesting(false)
+        }
+    }
+
+    private func startLightning(bounds: CGSize) {
+        timer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { _ in
+            // ~8% chance per tick = roughly one strike every 4 seconds
+            guard Double.random(in: 0...1) < 0.08 else { return }
+
+            let bolt = LightningBolt(
+                id: UUID(),
+                startX: CGFloat.random(in: 0.1...0.9),
+                startY: CGFloat.random(in: 0...0.3),
+                segments: Int.random(in: 4...7),
+                width: CGFloat.random(in: 0.5...1.5),
+                opacity: Double.random(in: 0.15...0.35),
+                seed: UInt64.random(in: 0...UInt64.max)
+            )
+            bolts.append(bolt)
+
+            // Fade and remove after brief flash
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    bolts.removeAll { $0.id == bolt.id }
+                }
+            }
+        }
+    }
+
+    private func stopLightning() {
+        timer?.invalidate()
+        timer = nil
+    }
+}
+
+/// Data for a single lightning bolt
+private struct LightningBolt: Identifiable {
+    let id: UUID
+    let startX: CGFloat   // 0-1 fraction of width
+    let startY: CGFloat   // 0-1 fraction of height
+    let segments: Int
+    let width: CGFloat
+    var opacity: Double
+    let seed: UInt64
+}
+
+/// Shape that draws a forking lightning bolt path
+private struct LightningBoltShape: Shape {
+    let bolt: LightningBolt
+    let bounds: CGSize
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        var rng = SeededRNG(seed: bolt.seed)
+
+        let startX = bounds.width * bolt.startX
+        let startY = bounds.height * bolt.startY
+        var currentPoint = CGPoint(x: startX, y: startY)
+
+        path.move(to: currentPoint)
+
+        let segmentLength = bounds.height * 0.12
+
+        for _ in 0..<bolt.segments {
+            let dx = CGFloat.random(in: -segmentLength * 0.6...segmentLength * 0.6, using: &rng)
+            let dy = CGFloat.random(in: segmentLength * 0.4...segmentLength, using: &rng)
+            let nextPoint = CGPoint(x: currentPoint.x + dx, y: currentPoint.y + dy)
+            path.addLine(to: nextPoint)
+            currentPoint = nextPoint
+        }
+
+        return path
+    }
+}
+
+/// Simple seeded RNG for deterministic bolt shapes within a frame
+private struct SeededRNG: RandomNumberGenerator {
+    var state: UInt64
+
+    init(seed: UInt64) {
+        self.state = seed
+    }
+
+    mutating func next() -> UInt64 {
+        state &+= 0x9E3779B97F4A7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9
+        z = (z ^ (z >> 27)) &* 0x94D049BB133111EB
+        return z ^ (z >> 31)
+    }
+}
+
+// MARK: - StarCraft Ambient Glow Pulse
+
+/// Enhanced pulsating border/edge glow specific to StarCraft theme.
+/// Creates a breathing ambient glow around the screen edges.
+public struct AmbientGlowOverlay: View {
+    @Environment(\.crtTheme) private var theme
+
+    @State private var phase: Double = 0
+
+    public init() {}
+
+    public var body: some View {
+        if theme == .starcraft {
+            GeometryReader { geometry in
+                ZStack {
+                    // Edge glow — pulsates between dim and bright
+                    RoundedRectangle(cornerRadius: 0)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [
+                                    theme.primary.opacity(0.0),
+                                    theme.primary.opacity(0.08 + phase * 0.06),
+                                    theme.bright.opacity(0.04 + phase * 0.04),
+                                    theme.primary.opacity(0.08 + phase * 0.06),
+                                    theme.primary.opacity(0.0)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 2
+                        )
+                        .shadow(color: theme.primary.opacity(0.1 + phase * 0.08), radius: 12)
+                        .shadow(color: theme.bright.opacity(0.03 + phase * 0.03), radius: 24)
+                }
+            }
+            .allowsHitTesting(false)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
+                    phase = 1.0
+                }
+            }
+        }
     }
 }

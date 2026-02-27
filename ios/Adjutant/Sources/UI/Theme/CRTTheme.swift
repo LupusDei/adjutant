@@ -13,7 +13,7 @@ public enum CRTTheme {
         case pipboy = "pipboy"        // Green CRT (default)
         case document = "document"    // Clean white/black
         case starcraft = "starcraft"  // Dark purple + teal
-        case friendly = "friendly"    // Colorful blue-primary palette
+        case friendly = "friendly"    // Playful multi-color palette
 
         public var id: String { rawValue }
 
@@ -33,7 +33,7 @@ public enum CRTTheme {
             case .pipboy: return Color(red: 0.125, green: 0.761, blue: 0.055)     // #20C20E
             case .document: return Color(red: 0.067, green: 0.067, blue: 0.067)   // #111111
             case .starcraft: return Color(red: 0.0, green: 1.0, blue: 0.835)      // #00FFD5
-            case .friendly: return Color(red: 0.231, green: 0.478, blue: 1.0)      // #3B7AFF
+            case .friendly: return Color(red: 0.918, green: 0.306, blue: 0.208)      // #EA4E35 (warm red-orange)
             }
         }
 
@@ -43,7 +43,7 @@ public enum CRTTheme {
             case .pipboy: return Color(red: 0.2, green: 1.0, blue: 0.2)           // #33FF33
             case .document: return Color.black                                      // #000000
             case .starcraft: return Color(red: 0.4, green: 1.0, blue: 0.925)      // #66FFEC
-            case .friendly: return Color(red: 0.145, green: 0.388, blue: 0.922)    // #2563EB
+            case .friendly: return Color(red: 0.255, green: 0.522, blue: 0.957)    // #4185F4 (Google blue)
             }
         }
 
@@ -53,7 +53,7 @@ public enum CRTTheme {
             case .pipboy: return Color(red: 0.039, green: 0.373, blue: 0.027)     // #0A5F07
             case .document: return Color(red: 0.463, green: 0.463, blue: 0.463)   // #767676 (WCAG AA on white)
             case .starcraft: return Color(red: 0.0, green: 0.467, blue: 0.4)      // #007766
-            case .friendly: return Color(red: 0.576, green: 0.651, blue: 0.784)    // #93A6C8
+            case .friendly: return Color(red: 0.529, green: 0.545, blue: 0.569)    // #878B91 (neutral gray)
             }
         }
 
@@ -80,9 +80,9 @@ public enum CRTTheme {
                 )
             case .friendly:
                 return BackgroundSet(
-                    screen: Color(red: 0.957, green: 0.965, blue: 0.988),      // #F4F7FC
+                    screen: Color(red: 0.973, green: 0.969, blue: 0.965),      // #F8F7F6 (warm neutral)
                     panel: Color.white,                                         // #FFFFFF
-                    elevated: Color(red: 0.929, green: 0.941, blue: 0.973)     // #EDF0F8
+                    elevated: Color(red: 0.953, green: 0.949, blue: 0.941)     // #F3F2F0 (warm gray)
                 )
             }
         }
@@ -109,7 +109,7 @@ public enum CRTTheme {
             case .pipboy: return primary
             case .document: return Color(red: 0.067, green: 0.067, blue: 0.067)   // #111111
             case .starcraft: return primary
-            case .friendly: return Color(red: 0.173, green: 0.173, blue: 0.173)   // #2C2C2C
+            case .friendly: return Color(red: 0.133, green: 0.133, blue: 0.133)   // #222222
             }
         }
 
@@ -119,7 +119,7 @@ public enum CRTTheme {
             case .pipboy: return dim
             case .document: return Color(red: 0.463, green: 0.463, blue: 0.463)   // #767676 (WCAG AA)
             case .starcraft: return dim
-            case .friendly: return Color(red: 0.42, green: 0.447, blue: 0.498)    // #6B7280
+            case .friendly: return Color(red: 0.427, green: 0.427, blue: 0.427)    // #6D6D6D (neutral)
             }
         }
 
@@ -129,7 +129,7 @@ public enum CRTTheme {
             case .pipboy: return primary
             case .document: return Color(red: 0.145, green: 0.388, blue: 0.922)   // #2563EB
             case .starcraft: return primary
-            case .friendly: return Color(red: 0.145, green: 0.388, blue: 0.922)   // #2563EB
+            case .friendly: return Color(red: 0.255, green: 0.522, blue: 0.957)   // #4185F4 (Google blue)
             }
         }
 

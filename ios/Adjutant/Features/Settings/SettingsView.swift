@@ -723,47 +723,53 @@ private struct SchemePreviewCard: View {
 
     // MARK: - Friendly Content
 
-    /// Warm colorful aesthetic: multiple accent colors, soft rounded feel
+    /// Playful multi-color aesthetic: Google/kindergarten vibes, variety of colors
     private var friendlyContent: some View {
         VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
-            // Header with warm styling
+            // Header with playful styling
             HStack {
-                Text(scheme.displayName)
-                    .font(.system(size: CRTTypography.sizeLG, weight: .bold, design: .rounded))
-                    .foregroundColor(colorTheme.textPrimary)
+                // Each letter in a different color
+                HStack(spacing: 1) {
+                    ForEach(Array(zip(Array("FRIENDLY"), friendlyAccentColors)), id: \.0) { letter, color in
+                        Text(String(letter))
+                            .font(.system(size: CRTTypography.sizeLG, weight: .heavy, design: .rounded))
+                            .foregroundColor(color)
+                    }
+                }
 
                 Spacer()
 
                 selectionIndicator
             }
 
-            // Colorful accent dots representing the variety palette
-            HStack(spacing: 8) {
-                ForEach(friendlyAccentColors, id: \.self) { color in
+            // Colorful accent circles — varied sizes for playful feel
+            HStack(spacing: 6) {
+                ForEach(Array(friendlyAccentColors.enumerated()), id: \.offset) { index, color in
                     Circle()
                         .fill(color)
-                        .frame(width: 12, height: 12)
+                        .frame(width: CGFloat([16, 12, 14, 12, 10, 14][index]),
+                               height: CGFloat([16, 12, 14, 12, 10, 14][index]))
                 }
 
                 Spacer()
             }
 
-            // Warm descriptive text
-            Text("Colorful, friendly workspace")
-                .font(.system(size: CRTTypography.sizeSM, weight: .regular, design: .rounded))
+            // Playful tagline
+            Text("A playground of colors")
+                .font(.system(size: CRTTypography.sizeSM, weight: .medium, design: .rounded))
                 .foregroundColor(colorTheme.textSecondary)
         }
     }
 
-    /// The variety of colors that make up the Friendly palette
+    /// Google-style multi-color palette: no single dominant color
     private var friendlyAccentColors: [Color] {
         [
-            Color(red: 0.231, green: 0.478, blue: 1.0),   // Blue #3B7AFF
-            Color(red: 0.42, green: 0.80, blue: 1.0),     // Sky blue #6BCBFF
-            Color(red: 0.42, green: 0.80, blue: 0.47),    // Green #6BCB77
-            Color(red: 1.0, green: 0.85, blue: 0.24),     // Yellow #FFD93D
-            Color(red: 1.0, green: 0.42, blue: 0.42),     // Coral #FF6B6B
-            Color(red: 0.69, green: 0.59, blue: 0.99),    // Purple #B197FC
+            Color(red: 0.255, green: 0.522, blue: 0.957),  // Blue    #4185F4
+            Color(red: 0.918, green: 0.306, blue: 0.208),  // Red     #EA4E35
+            Color(red: 0.984, green: 0.737, blue: 0.020),  // Yellow  #FBBC05
+            Color(red: 0.204, green: 0.659, blue: 0.325),  // Green   #34A853
+            Color(red: 0.675, green: 0.345, blue: 0.847),  // Purple  #AC58D8
+            Color(red: 1.0, green: 0.435, blue: 0.259),    // Orange  #FF6F42
         ]
     }
 
