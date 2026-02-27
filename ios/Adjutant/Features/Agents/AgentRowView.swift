@@ -52,15 +52,19 @@ struct AgentRowView: View {
                         }
                     }
 
-                    // Status/task info — always show status, plus task if available
-                    VStack(alignment: .leading, spacing: 1) {
+                    // Status label + task title
+                    HStack(spacing: CRTTheme.Spacing.xs) {
+                        Text(statusDisplayText)
+                            .font(CRTTheme.Typography.font(size: 11, weight: .bold))
+                            .tracking(0.5)
+                            .foregroundColor(statusColor)
+
                         if let task = member.currentTask {
                             Text(task)
-                                .font(CRTTheme.Typography.font(size: 13, theme: theme))
+                                .font(CRTTheme.Typography.font(size: 12, theme: theme))
                                 .foregroundColor(theme.dim)
-                                .lineLimit(2)
+                                .lineLimit(1)
                         }
-                        statusText
                     }
                 }
 
@@ -109,15 +113,6 @@ struct AgentRowView: View {
 
     private var statusIndicator: some View {
         StatusDot(statusType, size: 10, pulse: shouldPulse)
-    }
-
-    private var statusText: some View {
-        CRTText(
-            statusDisplayText,
-            style: .caption,
-            glowIntensity: .subtle,
-            color: statusColor
-        )
     }
 
     // MARK: - Status Helpers
