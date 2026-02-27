@@ -247,6 +247,14 @@ final class AppCoordinator: Coordinator, ObservableObject {
         selectedTab = tab
     }
 
+    /// Pop one level in the navigation stack (overrides protocol default to dismiss keyboard)
+    func pop() {
+        dismissKeyboard()
+        if !path.isEmpty {
+            path.removeLast()
+        }
+    }
+
     /// Pops to the root of the current tab's navigation stack
     func popToRoot() {
         dismissKeyboard()
