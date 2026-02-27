@@ -180,16 +180,23 @@ function enrichWithMcpStatus(members: CrewMember[]): void {
     const mcpStatus = statuses.get(member.id) ?? statuses.get(member.name);
     if (!mcpStatus) continue;
 
-    // Only apply MCP status if the agent still has an active MCP connection
     const isConnected = connectedIds.has(member.id) || connectedIds.has(member.name);
     if (!isConnected) continue;
 
-    if (mcpStatus.status === "working") {
-      member.status = "working";
-    } else if (mcpStatus.status === "blocked") {
-      member.status = "blocked";
+    // Apply MCP status for ALL states
+    const statusMap: Record<string, CrewMemberStatus> = {
+      working: "working",
+      blocked: "blocked",
+      idle: "idle",
+      done: "idle",
+    };
+    const mapped = statusMap[mcpStatus.status];
+    if (mapped) {
+      member.status = mapped;
     }
-    if (mcpStatus.task && !member.currentTask) {
+
+    // MCP task always takes priority (more current than hookBead)
+    if (mcpStatus.task) {
       member.currentTask = mcpStatus.task;
     }
   }

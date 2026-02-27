@@ -131,11 +131,16 @@ export function registerStatusTools(server: McpServer, store: MessageStore): voi
       const projectId = resolveProjectId(extra);
       const now = new Date().toISOString();
 
+      // Preserve previous task/beadId when not explicitly provided
+      const previous = agentStatuses.get(agentId);
+      const resolvedTask = task ?? previous?.task;
+      const resolvedBeadId = beadId ?? previous?.beadId;
+
       agentStatuses.set(agentId, {
         agentId,
         status,
-        task,
-        beadId,
+        task: resolvedTask,
+        beadId: resolvedBeadId,
         projectId,
         updatedAt: now,
       });
