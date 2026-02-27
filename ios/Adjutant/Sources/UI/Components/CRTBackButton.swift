@@ -94,6 +94,27 @@ public struct CRTBackButton: View {
     }
 }
 
+// MARK: - Swipe-Back Gesture Re-enabler
+
+#if os(iOS)
+/// Re-enables the interactive pop (swipe-back) gesture that gets disabled
+/// when `.navigationBarBackButtonHidden(true)` is used with a custom back button.
+private struct InteractivePopGestureEnabler: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        InteractivePopController()
+    }
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+
+    private class InteractivePopController: UIViewController {
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            navigationController?.interactivePopGestureRecognizer?.isEnabled = true
+            navigationController?.interactivePopGestureRecognizer?.delegate = nil
+        }
+    }
+}
+#endif
+
 // MARK: - View Modifier for CRT Navigation Style
 
 /// A view modifier that applies CRT styling to navigation bars.
@@ -105,6 +126,7 @@ public struct CRTNavigationStyle: ViewModifier {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
+            .background(InteractivePopGestureEnabler())
             #endif
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -118,6 +140,15 @@ extension View {
     /// Applies CRT styling to navigation, including a custom back button.
     public func crtNavigationStyle() -> some View {
         modifier(CRTNavigationStyle())
+    }
+
+    /// Re-enables swipe-back gesture when using `.navigationBarBackButtonHidden(true)`.
+    public func enableSwipeBack() -> some View {
+        #if os(iOS)
+        self.background(InteractivePopGestureEnabler())
+        #else
+        self
+        #endif
     }
 }
 

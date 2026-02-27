@@ -63,6 +63,7 @@ struct EpicDetailView: View {
         .background(theme.background.screen)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
+        .enableSwipeBack()
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 CRTBackButton {

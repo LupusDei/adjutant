@@ -30,6 +30,7 @@ struct AgentDetailView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
+        .enableSwipeBack()
         #endif
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
