@@ -90,6 +90,13 @@ struct ChatBubble: View {
                             radius: 4,
                             intensity: 0.2
                         )
+                        .contextMenu {
+                            Button {
+                                UIPasteboard.general.string = message.body
+                            } label: {
+                                Label("Copy", systemImage: "doc.on.doc")
+                            }
+                        }
 
                     // Play/Stop button for incoming messages
                     if !isOutgoing, let onPlay = onPlay, let onStop = onStop {
