@@ -69,10 +69,20 @@ public struct PersistentMessage: Codable, Identifiable, Hashable, Sendable {
 
     private static let dateFormatterBasic = ISO8601DateFormatter()
 
+    /// SQLite datetime format: "2026-02-27 02:03:22"
+    private static let sqliteDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
     /// Parse the createdAt timestamp string into a Date
     public var date: Date? {
         Self.dateFormatterWithFractional.date(from: createdAt)
             ?? Self.dateFormatterBasic.date(from: createdAt)
+            ?? Self.sqliteDateFormatter.date(from: createdAt)
     }
 
     /// Display name for the sender
