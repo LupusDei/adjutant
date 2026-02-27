@@ -47,8 +47,6 @@ function getStatusInfo(status: string, isSwarm = false): { label: string; color:
       return { label: 'HOOKED', color: '#00FFFF' };
     case 'in_progress':
       return { label: 'IN PROGRESS', color: '#00FF88' };
-    case 'blocked':
-      return { label: 'BLOCKED', color: '#FF6B35' };
     case 'closed':
       return { label: 'CLOSED', color: '#666666' };
     default:

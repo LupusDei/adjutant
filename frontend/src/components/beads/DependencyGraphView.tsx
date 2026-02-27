@@ -237,8 +237,6 @@ function DependencyGraphInner({ isActive = true }: DependencyGraphViewProps) {
       case 'in_progress':
       case 'hooked':
         return '#ffaa00';
-      case 'blocked':
-        return '#ff4444';
       default:
         return '#666666';
     }

@@ -36,8 +36,6 @@ function getStatusInfo(status: string, isComplete: boolean): { label: string; co
       return { label: 'IN PROGRESS', color: 'var(--crt-phosphor)' };
     case 'closed':
       return { label: 'CLOSED', color: '#00FF00' };
-    case 'blocked':
-      return { label: 'BLOCKED', color: '#FF4444' };
     default:
       return { label: status.toUpperCase(), color: 'var(--crt-phosphor-dim)' };
   }

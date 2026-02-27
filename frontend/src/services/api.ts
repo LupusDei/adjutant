@@ -308,13 +308,13 @@ export const api = {
     /**
      * List beads with filtering.
      * @param params.status - Status filter options:
-     *   - "default": Shows open + in_progress + blocked (active work)
-     *   - "open", "in_progress", "blocked", "deferred", "closed": Single status
+     *   - "default": Shows open + in_progress (active work)
+     *   - "open", "in_progress", "deferred", "closed": Single status
      *   - "all": Shows everything
      */
     async list(params?: {
       rig?: string;
-      status?: 'default' | 'open' | 'hooked' | 'in_progress' | 'blocked' | 'deferred' | 'closed' | 'all';
+      status?: 'default' | 'open' | 'hooked' | 'in_progress' | 'deferred' | 'closed' | 'all';
       type?: string;
       limit?: number;
     }): Promise<BeadInfo[]> {

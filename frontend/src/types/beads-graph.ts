@@ -7,7 +7,7 @@
 export interface GraphNodeData {
   id: string;
   title: string;
-  status: string; // "open" | "in_progress" | "closed" | "blocked" | "hooked"
+  status: string; // "open" | "in_progress" | "closed" | "hooked"
   type: string; // "epic" | "task" | "bug"
   priority: number;
   assignee: string | null;

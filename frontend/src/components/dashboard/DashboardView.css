@@ -305,12 +305,6 @@
   border: 1px solid var(--crt-phosphor-dim);
 }
 
-.dashboard-status-blocked {
-  background: rgba(255, 170, 0, 0.15);
-  color: #FFAA00;
-  border: 1px solid #FFAA00;
-}
-
 .dashboard-status-stuck {
   background: rgba(255, 68, 68, 0.15);
   color: var(--crt-red);
@@ -456,11 +450,6 @@
   background-color: var(--crt-phosphor-dim);
 }
 
-.dashboard-indicator-blocked {
-  background-color: #FFAA00;
-  box-shadow: 0 0 8px rgba(255, 170, 0, 0.5);
-}
-
 .dashboard-indicator-stuck {
   background-color: var(--crt-red);
   box-shadow: 0 0 8px rgba(255, 68, 68, 0.5);
@@ -482,10 +471,6 @@
 
 .dashboard-text-idle {
   color: var(--crt-phosphor-dim);
-}
-
-.dashboard-text-blocked {
-  color: #FFAA00;
 }
 
 .dashboard-text-stuck {

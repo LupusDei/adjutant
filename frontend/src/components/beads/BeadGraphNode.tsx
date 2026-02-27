@@ -24,7 +24,6 @@ const STATUS_COLORS: Record<string, string> = {
   open: '#666666',
   in_progress: '#ffaa00',
   closed: '#00ff00',
-  blocked: '#ff4444',
   hooked: '#ffaa00',
   deferred: '#555555',
 };
