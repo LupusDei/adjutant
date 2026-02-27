@@ -132,6 +132,11 @@ final class AppState: ObservableObject {
         let config = APIClientConfiguration(baseURL: persistedURL, apiKey: persistedAPIKey)
         self.apiClient = APIClient(configuration: config)
 
+        // Sync API key to shared defaults for widget extension access
+        if let key = persistedAPIKey {
+            Self.sharedDefaults?.set(key, forKey: "apiKey")
+        }
+
         loadPersistedState()
         setupNetworkRecoveryObserver()
         registerDependencies()
@@ -425,8 +430,10 @@ final class AppState: ObservableObject {
             .sink { [weak self] key in
                 if let key = key {
                     UserDefaults.standard.set(key, forKey: "apiKey")
+                    Self.sharedDefaults?.set(key, forKey: "apiKey")
                 } else {
                     UserDefaults.standard.removeObject(forKey: "apiKey")
+                    Self.sharedDefaults?.removeObject(forKey: "apiKey")
                 }
                 self?.recreateAPIClient()
             }

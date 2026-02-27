@@ -108,23 +108,25 @@ struct AdjutantWidgetProvider: TimelineProvider {
         }
     }
 
-    /// Get the API base URL from shared App Groups UserDefaults
-    private func getSharedAPIBaseURL() -> URL {
+    /// Read API configuration from shared App Groups UserDefaults
+    private func getSharedAPIConfig() -> APIClientConfiguration {
         let sharedDefaults = UserDefaults(suiteName: Self.appGroupIdentifier)
+        let baseURL: URL
         if let urlString = sharedDefaults?.string(forKey: "apiBaseURL"),
            let url = URL(string: urlString) {
-            return url
+            baseURL = url
+        } else {
+            baseURL = URL(string: "http://localhost:4201/api")!
         }
-        // Fall back to localhost if no URL configured
-        return URL(string: "http://localhost:4201/api")!
+        let apiKey = sharedDefaults?.string(forKey: "apiKey")
+        return APIClientConfiguration(baseURL: baseURL, apiKey: apiKey)
     }
 
     /// Fetch agents and beads directly from the backend.
     /// No dependency on Gas Town system status — works in swarm mode.
     private func fetchWidgetData() async -> AdjutantWidgetEntry {
         do {
-            let baseURL = getSharedAPIBaseURL()
-            let config = APIClientConfiguration(baseURL: baseURL)
+            let config = getSharedAPIConfig()
             let client = APIClient(configuration: config)
 
             // Fetch beads, agents, and unread counts in parallel
