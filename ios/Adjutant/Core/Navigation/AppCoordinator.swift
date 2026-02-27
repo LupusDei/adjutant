@@ -218,6 +218,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
     /// Prevents stale path accumulation when dismiss() doesn't sync the
     /// NavigationStack path binding (known iOS TabView + page style bug).
     func navigateReplacingPath(to route: AppRoute) {
+        dismissKeyboard()
         var newPath = NavigationPath()
         newPath.append(route)
         setPath(newPath, for: selectedTab)
@@ -225,6 +226,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
 
     /// Appends a route to the current tab's navigation path
     private func appendToCurrentPath(_ route: AppRoute) {
+        dismissKeyboard()
         switch selectedTab {
         case .overview: overviewPath.append(route)
         case .dashboard: dashboardPath.append(route)
@@ -241,12 +243,19 @@ final class AppCoordinator: Coordinator, ObservableObject {
 
     /// Selects a tab (each tab maintains its own navigation path)
     func selectTab(_ tab: AppTab) {
+        dismissKeyboard()
         selectedTab = tab
     }
 
     /// Pops to the root of the current tab's navigation stack
     func popToRoot() {
+        dismissKeyboard()
         setPath(NavigationPath(), for: selectedTab)
+    }
+
+    /// Dismisses the keyboard by resigning first responder globally.
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
     // MARK: - Sheet Presentation
