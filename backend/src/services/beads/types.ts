@@ -135,6 +135,7 @@ export interface EpicProgress {
   closedChildren: number;
   completionPercent: number;
   assignee: string | null;
+  closedAt?: string | null;
 }
 
 /**

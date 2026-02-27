@@ -9,17 +9,39 @@ public struct ProjectOverviewResponse: Codable, Equatable {
     public let beads: BeadsOverview
     public let epics: EpicsOverview
     public let agents: [AgentOverview]
+    public let unreadMessages: [OverviewUnreadSummary]?
 
     public init(
         project: ProjectSummary,
         beads: BeadsOverview,
         epics: EpicsOverview,
-        agents: [AgentOverview]
+        agents: [AgentOverview],
+        unreadMessages: [OverviewUnreadSummary]? = nil
     ) {
         self.project = project
         self.beads = beads
         self.epics = epics
         self.agents = agents
+        self.unreadMessages = unreadMessages
+    }
+}
+
+// MARK: - Unread Message Summary
+
+/// Unread messages from a single agent for the overview widget.
+public struct OverviewUnreadSummary: Codable, Equatable, Identifiable {
+    public let agentId: String
+    public let unreadCount: Int
+    public let latestBody: String
+    public let latestCreatedAt: String
+
+    public var id: String { agentId }
+
+    public init(agentId: String, unreadCount: Int, latestBody: String, latestCreatedAt: String) {
+        self.agentId = agentId
+        self.unreadCount = unreadCount
+        self.latestBody = latestBody
+        self.latestCreatedAt = latestCreatedAt
     }
 }
 
@@ -122,6 +144,7 @@ public struct EpicProgress: Codable, Identifiable, Equatable {
     /// Completion ratio from 0.0 to 1.0
     public let completionPercent: Double
     public let assignee: String?
+    public let closedAt: String?
 
     public init(
         id: String,
@@ -130,7 +153,8 @@ public struct EpicProgress: Codable, Identifiable, Equatable {
         totalChildren: Int,
         closedChildren: Int,
         completionPercent: Double,
-        assignee: String? = nil
+        assignee: String? = nil,
+        closedAt: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -139,6 +163,7 @@ public struct EpicProgress: Codable, Identifiable, Equatable {
         self.closedChildren = closedChildren
         self.completionPercent = completionPercent
         self.assignee = assignee
+        self.closedAt = closedAt
     }
 }
 

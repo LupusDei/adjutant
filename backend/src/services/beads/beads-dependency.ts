@@ -236,6 +236,7 @@ export function transformClosedEpics(
         closedChildren: 0,
         completionPercent: 1.0,
         assignee: e.assignee ?? null,
+        closedAt: e.closed_at ?? null,
       })
     );
 }

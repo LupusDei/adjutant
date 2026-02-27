@@ -113,14 +113,15 @@ export function createProjectsRouter(store: MessageStore): Router {
 
       const project = projectResult.data;
 
-      // Fetch beads overview, epic progress, agents, and unread counts in parallel
-      const [beadsResult, epicResult, recentEpicsResult, agentsResult, unreadCounts] =
+      // Fetch beads overview, epic progress, agents, unread counts, and unread summaries in parallel
+      const [beadsResult, epicResult, recentEpicsResult, agentsResult, unreadCounts, unreadSummaries] =
         await Promise.all([
           getProjectOverview(project.path),
           computeEpicProgress(project.path),
           getRecentlyCompletedEpics(project.path, 5),
           getAgents(),
           Promise.resolve(store.getUnreadCounts()),
+          Promise.resolve(store.getUnreadSummaries(8)),
         ]);
 
       // Build unread count map: agentId -> count
@@ -162,6 +163,7 @@ export function createProjectsRouter(store: MessageStore): Router {
           recentlyCompleted: recentlyCompletedEpics,
         },
         agents,
+        unreadMessages: unreadSummaries,
       }));
     } catch (err) {
       return res.status(500).json(
