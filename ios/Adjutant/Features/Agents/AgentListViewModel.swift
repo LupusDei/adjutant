@@ -1,6 +1,9 @@
 import Foundation
 import Combine
 import AdjutantKit
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// ViewModel for the Agent List feature.
 /// Handles loading agents, filtering by rig, and searching by name.
@@ -252,6 +255,31 @@ final class AgentListViewModel: BaseViewModel {
         searchText = ""
         selectedRig = nil
         selectedStatus = nil
+    }
+
+    // MARK: - Agent Actions
+
+    /// Terminates an agent's session
+    /// - Parameter member: The crew member to terminate
+    /// - Returns: True if termination was successful
+    @discardableResult
+    func terminateAgent(_ member: CrewMember) async -> Bool {
+        let sessionId = member.sessionId ?? member.id
+
+        do {
+            _ = try await apiClient.killSession(id: sessionId)
+
+            #if canImport(UIKit)
+            let feedback = UINotificationFeedbackGenerator()
+            feedback.notificationOccurred(.success)
+            #endif
+
+            await refresh()
+            return true
+        } catch {
+            handleError(error)
+            return false
+        }
     }
 
     // MARK: - Computed Properties

@@ -5,9 +5,12 @@ import AdjutantKit
 /// Features search, rig filtering, and navigation to detail views.
 struct AgentListView: View {
     @Environment(\.crtTheme) private var theme
+    @EnvironmentObject private var coordinator: AppCoordinator
     @StateObject private var viewModel: AgentListViewModel
     @State private var showingRigPicker = false
     @State private var showingSpawnSheet = false
+    @State private var agentToTerminate: CrewMember?
+    @State private var showTerminateConfirmation = false
 
     /// Callback when an agent is selected
     var onSelectMember: ((CrewMember) -> Void)?
@@ -438,40 +441,84 @@ struct AgentListView: View {
     }
 
     private var agentList: some View {
-        ScrollView {
-            LazyVStack(spacing: CRTTheme.Spacing.md, pinnedViews: .sectionHeaders) {
-                ForEach(viewModel.groupedCrewMembers) { group in
-                    Section {
-                        ForEach(group.members) { member in
-                            AgentRowView(
-                                member: member,
-                                beadContext: viewModel.beadContext(for: member)
-                            ) {
-                                onSelectMember?(member)
-                            }
+        List {
+            ForEach(viewModel.groupedCrewMembers) { group in
+                Section {
+                    ForEach(group.members) { member in
+                        AgentRowView(
+                            member: member,
+                            beadContext: viewModel.beadContext(for: member)
+                        ) {
+                            onSelectMember?(member)
                         }
-                    } header: {
-                        sectionHeader(for: group)
+                        .listRowBackground(theme.background.screen)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(
+                            top: CRTTheme.Spacing.xs,
+                            leading: CRTTheme.Spacing.md,
+                            bottom: CRTTheme.Spacing.xs,
+                            trailing: CRTTheme.Spacing.md
+                        ))
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button {
+                                coordinator.pendingChatAgentId = member.id
+                                coordinator.selectTab(.chat)
+                            } label: {
+                                Label("Chat", systemImage: "bubble.left.fill")
+                            }
+                            .tint(CRTTheme.State.info)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                agentToTerminate = member
+                                showTerminateConfirmation = true
+                            } label: {
+                                Label("Terminate", systemImage: "xmark.circle")
+                            }
+                            .tint(CRTTheme.State.error)
+                        }
                     }
-                }
-
-                // Error banner
-                if let error = viewModel.errorMessage {
-                    ErrorBanner(
-                        message: error,
-                        onRetry: {
-                            Task { await viewModel.refresh() }
-                        },
-                        onDismiss: { viewModel.clearError() }
-                    )
-                    .padding(.horizontal)
+                } header: {
+                    sectionHeader(for: group)
                 }
             }
-            .padding(.horizontal, CRTTheme.Spacing.md)
-            .padding(.vertical, CRTTheme.Spacing.sm)
+
+            // Error banner
+            if let error = viewModel.errorMessage {
+                ErrorBanner(
+                    message: error,
+                    onRetry: {
+                        Task { await viewModel.refresh() }
+                    },
+                    onDismiss: { viewModel.clearError() }
+                )
+                .listRowBackground(theme.background.screen)
+                .listRowSeparator(.hidden)
+            }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(theme.background.screen)
         .refreshable {
             await viewModel.refresh()
+        }
+        .alert(
+            "TERMINATE \(agentToTerminate?.name.uppercased() ?? "")?",
+            isPresented: $showTerminateConfirmation
+        ) {
+            Button("Cancel", role: .cancel) {
+                agentToTerminate = nil
+            }
+            Button("TERMINATE", role: .destructive) {
+                if let agent = agentToTerminate {
+                    agentToTerminate = nil
+                    Task {
+                        await viewModel.terminateAgent(agent)
+                    }
+                }
+            }
+        } message: {
+            Text("This will kill the agent's session. This action cannot be undone.")
         }
     }
 
