@@ -52,14 +52,15 @@ struct AgentRowView: View {
                         }
                     }
 
-                    // Status/task info
-                    HStack(spacing: CRTTheme.Spacing.xs) {
+                    // Status/task info — always show status, plus task if available
+                    VStack(alignment: .leading, spacing: 1) {
                         if let task = member.currentTask {
-                            CRTText(task, style: .caption, glowIntensity: .subtle, color: theme.dim)
-                                .lineLimit(1)
-                        } else {
-                            statusText
+                            Text(task)
+                                .font(CRTTheme.Typography.font(size: 13, theme: theme))
+                                .foregroundColor(theme.dim)
+                                .lineLimit(2)
                         }
+                        statusText
                     }
                 }
 

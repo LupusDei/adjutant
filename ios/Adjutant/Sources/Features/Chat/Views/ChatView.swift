@@ -659,19 +659,18 @@ private struct RecipientSelectorSheet: View {
                         }
                     }
 
-                    // Show current task or top assigned bead
+                    // Show current task prominently when available
                     if let task = currentTask, !task.isEmpty {
-                        CRTText(task, style: .caption, glowIntensity: .none, color: theme.dim)
-                            .lineLimit(1)
+                        Text(task)
+                            .font(CRTTheme.Typography.font(size: 13, theme: theme))
+                            .foregroundColor(theme.dim)
+                            .lineLimit(2)
                     } else if let topBead = beads.first {
                         HStack(spacing: CRTTheme.Spacing.xxs) {
                             CRTText(topBead.id, style: .caption, glowIntensity: .subtle, color: theme.dim)
                             CRTText(topBead.title, style: .caption, glowIntensity: .none, color: theme.dim)
                                 .lineLimit(1)
                         }
-                    } else {
-                        CRTText(id, style: .caption, glowIntensity: .none)
-                            .foregroundColor(theme.dim)
                     }
                 }
 
