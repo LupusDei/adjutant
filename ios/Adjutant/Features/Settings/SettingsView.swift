@@ -761,16 +761,9 @@ private struct SchemePreviewCard: View {
         }
     }
 
-    /// Google-style multi-color palette: no single dominant color
+    /// Google-style multi-color palette from the canonical FriendlyColorPalette
     private var friendlyAccentColors: [Color] {
-        [
-            Color(red: 0.255, green: 0.522, blue: 0.957),  // Blue    #4185F4
-            Color(red: 0.918, green: 0.306, blue: 0.208),  // Red     #EA4E35
-            Color(red: 0.984, green: 0.737, blue: 0.020),  // Yellow  #FBBC05
-            Color(red: 0.204, green: 0.659, blue: 0.325),  // Green   #34A853
-            Color(red: 0.675, green: 0.345, blue: 0.847),  // Purple  #AC58D8
-            Color(red: 1.0, green: 0.435, blue: 0.259),    // Orange  #FF6F42
-        ]
+        colorTheme.colorPalette?.allColors ?? [colorTheme.primary, colorTheme.accent]
     }
 
     // MARK: - Shared Selection Indicator
