@@ -152,7 +152,7 @@ export function registerStatusTools(server: McpServer, store: MessageStore): voi
         type: "typing",
         from: agentId,
         state: status,
-        metadata: { type: "agent_status", status, task, beadId, projectId },
+        metadata: { type: "agent_status", status, task: resolvedTask, beadId: resolvedBeadId, projectId },
       });
 
       return {
