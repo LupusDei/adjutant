@@ -57,8 +57,8 @@ struct ChatBubble: View {
                     }
                     if let date = message.date {
                         Text(formatTimestamp(date))
-                            .font(CRTTheme.Typography.font(size: 10))
-                            .foregroundColor(theme.dim.opacity(0.4))
+                            .font(CRTTheme.Typography.font(size: 12))
+                            .foregroundColor(theme.dim)
                     }
                 }
             }
@@ -121,8 +121,8 @@ struct ChatBubble: View {
                 // Timestamp to the right of incoming bubbles
                 if let date = message.date {
                     Text(formatTimestamp(date))
-                        .font(CRTTheme.Typography.font(size: 10))
-                        .foregroundColor(theme.dim.opacity(0.4))
+                        .font(CRTTheme.Typography.font(size: 12))
+                        .foregroundColor(theme.dim)
                 }
                 Spacer(minLength: 40)
             }
