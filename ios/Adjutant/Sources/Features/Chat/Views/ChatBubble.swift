@@ -47,9 +47,20 @@ struct ChatBubble: View {
     }
 
     var body: some View {
-        HStack {
+        HStack(alignment: .bottom, spacing: CRTTheme.Spacing.xxs) {
             if isOutgoing {
-                Spacer(minLength: 60)
+                Spacer(minLength: 40)
+                // Timestamp + delivery status to the left of outgoing bubbles
+                VStack(alignment: .trailing, spacing: 2) {
+                    if isOutgoing {
+                        deliveryStatusView
+                    }
+                    if let date = message.date {
+                        Text(formatTimestamp(date))
+                            .font(CRTTheme.Typography.font(size: 10))
+                            .foregroundColor(theme.dim.opacity(0.4))
+                    }
+                }
             }
 
             VStack(alignment: alignment, spacing: CRTTheme.Spacing.xxs) {
@@ -105,43 +116,16 @@ struct ChatBubble: View {
                         .accessibilityLabel(isPlaying ? "Stop audio" : "Play audio")
                     }
                 }
-
-                // Timestamp and delivery status
-                HStack(spacing: CRTTheme.Spacing.xxs) {
-                    if let date = message.date {
-                        CRTText(
-                            formatTimestamp(date),
-                            style: .caption,
-                            glowIntensity: .none,
-                            color: theme.dim.opacity(0.6)
-                        )
-                    }
-
-                    // Delivery status indicator for outgoing messages
-                    if isOutgoing {
-                        if message.deliveryStatus == .pending {
-                            Image(systemName: "clock")
-                                .font(.system(size: 10))
-                                .foregroundColor(theme.dim.opacity(0.5))
-                        } else if message.deliveryStatus == .failed {
-                            Button {
-                                onRetry?()
-                            } label: {
-                                HStack(spacing: 2) {
-                                    Image(systemName: "exclamationmark.circle")
-                                        .font(.system(size: 10))
-                                    CRTText("FAILED", style: .caption, glowIntensity: .none, color: CRTTheme.State.error)
-                                }
-                                .foregroundColor(CRTTheme.State.error)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
             }
 
             if !isOutgoing {
-                Spacer(minLength: 60)
+                // Timestamp to the right of incoming bubbles
+                if let date = message.date {
+                    Text(formatTimestamp(date))
+                        .font(CRTTheme.Typography.font(size: 10))
+                        .foregroundColor(theme.dim.opacity(0.4))
+                }
+                Spacer(minLength: 40)
             }
         }
         .padding(.horizontal, CRTTheme.Spacing.sm)
@@ -149,20 +133,41 @@ struct ChatBubble: View {
         .accessibilityLabel("\(isOutgoing ? "You" : message.senderName): \(message.body)")
     }
 
-    /// Format the message timestamp for display
+    /// Delivery status indicator for outgoing messages
+    @ViewBuilder
+    private var deliveryStatusView: some View {
+        if message.deliveryStatus == .pending {
+            Image(systemName: "clock")
+                .font(.system(size: 9))
+                .foregroundColor(theme.dim.opacity(0.4))
+        } else if message.deliveryStatus == .failed {
+            Button {
+                onRetry?()
+            } label: {
+                Image(systemName: "exclamationmark.circle")
+                    .font(.system(size: 9))
+                    .foregroundColor(CRTTheme.State.error)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// Format the message timestamp for minimal display (e.g. "2/26 8:02pm")
     private func formatTimestamp(_ date: Date) -> String {
         let formatter = DateFormatter()
         let calendar = Calendar.current
 
         if calendar.isDateInToday(date) {
-            formatter.dateFormat = "HH:mm"
-        } else if calendar.isDateInYesterday(date) {
-            formatter.dateFormat = "'YESTERDAY' HH:mm"
+            formatter.dateFormat = "h:mma"
+        } else if calendar.component(.year, from: date) == calendar.component(.year, from: Date()) {
+            formatter.dateFormat = "M/d h:mma"
         } else {
-            formatter.dateFormat = "MMM d, HH:mm"
+            formatter.dateFormat = "M/d/yy h:mma"
         }
 
-        return formatter.string(from: date).uppercased()
+        formatter.amSymbol = "am"
+        formatter.pmSymbol = "pm"
+        return formatter.string(from: date)
     }
 }
 
