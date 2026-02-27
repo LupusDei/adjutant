@@ -103,6 +103,15 @@ public enum CRTTheme {
             }
         }
 
+        /// Font design style for this theme
+        public var fontDesign: Font.Design {
+            switch self {
+            case .pipboy, .starcraft: return .monospaced
+            case .document: return .default
+            case .friendly: return .rounded
+            }
+        }
+
         /// Primary text color for this theme
         public var textPrimary: Color {
             switch self {
