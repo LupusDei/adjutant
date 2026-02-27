@@ -1,9 +1,8 @@
 import SwiftUI
 import AdjutantKit
 
-/// A 5-column Kanban board for displaying beads across workflow stages.
-/// Columns: OPEN -> HOOKED -> IN PROGRESS -> CLOSED -> BLOCKED
-/// BLOCKED appears last as exceptional items needing attention.
+/// A 4-column Kanban board for displaying beads across workflow stages.
+/// Columns: OPEN -> HOOKED -> IN PROGRESS -> CLOSED
 /// Supports drag-and-drop between columns with optimistic updates.
 struct KanbanBoardView: View {
     @Environment(\.crtTheme) private var theme
@@ -126,19 +125,6 @@ struct KanbanBoardView: View {
                 source: "adjutant",
                 labels: [],
                 createdAt: "2026-01-25T06:00:00Z",
-                updatedAt: nil
-            ),
-            BeadInfo(
-                id: "adj-004",
-                title: "Code review",
-                status: "blocked",
-                priority: 1,
-                type: "task",
-                assignee: "adjutant/crew/bob",
-                rig: "adjutant",
-                source: "adjutant",
-                labels: [],
-                createdAt: "2026-01-25T04:00:00Z",
                 updatedAt: nil
             ),
             BeadInfo(

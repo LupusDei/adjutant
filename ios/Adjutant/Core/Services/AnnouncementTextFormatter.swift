@@ -59,8 +59,6 @@ public struct AnnouncementTextFormatter {
             return "Starting work on: \(cleanTitle)"
         case "closed", "completed", "done":
             return "Task completed: \(cleanTitle)"
-        case "blocked":
-            return "Task blocked: \(cleanTitle)"
         case "open":
             if oldStatus?.lowercased() == "closed" {
                 return "Task reopened: \(cleanTitle)"

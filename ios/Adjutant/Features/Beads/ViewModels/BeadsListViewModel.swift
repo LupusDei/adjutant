@@ -415,7 +415,7 @@ final class BeadsListViewModel: BaseViewModel {
     }
 
     /// Get status type for badge display.
-    /// Valid statuses: open, hooked, in_progress, blocked, closed.
+    /// Valid statuses: open, hooked, in_progress, closed.
     /// In Swarm mode, hooked is treated as in_progress.
     func statusType(for bead: BeadInfo) -> BadgeView.Style.StatusType {
         let status = AppState.shared.deploymentMode == .swarm && bead.status.lowercased() == "hooked"
@@ -424,8 +424,6 @@ final class BeadsListViewModel: BaseViewModel {
         switch status {
         case "closed":
             return .offline
-        case "blocked":
-            return .warning
         case "hooked", "in_progress":
             return .info
         case "open":
@@ -479,19 +477,6 @@ extension BeadsListViewModel {
             labels: ["testing"],
             createdAt: "2026-01-24T16:00:00Z",
             updatedAt: nil
-        ),
-        BeadInfo(
-            id: "hq-001",
-            title: "Coordinate cross-rig deployment",
-            status: "blocked",
-            priority: 1,
-            type: "epic",
-            assignee: "mayor/",
-            rig: nil,
-            source: "town",
-            labels: ["coordination", "deployment"],
-            createdAt: "2026-01-20T10:00:00Z",
-            updatedAt: "2026-01-24T09:00:00Z"
         ),
         BeadInfo(
             id: "adj-004",

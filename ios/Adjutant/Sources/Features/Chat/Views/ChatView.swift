@@ -766,7 +766,7 @@ private struct RecipientSelectorSheet: View {
     /// Loads beads and groups them by assignee for display in recipient rows
     private func loadAgentBeads() async {
         do {
-            // Fetch active beads (open, hooked, in_progress, blocked) + recently closed
+            // Fetch active beads (open, hooked, in_progress) + recently closed
             let activeBeads = try await apiClient.getBeads(rig: "all", status: .default)
             let closedBeads = try await apiClient.getBeads(rig: "all", status: .closed, limit: 50)
 

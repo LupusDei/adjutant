@@ -279,7 +279,7 @@ public final class BeadStatusMonitor: ObservableObject {
             } else if bead.status == "closed" {
                 changeType = .completed
             } else {
-                // Other status changes (hooked, blocked, deferred, etc.) - don't announce
+                // Other status changes (hooked, deferred, etc.) - don't announce
                 continue
             }
 

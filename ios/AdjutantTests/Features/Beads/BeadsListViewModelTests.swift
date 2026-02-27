@@ -126,14 +126,6 @@ final class BeadsListViewModelTests: XCTestCase {
         }
     }
 
-    func testStatusTypeForBlocked() async {
-        let blockedBead = viewModel.beads.first { $0.status == "blocked" }
-        if let bead = blockedBead {
-            let statusType = viewModel.statusType(for: bead)
-            XCTAssertEqual(statusType, .warning)
-        }
-    }
-
     func testStatusTypeForInProgress() async {
         let inProgressBead = viewModel.beads.first { $0.status == "in_progress" }
         if let bead = inProgressBead {
@@ -630,7 +622,6 @@ final class BeadsListViewModelTests: XCTestCase {
         XCTAssertTrue(statuses.contains("open"), "Mock data should contain open beads")
         XCTAssertTrue(statuses.contains("in_progress"), "Mock data should contain in_progress beads")
         XCTAssertTrue(statuses.contains("closed"), "Mock data should contain closed beads")
-        XCTAssertTrue(statuses.contains("blocked"), "Mock data should contain blocked beads")
     }
 
     func testMockDataHasExpectedTypes() {

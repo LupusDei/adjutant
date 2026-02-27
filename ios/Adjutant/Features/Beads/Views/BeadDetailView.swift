@@ -421,7 +421,6 @@ struct BeadDetailView: View {
     private func statusType(for status: String) -> BadgeView.Style.StatusType {
         switch status {
         case "closed": return .offline
-        case "blocked": return .warning
         case "hooked", "in_progress": return .info
         case "open": return .success
         default: return .info
@@ -431,7 +430,6 @@ struct BeadDetailView: View {
     private func statusColor(for status: String) -> Color {
         switch status {
         case "closed": return CRTTheme.State.offline
-        case "blocked": return CRTTheme.State.warning
         case "hooked", "in_progress": return CRTTheme.State.info
         case "open": return CRTTheme.State.success
         default: return theme.primary

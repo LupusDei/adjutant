@@ -76,8 +76,6 @@ struct DependencyGraphNodeView: View {
             return Color(red: 0, green: 1, blue: 0) // bright green #00ff00
         case "in_progress", "hooked":
             return CRTTheme.State.warning // amber/yellow
-        case "blocked":
-            return CRTTheme.State.error // red
         case "open":
             return CRTTheme.State.offline // dim gray
         default:
@@ -130,11 +128,6 @@ struct DependencyGraphNodeView: View {
             nodeInfo: GraphNodeInfo(id: "adj-003", title: "Closed Task", status: "closed", type: "task", priority: 3, assignee: nil, source: "town"),
             position: .zero,
             layer: 1
-        ),
-        BeadGraphNode(
-            nodeInfo: GraphNodeInfo(id: "adj-004", title: "Blocked Bug", status: "blocked", type: "bug", priority: 0, assignee: "crew/bob", source: "town"),
-            position: .zero,
-            layer: 2
         ),
     ]
 

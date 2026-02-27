@@ -386,7 +386,6 @@ extension APIClient {
         case open
         case hooked
         case inProgress = "in_progress"
-        case blocked
         case deferred
         case closed
         case all
@@ -459,7 +458,7 @@ extension APIClient {
     ///
     /// - Parameters:
     ///   - id: Full bead ID (e.g., "hq-vts8", "gb-53tj")
-    ///   - status: New status value (open, in_progress, blocked, closed, etc.)
+    ///   - status: New status value (open, in_progress, closed, etc.)
     /// - Returns: A ``BeadUpdateResponse`` confirming the update.
     /// - Throws: ``APIClientError`` if the request fails or status is invalid.
     public func updateBeadStatus(id: String, status: String) async throws -> BeadUpdateResponse {

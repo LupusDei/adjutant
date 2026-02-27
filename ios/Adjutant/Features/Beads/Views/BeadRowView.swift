@@ -118,13 +118,11 @@ struct BeadRowView: View {
         return bead.status
     }
 
-    /// Valid statuses: open, hooked, in_progress, blocked, closed
+    /// Valid statuses: open, hooked, in_progress, closed
     private var statusType: BadgeView.Style.StatusType {
         switch displayStatus.lowercased() {
         case "closed":
             return .offline
-        case "blocked":
-            return .warning
         case "hooked", "in_progress":
             return .info
         case "open":
@@ -185,23 +183,6 @@ struct BeadRowView: View {
                 source: "adjutant",
                 labels: ["urgent"],
                 createdAt: "2026-01-25T08:00:00Z",
-                updatedAt: nil
-            ),
-            onTap: {}
-        )
-
-        BeadRowView(
-            bead: BeadInfo(
-                id: "hq-003",
-                title: "Blocked task waiting on dependency",
-                status: "blocked",
-                priority: 2,
-                type: "task",
-                assignee: "mayor/",
-                rig: nil,
-                source: "town",
-                labels: ["blocked", "dependency"],
-                createdAt: "2026-01-24T10:00:00Z",
                 updatedAt: nil
             ),
             onTap: {}
