@@ -33,6 +33,7 @@ export type {
   ListBeadsOptions,
   BeadsServiceResult,
   BeadStatus,
+  BeadSortField,
   UpdateBeadOptions,
   EpicWithChildren,
   EpicProgress,
@@ -42,7 +43,7 @@ export type {
   FetchResult,
 } from "./types.js";
 
-export { DEFAULT_STATUSES, ALL_STATUSES } from "./types.js";
+export { DEFAULT_STATUSES, ALL_STATUSES, VALID_SORT_FIELDS } from "./types.js";
 
 // ============================================================================
 // Prefix Map

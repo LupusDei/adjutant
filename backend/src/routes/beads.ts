@@ -10,7 +10,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { listBeads, listAllBeads, updateBead, getBead, getEpicChildren, listEpicsWithProgress, listBeadSources, listRecentlyClosed, getBeadsGraph, type BeadStatus } from "../services/beads/index.js";
+import { listBeads, listAllBeads, updateBead, getBead, getEpicChildren, listEpicsWithProgress, listBeadSources, listRecentlyClosed, getBeadsGraph, type BeadStatus, type BeadSortField, VALID_SORT_FIELDS } from "../services/beads/index.js";
 import { BeadsGraphResponseSchema } from "../types/beads.js";
 import { resolveRigPath } from "../services/workspace/index.js";
 import { listProjects } from "../services/projects-service.js";
@@ -44,6 +44,8 @@ export const beadsRouter = Router();
  * - type: Filter by bead type (e.g., "task", "bug", "feature")
  * - limit: Max results (default: 500)
  * - excludeTown: Set to "true" to exclude hq- town beads when rig=all (default: false)
+ * - sort: Sort field for bd list (priority, created, updated, closed, status, id, title, type, assignee)
+ * - order: Sort order ("asc" or "desc", default: "asc")
  */
 beadsRouter.get("/", async (req, res) => {
   const rigParam = req.query["rig"] as string | undefined;
@@ -52,8 +54,16 @@ beadsRouter.get("/", async (req, res) => {
   const limitStr = req.query["limit"] as string | undefined;
   const assigneeParam = req.query["assignee"] as string | undefined;
   const excludeTown = req.query["excludeTown"] === "true";
+  const sortParam = req.query["sort"] as string | undefined;
+  const orderParam = req.query["order"] as string | undefined;
   // Higher default to show low-priority bugs (P3) which sort to the end
   const limit = limitStr ? parseInt(limitStr, 10) : 500;
+
+  // Validate sort field against allowed values
+  const sort = sortParam && (VALID_SORT_FIELDS as readonly string[]).includes(sortParam)
+    ? sortParam as BeadSortField
+    : undefined;
+  const order: "asc" | "desc" | undefined = orderParam === "desc" ? "desc" : orderParam === "asc" ? "asc" : undefined;
 
   // Default to showing active work (open + in_progress + blocked)
   const status = statusParam ?? "default";
@@ -67,6 +77,8 @@ beadsRouter.get("/", async (req, res) => {
     const result = await listAllBeads({
       ...(typeParam && { type: typeParam }),
       ...(assigneeParam && { assignee: assigneeParam }),
+      ...(sort && { sort }),
+      ...(order && { order }),
       status,
       limit,
       excludePrefixes,
@@ -104,6 +116,8 @@ beadsRouter.get("/", async (req, res) => {
     ...(rigPath && { rigPath }),
     ...(typeParam && { type: typeParam }),
     ...(assigneeParam && { assignee: assigneeParam }),
+    ...(sort && { sort }),
+    ...(order && { order }),
     status,
     limit,
   });

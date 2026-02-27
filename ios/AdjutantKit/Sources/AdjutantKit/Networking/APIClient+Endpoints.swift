@@ -398,7 +398,9 @@ extension APIClient {
         type: String? = nil,
         limit: Int? = nil,
         assignee: String? = nil,
-        excludeTown: Bool = false
+        excludeTown: Bool = false,
+        sort: String? = nil,
+        order: String? = nil
     ) async throws -> [BeadInfo] {
         var queryItems: [URLQueryItem] = []
 
@@ -419,6 +421,12 @@ extension APIClient {
         }
         if excludeTown {
             queryItems.append(URLQueryItem(name: "excludeTown", value: "true"))
+        }
+        if let sort {
+            queryItems.append(URLQueryItem(name: "sort", value: sort))
+        }
+        if let order {
+            queryItems.append(URLQueryItem(name: "order", value: order))
         }
 
         return try await requestWithEnvelope(

@@ -168,7 +168,10 @@ export async function listBeads(
       beads = filterByAssignee(beads, options.assignee);
     }
 
-    beads = sortByPriorityThenDate(beads);
+    // Skip re-sort when bd already sorted by a specific field
+    if (!options.sort) {
+      beads = sortByPriorityThenDate(beads);
+    }
     beads = applyLimit(beads, options.limit);
 
     return { success: true, data: beads };
@@ -240,7 +243,10 @@ export async function listAllBeads(
       allBeads = filterByAssignee(allBeads, options.assignee);
     }
 
-    allBeads = sortByPriorityThenDate(allBeads);
+    // Skip re-sort when bd already sorted by a specific field
+    if (!options.sort) {
+      allBeads = sortByPriorityThenDate(allBeads);
+    }
     allBeads = applyLimit(allBeads, options.limit);
 
     logInfo("listAllBeads complete", { durationMs: Date.now() - perfStart, beadCount: allBeads.length });
@@ -280,7 +286,7 @@ export async function listRecentlyClosed(
 
     for (const db of databasesToQuery) {
       const result = await execBd<BeadsIssue[]>(
-        ["list", "--all", "--status", "closed", "--json", "--limit", "0"],
+        ["list", "--all", "--status", "closed", "--json", "--sort", "closed", "--reverse", "--limit", "200"],
         { cwd: db.workDir, beadsDir: db.beadsDir }
       );
 

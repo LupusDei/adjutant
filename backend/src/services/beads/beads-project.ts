@@ -29,29 +29,29 @@ export async function getProjectOverview(
   try {
     const beadsDir = resolveBeadsDir(projectPath);
 
-    // Fetch open beads
+    // Fetch open beads (usually small set)
     const openResult = await execBd<BeadsIssue[]>(
-      ["list", "--json", "--status", "open", "--limit", "0"],
+      ["list", "--json", "--status", "open", "--limit", "200"],
       { cwd: projectPath, beadsDir }
     );
 
-    // Fetch in-progress, hooked, and blocked beads (all active work statuses)
+    // Fetch in-progress, hooked, and blocked beads (all active work statuses, usually small)
     const inProgressResult = await execBd<BeadsIssue[]>(
-      ["list", "--json", "--status", "in_progress", "--limit", "0"],
+      ["list", "--json", "--status", "in_progress", "--limit", "200"],
       { cwd: projectPath, beadsDir }
     );
     const hookedResult = await execBd<BeadsIssue[]>(
-      ["list", "--json", "--status", "hooked", "--limit", "0"],
+      ["list", "--json", "--status", "hooked", "--limit", "200"],
       { cwd: projectPath, beadsDir }
     );
     const blockedResult = await execBd<BeadsIssue[]>(
-      ["list", "--json", "--status", "blocked", "--limit", "0"],
+      ["list", "--json", "--status", "blocked", "--limit", "200"],
       { cwd: projectPath, beadsDir }
     );
 
-    // Fetch closed beads for recently-closed (last 24h)
+    // Fetch closed beads for recently-closed: sort by closed date descending, cap at 200
     const closedResult = await execBd<BeadsIssue[]>(
-      ["list", "--all", "--json", "--status", "closed", "--limit", "0"],
+      ["list", "--all", "--json", "--status", "closed", "--sort", "closed", "--reverse", "--limit", "200"],
       { cwd: projectPath, beadsDir }
     );
 
@@ -118,7 +118,7 @@ export async function computeEpicProgress(
     const beadsDir = resolveBeadsDir(projectPath);
 
     const epicsResult = await execBd<BeadsIssue[]>(
-      ["list", "--json", "--type", "epic", "--all", "--limit", "0"],
+      ["list", "--json", "--type", "epic", "--all", "--limit", "200"],
       { cwd: projectPath, beadsDir }
     );
 
@@ -132,7 +132,7 @@ export async function computeEpicProgress(
 
     // Batch: fetch all beads once to build a status lookup map
     const allBeadsResult = await execBd<BeadsIssue[]>(
-      ["list", "--all", "--json", "--limit", "0"],
+      ["list", "--all", "--json", "--limit", "500"],
       { cwd: projectPath, beadsDir }
     );
     const statusMap = new Map<string, string>();
@@ -198,7 +198,7 @@ export async function getRecentlyCompletedEpics(
     const beadsDir = resolveBeadsDir(projectPath);
 
     const result = await execBd<BeadsIssue[]>(
-      ["list", "--json", "--type", "epic", "--status", "closed", "--limit", "0"],
+      ["list", "--json", "--type", "epic", "--status", "closed", "--sort", "closed", "--reverse", "--limit", "200"],
       { cwd: projectPath, beadsDir }
     );
 

@@ -18,6 +18,7 @@ import type {
   BeadsGraphOptions,
   FetchResult,
 } from "./types.js";
+import { VALID_SORT_FIELDS } from "./types.js";
 import { ensurePrefixMap, loadPrefixMap } from "./beads-prefix-map.js";
 import { transformBead } from "./beads-transform.js";
 import { parseStatusFilter, excludeWisps } from "./beads-filter.js";
@@ -143,11 +144,20 @@ export async function fetchBeadsFromDatabase(
     args.push("--type", options.type);
   }
 
-  // Always fetch all beads from bd (--limit 0 = unlimited).
-  // The old approach passed a finite limit which silently dropped beads
-  // in projects with 500+ issues (adj-n7w2). Post-fetch filtering and
-  // route-level limits handle truncation instead.
-  args.push("--limit", "0");
+  // Pass sort field to bd if specified and valid
+  if (options.sort && (VALID_SORT_FIELDS as readonly string[]).includes(options.sort)) {
+    args.push("--sort", options.sort);
+  }
+
+  // --reverse for descending order
+  if (options.order === "desc") {
+    args.push("--reverse");
+  }
+
+  // Pass limit to bd CLI. Default to 500 when not specified.
+  // Callers that need unlimited results should pass limit: 0 explicitly.
+  const bdLimit = options.limit ?? 500;
+  args.push("--limit", String(bdLimit));
 
   const result = await execBd<BeadsIssue[]>(args, { cwd: workDir, beadsDir });
   if (!result.success) {
@@ -196,7 +206,7 @@ export async function fetchGraphBeadsFromDatabase(
     args.push("--type", options.type);
   }
 
-  // Fetch all beads (no truncation at the bd CLI level)
+  // Graph queries need all beads for correct edge computation
   args.push("--limit", "0");
 
   const result = await execBd<BeadsIssue[]>(args, { cwd: workDir, beadsDir });

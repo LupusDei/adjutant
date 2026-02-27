@@ -121,7 +121,7 @@ describe("beads-service", () => {
       expect(args).toContain("bug");
     });
 
-    it("should always pass --limit 0 to bd command for unlimited results", async () => {
+    it("should pass limit to bd command (default 500 when unspecified)", async () => {
       vi.mocked(execBd).mockResolvedValue({
         success: true,
         data: [],
@@ -132,7 +132,69 @@ describe("beads-service", () => {
 
       const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
       expect(args).toContain("--limit");
-      expect(args).toContain("0");
+      expect(args).toContain("10");
+    });
+
+    it("should default limit to 500 when not specified", async () => {
+      vi.mocked(execBd).mockResolvedValue({
+        success: true,
+        data: [],
+        exitCode: 0,
+      });
+
+      await listBeads();
+
+      const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
+      expect(args).toContain("--limit");
+      expect(args).toContain("500");
+    });
+
+    it("should pass sort and reverse flags to bd command", async () => {
+      vi.mocked(execBd).mockResolvedValue({
+        success: true,
+        data: [],
+        exitCode: 0,
+      });
+
+      await listBeads({ sort: "updated", order: "desc" });
+
+      const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
+      expect(args).toContain("--sort");
+      expect(args).toContain("updated");
+      expect(args).toContain("--reverse");
+    });
+
+    it("should not pass --reverse when order is asc", async () => {
+      vi.mocked(execBd).mockResolvedValue({
+        success: true,
+        data: [],
+        exitCode: 0,
+      });
+
+      await listBeads({ sort: "created", order: "asc" });
+
+      const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
+      expect(args).toContain("--sort");
+      expect(args).toContain("created");
+      expect(args).not.toContain("--reverse");
+    });
+
+    it("should skip client-side sort when bd sort is specified", async () => {
+      vi.mocked(execBd).mockResolvedValue({
+        success: true,
+        data: [
+          createBead({ id: "hq-001", priority: 3, updated_at: "2026-01-10T12:00:00Z" }),
+          createBead({ id: "hq-002", priority: 1, updated_at: "2026-01-12T12:00:00Z" }),
+        ],
+        exitCode: 0,
+      });
+
+      const result = await listBeads({ sort: "updated", order: "desc" });
+
+      expect(result.success).toBe(true);
+      // When sort is specified, bd handles sorting — results should maintain bd's order
+      expect(result.data?.[0].id).toBe("hq-001");
+      expect(result.data?.[1].id).toBe("hq-002");
     });
 
     it("should filter by rig via assignee prefix", async () => {
