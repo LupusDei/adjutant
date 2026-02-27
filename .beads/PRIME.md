@@ -71,6 +71,7 @@ If build or tests fail, fix the issues BEFORE committing — do NOT push broken 
 ```bash
 bd show <id>       # Review issue details
 bd update <id> --assignee=<your-name> --status=in_progress  # Claim it (ALWAYS include --assignee)
+set_status({ status: "working", task: "<concise description>" })  # Report to dashboard
 ```
 
 **Assigning work to a team agent:**
@@ -82,6 +83,7 @@ bd update <id> --assignee=<agent-name>   # Assign before spawning
 **Completing work:**
 ```bash
 bd close <id1> ...    # Close completed issues at once
+set_status({ status: "done", task: "Completed <id>: <what you finished>" })  # Report to dashboard
 bd sync                     # Push to remote
 ```
 
@@ -222,7 +224,9 @@ When assigning work to team agents, the **coordinator** must:
    Your assigned beads: <list their bead IDs here>
    Parent epic: <parent bead ID>
 
-   Before starting each task:  bd update <id> --assignee=<your-name> --status=in_progress
+   Before starting each task:
+     bd update <id> --assignee=<your-name> --status=in_progress
+     set_status({ status: "working", task: "<concise description of what you're doing>" })
    After completing each task:
      1. npm run build          (must exit 0)
      2. npm test               (must pass)
@@ -230,10 +234,13 @@ When assigning work to team agents, the **coordinator** must:
      4. git push -u origin <your-branch>
      5. Merge to main: git checkout main && git pull && git merge <branch> && npm run build && npm test && git push origin main
      6. bd close <id>
+     7. set_status({ status: "done", task: "Completed <bead-id>: <what you finished>" })
    If push to main fails (race), pull --rebase and retry.
    You may close parent epics manually when all children are done, or let them auto-close.
    If build/tests fail, fix them before closing the bead.
-   Before shutting down:        bd sync
+   Before shutting down:
+     set_status({ status: "idle", task: "Finished work, shutting down" })
+     bd sync
    ```
 4. **Include the working directory** — teammates in worktrees won't have `.beads/`, so tell them the path to the main repo if needed
 

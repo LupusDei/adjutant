@@ -26,15 +26,24 @@ send_message({ to: "user", body: "Build complete. All tests pass." })
 send_message({ to: "user", body: "Need clarification on X", threadId: "questions" })
 ```
 
-### Status Reporting
+### Status Reporting (MANDATORY)
 
-Report state changes so the dashboard shows your current activity:
+**You MUST call `set_status` when starting AND completing every task.**
+The dashboard and iOS app show your current task to the user at all times.
+**Always include a `task` description** — even when going idle or done.
 
 ```
 set_status({ status: "working", task: "Implementing feature X", beadId: "adj-013.2.1" })
 set_status({ status: "blocked", task: "Waiting for API key" })
-set_status({ status: "done" })
+set_status({ status: "done", task: "Completed feature X" })
+set_status({ status: "idle", task: "Finished adj-013.2, awaiting next task" })
 ```
+
+**Rules:**
+- Call `set_status(working)` BEFORE starting any task — with a concise task description
+- Call `set_status(done)` or `set_status(idle)` AFTER completing a task — include what you finished
+- **Never omit the `task` field** — the user relies on it to see what agents are doing
+- Keep task descriptions concise (under 80 chars) and meaningful
 
 ### Progress on Long Tasks
 
