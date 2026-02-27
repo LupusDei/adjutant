@@ -1,6 +1,6 @@
 {
   "name": "adjutant",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "description": "Retro terminal UI for Gastown multi-agent orchestration with iOS companion app",
   "type": "module",
   "bin": {

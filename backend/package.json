@@ -1,6 +1,6 @@
 {
   "name": "adjutant-backend",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "description": "Backend API for Adjutant - wraps gastown CLI commands",
   "type": "module",
   "main": "dist/index.js",
