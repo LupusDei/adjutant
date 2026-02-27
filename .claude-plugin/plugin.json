@@ -1,0 +1,8 @@
+{
+  "name": "adjutant-agent",
+  "description": "Adjutant agent protocol for MCP communication, beads, and epic planning",
+  "hooks": {
+    "SessionStart": [{ "matcher": "", "hooks": [{ "type": "command", "command": "cat .adjutant/PRIME.md 2>/dev/null || true" }] }],
+    "PreCompact": [{ "matcher": "", "hooks": [{ "type": "command", "command": "cat .adjutant/PRIME.md 2>/dev/null || true" }] }]
+  }
+}

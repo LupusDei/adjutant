@@ -1,0 +1,17 @@
+{
+  "name": "adjutant-agent",
+  "owner": { "name": "Adjutant" },
+  "plugins": [{
+    "name": "adjutant-agent",
+    "description": "Agent skills for Adjutant dashboard: MCP tools, epic planning, messaging, proposals",
+    "source": "./",
+    "skills": [
+      "./skills/mcp-tools",
+      "./skills/epic-planner",
+      "./skills/broadcast-prompt",
+      "./skills/direct-message",
+      "./skills/discuss-proposal",
+      "./skills/execute-proposal"
+    ]
+  }]
+}

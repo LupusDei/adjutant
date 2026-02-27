@@ -1,12 +1,12 @@
 # Adjutant Agent Skill: Setup and Configuration
 
-**Purpose**: How to install and configure the `adjutant-agent` skill so spawned Claude Code agents automatically connect to the Adjutant MCP server and communicate via its messaging tools.
+**Purpose**: How to install and configure the `adjutant-agent` plugin so spawned Claude Code agents automatically connect to the Adjutant MCP server and communicate via its messaging tools.
 
 ---
 
 ## 1. What the Adjutant Agent Skill Does
 
-The `adjutant-agent` skill (defined at `.claude/skills/adjutant-agent/SKILL.md`) teaches a Claude Code agent how to use the Adjutant MCP tools. When loaded, the agent gains access to:
+The `adjutant-agent` plugin (defined at `skills/mcp-tools/SKILL.md`) teaches a Claude Code agent how to use the Adjutant MCP tools. When loaded, the agent gains access to:
 
 - **Messaging** -- `send_message`, `read_messages`, `list_threads`, `mark_read`
 - **Status reporting** -- `set_status`, `report_progress`, `announce`
@@ -130,7 +130,7 @@ Alternatively, the agent can be identified via the SSE URL query parameter if th
 
 When Claude Code starts in the adjutant project directory, it should:
 1. Load `.mcp.json` and connect to the Adjutant MCP server
-2. Discover the `adjutant-agent` skill from `.claude/skills/adjutant-agent/SKILL.md`
+2. Discover the `adjutant-agent` plugin from `skills/mcp-tools/SKILL.md`
 3. Have MCP tools available: `send_message`, `set_status`, etc.
 
 To verify from within a Claude Code session, the agent can call any MCP tool:
@@ -269,7 +269,7 @@ Before starting work, ensure .mcp.json exists in your working directory with:
 | `get_project_state` | Project summary | (none) |
 | `search_messages` | Full-text search | `query` (required), `agentId`, `limit` |
 
-Full input/output schemas are in `.claude/skills/adjutant-agent/references/tool-catalog.md`.
+Full input/output schemas are in `skills/mcp-tools/references/tool-catalog.md`.
 
 ---
 
@@ -310,8 +310,8 @@ Agent starts -> Claude Code reads .mcp.json
 | File | Purpose |
 |------|---------|
 | `.mcp.json` | MCP server configuration (project root) |
-| `.claude/skills/adjutant-agent/SKILL.md` | Skill definition (tool usage docs) |
-| `.claude/skills/adjutant-agent/references/tool-catalog.md` | Complete tool schemas |
+| `skills/mcp-tools/SKILL.md` | Skill definition (tool usage docs) |
+| `skills/mcp-tools/references/tool-catalog.md` | Complete tool schemas |
 | `backend/src/services/mcp-server.ts` | MCP server, connection tracking, identity resolution |
 | `backend/src/services/mcp-tools/messaging.ts` | send_message, read_messages, list_threads, mark_read |
 | `backend/src/services/mcp-tools/status.ts` | set_status, report_progress, announce |
@@ -455,7 +455,7 @@ claude
 | `.mcp.json` | Project root | Tells Claude Code how to connect to Adjutant MCP server |
 | `ADJUTANT_AGENT_ID` env var | Shell environment | Sets the agent's identity for server-side resolution |
 | Adjutant backend | Running on `:4201` | Hosts MCP server, SQLite store, WebSocket broadcast |
-| `adjutant-agent` skill | `.claude/skills/adjutant-agent/` | Documents available tools (loaded by skill system) |
+| `adjutant-agent` plugin | `skills/mcp-tools/` | Documents available tools (loaded by skill system) |
 | Spawn prompt instructions | Agent's initial prompt | Tells agent to use MCP tools for communication |
 
 The minimum viable setup is: `.mcp.json` in the working directory + Adjutant backend running. Everything else is optional but recommended.
@@ -466,9 +466,9 @@ The minimum viable setup is: `.mcp.json` in the working directory + Adjutant bac
 
 ### Skill auto-loading
 
-Claude Code discovers skills from `.claude/skills/` in the project directory on session start. The `adjutant-agent` skill at `.claude/skills/adjutant-agent/SKILL.md` is loaded automatically when an agent starts in any directory that has this path. This skill is **documentation only** — it tells the agent what MCP tools are available and how to use them. The actual MCP connection is established separately by `.mcp.json`.
+Claude Code discovers skills from `skills/` in the project directory on session start. The `adjutant-agent` plugin at `skills/mcp-tools/SKILL.md` is loaded automatically when an agent starts in any directory that has this path. This skill is **documentation only** — it tells the agent what MCP tools are available and how to use them. The actual MCP connection is established separately by `.mcp.json`.
 
-For agents in **other project directories** (worktrees, separate repos), the skill is NOT automatically available unless `.claude/skills/adjutant-agent/` exists in that directory. In most cases this is fine — the agent gets the MCP tools from `.mcp.json` regardless. The skill just provides usage documentation.
+For agents in **other project directories** (worktrees, separate repos), the skill is NOT automatically available unless `skills/mcp-tools/` exists in that directory. In most cases this is fine — the agent gets the MCP tools from `.mcp.json` regardless. The skill just provides usage documentation.
 
 ### MCP tool availability
 

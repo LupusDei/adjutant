@@ -63,11 +63,11 @@ function checkFiles(cwd: string): CheckResult[] {
       : { name: "Frontend dependencies", status: "fail", message: "run npm run install:all" },
   );
 
-  // Skills directory
+  // Plugin skills
   results.push(
-    dirExists(`${cwd}/.claude/skills/adjutant-agent`)
-      ? { name: "Adjutant agent skill", status: "pass" }
-      : { name: "Adjutant agent skill", status: "warn" },
+    fileExists(`${cwd}/skills/mcp-tools/SKILL.md`)
+      ? { name: "Adjutant agent plugin", status: "pass" }
+      : { name: "Adjutant agent plugin", status: "warn" },
   );
 
   // API keys

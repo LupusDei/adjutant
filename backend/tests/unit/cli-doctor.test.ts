@@ -101,10 +101,14 @@ describe("cli/commands/doctor", () => {
       // No hooks registered
       return "{}";
     });
-    vi.mocked(fs.statSync).mockImplementation((p: fs.PathLike) => {
+    vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as fs.Stats);
+    // Override existsSync to also exclude mcp-tools/SKILL.md (plugin check)
+    vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
       const s = String(p);
-      if (s.includes("adjutant-agent")) return { isDirectory: () => false } as fs.Stats;
-      return { isDirectory: () => true } as fs.Stats;
+      if (s.includes("adjutant.db")) return false;
+      if (s.includes("api-keys.json")) return false;
+      if (s.includes("mcp-tools/SKILL.md")) return false;
+      return true;
     });
 
     const exitCode = await runDoctor();
