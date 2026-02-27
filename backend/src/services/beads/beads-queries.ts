@@ -280,7 +280,7 @@ export async function listRecentlyClosed(
 
     for (const db of databasesToQuery) {
       const result = await execBd<BeadsIssue[]>(
-        ["list", "--all", "--status", "closed", "--json"],
+        ["list", "--all", "--status", "closed", "--json", "--limit", "0"],
         { cwd: db.workDir, beadsDir: db.beadsDir }
       );
 

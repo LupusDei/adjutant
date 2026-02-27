@@ -110,7 +110,7 @@ export async function listEpicsWithProgress(
     const townBeadsDir = resolveBeadsDir(townRoot);
 
     // Fetch epics from town database
-    const listArgs = ["list", "--json", "--type", "epic", "--all"];
+    const listArgs = ["list", "--json", "--type", "epic", "--all", "--limit", "0"];
     const epicResult = await execBd<BeadsIssue[]>(listArgs, {
       cwd: townRoot,
       beadsDir: townBeadsDir,

@@ -121,7 +121,7 @@ describe("beads-service", () => {
       expect(args).toContain("bug");
     });
 
-    it("should pass limit to bd command", async () => {
+    it("should always pass --limit 0 to bd command for unlimited results", async () => {
       vi.mocked(execBd).mockResolvedValue({
         success: true,
         data: [],
@@ -132,7 +132,7 @@ describe("beads-service", () => {
 
       const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
       expect(args).toContain("--limit");
-      expect(args).toContain("10");
+      expect(args).toContain("0");
     });
 
     it("should filter by rig via assignee prefix", async () => {

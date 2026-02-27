@@ -143,12 +143,11 @@ export async function fetchBeadsFromDatabase(
     args.push("--type", options.type);
   }
 
-  const requestLimit = needsClientSideFilter
-    ? Math.max((options.limit ?? 100) * 10, 2000)
-    : options.limit;
-  if (requestLimit) {
-    args.push("--limit", requestLimit.toString());
-  }
+  // Always fetch all beads from bd (--limit 0 = unlimited).
+  // The old approach passed a finite limit which silently dropped beads
+  // in projects with 500+ issues (adj-n7w2). Post-fetch filtering and
+  // route-level limits handle truncation instead.
+  args.push("--limit", "0");
 
   const result = await execBd<BeadsIssue[]>(args, { cwd: workDir, beadsDir });
   if (!result.success) {
@@ -196,6 +195,9 @@ export async function fetchGraphBeadsFromDatabase(
   if (options.type) {
     args.push("--type", options.type);
   }
+
+  // Fetch all beads (no truncation at the bd CLI level)
+  args.push("--limit", "0");
 
   const result = await execBd<BeadsIssue[]>(args, { cwd: workDir, beadsDir });
   if (!result.success) {
