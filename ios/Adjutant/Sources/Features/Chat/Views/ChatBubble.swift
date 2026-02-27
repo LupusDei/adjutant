@@ -28,11 +28,25 @@ struct ChatBubble: View {
         isOutgoing ? .trailing : .leading
     }
 
+    /// Agent-specific color for Friendly theme, falls back to theme colors
+    private var senderColor: Color {
+        if let palette = theme.colorPalette, !isOutgoing {
+            return palette.color(for: message.senderName)
+        }
+        return isOutgoing ? theme.primary : theme.dim
+    }
+
     /// Bubble background color
     private var bubbleColor: Color {
         if isOutgoing {
+            if theme.colorPalette != nil {
+                return theme.colorPalette!.blue.opacity(0.12)
+            }
             return theme.primary.opacity(0.2)
         } else {
+            if theme.colorPalette != nil {
+                return senderColor.opacity(0.08)
+            }
             return theme.background.elevated
         }
     }
@@ -40,8 +54,14 @@ struct ChatBubble: View {
     /// Border color
     private var borderColor: Color {
         if isOutgoing {
+            if theme.colorPalette != nil {
+                return theme.colorPalette!.blue.opacity(0.4)
+            }
             return theme.primary.opacity(0.6)
         } else {
+            if theme.colorPalette != nil {
+                return senderColor.opacity(0.4)
+            }
             return theme.dim.opacity(0.6)
         }
     }
@@ -67,7 +87,7 @@ struct ChatBubble: View {
                 // Sender label for incoming messages
                 if !isOutgoing {
                     CRTText(message.senderName.uppercased(), style: .caption, glowIntensity: .subtle)
-                        .foregroundColor(theme.dim)
+                        .foregroundColor(senderColor)
                 }
 
                 // Message content with optional play button

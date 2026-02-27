@@ -110,6 +110,14 @@ public struct CRTCard<Content: View>: View {
         .accessibilityLabel(header ?? "Card")
     }
 
+    /// Friendly theme: use palette color based on header title for variety
+    private var headerAccentColor: Color {
+        if let palette = theme.colorPalette, let header = header {
+            return palette.color(for: header)
+        }
+        return theme.primary
+    }
+
     @ViewBuilder
     private func headerView(title: String, badge: String?) -> some View {
         HStack {
@@ -123,11 +131,11 @@ public struct CRTCard<Content: View>: View {
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
-        .background(theme.primary.opacity(0.1))
+        .background(headerAccentColor.opacity(0.1))
         .overlay(
             Rectangle()
                 .frame(height: 1)
-                .foregroundColor(theme.primary.opacity(0.3)),
+                .foregroundColor(headerAccentColor.opacity(0.3)),
             alignment: .bottom
         )
     }

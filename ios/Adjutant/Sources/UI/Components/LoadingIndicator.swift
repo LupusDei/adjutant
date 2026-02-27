@@ -83,16 +83,12 @@ public struct LoadingIndicator: View {
                 .stroke(theme.dim.opacity(0.3), lineWidth: size.lineWidth)
                 .frame(width: size.diameter, height: size.diameter)
 
-            // Animated arc
+            // Animated arc — multi-color gradient for Friendly theme
             Circle()
                 .trim(from: 0, to: 0.7)
                 .stroke(
                     AngularGradient(
-                        colors: [
-                            theme.primary.opacity(0.1),
-                            theme.primary.opacity(0.5),
-                            theme.primary
-                        ],
+                        colors: spinnerColors,
                         center: .center,
                         startAngle: .degrees(0),
                         endAngle: .degrees(360)
@@ -105,11 +101,31 @@ public struct LoadingIndicator: View {
                     .linear(duration: 1.0).repeatForever(autoreverses: false),
                     value: isAnimating
                 )
-                .crtGlow(color: theme.primary, radius: 4, intensity: 0.5)
+                .crtGlow(color: theme.colorPalette?.blue ?? theme.primary, radius: 4, intensity: 0.5)
         }
         .onAppear {
             isAnimating = true
         }
+    }
+
+    /// Friendly theme: rainbow gradient spinner; others: single-color gradient
+    private var spinnerColors: [Color] {
+        if let palette = theme.colorPalette {
+            return [
+                palette.blue,
+                palette.purple,
+                palette.red,
+                palette.orange,
+                palette.yellow,
+                palette.green,
+                palette.blue
+            ]
+        }
+        return [
+            theme.primary.opacity(0.1),
+            theme.primary.opacity(0.5),
+            theme.primary
+        ]
     }
 
     private func animatedTextView(text: String) -> some View {

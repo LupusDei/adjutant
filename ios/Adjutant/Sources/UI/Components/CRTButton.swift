@@ -40,37 +40,45 @@ public struct CRTButton: View {
         case danger     // Red/destructive
 
         func backgroundColor(theme: CRTTheme.ColorTheme, isPressed: Bool) -> Color {
+            let palette = theme.colorPalette
             switch self {
             case .primary:
-                return isPressed ? theme.bright : theme.accent
+                let base = palette?.blue ?? theme.accent
+                return isPressed ? base.opacity(0.8) : base
             case .secondary, .ghost:
-                return isPressed ? theme.accent.opacity(0.1) : .clear
+                let base = palette?.green ?? theme.accent
+                return isPressed ? base.opacity(0.1) : .clear
             case .danger:
-                return isPressed ? CRTTheme.State.error.opacity(0.2) : .clear
+                let base = palette?.red ?? CRTTheme.State.error
+                return isPressed ? base.opacity(0.2) : .clear
             }
         }
 
         func foregroundColor(theme: CRTTheme.ColorTheme) -> Color {
             switch self {
             case .primary:
-                return theme.background.screen
+                return theme.colorPalette != nil ? .white : theme.background.screen
             case .secondary, .ghost:
                 return theme.textPrimary
             case .danger:
-                return CRTTheme.State.error
+                return theme.colorPalette?.red ?? CRTTheme.State.error
             }
         }
 
         func borderColor(theme: CRTTheme.ColorTheme, isPressed: Bool) -> Color {
+            let palette = theme.colorPalette
             switch self {
             case .primary:
-                return isPressed ? theme.bright : theme.accent
+                let base = palette?.blue ?? theme.accent
+                return isPressed ? base.opacity(0.8) : base
             case .secondary:
-                return isPressed ? theme.bright : theme.accent
+                let base = palette?.green ?? theme.accent
+                return isPressed ? base.opacity(0.8) : base
             case .ghost:
                 return .clear
             case .danger:
-                return isPressed ? CRTTheme.State.error.opacity(0.8) : CRTTheme.State.error
+                let base = palette?.red ?? CRTTheme.State.error
+                return isPressed ? base.opacity(0.8) : base
             }
         }
     }

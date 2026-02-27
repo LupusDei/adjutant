@@ -29,7 +29,10 @@ struct AgentRowView: View {
                 VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxxs) {
                     // Name and bead badge row
                     HStack(spacing: CRTTheme.Spacing.xs) {
-                        CRTText(member.name, style: .body, glowIntensity: .medium)
+                        // Friendly: agent-specific color from palette
+                        let agentColor = theme.colorPalette?.color(for: member.name) ?? theme.primary
+
+                        CRTText(member.name, style: .body, glowIntensity: .medium, color: agentColor)
 
                         if let rig = member.rig {
                             CRTText("[\(rig)]", style: .caption, glowIntensity: .subtle, color: theme.dim)
@@ -40,14 +43,14 @@ struct AgentRowView: View {
                             Text(beadId)
                                 .font(CRTTheme.Typography.font(size: 9, weight: .bold))
                                 .tracking(0.5)
-                                .foregroundColor(theme.primary)
+                                .foregroundColor(agentColor)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 1)
-                                .background(theme.primary.opacity(0.12))
+                                .background(agentColor.opacity(0.12))
                                 .cornerRadius(3)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 3)
-                                        .stroke(theme.primary.opacity(0.3), lineWidth: 0.5)
+                                        .stroke(agentColor.opacity(0.3), lineWidth: 0.5)
                                 )
                         }
                     }

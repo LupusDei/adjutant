@@ -189,6 +189,17 @@ public struct BadgeView: View {
     }
 
     private func priorityColor(for level: Int) -> Color {
+        // Friendly theme: use multi-color palette for priorities
+        if let palette = theme.colorPalette {
+            switch level {
+            case 0: return palette.red
+            case 1: return palette.orange
+            case 2: return palette.yellow
+            case 3: return palette.green
+            case 4: return palette.blue
+            default: return palette.purple
+            }
+        }
         switch level {
         case 0: return CRTTheme.Priority.urgent
         case 1: return CRTTheme.Priority.high
