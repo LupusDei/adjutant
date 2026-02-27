@@ -146,7 +146,7 @@ final class DashboardViewModel: BaseViewModel {
         }
 
         // Unread messages grouped by agent
-        if let summaries = response.unreadMessages.data {
+        if let summaries = response.unreadMessages?.data {
             unreadMessages = summaries
         }
 

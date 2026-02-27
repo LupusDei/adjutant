@@ -128,7 +128,7 @@ public struct DashboardResponse: Decodable {
     public let beads: DashboardSection<DashboardBeadsData>
     public let crew: DashboardSection<[CrewMember]>
     public let unreadCounts: DashboardSection<[String: Int]>
-    public let unreadMessages: DashboardSection<[UnreadAgentSummary]>
+    public let unreadMessages: DashboardSection<[UnreadAgentSummary]>?
     public let epics: DashboardSection<DashboardEpicsData>
     public let mail: DashboardSection<DashboardMailSummary>
     public let timestamp: String
@@ -138,7 +138,7 @@ public struct DashboardResponse: Decodable {
         beads: DashboardSection<DashboardBeadsData>,
         crew: DashboardSection<[CrewMember]>,
         unreadCounts: DashboardSection<[String: Int]>,
-        unreadMessages: DashboardSection<[UnreadAgentSummary]>,
+        unreadMessages: DashboardSection<[UnreadAgentSummary]>? = nil,
         epics: DashboardSection<DashboardEpicsData>,
         mail: DashboardSection<DashboardMailSummary>,
         timestamp: String
