@@ -49,7 +49,8 @@ interface WsClientMessage {
 /** Server → Client message types */
 interface WsServerMessage {
   type: "auth_challenge" | "connected" | "message" | "chat_message" | "stream_token" | "stream_end" | "typing" | "delivered" | "error" | "sync_response" | "pong"
-    | "session_connected" | "session_disconnected" | "session_output" | "session_raw" | "session_status";
+    | "session_connected" | "session_disconnected" | "session_output" | "session_raw" | "session_status"
+    | "timeline_event";
   id?: string | undefined;
   clientId?: string | undefined;
   seq?: number | undefined;
@@ -78,6 +79,13 @@ interface WsServerMessage {
   status?: string | undefined;
   name?: string | undefined;
   events?: unknown[] | undefined;
+  // Timeline event fields
+  eventType?: string | undefined;
+  agentId?: string | undefined;
+  action?: string | undefined;
+  detail?: Record<string, unknown> | null | undefined;
+  beadId?: string | null | undefined;
+  createdAt?: string | undefined;
 }
 
 interface WsClient {

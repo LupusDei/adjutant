@@ -63,16 +63,16 @@ export function createEventStore(db: Database.Database): EventStore {
 
       // Broadcast to WebSocket clients
       wsBroadcast({
-        type: "timeline_event" as "chat_message",
+        type: "timeline_event",
         id: event.id,
         eventType: event.eventType,
         agentId: event.agentId,
         action: event.action,
         detail: event.detail,
         beadId: event.beadId,
-        messageId: event.messageId,
+        messageId: event.messageId ?? undefined,
         createdAt: event.createdAt,
-      } as Record<string, unknown> & { type: "chat_message" });
+      });
 
       return event;
     },
