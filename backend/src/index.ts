@@ -21,6 +21,7 @@ import { registerBeadTools } from "./services/mcp-tools/beads.js";
 import { registerQueryTools } from "./services/mcp-tools/queries.js";
 import { registerProposalTools } from "./services/mcp-tools/proposals.js";
 import { createProposalStore } from "./services/proposal-store.js";
+import { createEventStore } from "./services/event-store.js";
 import { initMessageDelivery } from "./services/message-delivery.js";
 import { initBeadAssignNotification } from "./services/bead-assign-notification.js";
 
@@ -66,6 +67,7 @@ app.use("/api/costs", costsRouter);
 const messageDb = initDatabase();
 const messageStore = createMessageStore(messageDb);
 const proposalStore = createProposalStore(messageDb);
+const eventStore = createEventStore(messageDb);
 app.use("/api/messages", createMessagesRouter(messageStore));
 app.use("/api/projects", createProjectsRouter(messageStore));
 app.use("/api/proposals", createProposalsRouter(proposalStore));
@@ -116,9 +118,9 @@ const server = app.listen(PORT, () => {
   // is called on each new instance to wire up tools.
   initMcpServer();
   setToolRegistrar((server) => {
-    registerMessagingTools(server, messageStore);
-    registerStatusTools(server, messageStore);
-    registerBeadTools(server);
+    registerMessagingTools(server, messageStore, eventStore);
+    registerStatusTools(server, messageStore, eventStore);
+    registerBeadTools(server, eventStore);
     registerQueryTools(server, messageStore);
     registerProposalTools(server, proposalStore);
   });

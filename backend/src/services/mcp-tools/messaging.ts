@@ -12,11 +12,12 @@ import { wsBroadcast } from "../ws-server.js";
 import { getAgentBySession } from "../mcp-server.js";
 import { isAPNsConfigured, sendNotificationToAll } from "../apns-service.js";
 import { logInfo, logWarn } from "../../utils/index.js";
+import type { EventStore } from "../event-store.js";
 
 /**
  * Register all messaging MCP tools on the given server.
  */
-export function registerMessagingTools(server: McpServer, store: MessageStore): void {
+export function registerMessagingTools(server: McpServer, store: MessageStore, eventStore?: EventStore): void {
   // ========================================================================
   // send_message
   // ========================================================================
@@ -61,7 +62,16 @@ export function registerMessagingTools(server: McpServer, store: MessageStore): 
         metadata: message.metadata ?? undefined,
       });
 
-      // 3. Send APNS push if applicable (to "user" or "mayor/")
+      // 3. Emit timeline event
+      eventStore?.insertEvent({
+        eventType: "message_sent",
+        agentId,
+        action: `Message to ${to}`,
+        detail: { to, threadId },
+        messageId: message.id,
+      });
+
+      // 4. Send APNS push if applicable (to "user" or "mayor/")
       if ((to === "user" || to === "mayor/") && isAPNsConfigured()) {
         const truncatedBody = body.length > 200 ? body.slice(0, 197) + "..." : body;
         sendNotificationToAll({
@@ -81,7 +91,7 @@ export function registerMessagingTools(server: McpServer, store: MessageStore): 
         });
       }
 
-      // 4. Return result
+      // 5. Return result
       return {
         content: [
           {

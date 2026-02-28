@@ -16,6 +16,7 @@ import { execBd, type BdExecOptions, type BdResult } from "../bd-client.js";
 import { logError } from "../../utils/index.js";
 import { autoCompleteEpics } from "../beads/index.js";
 import { getProjectContextBySession } from "../mcp-server.js";
+import type { EventStore } from "../event-store.js";
 
 // =============================================================================
 // Mutex for serializing bd access
@@ -84,7 +85,7 @@ function resolveBdOptions(extra?: { sessionId?: string | undefined }): BdExecOpt
 // Tool registration
 // =============================================================================
 
-export function registerBeadTools(server: McpServer): void {
+export function registerBeadTools(server: McpServer, eventStore?: EventStore): void {
   // ---------------------------------------------------------------------------
   // create_bead
   // ---------------------------------------------------------------------------
@@ -157,6 +158,16 @@ export function registerBeadTools(server: McpServer): void {
           return errorResult(result);
         }
 
+        // Emit timeline event for bead update
+        const updateEventInput: Parameters<NonNullable<typeof eventStore>["insertEvent"]>[0] = {
+          eventType: "bead_updated",
+          agentId: "system",
+          action: `Updated bead ${id}`,
+          detail: { id, status, assignee },
+          beadId: id,
+        };
+        eventStore?.insertEvent(updateEventInput);
+
         // After closing a task/bug via update, auto-complete any eligible parent epics
         const messages = [`Updated bead ${id}`];
         if (status === "closed") {
@@ -195,6 +206,16 @@ export function registerBeadTools(server: McpServer): void {
           logError("close_bead failed", { id, error: result.error });
           return errorResult(result);
         }
+
+        // Emit timeline event for bead close
+        const closeEventInput: Parameters<NonNullable<typeof eventStore>["insertEvent"]>[0] = {
+          eventType: "bead_closed",
+          agentId: "system",
+          action: `Closed bead ${id}`,
+          detail: { id, reason },
+          beadId: id,
+        };
+        eventStore?.insertEvent(closeEventInput);
 
         // After closing a task/bug, auto-complete any eligible parent epics
         const autoCompleted = await autoCompleteEpics();

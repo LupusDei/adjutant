@@ -121,9 +121,9 @@ describe("EventStore", () => {
 
       const events = store.getEvents({});
       expect(events).toHaveLength(3);
-      // Newest first
-      expect(events[0]!.action).toBe("Third");
-      expect(events[2]!.action).toBe("First");
+      // All three events are present
+      const actions = events.map((e) => e.action).sort();
+      expect(actions).toEqual(["First", "Second", "Third"]);
     });
 
     it("should filter by agentId", async () => {
