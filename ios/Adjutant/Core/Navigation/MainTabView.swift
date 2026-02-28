@@ -105,6 +105,8 @@ private struct TabContent: View {
             )
         case .beads:
             BeadsView()
+        case .timeline:
+            TimelineView()
         case .proposals:
             ProposalsView()
         case .settings:
