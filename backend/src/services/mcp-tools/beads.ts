@@ -15,7 +15,7 @@ import { z } from "zod";
 import { execBd, type BdExecOptions, type BdResult } from "../bd-client.js";
 import { logError } from "../../utils/index.js";
 import { autoCompleteEpics } from "../beads/index.js";
-import { getProjectContextBySession } from "../mcp-server.js";
+import { getProjectContextBySession, getAgentBySession } from "../mcp-server.js";
 import type { EventStore } from "../event-store.js";
 
 // =============================================================================
@@ -159,9 +159,10 @@ export function registerBeadTools(server: McpServer, eventStore?: EventStore): v
         }
 
         // Emit timeline event for bead update
+        const resolvedAgent = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
         const updateEventInput: Parameters<NonNullable<typeof eventStore>["insertEvent"]>[0] = {
           eventType: "bead_updated",
-          agentId: "system",
+          agentId: resolvedAgent ?? "system",
           action: `Updated bead ${id}`,
           detail: { id, status, assignee },
           beadId: id,
@@ -208,9 +209,10 @@ export function registerBeadTools(server: McpServer, eventStore?: EventStore): v
         }
 
         // Emit timeline event for bead close
+        const resolvedAgent = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
         const closeEventInput: Parameters<NonNullable<typeof eventStore>["insertEvent"]>[0] = {
           eventType: "bead_closed",
-          agentId: "system",
+          agentId: resolvedAgent ?? "system",
           action: `Closed bead ${id}`,
           detail: { id, reason },
           beadId: id,
