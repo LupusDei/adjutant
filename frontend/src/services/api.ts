@@ -662,4 +662,42 @@ export const api = {
   },
 };
 
+// =============================================================================
+// Timeline Types & API
+// =============================================================================
+
+export interface TimelineEvent {
+  id: string;
+  eventType: string;
+  agentId: string;
+  action: string;
+  detail: Record<string, unknown> | null;
+  beadId: string | null;
+  messageId: string | null;
+  createdAt: string;
+}
+
+export interface TimelineResponse {
+  events: TimelineEvent[];
+  hasMore: boolean;
+}
+
+export async function getTimelineEvents(params?: {
+  agentId?: string;
+  eventType?: string;
+  beadId?: string;
+  before?: string;
+  limit?: number;
+}): Promise<TimelineResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.agentId) searchParams.set('agentId', params.agentId);
+  if (params?.eventType) searchParams.set('eventType', params.eventType);
+  if (params?.beadId) searchParams.set('beadId', params.beadId);
+  if (params?.before) searchParams.set('before', params.before);
+  if (params?.limit) searchParams.set('limit', params.limit.toString());
+
+  const query = searchParams.toString();
+  return apiFetch(`/events/timeline${query ? `?${query}` : ''}`);
+}
+
 export default api;

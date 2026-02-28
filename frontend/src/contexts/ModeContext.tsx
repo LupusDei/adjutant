@@ -234,10 +234,10 @@ export function useVisibleTabs(): Set<string> {
   return useMemo(() => {
     switch (mode) {
       case 'swarm':
-        return new Set(['dashboard', 'chat', 'crew', 'epics', 'beads', 'proposals', 'settings']);
+        return new Set(['dashboard', 'chat', 'crew', 'epics', 'beads', 'timeline', 'proposals', 'settings']);
       case 'gastown':
       default:
-        return new Set(['dashboard', 'mail', 'chat', 'epics', 'crew', 'beads', 'proposals', 'settings']);
+        return new Set(['dashboard', 'mail', 'chat', 'epics', 'crew', 'beads', 'timeline', 'proposals', 'settings']);
     }
   }, [mode]);
 }
