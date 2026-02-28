@@ -355,7 +355,7 @@ struct SwarmOverviewView: View {
     private func epicsSection(_ epics: EpicsOverview) -> some View {
         CRTCard(style: .standard) {
             VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
-                Button(action: { coordinator.navigate(to: .epics) }) {
+                Button(action: { coordinator.navigate(to: .beads) }) {
                     HStack {
                         Image(systemName: "flag.fill")
                             .foregroundColor(theme.primary)

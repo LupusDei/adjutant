@@ -45,7 +45,7 @@ struct DashboardView: View {
                 EpicsOverviewWidget(
                     inProgressEpics: viewModel.inProgressEpics,
                     completedEpics: viewModel.completedEpics,
-                    onTap: { coordinator.navigate(to: .epics) }
+                    onTap: { coordinator.navigate(to: .beads) }
                 )
                 .padding(.horizontal, CRTTheme.Spacing.md)
             }

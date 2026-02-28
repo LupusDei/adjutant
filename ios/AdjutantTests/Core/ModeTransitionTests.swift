@@ -76,7 +76,7 @@ final class ModeTransitionTests: XCTestCase {
         }
     }
 
-    func testSwarmShowsOverviewChatCrewEpicsProjectsBeadsProposalsSettings() {
+    func testSwarmShowsOverviewChatCrewProjectsBeadsTimelineProposalsSettings() {
         appState.updateDeploymentMode(.swarm)
         let tabs = appState.visibleTabs
 
@@ -84,9 +84,9 @@ final class ModeTransitionTests: XCTestCase {
         XCTAssertTrue(tabs.contains(.overview))
         XCTAssertTrue(tabs.contains(.chat))
         XCTAssertTrue(tabs.contains(.crew))
-        XCTAssertTrue(tabs.contains(.epics))
         XCTAssertTrue(tabs.contains(.projects))
         XCTAssertTrue(tabs.contains(.beads))
+        XCTAssertTrue(tabs.contains(.timeline))
         XCTAssertTrue(tabs.contains(.proposals))
         XCTAssertTrue(tabs.contains(.settings))
         XCTAssertFalse(tabs.contains(.dashboard))
@@ -118,11 +118,6 @@ final class ModeTransitionTests: XCTestCase {
     func testCrewTabVisibleInSwarm() {
         appState.updateDeploymentMode(.swarm)
         XCTAssertTrue(appState.visibleTabs.contains(.crew))
-    }
-
-    func testEpicsTabVisibleInSwarm() {
-        appState.updateDeploymentMode(.swarm)
-        XCTAssertTrue(appState.visibleTabs.contains(.epics))
     }
 
     func testTabsRestoreAfterRoundTrip() {
