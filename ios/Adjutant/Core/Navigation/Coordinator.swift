@@ -77,7 +77,6 @@ enum AppRoute: Hashable {
 enum AppTab: Int, CaseIterable, Identifiable {
     case overview
     case chat
-    case epics
     case beads
     case timeline
     case crew
@@ -96,7 +95,6 @@ enum AppTab: Int, CaseIterable, Identifiable {
         case .dashboard: return "DASHBOARD"
         case .mail: return "MAIL"
         case .chat: return "CHAT"
-        case .epics: return "EPICS"
         case .crew: return "AGENTS"
         case .projects: return "PROJECTS"
         case .beads: return "BEADS"
@@ -112,7 +110,6 @@ enum AppTab: Int, CaseIterable, Identifiable {
         case .dashboard: return "square.grid.2x2"
         case .mail: return "envelope"
         case .chat: return "message"
-        case .epics: return "list.bullet.clipboard"
         case .crew: return "person.3"
         case .projects: return "folder"
         case .beads: return "circle.grid.3x3"

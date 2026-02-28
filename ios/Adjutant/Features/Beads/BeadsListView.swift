@@ -1,16 +1,18 @@
 import SwiftUI
 import AdjutantKit
 
-/// View mode for the beads screen: Kanban board or dependency graph.
+/// View mode for the beads screen: Kanban board, dependency graph, or epics list.
 enum BeadsViewMode: String, CaseIterable {
     case kanban = "BOARD"
     case graph = "GRAPH"
+    case epics = "EPICS"
 
     /// SF Symbol icon representing this view mode.
     var iconName: String {
         switch self {
         case .kanban: return "rectangle.split.3x1"
         case .graph: return "point.3.connected.trianglepath.dotted"
+        case .epics: return "list.bullet.clipboard"
         }
     }
 }
@@ -92,8 +94,8 @@ struct BeadsListView: View {
                 SortDropdown(currentSort: $viewModel.currentSort)
             }
 
-            // Count badge
-            if viewModel.openCount > 0 {
+            // Count badge (hide in epics mode — epics have their own section counts)
+            if viewMode != .epics, viewModel.openCount > 0 {
                 BadgeView("\(viewModel.openCount) OPEN", style: .status(.success))
             }
 
@@ -260,6 +262,8 @@ struct BeadsListView: View {
             kanbanContent
         case .graph:
             DependencyGraphView()
+        case .epics:
+            EpicsContentView()
         }
     }
 

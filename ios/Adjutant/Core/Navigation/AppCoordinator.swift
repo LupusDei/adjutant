@@ -24,7 +24,6 @@ final class AppCoordinator: Coordinator, ObservableObject {
     @Published var dashboardPath = NavigationPath()
     @Published var mailPath = NavigationPath()
     @Published var chatPath = NavigationPath()
-    @Published var epicsPath = NavigationPath()
     @Published var agentsPath = NavigationPath()
     @Published var projectsPath = NavigationPath()
     @Published var beadsPath = NavigationPath()
@@ -46,7 +45,6 @@ final class AppCoordinator: Coordinator, ObservableObject {
         case .dashboard: return dashboardPath
         case .mail: return mailPath
         case .chat: return chatPath
-        case .epics: return epicsPath
         case .crew: return agentsPath
         case .projects: return projectsPath
         case .beads: return beadsPath
@@ -63,7 +61,6 @@ final class AppCoordinator: Coordinator, ObservableObject {
         case .dashboard: dashboardPath = newPath
         case .mail: mailPath = newPath
         case .chat: chatPath = newPath
-        case .epics: epicsPath = newPath
         case .crew: agentsPath = newPath
         case .projects: projectsPath = newPath
         case .beads: beadsPath = newPath
@@ -191,7 +188,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
         case .chat:
             selectTab(.chat)
         case .epics:
-            selectTab(.epics)
+            selectTab(.beads)
         case .crew:
             selectTab(.crew)
         case .projects:
@@ -237,7 +234,6 @@ final class AppCoordinator: Coordinator, ObservableObject {
         case .dashboard: dashboardPath.append(route)
         case .mail: mailPath.append(route)
         case .chat: chatPath.append(route)
-        case .epics: epicsPath.append(route)
         case .crew: agentsPath.append(route)
         case .projects: projectsPath.append(route)
         case .beads: beadsPath.append(route)
