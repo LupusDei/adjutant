@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 import { getTimelineEvents, type TimelineEvent } from '../services/api';
-import { useCommunication } from '../contexts/CommunicationContext';
+import { useCommunication, type IncomingTimelineEvent } from '../contexts/CommunicationContext';
 
 export type TimeRange = '1h' | '6h' | '24h' | '7d' | 'all';
 
@@ -51,7 +51,7 @@ export function useTimeline(): UseTimelineResult {
   const [filters, setFilters] = useState<TimelineFilters>({});
 
   const mountedRef = useRef(true);
-  const { subscribe } = useCommunication();
+  const { subscribeTimeline } = useCommunication();
 
   // Fetch events from REST API
   const fetchEvents = useCallback(async () => {
@@ -93,44 +93,39 @@ export function useTimeline(): UseTimelineResult {
   }, [fetchEvents]);
 
   // Subscribe to real-time timeline_event messages via WebSocket
-  // The CommunicationContext subscribe gives us chat_message events,
-  // but timeline events come through SSE. We'll use an EventSource listener.
   useEffect(() => {
-    let es: EventSource | null = null;
+    const unsubscribe = subscribeTimeline((incoming: IncomingTimelineEvent) => {
+      // Apply filters client-side for real-time events
+      if (filters.agentId && incoming.agentId !== filters.agentId) return;
+      if (filters.eventType && incoming.eventType !== filters.eventType) return;
+      if (filters.beadId && incoming.beadId !== filters.beadId) return;
 
-    try {
-      es = new EventSource('/api/events');
+      // Apply time-range filter client-side
+      if (filters.timeRange) {
+        const after = timeRangeToAfter(filters.timeRange);
+        if (after && incoming.createdAt < after) return;
+      }
 
-      es.addEventListener('timeline_event', (event: MessageEvent) => {
-        try {
-          const data = JSON.parse(event.data as string) as TimelineEvent;
-
-          // Apply filters client-side for real-time events
-          if (filters.agentId && data.agentId !== filters.agentId) return;
-          if (filters.eventType && data.eventType !== filters.eventType) return;
-          if (filters.beadId && data.beadId !== filters.beadId) return;
-
-          setEvents((prev) => {
-            // Deduplicate
-            if (prev.some((e) => e.id === data.id)) return prev;
-            return [data, ...prev];
-          });
-        } catch {
-          // Ignore parse errors
-        }
-      });
-
-      es.onerror = () => {
-        // EventSource auto-reconnects
+      const data: TimelineEvent = {
+        id: incoming.id,
+        eventType: incoming.eventType,
+        agentId: incoming.agentId,
+        action: incoming.action,
+        detail: incoming.detail,
+        beadId: incoming.beadId ?? null,
+        messageId: incoming.messageId ?? null,
+        createdAt: incoming.createdAt,
       };
-    } catch {
-      // EventSource not supported
-    }
 
-    return () => {
-      es?.close();
-    };
-  }, [filters, subscribe]);
+      setEvents((prev) => {
+        // Deduplicate
+        if (prev.some((e) => e.id === data.id)) return prev;
+        return [data, ...prev];
+      });
+    });
+
+    return unsubscribe;
+  }, [filters, subscribeTimeline]);
 
   // Load older events (pagination)
   const loadMore = useCallback(async () => {

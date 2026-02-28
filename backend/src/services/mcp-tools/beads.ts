@@ -159,7 +159,7 @@ export function registerBeadTools(server: McpServer, eventStore?: EventStore): v
         }
 
         // Emit timeline event for bead update
-        const resolvedAgent = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
+        const resolvedAgent = extra?.sessionId ? getAgentBySession(extra.sessionId) : undefined;
         const updateEventInput: Parameters<NonNullable<typeof eventStore>["insertEvent"]>[0] = {
           eventType: "bead_updated",
           agentId: resolvedAgent ?? "system",
@@ -209,7 +209,7 @@ export function registerBeadTools(server: McpServer, eventStore?: EventStore): v
         }
 
         // Emit timeline event for bead close
-        const resolvedAgent = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
+        const resolvedAgent = extra?.sessionId ? getAgentBySession(extra.sessionId) : undefined;
         const closeEventInput: Parameters<NonNullable<typeof eventStore>["insertEvent"]>[0] = {
           eventType: "bead_closed",
           agentId: resolvedAgent ?? "system",

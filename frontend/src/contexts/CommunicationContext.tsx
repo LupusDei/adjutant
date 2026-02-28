@@ -16,6 +16,18 @@ export interface IncomingChatMessage {
   seq?: number;
 }
 
+/** An incoming timeline event received via WebSocket. */
+export interface IncomingTimelineEvent {
+  id: string;
+  eventType: string;
+  agentId: string;
+  action: string;
+  detail: Record<string, unknown> | null;
+  beadId?: string;
+  messageId?: string;
+  createdAt: string;
+}
+
 /** Options for sending a chat message. */
 export interface SendMessageOptions {
   to?: string;
@@ -24,6 +36,7 @@ export interface SendMessageOptions {
 }
 
 type MessageHandler = (msg: IncomingChatMessage) => void;
+type TimelineEventHandler = (event: IncomingTimelineEvent) => void;
 
 /** Shape of a parsed WebSocket server message. */
 interface WsServerMsg {
@@ -38,6 +51,14 @@ interface WsServerMsg {
   sessionId?: string;
   lastSeq?: number;
   serverTime?: string;
+  // Timeline event fields
+  eventType?: string;
+  agentId?: string;
+  action?: string;
+  detail?: Record<string, unknown> | null;
+  beadId?: string;
+  messageId?: string;
+  createdAt?: string;
 }
 
 /**
@@ -54,6 +75,8 @@ export interface CommunicationContextValue {
   sendMessage: (opts: SendMessageOptions) => Promise<void>;
   /** Subscribe to incoming chat messages. Returns an unsubscribe function. */
   subscribe: (callback: MessageHandler) => () => void;
+  /** Subscribe to incoming timeline events. Returns an unsubscribe function. */
+  subscribeTimeline: (callback: TimelineEventHandler) => () => void;
 }
 
 // ============================================================================
@@ -105,6 +128,7 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
   const wsRef = useRef<WebSocket | null>(null);
   const sseRef = useRef<EventSource | null>(null);
   const subscribersRef = useRef<Set<MessageHandler>>(new Set());
+  const timelineSubscribersRef = useRef<Set<TimelineEventHandler>>(new Set());
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const reconnectAttemptsRef = useRef(0);
 
@@ -117,9 +141,20 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const notifyTimeline = useCallback((event: IncomingTimelineEvent) => {
+    for (const cb of timelineSubscribersRef.current) {
+      try { cb(event); } catch { /* ignore subscriber errors */ }
+    }
+  }, []);
+
   const subscribe = useCallback((callback: MessageHandler) => {
     subscribersRef.current.add(callback);
     return () => { subscribersRef.current.delete(callback); };
+  }, []);
+
+  const subscribeTimeline = useCallback((callback: TimelineEventHandler) => {
+    timelineSubscribersRef.current.add(callback);
+    return () => { timelineSubscribersRef.current.delete(callback); };
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -262,6 +297,20 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
               notify(incoming);
             }
             break;
+          case 'timeline_event':
+            if (msg.id && msg.eventType && msg.agentId && msg.action && msg.createdAt) {
+              notifyTimeline({
+                id: msg.id,
+                eventType: msg.eventType,
+                agentId: msg.agentId,
+                action: msg.action,
+                detail: msg.detail ?? null,
+                beadId: msg.beadId,
+                messageId: msg.messageId,
+                createdAt: msg.createdAt,
+              });
+            }
+            break;
           case 'error':
             if (msg.code === 'auth_failed' || msg.code === 'auth_timeout') {
               // Auth failure — fall back to SSE rather than retrying
@@ -314,7 +363,7 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
     }
 
     return teardown;
-  }, [priority, notify]);
+  }, [priority, notify, notifyTimeline]);
 
   // ---------------------------------------------------------------------------
   // Send message — WebSocket if open, otherwise HTTP fallback
@@ -347,7 +396,8 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
     connectionStatus,
     sendMessage,
     subscribe,
-  }), [priority, setPriority, connectionStatus, sendMessage, subscribe]);
+    subscribeTimeline,
+  }), [priority, setPriority, connectionStatus, sendMessage, subscribe, subscribeTimeline]);
 
   return (
     <CommunicationContext.Provider value={value}>
