@@ -227,6 +227,15 @@ export class SessionBridge {
     let buffer: string[] | undefined;
     if (replay) {
       buffer = this.registry.getOutputBuffer(sessionId);
+      // First connection: buffer is empty because pipe just attached and no
+      // output has been captured yet. Snapshot the current terminal content
+      // so the client sees what's already on screen.
+      if (!buffer || buffer.length === 0) {
+        const snapshot = await this.connector.capturePane(sessionId);
+        if (snapshot) {
+          buffer = snapshot.split("\n").filter(line => line.trim().length > 0);
+        }
+      }
     } else {
       this.registry.clearOutputBuffer(sessionId);
     }
