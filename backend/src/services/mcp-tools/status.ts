@@ -14,6 +14,7 @@ import type { SessionStatus } from "../session-registry.js";
 import { isAPNsConfigured, sendNotificationToAll } from "../apns-service.js";
 import { logWarn } from "../../utils/index.js";
 import type { MessageStore } from "../message-store.js";
+import type { EventStore } from "../event-store.js";
 
 // ============================================================================
 // Types
@@ -112,7 +113,7 @@ function syncToSessionBridge(agentId: string, mcpStatus: string): void {
 /**
  * Register set_status, report_progress, and announce tools on the MCP server.
  */
-export function registerStatusTools(server: McpServer, store: MessageStore): void {
+export function registerStatusTools(server: McpServer, store: MessageStore, eventStore?: EventStore): void {
   // --------------------------------------------------------------------------
   // set_status
   // --------------------------------------------------------------------------
@@ -155,6 +156,16 @@ export function registerStatusTools(server: McpServer, store: MessageStore): voi
         metadata: { type: "agent_status", status, task: resolvedTask, beadId: resolvedBeadId, projectId },
       });
 
+      // Emit timeline event
+      const statusEventInput: Parameters<NonNullable<typeof eventStore>["insertEvent"]>[0] = {
+        eventType: "status_change",
+        agentId,
+        action: `Status: ${status}`,
+        detail: { status, task: resolvedTask, beadId: resolvedBeadId },
+      };
+      if (resolvedBeadId) statusEventInput.beadId = resolvedBeadId;
+      eventStore?.insertEvent(statusEventInput);
+
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ acknowledged: true, status }) }],
       };
@@ -181,6 +192,14 @@ export function registerStatusTools(server: McpServer, store: MessageStore): voi
         from: agentId,
         state: "working",
         metadata: { type: "agent_status", status: "working", task, percentage, description },
+      });
+
+      // Emit timeline event
+      eventStore?.insertEvent({
+        eventType: "progress_report",
+        agentId,
+        action: `Progress: ${percentage}%`,
+        detail: { task, percentage, description },
       });
 
       return {
@@ -227,6 +246,17 @@ export function registerStatusTools(server: McpServer, store: MessageStore): voi
         timestamp: message.createdAt,
         metadata: message.metadata ?? undefined,
       });
+
+      // Emit timeline event
+      const announceEventInput: Parameters<NonNullable<typeof eventStore>["insertEvent"]>[0] = {
+        eventType: "announcement",
+        agentId,
+        action: `${type}: ${title}`,
+        detail: { type, title, body, beadId },
+        messageId: message.id,
+      };
+      if (beadId) announceEventInput.beadId = beadId;
+      eventStore?.insertEvent(announceEventInput);
 
       // Send APNS push for announcements
       if (isAPNsConfigured()) {
