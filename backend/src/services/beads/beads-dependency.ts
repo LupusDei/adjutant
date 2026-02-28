@@ -180,15 +180,19 @@ export function buildEpicWithChildren(
   epicInfo: BeadInfo,
   detail: BeadsIssue
 ): EpicWithChildren {
+  // In bd show output, dependencies are full issue objects with an added
+  // dependency_type field — NOT {issue_id, depends_on_id, type} tuples.
+  // Each item IS a child bead. Filter wisps for consistency with detail view.
   const deps = detail.dependencies ?? [];
-  const childDeps = deps.filter((d) => d.issue_id === detail.id);
-  const totalCount = childDeps.length;
-  const closedCount = childDeps.filter((dep) => {
-    // The dep object in bd show output is actually a full issue object
-    // with a dependency_type field added. Check status field directly.
-    const depAsRecord = dep as Record<string, unknown>;
-    return depAsRecord["status"] === "closed";
-  }).reduce((count) => count + 1, 0);
+  const children = deps.filter((dep) => {
+    const d = dep as Record<string, unknown>;
+    return !d["wisp"] && !(typeof d["id"] === "string" && d["id"].includes("-wisp-"));
+  });
+  const totalCount = children.length;
+  const closedCount = children.filter((dep) => {
+    const d = dep as Record<string, unknown>;
+    return d["status"] === "closed";
+  }).length;
   const progress = totalCount > 0 ? closedCount / totalCount : 0;
 
   return {

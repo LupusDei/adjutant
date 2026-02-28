@@ -460,23 +460,45 @@ describe("buildEpicWithChildren", () => {
     expect(result.progress).toBeCloseTo(2 / 3);
   });
 
-  it("should only count deps where issue_id matches the epic", () => {
+  it("should count all deps as children (bd show returns only this epic's children)", () => {
     const epicInfo = makeBeadInfo({ id: "hq-ep1" });
     const detail = makeIssue({
       id: "hq-ep1",
       dependencies: [
         { issue_id: "hq-ep1", depends_on_id: "hq-t1", type: "depends_on" },
-        { issue_id: "hq-other", depends_on_id: "hq-t2", type: "depends_on" },
+        { issue_id: "hq-ep1", depends_on_id: "hq-t2", type: "depends_on" },
       ],
     });
     const deps = detail.dependencies!;
     (deps[0] as Record<string, unknown>)["status"] = "closed";
+    (deps[1] as Record<string, unknown>)["status"] = "open";
+
+    const result = buildEpicWithChildren(epicInfo, detail);
+    expect(result.totalCount).toBe(2);
+    expect(result.closedCount).toBe(1);
+    expect(result.progress).toBe(0.5);
+  });
+
+  it("should filter out wisp deps from the count", () => {
+    const epicInfo = makeBeadInfo({ id: "hq-ep1" });
+    const detail = makeIssue({
+      id: "hq-ep1",
+      dependencies: [
+        { issue_id: "hq-ep1", depends_on_id: "hq-t1", type: "depends_on" },
+        { issue_id: "hq-ep1", depends_on_id: "hq-wisp-1", type: "depends_on" },
+      ],
+    });
+    const deps = detail.dependencies!;
+    (deps[0] as Record<string, unknown>)["status"] = "open";
+    (deps[0] as Record<string, unknown>)["id"] = "hq-t1";
     (deps[1] as Record<string, unknown>)["status"] = "closed";
+    (deps[1] as Record<string, unknown>)["id"] = "hq-wisp-1";
+    (deps[1] as Record<string, unknown>)["wisp"] = true;
 
     const result = buildEpicWithChildren(epicInfo, detail);
     expect(result.totalCount).toBe(1);
-    expect(result.closedCount).toBe(1);
-    expect(result.progress).toBe(1);
+    expect(result.closedCount).toBe(0);
+    expect(result.progress).toBe(0);
   });
 
   it("should return empty children array", () => {
