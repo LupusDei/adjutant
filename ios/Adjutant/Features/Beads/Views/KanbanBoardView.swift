@@ -70,14 +70,14 @@ struct KanbanBoardView: View {
         let columnCount = CGFloat(definitions.count)
         let spacing = CRTTheme.Spacing.xs * (columnCount - 1)
 
-        // On iPhone (< 600pt width), show ~2.5 columns to hint scrolling
+        // On iPhone (< 600pt width), show ~1.7 columns to hint scrolling
         // On iPad (>= 600pt), show more columns
         if size.width < 600 {
-            let visibleColumns: CGFloat = 2.5
+            let visibleColumns: CGFloat = 1.7
             return (availableWidth - (CRTTheme.Spacing.xs * (visibleColumns - 1))) / visibleColumns
         } else {
-            // Show up to 5 columns on iPad
-            let visibleColumns = min(5, columnCount)
+            // Show up to ~3.3 columns on iPad
+            let visibleColumns = min(3.3, columnCount)
             return (availableWidth - (CRTTheme.Spacing.xs * (visibleColumns - 1))) / visibleColumns
         }
     }
