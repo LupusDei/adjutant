@@ -131,6 +131,34 @@ describe("GET /api/events/timeline", () => {
     expect(res.body.events[0].beadId).toBe("adj-1");
   });
 
+  it("should filter by after timestamp", async () => {
+    const { createEventStore } = await import("../../src/services/event-store.js");
+    const { createEventsRouter } = await import("../../src/routes/events.js");
+    const express = (await import("express")).default;
+
+    const eventStore = createEventStore(db);
+
+    // Insert an old event via raw SQL
+    db.prepare(`
+      INSERT INTO events (id, event_type, agent_id, action, created_at)
+      VALUES ('old-1', 'status_change', 'agent-1', 'Old event', datetime('now', '-3 days'))
+    `).run();
+    // Insert a recent event via the store
+    eventStore.insertEvent({ eventType: "status_change", agentId: "agent-1", action: "Recent event" });
+
+    const app = express();
+    app.use(express.json());
+    app.use("/api/events", createEventsRouter(eventStore));
+
+    const { default: request } = await import("supertest");
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const res = await request(app).get(`/api/events/timeline?after=${encodeURIComponent(twoDaysAgo)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.events).toHaveLength(1);
+    expect(res.body.events[0].action).toBe("Recent event");
+  });
+
   it("should respect limit and return hasMore", async () => {
     const { createEventStore } = await import("../../src/services/event-store.js");
     const { createEventsRouter } = await import("../../src/routes/events.js");

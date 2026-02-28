@@ -7,8 +7,16 @@
 
 import { useState, useEffect, useCallback, useMemo, type CSSProperties } from 'react';
 
-import type { TimelineFilters as FilterState } from '../../hooks/useTimeline';
+import type { TimelineFilters as FilterState, TimeRange } from '../../hooks/useTimeline';
 import type { TimelineEvent } from '../../services/api';
+
+const TIME_RANGES: { value: TimeRange; label: string }[] = [
+  { value: '1h', label: 'LAST 1H' },
+  { value: '6h', label: 'LAST 6H' },
+  { value: '24h', label: 'LAST 24H' },
+  { value: '7d', label: 'LAST 7D' },
+  { value: 'all', label: 'ALL TIME' },
+];
 
 const EVENT_TYPES = [
   { value: 'status_change', label: 'STATUS', icon: '\u{1F504}' },
@@ -62,12 +70,17 @@ export function TimelineFilters({ filters, onFiltersChange, events }: TimelineFi
     });
   }, [filters, onFiltersChange]);
 
+  const handleTimeRangeChange = useCallback((value: string) => {
+    const range = value as TimeRange;
+    onFiltersChange({ ...filters, timeRange: range === 'all' ? undefined : range });
+  }, [filters, onFiltersChange]);
+
   const handleClearAll = useCallback(() => {
     setBeadInput('');
     onFiltersChange({});
   }, [onFiltersChange]);
 
-  const hasActiveFilters = filters.agentId || filters.eventType || filters.beadId;
+  const hasActiveFilters = filters.agentId || filters.eventType || filters.beadId || filters.timeRange;
 
   return (
     <div style={styles.container}>
@@ -82,6 +95,18 @@ export function TimelineFilters({ filters, onFiltersChange, events }: TimelineFi
         <option value="system">SYSTEM</option>
         {agentIds.map((id) => (
           <option key={id} value={id}>{id.toUpperCase()}</option>
+        ))}
+      </select>
+
+      {/* Time range dropdown */}
+      <select
+        value={filters.timeRange ?? 'all'}
+        onChange={(e) => { handleTimeRangeChange(e.target.value); }}
+        style={styles.select}
+        aria-label="Filter by time range"
+      >
+        {TIME_RANGES.map((tr) => (
+          <option key={tr.value} value={tr.value}>{tr.label}</option>
         ))}
       </select>
 

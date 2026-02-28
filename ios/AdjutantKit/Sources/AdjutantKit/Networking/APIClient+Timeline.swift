@@ -20,6 +20,7 @@ extension APIClient {
         eventType: String? = nil,
         beadId: String? = nil,
         before: String? = nil,
+        after: String? = nil,
         limit: Int = 50
     ) async throws -> TimelineResponse {
         var queryItems: [URLQueryItem] = [
@@ -36,6 +37,9 @@ extension APIClient {
         }
         if let before {
             queryItems.append(URLQueryItem(name: "before", value: before))
+        }
+        if let after {
+            queryItems.append(URLQueryItem(name: "after", value: after))
         }
 
         // Timeline endpoint returns { events, hasMore } directly (no ApiResponse envelope)

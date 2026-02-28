@@ -93,6 +93,23 @@ struct TimelineView: View {
                     }
                 }
 
+                // Time range picker
+                Menu {
+                    ForEach(TimelineViewModel.TimeRangeOption.allCases) { option in
+                        Button(option.label) {
+                            viewModel.selectedTimeRange = option
+                        }
+                    }
+                } label: {
+                    filterChip(
+                        label: viewModel.selectedTimeRange == .all
+                            ? "ALL TIME"
+                            : "LAST \(viewModel.selectedTimeRange.label)",
+                        icon: "clock",
+                        isActive: viewModel.selectedTimeRange != .all
+                    )
+                }
+
                 // Event type filter chips
                 ForEach(TimelineViewModel.eventTypes, id: \.value) { eventType in
                     Button {

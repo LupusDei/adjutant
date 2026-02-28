@@ -38,6 +38,7 @@ export const TimelineQuerySchema = z.object({
   eventType: EventType.optional(),
   beadId: z.string().optional(),
   before: z.string().optional(),
+  after: z.string().optional(),
   limit: z.coerce.number().min(1).max(200).optional().default(50),
 });
 export type TimelineQuery = z.infer<typeof TimelineQuerySchema>;

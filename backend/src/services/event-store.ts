@@ -101,6 +101,11 @@ export function createEventStore(db: Database.Database): EventStore {
         params.push(query.before);
       }
 
+      if (query.after !== undefined) {
+        conditions.push("created_at > ?");
+        params.push(query.after);
+      }
+
       const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
       const limit = query.limit ?? 50;
       params.push(limit);

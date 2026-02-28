@@ -28,6 +28,50 @@ final class TimelineViewModel: BaseViewModel {
         }
     }
 
+    /// Selected time range filter
+    @Published var selectedTimeRange: TimeRangeOption = .all {
+        didSet {
+            Task<Void, Never> { await refresh() }
+        }
+    }
+
+    // MARK: - Time Range Options
+
+    /// Time range options for filtering events
+    enum TimeRangeOption: String, CaseIterable, Identifiable {
+        case oneHour = "1h"
+        case sixHours = "6h"
+        case twentyFourHours = "24h"
+        case sevenDays = "7d"
+        case all = "all"
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .oneHour: return "1H"
+            case .sixHours: return "6H"
+            case .twentyFourHours: return "24H"
+            case .sevenDays: return "7D"
+            case .all: return "ALL"
+            }
+        }
+
+        /// Returns an ISO 8601 timestamp for the `after` query parameter, or nil for `.all`.
+        var afterTimestamp: String? {
+            guard self != .all else { return nil }
+            let offsets: [TimeRangeOption: TimeInterval] = [
+                .oneHour: 3600,
+                .sixHours: 6 * 3600,
+                .twentyFourHours: 24 * 3600,
+                .sevenDays: 7 * 24 * 3600,
+            ]
+            guard let offset = offsets[self] else { return nil }
+            let date = Date(timeIntervalSinceNow: -offset)
+            return ISO8601DateFormatter().string(from: date)
+        }
+    }
+
     // MARK: - Event Type Options
 
     /// Available event types for filtering
@@ -69,6 +113,7 @@ final class TimelineViewModel: BaseViewModel {
             let response = try await apiClient.getTimelineEvents(
                 agentId: self.selectedAgent,
                 eventType: self.selectedEventType,
+                after: self.selectedTimeRange.afterTimestamp,
                 limit: 50
             )
             self.events = response.events
@@ -86,6 +131,7 @@ final class TimelineViewModel: BaseViewModel {
                 agentId: self.selectedAgent,
                 eventType: self.selectedEventType,
                 before: lastEvent.createdAt,
+                after: self.selectedTimeRange.afterTimestamp,
                 limit: 50
             )
             self.events.append(contentsOf: response.events)

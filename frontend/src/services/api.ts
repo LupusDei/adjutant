@@ -687,6 +687,7 @@ export async function getTimelineEvents(params?: {
   eventType?: string;
   beadId?: string;
   before?: string;
+  after?: string;
   limit?: number;
 }): Promise<TimelineResponse> {
   const searchParams = new URLSearchParams();
@@ -694,6 +695,7 @@ export async function getTimelineEvents(params?: {
   if (params?.eventType) searchParams.set('eventType', params.eventType);
   if (params?.beadId) searchParams.set('beadId', params.beadId);
   if (params?.before) searchParams.set('before', params.before);
+  if (params?.after) searchParams.set('after', params.after);
   if (params?.limit) searchParams.set('limit', params.limit.toString());
 
   const query = searchParams.toString();

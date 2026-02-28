@@ -178,6 +178,29 @@ describe("EventStore", () => {
       expect(actions).not.toContain("E3");
     });
 
+    it("should filter by after timestamp", async () => {
+      const { createEventStore } = await import("../../src/services/event-store.js");
+      const store = createEventStore(db);
+
+      // Insert events at different timestamps
+      db.prepare(`
+        INSERT INTO events (id, event_type, agent_id, action, created_at)
+        VALUES ('old-event', 'status_change', 'agent-1', 'Old', datetime('now', '-3 days'))
+      `).run();
+      db.prepare(`
+        INSERT INTO events (id, event_type, agent_id, action, created_at)
+        VALUES ('mid-event', 'status_change', 'agent-1', 'Mid', datetime('now', '-1 days'))
+      `).run();
+      store.insertEvent({ eventType: "status_change", agentId: "agent-1", action: "Recent" });
+
+      // After 2 days ago should return only mid and recent
+      const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+      const events = store.getEvents({ after: twoDaysAgo });
+      expect(events).toHaveLength(2);
+      const actions = events.map((e) => e.action).sort();
+      expect(actions).toEqual(["Mid", "Recent"]);
+    });
+
     it("should respect limit parameter", async () => {
       const { createEventStore } = await import("../../src/services/event-store.js");
       const store = createEventStore(db);

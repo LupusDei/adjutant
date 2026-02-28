@@ -10,10 +10,13 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { getTimelineEvents, type TimelineEvent } from '../services/api';
 import { useCommunication } from '../contexts/CommunicationContext';
 
+export type TimeRange = '1h' | '6h' | '24h' | '7d' | 'all';
+
 export interface TimelineFilters {
   agentId?: string;
   eventType?: string;
   beadId?: string;
+  timeRange?: TimeRange;
 }
 
 export interface UseTimelineResult {
@@ -24,6 +27,20 @@ export interface UseTimelineResult {
   filters: TimelineFilters;
   setFilters: (filters: TimelineFilters) => void;
   loadMore: () => Promise<void>;
+}
+
+function timeRangeToAfter(range: TimeRange | undefined): string | undefined {
+  if (!range || range === 'all') return undefined;
+  const now = Date.now();
+  const offsets: Record<string, number> = {
+    '1h': 60 * 60 * 1000,
+    '6h': 6 * 60 * 60 * 1000,
+    '24h': 24 * 60 * 60 * 1000,
+    '7d': 7 * 24 * 60 * 60 * 1000,
+  };
+  const offset = offsets[range];
+  if (!offset) return undefined;
+  return new Date(now - offset).toISOString();
 }
 
 export function useTimeline(): UseTimelineResult {
@@ -48,6 +65,8 @@ export function useTimeline(): UseTimelineResult {
       if (filters.agentId) params.agentId = filters.agentId;
       if (filters.eventType) params.eventType = filters.eventType;
       if (filters.beadId) params.beadId = filters.beadId;
+      const after = timeRangeToAfter(filters.timeRange);
+      if (after) params.after = after;
 
       const response = await getTimelineEvents(params);
 
@@ -127,6 +146,8 @@ export function useTimeline(): UseTimelineResult {
       if (filters.agentId) params.agentId = filters.agentId;
       if (filters.eventType) params.eventType = filters.eventType;
       if (filters.beadId) params.beadId = filters.beadId;
+      const after = timeRangeToAfter(filters.timeRange);
+      if (after) params.after = after;
 
       const response = await getTimelineEvents(params);
 
