@@ -1,7 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, convoysRouter, costsRouter, createDashboardRouter, createMessagesRouter, createProjectsRouter, createProposalsRouter, devicesRouter, eventsRouter, mailRouter, mcpRouter, modeRouter, permissionsRouter, powerRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, convoysRouter, costsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createProjectsRouter, createProposalsRouter, devicesRouter, mailRouter, mcpRouter, modeRouter, permissionsRouter, powerRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { createDashboardService } from "./services/dashboard-service.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
@@ -51,7 +51,7 @@ app.use("/api/beads", beadsRouter);
 app.use("/api/convoys", convoysRouter);
 app.use("/api/agents", agentsRouter);
 app.use("/api/devices", devicesRouter);
-app.use("/api/events", eventsRouter);
+// Events router mounted after eventStore creation below
 app.use("/api/mail", mailRouter);
 app.use("/api/mode", modeRouter);
 app.use("/api/power", powerRouter);
@@ -68,6 +68,7 @@ const messageDb = initDatabase();
 const messageStore = createMessageStore(messageDb);
 const proposalStore = createProposalStore(messageDb);
 const eventStore = createEventStore(messageDb);
+app.use("/api/events", createEventsRouter(eventStore));
 app.use("/api/messages", createMessagesRouter(messageStore));
 app.use("/api/projects", createProjectsRouter(messageStore));
 app.use("/api/proposals", createProposalsRouter(proposalStore));
