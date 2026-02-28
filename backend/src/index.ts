@@ -73,6 +73,18 @@ app.use("/api/messages", createMessagesRouter(messageStore));
 app.use("/api/projects", createProjectsRouter(messageStore));
 app.use("/api/proposals", createProposalsRouter(proposalStore));
 
+// Prune events older than 7 days on startup, then every 6 hours
+const PRUNE_DAYS = 7;
+const PRUNE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+const startupPruned = eventStore.pruneOldEvents(PRUNE_DAYS);
+logInfo("Event pruning", { deletedCount: startupPruned });
+
+setInterval(() => {
+  const deletedCount = eventStore.pruneOldEvents(PRUNE_DAYS);
+  logInfo("Event pruning", { deletedCount });
+}, PRUNE_INTERVAL_MS);
+
 const dashboardService = createDashboardService(messageStore);
 app.use("/api/dashboard", createDashboardRouter(dashboardService));
 

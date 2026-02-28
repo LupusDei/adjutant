@@ -235,5 +235,33 @@ describe("EventStore", () => {
       const deletedCount = store.pruneOldEvents(30);
       expect(deletedCount).toBe(0);
     });
+
+    it("should prune events older than 7 days while keeping recent ones", async () => {
+      const { createEventStore } = await import("../../src/services/event-store.js");
+      const store = createEventStore(db);
+
+      // Insert events at various ages
+      db.prepare(`
+        INSERT INTO events (id, event_type, agent_id, action, created_at)
+        VALUES ('old-8d', 'status_change', 'agent-1', '8 days old', datetime('now', '-8 days'))
+      `).run();
+      db.prepare(`
+        INSERT INTO events (id, event_type, agent_id, action, created_at)
+        VALUES ('old-10d', 'announcement', 'agent-2', '10 days old', datetime('now', '-10 days'))
+      `).run();
+      db.prepare(`
+        INSERT INTO events (id, event_type, agent_id, action, created_at)
+        VALUES ('recent-6d', 'status_change', 'agent-1', '6 days old', datetime('now', '-6 days'))
+      `).run();
+      store.insertEvent({ eventType: "status_change", agentId: "agent-1", action: "Just now" });
+
+      const deletedCount = store.pruneOldEvents(7);
+      expect(deletedCount).toBe(2); // 8d and 10d old events
+
+      const remaining = store.getEvents({});
+      expect(remaining).toHaveLength(2);
+      const actions = remaining.map((e) => e.action).sort();
+      expect(actions).toEqual(["6 days old", "Just now"]);
+    });
   });
 });
