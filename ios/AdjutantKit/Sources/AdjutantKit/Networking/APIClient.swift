@@ -354,21 +354,6 @@ public struct IdentityResponse: Codable, Equatable {
     }
 }
 
-/// Spawn polecat response
-public struct SpawnPolecatResponse: Codable, Equatable {
-    public let sessionId: String?
-    public let callsign: String?
-    public let projectPath: String?
-    public let spawned: Bool
-
-    public init(sessionId: String? = nil, callsign: String? = nil, projectPath: String? = nil, spawned: Bool) {
-        self.sessionId = sessionId
-        self.callsign = callsign
-        self.projectPath = projectPath
-        self.spawned = spawned
-    }
-}
-
 /// Request body for updating a bead's status
 public struct BeadStatusUpdateRequest: Codable, Equatable {
     public let status: String

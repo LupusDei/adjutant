@@ -106,9 +106,6 @@ struct AgentDetailView: View {
                 HStack(spacing: CRTTheme.Spacing.xs) {
                     BadgeView(viewModel.member.type.rawValue.uppercased(), style: .tag)
 
-                    if let rig = viewModel.member.rig {
-                        CRTText("[\(rig)]", style: .caption, glowIntensity: .subtle, color: theme.dim)
-                    }
                 }
             }
 
@@ -254,10 +251,6 @@ struct AgentDetailView: View {
 
                 // Details grid
                 VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
-                    if let rig = viewModel.member.rig {
-                        detailRow(label: "RIG", value: rig.uppercased())
-                    }
-
                     if let branch = viewModel.member.branch {
                         detailRow(label: "BRANCH", value: branch)
                     }
@@ -758,12 +751,6 @@ struct AgentDetailView: View {
 
     private var agentIcon: String {
         switch viewModel.member.type {
-        case .mayor: return "crown.fill"
-        case .deacon: return "bell.fill"
-        case .witness: return "eye.fill"
-        case .refinery: return "gearshape.2.fill"
-        case .crew: return "person.fill"
-        case .polecat: return "terminal.fill"
         case .user: return "person.circle.fill"
         case .agent: return "cpu.fill"
         }
@@ -914,14 +901,13 @@ private struct BeadPickerSheet: View {
 
 // MARK: - Preview
 
-#Preview("AgentDetailView - Polecat") {
+#Preview("AgentDetailView - Working Agent") {
     NavigationStack {
         AgentDetailView(
             member: CrewMember(
-                id: "greenplace/polecat-abc",
+                id: "polecat-abc",
                 name: "polecat-abc",
-                type: .polecat,
-                rig: "greenplace",
+                type: .agent,
                 status: .working,
                 currentTask: "Implementing feature adj-1234",
                 unreadMail: 2,
@@ -939,7 +925,6 @@ private struct BeadPickerSheet: View {
                 id: "adjutant/agent/toast",
                 name: "Toast",
                 type: .agent,
-                rig: "adjutant",
                 status: .working,
                 currentTask: "Building iOS features",
                 unreadMail: 3,
@@ -955,10 +940,9 @@ private struct BeadPickerSheet: View {
     NavigationStack {
         AgentDetailView(
             member: CrewMember(
-                id: "greenplace/witness",
+                id: "witness",
                 name: "Witness",
-                type: .witness,
-                rig: "greenplace",
+                type: .agent,
                 status: .offline,
                 unreadMail: 0
             )

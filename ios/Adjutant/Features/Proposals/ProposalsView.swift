@@ -15,9 +15,7 @@ struct ProposalsView: View {
             // Header
             AppHeaderView(
                 title: "PROPOSALS",
-                availableRigs: [],
-                isLoading: viewModel.isLoading,
-                onPowerTap: nil
+                isLoading: viewModel.isLoading
             )
             .padding(.vertical, CRTTheme.Spacing.sm)
 

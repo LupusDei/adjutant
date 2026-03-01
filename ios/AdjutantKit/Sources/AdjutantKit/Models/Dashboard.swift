@@ -124,7 +124,7 @@ public struct UnreadAgentSummary: Decodable, Equatable, Identifiable {
 /// Each section is independently nullable so partial backend failures
 /// don't kill the entire response.
 public struct DashboardResponse: Decodable {
-    public let status: DashboardSection<GastownStatus>
+    public let status: DashboardSection<SystemStatus>
     public let beads: DashboardSection<DashboardBeadsData>
     public let crew: DashboardSection<[CrewMember]>
     public let unreadCounts: DashboardSection<[String: Int]>
@@ -134,7 +134,7 @@ public struct DashboardResponse: Decodable {
     public let timestamp: String
 
     public init(
-        status: DashboardSection<GastownStatus>,
+        status: DashboardSection<SystemStatus>,
         beads: DashboardSection<DashboardBeadsData>,
         crew: DashboardSection<[CrewMember]>,
         unreadCounts: DashboardSection<[String: Int]>,

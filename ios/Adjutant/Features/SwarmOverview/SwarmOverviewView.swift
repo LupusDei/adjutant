@@ -583,7 +583,6 @@ struct SwarmOverviewView: View {
             id: agent.id,
             name: agent.name,
             type: .agent,
-            rig: nil,
             status: CrewMemberStatus(rawValue: agent.status) ?? .idle,
             currentTask: agent.currentBead,
             unreadMail: agent.unreadCount,

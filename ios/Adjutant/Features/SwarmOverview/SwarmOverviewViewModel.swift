@@ -120,13 +120,8 @@ final class SwarmOverviewViewModel: ObservableObject {
             return
         }
 
-        do {
-            let response = try await apiClient.spawnPolecat(projectPath: projectPath, callsign: callsign)
-            spawnedSessionId = response.callsign ?? response.sessionId
-            await refresh()
-        } catch {
-            errorMessage = "Spawn failed: \(error.localizedDescription)"
-        }
+        // Agent spawning removed — API no longer supports spawnPolecat
+        errorMessage = "Agent spawning is not available in this deployment mode"
     }
 
     // MARK: - Broadcast Status Request

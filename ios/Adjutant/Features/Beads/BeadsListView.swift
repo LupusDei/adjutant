@@ -171,12 +171,8 @@ struct BeadsListView: View {
 
                 Spacer()
 
-                // Mode-aware filter: Rig dropdown for gastown, Project dropdown for swarm
-                if appState.deploymentMode == .gastown {
-                    RigFilterDropdown(availableRigs: appState.availableRigs)
-                } else {
-                    SourceFilterDropdown(sources: viewModel.beadSources)
-                }
+                // Project source filter
+                SourceFilterDropdown(sources: viewModel.beadSources, selectedSource: $viewModel.selectedSource)
             }
 
             // Search field
@@ -367,7 +363,7 @@ struct BeadsListView: View {
     // MARK: - Drag & Drop Handling
 
     private func handleDrop(bead: BeadInfo, to targetColumn: KanbanColumnId) async {
-        let fromColumn = mapStatusToColumn(bead.status, isSwarm: appState.deploymentMode == .swarm)
+        let fromColumn = mapStatusToColumn(bead.status, isSwarm: true)
 
         // Don't process drop on same column
         guard fromColumn != targetColumn else {

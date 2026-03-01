@@ -46,33 +46,15 @@ final class EpicsListViewModel: BaseViewModel {
     private var pollingTask: Task<Void, Never>?
     private let pollingInterval: TimeInterval = 30.0
 
-    /// Currently selected rig filter (synced from AppState)
-    private var selectedRig: String? {
-        AppState.shared.selectedRig
-    }
-
     // MARK: - Initialization
 
     init(apiClient: APIClient? = nil) {
         self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
-        setupRigFilterObserver()
     }
 
     deinit {
         pollingTask?.cancel()
-    }
-
-    /// Sets up observation of rig filter changes from AppState
-    private func setupRigFilterObserver() {
-        AppState.shared.$selectedRig
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                Task {
-                    await self?.refresh()
-                }
-            }
-            .store(in: &cancellables)
     }
 
     // MARK: - Lifecycle

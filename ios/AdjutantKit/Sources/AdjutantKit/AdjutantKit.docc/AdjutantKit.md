@@ -1,6 +1,6 @@
 # ``AdjutantKit``
 
-A Swift networking layer for the Adjutant iOS app, providing communication with the Gas Town multi-agent orchestration system.
+A Swift networking layer for the Adjutant iOS app, providing communication with the Adjutant multi-agent dashboard.
 
 ## Overview
 
@@ -11,7 +11,7 @@ AdjutantKit provides a complete networking layer for the Adjutant iOS companion 
 - Automatic retry logic with exponential backoff
 - Comprehensive error handling
 
-The package is designed to work with the Adjutant backend server, which coordinates the Gas Town multi-agent system.
+The package is designed to work with the Adjutant backend server, which coordinates multi-agent workflows.
 
 ### Quick Start
 
@@ -24,15 +24,11 @@ let client = APIClient()
 // Fetch system status
 let status = try await client.getStatus()
 
-// Get inbox messages
-let messages = try await client.getMail()
+// Get agents
+let agents = try await client.getAgents()
 
-// Send a message
-try await client.sendMail(
-    to: "mayor/",
-    subject: "Status Update",
-    body: "All systems operational."
-)
+// Get beads
+let beads = try await client.getBeads(status: .open)
 ```
 
 ### Architecture
@@ -56,8 +52,7 @@ AdjutantKit follows a layered architecture:
 - ``Message``
 - ``CrewMember``
 - ``BeadInfo``
-- ``GastownStatus``
-- ``Convoy``
+- ``SystemStatus``
 
 ### Networking
 

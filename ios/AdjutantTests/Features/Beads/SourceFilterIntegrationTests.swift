@@ -3,108 +3,39 @@ import XCTest
 @testable import AdjutantKit
 
 /// Integration tests for the project-scoped beads source filter feature.
-/// Tests the interaction between AppState.selectedRig, BeadsListViewModel,
-/// and the mode-aware filtering logic.
+/// Tests the interaction between BeadsListViewModel.selectedSource
+/// and the filtering logic.
 @MainActor
 final class SourceFilterIntegrationTests: XCTestCase {
     var viewModel: BeadsListViewModel!
-    var savedRig: String?
-    var savedMode: DeploymentMode!
 
     override func setUp() async throws {
         try await super.setUp()
 
-        // Save current AppState to restore in tearDown
-        savedRig = AppState.shared.selectedRig
-        savedMode = AppState.shared.deploymentMode
-
-        // Reset to clean state
-        AppState.shared.selectedRig = nil
         viewModel = BeadsListViewModel()
         await viewModel.loadBeads()
     }
 
     override func tearDown() async throws {
-        // Restore AppState
-        AppState.shared.selectedRig = savedRig
-        AppState.shared.deploymentMode = savedMode
         viewModel = nil
         try await super.tearDown()
     }
 
-    // MARK: - AppState.selectedRig Integration
+    // MARK: - selectedSource Integration
 
-    func testSelectedRigNilShowsAllBeads() async {
-        AppState.shared.selectedRig = nil
+    func testSelectedSourceNilShowsAllBeads() async {
+        viewModel.selectedSource = nil
         viewModel.currentFilter = .all
 
-        // With no rig selected, all beads should be visible (excluding filtered types)
+        // With no source selected, all beads should be visible (excluding filtered types)
         XCTAssertFalse(viewModel.filteredBeads.isEmpty,
-            "Should show beads when no rig filter is selected")
-    }
-
-    func testSelectedRigFiltersBeadsToMatchingSource() async {
-        // Wait for rig observer to fire
-        AppState.shared.selectedRig = "adjutant"
-        try? await Task.sleep(nanoseconds: 300_000_000)
-
-        viewModel.currentFilter = .all
-
-        // All remaining beads should have source matching the selected rig
-        // (In mock data mode, the DataSyncService doesn't actually have beads,
-        // so we verify the mechanism works with the mock data flow)
-        let filteredSources = Set(viewModel.beads.map { $0.source })
-        if !viewModel.beads.isEmpty {
-            XCTAssertTrue(filteredSources.allSatisfy { $0 == "adjutant" },
-                "After rig filter, all beads should have matching source")
-        }
-    }
-
-    func testSelectedRigResetShowsAllSources() async {
-        // Select a rig
-        AppState.shared.selectedRig = "adjutant"
-        try? await Task.sleep(nanoseconds: 300_000_000)
-
-        // Reset to all
-        AppState.shared.selectedRig = nil
-        try? await Task.sleep(nanoseconds: 300_000_000)
-
-        // Should show beads from multiple sources again
-        viewModel.currentFilter = .all
-        if !viewModel.beads.isEmpty {
-            let sources = Set(viewModel.beads.map { $0.source })
-            XCTAssertTrue(sources.count >= 1,
-                "After resetting rig filter, should show beads from all sources")
-        }
-    }
-
-    // MARK: - Deployment Mode Integration
-
-    func testGastownModeDoesNotFetchBeadSources() async {
-        AppState.shared.deploymentMode = .gastown
-        let freshVM = BeadsListViewModel()
-        await freshVM.loadBeads()
-
-        // In gastown mode with no API client (mock mode), sources should remain empty
-        XCTAssertTrue(freshVM.beadSources.isEmpty,
-            "Gastown mode should not populate beadSources (uses rig filter instead)")
-    }
-
-    func testSwarmModeUsesBeadSources() async {
-        AppState.shared.deploymentMode = .swarm
-        let freshVM = BeadsListViewModel()
-        await freshVM.loadBeads()
-
-        XCTAssertNotNil(freshVM.beadSources,
-            "beadSources should be accessible in swarm mode")
+            "Should show beads when no source filter is selected")
     }
 
     // MARK: - Source Filter + Status Filter Combinations
 
     func testSourceFilterCombinesWithOpenFilter() async {
-        AppState.shared.selectedRig = "adjutant"
-        try? await Task.sleep(nanoseconds: 300_000_000)
-
+        viewModel.selectedSource = "adjutant"
         viewModel.currentFilter = .open
 
         // All filtered beads should be non-closed
@@ -113,9 +44,7 @@ final class SourceFilterIntegrationTests: XCTestCase {
     }
 
     func testSourceFilterCombinesWithPriorityFilter() async {
-        AppState.shared.selectedRig = "adjutant"
-        try? await Task.sleep(nanoseconds: 300_000_000)
-
+        viewModel.selectedSource = "adjutant"
         viewModel.currentFilter = .priority
 
         // All filtered beads should be P0 or P1
@@ -124,13 +53,11 @@ final class SourceFilterIntegrationTests: XCTestCase {
     }
 
     func testSourceFilterCombinesWithSearch() async {
-        AppState.shared.selectedRig = "adjutant"
-        try? await Task.sleep(nanoseconds: 300_000_000)
-
+        viewModel.selectedSource = "adjutant"
         viewModel.currentFilter = .all
         viewModel.searchText = "Implement"
 
-        // All results should match both source and search
+        // All results should match search
         for bead in viewModel.filteredBeads {
             let matchesSearch =
                 bead.title.lowercased().contains("implement") ||
@@ -143,9 +70,7 @@ final class SourceFilterIntegrationTests: XCTestCase {
     }
 
     func testSourceFilterCombinesWithSort() async {
-        AppState.shared.selectedRig = "adjutant"
-        try? await Task.sleep(nanoseconds: 300_000_000)
-
+        viewModel.selectedSource = "adjutant"
         viewModel.currentFilter = .all
         viewModel.currentSort = .alphabetical
 
@@ -155,39 +80,6 @@ final class SourceFilterIntegrationTests: XCTestCase {
             XCTAssertTrue(comparison == .orderedAscending || comparison == .orderedSame,
                 "Beads should remain alphabetically sorted with source filter active")
         }
-    }
-
-    // MARK: - Source Filter Switching Tests
-
-    func testSwitchingSourceFilterUpdatesResults() async {
-        viewModel.currentFilter = .all
-
-        // Start with all
-        AppState.shared.selectedRig = nil
-        try? await Task.sleep(nanoseconds: 300_000_000)
-        let allCount = viewModel.beads.count
-
-        // Switch to specific source
-        AppState.shared.selectedRig = "adjutant"
-        try? await Task.sleep(nanoseconds: 300_000_000)
-        let adjutantCount = viewModel.beads.count
-
-        // Filtered count should be <= all count
-        XCTAssertLessThanOrEqual(adjutantCount, allCount,
-            "Filtering by source should show same or fewer beads")
-    }
-
-    func testRapidSourceFilterSwitching() async {
-        // Rapidly switch between sources — should not crash
-        for source in [nil, "adjutant", nil, "town", "adjutant", nil] as [String?] {
-            AppState.shared.selectedRig = source
-        }
-        try? await Task.sleep(nanoseconds: 300_000_000)
-
-        // Should settle in a consistent state
-        viewModel.currentFilter = .all
-        XCTAssertNotNil(viewModel.filteredBeads,
-            "filteredBeads should be in a consistent state after rapid switching")
     }
 
     // MARK: - BeadSource Model Integration
@@ -207,15 +99,15 @@ final class SourceFilterIntegrationTests: XCTestCase {
     }
 
     func testBeadSourceNamesAreUsedForFiltering() {
-        // Verify that source names match what selectedRig expects
+        // Verify that source names match what selectedSource expects
         let source = BeadSource(name: "my-project", path: "/path/to/project", hasBeads: true)
 
-        // SourceFilterDropdown sets selectedRig = source.name
-        AppState.shared.selectedRig = source.name
-        XCTAssertEqual(AppState.shared.selectedRig, "my-project")
+        // SourceFilterDropdown sets selectedSource = source.name
+        viewModel.selectedSource = source.name
+        XCTAssertEqual(viewModel.selectedSource, "my-project")
 
         // Clean up
-        AppState.shared.selectedRig = nil
+        viewModel.selectedSource = nil
     }
 
     // MARK: - Edge Cases

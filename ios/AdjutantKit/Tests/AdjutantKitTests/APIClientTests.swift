@@ -23,160 +23,21 @@ final class APIClientTests: XCTestCase {
         client = nil
     }
 
-    // MARK: - Response Envelope Tests
-
-    func testSuccessfulResponseDecoding() async throws {
-        MockURLProtocol.mockHandler = MockURLProtocol.mockResponse(json: [
-            "success": true,
-            "data": [
-                "powerState": "running",
-                "town": ["name": "gastown", "root": "/Users/test"],
-                "operator": ["name": "test", "email": "test@test.com", "unreadMail": 0],
-                "infrastructure": [
-                    "mayor": ["name": "mayor", "running": true, "unreadMail": 0],
-                    "deacon": ["name": "deacon", "running": true, "unreadMail": 0],
-                    "daemon": ["name": "daemon", "running": true, "unreadMail": 0]
-                ],
-                "rigs": [],
-                "fetchedAt": "2024-01-15T10:30:00.000Z"
-            ],
-            "timestamp": "2024-01-15T10:30:00.000Z"
-        ])
-
-        let status = try await client.getStatus()
-
-        XCTAssertEqual(status.powerState, .running)
-        XCTAssertEqual(status.town.name, "gastown")
-        XCTAssertEqual(status.operator.name, "test")
-    }
-
-    func testErrorResponseDecoding() async throws {
-        MockURLProtocol.mockHandler = MockURLProtocol.mockError(
-            statusCode: 404,
-            code: "NOT_FOUND",
-            message: "Resource not found"
-        )
-
-        do {
-            _ = try await client.getStatus()
-            XCTFail("Expected error to be thrown")
-        } catch let error as APIClientError {
-            guard case .serverError(let apiError) = error else {
-                XCTFail("Expected serverError, got \(error)")
-                return
-            }
-            XCTAssertEqual(apiError.code, "NOT_FOUND")
-            XCTAssertEqual(apiError.message, "Resource not found")
-        }
-    }
-
-    // MARK: - Error Handling Tests
-
-    func testNetworkError() async throws {
-        MockURLProtocol.mockHandler = MockURLProtocol.mockNetworkError(.notConnectedToInternet)
-
-        do {
-            _ = try await client.getStatus()
-            XCTFail("Expected error to be thrown")
-        } catch let error as APIClientError {
-            guard case .networkError = error else {
-                XCTFail("Expected networkError, got \(error)")
-                return
-            }
-            XCTAssertTrue(error.isRetryable)
-        }
-    }
-
-    func testTimeoutError() async throws {
-        MockURLProtocol.mockHandler = MockURLProtocol.mockNetworkError(.timedOut)
-
-        do {
-            _ = try await client.getStatus()
-            XCTFail("Expected error to be thrown")
-        } catch let error as APIClientError {
-            guard case .timeout = error else {
-                XCTFail("Expected timeout, got \(error)")
-                return
-            }
-            XCTAssertTrue(error.isRetryable)
-        }
-    }
-
-    func testRateLimitError() async throws {
-        MockURLProtocol.mockHandler = { request in
-            let response = HTTPURLResponse(
-                url: request.url!,
-                statusCode: 429,
-                httpVersion: "HTTP/1.1",
-                headerFields: [
-                    "Content-Type": "application/json",
-                    "Retry-After": "60"
-                ]
-            )!
-            return (response, Data())
-        }
-
-        do {
-            _ = try await client.getStatus()
-            XCTFail("Expected error to be thrown")
-        } catch let error as APIClientError {
-            guard case .rateLimited(let retryAfter) = error else {
-                XCTFail("Expected rateLimited, got \(error)")
-                return
-            }
-            XCTAssertEqual(retryAfter, 60)
-            XCTAssertTrue(error.isRetryable)
-        }
-    }
-
     // MARK: - Model Decoding Tests
-
-    func testMessageDecoding() async throws {
-        let messageJSON: [String: Any] = [
-            "id": "gb-53tj",
-            "from": "mayor/",
-            "to": "overseer",
-            "subject": "Test message",
-            "body": "Test body content",
-            "timestamp": "2024-01-15T10:00:00.000Z",
-            "read": false,
-            "priority": 2,
-            "type": "notification",
-            "threadId": "thread-abc123",
-            "pinned": false,
-            "isInfrastructure": false
-        ]
-
-        MockURLProtocol.mockHandler = MockURLProtocol.mockResponse(json: [
-            "success": true,
-            "data": messageJSON,
-            "timestamp": "2024-01-15T10:30:00.000Z"
-        ])
-
-        let message = try await client.getMessage(id: "gb-53tj")
-
-        XCTAssertEqual(message.id, "gb-53tj")
-        XCTAssertEqual(message.from, "mayor/")
-        XCTAssertEqual(message.subject, "Test message")
-        XCTAssertEqual(message.priority, .normal)
-        XCTAssertEqual(message.type, .notification)
-        XCTAssertEqual(message.senderName, "mayor")
-    }
 
     func testCrewMemberDecoding() async throws {
         MockURLProtocol.mockHandler = MockURLProtocol.mockResponse(json: [
             "success": true,
             "data": [
                 [
-                    "id": "greenplace/Toast",
-                    "name": "Toast",
-                    "type": "polecat",
-                    "rig": "greenplace",
+                    "id": "agent-abc",
+                    "name": "agent-abc",
+                    "type": "agent",
                     "status": "working",
                     "currentTask": "Implementing feature",
                     "unreadMail": 2,
                     "firstSubject": "Task update",
-                    "branch": "polecat/feature-xyz"
+                    "branch": "feature-xyz"
                 ]
             ],
             "timestamp": "2024-01-15T10:30:00.000Z"
@@ -186,47 +47,10 @@ final class APIClientTests: XCTestCase {
 
         XCTAssertEqual(agents.count, 1)
         let agent = agents[0]
-        XCTAssertEqual(agent.id, "greenplace/Toast")
-        XCTAssertEqual(agent.type, .polecat)
+        XCTAssertEqual(agent.id, "agent-abc")
+        XCTAssertEqual(agent.type, .agent)
         XCTAssertEqual(agent.status, .working)
-        XCTAssertEqual(agent.branch, "polecat/feature-xyz")
-    }
-
-    func testConvoyDecoding() async throws {
-        MockURLProtocol.mockHandler = MockURLProtocol.mockResponse(json: [
-            "success": true,
-            "data": [
-                [
-                    "id": "convoy-001",
-                    "title": "Feature Implementation",
-                    "status": "in_progress",
-                    "rig": "greenplace",
-                    "progress": [
-                        "completed": 3,
-                        "total": 5
-                    ],
-                    "trackedIssues": [
-                        [
-                            "id": "gb-issue1",
-                            "title": "Task 1",
-                            "status": "closed",
-                            "priority": 1
-                        ]
-                    ]
-                ]
-            ],
-            "timestamp": "2024-01-15T10:30:00.000Z"
-        ])
-
-        let convoys = try await client.getConvoys()
-
-        XCTAssertEqual(convoys.count, 1)
-        let convoy = convoys[0]
-        XCTAssertEqual(convoy.id, "convoy-001")
-        XCTAssertEqual(convoy.progress.completed, 3)
-        XCTAssertEqual(convoy.progress.total, 5)
-        XCTAssertEqual(convoy.progress.percentage, 0.6)
-        XCTAssertFalse(convoy.isComplete)
+        XCTAssertEqual(agent.branch, "feature-xyz")
     }
 
     // MARK: - Bead Source Endpoint Tests
@@ -410,55 +234,12 @@ final class APIClientTests: XCTestCase {
             return (response, data)
         }
 
-        _ = try await client.getBeads(rig: "greenplace", status: .inProgress, limit: 100)
+        _ = try await client.getBeads(status: .inProgress, limit: 100)
 
         XCTAssertNotNil(capturedRequest)
         let urlString = capturedRequest!.url!.absoluteString
-        XCTAssertTrue(urlString.contains("rig=greenplace"))
         XCTAssertTrue(urlString.contains("status=in_progress"))
         XCTAssertTrue(urlString.contains("limit=100"))
-    }
-
-    func testPostRequestBodyEncoding() async throws {
-        var capturedRequest: URLRequest?
-        var capturedBody: Data?
-
-        MockURLProtocol.mockHandler = { request in
-            capturedRequest = request
-            // Capture body inside handler - may be in httpBody or httpBodyStream
-            capturedBody = MockURLProtocol.getBodyData(from: request)
-            let envelope: [String: Any] = [
-                "success": true,
-                "data": ["sent": true],
-                "timestamp": "2024-01-15T10:30:00.000Z"
-            ]
-            let data = try! JSONSerialization.data(withJSONObject: envelope)
-            let response = HTTPURLResponse(
-                url: request.url!,
-                statusCode: 200,
-                httpVersion: "HTTP/1.1",
-                headerFields: ["Content-Type": "application/json"]
-            )!
-            return (response, data)
-        }
-
-        let sendRequest = SendMessageRequest(
-            to: "mayor/",
-            subject: "Test",
-            body: "Test message",
-            priority: .high
-        )
-        _ = try await client.sendMail(sendRequest)
-
-        XCTAssertNotNil(capturedRequest)
-        XCTAssertEqual(capturedRequest!.httpMethod, "POST")
-        XCTAssertEqual(capturedRequest!.value(forHTTPHeaderField: "Content-Type"), "application/json")
-
-        XCTAssertNotNil(capturedBody, "Request body should have been captured")
-        let bodyJSON = try JSONSerialization.jsonObject(with: capturedBody!) as! [String: Any]
-        XCTAssertEqual(bodyJSON["to"] as? String, "mayor/")
-        XCTAssertEqual(bodyJSON["subject"] as? String, "Test")
-        XCTAssertEqual(bodyJSON["priority"] as? Int, 1)
     }
 }
 

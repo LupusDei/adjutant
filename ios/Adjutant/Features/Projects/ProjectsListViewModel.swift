@@ -3,15 +3,12 @@ import Combine
 import AdjutantKit
 
 /// ViewModel for the Projects List.
-/// Mode-aware: shows rigs in gastown mode, registered projects in swarm mode.
+/// Shows registered projects from the projects API.
 @MainActor
 final class ProjectsListViewModel: BaseViewModel {
     // MARK: - Published Properties
 
-    /// All rigs from the status API (gastown mode)
-    @Published private(set) var rigs: [RigStatus] = []
-
-    /// All projects from the projects API (swarm mode)
+    /// All projects from the projects API
     @Published private(set) var projects: [Project] = []
 
     /// Current search query
@@ -19,10 +16,7 @@ final class ProjectsListViewModel: BaseViewModel {
         didSet { applyFilters() }
     }
 
-    /// Filtered rigs for display (gastown)
-    @Published private(set) var filteredRigs: [RigStatus] = []
-
-    /// Filtered projects for display (swarm)
+    /// Filtered projects for display
     @Published private(set) var filteredProjects: [Project] = []
 
     // MARK: - Create Sheet State
@@ -43,16 +37,6 @@ final class ProjectsListViewModel: BaseViewModel {
 
     private let apiClient: APIClient
 
-    /// Current deployment mode
-    var deploymentMode: DeploymentMode {
-        AppState.shared.deploymentMode
-    }
-
-    /// Whether we're in gastown mode (shows rigs)
-    var isGastownMode: Bool {
-        deploymentMode == .gastown
-    }
-
     // MARK: - Initialization
 
     init(apiClient: APIClient? = nil) {
@@ -69,19 +53,7 @@ final class ProjectsListViewModel: BaseViewModel {
     // MARK: - Data Loading
 
     override func refresh() async {
-        if isGastownMode {
-            await refreshGastown()
-        } else {
-            await refreshProjects()
-        }
-    }
-
-    private func refreshGastown() async {
-        await performAsync(showLoading: rigs.isEmpty) {
-            let status = try await self.apiClient.getStatus()
-            self.rigs = status.rigs.sorted { $0.name.lowercased() < $1.name.lowercased() }
-            self.applyFilters()
-        }
+        await refreshProjects()
     }
 
     private func refreshProjects() async {
@@ -91,7 +63,7 @@ final class ProjectsListViewModel: BaseViewModel {
         }
     }
 
-    // MARK: - Project Actions (swarm)
+    // MARK: - Project Actions
 
     /// Create a project from an existing directory path
     func createFromPath(_ path: String, name: String? = nil) async -> Project? {
@@ -149,26 +121,6 @@ final class ProjectsListViewModel: BaseViewModel {
     // MARK: - Filtering
 
     private func applyFilters() {
-        if isGastownMode {
-            applyRigFilters()
-        } else {
-            applyProjectFilters()
-        }
-    }
-
-    private func applyRigFilters() {
-        if searchText.isEmpty {
-            filteredRigs = rigs
-        } else {
-            let query = searchText.lowercased()
-            filteredRigs = rigs.filter { rig in
-                rig.name.lowercased().contains(query) ||
-                rig.path.lowercased().contains(query)
-            }
-        }
-    }
-
-    private func applyProjectFilters() {
         if searchText.isEmpty {
             filteredProjects = projects
         } else {
@@ -185,37 +137,7 @@ final class ProjectsListViewModel: BaseViewModel {
         searchText = ""
     }
 
-    // MARK: - Computed Properties (gastown)
-
-    /// Total agent count across all rigs
-    var totalAgentCount: Int {
-        rigs.reduce(0) { $0 + agentCount(for: $1) }
-    }
-
-    /// Whether any filters are active
-    var hasActiveFilters: Bool {
-        !searchText.isEmpty
-    }
-
-    /// Agent count for a single rig
-    func agentCount(for rig: RigStatus) -> Int {
-        var count = 2 // witness + refinery
-        count += rig.crew.count
-        count += rig.polecats.count
-        return count
-    }
-
-    /// Running agent count for a single rig
-    func runningAgentCount(for rig: RigStatus) -> Int {
-        var count = 0
-        if rig.witness.running { count += 1 }
-        if rig.refinery.running { count += 1 }
-        count += rig.crew.filter { $0.running }.count
-        count += rig.polecats.filter { $0.running }.count
-        return count
-    }
-
-    // MARK: - Computed Properties (swarm)
+    // MARK: - Computed Properties
 
     /// Total number of projects
     var totalProjectCount: Int {
@@ -229,25 +151,21 @@ final class ProjectsListViewModel: BaseViewModel {
 
     /// Subtitle text for the header
     var headerSubtitle: String {
-        if isGastownMode {
-            return "\(filteredRigs.count) RIGS \u{2022} \(totalAgentCount) AGENTS"
-        } else {
-            return "\(filteredProjects.count) PROJECTS \u{2022} \(totalSessionCount) SESSIONS"
-        }
+        "\(filteredProjects.count) PROJECTS \u{2022} \(totalSessionCount) SESSIONS"
     }
 
-    /// Item count for display
-    var itemCount: Int {
-        isGastownMode ? filteredRigs.count : filteredProjects.count
+    /// Whether any filters are active
+    var hasActiveFilters: Bool {
+        !searchText.isEmpty
     }
 
     /// Whether the list has items
     var hasItems: Bool {
-        isGastownMode ? !filteredRigs.isEmpty : !filteredProjects.isEmpty
+        !filteredProjects.isEmpty
     }
 
     /// Whether initial data is empty (not just filtered)
     var hasNoData: Bool {
-        isGastownMode ? rigs.isEmpty : projects.isEmpty
+        projects.isEmpty
     }
 }

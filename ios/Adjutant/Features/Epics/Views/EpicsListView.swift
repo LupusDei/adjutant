@@ -5,7 +5,6 @@ import AdjutantKit
 struct EpicsListView: View {
     @Environment(\.crtTheme) private var theme
     @EnvironmentObject private var coordinator: AppCoordinator
-    @ObservedObject private var appState = AppState.shared
     @StateObject private var viewModel = EpicsListViewModel()
 
     var body: some View {
@@ -87,9 +86,6 @@ struct EpicsListView: View {
             }
 
             Spacer()
-
-            // Rig filter dropdown
-            RigFilterDropdown(availableRigs: appState.availableRigs)
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)

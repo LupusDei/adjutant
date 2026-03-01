@@ -4,14 +4,8 @@ import AdjutantKit
 /// A row view displaying a single bead in the list.
 struct BeadRowView: View {
     @Environment(\.crtTheme) private var theme
-    @ObservedObject private var appState = AppState.shared
-
     let bead: BeadInfo
     let onTap: () -> Void
-
-    private var isSwarm: Bool {
-        appState.deploymentMode == .swarm
-    }
 
     var body: some View {
         Button(action: onTap) {
@@ -110,9 +104,9 @@ struct BeadRowView: View {
 
     // MARK: - Helpers
 
-    /// Effective status for display — in Swarm mode, hooked is shown as in_progress.
+    /// Effective status for display — hooked is shown as in_progress.
     private var displayStatus: String {
-        if isSwarm && bead.status.lowercased() == "hooked" {
+        if bead.status.lowercased() == "hooked" {
             return "in_progress"
         }
         return bead.status

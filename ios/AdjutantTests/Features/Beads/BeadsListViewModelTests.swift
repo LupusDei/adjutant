@@ -178,13 +178,13 @@ final class BeadsListViewModelTests: XCTestCase {
     // Note: Rig filtering is now done server-side via the API rig parameter.
     // These tests verify that changing the rig triggers a reload (not client-side filtering).
 
-    func testRigFilterChangeTriggersFetch() async {
-        // Changing rig filter should trigger loadBeads() with the new rig parameter
+    func testSourceFilterChangeTriggersFetch() async {
+        // Changing source filter should trigger loadBeads() with the new source parameter
         // For mock data, this still loads all mock beads (no server-side filtering simulation)
         let initialCount = viewModel.beads.count
 
-        // Change rig filter
-        AppState.shared.selectedRig = "adjutant"
+        // Change source filter
+        viewModel.selectedSource = "adjutant"
 
         // Wait for refetch
         try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
@@ -193,7 +193,7 @@ final class BeadsListViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.beads.count, initialCount, "Mock data should still load all beads")
 
         // Clean up - reset to default
-        AppState.shared.selectedRig = "town"
+        viewModel.selectedSource = nil
     }
 
     // MARK: - Sort Tests

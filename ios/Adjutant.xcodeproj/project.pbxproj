@@ -14,7 +14,6 @@
 		A01234560000000000000010 /* AdjutantTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000010 /* AdjutantTests.swift */; };
 		A01234560000000000000011 /* TTSPlaybackServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000011 /* TTSPlaybackServiceTests.swift */; };
 		A01234560000000000000012 /* AgentDetailViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000012 /* AgentDetailViewModelTests.swift */; };
-		A01234560000000000000013 /* CrossPlatformConsistencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000013 /* CrossPlatformConsistencyTests.swift */; };
 		A01234560000000000000014 /* DependencyGraphViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000014 /* DependencyGraphViewModelTests.swift */; };
 		A01234560000000000000020 /* AdjutantUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000020 /* AdjutantUITests.swift */; };
 		A01234560000000000000021 /* AdjutantUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000021 /* AdjutantUITestsLaunchTests.swift */; };
@@ -75,7 +74,6 @@
 		A01234570000000000000010 /* AdjutantTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjutantTests.swift; sourceTree = "<group>"; };
 		A01234570000000000000011 /* TTSPlaybackServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSPlaybackServiceTests.swift; sourceTree = "<group>"; };
 		A01234570000000000000012 /* AgentDetailViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDetailViewModelTests.swift; sourceTree = "<group>"; };
-		A01234570000000000000013 /* CrossPlatformConsistencyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossPlatformConsistencyTests.swift; sourceTree = "<group>"; };
 		A01234570000000000000014 /* DependencyGraphViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DependencyGraphViewModelTests.swift; sourceTree = "<group>"; };
 		A01234570000000000000020 /* AdjutantUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjutantUITests.swift; sourceTree = "<group>"; };
 		A01234570000000000000021 /* AdjutantUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjutantUITestsLaunchTests.swift; sourceTree = "<group>"; };
@@ -219,7 +217,6 @@
 		A012345D0000000000000012 /* Core */ = {
 			isa = PBXGroup;
 			children = (
-				A01234570000000000000013 /* CrossPlatformConsistencyTests.swift */,
 				A01234570000000000000011 /* TTSPlaybackServiceTests.swift */,
 			);
 			path = Core;
@@ -497,7 +494,6 @@
 				A01234560000000000000010 /* AdjutantTests.swift in Sources */,
 				A01234560000000000000011 /* TTSPlaybackServiceTests.swift in Sources */,
 				A01234560000000000000012 /* AgentDetailViewModelTests.swift in Sources */,
-				A01234560000000000000013 /* CrossPlatformConsistencyTests.swift in Sources */,
 				A01234560000000000000014 /* DependencyGraphViewModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -247,9 +247,6 @@ public final class BackgroundTaskService: ObservableObject {
             allSuccess = false
         }
 
-        // Refresh system status and available rigs
-        await AppState.shared.fetchAvailableRigs()
-
         // Check voice availability
         await AppState.shared.checkVoiceAvailability()
 
@@ -268,18 +265,10 @@ public final class BackgroundTaskService: ObservableObject {
         return allSuccess
     }
 
-    /// Checks mail, announces overseer messages, and returns the count of unread messages.
-    /// - Returns: Number of unread messages
+    /// Returns the current unread message count.
+    /// Mail endpoint removed — uses cached count.
     private func checkMail() async throws -> Int {
-        let apiClient = AppState.shared.apiClient
-        let response = try await apiClient.getMail()
-
-        // Announce any new mail directed to overseer
-        await OverseerMailAnnouncer.shared.processMessages(response.items)
-
-        // Count unread messages
-        let unreadCount = response.items.filter { !$0.read }.count
-        return unreadCount
+        return AppState.shared.unreadMailCount
     }
 
     // MARK: - Live Activity Update

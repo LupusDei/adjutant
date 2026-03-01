@@ -210,22 +210,6 @@ public final class DataSyncService: ObservableObject {
             Task { await fetchBeads() }
         case "agent_status":
             Task { await fetchCrew() }
-        case "mail_received", "mail_read":
-            Task { await fetchMail() }
-        case "mode_changed":
-            // Parse the mode_changed event and update AppState
-            if let data = event.data.data(using: .utf8),
-               let modeEvent = try? JSONDecoder().decode(ModeChangedEvent.self, from: data) {
-                AppState.shared.updateDeploymentMode(from: modeEvent)
-            }
-            // Mode changes may affect available features; refresh everything
-            Task { await refreshAll() }
-        case "power_state":
-            // Power state is managed by AppState, but crew/beads may change
-            Task {
-                await fetchCrew()
-                await fetchBeads()
-            }
         case "connected":
             // Initial connection event from server, no action needed
             break
@@ -446,32 +430,9 @@ public final class DataSyncService: ObservableObject {
     // MARK: - Fetch Methods (Deduplicated)
 
     private func fetchMail() async {
-        // Deduplicate: skip if already fetching
-        guard !isFetchingMail else { return }
-        isFetchingMail = true
-        defer { isFetchingMail = false }
-
-        do {
-            let response = try await apiClient.getMail(all: true)
-            let sorted = response.items.sorted {
-                ($0.date ?? Date.distantPast) > ($1.date ?? Date.distantPast)
-            }
-            mail = sorted
-            lastMailUpdate = Date()
-
-            // Update cache
-            ResponseCache.shared.updateMessages(sorted)
-            WidgetCenter.shared.reloadTimelines(ofKind: "AdjutantWidget")
-
-            // Process notifications
-            await NotificationService.shared.processNewMessages(response.items)
-
-            // Announce overseer-directed mail
-            await OverseerMailAnnouncer.shared.processMessages(response.items)
-
-        } catch {
-            print("[DataSyncService] Mail fetch failed: \(error.localizedDescription)")
-        }
+        // Mail endpoint removed — mail data now comes from chat/messaging system
+        // Keep stub for subscriber compatibility
+        lastMailUpdate = Date()
     }
 
     private func fetchCrew() async {
@@ -515,7 +476,7 @@ public final class DataSyncService: ObservableObject {
             let effectiveSort = sort ?? "updated"
             let effectiveOrder = order ?? "desc"
             // Fetch beads for specified rig/project (server-side filtering + sorting)
-            let response = try await apiClient.getBeads(rig: rig ?? "all", status: .all, sort: effectiveSort, order: effectiveOrder)
+            let response = try await apiClient.getBeads(status: .all, sort: effectiveSort, order: effectiveOrder)
             let sorted = response.sorted {
                 if $0.priority != $1.priority {
                     return $0.priority < $1.priority
@@ -551,10 +512,9 @@ public final class DataSyncService: ObservableObject {
         }
     }
 
-    /// Returns crew filtered by rig
+    /// Returns all crew members
     public func crew(forRig rig: String?) -> [CrewMember] {
-        guard let rig = rig else { return crew }
-        return crew.filter { $0.rig == rig }
+        return crew
     }
 
     /// Returns beads filtered by rig

@@ -164,10 +164,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
 
     /// Handles mail notifications by triggering voice announcements directly from push payload.
-    /// Falls back to fetching messages if push data is incomplete.
     @MainActor
     private func handleMailNotification(userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
-        // Try direct push handling first (bypasses polling delay)
+        // Handle mail announcements directly from push payload
         if let payload = PushNotificationPayload(userInfo: userInfo) {
             let handled = await OverseerMailAnnouncer.shared.handlePushNotification(payload)
             if handled {
@@ -176,24 +175,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             }
         }
 
-        // Fallback: fetch all mail and process (for incomplete push payloads)
-        do {
-            let apiClient = makeAPIClient()
-            let mailResponse = try await apiClient.getMail()
-            let messages = mailResponse.items
-
-            let announcedCount = await OverseerMailAnnouncer.shared.processMessages(messages)
-
-            if announcedCount > 0 {
-                print("[AppDelegate] Announced \(announcedCount) mail message(s) via fetch fallback")
-                return .newData
-            } else {
-                return .noData
-            }
-        } catch {
-            print("[AppDelegate] Failed to handle mail notification: \(error.localizedDescription)")
-            return .failed
-        }
+        print("[AppDelegate] Mail notification had incomplete push payload, cannot process")
+        return .noData
     }
 
     /// Handles task/bead notifications by triggering voice announcements directly from push payload.

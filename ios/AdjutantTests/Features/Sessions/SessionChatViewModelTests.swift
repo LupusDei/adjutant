@@ -1,7 +1,7 @@
 import XCTest
 import Combine
 import AdjutantKit
-@testable import Adjutant
+@testable import AdjutantUI
 
 @MainActor
 final class SessionChatViewModelTests: XCTestCase {

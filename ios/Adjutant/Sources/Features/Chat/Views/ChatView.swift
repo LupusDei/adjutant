@@ -555,22 +555,7 @@ private struct RecipientSelectorSheet: View {
                 // Recipients list
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        // Mayor row — only shown in Gas Town mode
-                        if AppState.shared.deploymentMode == .gastown {
-                            recipientRow(
-                                id: "mayor/",
-                                name: "Mayor",
-                                type: .mayor,
-                                status: nil,
-                                currentTask: nil,
-                                beads: agentBeads["mayor/"] ?? [],
-                                isSelected: selectedRecipient == "mayor/",
-                                unreadCount: unreadCounts["mayor/"] ?? 0
-                            )
-
-                            Divider()
-                                .background(theme.dim.opacity(0.3))
-                        }
+                        // Mayor row removed — gastown mode no longer exists
 
                         // Other recipients
                         ForEach(filteredRecipients) { crew in
@@ -716,12 +701,6 @@ private struct RecipientSelectorSheet: View {
 
     private func iconForAgentType(_ type: AgentType) -> String {
         switch type {
-        case .mayor: return "crown"
-        case .deacon: return "bell"
-        case .witness: return "eye"
-        case .refinery: return "gearshape.2"
-        case .crew: return "person"
-        case .polecat: return "bolt"
         case .user: return "person.circle"
         case .agent: return "cpu"
         }
@@ -767,8 +746,8 @@ private struct RecipientSelectorSheet: View {
     private func loadAgentBeads() async {
         do {
             // Fetch active beads (open, hooked, in_progress) + recently closed
-            let activeBeads = try await apiClient.getBeads(rig: "all", status: .default)
-            let closedBeads = try await apiClient.getBeads(rig: "all", status: .closed, limit: 50)
+            let activeBeads = try await apiClient.getBeads(status: .default)
+            let closedBeads = try await apiClient.getBeads(status: .closed, limit: 50)
 
             var mapping: [String: [BeadInfo]] = [:]
             let allAgentIds = recipients.map(\.id)

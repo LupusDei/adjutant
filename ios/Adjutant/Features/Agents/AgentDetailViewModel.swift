@@ -95,7 +95,6 @@ final class AgentDetailViewModel: BaseViewModel {
     // MARK: - Private Properties
 
     private let apiClient: APIClient
-    private let terminalAPIClient: any TerminalAPIProviding
     private var pollingTask: Task<Void, Never>?
     private let pollingInterval: TimeInterval = 5.0
 
@@ -103,13 +102,10 @@ final class AgentDetailViewModel: BaseViewModel {
 
     init(
         member: CrewMember,
-        apiClient: APIClient? = nil,
-        terminalAPIClient: (any TerminalAPIProviding)? = nil
+        apiClient: APIClient? = nil
     ) {
         self.member = member
-        let client = apiClient ?? AppState.shared.apiClient
-        self.apiClient = client
-        self.terminalAPIClient = terminalAPIClient ?? client
+        self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
     }
 
@@ -121,7 +117,7 @@ final class AgentDetailViewModel: BaseViewModel {
 
     override func onAppear() {
         super.onAppear()
-        if member.type == .polecat {
+        if member.sessionId != nil {
             startPolling()
         }
     }
@@ -135,32 +131,16 @@ final class AgentDetailViewModel: BaseViewModel {
     // MARK: - Data Loading
 
     override func refresh() async {
-        if member.type == .polecat {
+        if member.sessionId != nil {
             await loadTerminal()
         }
     }
 
-    /// Loads terminal content for a polecat
+    /// Terminal content loading (API removed; terminal is now accessed via session streaming)
     func loadTerminal() async {
-        guard member.type == .polecat,
-              let rig = member.rig else { return }
-
-        isLoadingTerminal = true
-        errorMessage = nil
-
-        do {
-            let capture = try await terminalAPIClient.getPolecatTerminal(rig: rig, polecat: member.name)
-            terminalContent = capture.content
-            terminalSessionName = capture.sessionName
-            terminalTimestamp = ISO8601DateFormatter().date(from: capture.timestamp)
-            isLoadingTerminal = false
-        } catch {
-            isLoadingTerminal = false
-            if terminalContent == nil {
-                // Only show error if we don't have any content
-                handleError(error)
-            }
-        }
+        // Terminal API (getPolecatTerminal) has been removed.
+        // Terminal content is now viewed via the session terminal streaming feature.
+        isLoadingTerminal = false
     }
 
     /// Manually refresh terminal content
@@ -174,7 +154,6 @@ final class AgentDetailViewModel: BaseViewModel {
 
         do {
             let allBeads = try await apiClient.getBeads(
-                rig: "all",
                 status: .all,
                 assignee: member.name
             )
@@ -254,7 +233,7 @@ final class AgentDetailViewModel: BaseViewModel {
         isLoadingUnassignedBeads = true
 
         do {
-            let openBeads = try await apiClient.getBeads(rig: "all", status: .open)
+            let openBeads = try await apiClient.getBeads(status: .open)
             unassignedBeads = openBeads.filter { $0.assignee == nil || $0.assignee?.isEmpty == true }
             isLoadingUnassignedBeads = false
         } catch {
@@ -317,9 +296,9 @@ final class AgentDetailViewModel: BaseViewModel {
 
     // MARK: - Computed Properties
 
-    /// Whether this is a polecat (has terminal view)
+    /// Whether this agent has a terminal view (agents with sessions)
     var hasTerm: Bool {
-        member.type == .polecat
+        member.sessionId != nil
     }
 
     /// Whether the agent can be terminated

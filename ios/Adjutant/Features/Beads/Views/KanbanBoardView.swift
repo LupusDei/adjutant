@@ -6,17 +6,14 @@ import AdjutantKit
 /// Supports drag-and-drop between columns with optimistic updates.
 struct KanbanBoardView: View {
     @Environment(\.crtTheme) private var theme
-    @ObservedObject private var appState = AppState.shared
-
     let beads: [BeadInfo]
     let draggingBeadId: String?
     let targetColumnId: KanbanColumnId?
     let onBeadTap: (BeadInfo) -> Void
     let onDrop: (BeadInfo, KanbanColumnId) -> Void
 
-    private var isSwarm: Bool {
-        appState.deploymentMode == .swarm
-    }
+    /// Always true — swarm mode is the only deployment mode now
+    private let isSwarm = true
 
     /// Groups beads into columns based on their status.
     /// In Swarm mode, hooked beads are mapped to inProgress.
