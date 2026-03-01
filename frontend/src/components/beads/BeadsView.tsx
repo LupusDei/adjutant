@@ -5,6 +5,7 @@ import { BeadDetailView } from './BeadDetailView';
 import { AgentAssignModal } from './AgentAssignModal';
 import { OverseerToggle } from '../shared/OverseerToggle';
 import { usePolling } from '../../hooks/usePolling';
+import { useActiveProject } from '../../hooks/useActiveProject';
 import { fuzzyMatch } from '../../hooks/useFuzzySearch';
 import { api } from '../../services/api';
 import type { BeadInfo } from '../../types';
@@ -59,6 +60,16 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
   const [overseerView, setOverseerView] = useState(false);
   const [beads, setBeads] = useState<BeadInfo[]>([]);
   const [selectedBeadId, setSelectedBeadId] = useState<string | null>(null);
+
+  // Auto-scope to active project if no explicit user override in localStorage
+  const { activeProject } = useActiveProject();
+
+  useEffect(() => {
+    const saved = localStorage.getItem('beads-project-filter');
+    if (!saved && activeProject) {
+      setProjectFilter(activeProject);
+    }
+  }, [activeProject]);
 
   // Fetch bead sources on mount for filter options
   useEffect(() => {
