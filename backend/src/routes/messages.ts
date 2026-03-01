@@ -184,7 +184,7 @@ export function createMessagesRouter(store: MessageStore): Router {
       (a) => a.status !== "offline"
     );
 
-    const body = "Send me an update";
+    const body = "Use set_status to update your current status. Report what you just completed or what you are actively working on right now. Always reference specific work — never say 'idle awaiting next task'. Example: set_status({ status: \"working\", task: \"Implementing auth token refresh for session service\" }) or set_status({ status: \"done\", task: \"Completed adj-042: refactored beads-repository into modules\" }). Reply to me via send_message with a brief summary too.";
     const sent: string[] = [];
 
     for (const agent of activeAgents) {
