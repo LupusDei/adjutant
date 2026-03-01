@@ -343,15 +343,8 @@ export class LifecycleManager {
     logWarn("Pane readiness timeout — continuing anyway", { pane });
   }
 
-  private generateTmuxName(name: string, mode?: SessionMode): string {
+  private generateTmuxName(name: string, _mode?: SessionMode): string {
     const sanitized = name.replace(/[^a-zA-Z0-9_-]/g, "-");
-    switch (mode) {
-      case "gastown":
-        return sanitized;
-      case "swarm":
-        return `adj-swarm-${sanitized}`;
-      default:
-        return `adj-${sanitized}`;
-    }
+    return `adj-swarm-${sanitized}`;
   }
 }

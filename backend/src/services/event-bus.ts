@@ -53,17 +53,6 @@ export interface AgentStatusEvent {
   activity?: string;
 }
 
-export interface PowerStateEvent {
-  state: string;
-  rigs?: string[];
-}
-
-export interface ModeChangedEvent {
-  mode: string;
-  features: string[];
-  reason?: string;
-}
-
 export interface StreamStatusEvent {
   streamId: string;
   agent: string;
@@ -90,8 +79,6 @@ export interface EventMap {
   "bead:updated": BeadUpdatedEvent;
   "bead:closed": BeadClosedEvent;
   "agent:status_changed": AgentStatusEvent;
-  "power:state_changed": PowerStateEvent;
-  "mode:changed": ModeChangedEvent;
   "stream:status": StreamStatusEvent;
   "session:cost": Record<string, unknown>;
   "session:cost_alert": Record<string, unknown>;
@@ -171,8 +158,7 @@ class EventBus {
     const events: EventName[] = [
       "mail:received", "mail:read",
       "bead:created", "bead:updated", "bead:closed",
-      "agent:status_changed", "power:state_changed",
-      "mode:changed", "stream:status",
+      "agent:status_changed", "stream:status",
     ];
     for (const e of events) {
       const count = this.emitter.listenerCount(e);

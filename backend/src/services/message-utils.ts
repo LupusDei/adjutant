@@ -1,3 +1,8 @@
+/**
+ * Message utility functions for parsing beads issues into messages
+ * and handling agent identities.
+ */
+
 import type { Message, MessagePriority, MessageType } from "../types/index.js";
 import type { BeadsIssue } from "./bd-client.js";
 
@@ -16,7 +21,6 @@ const INFRASTRUCTURE_PATTERNS = [
 
 /**
  * Determines if a message subject indicates infrastructure/coordination traffic.
- * Infrastructure messages are system-generated and typically not relevant to users.
  */
 export function isInfrastructureMessage(subject: string): boolean {
   return INFRASTRUCTURE_PATTERNS.some(p => p.test(subject));
@@ -49,7 +53,7 @@ export function parseAgentBeadId(id: string, defaultRig?: string | null): Parsed
     return { rig: null, role: "dog", name: parts.slice(1).join("-") };
   }
 
-  const knownRoles = ["mayor", "deacon", "witness", "refinery", "crew", "polecat"];
+  const knownRoles = ["user", "agent"];
 
   if (defaultRig && parts.length >= 1 && first && knownRoles.includes(first.toLowerCase())) {
     return {
@@ -106,53 +110,18 @@ export function parseAgentFields(description: string): AgentFields {
 }
 
 export function addressToIdentity(address: string): string {
-  if (address === "overseer") return "overseer";
-  if (address === "mayor" || address === "mayor/") return "mayor/";
-  if (address === "deacon" || address === "deacon/") return "deacon/";
+  if (address === "user" || address === "user/") return "user";
 
   let normalized = address;
   if (normalized.endsWith("/")) {
     normalized = normalized.slice(0, -1);
   }
 
-  const parts = normalized.split("/");
-  if (parts.length === 3 && (parts[1] === "crew" || parts[1] === "polecats")) {
-    return `${parts[0]}/${parts[2]}`;
-  }
-
   return normalized;
 }
 
 export function identityToAddress(identity: string): string {
-  if (identity === "overseer") return "overseer";
-  if (identity === "mayor" || identity === "mayor/") return "mayor/";
-  if (identity === "deacon" || identity === "deacon/") return "deacon/";
-
-  const parts = identity.split("/");
-  if (parts.length === 3 && (parts[1] === "crew" || parts[1] === "polecats")) {
-    return `${parts[0]}/${parts[2]}`;
-  }
-
   return identity;
-}
-
-export function sessionNameForAgent(role: string, rig: string | null, name: string | null): string | null {
-  switch (role) {
-    case "mayor":
-      return "hq-mayor";
-    case "deacon":
-      return "hq-deacon";
-    case "witness":
-      return rig ? `gt-${rig}-witness` : null;
-    case "refinery":
-      return rig ? `gt-${rig}-refinery` : null;
-    case "crew":
-      return rig && name ? `gt-${rig}-crew-${name}` : null;
-    case "polecat":
-      return rig && name ? `gt-${rig}-${name}` : null;
-    default:
-      return null;
-  }
 }
 
 export interface BeadsMessageLabels {
@@ -247,4 +216,13 @@ export function beadsIssueToMessage(issue: BeadsIssue): Message {
   };
   if (labelInfo.replyTo) message.replyTo = labelInfo.replyTo;
   return message;
+}
+
+/**
+ * Extracts the prefix from a bead ID.
+ * E.g., "adj-abc123" → "adj", "hq-xlzm" → "hq"
+ */
+export function extractBeadPrefix(beadId: string): string | null {
+  const match = beadId.match(/^([a-z0-9]{2,5})-/i);
+  return match?.[1]?.toLowerCase() ?? null;
 }

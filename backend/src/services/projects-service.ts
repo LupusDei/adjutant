@@ -23,7 +23,7 @@ export interface Project {
   name: string;
   path: string;
   gitRemote?: string | undefined;
-  mode: "swarm" | "gastown";
+  mode: "swarm";
   sessions: string[];
   createdAt: string;
   active: boolean;

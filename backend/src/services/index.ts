@@ -1,6 +1,3 @@
-export { listMail, getMessage, sendMail, markRead } from './mail-service.js';
-export type { MailServiceResult } from './mail-service.js';
-
 export { getAgents } from './agents-service.js';
 export type { AgentsServiceResult } from './agents-service.js';
 

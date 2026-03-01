@@ -17,7 +17,6 @@ import type {
   WorkspaceProvider,
   WorkspaceConfig,
   BeadsDirInfo,
-  DeploymentMode,
 } from "./workspace-provider.js";
 
 // ============================================================================
@@ -58,7 +57,6 @@ function extractBeadPrefix(beadId: string): string | null {
  */
 export class SwarmProvider implements WorkspaceProvider {
   readonly name = "swarm";
-  readonly mode: DeploymentMode = "swarm";
 
   private projectRoot: string;
 
@@ -199,10 +197,8 @@ export class SwarmProvider implements WorkspaceProvider {
 }
 
 /**
- * Check if a directory looks like a swarm project (has .beads/ but no mayor/).
+ * Check if a directory looks like a swarm project (has .beads/).
  */
 export function isSwarmProject(dir: string): boolean {
-  const hasBeads = existsSync(join(dir, ".beads"));
-  const hasMayor = existsSync(join(dir, "mayor"));
-  return hasBeads && !hasMayor;
+  return existsSync(join(dir, ".beads"));
 }

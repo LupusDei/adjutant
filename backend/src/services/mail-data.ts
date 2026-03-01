@@ -1,5 +1,5 @@
 import { execBd, resolveBeadsDir, type BeadsIssue } from "./bd-client.js";
-import { parseMessageLabels } from "./gastown-utils.js";
+import { parseMessageLabels } from "./message-utils.js";
 import { logWarn } from "../utils/index.js";
 
 export interface MailIndexEntry {

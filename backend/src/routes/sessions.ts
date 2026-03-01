@@ -40,7 +40,7 @@ const CreateSessionSchema = z.object({
   name: z.string().min(1).optional(),
   projectPath: z.string().min(1).optional(),
   projectId: z.string().min(1).optional(),
-  mode: z.enum(["swarm", "gastown"]).optional(),
+  mode: z.literal("swarm").optional(),
   workspaceType: z.enum(["primary", "worktree", "copy"]).optional(),
   claudeArgs: z.array(z.string()).optional(),
 }).refine(

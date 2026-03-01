@@ -50,8 +50,10 @@ export interface VoiceConfigService {
 // Default Config Path
 // =============================================================================
 
-// Store in ~/.gastown/voice-config.json
-export const VOICE_CONFIG_PATH = join(homedir(), '.gastown', 'voice-config.json');
+// Store in ~/.adjutant/voice-config.json (with legacy fallback)
+const LEGACY_PATH = join(homedir(), '.gastown', 'voice-config.json');
+const PRIMARY_PATH = join(homedir(), '.adjutant', 'voice-config.json');
+export const VOICE_CONFIG_PATH = existsSync(PRIMARY_PATH) ? PRIMARY_PATH : existsSync(LEGACY_PATH) ? LEGACY_PATH : PRIMARY_PATH;
 
 // =============================================================================
 // Implementation

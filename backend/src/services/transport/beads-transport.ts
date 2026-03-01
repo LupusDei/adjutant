@@ -17,7 +17,7 @@ import {
   addressToIdentity,
   beadsIssueToMessage,
   parseMessageLabels,
-} from "../gastown-utils.js";
+} from "../message-utils.js";
 import { listMailIssues } from "../mail-data.js";
 import type { Message, MessagePriority } from "../../types/index.js";
 import type {
