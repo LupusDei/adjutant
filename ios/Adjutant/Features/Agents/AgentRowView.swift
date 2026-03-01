@@ -55,19 +55,19 @@ struct AgentRowView: View {
                         }
                     }
 
-                    // Status label + task title
-                    HStack(spacing: CRTTheme.Spacing.xs) {
-                        Text(statusDisplayText)
-                            .font(CRTTheme.Typography.font(size: 11, weight: .bold))
-                            .tracking(0.5)
-                            .foregroundColor(statusColor)
+                    // Status label
+                    Text(statusDisplayText)
+                        .font(CRTTheme.Typography.font(size: 10, weight: .bold))
+                        .tracking(0.5)
+                        .foregroundColor(statusColor)
 
-                        if let task = member.currentTask {
-                            Text(task)
-                                .font(CRTTheme.Typography.font(size: 12, theme: theme))
-                                .foregroundColor(theme.dim)
-                                .lineLimit(1)
-                        }
+                    // Task description (separate line, more visible)
+                    if let task = member.currentTask {
+                        Text(task)
+                            .font(CRTTheme.Typography.font(size: 11))
+                            .foregroundColor(theme.primary.opacity(0.7))
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
 

@@ -153,10 +153,12 @@ struct SwarmOverviewView: View {
                 .frame(width: 8, height: 8)
 
             // Name + status title (task description)
-            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxxs) {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxs) {
                 CRTText(agent.name.uppercased(), style: .body)
                 if let task = agent.currentBead {
-                    CRTText(task, style: .caption, color: theme.dim)
+                    Text(task)
+                        .font(CRTTheme.Typography.font(size: 11))
+                        .foregroundColor(theme.primary.opacity(0.7))
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
