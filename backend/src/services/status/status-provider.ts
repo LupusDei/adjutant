@@ -1,12 +1,11 @@
 /**
  * StatusProvider interface for abstracting system status retrieval.
- *
- * Implementations:
- * - GasTownStatusProvider: Full Gas Town infrastructure status
- * - SwarmStatusProvider: Simple swarm mode status
  */
 
-import type { PowerState, AgentStatus, CrewMember } from "../../types/index.js";
+import type { AgentStatus, CrewMember } from "../../types/index.js";
+
+/** Possible power states for the system. */
+export type PowerState = "stopped" | "starting" | "running" | "stopping";
 
 // ============================================================================
 // Generalized Status Types
@@ -50,7 +49,7 @@ export interface OperatorInfo {
  * Optional in swarm mode.
  */
 export interface InfrastructureStatus {
-  /** Primary coordinator (mayor in Gas Town, user in swarm) */
+  /** Primary coordinator */
   coordinator: AgentStatus;
   /** Health check agent (optional) */
   healthCheck?: AgentStatus;
@@ -60,9 +59,6 @@ export interface InfrastructureStatus {
 
 /**
  * Generalized system status.
- *
- * Replaces GastownStatus with a deployment-mode-agnostic structure.
- * Gas Town mode populates all fields; swarm mode uses a subset.
  */
 export interface SystemStatus {
   /** Current power state */

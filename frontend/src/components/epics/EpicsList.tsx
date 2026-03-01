@@ -24,7 +24,6 @@ interface EpicsListProps {
 /** Title patterns for overseer filtering - filter out operational/internal items */
 const OVERSEER_EXCLUDED_PATTERNS = [
   'witness', 'wisp', 'internal', 'sync', 'coordination',
-  'mail delivery', 'polecat', 'crew assignment', 'rig status',
   'heartbeat', 'health check', 'merge:',
 ];
 

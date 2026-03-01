@@ -96,15 +96,15 @@
     font-size: 0.65rem;
   }
 
-  .dashboard-convoy-item {
+  .dashboard-epics-item {
     padding: 8px;
   }
 
-  .dashboard-convoy-title {
+  .dashboard-epics-title {
     font-size: 0.85rem;
   }
 
-  .dashboard-convoy-status {
+  .dashboard-epics-status {
     font-size: 0.6rem;
   }
 
@@ -502,15 +502,15 @@
   white-space: nowrap;
 }
 
-/* Convoy styles */
-.dashboard-convoy-list {
+/* Epics list styles */
+.dashboard-epics-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
   min-width: 0;
 }
 
-.dashboard-convoy-item {
+.dashboard-epics-item {
   padding: 10px;
   border: 1px solid var(--crt-phosphor-dim);
   background: rgba(0, 0, 0, 0.3);
@@ -518,7 +518,7 @@
   overflow: hidden;
 }
 
-.dashboard-convoy-header {
+.dashboard-epics-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -526,7 +526,7 @@
   min-width: 0;
 }
 
-.dashboard-convoy-title {
+.dashboard-epics-title {
   font-weight: bold;
   color: var(--crt-phosphor);
   overflow: hidden;
@@ -536,34 +536,34 @@
   min-width: 0;
 }
 
-.dashboard-convoy-status {
+.dashboard-epics-status {
   font-size: 0.7rem;
   padding: 2px 6px;
   border-radius: 2px;
   margin-left: 8px;
 }
 
-.dashboard-convoy-status-active,
-.dashboard-convoy-status-in_progress {
+.dashboard-epics-status-active,
+.dashboard-epics-status-in_progress {
   background: rgba(0, 255, 0, 0.2);
   color: var(--crt-phosphor);
   border: 1px solid var(--crt-phosphor);
 }
 
-.dashboard-convoy-status-completed,
-.dashboard-convoy-status-done {
+.dashboard-epics-status-completed,
+.dashboard-epics-status-done {
   background: rgba(100, 100, 100, 0.2);
   color: var(--crt-phosphor-dim);
   border: 1px solid var(--crt-phosphor-dim);
 }
 
-.dashboard-convoy-status-pending {
+.dashboard-epics-status-pending {
   background: rgba(255, 170, 0, 0.15);
   color: #FFAA00;
   border: 1px solid #FFAA00;
 }
 
-.dashboard-convoy-progress {
+.dashboard-epics-progress {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -591,7 +591,7 @@
   text-align: right;
 }
 
-.dashboard-convoy-issues {
+.dashboard-epics-issues {
   display: block;
   font-size: 0.75rem;
   color: var(--crt-phosphor-dim);

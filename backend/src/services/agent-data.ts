@@ -51,7 +51,7 @@ async function fetchAgents(cwd: string, beadsDir: string): Promise<BeadsIssue[]>
     return [];
   }
 
-  // Filter for active agents (open) and tombstone (polecats use this)
+  // Filter for active agents (open) and tombstone
   const relevantStatuses = new Set(["open", "tombstone"]);
   return result.data.filter((issue) =>
     relevantStatuses.has(issue.status?.toLowerCase() ?? "")

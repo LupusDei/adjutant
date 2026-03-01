@@ -3,9 +3,8 @@
  *
  * Endpoints:
  * - GET /api/agents - Get all agents as CrewMember list
- * - POST /api/agents/spawn-polecat - Request polecat spawn for a rig
+ * - POST /api/agents/spawn - Create a new agent session
  * - GET /api/agents/session/:sessionId/terminal - Capture swarm agent terminal content
- * - GET /api/agents/:rig/:polecat/terminal - Capture polecat terminal content (legacy)
  */
 
 import { Router } from "express";
@@ -21,8 +20,7 @@ export const agentsRouter = Router();
 
 /**
  * GET /api/agents
- * Returns all agents in the gastown system as a CrewMember list
- * for the crew stats dashboard.
+ * Returns all agents as a CrewMember list for the crew stats dashboard.
  */
 agentsRouter.get("/", async (_req, res) => {
   const result = await getAgents();
@@ -37,10 +35,10 @@ agentsRouter.get("/", async (_req, res) => {
 });
 
 /**
- * Request body schema for spawn polecat endpoint.
+ * Request body schema for spawn agent endpoint.
  * Accepts either projectPath (absolute) or projectId (resolved via registry).
  */
-const spawnPolecatSchema = z.object({
+const spawnAgentSchema = z.object({
   projectPath: z.string().min(1).optional(),
   projectId: z.string().min(1).optional(),
   callsign: z.string().optional(),
@@ -50,12 +48,12 @@ const spawnPolecatSchema = z.object({
 );
 
 /**
- * POST /api/agents/spawn-polecat
+ * POST /api/agents/spawn
  * Creates a new agent session for the given project.
  * Accepts either projectPath or projectId (resolved via project registry).
  */
-agentsRouter.post("/spawn-polecat", async (req, res) => {
-  const parsed = spawnPolecatSchema.safeParse(req.body);
+agentsRouter.post("/spawn", async (req, res) => {
+  const parsed = spawnAgentSchema.safeParse(req.body);
 
   if (!parsed.success) {
     return res.status(400).json(
@@ -166,11 +164,10 @@ agentsRouter.get("/session/:sessionId/terminal", async (req, res) => {
 });
 
 /**
- * POST /api/agents/spawn
- * Alias for spawn-polecat (kept for backward compatibility).
+ * POST /api/agents/spawn-polecat
+ * Legacy alias for /spawn (backward compatibility).
  */
-agentsRouter.post("/spawn", (req, _res, next) => {
-  // Redirect to spawn-polecat handler
-  req.url = "/spawn-polecat";
+agentsRouter.post("/spawn-polecat", (req, _res, next) => {
+  req.url = "/spawn";
   next("route");
 });

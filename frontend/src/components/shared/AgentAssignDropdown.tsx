@@ -23,7 +23,7 @@ export interface AgentAssignDropdownProps {
 }
 
 /**
- * Extracts short name from a full agent path (e.g., "gastown/raynor" -> "raynor").
+ * Extracts short name from a full agent path (e.g., "project/raynor" -> "raynor").
  */
 function shortName(name: string | null): string {
   if (!name) return '';

@@ -1,7 +1,7 @@
 /**
  * Status service for Adjutant.
  *
- * Provides crew member data transformation from gastown status.
+ * Provides crew member data transformation.
  * Delegates to agents-service for the actual implementation.
  */
 
@@ -13,7 +13,7 @@ import type { CrewMember } from "../types/index.js";
 export type StatusServiceResult<T> = AgentsServiceResult<T>;
 
 /**
- * Gets all crew members from gastown status.
+ * Gets all crew members.
  * Returns agents transformed into CrewMember format for dashboard display.
  */
 export async function getCrewMembers(): Promise<StatusServiceResult<CrewMember[]>> {

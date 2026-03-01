@@ -252,7 +252,7 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
           {!loading && epicsInProgress && epicsCompleted && (
             <>
               {epicsInProgress.items.length > 0 ? (
-                <div className="dashboard-convoy-list">
+                <div className="dashboard-epics-list">
                   {epicsInProgress.items.map((epic) => (
                     <EpicCard key={epic.epic.id} epic={epic} />
                   ))}
@@ -263,7 +263,7 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
               {epicsCompleted.items.length > 0 && (
                 <>
                   <h4 className="dashboard-view-sub-title" style={{ marginTop: '16px' }}>RECENTLY COMPLETED</h4>
-                  <div className="dashboard-convoy-list">
+                  <div className="dashboard-epics-list">
                     {epicsCompleted.items.map((epic) => (
                       <div key={epic.epic.id} className="dashboard-epic-completed-row">
                         <EpicCard epic={epic} />

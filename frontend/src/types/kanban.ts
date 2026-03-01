@@ -25,7 +25,7 @@ export interface KanbanColumn {
 }
 
 /**
- * All column definitions in workflow order (Gastown mode).
+ * All column definitions in workflow order.
  */
 export const KANBAN_COLUMNS: { id: KanbanColumnId; title: string; color: string }[] = [
   { id: 'open', title: 'OPEN', color: '#00FF00' },

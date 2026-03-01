@@ -206,8 +206,8 @@ describe("deduplicateById", () => {
 
 describe("filterByAssignee", () => {
   const beads: BeadInfo[] = [
-    makeBead({ id: "hq-1", assignee: "gastown_boy/polecats/ace" }),
-    makeBead({ id: "hq-2", assignee: "gastown_boy/polecats/toast" }),
+    makeBead({ id: "hq-1", assignee: "proj1/agents/ace" }),
+    makeBead({ id: "hq-2", assignee: "proj1/agents/toast" }),
     makeBead({ id: "hq-3", assignee: null }),
     makeBead({ id: "hq-4", assignee: "adjutant/crew/worker" }),
     makeBead({ id: "hq-5", assignee: "ace" }),
@@ -218,7 +218,7 @@ describe("filterByAssignee", () => {
   });
 
   it("should filter by exact match", () => {
-    const result = filterByAssignee(beads, "gastown_boy/polecats/ace");
+    const result = filterByAssignee(beads, "proj1/agents/ace");
     expect(result).toHaveLength(1);
     expect(result[0]!.id).toBe("hq-1");
   });
@@ -307,7 +307,7 @@ describe("excludePrefixes", () => {
   const beads: BeadInfo[] = [
     makeBead({ id: "hq-abc", source: "town" }),
     makeBead({ id: "hq-def", source: "town" }),
-    makeBead({ id: "gb-123", source: "gastown_boy" }),
+    makeBead({ id: "gb-123", source: "proj1" }),
     makeBead({ id: "adj-456", source: "adjutant" }),
   ];
 
@@ -343,18 +343,18 @@ describe("excludePrefixes", () => {
 
 describe("filterByRig", () => {
   const beads: BeadInfo[] = [
-    makeBead({ id: "hq-1", rig: "gastown_boy" }),
-    makeBead({ id: "hq-2", rig: "gastown_boy" }),
+    makeBead({ id: "hq-1", rig: "proj1" }),
+    makeBead({ id: "hq-2", rig: "proj1" }),
     makeBead({ id: "hq-3", rig: "adjutant" }),
     makeBead({ id: "hq-4", rig: null }),
   ];
 
   it("should return empty array for empty input", () => {
-    expect(filterByRig([], "gastown_boy")).toEqual([]);
+    expect(filterByRig([], "proj1")).toEqual([]);
   });
 
   it("should filter beads by rig name", () => {
-    const result = filterByRig(beads, "gastown_boy");
+    const result = filterByRig(beads, "proj1");
     expect(result).toHaveLength(2);
     expect(result.map((b) => b.id)).toEqual(["hq-1", "hq-2"]);
   });

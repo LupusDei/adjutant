@@ -1,9 +1,8 @@
 /**
  * TopologyProvider interface for abstracting agent role handling.
  *
- * This allows Adjutant to work with different agent topologies:
- * - Gas Town: mayor, deacon, witness, refinery, crew, polecat
- * - Swarm: user, agent
+ * Implementations:
+ * - SwarmTopology: Simple user/agent model
  * - Custom: any user-defined roles
  */
 
@@ -13,11 +12,11 @@ import type { AgentType } from "../../types/index.js";
  * Agent address information.
  */
 export interface AgentAddress {
-  /** Full address string (e.g., "mayor/", "adjutant/polecats/flint") */
+  /** Full address string (e.g., "adjutant/agents/flint") */
   address: string;
   /** Role/type of the agent */
   role: AgentType;
-  /** Rig name if applicable */
+  /** Project/rig name if applicable */
   rig: string | null;
   /** Agent name within the role */
   name: string | null;
@@ -27,7 +26,7 @@ export interface AgentAddress {
  * Session name information for terminal/tmux sessions.
  */
 export interface SessionInfo {
-  /** Session name (e.g., "hq-mayor", "adj-witness") */
+  /** Session name (e.g., "adj-agent") */
   name: string;
   /** Whether this session should be considered infrastructure */
   isInfrastructure: boolean;
@@ -37,11 +36,10 @@ export interface SessionInfo {
  * Abstract interface for agent topology handling.
  *
  * Implementations:
- * - GasTownTopology: Full Gas Town role hierarchy
  * - SwarmTopology: Simple user/agent model
  */
 export interface TopologyProvider {
-  /** Name of this topology (e.g., "gastown", "swarm") */
+  /** Name of this topology (e.g., "swarm") */
   readonly name: string;
 
   /**
@@ -50,23 +48,17 @@ export interface TopologyProvider {
   agentTypes(): AgentType[];
 
   /**
-   * Get the "coordinator" agent type.
-   * - Gas Town: mayor
-   * - Swarm: user
+   * Get the "coordinator" agent type (e.g., "user").
    */
   coordinatorType(): AgentType;
 
   /**
-   * Get infrastructure agent types (coordinator, health check, etc.).
-   * - Gas Town: [mayor, deacon]
-   * - Swarm: [user]
+   * Get infrastructure agent types (coordinator, etc.).
    */
   infrastructureTypes(): AgentType[];
 
   /**
-   * Get worker agent types.
-   * - Gas Town: [crew, polecat, witness, refinery]
-   * - Swarm: [agent]
+   * Get worker agent types (e.g., [agent]).
    */
   workerTypes(): AgentType[];
 
@@ -82,7 +74,7 @@ export interface TopologyProvider {
   /**
    * Parse an agent address into its components.
    *
-   * @param address Full agent address (e.g., "adjutant/polecats/flint")
+   * @param address Full agent address (e.g., "adjutant/agents/flint")
    * @returns Parsed address components
    */
   parseAddress(address: string): AgentAddress | null;
@@ -91,8 +83,8 @@ export interface TopologyProvider {
    * Build an agent address from components.
    *
    * @param role Agent role/type
-   * @param rig Rig name (null for infrastructure agents)
-   * @param name Agent name (null for rig-level or infrastructure agents)
+   * @param rig Project/rig name (null for infrastructure agents)
+   * @param name Agent name (null for project-level or infrastructure agents)
    * @returns Full address string or null if invalid
    */
   buildAddress(role: AgentType, rig: string | null, name: string | null): string | null;
@@ -101,8 +93,8 @@ export interface TopologyProvider {
    * Get the tmux session info for an agent.
    *
    * @param role Agent role/type
-   * @param rig Rig name (null for infrastructure agents)
-   * @param name Agent name (null for rig-level agents)
+   * @param rig Project/rig name (null for infrastructure agents)
+   * @param name Agent name (null for project-level agents)
    * @returns Session info or null if not applicable
    */
   getSessionInfo(role: AgentType, rig: string | null, name: string | null): SessionInfo | null;

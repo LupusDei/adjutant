@@ -26,10 +26,10 @@ function createTestApp() {
  */
 function createMockAgent(overrides: Partial<CrewMember> = {}): CrewMember {
   return {
-    id: "gastown_boy/nux",
+    id: "proj1/nux",
     name: "nux",
-    type: "polecat",
-    rig: "gastown_boy",
+    type: "agent",
+    rig: "proj1",
     status: "working",
     unreadMail: 0,
     ...overrides,
@@ -61,9 +61,9 @@ describe("agents routes", () => {
 
     it("should return list of agents", async () => {
       const mockAgents = [
-        createMockAgent({ id: "mayor", name: "mayor", type: "mayor", rig: null }),
-        createMockAgent({ id: "gastown_boy/witness", name: "witness", type: "witness" }),
-        createMockAgent({ id: "gastown_boy/nux", name: "nux", type: "polecat" }),
+        createMockAgent({ id: "user-1", name: "user-1", type: "user", rig: null }),
+        createMockAgent({ id: "proj1/scout", name: "scout", type: "agent" }),
+        createMockAgent({ id: "proj1/nux", name: "nux", type: "agent" }),
       ];
 
       vi.mocked(getAgents).mockResolvedValue({
@@ -76,17 +76,17 @@ describe("agents routes", () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.data).toHaveLength(3);
-      expect(response.body.data[0].name).toBe("mayor");
-      expect(response.body.data[1].type).toBe("witness");
-      expect(response.body.data[2].rig).toBe("gastown_boy");
+      expect(response.body.data[0].name).toBe("user-1");
+      expect(response.body.data[1].type).toBe("agent");
+      expect(response.body.data[2].rig).toBe("proj1");
     });
 
     it("should return agents with various statuses", async () => {
       const mockAgents = [
-        createMockAgent({ id: "mayor", name: "mayor", status: "working", currentTask: "Managing gastown" }),
-        createMockAgent({ id: "gastown_boy/nux", name: "nux", status: "idle" }),
-        createMockAgent({ id: "gastown_boy/furiosa", name: "furiosa", status: "blocked" }),
-        createMockAgent({ id: "deacon", name: "deacon", status: "offline" }),
+        createMockAgent({ id: "user-1", name: "user-1", status: "working", currentTask: "Managing workspace" }),
+        createMockAgent({ id: "proj1/nux", name: "nux", status: "idle" }),
+        createMockAgent({ id: "proj1/furiosa", name: "furiosa", status: "blocked" }),
+        createMockAgent({ id: "scout", name: "scout", status: "offline" }),
       ];
 
       vi.mocked(getAgents).mockResolvedValue({
@@ -98,7 +98,7 @@ describe("agents routes", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.data[0].status).toBe("working");
-      expect(response.body.data[0].currentTask).toBe("Managing gastown");
+      expect(response.body.data[0].currentTask).toBe("Managing workspace");
       expect(response.body.data[1].status).toBe("idle");
       expect(response.body.data[2].status).toBe("blocked");
       expect(response.body.data[3].status).toBe("offline");
@@ -106,8 +106,8 @@ describe("agents routes", () => {
 
     it("should include unreadMail count", async () => {
       const mockAgents = [
-        createMockAgent({ id: "mayor", name: "mayor", unreadMail: 5 }),
-        createMockAgent({ id: "gastown_boy/witness", name: "witness", unreadMail: 0 }),
+        createMockAgent({ id: "user-1", name: "user-1", unreadMail: 5 }),
+        createMockAgent({ id: "proj1/scout", name: "scout", unreadMail: 0 }),
       ];
 
       vi.mocked(getAgents).mockResolvedValue({
@@ -151,12 +151,8 @@ describe("agents routes", () => {
 
     it("should return agents with different types", async () => {
       const mockAgents = [
-        createMockAgent({ type: "mayor" }),
-        createMockAgent({ type: "deacon" }),
-        createMockAgent({ type: "witness" }),
-        createMockAgent({ type: "refinery" }),
-        createMockAgent({ type: "crew" }),
-        createMockAgent({ type: "polecat" }),
+        createMockAgent({ type: "user" }),
+        createMockAgent({ type: "agent" }),
       ];
 
       vi.mocked(getAgents).mockResolvedValue({
@@ -167,14 +163,10 @@ describe("agents routes", () => {
       const response = await request(app).get("/api/agents");
 
       expect(response.status).toBe(200);
-      expect(response.body.data).toHaveLength(6);
+      expect(response.body.data).toHaveLength(2);
       expect(response.body.data.map((a: CrewMember) => a.type)).toEqual([
-        "mayor",
-        "deacon",
-        "witness",
-        "refinery",
-        "crew",
-        "polecat",
+        "user",
+        "agent",
       ]);
     });
   });

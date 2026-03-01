@@ -92,8 +92,8 @@ describe("beads/types", () => {
         status: "in_progress",
         priority: 0,
         type: "epic",
-        assignee: "gastown_boy",
-        rig: "gastown",
+        assignee: "proj1",
+        rig: "proj1",
         source: "town",
         labels: ["critical"],
         createdAt: "2026-01-01",
@@ -131,7 +131,7 @@ describe("beads/types", () => {
   describe("ListBeadsOptions", () => {
     it("should allow all optional fields", () => {
       const opts: ListBeadsOptions = {
-        rig: "gastown",
+        rig: "proj1",
         rigPath: "/Users/test/gt",
         status: "open",
         type: "task",
@@ -139,7 +139,7 @@ describe("beads/types", () => {
         assignee: "agent-1",
         excludePrefixes: ["hq-"],
       };
-      expect(opts.rig).toBe("gastown");
+      expect(opts.rig).toBe("proj1");
     });
 
     it("should allow empty options", () => {
@@ -246,7 +246,7 @@ describe("beads/types", () => {
   describe("BeadSource", () => {
     it("should describe a bead source directory", () => {
       const source: BeadSource = {
-        name: "gastown",
+        name: "proj1",
         path: "/Users/test/gt",
         hasBeads: true,
       };

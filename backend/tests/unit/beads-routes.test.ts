@@ -11,9 +11,11 @@ vi.mock("../../src/services/beads/index.js", () => ({
   listRecentlyClosed: vi.fn(),
 }));
 
-vi.mock("../../src/services/gastown-workspace.js", () => ({
-  resolveTownRoot: vi.fn(() => "/tmp/town"),
-  resolveRigPath: vi.fn((rig: string) => `/tmp/town/${rig}`),
+vi.mock("../../src/services/workspace/index.js", () => ({
+  resolveWorkspaceRoot: vi.fn(() => "/tmp/workspace"),
+  resolveRigPath: vi.fn((rig: string) => `/tmp/workspace/${rig}`),
+  listAllBeadsDirs: vi.fn(() => Promise.resolve([])),
+  getDeploymentMode: vi.fn(() => "swarm"),
 }));
 
 import { beadsRouter } from "../../src/routes/beads.js";
@@ -138,7 +140,7 @@ describe("beads routes", () => {
         data: [],
       });
 
-      await request(app).get("/api/beads?rig=gastown_boy");
+      await request(app).get("/api/beads?rig=proj1");
 
       expect(listBeads).toHaveBeenCalled();
       expect(listAllBeads).not.toHaveBeenCalled();
@@ -240,7 +242,7 @@ describe("beads routes", () => {
         error: { code: "BD_ERROR", message: "Rig database not found" },
       });
 
-      const response = await request(app).get("/api/beads?rig=gastown_boy");
+      const response = await request(app).get("/api/beads?rig=proj1");
 
       expect(response.status).toBe(500);
       expect(response.body.success).toBe(false);
@@ -292,8 +294,8 @@ describe("beads routes", () => {
         status: "in_progress",
         priority: 1,
         type: "feature",
-        assignee: "gastown_boy/polecats/toast",
-        rig: "gastown_boy",
+        assignee: "proj1/agents/toast",
+        rig: "proj1",
         source: "town",
         labels: ["urgent", "backend"],
         agentState: "working",
@@ -430,22 +432,22 @@ describe("beads routes", () => {
       expect(response.body.data.sources).toEqual([]);
     });
 
-    it("should return gastown mode with rig names", async () => {
+    it("should return swarm mode with project names", async () => {
       vi.mocked(listBeadSources).mockResolvedValue({
         success: true,
         data: {
           sources: [
-            { name: "adjutant", path: "/tmp/town/adjutant", hasBeads: true },
-            { name: "gastown_boy", path: "/tmp/town/gastown_boy", hasBeads: true },
+            { name: "adjutant", path: "/tmp/workspace/adjutant", hasBeads: true },
+            { name: "proj1", path: "/tmp/workspace/proj1", hasBeads: true },
           ],
-          mode: "gastown",
+          mode: "swarm",
         },
       });
 
       const response = await request(app).get("/api/beads/sources");
 
       expect(response.status).toBe(200);
-      expect(response.body.data.mode).toBe("gastown");
+      expect(response.body.data.mode).toBe("swarm");
       expect(response.body.data.sources).toHaveLength(2);
     });
 
@@ -482,11 +484,11 @@ describe("beads routes", () => {
       return {
         id: "hq-done1",
         title: "Completed Task",
-        assignee: "gastown_boy/polecats/ace",
+        assignee: "proj1/agents/ace",
         closedAt: "2026-02-23T10:30:00Z",
         type: "task",
         priority: 2,
-        rig: "gastown_boy",
+        rig: "proj1",
         source: "town",
         ...overrides,
       };
@@ -601,7 +603,7 @@ describe("beads routes", () => {
       const mockBead = createMockRecentlyClosed({
         id: "adj-done1",
         title: "Build endpoint",
-        assignee: "adjutant/polecats/toast",
+        assignee: "adjutant/agents/toast",
         closedAt: "2026-02-23T11:00:00Z",
         type: "task",
         priority: 1,
@@ -620,7 +622,7 @@ describe("beads routes", () => {
       const data = response.body.data[0];
       expect(data.id).toBe("adj-done1");
       expect(data.title).toBe("Build endpoint");
-      expect(data.assignee).toBe("adjutant/polecats/toast");
+      expect(data.assignee).toBe("adjutant/agents/toast");
       expect(data.closedAt).toBe("2026-02-23T11:00:00Z");
       expect(data.type).toBe("task");
       expect(data.priority).toBe(1);

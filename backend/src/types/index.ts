@@ -10,9 +10,6 @@ export type MessagePriority = 0 | 1 | 2 | 3 | 4;
 /** Message types indicating the purpose of the message. */
 export type MessageType = "notification" | "task" | "scavenge" | "reply";
 
-/** Possible states for the gastown system. */
-export type PowerState = "stopped" | "starting" | "running" | "stopping";
-
 /** Possible statuses for a crew member. */
 export type CrewMemberStatus =
   | "idle"
@@ -37,7 +34,7 @@ export type AgentType =
 // Message Types
 // ============================================================================
 
-/** A mail message in the gastown system. */
+/** A mail message in the system. */
 export interface Message {
   /** Unique identifier (beads issue ID format) */
   id: string;
@@ -90,7 +87,7 @@ export interface SendMessageRequest {
 }
 
 // ============================================================================
-// Gastown Status Types
+// Agent Status Types
 // ============================================================================
 
 /** Status of a single agent. */
@@ -133,7 +130,7 @@ export interface CrewMember {
   firstSubject?: string;
   /** Sender of first unread message (for preview) */
   firstFrom?: string;
-  /** Current git branch (for polecats) */
+  /** Current git branch */
   branch?: string;
   /** Session ID for linking to session chat (swarm) */
   sessionId?: string;
@@ -214,13 +211,6 @@ export const MessageTypeSchema = z.enum([
   "task",
   "scavenge",
   "reply",
-]);
-
-export const PowerStateSchema = z.enum([
-  "stopped",
-  "starting",
-  "running",
-  "stopping",
 ]);
 
 export const CrewMemberStatusSchema = z.enum([

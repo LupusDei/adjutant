@@ -15,7 +15,7 @@ vi.mock("../../src/services/api", () => ({
 
 // Mock ModeContext
 vi.mock("../../src/contexts/ModeContext", () => ({
-  useMode: vi.fn().mockReturnValue({ isSwarm: false, isGasTown: true }),
+  useMode: vi.fn().mockReturnValue({ isSwarm: true }),
 }));
 
 import { api } from "../../src/services/api";

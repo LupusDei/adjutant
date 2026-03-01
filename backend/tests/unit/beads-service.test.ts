@@ -207,14 +207,14 @@ describe("beads-service", () => {
       vi.mocked(execBd).mockResolvedValue({
         success: true,
         data: [
-          createBead({ id: "hq-001", assignee: "gastown_boy/polecats/toast" }),
-          createBead({ id: "hq-002", assignee: "gastown/crew/alice" }),
-          createBead({ id: "hq-003", assignee: "gastown_boy/crew/bob" }),
+          createBead({ id: "hq-001", assignee: "proj1/agents/toast" }),
+          createBead({ id: "hq-002", assignee: "proj2/agents/alice" }),
+          createBead({ id: "hq-003", assignee: "proj1/crew/bob" }),
         ],
         exitCode: 0,
       });
 
-      const result = await listBeads({ rig: "gastown_boy" });
+      const result = await listBeads({ rig: "proj1" });
 
       expect(result.success).toBe(true);
       expect(result.data).toHaveLength(2);
@@ -348,7 +348,7 @@ describe("beads-service", () => {
         id: "adj-67tta",
         title: "Adjutant Rig Task",
         description: "A rig-specific task",
-        assignee: "adjutant/polecats/quartz",
+        assignee: "adjutant/agents/quartz",
       });
 
       vi.mocked(execBd).mockResolvedValue({
@@ -397,7 +397,7 @@ describe("beads-service", () => {
         created_at: "2026-01-15T10:00:00Z",
         updated_at: "2026-01-16T12:00:00Z",
         closed_at: null,
-        assignee: "gastown_boy/polecats/toast",
+        assignee: "proj1/agents/toast",
         labels: ["urgent", "backend"],
         agent_state: "working",
         pinned: true,
@@ -426,8 +426,8 @@ describe("beads-service", () => {
       expect(detail.createdAt).toBe("2026-01-15T10:00:00Z");
       expect(detail.updatedAt).toBe("2026-01-16T12:00:00Z");
       expect(detail.closedAt).toBeNull();
-      expect(detail.assignee).toBe("gastown_boy/polecats/toast");
-      expect(detail.rig).toBe("gastown_boy");
+      expect(detail.assignee).toBe("proj1/agents/toast");
+      expect(detail.rig).toBe("proj1");
       expect(detail.labels).toEqual(["urgent", "backend"]);
       expect(detail.agentState).toBe("working");
       expect(detail.isPinned).toBe(true);
@@ -541,18 +541,18 @@ describe("beads-service", () => {
         exitCode: 0,
       });
 
-      const result = await updateBead("hq-test", { assignee: "adjutant/polecats/toast" });
+      const result = await updateBead("hq-test", { assignee: "adjutant/agents/toast" });
 
       expect(result.success).toBe(true);
       expect(result.data?.id).toBe("hq-test");
-      expect(result.data?.assignee).toBe("adjutant/polecats/toast");
+      expect(result.data?.assignee).toBe("adjutant/agents/toast");
       expect(result.data?.status).toBeUndefined();
 
       // Verify bd command args: should have --assignee but not --status
       const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
       expect(args).toContain("update");
       expect(args).toContain("--assignee");
-      expect(args).toContain("adjutant/polecats/toast");
+      expect(args).toContain("adjutant/agents/toast");
       expect(args).not.toContain("--status");
     });
 
@@ -583,18 +583,18 @@ describe("beads-service", () => {
         exitCode: 0,
       });
 
-      const result = await updateBead("hq-test", { status: "in_progress", assignee: "gastown/crew/alice" });
+      const result = await updateBead("hq-test", { status: "in_progress", assignee: "proj2/agents/alice" });
 
       expect(result.success).toBe(true);
       expect(result.data?.id).toBe("hq-test");
       expect(result.data?.status).toBe("in_progress");
-      expect(result.data?.assignee).toBe("gastown/crew/alice");
+      expect(result.data?.assignee).toBe("proj2/agents/alice");
 
       const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
       expect(args).toContain("--status");
       expect(args).toContain("in_progress");
       expect(args).toContain("--assignee");
-      expect(args).toContain("gastown/crew/alice");
+      expect(args).toContain("proj2/agents/alice");
     });
 
     it("should reject when neither status nor assignee provided", async () => {

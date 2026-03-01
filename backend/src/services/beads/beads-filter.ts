@@ -82,9 +82,9 @@ export function deduplicateById<T extends { id: string }>(items: T[]): T[] {
  *
  * Examples:
  *   filterByAssignee(beads, "ace")
- *     → matches "gastown_boy/polecats/ace" (last component) and "ace" (exact)
- *   filterByAssignee(beads, "gastown_boy/polecats/ace")
- *     → matches only exact "gastown_boy/polecats/ace"
+ *     → matches "project/agents/ace" (last component) and "ace" (exact)
+ *   filterByAssignee(beads, "project/agents/ace")
+ *     → matches only exact "project/agents/ace"
  */
 export function filterByAssignee(beads: BeadInfo[], assignee: string): BeadInfo[] {
   const target = assignee.toLowerCase();
@@ -92,7 +92,7 @@ export function filterByAssignee(beads: BeadInfo[], assignee: string): BeadInfo[
     if (!b.assignee) return false;
     const a = b.assignee.toLowerCase();
     if (a === target) return true;
-    // Match last path component: "rig/polecats/toast" matches "toast"
+    // Match last path component: "project/agents/toast" matches "toast"
     const lastComponent = a.split("/").pop();
     return lastComponent === target;
   });

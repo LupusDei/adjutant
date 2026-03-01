@@ -17,7 +17,7 @@ vi.mock("../../../src/services/bd-client.js", () => ({
 vi.mock("../../../src/services/workspace/index.js", () => ({
   resolveWorkspaceRoot: vi.fn(() => "/tmp/town"),
   listAllBeadsDirs: vi.fn(() => Promise.resolve([])),
-  getDeploymentMode: vi.fn(() => "gastown"),
+  getDeploymentMode: vi.fn(() => "swarm"),
 }));
 
 vi.mock("../../../src/services/event-bus.js", () => {
@@ -145,8 +145,8 @@ describe("beads-repository", () => {
     });
 
     it("should extract rig from path-style assignee", () => {
-      expect(_extractRig("gastown_boy/polecats/ace")).toBe("gastown_boy");
-      expect(_extractRig("gastown/refinery")).toBe("gastown");
+      expect(_extractRig("proj1/agents/ace")).toBe("proj1");
+      expect(_extractRig("proj2/worker")).toBe("proj2");
     });
 
     it("should return assignee directly when no slash", () => {
@@ -220,7 +220,7 @@ describe("beads-repository", () => {
     it("should filter by assignee when provided", async () => {
       vi.mocked(execBd).mockResolvedValue(
         bdSuccess([
-          createIssue({ id: "hq-001", assignee: "gastown/polecats/toast" }),
+          createIssue({ id: "hq-001", assignee: "proj2/agents/toast" }),
           createIssue({ id: "hq-002", assignee: "other/agent" }),
         ])
       );
@@ -265,15 +265,15 @@ describe("beads-repository", () => {
     it("should filter by rig when rig option is provided", async () => {
       vi.mocked(execBd).mockResolvedValue(
         bdSuccess([
-          createIssue({ id: "hq-001", assignee: "gastown/polecats/ace" }),
+          createIssue({ id: "hq-001", assignee: "proj2/agents/ace" }),
           createIssue({ id: "hq-002", assignee: "adjutant/crew/worker" }),
         ])
       );
 
-      const result = await listBeads({ rig: "gastown" });
+      const result = await listBeads({ rig: "proj2" });
       expect(result.success).toBe(true);
       expect(result.data).toHaveLength(1);
-      expect(result.data?.[0]?.rig).toBe("gastown");
+      expect(result.data?.[0]?.rig).toBe("proj2");
     });
   });
 
@@ -344,7 +344,7 @@ describe("beads-repository", () => {
       const issue = createIssue({
         id: "hq-abc1",
         description: "Detailed description",
-        assignee: "gastown_boy/polecats/ace",
+        assignee: "proj1/agents/ace",
         dependencies: [{ issue_id: "hq-abc1", depends_on_id: "hq-xyz1", type: "depends_on" }],
       });
 
@@ -354,7 +354,7 @@ describe("beads-repository", () => {
       expect(result.success).toBe(true);
       expect(result.data?.id).toBe("hq-abc1");
       expect(result.data?.description).toBe("Detailed description");
-      expect(result.data?.rig).toBe("gastown_boy");
+      expect(result.data?.rig).toBe("proj1");
       expect(result.data?.dependencies).toHaveLength(1);
       expect(result.data?.dependencies[0]?.dependsOnId).toBe("hq-xyz1");
     });

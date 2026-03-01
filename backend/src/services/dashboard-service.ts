@@ -10,17 +10,15 @@ import type { SystemStatus } from "./status/index.js";
 import { getAgents } from "./agents-service.js";
 import { listBeads, listEpicsWithProgress } from "./beads/index.js";
 import type { BeadInfo, EpicWithChildren, BeadsServiceResult } from "./beads/types.js";
-import { listMail } from "./mail-service.js";
 import type { MessageStore } from "./message-store.js";
 import type {
   DashboardResponse,
   DashboardSection,
   BeadCategory,
   EpicWithProgressItem,
-  MailSummary,
 } from "../types/dashboard.js";
 import type { UnreadAgentSummary } from "./message-store.js";
-import type { CrewMember, Message } from "../types/index.js";
+import type { CrewMember } from "../types/index.js";
 
 // ============================================================================
 // Constants
@@ -28,7 +26,6 @@ import type { CrewMember, Message } from "../types/index.js";
 
 const DASHBOARD_BEAD_LIMIT = 5;
 const DASHBOARD_EPIC_LIMIT = 5;
-const DASHBOARD_MAIL_LIMIT = 5;
 
 // ============================================================================
 // Result Wrappers
@@ -147,33 +144,6 @@ function wrapEpicsResult(
   });
 }
 
-/** Wrap mail result — compute summary server-side. */
-function wrapMailResult(
-  result: PromiseSettledResult<{ success: boolean; data?: Message[]; error?: { message: string } }>,
-): DashboardSection<MailSummary> {
-  return wrapResult(result, (serviceResult) => {
-    const messages = serviceResult.success && serviceResult.data ? serviceResult.data : [];
-    if (!serviceResult.success) return null;
-
-    // Group by threadId to count threads
-    const threadIds = new Set<string>();
-    let unreadCount = 0;
-    for (const msg of messages) {
-      threadIds.add(msg.threadId);
-      if (!msg.read) unreadCount++;
-    }
-
-    // Get most recent messages (already sorted newest first by mail service)
-    const recentMessages = messages.slice(0, DASHBOARD_MAIL_LIMIT);
-
-    return {
-      recentMessages,
-      totalCount: threadIds.size,
-      unreadCount,
-    };
-  });
-}
-
 // ============================================================================
 // Service Factory
 // ============================================================================
@@ -200,9 +170,7 @@ export function createDashboardService(messageStore: MessageStore): DashboardSer
         (async () => messageStore.getUnreadCounts())(),
         // 6: epics with progress
         listEpicsWithProgress({ status: "all" }),
-        // 7: mail
-        listMail(null),
-        // 8: unread message summaries grouped by agent (max 8)
+        // 7: unread message summaries grouped by agent (max 8)
         (async () => messageStore.getUnreadSummaries(8))(),
       ]);
 
@@ -224,15 +192,13 @@ export function createDashboardService(messageStore: MessageStore): DashboardSer
           results[5] as PromiseSettledResult<Array<{ agentId: string; count: number }>>,
         ),
         unreadMessages: wrapResult(
-          results[8] as PromiseSettledResult<UnreadAgentSummary[]>,
+          results[7] as PromiseSettledResult<UnreadAgentSummary[]>,
           (summaries) => summaries,
         ),
         epics: wrapEpicsResult(
           results[6] as PromiseSettledResult<BeadsServiceResult<EpicWithChildren[]>>,
         ),
-        mail: wrapMailResult(
-          results[7] as PromiseSettledResult<{ success: boolean; data?: Message[]; error?: { message: string } }>,
-        ),
+        mail: { data: null },
         timestamp: new Date().toISOString(),
       };
     },

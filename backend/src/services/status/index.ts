@@ -15,6 +15,7 @@ import type {
   SystemStatus,
   PowerCapabilities,
   PowerTransitionResult,
+  PowerState,
 } from "./status-provider.js";
 import { SwarmStatusProvider } from "./swarm-status-provider.js";
 
@@ -25,6 +26,7 @@ export type {
   SystemStatus,
   PowerCapabilities,
   PowerTransitionResult,
+  PowerState,
 };
 export type { WorkspaceInfo, OperatorInfo, InfrastructureStatus } from "./status-provider.js";
 

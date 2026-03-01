@@ -430,7 +430,7 @@ a:hover {
   animation: pulse-glow 2s ease-in-out infinite;
 }
 
-/* Pulsating indicator for active polecats */
+/* Pulsating indicator for active agents */
 @keyframes pulsate {
   0%, 100% {
     transform: scale(1);

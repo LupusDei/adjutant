@@ -26,7 +26,7 @@ export interface BeadInfo {
   priority: number;
   type: string;
   assignee: string | null;
-  /** Rig name extracted from assignee (e.g., "gastown_boy") or null for town-level */
+  /** Rig/project name extracted from assignee or null for top-level */
   rig: string | null;
   /** Source database: "town" for hq-*, or rig name for rig-specific beads */
   source: string;

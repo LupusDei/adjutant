@@ -48,7 +48,7 @@ describe('useDashboardCrew', () => {
     await waitFor(() => { expect(result.current.loading).toBe(false); });
 
     // Assert fetched data
-    expect(result.current.totalCrew).toBe(3); // 3 crew/polecat agents
+    expect(result.current.totalCrew).toBe(3); // 3 agents
     expect(result.current.activeCrew).toBe(2); // Jax (working) + Kael (idle)
     expect(result.current.recentCrew).toHaveLength(3);
     // Sorted by status priority: working first, then blocked, then idle

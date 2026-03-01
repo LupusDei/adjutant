@@ -25,9 +25,9 @@ describe("AgentAssignDropdown logic", () => {
 
   it("should filter agents to idle and working status", async () => {
     const mockAgents = [
-      { id: "1", name: "raynor", status: "idle", type: "polecat", rig: "gastown" },
-      { id: "2", name: "zeratul", status: "working", type: "polecat", rig: "gastown" },
-      { id: "3", name: "kerrigan", status: "blocked", type: "polecat", rig: "gastown" },
+      { id: "1", name: "raynor", status: "idle", type: "agent", rig: "adjutant" },
+      { id: "2", name: "zeratul", status: "working", type: "agent", rig: "adjutant" },
+      { id: "3", name: "kerrigan", status: "blocked", type: "agent", rig: "adjutant" },
     ];
     vi.mocked(api.agents.list).mockResolvedValue(mockAgents as any);
 
@@ -42,7 +42,7 @@ describe("AgentAssignDropdown logic", () => {
 
   it("should return empty array when no agents are idle or working", async () => {
     const mockAgents = [
-      { id: "1", name: "kerrigan", status: "blocked", type: "polecat", rig: "gastown" },
+      { id: "1", name: "kerrigan", status: "blocked", type: "agent", rig: "adjutant" },
     ];
     vi.mocked(api.agents.list).mockResolvedValue(mockAgents as any);
 
@@ -74,7 +74,7 @@ describe("AgentAssignDropdown logic", () => {
       return parts[parts.length - 1] ?? name;
     };
 
-    expect(shortName("gastown/raynor")).toBe("raynor");
+    expect(shortName("adjutant/raynor")).toBe("raynor");
     expect(shortName("raynor")).toBe("raynor");
     expect(shortName(null)).toBe("");
     expect(shortName("a/b/c")).toBe("c");

@@ -93,7 +93,7 @@ function formatDate(dateStr: string): string {
  */
 function formatAssignee(assignee: string | null): string {
   if (!assignee) return '-';
-  // Extract name from path like "gastown_boy/dag" -> "dag"
+  // Extract name from path like "project/dag" -> "dag"
   const parts = assignee.split('/');
   return parts[parts.length - 1] ?? assignee;
 }
@@ -211,9 +211,9 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
     if (!beads) return [];
 
     // Base excluded types (always filtered out)
-    const EXCLUDED_TYPES = ['message', 'epic', 'convoy', 'agent'];
+    const EXCLUDED_TYPES = ['message', 'epic', 'agent'];
 
-    // Additional type exclusions for overseer view (Gas Town operations)
+    // Additional type exclusions for overseer view (operational beads)
     const OVERSEER_EXCLUDED_TYPES = [
       'role',
       'witness',
@@ -229,17 +229,13 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
       'wisp',
     ];
 
-    // Title patterns that indicate Gas Town operational beads
+    // Title patterns that indicate operational beads
     const OVERSEER_EXCLUDED_TITLE_PATTERNS = [
       'witness',
       'wisp',
       'internal',
       'sync',
       'coordination',
-      'mail delivery',
-      'polecat',
-      'crew assignment',
-      'rig status',
       'heartbeat',
       'health check',
     ];
@@ -248,7 +244,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
       (bead) => !EXCLUDED_TYPES.includes(bead.type.toLowerCase())
     );
 
-    // Apply overseer filter: hide Gas Town operational beads
+    // Apply overseer filter: hide operational beads
     if (overseerView) {
       filteredBeads = filteredBeads.filter((bead) => {
         const typeLower = bead.type.toLowerCase();

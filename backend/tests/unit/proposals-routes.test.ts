@@ -160,7 +160,7 @@ describe("proposals-routes", () => {
         author: "a", title: "P1", description: "D1", type: "product", project: "adjutant",
       });
       await request(app).post("/api/proposals").send({
-        author: "b", title: "P2", description: "D2", type: "engineering", project: "gastown",
+        author: "b", title: "P2", description: "D2", type: "engineering", project: "other-project",
       });
       await request(app).post("/api/proposals").send({
         author: "c", title: "P3", description: "D3", type: "product", project: "adjutant",
@@ -173,11 +173,11 @@ describe("proposals-routes", () => {
 
     it("should include project in response", async () => {
       await request(app).post("/api/proposals").send({
-        author: "agent-1", title: "Test", description: "Desc", type: "product", project: "gastown",
+        author: "agent-1", title: "Test", description: "Desc", type: "product", project: "other-project",
       });
 
       const res = await request(app).get("/api/proposals");
-      expect(res.body.data[0].project).toBe("gastown");
+      expect(res.body.data[0].project).toBe("other-project");
     });
   });
 
@@ -226,7 +226,7 @@ describe("proposals-routes", () => {
         title: "To Dismiss",
         description: "Will be dismissed",
         type: "engineering",
-        project: "gastown",
+        project: "other-project",
       });
 
       const res = await request(app)

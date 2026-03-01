@@ -12,11 +12,11 @@ export interface DashboardCrewMember {
 }
 
 interface DashboardCrew {
-  /** Total crew/polecat count */
+  /** Total crew count */
   totalCrew: number;
   /** Active (working + idle) count */
   activeCrew: number;
-  /** 3 most recent crew/polecats sorted by status priority */
+  /** 3 most recent agents sorted by status priority */
   recentCrew: DashboardCrewMember[];
   /** Alerts for blocked/stuck agents */
   crewAlerts: string[];
@@ -64,7 +64,7 @@ export function useDashboardCrew(): DashboardCrew {
         const active = dashboardAgents.filter((m) => m.status === 'working' || m.status === 'idle').length;
         setActiveCrew(active);
 
-        // Get 3 most recent crew/polecats sorted by status priority
+        // Get 3 most recent agents sorted by status priority
         const recent = dashboardAgents
           .sort((a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status])
           .slice(0, 3)

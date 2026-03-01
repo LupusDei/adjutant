@@ -43,7 +43,7 @@ describe("usePolling", () => {
 
   describe("successful fetch", () => {
     it("should update data and set loading to false after fetch resolves", async () => {
-      const mockData = { powerState: "running", town: { name: "TestTown" } };
+      const mockData = { status: "running", workspace: { name: "TestWorkspace" } };
       const fetchFn = vi.fn().mockResolvedValue(mockData);
 
       const { result } = renderHook(() =>

@@ -1,13 +1,11 @@
 /**
  * SwarmProvider - WorkspaceProvider for swarm/multi-agent deployments.
  *
- * This provider is for running Adjutant without Gas Town infrastructure.
- * It assumes a single project with a local .beads/ directory.
+ * Assumes a single project with a local .beads/ directory.
  *
  * Use cases:
  * - Solo developer with Claude Code
- * - Single project without multi-agent orchestration
- * - Testing/development without Gas Town
+ * - Multi-agent orchestration via MCP
  */
 
 import { existsSync, readFileSync, readdirSync } from "fs";
@@ -52,7 +50,6 @@ function extractBeadPrefix(beadId: string): string | null {
  * Features:
  * - Single .beads/ directory (local to project)
  * - No power control (always "running")
- * - No gt binary required
  * - No rigs (single project)
  */
 export class SwarmProvider implements WorkspaceProvider {

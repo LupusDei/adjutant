@@ -99,7 +99,7 @@ describe("EventBus", () => {
         preview: "Hello",
       });
       bus.emit("mode:changed", {
-        mode: "gastown",
+        mode: "swarm",
         features: ["dashboard"],
       });
 
@@ -113,7 +113,7 @@ describe("EventBus", () => {
       expect(handler).toHaveBeenNthCalledWith(
         2,
         "mode:changed",
-        expect.objectContaining({ mode: "gastown" }),
+        expect.objectContaining({ mode: "swarm" }),
         2,
       );
     });

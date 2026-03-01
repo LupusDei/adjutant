@@ -9,11 +9,10 @@ import type { BeadInfo } from "./types.js";
 import { prefixToSource } from "./beads-prefix-map.js";
 
 /**
- * Extracts rig name from assignee path.
+ * Extracts project/rig name from assignee path.
  * Examples:
- *   "gastown_boy/polecats/ace" -> "gastown_boy"
- *   "gastown/refinery" -> "gastown"
- *   "mayor/" -> null (town-level)
+ *   "myproject/agents/ace" -> "myproject"
+ *   "user/" -> null (top-level)
  *   null -> null
  */
 export function extractRig(assignee: string | null | undefined): string | null {

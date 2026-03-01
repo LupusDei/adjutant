@@ -14,7 +14,6 @@ const INFRASTRUCTURE_PATTERNS = [
   /^WITNESS_PING/i,
   /^MERGE_READY/i,
   /^MERGED:/i,
-  /^POLECAT_DONE/i,
   /^Session ended/i,
   /^Handoff complete/i,
 ];

@@ -9,13 +9,11 @@ const {
   mockGetAgents,
   mockListBeads,
   mockListEpicsWithProgress,
-  mockListMail,
 } = vi.hoisted(() => ({
   mockGetStatus: vi.fn(),
   mockGetAgents: vi.fn(),
   mockListBeads: vi.fn(),
   mockListEpicsWithProgress: vi.fn(),
-  mockListMail: vi.fn(),
 }));
 
 vi.mock("../../src/services/status/index.js", () => ({
@@ -33,14 +31,10 @@ vi.mock("../../src/services/beads/index.js", () => ({
   listEpicsWithProgress: mockListEpicsWithProgress,
 }));
 
-vi.mock("../../src/services/mail-service.js", () => ({
-  listMail: mockListMail,
-}));
-
 import { createDashboardService } from "../../src/services/dashboard-service.js";
 import type { MessageStore } from "../../src/services/message-store.js";
 import type { BeadInfo, EpicWithChildren } from "../../src/services/beads/types.js";
-import type { CrewMember, Message } from "../../src/types/index.js";
+import type { CrewMember } from "../../src/types/index.js";
 
 // ============================================================================
 // Fixtures
@@ -67,27 +61,9 @@ function createCrewMember(overrides: Partial<CrewMember> = {}): CrewMember {
   return {
     id: "test-agent",
     name: "test-agent",
-    type: "crew",
+    type: "agent",
     rig: null,
     status: "idle",
-    ...overrides,
-  };
-}
-
-function createMailMessage(overrides: Partial<Message> = {}): Message {
-  return {
-    id: "msg-001",
-    from: "mayor/",
-    to: "overseer",
-    subject: "Test",
-    body: "Test body",
-    timestamp: "2026-01-01T00:00:00Z",
-    read: false,
-    priority: 2,
-    type: "task",
-    threadId: "thread-001",
-    pinned: false,
-    isInfrastructure: false,
     ...overrides,
   };
 }
@@ -154,11 +130,6 @@ describe("DashboardService", () => {
       success: true,
       data: [createEpicWithChildren()],
     });
-    mockListMail.mockResolvedValue({
-      success: true,
-      data: [createMailMessage()],
-    });
-
     // Act
     const service = createDashboardService(mockMessageStore);
     const result = await service.fetchDashboard();
@@ -181,10 +152,6 @@ describe("DashboardService", () => {
     expect(result.epics.data!.inProgress.items).toHaveLength(1);
     expect(result.epics.data!.inProgress.items[0]!.progress).toBe(0.33);
 
-    expect(result.mail.data).toBeTruthy();
-    expect(result.mail.data!.recentMessages).toHaveLength(1);
-    expect(result.mail.data!.unreadCount).toBe(1);
-
     expect(result.timestamp).toBeTruthy();
   });
 
@@ -200,10 +167,6 @@ describe("DashboardService", () => {
       data: [createCrewMember()],
     });
     mockListEpicsWithProgress.mockResolvedValue({
-      success: true,
-      data: [],
-    });
-    mockListMail.mockResolvedValue({
       success: true,
       data: [],
     });
@@ -230,7 +193,6 @@ describe("DashboardService", () => {
       throw new Error("db failed");
     });
     mockListEpicsWithProgress.mockRejectedValue(new Error("epics failed"));
-    mockListMail.mockRejectedValue(new Error("mail failed"));
 
     // Act
     const service = createDashboardService(mockMessageStore);
@@ -252,9 +214,6 @@ describe("DashboardService", () => {
     expect(result.epics.data).toBeNull();
     expect(result.epics.error).toContain("epics failed");
 
-    expect(result.mail.data).toBeNull();
-    expect(result.mail.error).toContain("mail failed");
-
     expect(result.timestamp).toBeTruthy();
   });
 
@@ -267,7 +226,6 @@ describe("DashboardService", () => {
     mockListBeads.mockResolvedValue({ success: true, data: manyBeads });
     mockGetAgents.mockResolvedValue({ success: true, data: [] });
     mockListEpicsWithProgress.mockResolvedValue({ success: true, data: [] });
-    mockListMail.mockResolvedValue({ success: true, data: [] });
 
     // Act
     const service = createDashboardService(mockMessageStore);
@@ -298,8 +256,6 @@ describe("DashboardService", () => {
       success: true,
       data: [inProgressEpic, completedEpic],
     });
-    mockListMail.mockResolvedValue({ success: true, data: [] });
-
     // Act
     const service = createDashboardService(mockMessageStore);
     const result = await service.fetchDashboard();
@@ -312,30 +268,5 @@ describe("DashboardService", () => {
     expect(result.epics.data!.completed.items).toHaveLength(1);
     expect(result.epics.data!.completed.items[0]!.epic.id).toBe("epic-2");
     expect(result.epics.data!.completed.totalCount).toBe(1);
-  });
-
-  it("should compute mail summary with thread counts and unread", async () => {
-    // Arrange
-    const messages = [
-      createMailMessage({ id: "m1", threadId: "t1", read: true }),
-      createMailMessage({ id: "m2", threadId: "t1", read: false }),
-      createMailMessage({ id: "m3", threadId: "t2", read: false }),
-      createMailMessage({ id: "m4", threadId: "t3", read: true }),
-    ];
-
-    mockGetStatus.mockResolvedValue({ success: true, data: {} });
-    mockListBeads.mockResolvedValue({ success: true, data: [] });
-    mockGetAgents.mockResolvedValue({ success: true, data: [] });
-    mockListEpicsWithProgress.mockResolvedValue({ success: true, data: [] });
-    mockListMail.mockResolvedValue({ success: true, data: messages });
-
-    // Act
-    const service = createDashboardService(mockMessageStore);
-    const result = await service.fetchDashboard();
-
-    // Assert
-    expect(result.mail.data!.totalCount).toBe(3); // 3 unique threads
-    expect(result.mail.data!.unreadCount).toBe(2); // 2 unread messages
-    expect(result.mail.data!.recentMessages).toHaveLength(4); // all 4 (under limit of 5)
   });
 });

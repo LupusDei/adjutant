@@ -13,7 +13,7 @@ import {
 } from '../../src/services/voice-config-service.js';
 
 // Use a temp directory for config persistence tests
-const testConfigDir = join(tmpdir(), 'gastown-voice-config-test');
+const testConfigDir = join(tmpdir(), 'adjutant-voice-config-test');
 const testConfigPath = join(testConfigDir, 'voice-config.json');
 
 describe('VoiceConfigService', () => {

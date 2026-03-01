@@ -154,7 +154,7 @@ export function serviceUnavailable(
   return error(ErrorCode.SERVICE_UNAVAILABLE, message);
 }
 
-/** Create a CLI error response (gastown command failed) */
+/** Create a CLI error response (command failed) */
 export function cliError(
   command: string,
   stderr?: string

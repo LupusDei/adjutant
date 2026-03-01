@@ -108,14 +108,6 @@ export const AGENT_VOICE_MAPPINGS: Record<string, VoiceConfig> = {
     similarityBoost: 0.75,
   },
 
-  // Polecats (ephemeral workers)
-  polecat: {
-    voiceId: ELEVENLABS_VOICES.DAVE,
-    name: "Polecat (Dave)",
-    speed: 1.1,
-    stability: 0.45,
-    similarityBoost: 0.65,
-  },
 };
 
 /**
@@ -190,7 +182,7 @@ export function getVoiceForAgent(
     return config.agents[agentId];
   }
 
-  // Prefix match (e.g., "gastown/witness" matches "witness")
+  // Prefix match (e.g., "project/witness" matches "witness")
   const agentType = agentId.split("/").pop()?.toLowerCase();
   if (agentType && config.agents[agentType]) {
     return config.agents[agentType];

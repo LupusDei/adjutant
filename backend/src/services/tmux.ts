@@ -40,7 +40,7 @@ export async function listTmuxSessions(): Promise<Set<string>> {
 
 /**
  * Captures the content of a tmux pane, including ANSI escape codes.
- * @param sessionName - The tmux session name (e.g., "gt-gastown_boy-nux")
+ * @param sessionName - The tmux session name
  * @returns The raw terminal output with ANSI escape codes preserved
  * @throws Error if the session doesn't exist or capture fails
  */

@@ -29,8 +29,8 @@ function createMockStatus(overrides: Record<string, unknown> = {}) {
   return {
     powerState: "running",
     workspace: {
-      name: "gastown_boy",
-      root: "/Users/test/gt/gastown_boy",
+      name: "test-project",
+      root: "/Users/test/projects/test-project",
     },
     operator: {
       name: "Test User",
@@ -66,7 +66,7 @@ describe("status routes", () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.data.powerState).toBe("running");
-      expect(response.body.data.workspace.name).toBe("gastown_boy");
+      expect(response.body.data.workspace.name).toBe("test-project");
       expect(response.body.timestamp).toBeDefined();
     });
 
@@ -85,16 +85,13 @@ describe("status routes", () => {
       expect(response.body.data.powerState).toBe("stopped");
     });
 
-    it("should return status with rig information", async () => {
+    it("should return status with project information", async () => {
       const mockStatus = createMockStatus({
         rigs: [
           {
-            name: "gastown_boy",
-            path: "/Users/test/gt/gastown_boy/refinery/rig",
-            witness: { name: "witness", running: true, unreadMail: 0 },
-            refinery: { name: "refinery", running: true, unreadMail: 2 },
-            crew: [],
-            polecats: [
+            name: "test-project",
+            path: "/Users/test/projects/test-project",
+            agents: [
               { name: "furiosa", running: true, unreadMail: 0, state: "working" },
             ],
             mergeQueue: { pending: 3, inFlight: 1, blocked: 0 },
@@ -111,8 +108,8 @@ describe("status routes", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.data.rigs).toHaveLength(1);
-      expect(response.body.data.rigs[0].name).toBe("gastown_boy");
-      expect(response.body.data.rigs[0].polecats).toHaveLength(1);
+      expect(response.body.data.rigs[0].name).toBe("test-project");
+      expect(response.body.data.rigs[0].agents).toHaveLength(1);
       expect(response.body.data.rigs[0].mergeQueue.pending).toBe(3);
     });
 

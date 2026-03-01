@@ -1,7 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, convoysRouter, costsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createProjectsRouter, createProposalsRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, costsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createProjectsRouter, createProposalsRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { createDashboardService } from "./services/dashboard-service.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
@@ -48,7 +48,6 @@ app.use(apiKeyAuth);
 
 // Routes
 app.use("/api/beads", beadsRouter);
-app.use("/api/convoys", convoysRouter);
 app.use("/api/agents", agentsRouter);
 app.use("/api/devices", devicesRouter);
 // Events router mounted after eventStore creation below

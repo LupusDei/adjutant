@@ -33,7 +33,7 @@ const SORT_OPTIONS: { value: BeadSort; label: string }[] = [
 ];
 
 /** Excluded types (always filtered) */
-const EXCLUDED_TYPES = ['message', 'epic', 'convoy', 'agent'];
+const EXCLUDED_TYPES = ['message', 'epic', 'agent'];
 
 /** Additional type exclusions for overseer view */
 const OVERSEER_EXCLUDED_TYPES = ['role', 'witness', 'wisp', 'infrastructure', 'coordination', 'sync'];
@@ -41,7 +41,7 @@ const OVERSEER_EXCLUDED_TYPES = ['role', 'witness', 'wisp', 'infrastructure', 'c
 /** Title patterns for overseer filtering */
 const OVERSEER_EXCLUDED_PATTERNS = [
   'witness', 'wisp', 'internal', 'sync', 'coordination',
-  'mail delivery', 'polecat', 'crew assignment', 'rig status', 'heartbeat', 'health check',
+  'heartbeat', 'health check',
 ];
 
 export function BeadsView({ isActive = true }: BeadsViewProps) {

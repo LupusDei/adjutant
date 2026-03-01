@@ -45,7 +45,7 @@ export interface CrewMember {
   firstSubject?: string;
   /** Sender of first unread message (for preview) */
   firstFrom?: string;
-  /** Current git branch (for polecats) */
+  /** Current git branch */
   branch?: string;
   /** Session ID for linking to session chat (swarm) */
   sessionId?: string;
@@ -79,7 +79,7 @@ export interface BeadInfo {
   type: string;
   /** Assignee address or null */
   assignee: string | null;
-  /** Rig name extracted from assignee (e.g., "gastown_boy") or null for town-level */
+  /** Rig/project name extracted from assignee or null for top-level */
   rig: string | null;
   /** Source database: "town" for hq-*, or rig name for rig-specific beads */
   source: string;

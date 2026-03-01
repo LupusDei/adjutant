@@ -21,7 +21,7 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       title: z.string().describe("Concise proposal title"),
       description: z.string().describe("Deep description of the improvement: what, why, and how"),
       type: z.enum(["product", "engineering"]).describe("Proposal type: 'product' for UX/product improvements, 'engineering' for refactoring/architecture"),
-      project: z.string().describe("Project this proposal is for (e.g., 'adjutant', 'gastown')"),
+      project: z.string().describe("Project this proposal is for (e.g., 'adjutant')"),
     },
     async ({ title, description, type, project }, extra) => {
       const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;

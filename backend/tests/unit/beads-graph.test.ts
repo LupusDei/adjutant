@@ -13,7 +13,7 @@ vi.mock("../../src/services/bd-client.js", () => ({
 vi.mock("../../src/services/workspace/index.js", () => ({
   resolveWorkspaceRoot: vi.fn(() => "/tmp/town"),
   listAllBeadsDirs: vi.fn(() => Promise.resolve([])),
-  getDeploymentMode: vi.fn(() => "gastown"),
+  getDeploymentMode: vi.fn(() => "swarm"),
 }));
 
 import { execBd, type BeadsIssue } from "../../src/services/bd-client.js";

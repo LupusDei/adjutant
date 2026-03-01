@@ -4,7 +4,6 @@
 
 export { agentsRouter } from "./agents.js";
 export { beadsRouter } from "./beads.js";
-export { convoysRouter } from "./convoys.js";
 export { devicesRouter } from "./devices.js";
 export { eventsRouter, createEventsRouter } from "./events.js";
 export { mcpRouter } from "./mcp.js";
