@@ -1,21 +1,16 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { BeadsView } from "./components/beads/BeadsView";
 import { ChatView } from "./components/chat/ChatView";
 import { EpicsView } from "./components/epics/EpicsView";
 import { CrewStats } from "./components/crew/CrewStats";
-import { MailView } from "./components/mail/MailView";
 import { OverseerNotificationStatus } from "./components/notifications";
-import { NuclearPowerButton } from "./components/power/NuclearPowerButton";
 import { SettingsView } from "./components/settings/SettingsView";
 import { CRTScreen } from "./components/shared/CRTScreen";
 import { QuickInput } from "./components/shared/QuickInput";
 import { KeyboardDismiss } from "./components/shared/KeyboardDismiss";
-import { RigFilter } from "./components/shared/RigFilter";
 import { ProjectSelector } from "./components/shared/ProjectSelector";
-import { RigProvider } from "./contexts/RigContext";
 import { ProjectProvider } from "./contexts/ProjectContext";
 import { CommunicationProvider } from "./contexts/CommunicationContext";
-import { ModeProvider, useVisibleTabs } from "./contexts/ModeContext";
 import { DashboardView } from "./components/dashboard/OverviewDashboard";
 import { ProposalsView } from "./components/proposals/ProposalsView";
 import { TimelineView } from "./components/timeline/TimelineView";
@@ -23,7 +18,7 @@ import { useUnreadCounts } from "./hooks/useUnreadCounts";
 
 export type ThemeId = 'green' | 'red' | 'blue' | 'tan' | 'pink' | 'purple';
 
-type TabId = "dashboard" | "mail" | "chat" | "epics" | "crew" | "beads" | "timeline" | "proposals" | "settings";
+type TabId = "dashboard" | "chat" | "epics" | "crew" | "beads" | "timeline" | "proposals" | "settings";
 
 interface Tab {
   id: TabId;
@@ -33,7 +28,6 @@ interface Tab {
 
 const TABS: Tab[] = [
   { id: "dashboard", label: "OVERVIEW", icon: "📊" },
-  { id: "mail", label: "MAIL", icon: "📧" },
   { id: "chat", label: "CHAT", icon: "💬" },
   { id: "epics", label: "EPICS", icon: "📋" },
   { id: "crew", label: "CREW", icon: "👥" },
@@ -67,21 +61,7 @@ function AppContent() {
     (localStorage.getItem('gt-theme') as ThemeId | null) ?? 'green'
   );
   const isSmallScreen = useIsSmallScreen();
-  const visibleTabs = useVisibleTabs();
   const { totalUnread } = useUnreadCounts();
-
-  // Filter tabs based on current mode
-  const filteredTabs = useMemo(
-    () => TABS.filter((tab) => visibleTabs.has(tab.id)),
-    [visibleTabs]
-  );
-
-  // Redirect to first visible tab if current tab becomes hidden
-  useEffect(() => {
-    if (!visibleTabs.has(activeTab) && filteredTabs.length > 0) {
-      setActiveTab(filteredTabs[0].id);
-    }
-  }, [visibleTabs, activeTab, filteredTabs]);
 
   // Apply theme to document element (html) globally for proper CSS variable cascade
   useEffect(() => {
@@ -97,13 +77,11 @@ function AppContent() {
           <div className="header-controls">
             <OverseerNotificationStatus />
             <ProjectSelector />
-            <RigFilter />
-            <NuclearPowerButton comingSoon={true} />
           </div>
         </header>
 
         <nav className="app-nav">
-          {filteredTabs.map((tab) => (
+          {TABS.map((tab) => (
             <button
               key={tab.id}
               className={`nav-tab ${activeTab === tab.id ? "active" : ""}`}
@@ -121,24 +99,13 @@ function AppContent() {
         </nav>
 
         <main className="app-content">
-          {visibleTabs.has("dashboard") && (
-            <section
-              className="tab-view"
-              hidden={activeTab !== "dashboard"}
-              aria-hidden={activeTab !== "dashboard"}
-            >
-              <DashboardView onNavigateToChat={(agentName: string) => { setChatRecipient(agentName); setActiveTab('chat'); }} />
-            </section>
-          )}
-          {visibleTabs.has("mail") && (
-            <section
-              className="tab-view"
-              hidden={activeTab !== "mail"}
-              aria-hidden={activeTab !== "mail"}
-            >
-              <MailView isActive={activeTab === "mail"} />
-            </section>
-          )}
+          <section
+            className="tab-view"
+            hidden={activeTab !== "dashboard"}
+            aria-hidden={activeTab !== "dashboard"}
+          >
+            <DashboardView onNavigateToChat={(agentName: string) => { setChatRecipient(agentName); setActiveTab('chat'); }} />
+          </section>
           <section
             className="tab-view"
             hidden={activeTab !== "chat"}
@@ -146,24 +113,20 @@ function AppContent() {
           >
             <ChatView isActive={activeTab === "chat"} initialAgent={chatRecipient} onInitialAgentConsumed={() => setChatRecipient('')} />
           </section>
-          {visibleTabs.has("epics") && (
-            <section
-              className="tab-view"
-              hidden={activeTab !== "epics"}
-              aria-hidden={activeTab !== "epics"}
-            >
-              <EpicsView isActive={activeTab === "epics"} />
-            </section>
-          )}
-          {visibleTabs.has("crew") && (
-            <section
-              className="tab-view"
-              hidden={activeTab !== "crew"}
-              aria-hidden={activeTab !== "crew"}
-            >
-              <CrewStats isActive={activeTab === "crew"} />
-            </section>
-          )}
+          <section
+            className="tab-view"
+            hidden={activeTab !== "epics"}
+            aria-hidden={activeTab !== "epics"}
+          >
+            <EpicsView isActive={activeTab === "epics"} />
+          </section>
+          <section
+            className="tab-view"
+            hidden={activeTab !== "crew"}
+            aria-hidden={activeTab !== "crew"}
+          >
+            <CrewStats isActive={activeTab === "crew"} />
+          </section>
           <section
             className="tab-view"
             hidden={activeTab !== "beads"}
@@ -171,24 +134,20 @@ function AppContent() {
           >
             <BeadsView isActive={activeTab === "beads"} />
           </section>
-          {visibleTabs.has("timeline") && (
-            <section
-              className="tab-view"
-              hidden={activeTab !== "timeline"}
-              aria-hidden={activeTab !== "timeline"}
-            >
-              <TimelineView isActive={activeTab === "timeline"} />
-            </section>
-          )}
-          {visibleTabs.has("proposals") && (
-            <section
-              className="tab-view"
-              hidden={activeTab !== "proposals"}
-              aria-hidden={activeTab !== "proposals"}
-            >
-              <ProposalsView isActive={activeTab === "proposals"} />
-            </section>
-          )}
+          <section
+            className="tab-view"
+            hidden={activeTab !== "timeline"}
+            aria-hidden={activeTab !== "timeline"}
+          >
+            <TimelineView isActive={activeTab === "timeline"} />
+          </section>
+          <section
+            className="tab-view"
+            hidden={activeTab !== "proposals"}
+            aria-hidden={activeTab !== "proposals"}
+          >
+            <ProposalsView isActive={activeTab === "proposals"} />
+          </section>
           <section
             className="tab-view"
             hidden={activeTab !== "settings"}
@@ -207,15 +166,11 @@ function AppContent() {
 
 function App() {
   return (
-    <ModeProvider>
-      <ProjectProvider>
-        <RigProvider>
-          <CommunicationProvider>
-            <AppContent />
-          </CommunicationProvider>
-        </RigProvider>
-      </ProjectProvider>
-    </ModeProvider>
+    <ProjectProvider>
+      <CommunicationProvider>
+        <AppContent />
+      </CommunicationProvider>
+    </ProjectProvider>
   );
 }
 

@@ -3,7 +3,6 @@ import { OverseerToggle } from '../shared/OverseerToggle';
 import { EpicsList, type EpicSortOption } from './EpicsList';
 import { EpicDetailView } from './EpicDetailView';
 import { api } from '../../services/api';
-import { useMode } from '../../contexts/ModeContext';
 
 export interface EpicsViewProps {
   /** Whether this tab is currently active */
@@ -14,7 +13,6 @@ export interface EpicsViewProps {
 type RigFilter = string;
 
 export function EpicsView({ isActive = true }: EpicsViewProps) {
-  const { isGasTown } = useMode();
   const [sortBy, setSortBy] = useState<EpicSortOption>('ACTIVITY');
   const [selectedEpicId, setSelectedEpicId] = useState<string | null>(null);
   const [overseerView, setOverseerView] = useState(false);
@@ -80,13 +78,13 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
           />
 
           {/* Source Filter */}
-          <span style={styles.filterLabel}>{isGasTown ? 'RIG:' : 'PROJECT:'}</span>
+          <span style={styles.filterLabel}>PROJECT:</span>
           <select
             value={rigFilter}
             onChange={(e) => { setRigFilter(e.target.value); }}
             style={styles.select}
           >
-            <option value="ALL">{isGasTown ? 'ALL RIGS' : 'ALL PROJECTS'}</option>
+            <option value="ALL">ALL PROJECTS</option>
             {rigOptions.map((rig) => (
               <option key={rig} value={rig}>
                 {rig.toUpperCase().replace(/_/g, ' ')}

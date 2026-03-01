@@ -22,9 +22,9 @@ interface MockAgent {
 }
 
 const mockAgents: MockAgent[] = [
-  { name: 'Jax', type: 'crew', status: 'working', rig: 'rig1', currentTask: 'Processing data' },
-  { name: 'Kael', type: 'polecat', status: 'idle', rig: 'rig2' },
-  { name: 'Zoe', type: 'crew', status: 'blocked', rig: null, currentTask: 'Waiting on dependency' },
+  { name: 'Jax', type: 'agent', status: 'working', rig: 'rig1', currentTask: 'Processing data' },
+  { name: 'Kael', type: 'agent', status: 'idle', rig: 'rig2' },
+  { name: 'Zoe', type: 'agent', status: 'blocked', rig: null, currentTask: 'Waiting on dependency' },
 ];
 
 describe('useDashboardCrew', () => {
@@ -59,9 +59,9 @@ describe('useDashboardCrew', () => {
 
   it('should generate alerts for blocked and stuck agents', async () => {
     const agentsWithIssues: MockAgent[] = [
-      { name: 'Alice', type: 'crew', status: 'stuck', rig: 'rig1' },
-      { name: 'Bob', type: 'polecat', status: 'blocked', rig: 'rig2' },
-      { name: 'Charlie', type: 'crew', status: 'working', rig: 'rig3' },
+      { name: 'Alice', type: 'agent', status: 'stuck', rig: 'rig1' },
+      { name: 'Bob', type: 'agent', status: 'blocked', rig: 'rig2' },
+      { name: 'Charlie', type: 'agent', status: 'working', rig: 'rig3' },
     ];
     vi.mocked(api.agents.list).mockResolvedValue(agentsWithIssues);
 
@@ -88,11 +88,11 @@ describe('useDashboardCrew', () => {
     expect(result.current.crewAlerts).toEqual([]);
   });
 
-  it('should exclude offline polecats from counts', async () => {
+  it('should count agents correctly including offline', async () => {
     const agentsWithOffline: MockAgent[] = [
-      { name: 'Active', type: 'polecat', status: 'working', rig: 'rig1' },
-      { name: 'Offline', type: 'polecat', status: 'offline', rig: null },
-      { name: 'Crew', type: 'crew', status: 'offline', rig: null }, // Offline crew still counted
+      { name: 'Active', type: 'agent', status: 'working', rig: 'rig1' },
+      { name: 'Offline1', type: 'agent', status: 'offline', rig: null },
+      { name: 'Offline2', type: 'user', status: 'offline', rig: null },
     ];
     vi.mocked(api.agents.list).mockResolvedValue(agentsWithOffline);
 
@@ -100,8 +100,7 @@ describe('useDashboardCrew', () => {
 
     await waitFor(() => { expect(result.current.loading).toBe(false); });
 
-    // Offline polecat excluded, offline crew included
-    expect(result.current.totalCrew).toBe(2);
-    expect(result.current.activeCrew).toBe(1); // Only 'Active' polecat
+    expect(result.current.totalCrew).toBe(3);
+    expect(result.current.activeCrew).toBe(1); // Only 'Active' agent
   });
 });

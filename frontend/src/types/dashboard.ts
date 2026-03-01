@@ -1,4 +1,4 @@
-import type { BeadInfo, CrewMember, GastownStatus, Message } from './index';
+import type { BeadInfo, CrewMember } from './index';
 
 /** Generic section wrapper — each section can independently succeed or fail */
 export interface DashboardSection<T> {
@@ -27,13 +27,6 @@ export interface EpicCategory {
   totalCount: number;
 }
 
-/** Mail summary for dashboard */
-export interface MailSummary {
-  recentMessages: Message[];
-  totalCount: number;
-  unreadCount: number;
-}
-
 /** Unread messages from a single agent, for the overview widget. */
 export interface UnreadAgentSummary {
   agentId: string;
@@ -44,7 +37,6 @@ export interface UnreadAgentSummary {
 
 /** Full dashboard response from GET /api/dashboard */
 export interface DashboardResponse {
-  status: DashboardSection<GastownStatus>;
   beads: DashboardSection<{
     inProgress: BeadCategory;
     open: BeadCategory;
@@ -57,6 +49,5 @@ export interface DashboardResponse {
     inProgress: EpicCategory;
     completed: EpicCategory;
   }>;
-  mail: DashboardSection<MailSummary>;
   timestamp: string;
 }

@@ -9,20 +9,10 @@ vi.mock('../../../src/services/api', () => ({
     beads: {
       list: vi.fn(),
     },
-    mail: {
+    messages: {
       send: vi.fn(),
     },
   },
-}));
-
-vi.mock('../../../src/contexts/ModeContext', () => ({
-  useMode: () => ({
-    mode: 'gastown',
-    isGasTown: true,
-    isSwarm: false,
-    availableModes: ['gastown'],
-    switchMode: vi.fn(),
-  }),
 }));
 
 const mockBeads = [
@@ -56,7 +46,7 @@ describe('BeadsList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.beads.list).mockResolvedValue(mockBeads);
-    vi.mocked(api.mail.send).mockResolvedValue(undefined);
+    vi.mocked(api.messages.send).mockResolvedValue(undefined as never);
   });
 
   describe('reactive updates on filter change', () => {
@@ -101,7 +91,9 @@ describe('BeadsList', () => {
         expect(api.beads.list).toHaveBeenCalled();
       });
 
-      vi.clearAllMocks();
+      // Reset call history but keep mock implementation
+      vi.mocked(api.beads.list).mockClear();
+      vi.mocked(api.beads.list).mockResolvedValue(mockBeads);
 
       // Rapid filter changes
       rerender(<BeadsList statusFilter="closed" isActive={true} />);
@@ -138,13 +130,13 @@ describe('BeadsList', () => {
       const slingOption = screen.getByText('SLING');
       await user.click(slingOption);
 
-      // Should send mail to mayor
+      // Should send message
       await waitFor(() => {
-        expect(api.mail.send).toHaveBeenCalledWith(
+        expect(api.messages.send).toHaveBeenCalledWith(
           expect.objectContaining({
-            to: 'mayor/',
+            to: 'user',
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            subject: expect.stringContaining('hq-001'),
+            body: expect.stringContaining('hq-001'),
           })
         );
       });
@@ -170,13 +162,13 @@ describe('BeadsList', () => {
       const deleteOption = screen.getByText('DELETE');
       await user.click(deleteOption);
 
-      // Should send delete request mail to mayor
+      // Should send delete request message
       await waitFor(() => {
-        expect(api.mail.send).toHaveBeenCalledWith(
+        expect(api.messages.send).toHaveBeenCalledWith(
           expect.objectContaining({
-            to: 'mayor/',
+            to: 'user',
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            subject: expect.stringContaining('Delete request'),
+            body: expect.stringContaining('Delete request'),
           })
         );
       });

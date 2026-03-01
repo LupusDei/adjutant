@@ -7,7 +7,6 @@ import { OverseerToggle } from '../shared/OverseerToggle';
 import { usePolling } from '../../hooks/usePolling';
 import { fuzzyMatch } from '../../hooks/useFuzzySearch';
 import { api } from '../../services/api';
-import { useMode } from '../../contexts/ModeContext';
 import type { BeadInfo } from '../../types';
 import type { KanbanColumnId } from '../../types/kanban';
 
@@ -46,10 +45,9 @@ const OVERSEER_EXCLUDED_PATTERNS = [
 ];
 
 export function BeadsView({ isActive = true }: BeadsViewProps) {
-  const { isGasTown } = useMode();
   const [searchInput, setSearchInput] = useState('');
   const [rigFilter, setRigFilter] = useState<RigFilter>(() => {
-    return localStorage.getItem('beads-rig-filter') ?? (isGasTown ? 'TOWN' : 'ALL');
+    return localStorage.getItem('beads-rig-filter') ?? 'ALL';
   });
   const [rigOptions, setRigOptions] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<BeadSort>(() => {
@@ -285,9 +283,7 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
   return (
     <div style={styles.container}>
       <header style={styles.header}>
-        <h2 style={styles.title} className="crt-glow">
-          {isGasTown ? 'WORK BOARD' : 'TASKS'}
-        </h2>
+        <h2 style={styles.title} className="crt-glow">TASKS</h2>
 
         <div style={styles.controls}>
           {/* View Mode Toggle */}
@@ -316,12 +312,10 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
             </button>
           </div>
 
-          {isGasTown && (
-            <OverseerToggle
-              storageKey="beads-overseer-view"
-              onChange={handleOverseerToggle}
-            />
-          )}
+          <OverseerToggle
+            storageKey="beads-overseer-view"
+            onChange={handleOverseerToggle}
+          />
 
           {/* Search Input */}
           <div style={styles.searchContainer}>
@@ -345,16 +339,15 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
           </div>
 
           {/* Source Filter */}
-          {(isGasTown || rigOptions.length > 0) && (
+          {rigOptions.length > 0 && (
             <>
-              <span style={styles.filterLabel}>{isGasTown ? 'RIG:' : 'SOURCE:'}</span>
+              <span style={styles.filterLabel}>SOURCE:</span>
               <select
                 value={rigFilter}
                 onChange={(e) => { setRigFilter(e.target.value); }}
                 style={styles.select}
               >
-                <option value="ALL">{isGasTown ? 'ALL RIGS' : 'ALL'}</option>
-                {isGasTown && <option value="TOWN">TOWN</option>}
+                <option value="ALL">ALL</option>
                 {rigOptions.map((rig) => (
                   <option key={rig} value={rig}>
                     {rig.toUpperCase().replace(/_/g, ' ')}

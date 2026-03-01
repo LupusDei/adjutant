@@ -7,7 +7,6 @@ import { useState, useCallback, useMemo, type DragEvent } from 'react';
 import { api } from '../services/api';
 import type { BeadInfo, KanbanColumnId, KanbanColumn, KanbanDragState } from '../types';
 import { getKanbanColumns, mapStatusToColumn } from '../types/kanban';
-import { useMode } from '../contexts/ModeContext';
 
 export interface UseKanbanOptions {
   /** Called after successful status update */
@@ -42,10 +41,10 @@ export interface UseKanbanResult {
 
 /**
  * Groups beads by status into Kanban columns.
- * In Swarm mode, hooked beads are mapped to in_progress.
+ * Hooked beads are mapped to in_progress.
  */
-function groupBeadsIntoColumns(beads: BeadInfo[], isSwarm: boolean): KanbanColumn[] {
-  const columns = getKanbanColumns(isSwarm);
+function groupBeadsIntoColumns(beads: BeadInfo[]): KanbanColumn[] {
+  const columns = getKanbanColumns();
 
   // Initialize columns with empty bead arrays
   const columnMap = new Map<KanbanColumnId, BeadInfo[]>();
@@ -55,7 +54,7 @@ function groupBeadsIntoColumns(beads: BeadInfo[], isSwarm: boolean): KanbanColum
 
   // Group beads by status
   for (const bead of beads) {
-    const columnId = mapStatusToColumn(bead.status, isSwarm);
+    const columnId = mapStatusToColumn(bead.status);
     const column = columnMap.get(columnId);
     if (column) {
       column.push(bead);
@@ -77,7 +76,6 @@ export function useKanban(
   options: UseKanbanOptions = {}
 ): UseKanbanResult {
   const { onStatusUpdate, onError, onAssignRequest } = options;
-  const { isSwarm } = useMode();
 
   const [dragState, setDragState] = useState<KanbanDragState>({
     beadId: null,
@@ -87,8 +85,8 @@ export function useKanban(
 
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Group beads into columns (swarm mode hides HOOKED column)
-  const columns = useMemo(() => groupBeadsIntoColumns(beads, isSwarm), [beads, isSwarm]);
+  // Group beads into columns (hooked maps to in_progress)
+  const columns = useMemo(() => groupBeadsIntoColumns(beads), [beads]);
 
   // Find bead by ID
   const findBead = useCallback(
@@ -98,14 +96,14 @@ export function useKanban(
 
   const handleDragStart = useCallback(
     (_e: DragEvent<HTMLDivElement>, bead: BeadInfo) => {
-      const fromColumn = mapStatusToColumn(bead.status, isSwarm);
+      const fromColumn = mapStatusToColumn(bead.status);
       setDragState({
         beadId: bead.id,
         fromColumn,
         overColumn: null,
       });
     },
-    [isSwarm]
+    []
   );
 
   const handleDragEnd = useCallback(() => {

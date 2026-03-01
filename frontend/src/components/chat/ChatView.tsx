@@ -7,7 +7,7 @@
 import { useState, useEffect } from 'react';
 
 import { CommandChat } from './CommandChat';
-import { RecipientSelector } from '../mail/RecipientSelector';
+import { ChatAgentSelector } from './ChatAgentSelector';
 import { useUnreadCounts } from '../../hooks/useUnreadCounts';
 
 export interface ChatViewProps {
@@ -36,7 +36,7 @@ export function ChatView({ isActive = true, initialAgent, onInitialAgentConsumed
         background: '#050505',
         flexShrink: 0,
       }}>
-        <RecipientSelector
+        <ChatAgentSelector
           value={selectedAgent}
           onChange={setSelectedAgent}
           unreadCounts={counts}

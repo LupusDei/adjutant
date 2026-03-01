@@ -5,7 +5,6 @@
 
 import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/api';
-import { useMode } from '../../contexts/ModeContext';
 import type { BeadDetail, BeadDependency } from '../../types';
 
 export interface BeadDetailViewProps {
@@ -38,8 +37,8 @@ function getPriorityInfo(priority: number): { label: string; color: string } {
  * Gets status display info.
  * In Swarm mode, hooked is displayed as IN PROGRESS.
  */
-function getStatusInfo(status: string, isSwarm = false): { label: string; color: string } {
-  const normalized = isSwarm && status.toLowerCase() === 'hooked' ? 'in_progress' : status.toLowerCase();
+function getStatusInfo(status: string): { label: string; color: string } {
+  const normalized = status.toLowerCase() === 'hooked' ? 'in_progress' : status.toLowerCase();
   switch (normalized) {
     case 'open':
       return { label: 'OPEN', color: '#00FF00' };
@@ -155,7 +154,6 @@ function getParentEpicIds(beadId: string, dependencies: BeadDependency[]): strin
 }
 
 export function BeadDetailView({ beadId, onClose, onBeadNavigate }: BeadDetailViewProps) {
-  const { isSwarm } = useMode();
   const [bead, setBead] = useState<BeadDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -214,7 +212,7 @@ export function BeadDetailView({ beadId, onClose, onBeadNavigate }: BeadDetailVi
   if (!beadId) return null;
 
   const priorityInfo = bead ? getPriorityInfo(bead.priority) : null;
-  const statusInfo = bead ? getStatusInfo(bead.status, isSwarm) : null;
+  const statusInfo = bead ? getStatusInfo(bead.status) : null;
 
   return (
     <>
@@ -310,7 +308,7 @@ export function BeadDetailView({ beadId, onClose, onBeadNavigate }: BeadDetailVi
                   <span style={styles.infoValue}>{bead.assignee ?? '—'}</span>
 
                   <span style={styles.infoLabel}>Rig:</span>
-                  <span style={styles.infoValue}>{bead.rig ?? 'Town'}</span>
+                  <span style={styles.infoValue}>{bead.rig ?? '—'}</span>
 
                   <span style={styles.infoLabel}>Source:</span>
                   <span style={styles.infoValue}>{bead.source}</span>

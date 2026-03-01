@@ -13,16 +13,8 @@ export function QuickInput() {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [identity, setIdentity] = useState<string>('overseer');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isMobile = useIsMobile();
-
-  // Fetch mail identity on mount
-  useEffect(() => {
-    api.mail.getIdentity()
-      .then(setIdentity)
-      .catch(() => { setIdentity('overseer'); });
-  }, []);
 
   // Handle voice transcript - append to text with smart spacing
   const handleVoiceTranscript = useCallback((transcript: string) => {
@@ -61,14 +53,9 @@ export function QuickInput() {
     setStatus('idle');
 
     try {
-      await api.mail.send({
-        to: 'mayor/',
-        from: identity,
-        subject: text.slice(0, 50).trim() + (text.length > 50 ? '...' : ''),
+      await api.messages.send({
+        to: 'user',
         body: text,
-        priority: 2, // Normal
-        type: 'task',
-        includeReplyInstructions: true,
       });
       
       setText('');
@@ -119,8 +106,7 @@ export function QuickInput() {
     }}>
       <div style={styles.header}>
         <div style={styles.headerLeft}>
-          <span style={styles.label}>TO: MAYOR</span>
-          <span style={styles.labelFrom}>FROM: {identity.toUpperCase()}</span>
+          <span style={styles.label}>QUICK MESSAGE</span>
           {status === 'success' && <span style={styles.success}>MESSAGE SENT</span>}
           {status === 'error' && <span style={styles.error}>ERROR SENDING</span>}
         </div>

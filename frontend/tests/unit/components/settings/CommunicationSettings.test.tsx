@@ -8,23 +8,6 @@ vi.mock("qrcode.react", () => ({
   QRCodeSVG: () => null,
 }));
 
-vi.mock("../../../../src/contexts/ModeContext", () => ({
-  useMode: vi.fn(() => ({
-    mode: "gastown",
-    features: ["power_control", "rigs", "websocket", "sse"],
-    availableModes: [
-      { mode: "gastown", available: true },
-      { mode: "swarm", available: true },
-    ],
-    loading: false,
-    error: null,
-    isGasTown: true,
-    isSwarm: false,
-    hasFeature: () => false,
-    switchMode: vi.fn(),
-  })),
-}));
-
 // =============================================================================
 // Mock WebSocket + EventSource for CommunicationProvider
 // =============================================================================
@@ -131,24 +114,8 @@ describe("Communication Settings", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
     globalThis.EventSource = MockEventSource as any;
 
-    // Mock fetch for tunnel and mode API calls
+    // Mock fetch for tunnel API calls
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      if (typeof url === "string" && url.includes("/api/mode")) {
-        return new Response(
-          JSON.stringify({
-            success: true,
-            data: {
-              mode: "gastown",
-              features: ["power_control", "rigs", "websocket", "sse"],
-              availableModes: [
-                { mode: "gastown", available: true },
-                { mode: "swarm", available: true },
-              ],
-            },
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        );
-      }
       if (typeof url === "string" && url.includes("/api/tunnel/status")) {
         return new Response(
           JSON.stringify({ success: true, data: { state: "stopped" } }),
@@ -225,46 +192,6 @@ describe("Communication Settings", () => {
         expect(screen.getByText("◉ WS")).toBeTruthy();
       });
       expect(localStorage.getItem("adjutant-comm-priority")).toBe("real-time");
-    });
-  });
-
-  describe("mode switcher", () => {
-    it("should display deployment mode section", () => {
-      renderSettings();
-      expect(screen.getByText("DEPLOYMENT MODE")).toBeTruthy();
-    });
-
-    it("should render both mode options", () => {
-      renderSettings();
-      expect(screen.getByText("GAS TOWN")).toBeTruthy();
-      expect(screen.getByText("SWARM")).toBeTruthy();
-    });
-
-    it("should call switchMode when clicking a different mode", async () => {
-      const { useMode } = await import("../../../../src/contexts/ModeContext");
-      const mockSwitchMode = vi.fn();
-      vi.mocked(useMode).mockReturnValue({
-        mode: "gastown",
-        features: [],
-        availableModes: [
-          { mode: "gastown", available: true },
-          { mode: "swarm", available: true },
-        ],
-        loading: false,
-        error: null,
-        isGasTown: true,
-        isSwarm: false,
-        hasFeature: () => false,
-        switchMode: mockSwitchMode,
-      });
-
-      renderSettings();
-
-      fireEvent.click(screen.getByText("SWARM"));
-
-      await waitFor(() => {
-        expect(mockSwitchMode).toHaveBeenCalledWith("swarm");
-      });
     });
   });
 

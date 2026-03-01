@@ -14,7 +14,6 @@ import { api } from '../../services/api';
 import { useUnreadCounts } from '../../hooks/useUnreadCounts';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoicePlayer } from '../../hooks/useVoicePlayer';
-import { useMode } from '../../contexts/ModeContext';
 import { useCommunication } from '../../contexts/CommunicationContext';
 import { useChatWebSocket } from '../../hooks/useChatWebSocket';
 import type { WsDeliveryConfirmation, WsStreamToken, WsTypingIndicator, ChatWebSocketCallbacks } from '../../hooks/useChatWebSocket';
@@ -123,8 +122,6 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // Get deployment mode for UI labels
-  const { isGasTown } = useMode();
   const { priority, connectionStatus: commContextStatus } = useCommunication();
 
   // Persistent messages from SQLite store
@@ -147,10 +144,10 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     }
   }, [agentId, isActive, markRead]);
 
-  // Determine coordinator name based on mode and agentId
+  // Determine coordinator name based on agentId
   const coordinatorName = agentId
     ? agentId.toUpperCase()
-    : (isGasTown ? 'MAYOR' : 'SWARM');
+    : 'AGENTS';
   // Voice input hook for recording
   const voiceInput = useVoiceInput();
 

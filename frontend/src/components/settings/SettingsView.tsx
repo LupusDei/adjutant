@@ -5,7 +5,6 @@ import { NotificationSettings, VoiceConfigPanel } from '../voice';
 import { setApiKey, clearApiKey, hasApiKey } from '../../services/api';
 import { useCommunication } from '../../contexts/CommunicationContext';
 import type { CommunicationPriority } from '../../types';
-import { useMode, type DeploymentMode } from '../../contexts/ModeContext';
 
 interface TunnelStatusData {
   state: 'stopped' | 'starting' | 'running' | 'error';
@@ -74,14 +73,7 @@ interface SettingsViewProps {
  * Settings view component.
  * Displays system settings and connection info including the public URL for remote access.
  */
-const MODE_OPTIONS: { mode: DeploymentMode; label: string; icon: string; description: string }[] = [
-  { mode: 'gastown', label: 'GAS TOWN', icon: '🏭', description: 'Full multi-agent infrastructure with Mayor, Witness, Refinery' },
-  { mode: 'swarm', label: 'SWARM', icon: '🐝', description: 'Multiple peer agents without formal hierarchy' },
-];
-
 export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
-  const { mode: currentMode, availableModes, switchMode: doSwitchMode } = useMode();
-  const [modeSwitching, setModeSwitching] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [showCoffeeQR, setShowCoffeeQR] = useState(false);
@@ -380,51 +372,6 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
           {tunnelStatus === 'error' && errorMsg && (
             <p style={styles.errorHint}>Error: {errorMsg}</p>
           )}
-        </section>
-
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>DEPLOYMENT MODE</h2>
-          <div style={styles.modeGrid}>
-            {MODE_OPTIONS.map((opt) => {
-              const isActive = currentMode === opt.mode;
-              const availability = availableModes.find((a) => a.mode === opt.mode);
-              const isAvailable = availability?.available ?? true;
-              return (
-                <button
-                  key={opt.mode}
-                  type="button"
-                  style={{
-                    ...styles.modeCard,
-                    borderColor: isActive ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)',
-                    borderWidth: isActive ? '2px' : '1px',
-                    opacity: isAvailable ? 1 : 0.4,
-                    cursor: isAvailable && !isActive && !modeSwitching ? 'pointer' : 'default',
-                  }}
-                  disabled={!isAvailable || isActive || modeSwitching}
-                  onClick={() => {
-                    if (!isAvailable || isActive || modeSwitching) return;
-                    setModeSwitching(true);
-                    void doSwitchMode(opt.mode).finally(() => { setModeSwitching(false); });
-                  }}
-                >
-                  <div style={styles.modeCardHeader}>
-                    <span style={styles.modeIcon}>{opt.icon}</span>
-                    <span style={{
-                      ...styles.modeLabel,
-                      color: isActive ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)',
-                    }}>
-                      {opt.label}
-                    </span>
-                    {isActive && <span style={styles.modeActiveBadge}>ACTIVE</span>}
-                  </div>
-                  <div style={styles.modeDescription}>{opt.description}</div>
-                  {!isAvailable && availability?.reason && (
-                    <div style={styles.modeUnavailable}>{availability.reason}</div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
         </section>
 
         <section style={styles.section}>
@@ -998,62 +945,6 @@ const styles = {
     minHeight: '44px',
   } as CSSProperties,
 
-  modeGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-    gap: '12px',
-  },
-
-  modeCard: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-    padding: '12px',
-    border: '1px solid',
-    borderRadius: '4px',
-    background: 'transparent',
-    fontFamily: 'inherit',
-    color: colors.primary,
-    textAlign: 'left',
-    transition: 'all 0.2s ease',
-  } as CSSProperties,
-
-  modeCardHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-
-  modeIcon: {
-    fontSize: '1.2rem',
-  },
-
-  modeLabel: {
-    fontSize: '0.85rem',
-    fontWeight: 'bold',
-    letterSpacing: '0.1em',
-  },
-
-  modeActiveBadge: {
-    fontSize: '0.6rem',
-    letterSpacing: '0.1em',
-    color: colors.primary,
-    border: `1px solid ${colors.primary}`,
-    padding: '1px 6px',
-    marginLeft: 'auto',
-  },
-
-  modeDescription: {
-    fontSize: '0.7rem',
-    color: colors.primaryDim,
-    lineHeight: 1.4,
-  },
-
-  modeUnavailable: {
-    fontSize: '0.65rem',
-    color: colors.red,
-    fontStyle: 'italic',
-  },
 } satisfies Record<string, CSSProperties>;
 
 export default SettingsView;

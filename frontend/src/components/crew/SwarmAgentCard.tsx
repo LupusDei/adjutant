@@ -112,11 +112,9 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
     if (!trimmed || assignState === 'loading') return;
     setAssignState('loading');
     try {
-      await api.mail.send({
-        to: `${agent.name}/`,
-        subject: `Assign bead: ${trimmed}`,
+      await api.messages.send({
+        to: agent.name,
         body: `Please work on bead ${trimmed}`,
-        type: 'task',
       });
       setShowAssign(false);
       setBeadId('');

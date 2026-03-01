@@ -28,7 +28,7 @@ interface DashboardCrew {
  * Custom hook to fetch crew data for the dashboard.
  */
 /** Agent types to show in the dashboard crew section */
-const DASHBOARD_AGENT_TYPES: AgentType[] = ['crew', 'polecat'];
+const DASHBOARD_AGENT_TYPES: AgentType[] = ['user', 'agent'];
 
 /** Status priority for sorting (lower = more important) */
 const STATUS_PRIORITY: Record<CrewMemberStatus, number> = {
@@ -54,10 +54,9 @@ export function useDashboardCrew(): DashboardCrew {
       try {
         const crewMembers = await api.agents.list();
 
-        // Filter to crew/polecat types, excluding offline polecats
+        // Filter to relevant agent types
         const dashboardAgents = crewMembers.filter((m) =>
-          DASHBOARD_AGENT_TYPES.includes(m.type) &&
-          !(m.type === 'polecat' && m.status === 'offline')
+          DASHBOARD_AGENT_TYPES.includes(m.type)
         );
         setTotalCrew(dashboardAgents.length);
 

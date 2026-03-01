@@ -4,12 +4,8 @@
  */
 import type {
   ApiResponse,
-  GastownStatus,
-  Message,
   CrewMember,
-  SendMessageRequest,
   PaginatedResponse,
-  PowerState,
   BeadInfo,
   BeadDetail,
   BeadsGraphResponse,
@@ -180,75 +176,11 @@ async function apiFetch<T>(
  */
 export const api = {
   /**
-   * Get gastown system status.
-   */
-  async getStatus(): Promise<GastownStatus> {
-    return apiFetch<GastownStatus>('/status');
-  },
-
-  /**
    * Dashboard operations - batch endpoint for initial load.
    */
   dashboard: {
     async get(): Promise<DashboardResponse> {
       return apiFetch<DashboardResponse>('/dashboard');
-    },
-  },
-
-  /**
-   * Power operations.
-   */
-  power: {
-    async up(): Promise<{ previousState: PowerState; newState: PowerState }> {
-      return apiFetch('/power/up', { method: 'POST' });
-    },
-
-    async down(): Promise<{ previousState: PowerState; newState: PowerState }> {
-      return apiFetch('/power/down', { method: 'POST' });
-    },
-  },
-
-  /**
-   * Mail operations.
-   */
-  mail: {
-    async list(params?: {
-      limit?: number;
-      offset?: number;
-      unreadOnly?: boolean;
-      all?: boolean;
-    }): Promise<PaginatedResponse<Message>> {
-      const searchParams = new URLSearchParams();
-      if (params?.limit) searchParams.set('limit', params.limit.toString());
-      if (params?.offset) searchParams.set('offset', params.offset.toString());
-      if (params?.unreadOnly) searchParams.set('unreadOnly', 'true');
-      if (params?.all) searchParams.set('all', 'true');
-
-      const query = searchParams.toString();
-      return apiFetch(`/mail${query ? `?${query}` : ''}`);
-    },
-
-    async get(messageId: string): Promise<Message> {
-      return apiFetch(`/mail/${encodeURIComponent(messageId)}`);
-    },
-
-    async send(request: SendMessageRequest): Promise<{ messageId: string }> {
-      return apiFetch('/mail', { method: 'POST', body: request });
-    },
-
-    async markRead(messageId: string): Promise<void> {
-      return apiFetch(`/mail/${encodeURIComponent(messageId)}/read`, {
-        method: 'POST',
-      });
-    },
-
-    async getThread(threadId: string): Promise<Message[]> {
-      return apiFetch(`/mail/thread/${encodeURIComponent(threadId)}`);
-    },
-
-    async getIdentity(): Promise<string> {
-      const result = await apiFetch<{ identity: string }>('/mail/identity');
-      return result.identity;
     },
   },
 
@@ -262,29 +194,6 @@ export const api = {
 
     async check(): Promise<{ healthy: boolean; issues: string[] }> {
       return apiFetch('/agents/health');
-    },
-
-    /**
-     * Request a new polecat spawn for a rig.
-     * Sends a task message to the mayor.
-     */
-    async spawnPolecat(rig: string): Promise<{ rig: string; requested: boolean }> {
-      return apiFetch('/agents/spawn-polecat', {
-        method: 'POST',
-        body: { rig },
-      });
-    },
-
-    /**
-     * Get terminal content for a polecat's tmux session.
-     * Returns raw output with ANSI escape codes for xterm.js rendering.
-     */
-    async getTerminal(rig: string, polecat: string): Promise<{
-      content: string;
-      sessionName: string;
-      timestamp: string;
-    }> {
-      return apiFetch(`/agents/${encodeURIComponent(rig)}/${encodeURIComponent(polecat)}/terminal`);
     },
 
     /**
@@ -313,13 +222,11 @@ export const api = {
      *   - "all": Shows everything
      */
     async list(params?: {
-      rig?: string;
       status?: 'default' | 'open' | 'hooked' | 'in_progress' | 'deferred' | 'closed' | 'all';
       type?: string;
       limit?: number;
     }): Promise<BeadInfo[]> {
       const searchParams = new URLSearchParams();
-      if (params?.rig) searchParams.set('rig', params.rig);
       if (params?.status) searchParams.set('status', params.status);
       if (params?.type) searchParams.set('type', params.type);
       if (params?.limit) searchParams.set('limit', params.limit.toString());
@@ -384,9 +291,8 @@ export const api = {
     /**
      * List epics with optional rig filter.
      */
-    async list(params?: { rig?: string }): Promise<BeadInfo[]> {
+    async list(): Promise<BeadInfo[]> {
       const query = new URLSearchParams();
-      if (params?.rig) query.set('rig', params.rig);
       query.set('type', 'epic');
       query.set('status', 'all');
       return apiFetch(`/beads?${query}`);
@@ -441,7 +347,6 @@ export const api = {
       projectPath?: string;
       projectId?: string;
       name?: string;
-      mode?: 'swarm' | 'gastown';
       workspaceType?: 'primary' | 'worktree' | 'copy';
     }): Promise<SessionInfo> {
       return apiFetch('/sessions', { method: 'POST', body: params });
