@@ -22,18 +22,10 @@ final class AgentListViewModel: BaseViewModel {
         didSet { applyFilters() }
     }
 
-    /// Current rig filter (nil = all rigs)
-    @Published var selectedRig: String? {
-        didSet { applyFilters() }
-    }
-
     /// Current status filter (nil = all statuses)
     @Published var selectedStatus: CrewMemberStatus? {
         didSet { applyFilters() }
     }
-
-    /// Available rigs for filtering
-    @Published private(set) var availableRigs: [String] = []
 
     /// Count of agents per status (computed from allCrewMembers, ignoring filters)
     @Published private(set) var statusCounts: [CrewMemberStatus: Int] = [:]
@@ -61,28 +53,16 @@ final class AgentListViewModel: BaseViewModel {
 
         var displayName: String {
             switch type {
-            case .mayor: return "MAYOR"
-            case .deacon: return "DEACONS"
-            case .witness: return "WITNESSES"
-            case .refinery: return "REFINERIES"
-            case .crew: return "CREW"
-            case .polecat: return "POLECATS"
             case .user: return "USERS"
             case .agent: return "AGENTS"
             }
         }
 
-        /// Sort order for hierarchy (Mayor > Deacons > Witnesses > Polecats)
+        /// Sort order for display
         var sortOrder: Int {
             switch type {
-            case .mayor: return 0
-            case .deacon: return 1
-            case .witness: return 2
-            case .refinery: return 3
-            case .crew: return 4
-            case .polecat: return 5
-            case .user: return 6
-            case .agent: return 7
+            case .agent: return 0
+            case .user: return 1
             }
         }
     }
@@ -106,7 +86,6 @@ final class AgentListViewModel: BaseViewModel {
         let cached = ResponseCache.shared.crewMembers
         if !cached.isEmpty {
             allCrewMembers = cached
-            updateAvailableRigs()
             applyFilters()
         }
     }
@@ -118,7 +97,6 @@ final class AgentListViewModel: BaseViewModel {
             .sink { [weak self] newCrew in
                 guard let self = self, !newCrew.isEmpty else { return }
                 self.allCrewMembers = newCrew
-                self.updateAvailableRigs()
                 self.applyFilters()
             }
             .store(in: &cancellables)
@@ -209,11 +187,6 @@ final class AgentListViewModel: BaseViewModel {
             filtered = filtered.filter { $0.status == status }
         }
 
-        // Apply rig filter
-        if let rig = selectedRig {
-            filtered = filtered.filter { $0.rig == rig }
-        }
-
         // Apply search filter
         if !searchText.isEmpty {
             let query = searchText.lowercased()
@@ -244,16 +217,9 @@ final class AgentListViewModel: BaseViewModel {
         statusCounts = counts
     }
 
-    /// Update the list of available rigs from loaded data
-    private func updateAvailableRigs() {
-        let rigs = Set(allCrewMembers.compactMap { $0.rig })
-        availableRigs = rigs.sorted()
-    }
-
     /// Clear all filters
     func clearFilters() {
         searchText = ""
-        selectedRig = nil
         selectedStatus = nil
     }
 
@@ -291,6 +257,6 @@ final class AgentListViewModel: BaseViewModel {
 
     /// Whether any filters are active
     var hasActiveFilters: Bool {
-        !searchText.isEmpty || selectedRig != nil || selectedStatus != nil
+        !searchText.isEmpty || selectedStatus != nil
     }
 }

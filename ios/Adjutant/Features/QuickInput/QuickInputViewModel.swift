@@ -77,20 +77,17 @@ final class QuickInputViewModel: BaseViewModel {
 
     // MARK: - Actions
 
-    /// Sends the message to the Mayor
+    /// Sends the message via chat API
     func sendMessage() async {
         guard canSend else { return }
 
         sendState = .sending
 
-        let request = SendMessageRequest(
-            to: "mayor/",
-            subject: "Quick Input Message",
-            body: messageBody.trimmingCharacters(in: .whitespacesAndNewlines)
-        )
-
         do {
-            _ = try await apiClient.sendMail(request)
+            _ = try await apiClient.sendChatMessage(
+                agentId: "user",
+                body: messageBody.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
             sendState = .success
 
             // Auto-collapse after success with delay
@@ -131,12 +128,7 @@ final class QuickInputViewModel: BaseViewModel {
     // MARK: - Private Methods
 
     private func fetchIdentity() async {
-        do {
-            let response = try await apiClient.getMailIdentity()
-            identity = response.identity
-        } catch {
-            // Use default identity on error
-            identity = "USER"
-        }
+        // Mail identity API removed; use default
+        identity = "USER"
     }
 }

@@ -1,25 +1,19 @@
 import SwiftUI
 import AdjutantKit
 
-/// Top-level view listing projects.
-/// Mode-aware: shows rigs in gastown mode, registered projects in swarm mode.
+/// Top-level view listing registered projects.
 struct ProjectsListView: View {
     @Environment(\.crtTheme) private var theme
     @StateObject private var viewModel: ProjectsListViewModel
 
-    /// Callback when a rig is selected (gastown mode)
-    var onSelectRig: ((RigStatus) -> Void)?
-
-    /// Callback when a project is selected (swarm mode)
+    /// Callback when a project is selected
     var onSelectProject: ((Project) -> Void)?
 
     init(
         apiClient: APIClient? = nil,
-        onSelectRig: ((RigStatus) -> Void)? = nil,
         onSelectProject: ((Project) -> Void)? = nil
     ) {
         _viewModel = StateObject(wrappedValue: ProjectsListViewModel(apiClient: apiClient))
-        self.onSelectRig = onSelectRig
         self.onSelectProject = onSelectProject
     }
 
@@ -62,15 +56,13 @@ struct ProjectsListView: View {
 
             Spacer()
 
-            // Add project button (non-gastown only)
-            if !viewModel.isGastownMode {
-                Button {
-                    viewModel.showingCreateSheet = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(theme.primary)
-                }
+            // Add project button
+            Button {
+                viewModel.showingCreateSheet = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(theme.primary)
             }
 
             // Refresh button
@@ -149,8 +141,6 @@ struct ProjectsListView: View {
             loadingView
         } else if !viewModel.hasItems {
             emptyView
-        } else if viewModel.isGastownMode {
-            rigList
         } else {
             projectList
         }
@@ -192,9 +182,7 @@ struct ProjectsListView: View {
             } else {
                 CRTText("NO PROJECTS FOUND", style: .subheader, glowIntensity: .subtle, color: theme.dim)
                 CRTText(
-                    viewModel.isGastownMode
-                        ? "No rigs are configured."
-                        : "Register a project to get started.",
+                    "Register a project to get started.",
                     style: .body, glowIntensity: .none, color: theme.dim.opacity(0.6)
                 )
             }
@@ -203,31 +191,7 @@ struct ProjectsListView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Gastown Rig List
-
-    private var rigList: some View {
-        ScrollView {
-            LazyVStack(spacing: CRTTheme.Spacing.sm) {
-                ForEach(viewModel.filteredRigs, id: \.name) { rig in
-                    ProjectRowView(
-                        rig: rig,
-                        runningCount: viewModel.runningAgentCount(for: rig),
-                        totalCount: viewModel.agentCount(for: rig),
-                        onTap: { onSelectRig?(rig) }
-                    )
-                }
-
-                errorBanner
-            }
-            .padding(.horizontal, CRTTheme.Spacing.md)
-            .padding(.vertical, CRTTheme.Spacing.sm)
-        }
-        .refreshable {
-            await viewModel.refresh()
-        }
-    }
-
-    // MARK: - Swarm Project List
+    // MARK: - Project List
 
     private var projectList: some View {
         ScrollView {
@@ -342,7 +306,7 @@ struct ProjectsListView: View {
 
 // MARK: - Swarm Project Row
 
-/// Row view for a swarm project.
+/// Row view for a project.
 private struct SwarmProjectRow: View {
     @Environment(\.crtTheme) private var theme
 
@@ -420,8 +384,6 @@ private struct SwarmProjectRow: View {
 
 // MARK: - Preview
 
-#Preview("ProjectsListView - Gastown") {
-    ProjectsListView { rig in
-        print("Selected: \(rig.name)")
-    }
+#Preview("ProjectsListView") {
+    ProjectsListView()
 }

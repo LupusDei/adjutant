@@ -38,10 +38,8 @@ final class BeadsListViewModel: BaseViewModel {
     /// Available bead sources for the source filter dropdown
     @Published private(set) var beadSources: [BeadSource] = []
 
-    /// Currently selected rig filter (synced from AppState)
-    private var selectedRig: String? {
-        AppState.shared.selectedRig
-    }
+    /// Currently selected source filter (nil = all)
+    @Published var selectedSource: String?
 
     // MARK: - Filter Types
 
@@ -118,7 +116,6 @@ final class BeadsListViewModel: BaseViewModel {
         super.init()
         loadSortPreference()
         setupDataSyncObserver()
-        setupRigFilterObserver()
         loadFromCache()
     }
 
@@ -164,26 +161,6 @@ final class BeadsListViewModel: BaseViewModel {
             .store(in: &cancellables)
     }
 
-    /// Sets up observation of rig filter changes from AppState.
-    /// Triggers a new server-side fetch when the selected rig/project changes.
-    private func setupRigFilterObserver() {
-        AppState.shared.$selectedRig
-            .dropFirst() // Skip initial value to avoid double-fetch on init
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self = self else { return }
-                // Clear stale beads immediately so loading state shows
-                self.beads = []
-                self.filteredBeads = []
-                self.errorMessage = nil
-                // Fetch beads for the new rig via loadBeads (uses performAsync for error handling)
-                Task {
-                    await self.loadBeads()
-                }
-            }
-            .store(in: &cancellables)
-    }
-
     deinit {
         // Cleanup handled by cancellables
     }
@@ -218,13 +195,11 @@ final class BeadsListViewModel: BaseViewModel {
         }
 
         await performAsync(showLoading: beads.isEmpty) {
-            await self.dataSync.refreshBeads(rig: self.selectedRig)
+            await self.dataSync.refreshBeads(rig: self.selectedSource)
         }
 
-        // Fetch bead sources for swarm source filter
-        if AppState.shared.deploymentMode != .gastown {
-            await fetchBeadSources(apiClient: apiClient)
-        }
+        // Fetch bead sources for source filter
+        await fetchBeadSources(apiClient: apiClient)
     }
 
     /// Fetches available projects from the API for the source filter dropdown.
@@ -420,7 +395,8 @@ final class BeadsListViewModel: BaseViewModel {
     /// Valid statuses: open, hooked, in_progress, closed.
     /// In Swarm mode, hooked is treated as in_progress.
     func statusType(for bead: BeadInfo) -> BadgeView.Style.StatusType {
-        let status = AppState.shared.deploymentMode == .swarm && bead.status.lowercased() == "hooked"
+        // In swarm mode (default), hooked is treated as in_progress
+        let status = bead.status.lowercased() == "hooked"
             ? "in_progress"
             : bead.status.lowercased()
         switch status {

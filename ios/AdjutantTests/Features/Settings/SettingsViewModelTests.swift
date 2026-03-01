@@ -12,7 +12,6 @@ final class SettingsViewModelTests: XCTestCase {
         defaults.removeObject(forKey: "notificationsEnabled")
         defaults.removeObject(forKey: "selectedVoice")
         defaults.removeObject(forKey: "voiceVolume")
-        defaults.removeObject(forKey: "defaultRigFilter")
         defaults.removeObject(forKey: "communicationPriority")
 
         viewModel = SettingsViewModel()
@@ -26,7 +25,6 @@ final class SettingsViewModelTests: XCTestCase {
         defaults.removeObject(forKey: "notificationsEnabled")
         defaults.removeObject(forKey: "selectedVoice")
         defaults.removeObject(forKey: "voiceVolume")
-        defaults.removeObject(forKey: "defaultRigFilter")
         defaults.removeObject(forKey: "communicationPriority")
     }
 
@@ -34,8 +32,6 @@ final class SettingsViewModelTests: XCTestCase {
 
     func testInitialState() {
         XCTAssertFalse(viewModel.isLoading)
-        XCTAssertEqual(viewModel.powerState, .stopped)
-        XCTAssertFalse(viewModel.isTunnelOperating)
     }
 
     func testDefaultVoiceVolume() {
@@ -46,11 +42,6 @@ final class SettingsViewModelTests: XCTestCase {
     func testDefaultVoiceOption() {
         // Should default to system voice
         XCTAssertEqual(viewModel.selectedVoice, .system)
-    }
-
-    func testDefaultRigFilterIsNil() {
-        // Should default to nil (all rigs)
-        XCTAssertNil(viewModel.defaultRigFilter)
     }
 
     // MARK: - Theme Tests
@@ -123,65 +114,6 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(SettingsViewModel.VoiceOption.male.displayName, "MALE")
         XCTAssertEqual(SettingsViewModel.VoiceOption.female.displayName, "FEMALE")
         XCTAssertEqual(SettingsViewModel.VoiceOption.robotic.displayName, "ROBOTIC")
-    }
-
-    // MARK: - Rig Filter Tests
-
-    func testRigFilterPersistence() {
-        viewModel.defaultRigFilter = "adjutant"
-        XCTAssertEqual(UserDefaults.standard.string(forKey: "defaultRigFilter"), "adjutant")
-
-        viewModel.defaultRigFilter = nil
-        XCTAssertNil(UserDefaults.standard.string(forKey: "defaultRigFilter"))
-    }
-
-    func testRigFilterUpdatesAppState() {
-        viewModel.defaultRigFilter = "beads"
-        XCTAssertEqual(AppState.shared.selectedRig, "beads")
-
-        viewModel.defaultRigFilter = nil
-        XCTAssertNil(AppState.shared.selectedRig)
-    }
-
-    // MARK: - Tunnel Control Tests
-
-    func testStartTunnelFromStoppedState() async {
-        XCTAssertEqual(viewModel.powerState, .stopped)
-
-        await viewModel.startTunnel()
-
-        XCTAssertEqual(viewModel.powerState, .running)
-        XCTAssertFalse(viewModel.isTunnelOperating)
-    }
-
-    func testStartTunnelIgnoredWhenNotStopped() async {
-        // First start the tunnel
-        await viewModel.startTunnel()
-        XCTAssertEqual(viewModel.powerState, .running)
-
-        // Try to start again - should be ignored
-        await viewModel.startTunnel()
-        XCTAssertEqual(viewModel.powerState, .running)
-    }
-
-    func testStopTunnelFromRunningState() async {
-        // First start the tunnel
-        await viewModel.startTunnel()
-        XCTAssertEqual(viewModel.powerState, .running)
-
-        // Now stop it
-        await viewModel.stopTunnel()
-
-        XCTAssertEqual(viewModel.powerState, .stopped)
-        XCTAssertFalse(viewModel.isTunnelOperating)
-    }
-
-    func testStopTunnelIgnoredWhenNotRunning() async {
-        XCTAssertEqual(viewModel.powerState, .stopped)
-
-        // Try to stop when already stopped - should be ignored
-        await viewModel.stopTunnel()
-        XCTAssertEqual(viewModel.powerState, .stopped)
     }
 
     // MARK: - App Version Tests
@@ -275,14 +207,5 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(CommunicationPriority.realTime.rawValue, "realTime")
         XCTAssertEqual(CommunicationPriority.efficient.rawValue, "efficient")
         XCTAssertEqual(CommunicationPriority.pollingOnly.rawValue, "pollingOnly")
-    }
-
-    // MARK: - PowerState Tests
-
-    func testPowerStateIsTransitioning() {
-        XCTAssertFalse(PowerState.stopped.isTransitioning)
-        XCTAssertTrue(PowerState.starting.isTransitioning)
-        XCTAssertFalse(PowerState.running.isTransitioning)
-        XCTAssertTrue(PowerState.stopping.isTransitioning)
     }
 }

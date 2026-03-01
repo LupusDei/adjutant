@@ -24,9 +24,6 @@ final class ResponseCache {
     /// Cached crew members
     private(set) var crewMembers: [CrewMember] = []
 
-    /// Cached convoys (deprecated, use epics)
-    private(set) var convoys: [Convoy] = []
-
     /// Cached epics
     private(set) var epics: [BeadInfo] = []
 
@@ -40,7 +37,6 @@ final class ResponseCache {
     /// Cached dashboard data
     private(set) var dashboardMail: [Message] = []
     private(set) var dashboardCrew: [CrewMember] = []
-    private(set) var dashboardConvoys: [Convoy] = []
 
     // MARK: - Timestamps
 
@@ -50,7 +46,6 @@ final class ResponseCache {
     enum CacheType {
         case messages
         case crew
-        case convoys
         case epics
         case beads
         case chat
@@ -75,12 +70,6 @@ final class ResponseCache {
         lastUpdated[.crew] = Date()
     }
 
-    /// Updates the cached convoys
-    func updateConvoys(_ convoys: [Convoy]) {
-        self.convoys = convoys
-        lastUpdated[.convoys] = Date()
-    }
-
     /// Updates the cached epics
     func updateEpics(_ epics: [BeadInfo]) {
         self.epics = epics
@@ -103,7 +92,6 @@ final class ResponseCache {
     /// Updates cached chat messages for a specific agent
     func updateChatMessages(_ messages: [PersistentMessage], forAgent agentId: String) {
         chatMessagesByAgent[agentId] = messages
-        // Also update the flat list for backward compatibility
         chatMessages = messages
         lastUpdated[.chat] = Date()
         persistChatMessages(messages)
@@ -115,10 +103,9 @@ final class ResponseCache {
     }
 
     /// Updates the cached dashboard data
-    func updateDashboard(mail: [Message], crew: [CrewMember], convoys: [Convoy]) {
+    func updateDashboard(mail: [Message], crew: [CrewMember]) {
         self.dashboardMail = mail
         self.dashboardCrew = crew
-        self.dashboardConvoys = convoys
         lastUpdated[.dashboard] = Date()
     }
 
@@ -129,7 +116,6 @@ final class ResponseCache {
         switch type {
         case .messages: return !messages.isEmpty
         case .crew: return !crewMembers.isEmpty
-        case .convoys: return !convoys.isEmpty
         case .epics: return !epics.isEmpty
         case .beads: return !beads.isEmpty
         case .chat: return !chatMessages.isEmpty
@@ -147,14 +133,12 @@ final class ResponseCache {
     func clearAll() {
         messages = []
         crewMembers = []
-        convoys = []
         epics = []
         beads = []
         chatMessages = []
         chatMessagesByAgent = [:]
         dashboardMail = []
         dashboardCrew = []
-        dashboardConvoys = []
         lastUpdated = [:]
         UserDefaults.standard.removeObject(forKey: Self.chatCacheKey)
     }
@@ -166,8 +150,6 @@ final class ResponseCache {
             messages = []
         case .crew:
             crewMembers = []
-        case .convoys:
-            convoys = []
         case .epics:
             epics = []
         case .beads:
@@ -178,7 +160,6 @@ final class ResponseCache {
         case .dashboard:
             dashboardMail = []
             dashboardCrew = []
-            dashboardConvoys = []
         }
         lastUpdated[type] = nil
     }
@@ -188,21 +169,17 @@ final class ResponseCache {
     private static let chatCacheKey = "cachedChatMessages"
     private static let maxPersistedMessages = 50
 
-    /// Debounce timer for chat message persistence
     private var persistDebounceTask: Task<Void, Never>?
     private var lastPersistTime: Date = .distantPast
     private static let persistDebounceInterval: TimeInterval = 5.0
 
-    /// Persists the most recent chat messages to UserDefaults for cold start recovery (debounced)
     private func persistChatMessages(_ messages: [PersistentMessage]) {
         let now = Date()
-        // If it's been more than 5s since last persist, write immediately
         if now.timeIntervalSince(lastPersistTime) >= Self.persistDebounceInterval {
             performPersist(messages)
             return
         }
 
-        // Otherwise debounce
         persistDebounceTask?.cancel()
         persistDebounceTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(Self.persistDebounceInterval * 1_000_000_000))
@@ -211,7 +188,6 @@ final class ResponseCache {
         }
     }
 
-    /// Actually writes messages to UserDefaults
     private func performPersist(_ messages: [PersistentMessage]) {
         lastPersistTime = Date()
         let recent = Array(messages.suffix(Self.maxPersistedMessages))
@@ -220,8 +196,6 @@ final class ResponseCache {
         }
     }
 
-    /// Loads persisted chat messages from UserDefaults into the in-memory cache.
-    /// Only loads if the in-memory cache is empty (cold start scenario).
     func loadPersistedChatMessages() {
         guard chatMessages.isEmpty else { return }
         guard let data = UserDefaults.standard.data(forKey: Self.chatCacheKey),

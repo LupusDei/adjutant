@@ -3,16 +3,13 @@ import Combine
 import AdjutantKit
 
 /// ViewModel for the Settings view.
-/// Manages theme selection, tunnel control, notifications, voice settings, and app preferences.
+/// Manages theme selection, notifications, voice settings, and app preferences.
 @MainActor
 final class SettingsViewModel: BaseViewModel {
     // MARK: - Published Properties
 
     /// Currently selected theme
     @Published var selectedTheme: ThemeIdentifier
-
-    /// Tunnel/system power state
-    @Published private(set) var powerState: PowerState = .stopped
 
     /// Whether notifications are enabled
     @Published var notificationsEnabled: Bool {
@@ -38,36 +35,12 @@ final class SettingsViewModel: BaseViewModel {
     /// Whether voice features are available
     @Published private(set) var isVoiceAvailable: Bool = false
 
-    /// Default rig filter (nil means all rigs)
-    @Published var defaultRigFilter: String? {
-        didSet {
-            UserDefaults.standard.set(defaultRigFilter, forKey: "defaultRigFilter")
-            AppState.shared.selectedRig = defaultRigFilter
-        }
-    }
-
     /// Communication priority level
     @Published var communicationPriority: CommunicationPriority {
         didSet {
             AppState.shared.communicationPriority = communicationPriority
         }
     }
-
-    /// Current deployment mode
-    @Published var deploymentMode: DeploymentMode {
-        didSet {
-            guard deploymentMode != AppState.shared.deploymentMode else { return }
-            Task {
-                await AppState.shared.switchDeploymentMode(to: deploymentMode)
-            }
-        }
-    }
-
-    /// Available rigs for filtering
-    @Published private(set) var availableRigs: [String] = []
-
-    /// Whether tunnel operation is in progress
-    @Published private(set) var isTunnelOperating: Bool = false
 
     /// Current server URL (from AppState)
     @Published var serverURL: String = ""
@@ -83,18 +56,6 @@ final class SettingsViewModel: BaseViewModel {
 
     /// Whether API key is being saved
     @Published private(set) var isSavingAPIKey: Bool = false
-
-    /// Current deployment mode
-    @Published private(set) var currentMode: DeploymentMode = .gastown
-
-    /// Available modes and their transition availability
-    @Published private(set) var availableModes: [AvailableMode] = []
-
-    /// Whether a mode switch is in progress
-    @Published private(set) var isModeSwitching: Bool = false
-
-    /// Error message from mode switch attempt
-    @Published var modeErrorMessage: String?
 
     // MARK: - App Info
 
@@ -148,10 +109,7 @@ final class SettingsViewModel: BaseViewModel {
             self.selectedVoice = .system
         }
 
-        self.defaultRigFilter = UserDefaults.standard.string(forKey: "defaultRigFilter")
-
         self.communicationPriority = AppState.shared.communicationPriority
-        self.deploymentMode = AppState.shared.deploymentMode
 
         super.init()
 
@@ -166,8 +124,7 @@ final class SettingsViewModel: BaseViewModel {
     }
 
     override func refresh() async {
-        await fetchAvailableRigs()
-        await AppState.shared.fetchDeploymentMode()
+        // No-op: power/mode/rig fetches removed
     }
 
     // MARK: - Theme
@@ -176,42 +133,6 @@ final class SettingsViewModel: BaseViewModel {
     func setTheme(_ theme: ThemeIdentifier) {
         selectedTheme = theme
         AppState.shared.currentTheme = theme
-    }
-
-    // MARK: - Tunnel Control
-
-    /// Starts the tunnel/system
-    func startTunnel() async {
-        guard powerState == .stopped else { return }
-
-        isTunnelOperating = true
-        powerState = .starting
-
-        await performAsyncAction(showLoading: false) {
-            // Simulate tunnel start - replace with actual API call
-            try await Task.sleep(nanoseconds: 1_500_000_000)
-            self.powerState = .running
-            AppState.shared.updatePowerState(.running)
-        }
-
-        isTunnelOperating = false
-    }
-
-    /// Stops the tunnel/system
-    func stopTunnel() async {
-        guard powerState == .running else { return }
-
-        isTunnelOperating = true
-        powerState = .stopping
-
-        await performAsyncAction(showLoading: false) {
-            // Simulate tunnel stop - replace with actual API call
-            try await Task.sleep(nanoseconds: 1_000_000_000)
-            self.powerState = .stopped
-            AppState.shared.updatePowerState(.stopped)
-        }
-
-        isTunnelOperating = false
     }
 
     // MARK: - Server URL
@@ -270,39 +191,9 @@ final class SettingsViewModel: BaseViewModel {
         serverURL = ""
     }
 
-    // MARK: - Mode Switching
-
-    /// Switches to a different deployment mode
-    func switchMode(to mode: DeploymentMode) async {
-        guard mode != currentMode, !isModeSwitching else { return }
-
-        isModeSwitching = true
-        modeErrorMessage = nil
-
-        do {
-            let result = try await apiClient.switchMode(to: mode)
-            AppState.shared.deploymentMode = result.mode
-            if let modes = result.availableModes {
-                AppState.shared.availableModes = modes
-            }
-        } catch {
-            modeErrorMessage = "Failed to switch mode"
-        }
-
-        isModeSwitching = false
-    }
-
     // MARK: - Private Methods
 
     private func setupBindings() {
-        // Observe AppState power changes
-        AppState.shared.$powerState
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                self?.powerState = state
-            }
-            .store(in: &cancellables)
-
         // Observe voice availability
         AppState.shared.$isVoiceAvailable
             .receive(on: DispatchQueue.main)
@@ -310,42 +201,14 @@ final class SettingsViewModel: BaseViewModel {
                 self?.isVoiceAvailable = available
             }
             .store(in: &cancellables)
-
-        // Observe deployment mode changes (e.g., from SSE mode_changed events)
-        AppState.shared.$deploymentMode
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] mode in
-                guard let self, self.deploymentMode != mode else { return }
-                self.deploymentMode = mode
-                self.currentMode = mode
-            }
-            .store(in: &cancellables)
-
-        // Observe available modes
-        AppState.shared.$availableModes
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] modes in
-                self?.availableModes = modes
-            }
-            .store(in: &cancellables)
     }
 
     private func syncWithAppState() {
         selectedTheme = AppState.shared.currentTheme
-        powerState = AppState.shared.powerState
         isVoiceAvailable = AppState.shared.isVoiceAvailable
         serverURL = AppState.shared.apiBaseURL.absoluteString
         apiKey = AppState.shared.apiKey ?? ""
         communicationPriority = AppState.shared.communicationPriority
-        deploymentMode = AppState.shared.deploymentMode
-        currentMode = AppState.shared.deploymentMode
-        availableModes = AppState.shared.availableModes
-    }
-
-    private func fetchAvailableRigs() async {
-        // Fetch rigs from AppState which calls the API
-        await AppState.shared.fetchAvailableRigs()
-        availableRigs = AppState.shared.availableRigs
     }
 
     // MARK: - API Key

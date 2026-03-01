@@ -1,19 +1,13 @@
 import SwiftUI
 import AdjutantKit
 
-/// Main tab bar view providing navigation between all 7 main sections.
+/// Main tab bar view providing navigation between all main sections.
 /// Features custom CRT-styled tab bar with glow effects and badge support.
 struct MainTabView: View {
     @StateObject private var coordinator = AppCoordinator()
     @EnvironmentObject private var dependencyContainer: DependencyContainer
     @Environment(\.crtTheme) private var theme
     @ObservedObject private var appState = AppState.shared
-
-    /// Tabs visible in the current deployment mode
-    private var visibleTabs: [AppTab] {
-        let visible = appState.deploymentMode.visibleTabs
-        return AppTab.allCases.filter { visible.contains($0) }
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,16 +17,14 @@ struct MainTabView: View {
             // Main content area with navigation
             TabContent(
                 selectedTab: coordinator.selectedTab,
-                coordinator: coordinator,
-                visibleTabs: visibleTabs
+                coordinator: coordinator
             )
             .environmentObject(coordinator)
 
             // Custom tab bar
             CRTTabBar(
                 selectedTab: $coordinator.selectedTab,
-                unreadCount: appState.unreadMailCount,
-                visibleTabs: visibleTabs
+                unreadCount: appState.unreadMailCount
             )
         }
         .background(theme.background.screen)
@@ -40,14 +32,6 @@ struct MainTabView: View {
         .onAppear {
             // Start network monitoring
             _ = NetworkMonitor.shared
-        }
-        .onChange(of: appState.deploymentMode) { _, newMode in
-            // If current tab is hidden in new mode, switch to first visible tab
-            if !newMode.visibleTabs.contains(coordinator.selectedTab) {
-                if let firstVisible = AppTab.allCases.first(where: { newMode.visibleTabs.contains($0) }) {
-                    coordinator.selectTab(firstVisible)
-                }
-            }
         }
     }
 }
@@ -59,10 +43,10 @@ private struct TabContent: View {
     let selectedTab: AppTab
     @ObservedObject var coordinator: AppCoordinator
     @ObservedObject private var appState = AppState.shared
-    let visibleTabs: [AppTab]
+
     var body: some View {
         ZStack {
-            ForEach(visibleTabs) { tab in
+            ForEach(AppTab.allCases) { tab in
                 NavigationStack(path: coordinator.pathBinding(for: tab)) {
                     tabView(for: tab)
                         .navigationDestination(for: AppRoute.self) { route in
@@ -81,10 +65,6 @@ private struct TabContent: View {
         switch tab {
         case .overview:
             SwarmOverviewView()
-        case .dashboard:
-            DashboardView()
-        case .mail:
-            MailListView()
         case .chat:
             ChatView(apiClient: AppState.shared.apiClient)
         case .crew:
@@ -94,11 +74,8 @@ private struct TabContent: View {
         case .projects:
             ProjectsListView(
                 apiClient: AppState.shared.apiClient,
-                onSelectRig: { rig in
-                    coordinator.navigateReplacingPath(to: .projectDetail(rig: rig))
-                },
                 onSelectProject: { project in
-                    coordinator.navigateReplacingPath(to: .swarmProjectDetail(project: project))
+                    coordinator.navigateReplacingPath(to: .projectDetail(project: project))
                 }
             )
         case .beads:
@@ -115,8 +92,6 @@ private struct TabContent: View {
     @ViewBuilder
     private func destinationView(for route: AppRoute) -> some View {
         switch route {
-        case .mailDetail(let id):
-            MailDetailView(messageId: id)
         case .epicDetail(let id):
             EpicDetailView(epicId: id)
         case .agentDetail(let member):
@@ -125,11 +100,9 @@ private struct TabContent: View {
             BeadDetailView(beadId: id)
         case .proposalDetail(let id):
             ProposalDetailView(proposalId: id)
-        case .projectDetail(let rig):
-            ProjectDetailView(rig: rig)
-        case .swarmProjectDetail(let project):
+        case .projectDetail(let project):
             SwarmProjectDetailView(project: project)
-        case .themeSettings, .voiceSettings, .tunnelSettings:
+        case .themeSettings, .voiceSettings:
             SettingsView()
         default:
             EmptyView()
@@ -153,7 +126,7 @@ struct CRTTabBar: View {
                 CRTTabBarItem(
                     tab: tab,
                     isSelected: selectedTab == tab,
-                    badgeCount: tab == .mail ? unreadCount : 0
+                    badgeCount: tab == .chat ? unreadCount : 0
                 ) {
                     selectedTab = tab
                 }
@@ -245,15 +218,7 @@ typealias BeadsView = BeadsListView
 #Preview("Tab Bar Only") {
     VStack {
         Spacer()
-        CRTTabBar(selectedTab: .constant(.dashboard), unreadCount: 5)
-    }
-    .background(CRTTheme.ColorTheme.pipboy.background.screen)
-}
-
-#Preview("Tab Bar - Mail Selected") {
-    VStack {
-        Spacer()
-        CRTTabBar(selectedTab: .constant(.mail), unreadCount: 12)
+        CRTTabBar(selectedTab: .constant(.overview), unreadCount: 5)
     }
     .background(CRTTheme.ColorTheme.pipboy.background.screen)
 }

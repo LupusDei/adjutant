@@ -3,13 +3,12 @@ import SwiftUI
 import Combine
 
 /// Main application coordinator managing app-wide navigation.
-/// Handles tab selection and navigation within each tab's stack.
 @MainActor
 final class AppCoordinator: Coordinator, ObservableObject {
     // MARK: - Published Properties
 
     /// Currently selected tab
-    @Published var selectedTab: AppTab = .dashboard
+    @Published var selectedTab: AppTab = .overview
 
     /// Sheet presentation state
     @Published var presentedSheet: SheetDestination?
@@ -19,10 +18,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
 
     // MARK: - Per-Tab Navigation Paths
 
-    /// Navigation paths for each tab (each tab has its own independent path)
     @Published var overviewPath = NavigationPath()
-    @Published var dashboardPath = NavigationPath()
-    @Published var mailPath = NavigationPath()
     @Published var chatPath = NavigationPath()
     @Published var agentsPath = NavigationPath()
     @Published var projectsPath = NavigationPath()
@@ -31,19 +27,14 @@ final class AppCoordinator: Coordinator, ObservableObject {
     @Published var proposalsPath = NavigationPath()
     @Published var settingsPath = NavigationPath()
 
-    /// Current tab's path (required by Coordinator protocol)
-    /// This is a computed property that proxies to the selected tab's path
     var path: NavigationPath {
         get { getPath(for: selectedTab) }
         set { setPath(newValue, for: selectedTab) }
     }
 
-    /// Returns the navigation path for a specific tab
     private func getPath(for tab: AppTab) -> NavigationPath {
         switch tab {
         case .overview: return overviewPath
-        case .dashboard: return dashboardPath
-        case .mail: return mailPath
         case .chat: return chatPath
         case .crew: return agentsPath
         case .projects: return projectsPath
@@ -54,12 +45,9 @@ final class AppCoordinator: Coordinator, ObservableObject {
         }
     }
 
-    /// Sets the path for a specific tab
     private func setPath(_ newPath: NavigationPath, for tab: AppTab) {
         switch tab {
         case .overview: overviewPath = newPath
-        case .dashboard: dashboardPath = newPath
-        case .mail: mailPath = newPath
         case .chat: chatPath = newPath
         case .crew: agentsPath = newPath
         case .projects: projectsPath = newPath
@@ -70,7 +58,6 @@ final class AppCoordinator: Coordinator, ObservableObject {
         }
     }
 
-    /// Returns binding to the navigation path for a specific tab
     func pathBinding(for tab: AppTab) -> Binding<NavigationPath> {
         Binding(
             get: { [weak self] in self?.getPath(for: tab) ?? NavigationPath() },
@@ -80,20 +67,13 @@ final class AppCoordinator: Coordinator, ObservableObject {
 
     // MARK: - Private Properties
 
-    /// Cancellables for notification observers
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Initialization
 
     init() {
-        // Set initial tab based on deployment mode
-        self.selectedTab = AppState.shared.deploymentMode.defaultTab
-
-        // Set up notification deep linking observers
         setupNotificationObservers()
-        setupModeObserver()
 
-        // Check for pending deep link from cold start notification tap
         if let agentId = NotificationService.shared.pendingDeepLinkAgentId {
             NotificationService.shared.pendingDeepLinkAgentId = nil
             pendingChatAgentId = agentId
@@ -103,32 +83,15 @@ final class AppCoordinator: Coordinator, ObservableObject {
 
     // MARK: - Notification Deep Linking
 
-    /// Observes deployment mode changes and adjusts selected tab if needed
-    private func setupModeObserver() {
-        AppState.shared.$deploymentMode
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] mode in
-                guard let self = self else { return }
-                let visibleTabs = mode.visibleTabs
-                if !visibleTabs.contains(self.selectedTab) {
-                    self.selectedTab = mode.defaultTab
-                }
-            }
-            .store(in: &cancellables)
-    }
-
-    /// Sets up observers for notification tap deep linking
     private func setupNotificationObservers() {
-        // Handle mail notification taps
+        // Handle mail notification taps → redirect to chat
         NotificationCenter.default.publisher(for: .navigateToMail)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] notification in
-                guard let mailId = notification.userInfo?["mailId"] as? String else { return }
-                self?.handleMailNotificationTap(mailId: mailId)
+            .sink { [weak self] _ in
+                self?.selectTab(.chat)
             }
             .store(in: &cancellables)
 
-        // Handle task notification taps
         NotificationCenter.default.publisher(for: .navigateToTask)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notification in
@@ -137,7 +100,6 @@ final class AppCoordinator: Coordinator, ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Handle chat message notification taps
         NotificationCenter.default.publisher(for: .navigateToChat)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notification in
@@ -147,28 +109,14 @@ final class AppCoordinator: Coordinator, ObservableObject {
             .store(in: &cancellables)
     }
 
-    /// Handles navigation when a mail notification is tapped
-    /// - Parameter mailId: The ID of the mail to navigate to
-    private func handleMailNotificationTap(mailId: String) {
-        selectTab(.mail)
-        navigateReplacingPath(to: .mailDetail(id: mailId))
-    }
-
-    /// Handles navigation when a task notification is tapped
-    /// - Parameter taskId: The ID of the task/bead to navigate to
     private func handleTaskNotificationTap(taskId: String) {
         selectTab(.beads)
         navigateReplacingPath(to: .beadDetail(id: taskId))
     }
 
-    /// The agent ID currently being viewed in chat (nil if not viewing a chat)
     @Published var activeViewingAgentId: String?
-
-    /// The agent ID to select when the chat tab opens (set by push notification deep link)
     @Published var pendingChatAgentId: String?
 
-    /// Handles navigation when a chat message notification is tapped
-    /// - Parameter agentId: The agent to navigate to in chat
     private func handleChatNotificationTap(agentId: String) {
         pendingChatAgentId = agentId
         selectTab(.chat)
@@ -178,13 +126,8 @@ final class AppCoordinator: Coordinator, ObservableObject {
 
     func navigate(to route: AppRoute) {
         switch route {
-        // Tab routes - switch to the tab
         case .overview:
             selectTab(.overview)
-        case .dashboard:
-            selectTab(.dashboard)
-        case .mail:
-            selectTab(.mail)
         case .chat:
             selectTab(.chat)
         case .epics:
@@ -202,23 +145,14 @@ final class AppCoordinator: Coordinator, ObservableObject {
         case .settings:
             selectTab(.settings)
 
-        // Detail routes - push onto current tab's stack
-        case .mailDetail, .epicDetail, .agentDetail, .beadDetail, .proposalDetail, .polecatTerminal, .projectDetail, .swarmProjectDetail:
+        case .agentDetail, .beadDetail, .epicDetail, .proposalDetail, .projectDetail:
             appendToCurrentPath(route)
 
-        // Modal routes - present as sheet
-        case .mailCompose:
-            presentedSheet = .mailCompose(replyTo: nil)
-
-        // Settings sub-routes
-        case .themeSettings, .voiceSettings, .tunnelSettings:
+        case .themeSettings, .voiceSettings:
             appendToCurrentPath(route)
         }
     }
 
-    /// Replaces the current tab's navigation path with a single route.
-    /// Prevents stale path accumulation when dismiss() doesn't sync the
-    /// NavigationStack path binding (known iOS TabView + page style bug).
     func navigateReplacingPath(to route: AppRoute) {
         dismissKeyboard()
         var newPath = NavigationPath()
@@ -226,13 +160,10 @@ final class AppCoordinator: Coordinator, ObservableObject {
         setPath(newPath, for: selectedTab)
     }
 
-    /// Appends a route to the current tab's navigation path
     private func appendToCurrentPath(_ route: AppRoute) {
         dismissKeyboard()
         switch selectedTab {
         case .overview: overviewPath.append(route)
-        case .dashboard: dashboardPath.append(route)
-        case .mail: mailPath.append(route)
         case .chat: chatPath.append(route)
         case .crew: agentsPath.append(route)
         case .projects: projectsPath.append(route)
@@ -243,13 +174,11 @@ final class AppCoordinator: Coordinator, ObservableObject {
         }
     }
 
-    /// Selects a tab (each tab maintains its own navigation path)
     func selectTab(_ tab: AppTab) {
         dismissKeyboard()
         selectedTab = tab
     }
 
-    /// Pop one level in the navigation stack (overrides protocol default to dismiss keyboard)
     func pop() {
         dismissKeyboard()
         if !path.isEmpty {
@@ -257,13 +186,11 @@ final class AppCoordinator: Coordinator, ObservableObject {
         }
     }
 
-    /// Pops to the root of the current tab's navigation stack
     func popToRoot() {
         dismissKeyboard()
         setPath(NavigationPath(), for: selectedTab)
     }
 
-    /// Dismisses the keyboard by resigning first responder globally.
     private func dismissKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
@@ -290,9 +217,6 @@ final class AppCoordinator: Coordinator, ObservableObject {
 
     // MARK: - Deep Linking
 
-    /// Handles a deep link URL
-    /// - Parameter url: The URL to handle
-    /// - Returns: True if the URL was handled
     @discardableResult
     func handleDeepLink(_ url: URL) -> Bool {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
@@ -301,15 +225,6 @@ final class AppCoordinator: Coordinator, ObservableObject {
         }
 
         switch components.host {
-        case "mail":
-            if let id = components.queryItems?.first(where: { $0.name == "id" })?.value {
-                selectTab(.mail)
-                navigateReplacingPath(to: .mailDetail(id: id))
-            } else {
-                selectTab(.mail)
-            }
-            return true
-
         case "chat":
             if let agentId = components.queryItems?.first(where: { $0.name == "agent" })?.value {
                 pendingChatAgentId = agentId
@@ -330,6 +245,11 @@ final class AppCoordinator: Coordinator, ObservableObject {
             selectTab(.settings)
             return true
 
+        // Legacy deep links redirect to overview
+        case "mail", "dashboard":
+            selectTab(.overview)
+            return true
+
         default:
             return false
         }
@@ -339,13 +259,10 @@ final class AppCoordinator: Coordinator, ObservableObject {
 // MARK: - Sheet Destinations
 
 enum SheetDestination: Identifiable {
-    case mailCompose(replyTo: String?)
     case qrCode(url: String)
 
     var id: String {
         switch self {
-        case .mailCompose(let replyTo):
-            return "mailCompose-\(replyTo ?? "new")"
         case .qrCode(let url):
             return "qrCode-\(url)"
         }

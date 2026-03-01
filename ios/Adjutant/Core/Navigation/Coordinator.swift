@@ -3,25 +3,16 @@ import SwiftUI
 import AdjutantKit
 
 /// Protocol defining the interface for navigation coordinators.
-/// Coordinators manage navigation flow and decouple navigation logic from views.
 @MainActor
 protocol Coordinator: AnyObject, ObservableObject {
     associatedtype Route: Hashable
 
-    /// The navigation path for programmatic navigation
     var path: NavigationPath { get set }
-
-    /// Navigate to a specific route
     func navigate(to route: Route)
-
-    /// Pop to the root of the navigation stack
     func popToRoot()
-
-    /// Pop one level in the navigation stack
     func pop()
 }
 
-/// Default implementations for Coordinator
 extension Coordinator {
     func popToRoot() {
         path = NavigationPath()
@@ -40,8 +31,6 @@ extension Coordinator {
 enum AppRoute: Hashable {
     // Tab routes
     case overview
-    case dashboard
-    case mail
     case chat
     case epics
     case crew
@@ -52,22 +41,17 @@ enum AppRoute: Hashable {
     case settings
 
     // Detail routes
-    case mailDetail(id: String)
-    case mailCompose(replyTo: String? = nil)
-    case epicDetail(id: String)
     case agentDetail(member: CrewMember)
     case beadDetail(id: String)
+    case epicDetail(id: String)
     case proposalDetail(id: String)
-    case polecatTerminal(rig: String, polecat: String)
 
     // Project routes
-    case projectDetail(rig: RigStatus)
-    case swarmProjectDetail(project: Project)
+    case projectDetail(project: Project)
 
     // Settings sub-routes
     case themeSettings
     case voiceSettings
-    case tunnelSettings
 }
 
 // MARK: - Tab Definition
@@ -83,17 +67,12 @@ enum AppTab: Int, CaseIterable, Identifiable {
     case projects
     case proposals
     case settings
-    // Legacy tabs (gastown mode only, shown after primary tabs)
-    case dashboard
-    case mail
 
     var id: Int { rawValue }
 
     var title: String {
         switch self {
         case .overview: return "OVERVIEW"
-        case .dashboard: return "DASHBOARD"
-        case .mail: return "MAIL"
         case .chat: return "CHAT"
         case .crew: return "AGENTS"
         case .projects: return "PROJECTS"
@@ -107,8 +86,6 @@ enum AppTab: Int, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .overview: return "rectangle.3.group"
-        case .dashboard: return "square.grid.2x2"
-        case .mail: return "envelope"
         case .chat: return "message"
         case .crew: return "person.3"
         case .projects: return "folder"

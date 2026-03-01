@@ -7,7 +7,6 @@ struct AgentListView: View {
     @Environment(\.crtTheme) private var theme
     @EnvironmentObject private var coordinator: AppCoordinator
     @StateObject private var viewModel: AgentListViewModel
-    @State private var showingRigPicker = false
     @State private var showingSpawnSheet = false
     @State private var agentToTerminate: CrewMember?
     @State private var showTerminateConfirmation = false
@@ -42,9 +41,6 @@ struct AgentListView: View {
         }
         .onDisappear {
             viewModel.onDisappear()
-        }
-        .sheet(isPresented: $showingRigPicker) {
-            rigPickerSheet
         }
         .sheet(isPresented: $showingSpawnSheet) {
             SpawnAgentSheet {
@@ -256,37 +252,11 @@ struct AgentListView: View {
             // Status filter chips
             statusFilterBar
 
-            // Rig filter button
-            HStack {
-                Button {
-                    showingRigPicker = true
-                } label: {
-                    HStack(spacing: CRTTheme.Spacing.xxs) {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                            .font(.system(size: 12))
+            // Clear filters button
+            if viewModel.hasActiveFilters {
+                HStack {
+                    Spacer()
 
-                        if let rig = viewModel.selectedRig {
-                            CRTText(rig.uppercased(), style: .caption, glowIntensity: .subtle)
-                        } else {
-                            CRTText("ALL RIGS", style: .caption, glowIntensity: .subtle, color: theme.dim)
-                        }
-                    }
-                    .foregroundColor(viewModel.selectedRig != nil ? theme.primary : theme.dim)
-                    .padding(.horizontal, CRTTheme.Spacing.sm)
-                    .padding(.vertical, CRTTheme.Spacing.xxs)
-                    .background(
-                        RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                            .fill(viewModel.selectedRig != nil ? theme.primary.opacity(0.15) : Color.clear)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                            .stroke(viewModel.selectedRig != nil ? theme.primary.opacity(0.5) : theme.dim.opacity(0.3), lineWidth: 1)
-                    )
-                }
-
-                Spacer()
-
-                if viewModel.hasActiveFilters {
                     Button {
                         viewModel.clearFilters()
                     } label: {
@@ -429,9 +399,7 @@ struct AgentListView: View {
             } else {
                 CRTText("NO AGENTS FOUND", style: .subheader, glowIntensity: .subtle, color: theme.dim)
                 CRTText(
-                    AppState.shared.deploymentMode == .gastown
-                        ? "Gas Town appears to be empty."
-                        : "No active agent sessions. Start an agent from the Projects tab.",
+                    "No active agent sessions. Start an agent from the Projects tab.",
                     style: .body, glowIntensity: .none, color: theme.dim.opacity(0.6)
                 )
             }
@@ -537,57 +505,6 @@ struct AgentListView: View {
         .background(theme.background.screen)
     }
 
-    private var rigPickerSheet: some View {
-        NavigationView {
-            List {
-                Button {
-                    viewModel.selectedRig = nil
-                    showingRigPicker = false
-                } label: {
-                    HStack {
-                        Text("All Rigs")
-                            .foregroundColor(theme.primary)
-                        Spacer()
-                        if viewModel.selectedRig == nil {
-                            Image(systemName: "checkmark")
-                                .foregroundColor(theme.primary)
-                        }
-                    }
-                }
-
-                ForEach(viewModel.availableRigs, id: \.self) { rig in
-                    Button {
-                        viewModel.selectedRig = rig
-                        showingRigPicker = false
-                    } label: {
-                        HStack {
-                            Text(rig)
-                                .foregroundColor(theme.primary)
-                            Spacer()
-                            if viewModel.selectedRig == rig {
-                                Image(systemName: "checkmark")
-                                    .foregroundColor(theme.primary)
-                            }
-                        }
-                    }
-                }
-            }
-            .listStyle(.plain)
-            .background(theme.background.screen)
-            .navigationTitle("Filter by Rig")
-            #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        showingRigPicker = false
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium])
-    }
 }
 
 // MARK: - Placeholder Modifier

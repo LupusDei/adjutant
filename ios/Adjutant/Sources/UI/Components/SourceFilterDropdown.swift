@@ -1,27 +1,28 @@
 import SwiftUI
 import AdjutantKit
 
-/// A dropdown menu for filtering beads by project source in swarm modes.
+/// A dropdown menu for filtering beads by project source.
 /// Shows "All" option plus available project directories that contain beads.
-/// Uses the same `selectedRig` on AppState as RigFilterDropdown for filtering.
 struct SourceFilterDropdown: View {
     @Environment(\.crtTheme) private var theme
-    @ObservedObject private var appState = AppState.shared
 
     /// Available bead sources from the API
     let sources: [BeadSource]
+
+    /// Currently selected source (nil = all)
+    @Binding var selectedSource: String?
 
     var body: some View {
         Menu {
             // ALL option
             Button {
                 withAnimation(.easeInOut(duration: CRTTheme.Animation.fast)) {
-                    appState.selectedRig = nil
+                    selectedSource = nil
                 }
             } label: {
                 HStack {
                     Text("ALL")
-                    if appState.selectedRig == nil {
+                    if selectedSource == nil {
                         Image(systemName: "checkmark")
                     }
                 }
@@ -34,12 +35,12 @@ struct SourceFilterDropdown: View {
                 ForEach(sources) { source in
                     Button {
                         withAnimation(.easeInOut(duration: CRTTheme.Animation.fast)) {
-                            appState.selectedRig = source.name
+                            selectedSource = source.name
                         }
                     } label: {
                         HStack {
                             Text(source.name.uppercased())
-                            if appState.selectedRig == source.name {
+                            if selectedSource == source.name {
                                 Image(systemName: "checkmark")
                             }
                         }
@@ -83,7 +84,7 @@ struct SourceFilterDropdown: View {
     }
 
     private var displayText: String {
-        guard let selected = appState.selectedRig else {
+        guard let selected = selectedSource else {
             return "ALL"
         }
         return selected.uppercased()
@@ -94,12 +95,15 @@ struct SourceFilterDropdown: View {
 
 #Preview("Source Filter Dropdown") {
     VStack(spacing: 20) {
-        SourceFilterDropdown(sources: [
-            BeadSource(name: "my-project", path: "/home/user/my-project", hasBeads: true),
-            BeadSource(name: "another-app", path: "/home/user/another-app", hasBeads: true),
-        ])
+        SourceFilterDropdown(
+            sources: [
+                BeadSource(name: "my-project", path: "/home/user/my-project", hasBeads: true),
+                BeadSource(name: "another-app", path: "/home/user/another-app", hasBeads: true),
+            ],
+            selectedSource: .constant(nil)
+        )
 
-        SourceFilterDropdown(sources: [])
+        SourceFilterDropdown(sources: [], selectedSource: .constant(nil))
     }
     .padding()
     .background(CRTTheme.ColorTheme.pipboy.background.screen)

@@ -8,40 +8,37 @@ final class AgentDetailViewModelTests: XCTestCase {
     // MARK: - Properties
 
     private var sut: AgentDetailViewModel!
-    private var mockAPIClient: MockTerminalAPIClient!
 
     // MARK: - Setup
 
     override func setUp() async throws {
         try await super.setUp()
-        mockAPIClient = MockTerminalAPIClient()
     }
 
     override func tearDown() async throws {
         sut = nil
-        mockAPIClient = nil
         try await super.tearDown()
     }
 
     // MARK: - Initialization Tests
 
-    func testInit_withPolecat_setsHasTermTrue() async {
+    func testInit_withSession_setsHasTermTrue() async {
         // Given
-        let member = createPolecatMember()
+        let member = createAgentWithSession()
 
         // When
-        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member)
 
         // Then
         XCTAssertTrue(sut.hasTerm)
     }
 
-    func testInit_withNonPolecat_setsHasTermFalse() async {
+    func testInit_withoutSession_setsHasTermFalse() async {
         // Given
-        let member = createMayorMember()
+        let member = createUserMember()
 
         // When
-        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member)
 
         // Then
         XCTAssertFalse(sut.hasTerm)
@@ -49,10 +46,10 @@ final class AgentDetailViewModelTests: XCTestCase {
 
     func testInit_hasAutoScrollEnabled() async {
         // Given
-        let member = createPolecatMember()
+        let member = createAgentWithSession()
 
         // When
-        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member)
 
         // Then
         XCTAssertTrue(sut.autoScrollEnabled)
@@ -60,10 +57,10 @@ final class AgentDetailViewModelTests: XCTestCase {
 
     func testInit_terminalContentIsNil() async {
         // Given
-        let member = createPolecatMember()
+        let member = createAgentWithSession()
 
         // When
-        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member)
 
         // Then
         XCTAssertNil(sut.terminalContent)
@@ -71,86 +68,26 @@ final class AgentDetailViewModelTests: XCTestCase {
 
     // MARK: - Terminal Loading Tests
 
-    func testLoadTerminal_success_setsContent() async {
+    func testLoadTerminal_noSession_doesNotLoad() async {
         // Given
-        let member = createPolecatMember()
-        let expectedContent = "Terminal output here..."
-        mockAPIClient.terminalResult = .success(TerminalCapture(
-            content: expectedContent,
-            sessionName: "gt-greenplace-polecat-abc",
-            timestamp: "2026-01-25T12:00:00Z"
-        ))
-        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
-
-        // When
-        await sut.loadTerminal()
-
-        // Then
-        XCTAssertEqual(sut.terminalContent, expectedContent)
-        XCTAssertEqual(sut.terminalSessionName, "gt-greenplace-polecat-abc")
-        XCTAssertNotNil(sut.terminalTimestamp)
-    }
-
-    func testLoadTerminal_failure_setsError() async {
-        // Given
-        let member = createPolecatMember()
-        mockAPIClient.terminalResult = .failure(APIClientError.networkError("Connection failed"))
-        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
+        let member = createAgentWithoutSession()
+        sut = AgentDetailViewModel(member: member)
 
         // When
         await sut.loadTerminal()
 
         // Then
         XCTAssertNil(sut.terminalContent)
-        XCTAssertNotNil(sut.errorMessage)
-    }
-
-    func testLoadTerminal_nonPolecat_doesNotLoad() async {
-        // Given
-        let member = createMayorMember()
-        mockAPIClient.terminalResult = .success(TerminalCapture(
-            content: "Should not see this",
-            sessionName: "test",
-            timestamp: "2026-01-25T12:00:00Z"
-        ))
-        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
-
-        // When
-        await sut.loadTerminal()
-
-        // Then
-        XCTAssertNil(sut.terminalContent)
-        XCTAssertFalse(mockAPIClient.getTerminalCalled)
-    }
-
-    func testLoadTerminal_noRig_doesNotLoad() async {
-        // Given
-        let member = CrewMember(
-            id: "polecat-orphan",
-            name: "polecat-orphan",
-            type: .polecat,
-            rig: nil,
-            status: .idle,
-            unreadMail: 0
-        )
-        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
-
-        // When
-        await sut.loadTerminal()
-
-        // Then
-        XCTAssertNil(sut.terminalContent)
-        XCTAssertFalse(mockAPIClient.getTerminalCalled)
     }
 
     // MARK: - Status Display Tests
 
     func testStatusDisplayText_idle() async {
         // Given
-        let member = createPolecatMember(status: .idle)
+        let member = createAgentWithSession(status: .idle)
 
         // When
-        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member)
 
         // Then
         XCTAssertEqual(sut.statusDisplayText, "IDLE")
@@ -158,10 +95,10 @@ final class AgentDetailViewModelTests: XCTestCase {
 
     func testStatusDisplayText_working() async {
         // Given
-        let member = createPolecatMember(status: .working)
+        let member = createAgentWithSession(status: .working)
 
         // When
-        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member)
 
         // Then
         XCTAssertEqual(sut.statusDisplayText, "WORKING")
@@ -169,10 +106,10 @@ final class AgentDetailViewModelTests: XCTestCase {
 
     func testStatusDisplayText_blocked() async {
         // Given
-        let member = createPolecatMember(status: .blocked)
+        let member = createAgentWithSession(status: .blocked)
 
         // When
-        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member)
 
         // Then
         XCTAssertEqual(sut.statusDisplayText, "BLOCKED")
@@ -180,10 +117,10 @@ final class AgentDetailViewModelTests: XCTestCase {
 
     func testStatusDisplayText_stuck() async {
         // Given
-        let member = createPolecatMember(status: .stuck)
+        let member = createAgentWithSession(status: .stuck)
 
         // When
-        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member)
 
         // Then
         XCTAssertEqual(sut.statusDisplayText, "STUCK")
@@ -191,10 +128,10 @@ final class AgentDetailViewModelTests: XCTestCase {
 
     func testStatusDisplayText_offline() async {
         // Given
-        let member = createPolecatMember(status: .offline)
+        let member = createAgentWithSession(status: .offline)
 
         // When
-        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
+        sut = AgentDetailViewModel(member: member)
 
         // Then
         XCTAssertEqual(sut.statusDisplayText, "OFFLINE")
@@ -202,27 +139,10 @@ final class AgentDetailViewModelTests: XCTestCase {
 
     // MARK: - Formatted Timestamp Tests
 
-    func testFormattedTimestamp_withTimestamp_returnsFormatted() async {
-        // Given
-        let member = createPolecatMember()
-        mockAPIClient.terminalResult = .success(TerminalCapture(
-            content: "test",
-            sessionName: "test",
-            timestamp: "2026-01-25T14:30:00Z"
-        ))
-        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
-
-        // When
-        await sut.loadTerminal()
-
-        // Then
-        XCTAssertFalse(sut.formattedTimestamp.isEmpty)
-    }
-
     func testFormattedTimestamp_noTimestamp_returnsEmpty() async {
         // Given
-        let member = createPolecatMember()
-        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
+        let member = createAgentWithSession()
+        sut = AgentDetailViewModel(member: member)
 
         // Then
         XCTAssertTrue(sut.formattedTimestamp.isEmpty)
@@ -232,8 +152,8 @@ final class AgentDetailViewModelTests: XCTestCase {
 
     func testAutoScrollEnabled_canToggle() async {
         // Given
-        let member = createPolecatMember()
-        sut = AgentDetailViewModel(member: member, terminalAPIClient: mockAPIClient)
+        let member = createAgentWithSession()
+        sut = AgentDetailViewModel(member: member)
         XCTAssertTrue(sut.autoScrollEnabled)
 
         // When
@@ -251,43 +171,37 @@ final class AgentDetailViewModelTests: XCTestCase {
 
     // MARK: - Helper Methods
 
-    private func createPolecatMember(status: CrewMemberStatus = .working) -> CrewMember {
+    private func createAgentWithSession(status: CrewMemberStatus = .working) -> CrewMember {
         CrewMember(
-            id: "greenplace/polecat-abc",
-            name: "polecat-abc",
-            type: .polecat,
-            rig: "greenplace",
+            id: "agent-abc",
+            name: "agent-abc",
+            type: .agent,
             status: status,
             currentTask: "Working on feature",
             unreadMail: 0,
-            branch: "feature/test"
+            branch: "feature/test",
+            sessionId: "session-123"
         )
     }
 
-    private func createMayorMember() -> CrewMember {
+    private func createAgentWithoutSession(status: CrewMemberStatus = .idle) -> CrewMember {
         CrewMember(
-            id: "mayor/",
-            name: "Mayor",
-            type: .mayor,
-            rig: nil,
+            id: "agent-orphan",
+            name: "agent-orphan",
+            type: .agent,
+            status: status,
+            unreadMail: 0
+        )
+    }
+
+    private func createUserMember() -> CrewMember {
+        CrewMember(
+            id: "user",
+            name: "User",
+            type: .user,
             status: .working,
             currentTask: "Coordinating",
             unreadMail: 0
         )
-    }
-}
-
-// MARK: - Mock API Client
-
-private final class MockTerminalAPIClient: TerminalAPIProviding, @unchecked Sendable {
-    var terminalResult: Result<TerminalCapture, Error>?
-    var getTerminalCalled = false
-
-    func getPolecatTerminal(rig: String, polecat: String) async throws -> TerminalCapture {
-        getTerminalCalled = true
-        guard let result = terminalResult else {
-            throw APIClientError.networkError("Not configured")
-        }
-        return try result.get()
     }
 }

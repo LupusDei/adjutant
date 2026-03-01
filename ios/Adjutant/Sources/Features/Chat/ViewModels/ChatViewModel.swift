@@ -26,7 +26,7 @@ final class ChatViewModel: BaseViewModel {
         if let persisted = UserDefaults.standard.string(forKey: "lastChatRecipient"), !persisted.isEmpty {
             return persisted
         }
-        return AppState.shared.deploymentMode == .gastown ? "mayor/" : ""
+        return ""
     }()
 
     /// All available recipients (agents)
@@ -361,9 +361,7 @@ final class ChatViewModel: BaseViewModel {
             self.availableRecipients = agents
 
             // Validate the current recipient exists in the loaded agents list.
-            // In Gastown mode, "mayor/" is always valid even if not in the agents array.
-            let recipientIsValid = self.selectedRecipient == "mayor/" ||
-                agents.contains(where: { $0.id == self.selectedRecipient })
+            let recipientIsValid = agents.contains(where: { $0.id == self.selectedRecipient })
 
             if self.selectedRecipient.isEmpty || !recipientIsValid {
                 if let first = agents.first {

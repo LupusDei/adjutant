@@ -21,7 +21,6 @@
 ///
 /// // Make API calls
 /// let status = try await client.getStatus()
-/// let mail = try await client.getMail()
 /// let agents = try await client.getAgents()
 /// ```
 ///
@@ -30,8 +29,7 @@
 /// - ``ApiResponse``: Generic response wrapper
 /// - ``Message``: Mail message
 /// - ``CrewMember``: Agent/crew member
-/// - ``GastownStatus``: System status
-/// - ``Convoy``: Work package
+/// - ``SystemStatus``: System status
 /// - ``BeadInfo``: Issue/task
 ///
 /// ## Error Handling

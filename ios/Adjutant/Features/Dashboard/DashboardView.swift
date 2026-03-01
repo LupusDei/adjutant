@@ -15,9 +15,7 @@ struct DashboardView: View {
                 AppHeaderView(
                     title: "ADJUTANT",
                     subtitle: "SYSTEM OVERVIEW",
-                    availableRigs: appState.availableRigs,
-                    isLoading: viewModel.isRefreshing,
-                    onPowerTap: { coordinator.navigate(to: .settings) }
+                    isLoading: viewModel.isRefreshing
                 )
 
                 // Unread Messages (top)

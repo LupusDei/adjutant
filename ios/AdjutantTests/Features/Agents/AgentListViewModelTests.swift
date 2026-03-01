@@ -33,8 +33,6 @@ final class AgentListViewModelTests: XCTestCase {
         XCTAssertTrue(sut.allCrewMembers.isEmpty)
         XCTAssertTrue(sut.groupedCrewMembers.isEmpty)
         XCTAssertTrue(sut.searchText.isEmpty)
-        XCTAssertNil(sut.selectedRig)
-        XCTAssertTrue(sut.availableRigs.isEmpty)
         XCTAssertEqual(sut.displayedCount, 0)
         XCTAssertFalse(sut.hasActiveFilters)
     }
@@ -80,11 +78,10 @@ final class AgentListViewModelTests: XCTestCase {
         await sut.refresh()
 
         // Then
-        // Should have groups for mayor, witness, and polecat
+        // Should have groups for user and agent
         let groupTypes = sut.groupedCrewMembers.map { $0.type }
-        XCTAssertTrue(groupTypes.contains(.mayor))
-        XCTAssertTrue(groupTypes.contains(.witness))
-        XCTAssertTrue(groupTypes.contains(.polecat))
+        XCTAssertTrue(groupTypes.contains(.user))
+        XCTAssertTrue(groupTypes.contains(.agent))
     }
 
     func testGrouping_sortedByHierarchy() async {
@@ -97,7 +94,7 @@ final class AgentListViewModelTests: XCTestCase {
         await sut.refresh()
 
         // Then
-        // Mayor should come before Witness, Witness before Polecat
+        // Agent should come before User
         let sortOrders = sut.groupedCrewMembers.map { $0.sortOrder }
         XCTAssertEqual(sortOrders, sortOrders.sorted())
     }
@@ -105,9 +102,9 @@ final class AgentListViewModelTests: XCTestCase {
     func testGrouping_membersAlphabetized() async {
         // Given
         let agents = [
-            createCrewMember(name: "Zeta", type: .polecat),
-            createCrewMember(name: "Alpha", type: .polecat),
-            createCrewMember(name: "Beta", type: .polecat)
+            createCrewMember(name: "Zeta", type: .agent),
+            createCrewMember(name: "Alpha", type: .agent),
+            createCrewMember(name: "Beta", type: .agent)
         ]
         mockAPIClient.getAgentsResult = .success(agents)
         sut = AgentListViewModel(apiClient: mockAPIClient)
@@ -116,9 +113,9 @@ final class AgentListViewModelTests: XCTestCase {
         await sut.refresh()
 
         // Then
-        let polecatGroup = sut.groupedCrewMembers.first { $0.type == .polecat }
-        XCTAssertNotNil(polecatGroup)
-        let names = polecatGroup?.members.map { $0.name }
+        let agentGroup = sut.groupedCrewMembers.first { $0.type == .agent }
+        XCTAssertNotNil(agentGroup)
+        let names = agentGroup?.members.map { $0.name }
         XCTAssertEqual(names, ["Alpha", "Beta", "Zeta"])
     }
 
@@ -132,12 +129,12 @@ final class AgentListViewModelTests: XCTestCase {
         await sut.refresh()
 
         // When
-        sut.searchText = "Mayor"
+        sut.searchText = "User"
 
         // Then
         XCTAssertEqual(sut.displayedCount, 1)
         XCTAssertTrue(sut.groupedCrewMembers.allSatisfy { group in
-            group.members.allSatisfy { $0.name.lowercased().contains("mayor") }
+            group.members.allSatisfy { $0.name.lowercased().contains("user") }
         })
     }
 
@@ -149,7 +146,7 @@ final class AgentListViewModelTests: XCTestCase {
         await sut.refresh()
 
         // When
-        sut.searchText = "MAYOR"
+        sut.searchText = "USER"
 
         // Then
         XCTAssertEqual(sut.displayedCount, 1)
@@ -158,8 +155,8 @@ final class AgentListViewModelTests: XCTestCase {
     func testSearch_filtersByCurrentTask() async {
         // Given
         let agents = [
-            createCrewMember(name: "Worker1", type: .polecat, currentTask: "Building feature X"),
-            createCrewMember(name: "Worker2", type: .polecat, currentTask: "Fixing bug Y")
+            createCrewMember(name: "Worker1", type: .agent, currentTask: "Building feature X"),
+            createCrewMember(name: "Worker2", type: .agent, currentTask: "Fixing bug Y")
         ]
         mockAPIClient.getAgentsResult = .success(agents)
         sut = AgentListViewModel(apiClient: mockAPIClient)
@@ -187,79 +184,7 @@ final class AgentListViewModelTests: XCTestCase {
         XCTAssertTrue(sut.groupedCrewMembers.isEmpty)
     }
 
-    // MARK: - Rig Filter Tests
-
-    func testRigFilter_filtersByRig() async {
-        // Given
-        let agents = [
-            createCrewMember(name: "Worker1", type: .polecat, rig: "greenplace"),
-            createCrewMember(name: "Worker2", type: .polecat, rig: "oldforge"),
-            createCrewMember(name: "Worker3", type: .polecat, rig: "greenplace")
-        ]
-        mockAPIClient.getAgentsResult = .success(agents)
-        sut = AgentListViewModel(apiClient: mockAPIClient)
-        await sut.refresh()
-
-        // When
-        sut.selectedRig = "greenplace"
-
-        // Then
-        XCTAssertEqual(sut.displayedCount, 2)
-    }
-
-    func testRigFilter_updatesAvailableRigs() async {
-        // Given
-        let agents = [
-            createCrewMember(name: "Worker1", type: .polecat, rig: "greenplace"),
-            createCrewMember(name: "Worker2", type: .polecat, rig: "oldforge"),
-            createCrewMember(name: "Worker3", type: .witness, rig: "greenplace")
-        ]
-        mockAPIClient.getAgentsResult = .success(agents)
-        sut = AgentListViewModel(apiClient: mockAPIClient)
-
-        // When
-        await sut.refresh()
-
-        // Then
-        XCTAssertEqual(Set(sut.availableRigs), Set(["greenplace", "oldforge"]))
-    }
-
-    func testRigFilter_excludesNilRigs() async {
-        // Given
-        let agents = [
-            createCrewMember(name: "Mayor", type: .mayor, rig: nil),
-            createCrewMember(name: "Worker", type: .polecat, rig: "greenplace")
-        ]
-        mockAPIClient.getAgentsResult = .success(agents)
-        sut = AgentListViewModel(apiClient: mockAPIClient)
-
-        // When
-        await sut.refresh()
-
-        // Then
-        XCTAssertEqual(sut.availableRigs, ["greenplace"])
-    }
-
-    // MARK: - Combined Filter Tests
-
-    func testCombinedFilters_searchAndRig() async {
-        // Given
-        let agents = [
-            createCrewMember(name: "Alpha", type: .polecat, rig: "greenplace"),
-            createCrewMember(name: "Beta", type: .polecat, rig: "greenplace"),
-            createCrewMember(name: "Alpha", type: .polecat, rig: "oldforge")
-        ]
-        mockAPIClient.getAgentsResult = .success(agents)
-        sut = AgentListViewModel(apiClient: mockAPIClient)
-        await sut.refresh()
-
-        // When
-        sut.searchText = "Alpha"
-        sut.selectedRig = "greenplace"
-
-        // Then
-        XCTAssertEqual(sut.displayedCount, 1)
-    }
+    // MARK: - Filter Tests
 
     func testClearFilters_resetsAll() async {
         // Given
@@ -268,14 +193,12 @@ final class AgentListViewModelTests: XCTestCase {
         sut = AgentListViewModel(apiClient: mockAPIClient)
         await sut.refresh()
         sut.searchText = "test"
-        sut.selectedRig = "greenplace"
 
         // When
         sut.clearFilters()
 
         // Then
         XCTAssertTrue(sut.searchText.isEmpty)
-        XCTAssertNil(sut.selectedRig)
         XCTAssertFalse(sut.hasActiveFilters)
     }
 
@@ -288,18 +211,6 @@ final class AgentListViewModelTests: XCTestCase {
 
         // When
         sut.searchText = "test"
-
-        // Then
-        XCTAssertTrue(sut.hasActiveFilters)
-    }
-
-    func testHasActiveFilters_withRig_returnsTrue() async {
-        // Given
-        mockAPIClient.getAgentsResult = .success([])
-        sut = AgentListViewModel(apiClient: mockAPIClient)
-
-        // When
-        sut.selectedRig = "greenplace"
 
         // Then
         XCTAssertTrue(sut.hasActiveFilters)
@@ -319,12 +230,8 @@ final class AgentListViewModelTests: XCTestCase {
     func testAgentTypeGroup_displayNames() {
         // Given
         let groups: [(AgentType, String)] = [
-            (.mayor, "MAYOR"),
-            (.deacon, "DEACONS"),
-            (.witness, "WITNESSES"),
-            (.refinery, "REFINERIES"),
-            (.crew, "CREW"),
-            (.polecat, "POLECATS")
+            (.user, "USERS"),
+            (.agent, "AGENTS")
         ]
 
         // Then
@@ -335,8 +242,8 @@ final class AgentListViewModelTests: XCTestCase {
     }
 
     func testAgentTypeGroup_sortOrder() {
-        // Given
-        let types: [AgentType] = [.mayor, .deacon, .witness, .refinery, .crew, .polecat]
+        // Given - agent (0) comes before user (1)
+        let types: [AgentType] = [.agent, .user]
 
         // Then
         for (index, type) in types.enumerated() {
@@ -349,26 +256,23 @@ final class AgentListViewModelTests: XCTestCase {
 
     private func createTestAgents() -> [CrewMember] {
         [
-            createCrewMember(name: "Mayor", type: .mayor, rig: nil, status: .working),
-            createCrewMember(name: "Witness", type: .witness, rig: "greenplace", status: .idle),
-            createCrewMember(name: "Polecat-ABC", type: .polecat, rig: "greenplace", status: .working),
-            createCrewMember(name: "Polecat-XYZ", type: .polecat, rig: "oldforge", status: .stuck)
+            createCrewMember(name: "User", type: .user, status: .working),
+            createCrewMember(name: "Agent-ABC", type: .agent, status: .working),
+            createCrewMember(name: "Agent-XYZ", type: .agent, status: .stuck)
         ]
     }
 
     private func createCrewMember(
         name: String,
         type: AgentType,
-        rig: String? = "greenplace",
         status: CrewMemberStatus = .idle,
         currentTask: String? = nil,
         unreadMail: Int = 0
     ) -> CrewMember {
         CrewMember(
-            id: "\(rig ?? "town")/\(name)",
+            id: "town/\(name)",
             name: name,
             type: type,
-            rig: rig,
             status: status,
             currentTask: currentTask,
             unreadMail: unreadMail,

@@ -34,10 +34,6 @@ struct AgentRowView: View {
 
                         CRTText(member.name, style: .body, glowIntensity: .medium, color: agentColor)
 
-                        if let rig = member.rig {
-                            CRTText("[\(rig)]", style: .caption, glowIntensity: .subtle, color: theme.dim)
-                        }
-
                         // Current bead ID badge
                         if let beadId = beadContext.currentBeadId {
                             Text(beadId)
@@ -155,9 +151,6 @@ struct AgentRowView: View {
 
     private var accessibilityDescription: String {
         var description = "\(member.name), \(member.type.rawValue)"
-        if let rig = member.rig {
-            description += ", \(rig)"
-        }
         description += ", status: \(statusDisplayText.lowercased())"
         if (member.unreadMail ?? 0) > 0 {
             description += ", \(member.unreadMail ?? 0) unread messages"
@@ -172,10 +165,9 @@ struct AgentRowView: View {
     VStack(spacing: 12) {
         AgentRowView(
             member: CrewMember(
-                id: "mayor/",
-                name: "Mayor",
-                type: .mayor,
-                rig: nil,
+                id: "agent-coordinator",
+                name: "Coordinator",
+                type: .agent,
                 status: .working,
                 currentTask: "Coordinating infrastructure",
                 unreadMail: 3,
@@ -186,10 +178,9 @@ struct AgentRowView: View {
 
         AgentRowView(
             member: CrewMember(
-                id: "greenplace/witness",
-                name: "Witness",
-                type: .witness,
-                rig: "greenplace",
+                id: "agent-watcher",
+                name: "Watcher",
+                type: .agent,
                 status: .idle,
                 unreadMail: 0
             ),
@@ -198,10 +189,9 @@ struct AgentRowView: View {
 
         AgentRowView(
             member: CrewMember(
-                id: "greenplace/polecat-abc",
+                id: "polecat-abc",
                 name: "polecat-abc",
-                type: .polecat,
-                rig: "greenplace",
+                type: .agent,
                 status: .blocked,
                 currentTask: "Waiting on review",
                 unreadMail: 1
@@ -211,10 +201,9 @@ struct AgentRowView: View {
 
         AgentRowView(
             member: CrewMember(
-                id: "oldforge/polecat-xyz",
+                id: "polecat-xyz",
                 name: "polecat-xyz",
-                type: .polecat,
-                rig: "oldforge",
+                type: .agent,
                 status: .stuck,
                 currentTask: "Build failing",
                 unreadMail: 5
@@ -224,10 +213,9 @@ struct AgentRowView: View {
 
         AgentRowView(
             member: CrewMember(
-                id: "offline/polecat",
+                id: "polecat-old",
                 name: "polecat-old",
-                type: .polecat,
-                rig: "oldforge",
+                type: .agent,
                 status: .offline,
                 unreadMail: 0
             ),

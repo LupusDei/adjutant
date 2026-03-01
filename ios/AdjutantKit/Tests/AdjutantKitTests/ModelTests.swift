@@ -23,16 +23,6 @@ final class ModelTests: XCTestCase {
         }
     }
 
-    func testPowerStateDecoding() throws {
-        let states = ["stopped", "starting", "running", "stopping"]
-
-        for state in states {
-            let json = "\"\(state)\""
-            let decoded = try decoder.decode(PowerState.self, from: json.data(using: .utf8)!)
-            XCTAssertEqual(decoded.rawValue, state)
-        }
-    }
-
     func testCrewMemberStatusDecoding() throws {
         let statuses = ["idle", "working", "blocked", "stuck", "offline"]
 
@@ -44,8 +34,7 @@ final class ModelTests: XCTestCase {
     }
 
     func testAgentTypeDecoding() throws {
-        let types = ["mayor", "deacon", "witness", "refinery", "crew", "polecat"]
-
+        let types = ["user", "agent"]
         for type in types {
             let json = "\"\(type)\""
             let decoded = try decoder.decode(AgentType.self, from: json.data(using: .utf8)!)
@@ -143,176 +132,27 @@ final class ModelTests: XCTestCase {
     func testCrewMemberDecoding() throws {
         let json = """
         {
-            "id": "greenplace/Toast",
-            "name": "Toast",
-            "type": "polecat",
-            "rig": "greenplace",
+            "id": "agent-abc",
+            "name": "agent-abc",
+            "type": "agent",
             "status": "working",
             "currentTask": "Building feature",
             "unreadMail": 5,
             "firstSubject": "Task assigned",
-            "firstFrom": "mayor/",
-            "branch": "polecat/feature-xyz"
+            "firstFrom": "user",
+            "branch": "feature-xyz"
         }
         """
 
         let member = try decoder.decode(CrewMember.self, from: json.data(using: .utf8)!)
 
-        XCTAssertEqual(member.id, "greenplace/Toast")
-        XCTAssertEqual(member.name, "Toast")
-        XCTAssertEqual(member.type, .polecat)
-        XCTAssertEqual(member.rig, "greenplace")
+        XCTAssertEqual(member.id, "agent-abc")
+        XCTAssertEqual(member.name, "agent-abc")
+        XCTAssertEqual(member.type, .agent)
         XCTAssertEqual(member.status, .working)
         XCTAssertEqual(member.currentTask, "Building feature")
         XCTAssertEqual(member.unreadMail, 5)
-        XCTAssertEqual(member.branch, "polecat/feature-xyz")
-    }
-
-    func testCrewMemberWithNullRig() throws {
-        let json = """
-        {
-            "id": "mayor/",
-            "name": "mayor",
-            "type": "mayor",
-            "rig": null,
-            "status": "working",
-            "unreadMail": 0
-        }
-        """
-
-        let member = try decoder.decode(CrewMember.self, from: json.data(using: .utf8)!)
-
-        XCTAssertNil(member.rig)
-        XCTAssertEqual(member.type, .mayor)
-    }
-
-    // MARK: - GastownStatus Tests
-
-    func testGastownStatusDecoding() throws {
-        let json = """
-        {
-            "powerState": "running",
-            "town": {
-                "name": "gastown",
-                "root": "/Users/test/gt"
-            },
-            "operator": {
-                "name": "testuser",
-                "email": "test@example.com",
-                "unreadMail": 3
-            },
-            "infrastructure": {
-                "mayor": {
-                    "name": "mayor",
-                    "running": true,
-                    "unreadMail": 0
-                },
-                "deacon": {
-                    "name": "deacon",
-                    "running": true,
-                    "unreadMail": 0
-                },
-                "daemon": {
-                    "name": "daemon",
-                    "running": true,
-                    "unreadMail": 0
-                }
-            },
-            "rigs": [],
-            "fetchedAt": "2024-01-15T10:30:00.000Z"
-        }
-        """
-
-        let status = try decoder.decode(GastownStatus.self, from: json.data(using: .utf8)!)
-
-        XCTAssertEqual(status.powerState, .running)
-        XCTAssertEqual(status.town.name, "gastown")
-        XCTAssertEqual(status.operator.name, "testuser")
-        XCTAssertEqual(status.operator.unreadMail, 3)
-        XCTAssertTrue(status.infrastructure?.mayor.running ?? false)
-        XCTAssertEqual(status.rigs.count, 0)
-    }
-
-    // MARK: - Convoy Tests
-
-    func testConvoyDecoding() throws {
-        let json = """
-        {
-            "id": "convoy-001",
-            "title": "Feature Implementation",
-            "status": "in_progress",
-            "rig": "greenplace",
-            "progress": {
-                "completed": 3,
-                "total": 5
-            },
-            "trackedIssues": [
-                {
-                    "id": "gb-1",
-                    "title": "Task 1",
-                    "status": "closed"
-                },
-                {
-                    "id": "gb-2",
-                    "title": "Task 2",
-                    "status": "in_progress",
-                    "assignee": "polecat-123",
-                    "priority": 1
-                }
-            ]
-        }
-        """
-
-        let convoy = try decoder.decode(Convoy.self, from: json.data(using: .utf8)!)
-
-        XCTAssertEqual(convoy.id, "convoy-001")
-        XCTAssertEqual(convoy.title, "Feature Implementation")
-        XCTAssertEqual(convoy.rig, "greenplace")
-        XCTAssertEqual(convoy.progress.completed, 3)
-        XCTAssertEqual(convoy.progress.total, 5)
-        XCTAssertEqual(convoy.progress.percentage, 0.6)
-        XCTAssertFalse(convoy.isComplete)
-        XCTAssertEqual(convoy.trackedIssues.count, 2)
-    }
-
-    func testConvoyProgressPercentage() {
-        let complete = ConvoyProgress(completed: 5, total: 5)
-        XCTAssertEqual(complete.percentage, 1.0)
-
-        let empty = ConvoyProgress(completed: 0, total: 0)
-        XCTAssertEqual(empty.percentage, 0.0)
-
-        let half = ConvoyProgress(completed: 1, total: 2)
-        XCTAssertEqual(half.percentage, 0.5)
-    }
-
-    func testConvoyIsComplete() {
-        // Complete convoy (all tasks done)
-        let completeConvoy = Convoy(
-            id: "c1", title: "Complete", status: "open", rig: nil,
-            progress: ConvoyProgress(completed: 5, total: 5),
-            trackedIssues: []
-        )
-        XCTAssertTrue(completeConvoy.isComplete)
-        XCTAssertFalse(completeConvoy.hasNoTasks)
-
-        // Incomplete convoy
-        let incompleteConvoy = Convoy(
-            id: "c2", title: "Incomplete", status: "open", rig: nil,
-            progress: ConvoyProgress(completed: 3, total: 5),
-            trackedIssues: []
-        )
-        XCTAssertFalse(incompleteConvoy.isComplete)
-        XCTAssertFalse(incompleteConvoy.hasNoTasks)
-
-        // Empty convoy (0/0) should NOT be considered complete
-        let emptyConvoy = Convoy(
-            id: "c3", title: "Empty", status: "open", rig: nil,
-            progress: ConvoyProgress(completed: 0, total: 0),
-            trackedIssues: []
-        )
-        XCTAssertFalse(emptyConvoy.isComplete, "Convoy with 0/0 tasks should not be complete")
-        XCTAssertTrue(emptyConvoy.hasNoTasks, "Convoy with 0 total tasks should have hasNoTasks=true")
+        XCTAssertEqual(member.branch, "feature-xyz")
     }
 
     // MARK: - BeadSource Tests

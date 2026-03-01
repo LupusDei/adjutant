@@ -28,9 +28,6 @@ final class DashboardViewModel: BaseViewModel {
     /// Recently closed beads
     @Published private(set) var recentClosedBeads: [BeadInfo] = []
 
-    /// Rig statuses from the status API
-    @Published private(set) var rigStatuses: [RigStatus] = []
-
     /// Unread messages grouped by agent (max 8)
     @Published private(set) var unreadMessages: [UnreadAgentSummary] = []
 
@@ -129,17 +126,6 @@ final class DashboardViewModel: BaseViewModel {
 
     /// Processes the batch dashboard response, updating all published properties
     private func processDashboardResponse(_ response: DashboardResponse) {
-        // Status section → rig statuses
-        if let statusData = response.status.data {
-            rigStatuses = statusData.rigs.sorted { $0.name.lowercased() < $1.name.lowercased() }
-
-            // Update AppState power state from status data
-            let localState = PowerState(rawValue: statusData.powerState.rawValue)
-            if let localState {
-                AppState.shared.updatePowerState(localState)
-            }
-        }
-
         // Beads section
         if let beadsData = response.beads.data {
             processBeadsData(beadsData)
@@ -169,8 +155,7 @@ final class DashboardViewModel: BaseViewModel {
         // Update cache for other views
         ResponseCache.shared.updateDashboard(
             mail: recentMail,
-            crew: crewMembers,
-            convoys: []
+            crew: crewMembers
         )
 
         // Sync Live Activity + Widgets
@@ -220,20 +205,6 @@ final class DashboardViewModel: BaseViewModel {
     private func syncLiveActivity() async {
         #if os(iOS)
         guard #available(iOS 16.1, *) else { return }
-
-        // Get the power state from AppState (convert local to AdjutantKit type)
-        let localPowerState = AppState.shared.powerState
-        let powerState: AdjutantKit.PowerState
-        switch localPowerState {
-        case .stopped:
-            powerState = .stopped
-        case .starting:
-            powerState = .starting
-        case .running:
-            powerState = .running
-        case .stopping:
-            powerState = .stopping
-        }
 
         // Build agent summaries from active crew
         let agentSummaries: [AgentSummary] = activeCrewMembers.prefix(4).map { member in

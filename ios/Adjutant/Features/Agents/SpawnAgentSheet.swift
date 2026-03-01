@@ -290,24 +290,8 @@ struct SpawnAgentSheet: View {
         errorMessage = nil
 
         do {
-            let response = try await apiClient.spawnPolecat(projectPath: project.path, callsign: agentName.isEmpty ? nil : agentName)
-            isSpawning = false
-
-            #if canImport(UIKit)
-            let feedback = UINotificationFeedbackGenerator()
-            feedback.notificationOccurred(.success)
-            #endif
-
-            onSpawned()
-
-            // Navigate to chat with the spawned agent
-            let chatAgentId = response.callsign ?? agentName
-            if !chatAgentId.isEmpty {
-                coordinator.pendingChatAgentId = chatAgentId
-                coordinator.selectTab(.chat)
-            }
-
-            dismiss()
+            // Agent spawning API removed — spawn is no longer available
+            throw APIClientError.networkError("Agent spawning is not available in this deployment mode")
         } catch {
             isSpawning = false
             errorMessage = "Failed to spawn: \(error.localizedDescription)"
