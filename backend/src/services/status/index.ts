@@ -1,9 +1,7 @@
 /**
- * Status module - System status and power control abstraction.
+ * Status module - System status retrieval.
  *
- * Provides deployment-mode-aware status handling:
- * - Gas Town: Full infrastructure status with power control
- * - Swarm: Simple always-on status without power control
+ * Provides the SwarmStatusProvider for system status.
  *
  * Usage:
  *   import { getStatusProvider } from "./status/index.js";
@@ -11,7 +9,6 @@
  *   const status = await provider.getStatus();
  */
 
-import { getWorkspace } from "../workspace/index.js";
 import type {
   StatusProvider,
   StatusResult,
@@ -19,7 +16,6 @@ import type {
   PowerCapabilities,
   PowerTransitionResult,
 } from "./status-provider.js";
-import { GasTownStatusProvider } from "./gastown-status-provider.js";
 import { SwarmStatusProvider } from "./swarm-status-provider.js";
 
 // Re-export types
@@ -36,29 +32,14 @@ export type { WorkspaceInfo, OperatorInfo, InfrastructureStatus } from "./status
 let statusProviderInstance: StatusProvider | null = null;
 
 /**
- * Get the appropriate StatusProvider for the current deployment mode.
- *
- * Uses the workspace provider to determine which status provider to use:
- * - gastown mode → GasTownStatusProvider
- * - swarm mode → SwarmStatusProvider
+ * Get the StatusProvider singleton.
  */
 export function getStatusProvider(): StatusProvider {
   if (statusProviderInstance) {
     return statusProviderInstance;
   }
 
-  const workspace = getWorkspace();
-
-  switch (workspace.mode) {
-    case "gastown":
-      statusProviderInstance = new GasTownStatusProvider();
-      break;
-    case "swarm":
-    default:
-      statusProviderInstance = new SwarmStatusProvider();
-      break;
-  }
-
+  statusProviderInstance = new SwarmStatusProvider();
   return statusProviderInstance;
 }
 
@@ -69,6 +50,5 @@ export function resetStatusProvider(): void {
   statusProviderInstance = null;
 }
 
-// Re-export specific provider classes for direct use if needed
-export { GasTownStatusProvider } from "./gastown-status-provider.js";
+// Re-export specific provider class for direct use if needed
 export { SwarmStatusProvider } from "./swarm-status-provider.js";

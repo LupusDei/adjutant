@@ -5,9 +5,6 @@
  * for the dashboard display using bd/tmux data.
  */
 
-import { collectAgentSnapshot, type AgentRuntimeInfo } from "./agent-data.js";
-import { resolveWorkspaceRoot, getDeploymentMode } from "./workspace/index.js";
-import { getTopology } from "./topology/index.js";
 import { getEventBus } from "./event-bus.js";
 import { listTmuxSessions } from "./tmux.js";
 import { getSessionBridge } from "./session-bridge.js";
@@ -29,76 +26,6 @@ export interface AgentsServiceResult<T> {
     code: string;
     message: string;
   };
-}
-
-/**
- * Maps raw agent role string to AgentType using topology provider.
- * Handles both direct type names and role aliases.
- */
-function mapAgentType(role: string): AgentType {
-  const topology = getTopology();
-  return topology.normalizeRole(role);
-}
-
-/**
- * Maps raw state string to CrewMemberStatus.
- * @param running Whether the agent's tmux session is running
- * @param state Explicit agent state (idle, working, blocked, stuck, etc.)
- * @param hasHookedWork Whether the agent has work hooked (bead assigned)
- */
-function mapStatus(running: boolean, state?: string, hasHookedWork?: boolean): CrewMemberStatus {
-  if (!running) return "offline";
-
-  // If there's an explicit state, use it
-  if (state) {
-    const stateMap: Record<string, CrewMemberStatus> = {
-      idle: "idle",
-      working: "working",
-      blocked: "blocked",
-      stuck: "stuck",
-      "awaiting-gate": "blocked",
-    };
-    return stateMap[state.toLowerCase()] ?? "idle";
-  }
-
-  // If no explicit state but has hooked work, they're working
-  if (hasHookedWork) return "working";
-
-  return "idle";
-}
-
-function transformAgent(agent: AgentRuntimeInfo): CrewMember {
-  const hasHookedWork = Boolean(agent.hookBead);
-  const result: CrewMember = {
-    id: agent.address,
-    name: agent.name,
-    type: mapAgentType(agent.role),
-    rig: agent.rig,
-    status: mapStatus(agent.running, agent.state, hasHookedWork),
-    unreadMail: agent.unreadMail,
-  };
-  // Mail preview - first unread subject and sender
-  if (agent.firstSubject) {
-    result.firstSubject = agent.firstSubject;
-  }
-  if (agent.firstFrom) {
-    result.firstFrom = agent.firstFrom;
-  }
-  // Current work - from hook bead title (fetched in agent-data.ts)
-  if (agent.hookBeadTitle) {
-    result.currentTask = agent.hookBeadTitle;
-  }
-  if (agent.branch) {
-    result.branch = agent.branch;
-  }
-  // Swarm fields (populated by enrichWithSessionData)
-  if (agent.lastActivity) {
-    result.lastActivity = agent.lastActivity;
-  }
-  if (agent.worktreePath) {
-    result.worktreePath = agent.worktreePath;
-  }
-  return result;
 }
 
 /**
@@ -208,36 +135,12 @@ function enrichWithMcpStatus(members: CrewMember[]): void {
 
 /**
  * Gets all agents as CrewMember list for the dashboard.
- * Uses gt status --json which includes mail counts.
+ * Discovers agents from tmux sessions + managed sessions.
  * Merges MCP-connected agents so all active agents are visible.
  * Emits agent:status_changed events when agent statuses change.
  */
 export async function getAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
-  try {
-    const mode = getDeploymentMode();
-
-    // In swarm mode, discover agents from tmux sessions + managed sessions
-    if (mode !== "gastown") {
-      return await getTmuxAgents();
-    }
-
-    const townRoot = resolveWorkspaceRoot();
-    const { agents } = await collectAgentSnapshot(townRoot);
-    const crewMembers = agents.map(transformAgent);
-    enrichWithSessionData(crewMembers);
-    enrichWithMcpStatus(crewMembers);
-    crewMembers.sort((a, b) => a.name.localeCompare(b.name));
-    emitStatusChanges(crewMembers);
-    return { success: true, data: crewMembers };
-  } catch (err) {
-    return {
-      success: false,
-      error: {
-        code: "AGENTS_ERROR",
-        message: err instanceof Error ? err.message : "Failed to get agents",
-      },
-    };
-  }
+  return await getTmuxAgents();
 }
 
 /**

@@ -15,7 +15,7 @@ import { logInfo, logWarn } from "../utils/index.js";
 // Types
 // ============================================================================
 
-export type SessionMode = "swarm" | "gastown";
+export type SessionMode = "swarm";
 export type SessionStatus = "idle" | "working" | "waiting_permission" | "offline";
 export type WorkspaceType = "primary" | "worktree" | "copy";
 

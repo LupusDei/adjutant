@@ -24,20 +24,10 @@ export type CrewMemberStatus =
 /**
  * Agent types in the system.
  *
- * Gas Town roles: mayor, deacon, witness, refinery, crew, polecat
  * Swarm roles: user, agent
  * Extensible via string for custom deployments.
  */
 export type AgentType =
-  // Gas Town infrastructure roles
-  | "mayor"
-  | "deacon"
-  | "witness"
-  | "refinery"
-  // Gas Town worker roles
-  | "crew"
-  | "polecat"
-  // Swarm mode roles
   | "user"
   | "agent"
   // Extensibility for custom deployments
@@ -117,55 +107,6 @@ export interface AgentStatus {
   firstMessageSubject?: string;
   /** Special states like 'stuck' or 'awaiting-gate' */
   state?: "stuck" | "awaiting-gate" | "idle" | "working";
-}
-
-/** Status of agents within a single rig (project). */
-export interface RigStatus {
-  /** Rig name */
-  name: string;
-  /** Rig root path */
-  path: string;
-  /** Witness agent for this rig */
-  witness: AgentStatus;
-  /** Refinery agent for this rig */
-  refinery: AgentStatus;
-  /** Crew workers for this rig */
-  crew: AgentStatus[];
-  /** Active polecats (ephemeral workers) */
-  polecats: AgentStatus[];
-  /** Merge queue summary */
-  mergeQueue: {
-    pending: number;
-    inFlight: number;
-    blocked: number;
-  };
-}
-
-/** Overall gastown system status. */
-export interface GastownStatus {
-  /** Current power state */
-  powerState: PowerState;
-  /** Town metadata */
-  town: {
-    name: string;
-    root: string;
-  };
-  /** Operator (human user) information */
-  operator: {
-    name: string;
-    email: string;
-    unreadMail: number;
-  };
-  /** Infrastructure agent statuses */
-  infrastructure: {
-    mayor: AgentStatus;
-    deacon: AgentStatus;
-    daemon: AgentStatus;
-  };
-  /** Per-rig agent information */
-  rigs: RigStatus[];
-  /** Timestamp of this status snapshot */
-  fetchedAt: string;
 }
 
 // ============================================================================
@@ -254,14 +195,6 @@ export interface PaginatedResponse<T> {
 }
 
 // Endpoint-specific response types
-export type StatusResponse = ApiResponse<GastownStatus>;
-export type MailListResponse = ApiResponse<PaginatedResponse<Message>>;
-export type MailDetailResponse = ApiResponse<Message>;
-export type SendMailResponse = ApiResponse<{ messageId: string }>;
-export type PowerResponse = ApiResponse<{
-  previousState: PowerState;
-  newState: PowerState;
-}>;
 export type AgentsResponse = ApiResponse<CrewMember[]>;
 
 // ============================================================================
@@ -300,15 +233,6 @@ export const CrewMemberStatusSchema = z.enum([
 
 export const AgentTypeSchema = z.union([
   z.enum([
-    // Gas Town infrastructure
-    "mayor",
-    "deacon",
-    "witness",
-    "refinery",
-    // Gas Town workers
-    "crew",
-    "polecat",
-    // Swarm mode
     "user",
     "agent",
   ]),
@@ -334,7 +258,7 @@ export const MessageSchema = z.object({
 });
 
 export const SendMessageRequestSchema = z.object({
-  to: z.string().optional().default("mayor/"),
+  to: z.string().optional().default("user"),
   from: z.string().optional(),
   subject: z.string().min(1, "Subject is required"),
   body: z.string().min(1, "Message body is required"),
@@ -351,40 +275,6 @@ export const AgentStatusSchema = z.object({
   unreadMail: z.number(),
   firstMessageSubject: z.string().optional(),
   state: z.enum(["stuck", "awaiting-gate", "idle", "working"]).optional(),
-});
-
-export const RigStatusSchema = z.object({
-  name: z.string(),
-  path: z.string(),
-  witness: AgentStatusSchema,
-  refinery: AgentStatusSchema,
-  crew: z.array(AgentStatusSchema),
-  polecats: z.array(AgentStatusSchema),
-  mergeQueue: z.object({
-    pending: z.number(),
-    inFlight: z.number(),
-    blocked: z.number(),
-  }),
-});
-
-export const GastownStatusSchema = z.object({
-  powerState: PowerStateSchema,
-  town: z.object({
-    name: z.string(),
-    root: z.string(),
-  }),
-  operator: z.object({
-    name: z.string(),
-    email: z.string(),
-    unreadMail: z.number(),
-  }),
-  infrastructure: z.object({
-    mayor: AgentStatusSchema,
-    deacon: AgentStatusSchema,
-    daemon: AgentStatusSchema,
-  }),
-  rigs: z.array(RigStatusSchema),
-  fetchedAt: z.string(),
 });
 
 export const CrewMemberSchema = z.object({

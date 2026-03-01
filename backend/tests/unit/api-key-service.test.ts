@@ -67,7 +67,7 @@ describe("api-key-service", () => {
       generateApiKey();
 
       expect(fs.mkdirSync).toHaveBeenCalledWith(
-        expect.stringContaining(".gastown"),
+        expect.stringContaining(".adjutant"),
         { recursive: true }
       );
     });

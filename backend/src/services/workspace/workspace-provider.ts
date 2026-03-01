@@ -1,9 +1,5 @@
 /**
  * WorkspaceProvider interface for abstracting workspace resolution.
- *
- * This allows Adjutant to work with different deployment modes:
- * - Gas Town: Full multi-agent orchestration with mayor, rigs, etc.
- * - Swarm: Multiple agents without Gas Town infrastructure
  */
 
 /**
@@ -12,7 +8,7 @@
 export interface BeadsDirInfo {
   /** Absolute path to the .beads directory */
   path: string;
-  /** Rig name if this is a rig-specific beads dir, null for town-level */
+  /** Rig name if this is a rig-specific beads dir, null for project-level */
   rig: string | null;
   /** Working directory containing this beads directory */
   workDir: string;
@@ -33,70 +29,49 @@ export interface WorkspaceConfig {
 }
 
 /**
- * Deployment mode for this workspace.
- */
-export type DeploymentMode = "gastown" | "swarm";
-
-/**
  * Abstract interface for workspace resolution.
  *
  * Implementations:
- * - GasTownProvider: Full Gas Town deployment with mayor/town.json
  * - SwarmProvider: Swarm/multi-agent deployment with local .beads/
  */
 export interface WorkspaceProvider {
-  /** Name of this provider (e.g., "gastown", "swarm") */
+  /** Name of this provider (e.g., "swarm") */
   readonly name: string;
-
-  /** Deployment mode */
-  readonly mode: DeploymentMode;
 
   /**
    * Root directory for this workspace.
-   * - Gas Town: Town root (directory containing mayor/)
-   * - Swarm: Project root (cwd or configured path)
    */
   resolveRoot(): string;
 
   /**
    * Load workspace configuration.
-   * - Gas Town: Reads mayor/town.json
-   * - Swarm: Reads adjutant.config.json or returns defaults
    */
   loadConfig(): Promise<WorkspaceConfig>;
 
   /**
    * List all beads directories to scan.
-   * - Gas Town: Town .beads/ + all rig .beads/ directories
-   * - Swarm: Just the local .beads/ directory
    */
   listBeadsDirs(): Promise<BeadsDirInfo[]>;
 
   /**
    * Resolve beads directory for a specific bead ID based on its prefix.
-   * @param beadId Full bead ID (e.g., "hq-abc123", "adj-xyz")
+   * @param beadId Full bead ID (e.g., "adj-xyz")
    * @returns Directory info or null if not found
    */
   resolveBeadsDirFromId(beadId: string): Promise<{ workDir: string; beadsDir: string } | null>;
 
   /**
    * Whether this workspace has centralized power control.
-   * - Gas Town: true (gt up / gt down)
-   * - Swarm: false (always "running")
    */
   hasPowerControl(): boolean;
 
   /**
    * Whether the gt binary is available.
-   * - Gas Town: true
-   * - Swarm: false
    */
   hasGtBinary(): boolean;
 
   /**
    * List available rig names.
-   * - Gas Town: Reads from mayor/rigs.json
-   * - Swarm: Empty array
    */
   listRigNames(): Promise<string[]>;
 

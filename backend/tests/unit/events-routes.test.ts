@@ -232,9 +232,9 @@ describe("events routes (SSE)", () => {
       const client = connectSse(server);
       await client.waitForEvents(1);
 
-      getEventBus().emit("mode:changed", {
-        mode: "gastown",
-        features: ["dashboard"],
+      getEventBus().emit("agent:status_changed", {
+        agent: "onyx",
+        status: "working",
       });
 
       const received = await client.waitForEvents(2);
@@ -242,7 +242,7 @@ describe("events routes (SSE)", () => {
 
       const allText = received.join("");
       expect(allText).toMatch(/id: \d+/);
-      expect(allText).toContain("event: mode_changed");
+      expect(allText).toContain("event: agent_status");
     });
 
     it("should skip events with seq <= Last-Event-ID", async () => {
@@ -298,30 +298,27 @@ describe("events routes (SSE)", () => {
         agent: "onyx",
         status: "idle",
       });
-      bus.emit("power:state_changed", {
-        state: "running",
-      });
       bus.emit("mail:received", {
         id: "m-1",
-        from: "mayor/",
+        from: "user",
         to: "op",
         subject: "S",
         preview: "P",
       });
-      bus.emit("mode:changed", {
-        mode: "gastown",
-        features: [],
+      bus.emit("stream:status", {
+        streamId: "stream-1",
+        agent: "onyx",
+        state: "started",
       });
 
-      const received = await client.waitForEvents(6);
+      const received = await client.waitForEvents(5);
       client.close();
 
       const allText = received.join("");
       expect(allText).toContain("event: bead_update");
       expect(allText).toContain("event: agent_status");
-      expect(allText).toContain("event: power_state");
       expect(allText).toContain("event: mail_received");
-      expect(allText).toContain("event: mode_changed");
+      expect(allText).toContain("event: stream_status");
     });
 
     it("should handle stream:status events", async () => {

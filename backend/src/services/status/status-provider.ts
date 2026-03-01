@@ -6,7 +6,7 @@
  * - SwarmStatusProvider: Simple swarm mode status
  */
 
-import type { PowerState, AgentStatus, RigStatus, CrewMember } from "../../types/index.js";
+import type { PowerState, AgentStatus, CrewMember } from "../../types/index.js";
 
 // ============================================================================
 // Generalized Status Types
@@ -75,8 +75,8 @@ export interface SystemStatus {
   operator: OperatorInfo;
   /** Infrastructure agent statuses (optional in swarm) */
   infrastructure?: InfrastructureStatus;
-  /** Per-rig/project information (empty in swarm) */
-  rigs: RigStatus[];
+  /** Per-project information */
+  rigs: never[];
   /** All crew members/agents */
   agents: CrewMember[];
   /** Timestamp of this status snapshot */

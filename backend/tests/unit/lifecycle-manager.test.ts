@@ -224,8 +224,8 @@ describe("LifecycleManager", () => {
   // ==========================================================================
 
   describe("tmux naming", () => {
-    it("should prefix default-mode sessions with adj-", async () => {
-      mockTmuxForCreate("adj-myagent");
+    it("should prefix sessions with adj-swarm-", async () => {
+      mockTmuxForCreate("adj-swarm-myagent");
 
       await lifecycle.createSession({
         name: "myagent",
@@ -237,10 +237,10 @@ describe("LifecycleManager", () => {
         (call: unknown[]) => (call[1] as string[])[0] === "new-session"
       );
       expect(newSessionCall).toBeDefined();
-      expect((newSessionCall![1] as string[]).indexOf("adj-myagent")).toBeGreaterThan(-1);
+      expect((newSessionCall![1] as string[]).indexOf("adj-swarm-myagent")).toBeGreaterThan(-1);
     });
 
-    it("should prefix swarm sessions with adj-swarm-", async () => {
+    it("should prefix swarm sessions with adj-swarm- when mode is explicit", async () => {
       mockTmuxForCreate("adj-swarm-worker1");
 
       await lifecycle.createSession({
@@ -257,23 +257,8 @@ describe("LifecycleManager", () => {
       ).toBeGreaterThan(-1);
     });
 
-    it("should use name directly for gastown mode", async () => {
-      mockTmuxForCreate("mayor");
-
-      await lifecycle.createSession({
-        name: "mayor",
-        projectPath: "/tmp",
-        mode: "gastown",
-      });
-
-      const newSessionCall = mockExecFile.mock.calls.find(
-        (call: unknown[]) => (call[1] as string[])[0] === "new-session"
-      );
-      expect((newSessionCall![1] as string[]).indexOf("mayor")).toBeGreaterThan(-1);
-    });
-
     it("should sanitize special characters in names", async () => {
-      mockTmuxForCreate("adj-my-agent-1");
+      mockTmuxForCreate("adj-swarm-my-agent-1");
 
       await lifecycle.createSession({
         name: "my agent/1",

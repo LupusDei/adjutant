@@ -9,7 +9,6 @@
 import { basename } from "path";
 import { logInfo, logWarn } from "../utils/index.js";
 import { getEventBus } from "./event-bus.js";
-import { getDeploymentMode } from "./workspace/index.js";
 import {
   SessionRegistry,
   getSessionRegistry,
@@ -114,11 +113,10 @@ export class SessionBridge {
     if (!hasProjectSession) {
       const sessionName = basename(projectRoot);
       logInfo("Auto-creating session for project root", { projectRoot, sessionName });
-      const mode = getDeploymentMode();
       const result = await this.lifecycle.createSession({
         name: sessionName,
         projectPath: projectRoot,
-        mode,
+        mode: "swarm",
         workspaceType: "primary",
       });
       if (result.success) {

@@ -8,7 +8,7 @@
 import { join } from "path";
 
 import { execBd, resolveBeadsDir, type BeadsIssue } from "../bd-client.js";
-import { listAllBeadsDirs, resolveWorkspaceRoot, getDeploymentMode } from "../workspace/index.js";
+import { listAllBeadsDirs, resolveWorkspaceRoot } from "../workspace/index.js";
 import { logInfo } from "../../utils/index.js";
 import type {
   BeadSource,
@@ -247,15 +247,13 @@ export async function listBeadSources(): Promise<
 > {
   try {
     const beadsDirs = await listAllBeadsDirs();
-    const mode = getDeploymentMode();
-
     const sources: BeadSource[] = beadsDirs.map((dirInfo) => ({
       name: dirInfo.rig ?? "project",
       path: dirInfo.workDir,
       hasBeads: true,
     }));
 
-    return { success: true, data: { sources, mode } };
+    return { success: true, data: { sources, mode: "swarm" } };
   } catch (err) {
     return {
       success: false,

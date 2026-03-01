@@ -11,14 +11,20 @@ vi.mock("../../src/services/bd-client.js", () => ({
   }),
 }));
 
-vi.mock("../../src/services/gastown-workspace.js", () => ({
-  resolveTownRoot: vi.fn(() => "/tmp/town"),
+vi.mock("../../src/services/workspace/index.js", () => ({
+  resolveWorkspaceRoot: vi.fn(() => "/tmp/town"),
   listAllBeadsDirs: vi.fn(() => Promise.resolve([])),
+  getWorkspace: vi.fn(() => ({
+    root: "/tmp/town",
+    name: "test",
+    isSwarmProject: () => true,
+  })),
+  resetWorkspace: vi.fn(),
 }));
 
 import { execBd, type BeadsIssue } from "../../src/services/bd-client.js";
 import { listBeads, getBead, updateBead } from "../../src/services/beads/index.js";
-import { listAllBeadsDirs } from "../../src/services/gastown-workspace.js";
+import { listAllBeadsDirs } from "../../src/services/workspace/index.js";
 
 // =============================================================================
 // Test Fixtures

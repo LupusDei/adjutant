@@ -26,10 +26,16 @@ interface ApiKeyStore {
 
 /**
  * Get the path to the API keys file.
- * Defaults to ~/.gastown/api-keys.json unless overridden by API_KEYS_PATH env var.
+ * Defaults to ~/.adjutant/api-keys.json unless overridden by API_KEYS_PATH env var.
+ * Falls back to legacy ~/.gastown/api-keys.json if it exists.
  */
 function getKeysPath(): string {
-  return process.env["API_KEYS_PATH"] ?? join(homedir(), ".gastown", "api-keys.json");
+  if (process.env["API_KEYS_PATH"]) return process.env["API_KEYS_PATH"];
+  const primary = join(homedir(), ".adjutant", "api-keys.json");
+  if (existsSync(primary)) return primary;
+  const legacy = join(homedir(), ".gastown", "api-keys.json");
+  if (existsSync(legacy)) return legacy;
+  return primary;
 }
 
 /**

@@ -1,9 +1,7 @@
 /**
- * Transport module - Mail delivery abstraction.
+ * Transport module - Mail delivery.
  *
- * Provides deployment-mode-aware mail transport:
- * - Gas Town: gt mail send with tmux notifications
- * - Swarm: Direct beads operations
+ * Provides the BeadsTransport for mail delivery via direct beads operations.
  *
  * Usage:
  *   import { getTransport } from "./transport/index.js";
@@ -11,9 +9,7 @@
  *   await transport.sendMessage({ to, from, subject, body });
  */
 
-import { getWorkspace } from "../workspace/index.js";
 import type { MailTransport, SendOptions, TransportResult, ListMailOptions, NotificationProvider } from "./mail-transport.js";
-import { GasTownTransport } from "./gastown-transport.js";
 import { BeadsTransport } from "./beads-transport.js";
 
 // Re-export types
@@ -23,29 +19,14 @@ export type { MailTransport, SendOptions, TransportResult, ListMailOptions, Noti
 let transportInstance: MailTransport | null = null;
 
 /**
- * Get the appropriate MailTransport for the current deployment mode.
- *
- * Uses the workspace provider to determine which transport to use:
- * - gastown mode → GasTownTransport
- * - swarm mode → BeadsTransport
+ * Get the MailTransport singleton.
  */
 export function getTransport(): MailTransport {
   if (transportInstance) {
     return transportInstance;
   }
 
-  const workspace = getWorkspace();
-
-  switch (workspace.mode) {
-    case "gastown":
-      transportInstance = new GasTownTransport();
-      break;
-    case "swarm":
-    default:
-      transportInstance = new BeadsTransport();
-      break;
-  }
-
+  transportInstance = new BeadsTransport();
   return transportInstance;
 }
 
@@ -56,8 +37,7 @@ export function resetTransport(): void {
   transportInstance = null;
 }
 
-// Re-export specific transport classes for direct use if needed
-export { GasTownTransport } from "./gastown-transport.js";
+// Re-export specific transport class for direct use if needed
 export { BeadsTransport } from "./beads-transport.js";
 
 // Re-export notification providers

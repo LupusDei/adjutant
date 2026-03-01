@@ -1,22 +1,15 @@
-import { execFile } from "child_process";
-import { promisify } from "util";
-import { existsSync } from "fs";
-import { join } from "path";
 import { execBd, stripBeadPrefix, type BeadsIssue } from "./bd-client.js";
 import {
   listAllBeadsDirs,
   resolveBeadsDirFromId,
-  resolveWorkspaceRoot,
 } from "./workspace/index.js";
-import { extractBeadPrefix } from "./gastown-workspace.js";
-import { getTopology } from "./topology/index.js";
-
-const execFileAsync = promisify(execFile);
 import {
+  extractBeadPrefix,
   addressToIdentity,
   parseAgentBeadId,
   parseAgentFields,
-} from "./gastown-utils.js";
+} from "./message-utils.js";
+import { getTopology } from "./topology/index.js";
 import { listTmuxSessions } from "./tmux.js";
 import { buildMailIndex, listMailIssues, type MailIndexEntry } from "./mail-data.js";
 
@@ -46,31 +39,6 @@ export interface AgentSnapshot {
   mailIndex: Map<string, MailIndexEntry>;
 }
 
-
-/**
- * Gets the current git branch for a polecat from their worktree.
- * Returns undefined if the worktree doesn't exist or git fails.
- */
-async function getPolecatBranch(rig: string, polecatName: string): Promise<string | undefined> {
-  try {
-    const townRoot = resolveWorkspaceRoot();
-    // Polecat worktrees are at: {townRoot}/{rig}/polecats/{name}/{rig}/
-    const worktreePath = join(townRoot, rig, "polecats", polecatName, rig);
-
-    if (!existsSync(worktreePath)) {
-      return undefined;
-    }
-
-    const { stdout } = await execFileAsync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
-      cwd: worktreePath,
-      timeout: 5000,
-    });
-
-    return stdout.trim() || undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 async function fetchAgents(cwd: string, beadsDir: string): Promise<BeadsIssue[]> {
   // Single call with --all, filter client-side for relevant statuses
@@ -206,66 +174,30 @@ export async function collectAgentSnapshot(
   }
 
   // Synthesize agents from running tmux sessions if not found in beads
-  // This section handles Gas Town session patterns - in swarm mode,
-  // agents are discovered purely through beads, not tmux sessions
   for (const sessionName of sessions) {
-    let rig: string | null = null;
     let role: string | null = null;
     let name: string | null = null;
 
-    if (sessionName === "hq-mayor") {
-      role = "mayor";
-      name = "mayor";
-    } else if (sessionName === "hq-deacon") {
-      role = "deacon";
-      name = "deacon";
-    } else if (sessionName.startsWith("gt-")) {
-      const parts = sessionName.split("-");
-      // gt-{rig}-witness
-      // gt-{rig}-refinery
-      // gt-{rig}-crew-{name}
-      // gt-{rig}-{name} (polecat)
-      if (parts.length >= 3 && parts[1] && parts[2]) {
-        rig = parts[1];
-        const typeOrName = parts[2];
-
-        if (typeOrName === "witness") {
-          role = "witness";
-          name = "witness";
-        } else if (typeOrName === "refinery") {
-          role = "refinery";
-          name = "refinery";
-        } else if (typeOrName === "crew" && parts.length >= 4) {
-          role = "crew";
-          name = parts.slice(3).join("-");
-        } else {
-          // Assume polecat if not one of the above known types
-          role = "polecat";
-          name = parts.slice(2).join("-");
-        }
-      }
-    } else if (sessionName.startsWith("agent-")) {
-      // Swarm mode: agent-{name} sessions
+    if (sessionName.startsWith("agent-")) {
       role = "agent";
       name = sessionName.slice("agent-".length);
     }
 
     if (role && name) {
-      const address = topology.buildAddress(role, rig, name);
+      const address = topology.buildAddress(role, null, name);
       if (address) {
         const identity = addressToIdentity(address);
-        // Check if already found via beads
         if (!identities.has(identity)) {
           identities.add(identity);
           baseAgents.push({
-            id: address, // Fallback ID
+            id: address,
             name,
             role,
-            rig,
+            rig: null,
             address,
             sessionName,
             running: true,
-            state: "running", // It has a session, so it's running
+            state: "running",
           });
         }
       }
@@ -284,18 +216,6 @@ export async function collectAgentSnapshot(
   // Fetch hook bead titles, routing each to the correct beads database by prefix
   const hookBeadTitles = await fetchBeadTitles(uniqueHookBeadIds);
 
-  // Fetch branches for polecats in parallel
-  const polecatAgents = baseAgents.filter((a) => a.role === "polecat" && a.rig);
-  const branchResults = await Promise.all(
-    polecatAgents.map(async (agent) => ({
-      address: agent.address,
-      branch: await getPolecatBranch(agent.rig!, agent.name),
-    }))
-  );
-  const branchMap = new Map(
-    branchResults.filter((r) => r.branch).map((r) => [r.address, r.branch!])
-  );
-
   const agents: AgentRuntimeInfo[] = baseAgents.map((agent) => {
     const mailInfo = mailIndex.get(addressToIdentity(agent.address));
     const result: AgentRuntimeInfo = {
@@ -309,10 +229,6 @@ export async function collectAgentSnapshot(
       const title = hookBeadTitles.get(agent.hookBead);
       if (title) result.hookBeadTitle = title;
     }
-
-    // Add branch for polecats
-    const branch = branchMap.get(agent.address);
-    if (branch) result.branch = branch;
 
     return result;
   });
