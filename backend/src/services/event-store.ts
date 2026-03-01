@@ -3,6 +3,11 @@ import type Database from "better-sqlite3";
 import type { TimelineEvent, EventRow, TimelineQuery } from "../types/events.js";
 import { wsBroadcast } from "./ws-server.js";
 
+/** Convert ISO timestamp (with T/Z) back to SQLite format for DB comparisons */
+function toDbTimestamp(iso: string): string {
+  return iso.replace("T", " ").replace("Z", "");
+}
+
 export interface InsertEventInput {
   eventType: string;
   agentId: string;
@@ -27,7 +32,7 @@ function rowToEvent(row: EventRow): TimelineEvent {
     detail: row.detail !== null ? (JSON.parse(row.detail) as Record<string, unknown>) : null,
     beadId: row.bead_id,
     messageId: row.message_id,
-    createdAt: row.created_at,
+    createdAt: row.created_at.endsWith("Z") ? row.created_at : row.created_at.replace(" ", "T") + "Z",
   };
 }
 
@@ -98,12 +103,12 @@ export function createEventStore(db: Database.Database): EventStore {
 
       if (query.before !== undefined) {
         conditions.push("created_at < ?");
-        params.push(query.before);
+        params.push(toDbTimestamp(query.before));
       }
 
       if (query.after !== undefined) {
         conditions.push("created_at > ?");
-        params.push(query.after);
+        params.push(toDbTimestamp(query.after));
       }
 
       const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
