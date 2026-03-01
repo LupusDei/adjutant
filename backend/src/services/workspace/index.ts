@@ -78,17 +78,17 @@ export function hasGtBinary(): boolean {
 }
 
 /**
- * List available rig names.
+ * List available project names.
  */
-export async function listRigNames(): Promise<string[]> {
-  return getWorkspace().listRigNames();
+export async function listProjectNames(): Promise<string[]> {
+  return getWorkspace().listProjectNames();
 }
 
 /**
- * Resolve path for a rig.
+ * Resolve path for a project.
  */
-export function resolveRigPath(rigName: string): string | null {
-  return getWorkspace().resolveRigPath(rigName);
+export function resolveProjectPath(projectName: string): string | null {
+  return getWorkspace().resolveProjectPath(projectName);
 }
 
 /**

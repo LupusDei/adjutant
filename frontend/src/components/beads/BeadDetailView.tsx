@@ -307,8 +307,8 @@ export function BeadDetailView({ beadId, onClose, onBeadNavigate }: BeadDetailVi
                   <span style={styles.infoLabel}>Assignee:</span>
                   <span style={styles.infoValue}>{bead.assignee ?? '—'}</span>
 
-                  <span style={styles.infoLabel}>Rig:</span>
-                  <span style={styles.infoValue}>{bead.rig ?? '—'}</span>
+                  <span style={styles.infoLabel}>Project:</span>
+                  <span style={styles.infoValue}>{bead.project ?? '—'}</span>
 
                   <span style={styles.infoLabel}>Source:</span>
                   <span style={styles.infoValue}>{bead.source}</span>

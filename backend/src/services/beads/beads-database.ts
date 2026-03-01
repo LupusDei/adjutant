@@ -51,11 +51,11 @@ export async function resolveBeadDatabase(beadId: string): Promise<
   }
 
   const beadsDirs = await listAllBeadsDirs();
-  const rigDir = beadsDirs.find((d) => d.rig === source);
-  if (!rigDir) {
-    return { error: { code: "RIG_NOT_FOUND", message: `Cannot find rig database for prefix: ${prefix}` } };
+  const projectDir = beadsDirs.find((d) => d.project === source);
+  if (!projectDir) {
+    return { error: { code: "PROJECT_NOT_FOUND", message: `Cannot find project database for prefix: ${prefix}` } };
   }
-  return { workDir: rigDir.workDir, beadsDir: rigDir.path };
+  return { workDir: projectDir.workDir, beadsDir: projectDir.path };
 }
 
 // ============================================================================
@@ -63,52 +63,52 @@ export async function resolveBeadDatabase(beadId: string): Promise<
 // ============================================================================
 
 /**
- * Builds a list of databases to query based on rig filter.
- * Replaces the repeated town+rigs aggregation pattern in listAllBeads,
+ * Builds a list of databases to query based on project filter.
+ * Replaces the repeated town+projects aggregation pattern in listAllBeads,
  * listRecentlyClosed, and getBeadsGraph.
  *
- * @param rig "all" for town + all rigs, "town" for town only, or a specific rig name
+ * @param project "all" for town + all projects, "town" for town only, or a specific project name
  */
 export async function buildDatabaseList(
-  rig?: string
+  project?: string
 ): Promise<Array<{ workDir: string; beadsDir: string; source: string }>> {
   const townRoot = resolveWorkspaceRoot();
-  const effectiveRig = rig?.trim() || "town";
+  const effectiveProject = project?.trim() || "town";
 
-  if (effectiveRig === "all") {
+  if (effectiveProject === "all") {
     const townBeadsDir = join(townRoot, ".beads");
     const databases: Array<{ workDir: string; beadsDir: string; source: string }> = [
       { workDir: townRoot, beadsDir: townBeadsDir, source: "town" },
     ];
 
     const beadsDirs = await listAllBeadsDirs();
-    for (const dirInfo of beadsDirs.filter((d) => d.rig !== null)) {
+    for (const dirInfo of beadsDirs.filter((d) => d.project !== null)) {
       databases.push({
         workDir: dirInfo.workDir,
         beadsDir: dirInfo.path,
-        source: dirInfo.rig!,
+        source: dirInfo.project!,
       });
     }
     return databases;
   }
 
-  if (effectiveRig === "town") {
+  if (effectiveProject === "town") {
     const townBeadsDir = resolveBeadsDir(townRoot);
     return [{ workDir: townRoot, beadsDir: townBeadsDir, source: "town" }];
   }
 
-  // Specific rig
+  // Specific project
   const beadsDirs = await listAllBeadsDirs();
-  const rigDir = beadsDirs.find((d) => d.rig === effectiveRig);
-  if (rigDir) {
+  const projectDir = beadsDirs.find((d) => d.project === effectiveProject);
+  if (projectDir) {
     return [{
-      workDir: rigDir.workDir,
-      beadsDir: rigDir.path,
-      source: rigDir.rig!,
+      workDir: projectDir.workDir,
+      beadsDir: projectDir.path,
+      source: projectDir.project!,
     }];
   }
 
-  // Fallback: town database if rig not found
+  // Fallback: town database if project not found
   const townBeadsDir = resolveBeadsDir(townRoot);
   return [{ workDir: townRoot, beadsDir: townBeadsDir, source: "town" }];
 }
@@ -240,7 +240,7 @@ export async function fetchGraphBeadsFromDatabase(
 // ============================================================================
 
 /**
- * Lists all available bead sources (projects/rigs with beads databases).
+ * Lists all available bead sources (projects with beads databases).
  */
 export async function listBeadSources(): Promise<
   BeadsServiceResult<{ sources: BeadSource[]; mode: string }>
@@ -248,7 +248,7 @@ export async function listBeadSources(): Promise<
   try {
     const beadsDirs = await listAllBeadsDirs();
     const sources: BeadSource[] = beadsDirs.map((dirInfo) => ({
-      name: dirInfo.rig ?? "project",
+      name: dirInfo.project ?? "project",
       path: dirInfo.workDir,
       hasBeads: true,
     }));

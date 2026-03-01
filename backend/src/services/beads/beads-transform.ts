@@ -9,13 +9,13 @@ import type { BeadInfo } from "./types.js";
 import { prefixToSource } from "./beads-prefix-map.js";
 
 /**
- * Extracts project/rig name from assignee path.
+ * Extracts project name from assignee path.
  * Examples:
  *   "myproject/agents/ace" -> "myproject"
  *   "user/" -> null (top-level)
  *   null -> null
  */
-export function extractRig(assignee: string | null | undefined): string | null {
+export function extractProject(assignee: string | null | undefined): string | null {
   if (!assignee) return null;
   if (assignee === "mayor/" || assignee.startsWith("mayor/")) return null;
   const firstSlash = assignee.indexOf("/");
@@ -39,7 +39,7 @@ export function transformBead(issue: BeadsIssue, _dbSource: string): BeadInfo {
     priority: issue.priority,
     type: issue.issue_type,
     assignee: issue.assignee ?? null,
-    rig: extractRig(issue.assignee),
+    project: extractProject(issue.assignee),
     source: prefixToSource(issue.id),
     labels: issue.labels ?? [],
     createdAt: issue.created_at,
@@ -48,4 +48,4 @@ export function transformBead(issue: BeadsIssue, _dbSource: string): BeadInfo {
 }
 
 /** @internal Exported for testing */
-export const _extractRig = extractRig;
+export const _extractProject = extractProject;

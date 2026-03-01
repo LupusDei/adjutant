@@ -225,11 +225,14 @@ export const api = {
       status?: 'default' | 'open' | 'hooked' | 'in_progress' | 'deferred' | 'closed' | 'all';
       type?: string;
       limit?: number;
+      /** Scope which database(s) to query: "town", "all", or a specific project name */
+      project?: string;
     }): Promise<BeadInfo[]> {
       const searchParams = new URLSearchParams();
       if (params?.status) searchParams.set('status', params.status);
       if (params?.type) searchParams.set('type', params.type);
       if (params?.limit) searchParams.set('limit', params.limit.toString());
+      if (params?.project) searchParams.set('project', params.project);
 
       const query = searchParams.toString();
       return apiFetch(`/beads${query ? `?${query}` : ''}`);
@@ -268,7 +271,7 @@ export const api = {
     },
 
     /**
-     * Get available bead sources (projects/rigs) and deployment mode.
+     * Get available bead sources (projects) and deployment mode.
      * Used to populate filter dropdowns in any deployment mode.
      */
     async sources(): Promise<{ sources: { name: string; path: string; hasBeads: boolean }[]; mode: string }> {
@@ -289,7 +292,7 @@ export const api = {
    */
   epics: {
     /**
-     * List epics with optional rig filter.
+     * List epics with optional project filter.
      */
     async list(): Promise<BeadInfo[]> {
       const query = new URLSearchParams();

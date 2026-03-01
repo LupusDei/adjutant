@@ -17,7 +17,7 @@ export interface AgentRuntimeInfo {
   id: string;
   name: string;
   role: string;
-  rig: string | null;
+  project: string | null;
   address: string;
   sessionName: string | null;
   running: boolean;
@@ -118,12 +118,12 @@ export async function collectAgentSnapshot(
 ): Promise<AgentSnapshot> {
   const topology = getTopology();
   const sessions = await listTmuxSessions();
-  const foundIssues: { issue: BeadsIssue; sourceRig: string | null }[] = [];
+  const foundIssues: { issue: BeadsIssue; sourceProject: string | null }[] = [];
   const beadsDirs = await listAllBeadsDirs();
 
   for (const dirInfo of beadsDirs) {
     const agents = await fetchAgents(dirInfo.workDir, dirInfo.path);
-    foundIssues.push(...agents.map((issue) => ({ issue, sourceRig: dirInfo.rig })));
+    foundIssues.push(...agents.map((issue) => ({ issue, sourceProject: dirInfo.project })));
   }
 
   if (foundIssues.length === 0) {
@@ -133,19 +133,19 @@ export async function collectAgentSnapshot(
   const identities = new Set(extraIdentities.map(addressToIdentity));
   const baseAgents: Omit<AgentRuntimeInfo, "unreadMail" | "firstSubject">[] = [];
 
-  for (const { issue, sourceRig } of foundIssues) {
-    const parsed = parseAgentBeadId(issue.id, sourceRig);
+  for (const { issue, sourceProject } of foundIssues) {
+    const parsed = parseAgentBeadId(issue.id, sourceProject);
     const fields = parseAgentFields(issue.description);
     const role = topology.normalizeRole(fields.roleType ?? parsed?.role ?? "");
     if (!role) continue;
 
-    const rig = fields.rig ?? parsed?.rig ?? null;
+    const project = fields.rig ?? parsed?.rig ?? null;
     const name =
       parsed?.name ??
       (topology.isInfrastructure(role)
         ? role
         : issue.title || role);
-    const address = topology.buildAddress(role, rig, name);
+    const address = topology.buildAddress(role, project, name);
     if (!address) continue;
 
     const identity = addressToIdentity(address);
@@ -153,7 +153,7 @@ export async function collectAgentSnapshot(
     if (identities.has(identity)) continue;
     identities.add(identity);
 
-    const sessionInfo = topology.getSessionInfo(role, rig, name);
+    const sessionInfo = topology.getSessionInfo(role, project, name);
     const sessionName = sessionInfo?.name ?? null;
     const running = sessionName ? sessions.has(sessionName) : false;
     const state = issue.agent_state ?? fields.agentState;
@@ -163,7 +163,7 @@ export async function collectAgentSnapshot(
       id: issue.id,
       name,
       role,
-      rig,
+      project,
       address,
       sessionName,
       running,
@@ -193,7 +193,7 @@ export async function collectAgentSnapshot(
             id: address,
             name,
             role,
-            rig: null,
+            project: null,
             address,
             sessionName,
             running: true,

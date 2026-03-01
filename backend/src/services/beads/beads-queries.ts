@@ -21,7 +21,7 @@ import {
   ensurePrefixMap,
   prefixToSource,
 } from "./beads-prefix-map.js";
-import { extractRig } from "./beads-transform.js";
+import { extractProject } from "./beads-transform.js";
 import {
   buildDatabaseList,
   fetchBeadsFromDatabase,
@@ -102,7 +102,7 @@ export async function getBead(
       priority: issue.priority,
       type: issue.issue_type,
       assignee: issue.assignee ?? null,
-      rig: extractRig(issue.assignee),
+      project: extractProject(issue.assignee),
       source: prefixToSource(issue.id),
       labels: issue.labels ?? [],
       createdAt: issue.created_at,
@@ -135,7 +135,7 @@ export async function getBead(
 // ============================================================================
 
 /**
- * Lists beads from a single database (legacy behavior for rig-specific queries).
+ * Lists beads from a single database (legacy behavior for project-specific queries).
  */
 export async function listBeads(
   options: ListBeadsOptions = {}
@@ -144,9 +144,9 @@ export async function listBeads(
     await ensurePrefixMap();
 
     const townRoot = resolveWorkspaceRoot();
-    const workDir = options.rigPath ?? townRoot;
+    const workDir = options.projectPath ?? townRoot;
     const beadsDir = resolveBeadsDir(workDir);
-    const source = options.rig ?? "town";
+    const source = options.project ?? "town";
 
     const fetchResult = await fetchBeadsFromDatabase(workDir, beadsDir, source, options);
 
@@ -159,9 +159,9 @@ export async function listBeads(
 
     let beads = fetchResult.beads;
 
-    // Filter by rig if specified AND we're not already querying a rig-specific database
-    if (options.rig && !options.rigPath) {
-      beads = beads.filter((b) => b.rig === options.rig);
+    // Filter by project if specified AND we're not already querying a project-specific database
+    if (options.project && !options.projectPath) {
+      beads = beads.filter((b) => b.project === options.project);
     }
 
     if (options.assignee) {
@@ -187,11 +187,11 @@ export async function listBeads(
 }
 
 /**
- * Lists beads from town AND rig beads databases.
+ * Lists beads from town AND project beads databases.
  * IMPORTANT: Adjutant is the dashboard for ALL of Gas Town.
  */
 export async function listAllBeads(
-  options: Omit<ListBeadsOptions, "rig" | "rigPath"> = {}
+  options: Omit<ListBeadsOptions, "project" | "projectPath"> = {}
 ): Promise<BeadsServiceResult<BeadInfo[]>> {
   const perfStart = Date.now();
   try {
@@ -271,7 +271,7 @@ const RECENT_CLOSED_LIMIT = 10;
 
 /**
  * Lists beads closed within a configurable time window.
- * Queries all databases (town + rigs), filters by closed_at timestamp.
+ * Queries all databases (town + projects), filters by closed_at timestamp.
  */
 export async function listRecentlyClosed(
   hours: number = 1
@@ -305,7 +305,7 @@ export async function listRecentlyClosed(
           closedAt: issue.closed_at,
           type: issue.issue_type,
           priority: issue.priority,
-          rig: extractRig(issue.assignee),
+          project: extractProject(issue.assignee),
           source: prefixToSource(issue.id),
         });
       }
@@ -340,8 +340,8 @@ export async function getBeadsGraph(
   try {
     await ensurePrefixMap();
 
-    const rig = options.rig?.trim() || "town";
-    const databasesToQuery = await buildDatabaseList(rig);
+    const project = options.project?.trim() || "town";
+    const databasesToQuery = await buildDatabaseList(project);
 
     // Fetch from all databases sequentially
     const allIssues: BeadsIssue[] = [];
@@ -369,7 +369,7 @@ export async function getBeadsGraph(
 
     // Filter out excluded prefixes when excludeTown is set
     let issues = uniqueIssues;
-    if (options.excludeTown && rig === "all") {
+    if (options.excludeTown && project === "all") {
       issues = issues.filter((issue) => !issue.id.startsWith("hq-"));
     }
 

@@ -8,8 +8,8 @@
 export interface BeadsDirInfo {
   /** Absolute path to the .beads directory */
   path: string;
-  /** Rig name if this is a rig-specific beads dir, null for project-level */
-  rig: string | null;
+  /** Project name if this is a project-specific beads dir, null for top-level */
+  project: string | null;
   /** Working directory containing this beads directory */
   workDir: string;
 }
@@ -71,14 +71,14 @@ export interface WorkspaceProvider {
   hasGtBinary(): boolean;
 
   /**
-   * List available rig names.
+   * List available project names.
    */
-  listRigNames(): Promise<string[]>;
+  listProjectNames(): Promise<string[]>;
 
   /**
-   * Resolve the filesystem path for a rig.
-   * @param rigName Name of the rig
+   * Resolve the filesystem path for a project.
+   * @param projectName Name of the project
    * @returns Absolute path or null if not found
    */
-  resolveRigPath(rigName: string): string | null;
+  resolveProjectPath(projectName: string): string | null;
 }

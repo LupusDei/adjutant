@@ -118,8 +118,8 @@ export interface CrewMember {
   name: string;
   /** Agent type for icon/styling */
   type: AgentType;
-  /** Which rig this agent belongs to (null for town-level) */
-  rig: string | null;
+  /** Which project this agent belongs to (null for top-level) */
+  project: string | null;
   /** Current operational status */
   status: CrewMemberStatus;
   /** Current task description (if working) */
@@ -271,7 +271,7 @@ export const CrewMemberSchema = z.object({
   id: z.string(),
   name: z.string(),
   type: AgentTypeSchema,
-  rig: z.string().nullable(),
+  project: z.string().nullable(),
   status: CrewMemberStatusSchema,
   currentTask: z.string().optional(),
   unreadMail: z.number().optional(),

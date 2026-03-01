@@ -319,12 +319,12 @@ struct BeadDetailView: View {
                     }
                 }
 
-                // Rig
-                if let rig = bead.rig {
+                // Project
+                if let project = bead.project {
                     HStack {
-                        CRTText("RIG:", style: .caption, glowIntensity: .subtle)
+                        CRTText("PROJECT:", style: .caption, glowIntensity: .subtle)
                             .foregroundColor(theme.dim)
-                        CRTText(rig.uppercased(), style: .body, glowIntensity: .subtle)
+                        CRTText(project.uppercased(), style: .body, glowIntensity: .subtle)
                     }
                 }
             }

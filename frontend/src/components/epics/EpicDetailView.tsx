@@ -321,7 +321,7 @@ export function EpicDetailView(props: EpicDetailViewProps) {
                   >
                     {copied ? '\u2713' : '\u2398'}
                   </button>
-                  {epic.rig && <span style={styles.rigBadge}>{epic.rig.toUpperCase()}</span>}
+                  {epic.project && <span style={styles.rigBadge}>{epic.project.toUpperCase()}</span>}
                   <span
                     style={{
                       ...styles.priorityBadge,

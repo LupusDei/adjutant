@@ -203,7 +203,7 @@ describe("beads-service", () => {
       expect(result.data?.[1].id).toBe("hq-002");
     });
 
-    it("should filter by rig via assignee prefix", async () => {
+    it("should filter by project via assignee prefix", async () => {
       vi.mocked(execBd).mockResolvedValue({
         success: true,
         data: [
@@ -214,7 +214,7 @@ describe("beads-service", () => {
         exitCode: 0,
       });
 
-      const result = await listBeads({ rig: "proj1" });
+      const result = await listBeads({ project: "proj1" });
 
       expect(result.success).toBe(true);
       expect(result.data).toHaveLength(2);
@@ -222,14 +222,14 @@ describe("beads-service", () => {
       expect(result.data?.[1].id).toBe("hq-003");
     });
 
-    it("should use rigPath when provided", async () => {
+    it("should use projectPath when provided", async () => {
       vi.mocked(execBd).mockResolvedValue({
         success: true,
         data: [],
         exitCode: 0,
       });
 
-      await listBeads({ rigPath: "/custom/rig/path" });
+      await listBeads({ projectPath: "/custom/rig/path" });
 
       const options = vi.mocked(execBd).mock.calls[0]?.[1];
       expect(options?.cwd).toBe("/custom/rig/path");
@@ -334,20 +334,20 @@ describe("beads-service", () => {
       expect(result.data?.title).toBe("Town Level Task");
       expect(result.data?.description).toBe("A town-level task description");
       expect(result.data?.source).toBe("town");
-      // mayor/ assignees should have null rig
-      expect(result.data?.rig).toBeNull();
+      // mayor/ assignees should have null project
+      expect(result.data?.project).toBeNull();
     });
 
-    it("should return bead details for valid rig bead (adj-* prefix)", async () => {
-      // Set up the mock to return the adjutant rig directory
+    it("should return bead details for valid project bead (adj-* prefix)", async () => {
+      // Set up the mock to return the adjutant project directory
       vi.mocked(listAllBeadsDirs).mockResolvedValue([
-        { path: "/tmp/town/adjutant/.beads", workDir: "/tmp/town/adjutant", rig: "adjutant" },
+        { path: "/tmp/town/adjutant/.beads", workDir: "/tmp/town/adjutant", project: "adjutant" },
       ]);
 
       const mockIssue = createBead({
         id: "adj-67tta",
         title: "Adjutant Rig Task",
-        description: "A rig-specific task",
+        description: "A project-specific task",
         assignee: "adjutant/agents/quartz",
       });
 
@@ -362,7 +362,7 @@ describe("beads-service", () => {
       expect(result.success).toBe(true);
       expect(result.data?.id).toBe("adj-67tta");
       expect(result.data?.title).toBe("Adjutant Rig Task");
-      expect(result.data?.rig).toBe("adjutant");
+      expect(result.data?.project).toBe("adjutant");
     });
 
     it("should return error for invalid bead ID format (no prefix)", async () => {
@@ -427,7 +427,7 @@ describe("beads-service", () => {
       expect(detail.updatedAt).toBe("2026-01-16T12:00:00Z");
       expect(detail.closedAt).toBeNull();
       expect(detail.assignee).toBe("proj1/agents/toast");
-      expect(detail.rig).toBe("proj1");
+      expect(detail.project).toBe("proj1");
       expect(detail.labels).toEqual(["urgent", "backend"]);
       expect(detail.agentState).toBe("working");
       expect(detail.isPinned).toBe(true);
@@ -466,7 +466,7 @@ describe("beads-service", () => {
       expect(detail.updatedAt).toBeNull();
       expect(detail.closedAt).toBeNull();
       expect(detail.assignee).toBeNull();
-      expect(detail.rig).toBeNull();
+      expect(detail.project).toBeNull();
       expect(detail.labels).toEqual([]);
       expect(detail.agentState).toBeNull();
       expect(detail.isPinned).toBe(false);

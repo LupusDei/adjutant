@@ -13,7 +13,7 @@ vi.mock("../../src/services/beads/index.js", () => ({
 
 vi.mock("../../src/services/workspace/index.js", () => ({
   resolveWorkspaceRoot: vi.fn(() => "/tmp/workspace"),
-  resolveRigPath: vi.fn((rig: string) => `/tmp/workspace/${rig}`),
+  resolveProjectPath: vi.fn((project: string) => `/tmp/workspace/${project}`),
   listAllBeadsDirs: vi.fn(() => Promise.resolve([])),
   getDeploymentMode: vi.fn(() => "swarm"),
 }));
@@ -43,7 +43,7 @@ function createMockBead(overrides: Partial<BeadInfo> = {}): BeadInfo {
     priority: 2,
     type: "task",
     assignee: null,
-    rig: null,
+    project: null,
     source: "town",
     labels: [],
     createdAt: "2026-01-15T10:00:00Z",
@@ -64,7 +64,7 @@ function createMockBeadDetail(overrides: Partial<BeadDetail> = {}): BeadDetail {
     priority: 2,
     type: "task",
     assignee: null,
-    rig: null,
+    project: null,
     source: "town",
     labels: [],
     createdAt: "2026-01-15T10:00:00Z",
@@ -122,49 +122,49 @@ describe("beads routes", () => {
       expect(response.body.data[1].title).toBe("Second bead");
     });
 
-    it("should call listBeads when rig=town (explicit)", async () => {
+    it("should call listBeads when project=town (explicit)", async () => {
       vi.mocked(listBeads).mockResolvedValue({
         success: true,
         data: [],
       });
 
-      await request(app).get("/api/beads?rig=town");
+      await request(app).get("/api/beads?project=town");
 
       expect(listBeads).toHaveBeenCalled();
       expect(listAllBeads).not.toHaveBeenCalled();
     });
 
-    it("should call listBeads when rig is a specific rig name", async () => {
+    it("should call listBeads when project is a specific project name", async () => {
       vi.mocked(listBeads).mockResolvedValue({
         success: true,
         data: [],
       });
 
-      await request(app).get("/api/beads?rig=proj1");
+      await request(app).get("/api/beads?project=proj1");
 
       expect(listBeads).toHaveBeenCalled();
       expect(listAllBeads).not.toHaveBeenCalled();
     });
 
-    it("should call listAllBeads when rig=all", async () => {
+    it("should call listAllBeads when project=all", async () => {
       vi.mocked(listAllBeads).mockResolvedValue({
         success: true,
         data: [],
       });
 
-      await request(app).get("/api/beads?rig=all");
+      await request(app).get("/api/beads?project=all");
 
       expect(listAllBeads).toHaveBeenCalled();
       expect(listBeads).not.toHaveBeenCalled();
     });
 
-    it("should pass status query parameter with rig=all", async () => {
+    it("should pass status query parameter with project=all", async () => {
       vi.mocked(listAllBeads).mockResolvedValue({
         success: true,
         data: [],
       });
 
-      await request(app).get("/api/beads?rig=all&status=closed");
+      await request(app).get("/api/beads?project=all&status=closed");
 
       expect(listAllBeads).toHaveBeenCalledWith(
         expect.objectContaining({ status: "closed" })
@@ -223,30 +223,30 @@ describe("beads routes", () => {
       );
     });
 
-    it("should return 200 with empty array on listAllBeads error (rig=all)", async () => {
+    it("should return 200 with empty array on listAllBeads error (project=all)", async () => {
       vi.mocked(listAllBeads).mockResolvedValue({
         success: false,
         error: { code: "BD_ERROR", message: "Database not found" },
       });
 
-      const response = await request(app).get("/api/beads?rig=all");
+      const response = await request(app).get("/api/beads?project=all");
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.data).toEqual([]);
     });
 
-    it("should return 500 with error on listBeads failure when rig specified", async () => {
+    it("should return 500 with error on listBeads failure when project specified", async () => {
       vi.mocked(listBeads).mockResolvedValue({
         success: false,
-        error: { code: "BD_ERROR", message: "Rig database not found" },
+        error: { code: "BD_ERROR", message: "Project database not found" },
       });
 
-      const response = await request(app).get("/api/beads?rig=proj1");
+      const response = await request(app).get("/api/beads?project=proj1");
 
       expect(response.status).toBe(500);
       expect(response.body.success).toBe(false);
-      expect(response.body.error.message).toBe("Rig database not found");
+      expect(response.body.error.message).toBe("Project database not found");
     });
 
     it("should return 200 with empty array on listBeads error (default town)", async () => {
@@ -295,7 +295,7 @@ describe("beads routes", () => {
         priority: 1,
         type: "feature",
         assignee: "proj1/agents/toast",
-        rig: "proj1",
+        project: "proj1",
         source: "town",
         labels: ["urgent", "backend"],
         agentState: "working",
@@ -371,12 +371,12 @@ describe("beads routes", () => {
       expect(response.body.error.message).toBe("Failed to get bead");
     });
 
-    it("should handle rig-specific bead IDs (adj-* prefix)", async () => {
+    it("should handle project-specific bead IDs (adj-* prefix)", async () => {
       const mockDetail = createMockBeadDetail({
         id: "adj-67tta",
         title: "Adjutant Bead",
         source: "adjutant",
-        rig: "adjutant",
+        project: "adjutant",
       });
 
       vi.mocked(getBead).mockResolvedValue({
@@ -488,7 +488,7 @@ describe("beads routes", () => {
         closedAt: "2026-02-23T10:30:00Z",
         type: "task",
         priority: 2,
-        rig: "proj1",
+        project: "proj1",
         source: "town",
         ...overrides,
       };
@@ -607,7 +607,7 @@ describe("beads routes", () => {
         closedAt: "2026-02-23T11:00:00Z",
         type: "task",
         priority: 1,
-        rig: "adjutant",
+        project: "adjutant",
         source: "adjutant",
       });
 
@@ -626,7 +626,7 @@ describe("beads routes", () => {
       expect(data.closedAt).toBe("2026-02-23T11:00:00Z");
       expect(data.type).toBe("task");
       expect(data.priority).toBe(1);
-      expect(data.rig).toBe("adjutant");
+      expect(data.project).toBe("adjutant");
       expect(data.source).toBe("adjutant");
     });
   });

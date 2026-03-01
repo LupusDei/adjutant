@@ -102,7 +102,7 @@ export async function getEpicChildren(
  * Uses `bd show` per epic to get dependency data (children with status).
  */
 export async function listEpicsWithProgress(
-  options: { rig?: string; status?: string } = {}
+  options: { project?: string; status?: string } = {}
 ): Promise<BeadsServiceResult<EpicWithChildren[]>> {
   try {
     await ensurePrefixMap();
@@ -120,18 +120,18 @@ export async function listEpicsWithProgress(
       return { success: true, data: [] };
     }
 
-    // Also fetch from rig databases
+    // Also fetch from project databases
     const beadsDirs = await listAllBeadsDirs();
-    const rigDirs = beadsDirs.filter((d) => d.rig !== null);
+    const projectDirs = beadsDirs.filter((d) => d.project !== null);
 
     const allEpicIssues = [...epicResult.data];
-    for (const rigDir of rigDirs) {
-      const rigResult = await execBd<BeadsIssue[]>(listArgs, {
-        cwd: rigDir.workDir,
-        beadsDir: rigDir.path,
+    for (const projDir of projectDirs) {
+      const projResult = await execBd<BeadsIssue[]>(listArgs, {
+        cwd: projDir.workDir,
+        beadsDir: projDir.path,
       });
-      if (rigResult.success && rigResult.data) {
-        allEpicIssues.push(...rigResult.data);
+      if (projResult.success && projResult.data) {
+        allEpicIssues.push(...projResult.data);
       }
     }
 
@@ -152,9 +152,9 @@ export async function listEpicsWithProgress(
       if (source === "town" || source === "unknown") {
         epicDbMap.set(epic.id, { workDir: townRoot, beadsDir: townBeadsDir });
       } else {
-        const rigDir = rigDirs.find((d) => d.rig === source);
-        if (rigDir) {
-          epicDbMap.set(epic.id, { workDir: rigDir.workDir, beadsDir: rigDir.path });
+        const projDir = projectDirs.find((d) => d.project === source);
+        if (projDir) {
+          epicDbMap.set(epic.id, { workDir: projDir.workDir, beadsDir: projDir.path });
         } else {
           epicDbMap.set(epic.id, { workDir: townRoot, beadsDir: townBeadsDir });
         }

@@ -48,7 +48,7 @@ function createBeadInfo(overrides: Partial<BeadInfo> = {}): BeadInfo {
     priority: 2,
     type: "task",
     assignee: null,
-    rig: null,
+    project: null,
     source: "town",
     labels: [],
     createdAt: "2026-01-01T00:00:00Z",
@@ -62,7 +62,7 @@ function createCrewMember(overrides: Partial<CrewMember> = {}): CrewMember {
     id: "test-agent",
     name: "test-agent",
     type: "agent",
-    rig: null,
+    project: null,
     status: "idle",
     ...overrides,
   };

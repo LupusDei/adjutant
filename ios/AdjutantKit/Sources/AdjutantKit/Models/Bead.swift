@@ -18,8 +18,8 @@ public struct BeadInfo: Codable, Identifiable, Equatable, Hashable {
     public let type: String
     /// Assignee address or null
     public let assignee: String?
-    /// Project/rig name extracted from assignee, or null
-    public let rig: String?
+    /// Project name extracted from assignee, or null
+    public let project: String?
     /// Source project name
     public let source: String
     /// Labels attached to the bead
@@ -37,7 +37,7 @@ public struct BeadInfo: Codable, Identifiable, Equatable, Hashable {
         priority: Int,
         type: String,
         assignee: String?,
-        rig: String?,
+        project: String?,
         source: String,
         labels: [String],
         createdAt: String,
@@ -50,7 +50,7 @@ public struct BeadInfo: Codable, Identifiable, Equatable, Hashable {
         self.priority = priority
         self.type = type
         self.assignee = assignee
-        self.rig = rig
+        self.project = project
         self.source = source
         self.labels = labels
         self.createdAt = createdAt
@@ -105,7 +105,7 @@ public struct BeadDetail: Codable, Identifiable, Equatable {
     public let priority: Int
     public let type: String
     public let assignee: String?
-    public let rig: String?
+    public let project: String?
     public let source: String
     public let labels: [String]
     public let createdAt: String
@@ -122,7 +122,7 @@ public struct BeadDetail: Codable, Identifiable, Equatable {
     public let pinned: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case id, title, status, priority, type, assignee, rig, source, labels
+        case id, title, status, priority, type, assignee, project, source, labels
         case createdAt, updatedAt, description, closedAt, agentState
         case dependencies, pinned
     }
@@ -176,7 +176,7 @@ public struct BeadDetail: Codable, Identifiable, Equatable {
     public var asBeadInfo: BeadInfo {
         BeadInfo(
             id: id, title: title, description: description, status: status,
-            priority: priority, type: type, assignee: assignee, rig: rig,
+            priority: priority, type: type, assignee: assignee, project: project,
             source: source, labels: labels, createdAt: createdAt,
             updatedAt: updatedAt
         )
@@ -188,7 +188,7 @@ public struct BeadDetail: Codable, Identifiable, Equatable {
 /// A bead source represents a project directory that contains beads.
 /// Returned by GET /api/beads/sources.
 public struct BeadSource: Codable, Identifiable, Equatable {
-    /// Display name (rig name or project name)
+    /// Display name (project name)
     public let name: String
     /// Absolute path to the working directory
     public let path: String
@@ -240,7 +240,7 @@ public struct BeadSummary: Codable, Hashable {
     public let id: String
     /// Bead title
     public let title: String
-    /// Short assignee name (callsign only, no rig prefix)
+    /// Short assignee name (callsign only, no project prefix)
     public let assignee: String?
 
     public init(id: String, title: String, assignee: String?) {

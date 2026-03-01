@@ -194,7 +194,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
     error,
     refresh,
   } = usePolling<BeadInfo[]>(
-    // Fetch from ALL beads databases (no rig filter)
+    // Fetch from ALL beads databases (no project filter)
     () => api.beads.list({
       status: statusFilter,
       // Don't filter by type - show all beads (tasks, bugs, features, etc.)

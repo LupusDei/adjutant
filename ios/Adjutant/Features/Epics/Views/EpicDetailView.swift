@@ -96,8 +96,8 @@ struct EpicDetailView: View {
             HStack(spacing: CRTTheme.Spacing.sm) {
                 CRTText(epic.id.uppercased(), style: .mono, glowIntensity: .none, color: theme.dim)
 
-                if let rig = epic.rig {
-                    BadgeView(rig.uppercased(), style: .label)
+                if let project = epic.project {
+                    BadgeView(project.uppercased(), style: .label)
                 }
 
                 Spacer()

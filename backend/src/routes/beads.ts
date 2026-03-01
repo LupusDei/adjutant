@@ -2,7 +2,7 @@
  * Beads route for the Adjutant API.
  *
  * Endpoints:
- * - GET /api/beads - List beads for the rig
+ * - GET /api/beads - List beads for the project
  * - GET /api/beads/graph - Get dependency graph of all beads
  * - GET /api/beads/:id - Get detailed info for a single bead
  * - PATCH /api/beads/:id - Update a bead's status
@@ -12,7 +12,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { listBeads, listAllBeads, updateBead, getBead, getEpicChildren, listEpicsWithProgress, listBeadSources, listRecentlyClosed, getBeadsGraph, type BeadStatus, type BeadSortField, VALID_SORT_FIELDS } from "../services/beads/index.js";
 import { BeadsGraphResponseSchema } from "../types/beads.js";
-import { resolveRigPath } from "../services/workspace/index.js";
+import { resolveProjectPath } from "../services/workspace/index.js";
 import { listProjects } from "../services/projects-service.js";
 import { success, internalError, badRequest } from "../utils/responses.js";
 
@@ -31,10 +31,10 @@ export const beadsRouter = Router();
  * Returns beads for the beads tab.
  *
  * Query params:
- * - rig: Scope which database(s) to query. Options:
+ * - project: Scope which database(s) to query. Options:
  *   - "town": Query only town (hq-*) database (default)
- *   - "all": Query all databases (town + all rigs)
- *   - "<rig-name>": Query only that rig's database (e.g., "adjutant")
+ *   - "all": Query all databases (town + all projects)
+ *   - "<project-name>": Query only that project's database (e.g., "adjutant")
  * - status: Status filter. Options:
  *   - "default": Shows open + in_progress + blocked (active work)
  *   - "open", "in_progress", "blocked", "deferred", "closed": Single status
@@ -43,12 +43,12 @@ export const beadsRouter = Router();
  *   Default: "default" (active work only)
  * - type: Filter by bead type (e.g., "task", "bug", "feature")
  * - limit: Max results (default: 500)
- * - excludeTown: Set to "true" to exclude hq- town beads when rig=all (default: false)
+ * - excludeTown: Set to "true" to exclude hq- town beads when project=all (default: false)
  * - sort: Sort field for bd list (priority, created, updated, closed, status, id, title, type, assignee)
  * - order: Sort order ("asc" or "desc", default: "asc")
  */
 beadsRouter.get("/", async (req, res) => {
-  const rigParam = req.query["rig"] as string | undefined;
+  const projectParam = req.query["project"] as string | undefined;
   const statusParam = req.query["status"] as string | undefined;
   const typeParam = req.query["type"] as string | undefined;
   const limitStr = req.query["limit"] as string | undefined;
@@ -68,11 +68,11 @@ beadsRouter.get("/", async (req, res) => {
   // Default to showing active work (open + in_progress + blocked)
   const status = statusParam ?? "default";
 
-  // Normalize rig parameter: undefined/empty defaults to "town"
-  const rig = rigParam?.trim() || "town";
+  // Normalize project parameter: undefined/empty defaults to "town"
+  const project = projectParam?.trim() || "town";
 
-  // rig=all: Query ALL beads databases (town + all rigs)
-  if (rig === "all") {
+  // project=all: Query ALL beads databases (town + all projects)
+  if (project === "all") {
     const excludePrefixes = excludeTown ? ["hq-"] : [];
     const result = await listAllBeads({
       ...(typeParam && { type: typeParam }),
@@ -92,28 +92,28 @@ beadsRouter.get("/", async (req, res) => {
     return res.json(success(result.data));
   }
 
-  // rig=town or rig=<specific>: Query single database
-  // For "town", query the town database directly (no rigPath needed)
-  // For other rigs, resolve their path (check workspace rigs, then registered projects)
-  let rigPath: string | undefined;
-  if (rig !== "town") {
-    rigPath = resolveRigPath(rig) ?? undefined;
+  // project=town or project=<specific>: Query single database
+  // For "town", query the town database directly (no projectPath needed)
+  // For other projects, resolve their path (check workspace projects, then registered projects)
+  let projectPath: string | undefined;
+  if (project !== "town") {
+    projectPath = resolveProjectPath(project) ?? undefined;
 
-    // If workspace rig resolution failed, check registered projects by name
-    if (!rigPath) {
+    // If workspace project resolution failed, check registered projects by name
+    if (!projectPath) {
       const projectsResult = listProjects();
       if (projectsResult.success && projectsResult.data) {
-        const project = projectsResult.data.find((p) => p.name === rig);
-        if (project) {
-          rigPath = project.path;
+        const proj = projectsResult.data.find((p) => p.name === project);
+        if (proj) {
+          projectPath = proj.path;
         }
       }
     }
   }
 
   const result = await listBeads({
-    // Don't pass rig for filtering - we want all beads from the database
-    ...(rigPath && { rigPath }),
+    // Don't pass project for filtering - we want all beads from the database
+    ...(projectPath && { projectPath }),
     ...(typeParam && { type: typeParam }),
     ...(assigneeParam && { assignee: assigneeParam }),
     ...(sort && { sort }),
@@ -123,9 +123,9 @@ beadsRouter.get("/", async (req, res) => {
   });
 
   if (!result.success) {
-    // For explicit rig/project selection, surface the error so the client
+    // For explicit project selection, surface the error so the client
     // can show a meaningful message (e.g., corrupted beads database)
-    if (rig !== "town") {
+    if (project !== "town") {
       return res.status(500).json(
         internalError(result.error?.message ?? "Failed to load beads for project")
       );
@@ -139,7 +139,7 @@ beadsRouter.get("/", async (req, res) => {
 
 /**
  * GET /api/beads/sources
- * Returns available bead sources (projects/rigs) and current deployment mode.
+ * Returns available bead sources (projects) and current deployment mode.
  * Used by the frontend to populate filter dropdowns.
  */
 beadsRouter.get("/sources", async (_req, res) => {
@@ -194,24 +194,24 @@ beadsRouter.get("/recent-closed", async (req, res) => {
  * Express from matching "graph" as a bead ID parameter.
  *
  * Query params:
- * - rig: "town" (default), "all", or a specific rig name
+ * - project: "town" (default), "all", or a specific project name
  * - status: "default" (default), "open", "in_progress", "blocked", "closed", "all"
  * - type: Filter by bead type (e.g., "epic", "task", "bug")
  * - epicId: Filter to a specific epic's sub-tree (client-side hint)
- * - excludeTown: "true" to exclude hq-* beads when rig=all (default: false)
+ * - excludeTown: "true" to exclude hq-* beads when project=all (default: false)
  *
  * Response:
  * - { success: true, data: { nodes: GraphNode[], edges: GraphDependency[] } }
  */
 beadsRouter.get("/graph", async (req, res) => {
-  const rigParam = req.query["rig"] as string | undefined;
+  const projectParam = req.query["project"] as string | undefined;
   const statusParam = req.query["status"] as string | undefined;
   const typeParam = req.query["type"] as string | undefined;
   const epicIdParam = req.query["epicId"] as string | undefined;
   const excludeTown = req.query["excludeTown"] === "true";
 
   const result = await getBeadsGraph({
-    rig: rigParam,
+    project: projectParam,
     status: statusParam,
     type: typeParam,
     epicId: epicIdParam,

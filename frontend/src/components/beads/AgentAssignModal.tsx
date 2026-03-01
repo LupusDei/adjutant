@@ -97,8 +97,8 @@ export function AgentAssignModal({ beadId, onConfirm, onCancel }: AgentAssignMod
                   }}>
                     {agent.status.toUpperCase()}
                   </span>
-                  {agent.rig && (
-                    <span style={styles.agentRig}>{agent.rig}</span>
+                  {agent.project && (
+                    <span style={styles.agentRig}>{agent.project}</span>
                   )}
                 </button>
               ))}

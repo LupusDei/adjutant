@@ -359,7 +359,7 @@ final class ModelTests: XCTestCase {
         let bead = try decoder.decode(BeadInfo.self, from: json.data(using: .utf8)!)
 
         XCTAssertNil(bead.assignee)
-        XCTAssertNil(bead.rig)
+        XCTAssertNil(bead.project)
         XCTAssertNil(bead.updatedAt)
         XCTAssertNil(bead.updatedDate)
         XCTAssertTrue(bead.labels.isEmpty)

@@ -9,34 +9,34 @@ export interface EpicsViewProps {
   isActive?: boolean;
 }
 
-/** Rig options for filtering */
-type RigFilter = string;
+/** Project options for filtering */
+type ProjectFilter = string;
 
 export function EpicsView({ isActive = true }: EpicsViewProps) {
   const [sortBy, setSortBy] = useState<EpicSortOption>('ACTIVITY');
   const [selectedEpicId, setSelectedEpicId] = useState<string | null>(null);
   const [overseerView, setOverseerView] = useState(false);
-  const [rigFilter, setRigFilter] = useState<RigFilter>(() => {
-    return localStorage.getItem('epics-rig-filter') ?? 'ALL';
+  const [projectFilter, setProjectFilter] = useState<ProjectFilter>(() => {
+    return localStorage.getItem('epics-project-filter') ?? 'ALL';
   });
-  const [rigOptions, setRigOptions] = useState<string[]>([]);
+  const [projectOptions, setProjectOptions] = useState<string[]>([]);
 
   // Fetch bead sources on mount for filter options
   useEffect(() => {
     void api.beads.sources().then((result) => {
       if (result.sources.length > 0) {
         const names = result.sources.map((s) => s.name).sort();
-        setRigOptions(names);
+        setProjectOptions(names);
       }
     }).catch(() => {
       // Silently ignore - dropdown will just show ALL
     });
   }, []);
 
-  // Persist rig filter to localStorage
+  // Persist project filter to localStorage
   useEffect(() => {
-    localStorage.setItem('epics-rig-filter', rigFilter);
-  }, [rigFilter]);
+    localStorage.setItem('epics-project-filter', projectFilter);
+  }, [projectFilter]);
 
   const handleEpicClick = useCallback((epicId: string) => {
     setSelectedEpicId(epicId);
@@ -59,8 +59,8 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
     setRefreshTrigger(refreshTriggerRef.current);
   }, []);
 
-  // Convert UI rig filter to API parameter
-  const apiRig = rigFilter === 'ALL' ? undefined : rigFilter;
+  // Convert UI project filter to API parameter
+  const apiProject = projectFilter === 'ALL' ? undefined : projectFilter;
 
   return (
     <div style={styles.container}>
@@ -80,14 +80,14 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
           {/* Source Filter */}
           <span style={styles.filterLabel}>PROJECT:</span>
           <select
-            value={rigFilter}
-            onChange={(e) => { setRigFilter(e.target.value); }}
+            value={projectFilter}
+            onChange={(e) => { setProjectFilter(e.target.value); }}
             style={styles.select}
           >
             <option value="ALL">ALL PROJECTS</option>
-            {rigOptions.map((rig) => (
-              <option key={rig} value={rig}>
-                {rig.toUpperCase().replace(/_/g, ' ')}
+            {projectOptions.map((proj) => (
+              <option key={proj} value={proj}>
+                {proj.toUpperCase().replace(/_/g, ' ')}
               </option>
             ))}
           </select>
@@ -109,7 +109,7 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
       <EpicsList
         sortBy={sortBy}
         isActive={isActive}
-        rig={apiRig}
+        project={apiProject}
         overseerView={overseerView}
         onEpicClick={handleEpicClick}
         onAssign={handleAssign}

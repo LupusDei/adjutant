@@ -7,7 +7,7 @@ export interface DashboardCrewMember {
   name: string;
   type: AgentType;
   status: CrewMemberStatus;
-  rig: string | null;
+  project: string | null;
   currentTask?: string | undefined;
 }
 
@@ -68,7 +68,7 @@ export function useDashboardCrew(): DashboardCrew {
         const recent = dashboardAgents
           .sort((a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status])
           .slice(0, 3)
-          .map((m) => ({ name: m.name, type: m.type, status: m.status, rig: m.rig, currentTask: m.currentTask }));
+          .map((m) => ({ name: m.name, type: m.type, status: m.status, project: m.project, currentTask: m.currentTask }));
         setRecentCrew(recent);
 
         // Generate alerts for blocked/stuck agents

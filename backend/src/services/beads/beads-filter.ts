@@ -124,12 +124,12 @@ export function excludePrefixes(beads: BeadInfo[], prefixes: string[]): BeadInfo
 }
 
 // ============================================================================
-// Rig Filtering
+// Project Filtering
 // ============================================================================
 
 /**
- * Filters beads by rig name.
+ * Filters beads by project name.
  */
-export function filterByRig(beads: BeadInfo[], rig: string): BeadInfo[] {
-  return beads.filter((b) => b.rig === rig);
+export function filterByProject(beads: BeadInfo[], project: string): BeadInfo[] {
+  return beads.filter((b) => b.project === project);
 }

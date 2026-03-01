@@ -50,7 +50,7 @@ function extractBeadPrefix(beadId: string): string | null {
  * Features:
  * - Single .beads/ directory (local to project)
  * - No power control (always "running")
- * - No rigs (single project)
+ * - No sub-projects (single project)
  */
 export class SwarmProvider implements WorkspaceProvider {
   readonly name = "swarm";
@@ -105,7 +105,7 @@ export class SwarmProvider implements WorkspaceProvider {
     if (existsSync(join(this.projectRoot, ".beads"))) {
       results.push({
         path: beadsPath,
-        rig: null,
+        project: null,
         workDir: this.projectRoot,
       });
     }
@@ -124,7 +124,7 @@ export class SwarmProvider implements WorkspaceProvider {
           const childBeadsPath = resolveBeadsDir(childDir);
           results.push({
             path: childBeadsPath,
-            rig: entry.name,
+            project: entry.name,
             workDir: childDir,
           });
         }
@@ -164,7 +164,7 @@ export class SwarmProvider implements WorkspaceProvider {
     return false;
   }
 
-  async listRigNames(): Promise<string[]> {
+  async listProjectNames(): Promise<string[]> {
     const skipDirs = new Set(["node_modules", ".git"]);
     const names: string[] = [];
     try {
@@ -184,10 +184,10 @@ export class SwarmProvider implements WorkspaceProvider {
     return names;
   }
 
-  resolveRigPath(rigName: string): string | null {
-    const rigPath = join(this.projectRoot, rigName);
-    if (existsSync(join(rigPath, ".beads"))) {
-      return rigPath;
+  resolveProjectPath(projectName: string): string | null {
+    const projectPath = join(this.projectRoot, projectName);
+    if (existsSync(join(projectPath, ".beads"))) {
+      return projectPath;
     }
     return null;
   }

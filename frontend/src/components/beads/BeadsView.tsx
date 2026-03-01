@@ -18,8 +18,8 @@ export interface BeadsViewProps {
   isActive?: boolean;
 }
 
-/** Rig options for filtering */
-type RigFilter = string;
+/** Project options for filtering */
+type ProjectFilter = string;
 
 /** Sort options matching iOS app */
 type BeadSort = 'lastUpdated' | 'priority' | 'createdDate' | 'alphabetical' | 'assignee';
@@ -46,10 +46,10 @@ const OVERSEER_EXCLUDED_PATTERNS = [
 
 export function BeadsView({ isActive = true }: BeadsViewProps) {
   const [searchInput, setSearchInput] = useState('');
-  const [rigFilter, setRigFilter] = useState<RigFilter>(() => {
-    return localStorage.getItem('beads-rig-filter') ?? 'ALL';
+  const [projectFilter, setProjectFilter] = useState<ProjectFilter>(() => {
+    return localStorage.getItem('beads-project-filter') ?? 'ALL';
   });
-  const [rigOptions, setRigOptions] = useState<string[]>([]);
+  const [projectOptions, setProjectOptions] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<BeadSort>(() => {
     return (localStorage.getItem('beads-sort') ?? 'priority') as BeadSort;
   });
@@ -65,16 +65,16 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
     void api.beads.sources().then((result) => {
       if (result.sources.length > 0) {
         const names = result.sources.map((s) => s.name).sort();
-        setRigOptions(names);
+        setProjectOptions(names);
       }
     }).catch(() => {
       // Silently ignore - dropdown will just show ALL/TOWN
     });
   }, []);
 
-  // Convert UI rig filter to API parameter
-  // ALL sends rig=all to fetch from all databases; specific names fetch per-project
-  const apiRig = rigFilter === 'ALL' ? 'all' : rigFilter === 'TOWN' ? 'town' : rigFilter;
+  // Convert UI project filter to API parameter
+  // ALL sends project=all to fetch from all databases; specific names fetch per-project
+  const apiProject = projectFilter === 'ALL' ? 'all' : projectFilter === 'TOWN' ? 'town' : projectFilter;
 
   // Fetch beads from API
   const {
@@ -83,14 +83,14 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
     error,
     refresh,
   } = usePolling<BeadInfo[]>(
-    () => api.beads.list({ status: 'all', limit: 500, rig: apiRig }),
+    () => api.beads.list({ status: 'all', limit: 500, project: apiProject }),
     { interval: 30000, enabled: isActive }
   );
 
-  // Refetch when rig filter changes
+  // Refetch when project filter changes
   useEffect(() => {
     void refresh();
-  }, [rigFilter, refresh]);
+  }, [projectFilter, refresh]);
 
   // Update local beads state when fetch completes
   useEffect(() => {
@@ -99,10 +99,10 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
     }
   }, [fetchedBeads]);
 
-  // Persist rig filter to localStorage
+  // Persist project filter to localStorage
   useEffect(() => {
-    localStorage.setItem('beads-rig-filter', rigFilter);
-  }, [rigFilter]);
+    localStorage.setItem('beads-project-filter', projectFilter);
+  }, [projectFilter]);
 
   // Persist sort preference to localStorage
   useEffect(() => {
@@ -339,18 +339,18 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
           </div>
 
           {/* Source Filter */}
-          {rigOptions.length > 0 && (
+          {projectOptions.length > 0 && (
             <>
               <span style={styles.filterLabel}>SOURCE:</span>
               <select
-                value={rigFilter}
-                onChange={(e) => { setRigFilter(e.target.value); }}
+                value={projectFilter}
+                onChange={(e) => { setProjectFilter(e.target.value); }}
                 style={styles.select}
               >
                 <option value="ALL">ALL</option>
-                {rigOptions.map((rig) => (
-                  <option key={rig} value={rig}>
-                    {rig.toUpperCase().replace(/_/g, ' ')}
+                {projectOptions.map((proj) => (
+                  <option key={proj} value={proj}>
+                    {proj.toUpperCase().replace(/_/g, ' ')}
                   </option>
                 ))}
               </select>

@@ -44,9 +44,9 @@ struct EpicRowView: View {
                     // Epic ID
                     CRTText(epic.epic.id.uppercased(), style: .caption, glowIntensity: .none, color: theme.dim)
 
-                    // Rig badge if present
-                    if let rig = epic.epic.rig {
-                        BadgeView(rig.uppercased(), style: .label)
+                    // Project badge if present
+                    if let project = epic.epic.project {
+                        BadgeView(project.uppercased(), style: .label)
                     }
 
                     Spacer()

@@ -21,7 +21,7 @@ function makeBead(overrides: Partial<BeadInfo> & { id: string }): BeadInfo {
     priority: 1,
     type: "task",
     assignee: null,
-    rig: null,
+    project: null,
     source: "town",
     labels: [],
     createdAt: "2026-01-01T00:00:00Z",

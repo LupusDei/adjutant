@@ -73,7 +73,7 @@ describe("beads/types", () => {
         priority: 1,
         type: "task",
         assignee: null,
-        rig: null,
+        project: null,
         source: "town",
         labels: [],
         createdAt: "2026-01-01",
@@ -93,7 +93,7 @@ describe("beads/types", () => {
         priority: 0,
         type: "epic",
         assignee: "proj1",
-        rig: "proj1",
+        project: "proj1",
         source: "town",
         labels: ["critical"],
         createdAt: "2026-01-01",
@@ -121,7 +121,7 @@ describe("beads/types", () => {
         closedAt: "2026-01-15T10:00:00Z",
         type: "task",
         priority: 2,
-        rig: null,
+        project: null,
         source: "town",
       };
       expect(closed.closedAt).toBeTruthy();
@@ -131,15 +131,15 @@ describe("beads/types", () => {
   describe("ListBeadsOptions", () => {
     it("should allow all optional fields", () => {
       const opts: ListBeadsOptions = {
-        rig: "proj1",
-        rigPath: "/Users/test/gt",
+        project: "proj1",
+        projectPath: "/Users/test/gt",
         status: "open",
         type: "task",
         limit: 50,
         assignee: "agent-1",
         excludePrefixes: ["hq-"],
       };
-      expect(opts.rig).toBe("proj1");
+      expect(opts.project).toBe("proj1");
     });
 
     it("should allow empty options", () => {
@@ -200,7 +200,7 @@ describe("beads/types", () => {
         priority: 0,
         type: "epic",
         assignee: null,
-        rig: null,
+        project: null,
         source: "town",
         labels: [],
         createdAt: "2026-01-01",
@@ -257,7 +257,7 @@ describe("beads/types", () => {
   describe("BeadsGraphOptions", () => {
     it("should allow all optional filter fields", () => {
       const opts: BeadsGraphOptions = {
-        rig: "all",
+        project: "all",
         status: "default",
         type: "epic",
         epicId: "hq-ep1",

@@ -2,7 +2,7 @@
  * Prefix map management for beads.
  *
  * Maps bead ID prefixes (e.g., "hq", "adj", "gb") to their source
- * rig names. Used by other beads modules to route CLI commands to
+ * project names. Used by other beads modules to route CLI commands to
  * the correct database and to label beads in the UI.
  */
 
@@ -44,10 +44,10 @@ async function buildPrefixMap(): Promise<Map<string, string>> {
   try {
     const beadsDirs = await listAllBeadsDirs();
     for (const dirInfo of beadsDirs) {
-      if (!dirInfo.rig) continue;
+      if (!dirInfo.project) continue;
       const prefix = readPrefixFromConfig(dirInfo.path);
       if (prefix && !map.has(prefix)) {
-        map.set(prefix, dirInfo.rig);
+        map.set(prefix, dirInfo.project);
       }
     }
   } catch {
@@ -83,7 +83,7 @@ export async function ensurePrefixMap(): Promise<void> {
 }
 
 /**
- * Maps bead prefix to rig name for UI grouping.
+ * Maps bead prefix to project name for UI grouping.
  */
 export function prefixToSource(beadId: string): string {
   const prefix = beadId.split("-")[0];

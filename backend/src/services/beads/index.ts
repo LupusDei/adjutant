@@ -7,7 +7,7 @@
  * Sub-modules:
  *   - types.ts              — shared type definitions + constants
  *   - beads-prefix-map.ts   — prefix map state, lifecycle, helpers
- *   - beads-transform.ts    — extractRig, transformBead
+ *   - beads-transform.ts    — extractProject, transformBead
  *   - beads-database.ts     — database resolution, fetching, sources
  *   - beads-epics.ts        — epic type check, children, progress listing
  *   - beads-mutations.ts    — autoCompleteEpics, updateBead, updateBeadStatus
@@ -64,9 +64,9 @@ export {
 // ============================================================================
 
 export {
-  extractRig,
+  extractProject,
   transformBead,
-  _extractRig,
+  _extractProject,
 } from "./beads-transform.js";
 
 // ============================================================================
@@ -134,7 +134,7 @@ export {
   filterByAssignee,
   filterByStatuses,
   excludePrefixes,
-  filterByRig,
+  filterByProject,
 } from "./beads-filter.js";
 
 // ============================================================================

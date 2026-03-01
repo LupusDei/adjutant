@@ -9,7 +9,7 @@ import {
   filterByAssignee,
   filterByStatuses,
   excludePrefixes,
-  filterByRig,
+  filterByProject,
 } from "../../../src/services/beads/beads-filter.js";
 
 // ============================================================================
@@ -24,7 +24,7 @@ function makeBead(overrides: Partial<BeadInfo> & { id: string }): BeadInfo {
     priority: 1,
     type: "task",
     assignee: null,
-    rig: null,
+    project: null,
     source: "town",
     labels: [],
     createdAt: "2026-01-01T00:00:00Z",
@@ -338,34 +338,34 @@ describe("excludePrefixes", () => {
 });
 
 // ============================================================================
-// filterByRig
+// filterByProject
 // ============================================================================
 
-describe("filterByRig", () => {
+describe("filterByProject", () => {
   const beads: BeadInfo[] = [
-    makeBead({ id: "hq-1", rig: "proj1" }),
-    makeBead({ id: "hq-2", rig: "proj1" }),
-    makeBead({ id: "hq-3", rig: "adjutant" }),
-    makeBead({ id: "hq-4", rig: null }),
+    makeBead({ id: "hq-1", project: "proj1" }),
+    makeBead({ id: "hq-2", project: "proj1" }),
+    makeBead({ id: "hq-3", project: "adjutant" }),
+    makeBead({ id: "hq-4", project: null }),
   ];
 
   it("should return empty array for empty input", () => {
-    expect(filterByRig([], "proj1")).toEqual([]);
+    expect(filterByProject([], "proj1")).toEqual([]);
   });
 
-  it("should filter beads by rig name", () => {
-    const result = filterByRig(beads, "proj1");
+  it("should filter beads by project name", () => {
+    const result = filterByProject(beads, "proj1");
     expect(result).toHaveLength(2);
     expect(result.map((b) => b.id)).toEqual(["hq-1", "hq-2"]);
   });
 
-  it("should return empty when no beads match rig", () => {
-    const result = filterByRig(beads, "nonexistent_rig");
+  it("should return empty when no beads match project", () => {
+    const result = filterByProject(beads, "nonexistent_project");
     expect(result).toEqual([]);
   });
 
-  it("should not include beads with null rig", () => {
-    const result = filterByRig(beads, "adjutant");
+  it("should not include beads with null project", () => {
+    const result = filterByProject(beads, "adjutant");
     expect(result).toHaveLength(1);
     expect(result[0]!.id).toBe("hq-3");
   });

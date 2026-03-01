@@ -323,7 +323,7 @@ final class BeadsListViewModel: BaseViewModel {
                     priority: bead.priority,
                     type: bead.type,
                     assignee: bead.assignee,
-                    rig: bead.rig,
+                    project: bead.project,
                     source: bead.source,
                     labels: bead.labels,
                     createdAt: bead.createdAt,

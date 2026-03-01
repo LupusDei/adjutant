@@ -92,9 +92,9 @@ export function EpicCard({ epic, onClick, onAssign }: EpicCardProps) {
 
       <div style={styles.title}>{epic.epic.title}</div>
 
-      {epic.epic.rig && (
+      {epic.epic.project && (
         <div style={styles.rigRow}>
-          <span style={styles.rigBadge}>{epic.epic.rig.toUpperCase()}</span>
+          <span style={styles.rigBadge}>{epic.epic.project.toUpperCase()}</span>
         </div>
       )}
 

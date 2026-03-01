@@ -9,8 +9,8 @@ interface EpicsListProps {
   sortBy: EpicSortOption;
   /** Whether this tab is currently active */
   isActive?: boolean | undefined;
-  /** Optional rig filter */
-  rig?: string | undefined;
+  /** Optional project filter */
+  project?: string | undefined;
   /** Whether to apply overseer filtering */
   overseerView?: boolean | undefined;
   /** Callback when an epic is clicked */
@@ -50,8 +50,8 @@ function sortEpics(epics: EpicWithProgress[], sortBy: EpicSortOption): EpicWithP
   });
 }
 
-export function EpicsList({ sortBy, isActive = true, rig, overseerView = false, onEpicClick, onAssign }: EpicsListProps) {
-  const { openEpics, completedEpics, loading, error } = useEpics({ enabled: isActive, rig });
+export function EpicsList({ sortBy, isActive = true, project, overseerView = false, onEpicClick, onAssign }: EpicsListProps) {
+  const { openEpics, completedEpics, loading, error } = useEpics({ enabled: isActive, project });
 
   // Apply overseer filtering if enabled
   const filteredOpen = useMemo(() => {

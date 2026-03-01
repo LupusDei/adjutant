@@ -33,7 +33,7 @@ describe("SwarmProvider", () => {
       const dirs = await provider.listBeadsDirs();
 
       expect(dirs).toHaveLength(1);
-      expect(dirs[0].rig).toBeNull();
+      expect(dirs[0].project).toBeNull();
       expect(dirs[0].workDir).toBe(TEST_DIR);
       expect(dirs[0].path).toBe(join(TEST_DIR, ".beads"));
     });
@@ -61,16 +61,16 @@ describe("SwarmProvider", () => {
 
       expect(dirs).toHaveLength(3);
 
-      const root = dirs.find((d) => d.rig === null);
+      const root = dirs.find((d) => d.project === null);
       expect(root).toBeDefined();
       expect(root!.workDir).toBe(TEST_DIR);
 
-      const frontend = dirs.find((d) => d.rig === "frontend");
+      const frontend = dirs.find((d) => d.project === "frontend");
       expect(frontend).toBeDefined();
       expect(frontend!.workDir).toBe(join(TEST_DIR, "frontend"));
       expect(frontend!.path).toBe(join(TEST_DIR, "frontend", ".beads"));
 
-      const backend = dirs.find((d) => d.rig === "backend");
+      const backend = dirs.find((d) => d.project === "backend");
       expect(backend).toBeDefined();
       expect(backend!.workDir).toBe(join(TEST_DIR, "backend"));
     });
@@ -88,7 +88,7 @@ describe("SwarmProvider", () => {
       const dirs = await provider.listBeadsDirs();
 
       expect(dirs).toHaveLength(1);
-      expect(dirs[0].rig).toBeNull();
+      expect(dirs[0].project).toBeNull();
     });
 
     it("skips node_modules, .git, and dotfile directories", async () => {
@@ -104,7 +104,7 @@ describe("SwarmProvider", () => {
       const dirs = await provider.listBeadsDirs();
 
       expect(dirs).toHaveLength(1);
-      expect(dirs[0].rig).toBeNull();
+      expect(dirs[0].project).toBeNull();
     });
 
     it("follows .beads/redirect for sub-projects", async () => {
@@ -121,23 +121,23 @@ describe("SwarmProvider", () => {
       const provider = new SwarmProvider(TEST_DIR);
       const dirs = await provider.listBeadsDirs();
 
-      const rig = dirs.find((d) => d.rig === "myrig");
-      expect(rig).toBeDefined();
-      expect(rig!.path).toBe(redirectTarget);
-      expect(rig!.workDir).toBe(subDir);
+      const proj = dirs.find((d) => d.project === "myrig");
+      expect(proj).toBeDefined();
+      expect(proj!.path).toBe(redirectTarget);
+      expect(proj!.workDir).toBe(subDir);
     });
   });
 
   // ===========================================================================
-  // listRigNames
+  // listProjectNames
   // ===========================================================================
 
-  describe("listRigNames", () => {
+  describe("listProjectNames", () => {
     it("returns empty array when no sub-projects exist", async () => {
       mkdirSync(join(TEST_DIR, ".beads"), { recursive: true });
 
       const provider = new SwarmProvider(TEST_DIR);
-      const names = await provider.listRigNames();
+      const names = await provider.listProjectNames();
 
       expect(names).toEqual([]);
     });
@@ -153,7 +153,7 @@ describe("SwarmProvider", () => {
       mkdirSync(join(TEST_DIR, "gamma", ".beads"), { recursive: true });
 
       const provider = new SwarmProvider(TEST_DIR);
-      const names = await provider.listRigNames();
+      const names = await provider.listProjectNames();
 
       expect(names).toHaveLength(2);
       expect(names).toContain("alpha");
@@ -166,22 +166,22 @@ describe("SwarmProvider", () => {
       writeFileSync(join(TEST_DIR, ".secret", ".beads", "beads.db"), "");
 
       const provider = new SwarmProvider(TEST_DIR);
-      const names = await provider.listRigNames();
+      const names = await provider.listProjectNames();
 
       expect(names).toEqual([]);
     });
   });
 
   // ===========================================================================
-  // resolveRigPath
+  // resolveProjectPath
   // ===========================================================================
 
-  describe("resolveRigPath", () => {
+  describe("resolveProjectPath", () => {
     it("returns path for valid sub-project with .beads/", () => {
       mkdirSync(join(TEST_DIR, "myrig", ".beads"), { recursive: true });
 
       const provider = new SwarmProvider(TEST_DIR);
-      const result = provider.resolveRigPath("myrig");
+      const result = provider.resolveProjectPath("myrig");
 
       expect(result).toBe(join(TEST_DIR, "myrig"));
     });
@@ -190,14 +190,14 @@ describe("SwarmProvider", () => {
       mkdirSync(join(TEST_DIR, "plain"), { recursive: true });
 
       const provider = new SwarmProvider(TEST_DIR);
-      const result = provider.resolveRigPath("plain");
+      const result = provider.resolveProjectPath("plain");
 
       expect(result).toBeNull();
     });
 
     it("returns null for non-existent directory", () => {
       const provider = new SwarmProvider(TEST_DIR);
-      const result = provider.resolveRigPath("nonexistent");
+      const result = provider.resolveProjectPath("nonexistent");
 
       expect(result).toBeNull();
     });

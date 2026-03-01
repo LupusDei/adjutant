@@ -433,10 +433,10 @@ describe("getBeadsGraph", () => {
   });
 
   // adj-jrrn: Multi-database support
-  it("should query all databases when rig=all", async () => {
+  it("should query all databases when project=all", async () => {
     vi.mocked(listAllBeadsDirs).mockResolvedValue([
-      { path: "/tmp/town/.beads", workDir: "/tmp/town", rig: null },
-      { path: "/tmp/town/adjutant/.beads", workDir: "/tmp/town/adjutant", rig: "adjutant" },
+      { path: "/tmp/town/.beads", workDir: "/tmp/town", project: null },
+      { path: "/tmp/town/adjutant/.beads", workDir: "/tmp/town/adjutant", project: "adjutant" },
     ]);
 
     vi.mocked(execBd).mockResolvedValue({
@@ -445,14 +445,14 @@ describe("getBeadsGraph", () => {
       exitCode: 0,
     });
 
-    const result = await getBeadsGraph({ rig: "all" });
+    const result = await getBeadsGraph({ project: "all" });
 
     expect(result.success).toBe(true);
-    // Should have called execBd twice (once for town, once for adjutant rig)
+    // Should have called execBd twice (once for town, once for adjutant project)
     expect(vi.mocked(execBd)).toHaveBeenCalledTimes(2);
   });
 
-  it("should query only town database by default (rig=town)", async () => {
+  it("should query only town database by default (project=town)", async () => {
     vi.mocked(execBd).mockResolvedValue({
       success: true,
       data: [],
@@ -465,13 +465,13 @@ describe("getBeadsGraph", () => {
     expect(vi.mocked(execBd)).toHaveBeenCalledTimes(1);
   });
 
-  it("should exclude hq- beads when excludeTown=true with rig=all", async () => {
+  it("should exclude hq- beads when excludeTown=true with project=all", async () => {
     vi.mocked(listAllBeadsDirs).mockResolvedValue([
-      { path: "/tmp/town/.beads", workDir: "/tmp/town", rig: null },
-      { path: "/tmp/town/adjutant/.beads", workDir: "/tmp/town/adjutant", rig: "adjutant" },
+      { path: "/tmp/town/.beads", workDir: "/tmp/town", project: null },
+      { path: "/tmp/town/adjutant/.beads", workDir: "/tmp/town/adjutant", project: "adjutant" },
     ]);
 
-    // First call returns town beads, second returns rig beads
+    // First call returns town beads, second returns project beads
     vi.mocked(execBd)
       .mockResolvedValueOnce({
         success: true,
@@ -484,7 +484,7 @@ describe("getBeadsGraph", () => {
         exitCode: 0,
       });
 
-    const result = await getBeadsGraph({ rig: "all", excludeTown: true });
+    const result = await getBeadsGraph({ project: "all", excludeTown: true });
 
     expect(result.success).toBe(true);
     // hq-001 should be excluded
@@ -494,8 +494,8 @@ describe("getBeadsGraph", () => {
 
   it("should deduplicate nodes from multiple databases", async () => {
     vi.mocked(listAllBeadsDirs).mockResolvedValue([
-      { path: "/tmp/town/.beads", workDir: "/tmp/town", rig: null },
-      { path: "/tmp/town/adjutant/.beads", workDir: "/tmp/town/adjutant", rig: "adjutant" },
+      { path: "/tmp/town/.beads", workDir: "/tmp/town", project: null },
+      { path: "/tmp/town/adjutant/.beads", workDir: "/tmp/town/adjutant", project: "adjutant" },
     ]);
 
     // Same bead appears in both databases
@@ -512,7 +512,7 @@ describe("getBeadsGraph", () => {
         exitCode: 0,
       });
 
-    const result = await getBeadsGraph({ rig: "all" });
+    const result = await getBeadsGraph({ project: "all" });
 
     expect(result.success).toBe(true);
     // Should be 1 node, not 2 (deduplicated)
@@ -521,8 +521,8 @@ describe("getBeadsGraph", () => {
 
   it("should handle partial database failures gracefully", async () => {
     vi.mocked(listAllBeadsDirs).mockResolvedValue([
-      { path: "/tmp/town/.beads", workDir: "/tmp/town", rig: null },
-      { path: "/tmp/town/adjutant/.beads", workDir: "/tmp/town/adjutant", rig: "adjutant" },
+      { path: "/tmp/town/.beads", workDir: "/tmp/town", project: null },
+      { path: "/tmp/town/adjutant/.beads", workDir: "/tmp/town/adjutant", project: "adjutant" },
     ]);
 
     // Town succeeds, adjutant fails
@@ -538,7 +538,7 @@ describe("getBeadsGraph", () => {
         exitCode: 2,
       });
 
-    const result = await getBeadsGraph({ rig: "all" });
+    const result = await getBeadsGraph({ project: "all" });
 
     // Should succeed with partial data
     expect(result.success).toBe(true);

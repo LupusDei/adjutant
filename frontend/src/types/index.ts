@@ -34,7 +34,7 @@ export interface CrewMember {
   /** Agent type for icon/styling */
   type: AgentType;
   /** Which project this agent belongs to (null for unscoped) */
-  rig: string | null;
+  project: string | null;
   /** Current operational status */
   status: CrewMemberStatus;
   /** Current task description (if working) */
@@ -79,9 +79,9 @@ export interface BeadInfo {
   type: string;
   /** Assignee address or null */
   assignee: string | null;
-  /** Rig/project name extracted from assignee or null for top-level */
-  rig: string | null;
-  /** Source database: "town" for hq-*, or rig name for rig-specific beads */
+  /** Project name extracted from assignee or null for top-level */
+  project: string | null;
+  /** Source database: "town" for hq-*, or project name for project-specific beads */
   source: string;
   /** Labels attached to the bead */
   labels: string[];

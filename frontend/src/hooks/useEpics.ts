@@ -5,8 +5,8 @@ import type { BeadInfo, EpicWithProgressResponse } from '../types';
 import type { EpicWithProgress } from '../types/epics';
 
 export interface UseEpicsOptions {
-  /** Optional rig filter */
-  rig?: string | undefined;
+  /** Optional project filter */
+  project?: string | undefined;
   /** Whether this hook is active (for tab switching) */
   enabled?: boolean | undefined;
 }
@@ -41,7 +41,7 @@ function toEpicWithProgress(item: EpicWithProgressResponse): EpicWithProgress {
  * Polls every 30 seconds (matching iOS).
  */
 export function useEpics(options: UseEpicsOptions = {}): UseEpicsResult {
-  const { rig: _rig, enabled = true } = options;
+  const { project: _project, enabled = true } = options;
 
   const fetchFn = useCallback(
     () => api.epics.listWithProgress({ status: 'all' }),

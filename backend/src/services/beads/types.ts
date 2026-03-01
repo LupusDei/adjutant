@@ -26,9 +26,9 @@ export interface BeadInfo {
   priority: number;
   type: string;
   assignee: string | null;
-  /** Rig/project name extracted from assignee or null for top-level */
-  rig: string | null;
-  /** Source database: "town" for hq-*, or rig name for rig-specific beads */
+  /** Project name extracted from assignee or null for top-level */
+  project: string | null;
+  /** Source database: "town" for hq-*, or project name for project-specific beads */
   source: string;
   labels: string[];
   createdAt: string;
@@ -66,7 +66,7 @@ export interface RecentlyClosedBead {
   closedAt: string;
   type: string;
   priority: number;
-  rig: string | null;
+  project: string | null;
   source: string;
 }
 
@@ -79,9 +79,9 @@ export const VALID_SORT_FIELDS = [
 export type BeadSortField = typeof VALID_SORT_FIELDS[number];
 
 export interface ListBeadsOptions {
-  rig?: string;
-  /** Path to rig's directory containing .beads/ - if provided, queries that rig's beads database */
-  rigPath?: string;
+  project?: string;
+  /** Path to project's directory containing .beads/ - if provided, queries that project's beads database */
+  projectPath?: string;
   status?: string;
   type?: string;
   limit?: number;
@@ -165,10 +165,10 @@ export interface ProjectBeadsOverview {
 // ============================================================================
 
 /**
- * A bead source represents a project/rig directory that contains beads.
+ * A bead source represents a project directory that contains beads.
  */
 export interface BeadSource {
-  /** Display name (rig name or "project") */
+  /** Display name (project name) */
   name: string;
   /** Absolute path to the working directory */
   path: string;
@@ -185,15 +185,15 @@ export interface BeadSource {
  * Mirrors the query params from GET /api/beads/graph.
  */
 export interface BeadsGraphOptions {
-  /** Which database(s) to query: "town" (default), "all", or a specific rig name */
-  rig?: string | undefined;
+  /** Which database(s) to query: "town" (default), "all", or a specific project name */
+  project?: string | undefined;
   /** Status filter: "default", "all", or specific status(es) */
   status?: string | undefined;
   /** Filter by bead type (e.g., "epic", "task", "bug") */
   type?: string | undefined;
   /** Filter to a specific epic's sub-tree (client-side hint) */
   epicId?: string | undefined;
-  /** Exclude hq-* town beads when rig=all */
+  /** Exclude hq-* town beads when project=all */
   excludeTown?: boolean | undefined;
 }
 

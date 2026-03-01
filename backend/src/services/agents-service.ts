@@ -167,7 +167,7 @@ async function getTmuxAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
         id: session.name,
         name: session.name,
         type: "crew" as AgentType,
-        rig: "",
+        project: "",
         status: isRunning
           ? session.status === "working"
             ? "working"
@@ -193,7 +193,7 @@ async function getTmuxAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
         id: tmuxName,
         name: tmuxName,
         type: "crew" as AgentType,
-        rig: "",
+        project: "",
         status: "idle",
       });
     }

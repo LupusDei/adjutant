@@ -75,7 +75,7 @@ import {
   getRecentlyCompletedEpics,
   getBeadsGraph,
   // Exported for testing
-  _extractRig,
+  _extractProject,
   _prefixToSource,
   _resetPrefixMap,
 } from "../../../src/services/beads/index.js";
@@ -126,31 +126,31 @@ describe("beads-repository", () => {
   });
 
   // ===========================================================================
-  // extractRig
+  // extractProject
   // ===========================================================================
 
-  describe("extractRig", () => {
+  describe("extractProject", () => {
     it("should return null for null/undefined input", () => {
-      expect(_extractRig(null)).toBeNull();
-      expect(_extractRig(undefined)).toBeNull();
+      expect(_extractProject(null)).toBeNull();
+      expect(_extractProject(undefined)).toBeNull();
     });
 
     it("should return null for empty string", () => {
-      expect(_extractRig("")).toBeNull();
+      expect(_extractProject("")).toBeNull();
     });
 
     it("should return null for mayor/ (town-level)", () => {
-      expect(_extractRig("mayor/")).toBeNull();
-      expect(_extractRig("mayor/commands")).toBeNull();
+      expect(_extractProject("mayor/")).toBeNull();
+      expect(_extractProject("mayor/commands")).toBeNull();
     });
 
-    it("should extract rig from path-style assignee", () => {
-      expect(_extractRig("proj1/agents/ace")).toBe("proj1");
-      expect(_extractRig("proj2/worker")).toBe("proj2");
+    it("should extract project from path-style assignee", () => {
+      expect(_extractProject("proj1/agents/ace")).toBe("proj1");
+      expect(_extractProject("proj2/worker")).toBe("proj2");
     });
 
     it("should return assignee directly when no slash", () => {
-      expect(_extractRig("myrig")).toBe("myrig");
+      expect(_extractProject("myrig")).toBe("myrig");
     });
   });
 
@@ -262,7 +262,7 @@ describe("beads-repository", () => {
       expect(result.data).toHaveLength(2);
     });
 
-    it("should filter by rig when rig option is provided", async () => {
+    it("should filter by project when project option is provided", async () => {
       vi.mocked(execBd).mockResolvedValue(
         bdSuccess([
           createIssue({ id: "hq-001", assignee: "proj2/agents/ace" }),
@@ -270,10 +270,10 @@ describe("beads-repository", () => {
         ])
       );
 
-      const result = await listBeads({ rig: "proj2" });
+      const result = await listBeads({ project: "proj2" });
       expect(result.success).toBe(true);
       expect(result.data).toHaveLength(1);
-      expect(result.data?.[0]?.rig).toBe("proj2");
+      expect(result.data?.[0]?.project).toBe("proj2");
     });
   });
 
@@ -297,8 +297,8 @@ describe("beads-repository", () => {
     it("should deduplicate beads across databases", async () => {
       // Two databases return the same bead ID
       vi.mocked(listAllBeadsDirs).mockResolvedValue([
-        { path: "/tmp/town/.beads", workDir: "/tmp/town", rig: null },
-        { path: "/tmp/rig1/.beads", workDir: "/tmp/rig1", rig: "rig1" },
+        { path: "/tmp/town/.beads", workDir: "/tmp/town", project: null },
+        { path: "/tmp/proj1/.beads", workDir: "/tmp/proj1", project: "proj1" },
       ]);
 
       vi.mocked(execBd)
@@ -354,7 +354,7 @@ describe("beads-repository", () => {
       expect(result.success).toBe(true);
       expect(result.data?.id).toBe("hq-abc1");
       expect(result.data?.description).toBe("Detailed description");
-      expect(result.data?.rig).toBe("proj1");
+      expect(result.data?.project).toBe("proj1");
       expect(result.data?.dependencies).toHaveLength(1);
       expect(result.data?.dependencies[0]?.dependsOnId).toBe("hq-xyz1");
     });
@@ -471,8 +471,8 @@ describe("beads-repository", () => {
   describe("listBeadSources", () => {
     it("should return discovered bead sources", async () => {
       vi.mocked(listAllBeadsDirs).mockResolvedValue([
-        { path: "/tmp/town/.beads", workDir: "/tmp/town", rig: null },
-        { path: "/tmp/rig1/.beads", workDir: "/tmp/rig1", rig: "rig1" },
+        { path: "/tmp/town/.beads", workDir: "/tmp/town", project: null },
+        { path: "/tmp/rig1/.beads", workDir: "/tmp/rig1", project: "rig1" },
       ]);
 
       const result = await listBeadSources();

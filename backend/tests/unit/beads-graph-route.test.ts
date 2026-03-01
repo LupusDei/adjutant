@@ -14,7 +14,7 @@ vi.mock("../../src/services/beads/index.js", () => ({
 
 vi.mock("../../src/services/workspace/index.js", () => ({
   resolveWorkspaceRoot: vi.fn(() => "/tmp/town"),
-  resolveRigPath: vi.fn((rig: string) => `/tmp/town/${rig}`),
+  resolveProjectPath: vi.fn((project: string) => `/tmp/town/${project}`),
 }));
 
 import { beadsRouter } from "../../src/routes/beads.js";
@@ -138,10 +138,10 @@ describe("GET /api/beads/graph", () => {
       data: { nodes: [], edges: [] },
     });
 
-    await request(app).get("/api/beads/graph?rig=all&status=open&type=epic&epicId=hq-001&excludeTown=true");
+    await request(app).get("/api/beads/graph?project=all&status=open&type=epic&epicId=hq-001&excludeTown=true");
 
     expect(getBeadsGraph).toHaveBeenCalledWith({
-      rig: "all",
+      project: "all",
       status: "open",
       type: "epic",
       epicId: "hq-001",
@@ -158,7 +158,7 @@ describe("GET /api/beads/graph", () => {
     await request(app).get("/api/beads/graph");
 
     expect(getBeadsGraph).toHaveBeenCalledWith({
-      rig: undefined,
+      project: undefined,
       status: undefined,
       type: undefined,
       epicId: undefined,

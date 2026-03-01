@@ -29,7 +29,7 @@ function createMockAgent(overrides: Partial<CrewMember> = {}): CrewMember {
     id: "proj1/nux",
     name: "nux",
     type: "agent",
-    rig: "proj1",
+    project: "proj1",
     status: "working",
     unreadMail: 0,
     ...overrides,
@@ -61,7 +61,7 @@ describe("agents routes", () => {
 
     it("should return list of agents", async () => {
       const mockAgents = [
-        createMockAgent({ id: "user-1", name: "user-1", type: "user", rig: null }),
+        createMockAgent({ id: "user-1", name: "user-1", type: "user", project: null }),
         createMockAgent({ id: "proj1/scout", name: "scout", type: "agent" }),
         createMockAgent({ id: "proj1/nux", name: "nux", type: "agent" }),
       ];
@@ -78,7 +78,7 @@ describe("agents routes", () => {
       expect(response.body.data).toHaveLength(3);
       expect(response.body.data[0].name).toBe("user-1");
       expect(response.body.data[1].type).toBe("agent");
-      expect(response.body.data[2].rig).toBe("proj1");
+      expect(response.body.data[2].project).toBe("proj1");
     });
 
     it("should return agents with various statuses", async () => {
