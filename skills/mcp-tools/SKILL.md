@@ -6,7 +6,7 @@ description: "MCP tools for communicating with the Adjutant dashboard and other 
 # Adjutant Agent MCP Tools
 
 This skill provides MCP tools for agents to interact with the Adjutant dashboard,
-communicate with the user (Mayor) and other agents, manage beads, and report status.
+communicate with the user and other agents, manage beads, and report status.
 
 ## Connection
 
@@ -21,7 +21,7 @@ The server endpoint is `http://localhost:4201/mcp/sse` (SSE transport).
 
 ### Messaging Tools
 
-Use these to communicate with the Mayor (user) and other agents.
+Use these to communicate with the user and other agents.
 
 **`send_message`** -- Send a message to a recipient.
 ```
@@ -147,7 +147,7 @@ Messages flow through this pipeline:
 1. Agent calls `send_message` via MCP
 2. Message is persisted to SQLite (survives restarts)
 3. WebSocket event broadcasts to connected dashboard clients
-4. If recipient is `"user"` or `"mayor/"`, APNS push notification is sent to iOS
+4. If recipient is `"user"`, APNS push notification is sent to iOS
 
 Messages are durable -- they persist even if the dashboard is not connected.
 Use `read_messages` to catch up on messages sent while you were offline.

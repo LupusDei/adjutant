@@ -5,7 +5,7 @@
 ## Identifier Format
 
 - Root epic: `bd-xxx` where `bd` represents the beads prefix for the project
-  (e.g. `adj-` for adjutant, `gt-` for gastown)
+  (e.g. `adj-` for adjutant)
   `xxx` = **sequential numeric** (e.g. `bd-001`, `bd-002`, `bd-003`)
 - Sub-levels: append `.n` (sequential integers starting at 1)
   Examples: `bd-001.1`, `bd-042.1.3`, `bd-138.2.4.1`

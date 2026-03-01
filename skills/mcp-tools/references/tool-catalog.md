@@ -19,7 +19,7 @@ from the MCP session (not client-supplied).
 
 | Field    | Type   | Required | Description                                      |
 |----------|--------|----------|--------------------------------------------------|
-| to       | string | yes      | Recipient: `"user"`, `"mayor/"`, or agent name   |
+| to       | string | yes      | Recipient: `"user"` or agent name                |
 | body     | string | yes      | Message content                                  |
 | threadId | string | no       | Thread ID for conversation grouping              |
 | metadata | object | no       | Arbitrary key-value metadata                     |

@@ -9,10 +9,10 @@
 
 ## Naming Conventions
 
-- **Files**: kebab-case (`mail-service.ts`, `usePolling.ts`)
-- **Components**: PascalCase (`MailList.tsx`, `PowerButton.tsx`)
-- **Hooks**: camelCase with `use` prefix (`useMail`, `useGastownStatus`)
-- **Types/Interfaces**: PascalCase (`Message`, `GastownStatus`)
+- **Files**: kebab-case (`message-store.ts`, `usePolling.ts`)
+- **Components**: PascalCase (`ChatView.tsx`, `BeadsList.tsx`)
+- **Hooks**: camelCase with `use` prefix (`useChatMessages`, `useAgentStatus`)
+- **Types/Interfaces**: PascalCase (`Message`, `AgentStatus`)
 - **Constants**: SCREAMING_SNAKE_CASE (`API_BASE_URL`)
 
 ## React Patterns

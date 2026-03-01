@@ -44,7 +44,7 @@ Call `create_proposal` with:
   - **How**: High-level approach to implementation
   - **Impact**: Expected benefit (performance, UX, maintainability, etc.)
 - **type**: `"product"` or `"engineering"`
-- **project**: The project this proposal applies to (e.g., `"adjutant"`, `"gastown"`). Must match a registered project name. Agents should use the name of the project they are currently working in.
+- **project**: The project this proposal applies to (e.g., `"adjutant"`). Must match a registered project name. Agents should use the name of the project they are currently working in.
 
 ### Step 4: Announce
 

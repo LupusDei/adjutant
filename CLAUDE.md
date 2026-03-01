@@ -1,26 +1,15 @@
-# Mayor Context (adjutant)
+# Adjutant
 
-> **Recovery**: Run `gt prime` after compaction, clear, or new session
-
-Full context is injected by `gt prime` at session start.
-
-## CRITICAL: Scope Understanding
-
-**Adjutant is the DASHBOARD for ALL of Gas Town**, not just a UI for itself.
-
-- **Beads**: Show from `~/gt/.beads/` (town beads, hq-* prefix), NOT adjutant/.beads/
-- **Agents**: Show ALL rigs, polecats, crew across the entire town
-- **Mail**: Mayor's inbox at town level
-- **Convoys**: All town convoys
-
-The UI runs from `~/gt` and displays the complete state of Gas Town.
-See `.claude/rules/00-critical-scope.md` for details.
+Adjutant is a standalone multi-agent dashboard backed by beads (issue tracking) and MCP (agent communication).
 
 ## Active Technologies
-- TypeScript 5.x (strict mode) + React 18+, Express, Tailwind CSS, Zod (013-agent-task-assignment)
-- SQLite (message store), bd CLI (beads) (013-agent-task-assignment)
-- TypeScript 5.x (strict mode) + Express, Zod, bd-client (CLI wrapper), Node.js EventEmitter (019-beads-service-decompose)
-- SQLite (beads databases via bd CLI) — no direct DB access, all through bd-clien (019-beads-service-decompose)
+- TypeScript 5.x (strict mode) + React 18+, Express, Tailwind CSS, Zod
+- SQLite (message store + full-text search), bd CLI (beads issue tracking)
+- MCP via SSE transport (agent connections)
+- WebSocket (real-time chat), APNS (iOS push notifications)
 
-## Recent Changes
-- 013-agent-task-assignment: Added TypeScript 5.x (strict mode) + React 18+, Express, Tailwind CSS, Zod
+## Key Concepts
+- **Beads**: Issue tracking via `bd` CLI — epics, tasks, bugs with hierarchical dependencies
+- **Agents**: Connect via MCP SSE, use tools for messaging, status reporting, and bead management
+- **Messages**: Persistent SQLite-backed chat between agents and user, with WebSocket real-time delivery
+- **Dashboard**: Retro terminal themed web UI showing agents, beads, chat, and system state

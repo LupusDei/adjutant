@@ -9,7 +9,7 @@ This project uses speckit for structured feature development:
 3. `/speckit.clarify` - Resolve ambiguities
 4. `/speckit.plan` - Generate implementation plan
 5. `/speckit.tasks` - Create task breakdown
-6. `/speckit.beads` - Generate Gastown beads for orchestration
+6. `/speckit.beads` - Generate beads for orchestration
 7. `/speckit.implement` - Execute tasks
 
 ## Feature Artifacts
@@ -25,7 +25,7 @@ specs/001-pipboy-ui/
 ├── contracts/        # OpenAPI specs
 ├── quickstart.md     # Setup guide
 ├── tasks.md          # Implementation tasks
-└── beads-import.md   # Gastown orchestration data
+└── beads-import.md   # Beads orchestration data
 ```
 
 ## Task Format
@@ -46,9 +46,3 @@ Each user story should be:
 - Independently implementable
 - Independently testable
 - Deliverable as MVP increment
-
-## Current Feature
-
-Active feature: `001-pipboy-ui` (branch: `001-pipboy-ui`)
-
-See `specs/001-pipboy-ui/tasks.md` for implementation tasks.

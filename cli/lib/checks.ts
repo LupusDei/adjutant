@@ -84,7 +84,7 @@ export function getAdjutantDbPath(): string {
 
 /** Get the path to the API keys file. */
 export function getApiKeysPath(): string {
-  return join(homedir(), ".gastown", "api-keys.json");
+  return join(homedir(), ".adjutant", "api-keys.json");
 }
 
 /** Check if .mcp.json has the adjutant MCP server configured. */

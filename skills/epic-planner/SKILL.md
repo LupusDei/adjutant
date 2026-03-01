@@ -9,7 +9,7 @@ Plan and scaffold a complete epic hierarchy: from idea to beads-tracked, depende
 
 ## Spec → Bead Mapping
 
-Every spec artifact maps to a bead hierarchy level. Use the project's beads prefix (e.g. `adj-` for adjutant, `gt-` for gastown) — shown here as `bd-` generically.
+Every spec artifact maps to a bead hierarchy level. Use the project's beads prefix (e.g. `adj-` for adjutant) — shown here as `bd-` generically.
 
 | Spec Artifact | Section | Bead Level | Bead ID | Bead Type |
 |---|---|---|---|---|

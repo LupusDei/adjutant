@@ -1,7 +1,7 @@
 {
   "name": "adjutant-frontend",
   "version": "1.0.0",
-  "description": "Adjutant UI for gastown",
+  "description": "Adjutant dashboard frontend - retro terminal UI for multi-agent orchestration",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -18,8 +18,8 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\""
   },
   "keywords": [
-    "gastown",
-    "pip-boy",
+    "adjutant",
+    "dashboard",
     "react",
     "vite"
   ],

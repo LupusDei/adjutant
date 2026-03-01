@@ -520,7 +520,7 @@ For real-time message delivery to agents running in tmux sessions, the backend a
 The Adjutant backend uses optional API key authentication via `apiKeyAuth` middleware (defined in `backend/src/middleware/api-key.ts`).
 
 **Behavior**:
-- If **no API keys are configured** (`~/.gastown/api-keys.json` is empty or missing): ALL requests are allowed (open mode). This is the default for local development.
+- If **no API keys are configured** (`~/.adjutant/api-keys.json` is empty or missing): ALL requests are allowed (open mode). This is the default for local development.
 - If **API keys are configured**: requests must include a valid `Authorization: Bearer <api-key>` header.
 
 ### MCP routes are exempt from API key auth
@@ -545,4 +545,4 @@ npx tsx -e "import { generateApiKey } from './src/services/api-key-service.js'; 
 # Or use the /api/permissions endpoint if available
 ```
 
-Keys are stored as SHA-256 hashes in `~/.gastown/api-keys.json`. The raw key is only shown once at generation time.
+Keys are stored as SHA-256 hashes in `~/.adjutant/api-keys.json`. The raw key is only shown once at generation time.

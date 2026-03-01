@@ -1,7 +1,7 @@
 {
   "name": "adjutant",
   "version": "1.0.0",
-  "description": "Retro terminal UI for Gastown multi-agent orchestration with iOS companion app",
+  "description": "Retro terminal dashboard for multi-agent orchestration with iOS companion app",
   "type": "module",
   "bin": {
     "adjutant": "./bin/cli.js"
@@ -37,12 +37,14 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "gastown",
+    "dashboard",
     "cli",
     "terminal",
     "ui",
     "multi-agent",
     "orchestration",
+    "mcp",
+    "beads",
     "remote",
     "ios"
   ],

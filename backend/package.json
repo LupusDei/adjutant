@@ -1,7 +1,7 @@
 {
   "name": "adjutant-backend",
   "version": "1.0.0",
-  "description": "Backend API for Adjutant - wraps gastown CLI commands",
+  "description": "Backend API for Adjutant - MCP server, message store, and beads integration",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -22,9 +22,10 @@
     "api-key:revoke": "tsx src/cli/api-keys.ts revoke"
   },
   "keywords": [
-    "gastown",
-    "pip-boy",
-    "api"
+    "adjutant",
+    "mcp",
+    "api",
+    "beads"
   ],
   "author": "",
   "license": "ISC",

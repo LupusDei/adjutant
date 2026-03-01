@@ -12,8 +12,8 @@
 
 ### TDD Applies To
 
-- Backend services (`mail-service`, `power-service`, `status-service`, `gt-executor`)
-- Custom React hooks (`useMail`, `useGastownStatus`, `usePolling`)
+- Backend services (`message-store`, `bd-client`, `mcp-tools`, `agents-service`)
+- Custom React hooks (`useChatMessages`, `useAgentStatus`, `usePolling`)
 - All new features and functionality
 - Bug fixes (write a test that reproduces the bug first)
 - API endpoints and request handlers
@@ -39,7 +39,8 @@
 ## What to Test
 
 ### Backend
-- Service methods (mock `gt-executor` for unit tests)
+- Service methods (mock `bd-client` and external commands for unit tests)
+- MCP tool handlers (mock message store and bd client)
 - Request/response validation (Zod schemas)
 - Error handling paths
 
@@ -69,18 +70,18 @@ frontend/tests/unit/*.test.ts
 ## Test Naming
 
 ```typescript
-describe('MailService', () => {
+describe('MessageStore', () => {
   it('should return messages sorted by newest first', () => {})
-  it('should throw when gt command fails', () => {})
+  it('should throw when database is unavailable', () => {})
 })
 ```
 
-## Mocking the GT Executor
+## Mocking External Dependencies
 
-For service tests, mock the `gt-executor`:
+For service tests, mock external CLI wrappers:
 
 ```typescript
-vi.mock('../services/gt-executor', () => ({
-  executeGt: vi.fn()
+vi.mock('../services/bd-client', () => ({
+  executeBd: vi.fn()
 }))
 ```

@@ -2,7 +2,7 @@
 
 Templates for the four epic-planner artifacts. Fill sections from user input; delete unused optional sections. Mark unknowns with `[NEEDS CLARIFICATION]`.
 
-Use the project's beads prefix throughout (e.g. `adj-` for adjutant, `gt-` for gastown). Shown here as `bd-` generically.
+Use the project's beads prefix throughout (e.g. `adj-` for adjutant). Shown here as `bd-` generically.
 
 ## ID Conventions
 
