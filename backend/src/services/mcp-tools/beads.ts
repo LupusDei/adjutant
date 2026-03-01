@@ -73,11 +73,20 @@ function errorResult(result: BdResult) {
  * Resolve bd execution options from MCP session project context.
  * If the agent has a project context, scopes bd to that project's .beads/.
  * Otherwise returns empty options (workspace-default behavior).
+ *
+ * Logs warnings when agents access beads without project context,
+ * helping catch misconfigured agents (adj-029.2.5).
  */
 function resolveBdOptions(extra?: { sessionId?: string | undefined }): BdExecOptions {
-  if (!extra?.sessionId) return {};
+  if (!extra?.sessionId) {
+    console.warn("[beads] Bead tool called without session ID — cannot scope to project");
+    return {};
+  }
   const ctx = getProjectContextBySession(extra.sessionId);
-  if (!ctx) return {};
+  if (!ctx) {
+    console.warn(`[beads] Agent session ${extra.sessionId} has no project context — beads will use workspace default`);
+    return {};
+  }
   return { cwd: ctx.projectPath, beadsDir: ctx.beadsDir };
 }
 

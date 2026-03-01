@@ -601,6 +601,48 @@ describe("MCP Bead Tools", () => {
   });
 
   // ===========================================================================
+  // Project context warnings (adj-029.2.5)
+  // ===========================================================================
+
+  describe("resolveBdOptions warnings", () => {
+    it("should warn when bead tool called without session ID", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      mockExecBd.mockResolvedValue({
+        success: true,
+        data: [],
+        exitCode: 0,
+      });
+
+      const handler = getToolHandler("list_beads");
+      // Call without extra (no sessionId)
+      await handler({});
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("[beads] Bead tool called without session ID")
+      );
+      warnSpy.mockRestore();
+    });
+
+    it("should warn when agent session has no project context", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      mockExecBd.mockResolvedValue({
+        success: true,
+        data: [],
+        exitCode: 0,
+      });
+
+      const handler = getToolHandler("list_beads");
+      // Call with a sessionId that has no project context registered
+      await handler({}, { sessionId: "unknown-session-123" });
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("[beads] Agent session unknown-session-123 has no project context")
+      );
+      warnSpy.mockRestore();
+    });
+  });
+
+  // ===========================================================================
   // Serialization
   // ===========================================================================
 
