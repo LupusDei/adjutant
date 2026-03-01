@@ -3,6 +3,7 @@ import { OverseerToggle } from '../shared/OverseerToggle';
 import { EpicsList, type EpicSortOption } from './EpicsList';
 import { EpicDetailView } from './EpicDetailView';
 import { api } from '../../services/api';
+import { useActiveProject } from '../../hooks/useActiveProject';
 
 export interface EpicsViewProps {
   /** Whether this tab is currently active */
@@ -20,6 +21,16 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
     return localStorage.getItem('epics-project-filter') ?? 'ALL';
   });
   const [projectOptions, setProjectOptions] = useState<string[]>([]);
+
+  // Auto-scope to active project if no explicit user override in localStorage
+  const { activeProject } = useActiveProject();
+
+  useEffect(() => {
+    const saved = localStorage.getItem('epics-project-filter');
+    if (!saved && activeProject) {
+      setProjectFilter(activeProject);
+    }
+  }, [activeProject]);
 
   // Fetch bead sources on mount for filter options
   useEffect(() => {
