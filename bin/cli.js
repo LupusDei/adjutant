@@ -59,6 +59,25 @@ program
     }
   });
 
+// Prime command: output PRIME.md content to stdout
+program
+  .command('prime')
+  .description('Output PRIME.md agent protocol to stdout (used by plugin hooks)')
+  .action(async () => {
+    try {
+      const { runPrime } = await import('../dist/cli/commands/prime.js');
+      const exitCode = runPrime();
+      process.exit(exitCode);
+    } catch (error) {
+      if (error.code === 'ERR_MODULE_NOT_FOUND') {
+        console.error('CLI not built. Run: npx tsc -p tsconfig.cli.json');
+        process.exit(1);
+      }
+      console.error('Error:', error.message);
+      process.exit(1);
+    }
+  });
+
 // Doctor command: check system health
 program
   .command('doctor')

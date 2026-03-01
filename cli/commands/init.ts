@@ -7,8 +7,9 @@
  * Idempotent: safe to run multiple times.
  */
 
-import { mkdirSync, writeFileSync } from "fs";
-import { join } from "path";
+import { mkdirSync, readFileSync, writeFileSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 
 import {
   fileExists,
@@ -17,8 +18,9 @@ import {
   parseJsonFile,
   writeJsonFile,
   getAdjutantDbPath,
+  getGlobalAdjutantDir,
 } from "../lib/checks.js";
-import { registerHooks } from "../lib/hooks.js";
+import { installPlugin } from "../lib/plugin.js";
 import { printHeader, printCheck, printSummary, printSuccess, printError, type CheckResult } from "../lib/output.js";
 import { PRIME_MD_CONTENT } from "../lib/prime.js";
 
@@ -49,6 +51,22 @@ function initAdjutantDir(projectRoot: string, force: boolean): CheckResult {
 
   writeFileSync(primePath, PRIME_MD_CONTENT, "utf-8");
   return { name: ".adjutant/PRIME.md", status: "created" };
+}
+
+function initGlobalPrime(force: boolean): CheckResult {
+  const globalDir = getGlobalAdjutantDir();
+  const primePath = join(globalDir, "PRIME.md");
+
+  if (!dirExists(globalDir)) {
+    mkdirSync(globalDir, { recursive: true });
+  }
+
+  if (fileExists(primePath) && !force) {
+    return { name: "~/.adjutant/PRIME.md", status: "skipped", message: "already exists" };
+  }
+
+  writeFileSync(primePath, PRIME_MD_CONTENT, "utf-8");
+  return { name: "~/.adjutant/PRIME.md", status: "created", message: "default global PRIME.md" };
 }
 
 function initMcpJson(projectRoot: string): CheckResult {
@@ -117,20 +135,29 @@ export async function runInit(options: InitOptions): Promise<number> {
   const projectRoot = process.cwd();
   const results: CheckResult[] = [];
 
-  // adj-013.2.2: .adjutant/ dir + PRIME.md
+  // Global default PRIME.md (~/.adjutant/PRIME.md)
+  results.push(initGlobalPrime(options.force));
+
+  // Local .adjutant/ dir + PRIME.md (repo-specific override)
   results.push(initAdjutantDir(projectRoot, options.force));
 
   // adj-013.2.3: .mcp.json creation/validation
   results.push(initMcpJson(projectRoot));
 
-  // adj-013.2.4: Claude Code hook registration
-  results.push(registerHooks());
+  // Plugin installation (symlink, registry, enable, legacy hook cleanup)
+  // Resolve adjutant project root from this module's location (not cwd)
+  // dist/cli/commands/init.js -> project root is 3 levels up
+  const adjutantRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+  const pkg = JSON.parse(readFileSync(join(adjutantRoot, "package.json"), "utf-8"));
+  results.push(...installPlugin(adjutantRoot, pkg.version));
 
-  // adj-013.2.5: Dependency installation check
-  results.push(...checkDependencies(projectRoot));
-
-  // adj-013.2.6: SQLite database init check
-  results.push(checkDatabase());
+  // Adjutant-project-specific checks (only when running inside the adjutant repo)
+  const isAdjutantProject = fileExists(join(projectRoot, "package.json")) &&
+    JSON.parse(readFileSync(join(projectRoot, "package.json"), "utf-8")).name === "adjutant";
+  if (isAdjutantProject) {
+    results.push(...checkDependencies(projectRoot));
+    results.push(checkDatabase());
+  }
 
   for (const r of results) {
     printCheck(r);

@@ -77,9 +77,14 @@ export function getClaudeSettingsPath(): string {
   return join(homedir(), ".claude", "settings.json");
 }
 
+/** Get the path to the global ~/.adjutant directory. */
+export function getGlobalAdjutantDir(): string {
+  return join(homedir(), ".adjutant");
+}
+
 /** Get the path to the adjutant database. */
 export function getAdjutantDbPath(): string {
-  return join(homedir(), ".adjutant", "adjutant.db");
+  return join(getGlobalAdjutantDir(), "adjutant.db");
 }
 
 /** Get the path to the API keys file. */
@@ -118,23 +123,7 @@ export interface ClaudeSettings {
     PreCompact?: HookMatcher[];
     [key: string]: HookMatcher[] | undefined;
   };
+  enabledPlugins?: Record<string, boolean>;
   [key: string]: unknown;
 }
 
-export const HOOK_COMMAND = "cat .adjutant/PRIME.md 2>/dev/null || true";
-
-/** Check if adjutant-prime hook is registered in Claude Code settings. */
-export function adjutantHookRegistered(): boolean {
-  const settingsPath = getClaudeSettingsPath();
-  const settings = parseJsonFile<ClaudeSettings>(settingsPath);
-  if (!settings?.hooks) return false;
-
-  function hasHook(matchers: HookMatcher[] | undefined): boolean {
-    if (!matchers) return false;
-    return matchers.some((m) =>
-      m.hooks?.some((h) => h.command === HOOK_COMMAND)
-    );
-  }
-
-  return hasHook(settings.hooks.SessionStart) && hasHook(settings.hooks.PreCompact);
-}

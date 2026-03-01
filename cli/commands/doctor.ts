@@ -2,8 +2,10 @@
  * `adjutant doctor` — Check system health and prerequisites.
  *
  * Validates file existence, network health, tool availability,
- * and hook registration. Returns exit code 0 on all pass, 1 on any fail.
+ * and plugin registration. Returns exit code 0 on all pass, 1 on any fail.
  */
+
+import { execSync } from "child_process";
 
 import { printHeader, printCheck, printSummary, type CheckResult } from "../lib/output.js";
 import {
@@ -14,9 +16,12 @@ import {
   getApiKeysPath,
   httpReachable,
   commandAvailable,
-  adjutantHookRegistered,
   nodeVersionOk,
+  parseJsonFile,
+  getClaudeSettingsPath,
+  type ClaudeSettings,
 } from "../lib/checks.js";
+import { PLUGIN_KEY, LEGACY_HOOK_COMMANDS } from "../lib/plugin.js";
 
 /** adj-013.3.1: File/directory existence checks. */
 function checkFiles(cwd: string): CheckResult[] {
@@ -63,12 +68,8 @@ function checkFiles(cwd: string): CheckResult[] {
       : { name: "Frontend dependencies", status: "fail", message: "run npm run install:all" },
   );
 
-  // Plugin skills
-  results.push(
-    fileExists(`${cwd}/skills/mcp-tools/SKILL.md`)
-      ? { name: "Adjutant agent plugin", status: "pass" }
-      : { name: "Adjutant agent plugin", status: "warn" },
-  );
+  // Plugin health checks
+  results.push(...checkPlugin());
 
   // API keys
   results.push(
@@ -125,13 +126,54 @@ function checkTools(): CheckResult[] {
   return results;
 }
 
-/** adj-013.3.4: Hook registration check. */
-function checkHooks(): CheckResult[] {
-  return [
-    adjutantHookRegistered()
-      ? { name: "Claude hooks registered", status: "pass" }
-      : { name: "Claude hooks registered", status: "warn", message: "run adjutant init" },
-  ];
+/** Check plugin installation via claude CLI. */
+function checkPlugin(): CheckResult[] {
+  const results: CheckResult[] = [];
+
+  if (!commandAvailable("claude")) {
+    results.push({ name: "Adjutant plugin", status: "warn", message: "claude CLI not found" });
+    return results;
+  }
+
+  // Check if plugin is installed and enabled via claude plugin list
+  try {
+    const output = execSync("claude plugin list", {
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 10000,
+      encoding: "utf-8",
+    });
+    if (output.includes(PLUGIN_KEY) || output.includes("adjutant-agent")) {
+      results.push({ name: "Adjutant plugin", status: "pass" });
+    } else {
+      results.push({ name: "Adjutant plugin", status: "fail", message: "run adjutant init" });
+    }
+  } catch {
+    results.push({ name: "Adjutant plugin", status: "fail", message: "claude plugin list failed" });
+  }
+
+  // Check for stale legacy hooks
+  const settings = parseJsonFile<ClaudeSettings>(getClaudeSettingsPath());
+  let hasLegacy = false;
+  if (settings?.hooks) {
+    for (const event of Object.keys(settings.hooks)) {
+      const matchers = settings.hooks[event];
+      if (!Array.isArray(matchers)) continue;
+      for (const matcher of matchers) {
+        if (matcher.hooks?.some((h: { command: string }) => LEGACY_HOOK_COMMANDS.includes(h.command))) {
+          hasLegacy = true;
+          break;
+        }
+      }
+      if (hasLegacy) break;
+    }
+  }
+  results.push(
+    hasLegacy
+      ? { name: "No stale legacy hooks", status: "warn", message: "run adjutant init to clean up" }
+      : { name: "No stale legacy hooks", status: "pass" },
+  );
+
+  return results;
 }
 
 export async function runDoctor(): Promise<number> {
@@ -147,9 +189,6 @@ export async function runDoctor(): Promise<number> {
 
   // adj-013.3.3 - Tool availability checks
   results.push(...checkTools());
-
-  // adj-013.3.4 - Hook registration check
-  results.push(...checkHooks());
 
   for (const r of results) {
     printCheck(r);

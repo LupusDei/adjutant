@@ -26,7 +26,6 @@ import {
   commandAvailable,
   nodeVersionOk,
   mcpJsonValid,
-  adjutantHookRegistered,
 } from "../../../cli/lib/checks.js";
 
 describe("cli/lib/checks", () => {
@@ -177,47 +176,4 @@ describe("cli/lib/checks", () => {
     });
   });
 
-  describe("adjutantHookRegistered", () => {
-    it("returns false when no settings file", () => {
-      vi.mocked(fs.existsSync).mockReturnValue(false);
-      vi.mocked(fs.readFileSync).mockImplementation(() => {
-        throw new Error("ENOENT");
-      });
-      expect(adjutantHookRegistered()).toBe(false);
-    });
-
-    it("returns false when hooks section missing", () => {
-      vi.mocked(fs.readFileSync).mockReturnValue("{}");
-      expect(adjutantHookRegistered()).toBe(false);
-    });
-
-    it("returns false when only SessionStart registered", () => {
-      vi.mocked(fs.readFileSync).mockReturnValue(
-        JSON.stringify({
-          hooks: {
-            SessionStart: [
-              { matcher: "", hooks: [{ type: "command", command: "cat .adjutant/PRIME.md 2>/dev/null || true" }] },
-            ],
-          },
-        }),
-      );
-      expect(adjutantHookRegistered()).toBe(false);
-    });
-
-    it("returns true when both events registered", () => {
-      const hookEntry = {
-        matcher: "",
-        hooks: [{ type: "command", command: "cat .adjutant/PRIME.md 2>/dev/null || true" }],
-      };
-      vi.mocked(fs.readFileSync).mockReturnValue(
-        JSON.stringify({
-          hooks: {
-            SessionStart: [hookEntry],
-            PreCompact: [hookEntry],
-          },
-        }),
-      );
-      expect(adjutantHookRegistered()).toBe(true);
-    });
-  });
 });

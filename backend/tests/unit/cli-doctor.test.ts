@@ -41,15 +41,17 @@ describe("cli/commands/doctor", () => {
         return '{"mcpServers": {"adjutant": {"command": "npx"}}}';
       }
       if (p.endsWith("settings.json")) {
-        const hookEntry = {
-          matcher: "",
-          hooks: [{ type: "command", command: "cat .adjutant/PRIME.md 2>/dev/null || true" }],
-        };
-        return JSON.stringify({ hooks: { SessionStart: [hookEntry], PreCompact: [hookEntry] } });
+        return "{}";
       }
       return "{}";
     });
-    vi.mocked(execSync).mockReturnValue(Buffer.from(""));
+    // claude CLI and bd available; claude plugin list shows adjutant
+    vi.mocked(execSync).mockImplementation((cmd: string) => {
+      if (typeof cmd === "string" && cmd.includes("claude plugin list")) {
+        return Buffer.from("adjutant-agent@adjutant-marketplace (user, enabled)");
+      }
+      return Buffer.from("");
+    });
     mockFetch.mockResolvedValue({ status: 200 });
   });
 
@@ -82,9 +84,16 @@ describe("cli/commands/doctor", () => {
     expect(exitCode).toBe(1);
   });
 
-  it("returns 0 when optional checks fail (WARN only)", async () => {
-    // bd CLI not installed + SQLite DB missing + hooks not registered + no API keys
-    vi.mocked(execSync).mockImplementation(() => {
+  it("returns 0 when optional checks warn (bd missing, db missing)", async () => {
+    // bd CLI not installed + SQLite DB missing + no API keys
+    vi.mocked(execSync).mockImplementation((cmd: string) => {
+      if (typeof cmd === "string" && cmd.includes("claude plugin list")) {
+        return Buffer.from("adjutant-agent@adjutant-marketplace (user, enabled)");
+      }
+      if (typeof cmd === "string" && cmd.includes("command -v claude")) {
+        return Buffer.from("/usr/local/bin/claude");
+      }
+      // bd not found
       throw new Error("not found");
     });
     vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
@@ -93,23 +102,7 @@ describe("cli/commands/doctor", () => {
       if (s.includes("api-keys.json")) return false;
       return true;
     });
-    vi.mocked(fs.readFileSync).mockImplementation((filePath: fs.PathOrFileDescriptor) => {
-      const p = String(filePath);
-      if (p.endsWith(".mcp.json")) {
-        return '{"mcpServers": {"adjutant": {"command": "npx"}}}';
-      }
-      // No hooks registered
-      return "{}";
-    });
     vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as fs.Stats);
-    // Override existsSync to also exclude mcp-tools/SKILL.md (plugin check)
-    vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
-      const s = String(p);
-      if (s.includes("adjutant.db")) return false;
-      if (s.includes("api-keys.json")) return false;
-      if (s.includes("mcp-tools/SKILL.md")) return false;
-      return true;
-    });
 
     const exitCode = await runDoctor();
     // WARN items don't cause exit code 1
