@@ -3,7 +3,7 @@
 //  AdjutantWidgets
 //
 //  Live Activity widget for displaying Adjutant status on Lock Screen
-//  and Dynamic Island. Works in swarm mode — no Gas Town dependency.
+//  and Dynamic Island.
 //
 
 import SwiftUI

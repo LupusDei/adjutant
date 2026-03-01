@@ -120,7 +120,7 @@ final class SwarmOverviewViewModel: ObservableObject {
             return
         }
 
-        // Agent spawning removed — API no longer supports spawnPolecat
+        // Agent spawning removed — API no longer supports this
         errorMessage = "Agent spawning is not available in this deployment mode"
     }
 

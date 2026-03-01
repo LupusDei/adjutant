@@ -27,7 +27,7 @@ final class ChatViewModelTests: XCTestCase {
     func testInitialState() {
         XCTAssertTrue(viewModel.messages.isEmpty)
         XCTAssertEqual(viewModel.inputText, "")
-        XCTAssertEqual(viewModel.selectedRecipient, "mayor/")
+        XCTAssertEqual(viewModel.selectedRecipient, "")
         XCTAssertTrue(viewModel.availableRecipients.isEmpty)
         XCTAssertFalse(viewModel.isTyping)
         XCTAssertFalse(viewModel.isRecordingVoice)
@@ -48,7 +48,7 @@ final class ChatViewModelTests: XCTestCase {
 
     func testRefreshUpdatesConnectionStateToConnected() async {
         let testMessages = [
-            createTestMessage(id: "test-1", agentId: "mayor/", role: .agent)
+            createTestMessage(id: "test-1", agentId: "agent-1", role: .agent)
         ]
         MockURLProtocol.mockHandler = mockMessagesResponse(messages: testMessages)
 
@@ -67,8 +67,8 @@ final class ChatViewModelTests: XCTestCase {
 
     func testRefreshLoadsMessagesFromGetMessages() async {
         let testMessages = [
-            createTestMessage(id: "test-1", agentId: "mayor/", role: .agent),
-            createTestMessage(id: "test-2", agentId: "user", role: .user, recipient: "mayor/")
+            createTestMessage(id: "test-1", agentId: "agent-1", role: .agent),
+            createTestMessage(id: "test-2", agentId: "user", role: .user, recipient: "agent-1")
         ]
 
         MockURLProtocol.mockHandler = mockMessagesResponse(messages: testMessages)
@@ -90,17 +90,17 @@ final class ChatViewModelTests: XCTestCase {
 
         await viewModel.refresh()
 
-        // Should call /api/messages?agentId=mayor/
+        // Should call /api/messages?agentId=agent-1
         let components = URLComponents(url: capturedURL!, resolvingAgainstBaseURL: false)!
         let agentParam = components.queryItems?.first(where: { $0.name == "agentId" })
-        XCTAssertEqual(agentParam?.value, "mayor/")
+        XCTAssertEqual(agentParam?.value, "agent-1")
     }
 
     func testMessagesSortedOldestFirst() async {
         let now = Date()
         let testMessages = [
-            createTestMessage(id: "test-new", agentId: "mayor/", role: .agent, date: now),
-            createTestMessage(id: "test-old", agentId: "mayor/", role: .agent, date: now.addingTimeInterval(-3600))
+            createTestMessage(id: "test-new", agentId: "agent-1", role: .agent, date: now),
+            createTestMessage(id: "test-old", agentId: "agent-1", role: .agent, date: now.addingTimeInterval(-3600))
         ]
 
         MockURLProtocol.mockHandler = mockMessagesResponse(messages: testMessages)
@@ -132,7 +132,7 @@ final class ChatViewModelTests: XCTestCase {
     func testSetRecipientClearsMessagesAndRefreshes() async {
         // Load initial messages
         let initialMessages = [
-            createTestMessage(id: "test-1", agentId: "mayor/", role: .agent)
+            createTestMessage(id: "test-1", agentId: "agent-1", role: .agent)
         ]
         MockURLProtocol.mockHandler = mockMessagesResponse(messages: initialMessages)
         await viewModel.refresh()
@@ -157,7 +157,7 @@ final class ChatViewModelTests: XCTestCase {
             return self.mockMessagesResponse(messages: [])(request)
         }
 
-        await viewModel.setRecipient("mayor/") // Same as default
+        await viewModel.setRecipient("") // Same as default
         XCTAssertEqual(refreshCount, 0)
     }
 
@@ -213,19 +213,19 @@ final class ChatViewModelTests: XCTestCase {
     // MARK: - Outgoing Message Detection Tests
 
     func testIsOutgoingForUserMessage() {
-        let userMsg = createTestMessage(id: "test", agentId: "user", role: .user, recipient: "mayor/")
+        let userMsg = createTestMessage(id: "test", agentId: "user", role: .user, recipient: "agent-1")
         XCTAssertTrue(viewModel.isOutgoing(userMsg))
     }
 
     func testIsOutgoingFalseForAgentMessage() {
-        let agentMsg = createTestMessage(id: "test", agentId: "mayor/", role: .agent)
+        let agentMsg = createTestMessage(id: "test", agentId: "agent-1", role: .agent)
         XCTAssertFalse(viewModel.isOutgoing(agentMsg))
     }
 
     // MARK: - Recipient Display Name Tests
 
-    func testRecipientDisplayNameForMayor() {
-        XCTAssertEqual(viewModel.recipientDisplayName, "MAYOR")
+    func testRecipientDisplayNameForEmptyRecipient() {
+        XCTAssertEqual(viewModel.recipientDisplayName, "")
     }
 
     // MARK: - Load More History Tests
@@ -253,7 +253,7 @@ final class ChatViewModelTests: XCTestCase {
 
     func testLoadMoreHistoryUsesBeforeIdPagination() async {
         // First load some messages
-        let messages = [createTestMessage(id: "msg-1", agentId: "mayor/", role: .agent)]
+        let messages = [createTestMessage(id: "msg-1", agentId: "agent-1", role: .agent)]
         MockURLProtocol.mockHandler = mockMessagesResponse(messages: messages)
         await viewModel.refresh()
 
@@ -285,7 +285,7 @@ final class ChatViewModelTests: XCTestCase {
 
     func testIncomingWebSocketMessageAppendsToMessages() async {
         // Load initial messages
-        let initial = [createTestMessage(id: "msg-1", agentId: "mayor/", role: .agent)]
+        let initial = [createTestMessage(id: "msg-1", agentId: "agent-1", role: .agent)]
         MockURLProtocol.mockHandler = mockMessagesResponse(messages: initial)
         await viewModel.refresh()
         XCTAssertEqual(viewModel.messages.count, 1)
@@ -304,7 +304,7 @@ final class ChatViewModelTests: XCTestCase {
         let now = ISO8601DateFormatter().string(from: Date())
         let wsMessage = PersistentMessage(
             id: "ws-msg-1",
-            agentId: "mayor/",
+            agentId: "agent-1",
             recipient: "user",
             role: .agent,
             body: "WebSocket message",
@@ -325,12 +325,12 @@ final class ChatViewModelTests: XCTestCase {
         let wsService = ChatWebSocketService()
         let vm = ChatViewModel(apiClient: mockAPIClient, wsService: wsService)
 
-        let initial = [createTestMessage(id: "msg-1", agentId: "mayor/", role: .agent)]
+        let initial = [createTestMessage(id: "msg-1", agentId: "agent-1", role: .agent)]
         MockURLProtocol.mockHandler = mockMessagesResponse(messages: initial)
         await vm.refresh()
         XCTAssertEqual(vm.messages.count, 1)
 
-        // Send a message from a different agent (not the selected "mayor/")
+        // Send a message from a different agent (not the selected "agent-1")
         let now = ISO8601DateFormatter().string(from: Date())
         let otherMessage = PersistentMessage(
             id: "ws-msg-other",
@@ -355,7 +355,7 @@ final class ChatViewModelTests: XCTestCase {
         let wsService = ChatWebSocketService()
         let vm = ChatViewModel(apiClient: mockAPIClient, wsService: wsService)
 
-        let initial = [createTestMessage(id: "msg-1", agentId: "mayor/", role: .agent)]
+        let initial = [createTestMessage(id: "msg-1", agentId: "agent-1", role: .agent)]
         MockURLProtocol.mockHandler = mockMessagesResponse(messages: initial)
         await vm.refresh()
         XCTAssertEqual(vm.messages.count, 1)
@@ -364,7 +364,7 @@ final class ChatViewModelTests: XCTestCase {
         let now = ISO8601DateFormatter().string(from: Date())
         let duplicate = PersistentMessage(
             id: "msg-1",
-            agentId: "mayor/",
+            agentId: "agent-1",
             recipient: "user",
             role: .agent,
             body: "Duplicate",
@@ -741,12 +741,12 @@ final class WsServerMessageDecodingTests: XCTestCase {
     }
 
     func testDecodeChatMessage() throws {
-        let json = "{\"type\":\"message\",\"id\":\"msg-1\",\"seq\":5,\"from\":\"mayor/\",\"to\":\"user\",\"body\":\"Hello\",\"timestamp\":\"2026-02-14T00:00:00Z\"}".data(using: .utf8)!
+        let json = "{\"type\":\"message\",\"id\":\"msg-1\",\"seq\":5,\"from\":\"agent-1\",\"to\":\"user\",\"body\":\"Hello\",\"timestamp\":\"2026-02-14T00:00:00Z\"}".data(using: .utf8)!
         let msg = try decoder.decode(WsServerMessage.self, from: json)
         XCTAssertEqual(msg.type, "message")
         XCTAssertEqual(msg.id, "msg-1")
         XCTAssertEqual(msg.seq, 5)
-        XCTAssertEqual(msg.from, "mayor/")
+        XCTAssertEqual(msg.from, "agent-1")
         XCTAssertEqual(msg.body, "Hello")
     }
 
@@ -768,15 +768,15 @@ final class WsServerMessageDecodingTests: XCTestCase {
     }
 
     func testDecodeTypingIndicator() throws {
-        let json = "{\"type\":\"typing\",\"from\":\"mayor/\",\"state\":\"started\"}".data(using: .utf8)!
+        let json = "{\"type\":\"typing\",\"from\":\"agent-1\",\"state\":\"started\"}".data(using: .utf8)!
         let msg = try decoder.decode(WsServerMessage.self, from: json)
         XCTAssertEqual(msg.type, "typing")
-        XCTAssertEqual(msg.from, "mayor/")
+        XCTAssertEqual(msg.from, "agent-1")
         XCTAssertEqual(msg.state, "started")
     }
 
     func testDecodeStreamToken() throws {
-        let json = "{\"type\":\"stream_token\",\"streamId\":\"stream-1\",\"token\":\"Hello \",\"from\":\"mayor/\"}".data(using: .utf8)!
+        let json = "{\"type\":\"stream_token\",\"streamId\":\"stream-1\",\"token\":\"Hello \",\"from\":\"agent-1\"}".data(using: .utf8)!
         let msg = try decoder.decode(WsServerMessage.self, from: json)
         XCTAssertEqual(msg.type, "stream_token")
         XCTAssertEqual(msg.streamId, "stream-1")
@@ -830,12 +830,12 @@ final class WsClientMessageEncodingTests: XCTestCase {
     }
 
     func testEncodeChatMessage() throws {
-        let msg = WsClientMessage(type: "message", id: "client-1", to: "mayor/", body: "Hello")
+        let msg = WsClientMessage(type: "message", id: "client-1", to: "agent-1", body: "Hello")
         let data = try encoder.encode(msg)
         let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         XCTAssertEqual(json["type"] as? String, "message")
         XCTAssertEqual(json["id"] as? String, "client-1")
-        XCTAssertEqual(json["to"] as? String, "mayor/")
+        XCTAssertEqual(json["to"] as? String, "agent-1")
         XCTAssertEqual(json["body"] as? String, "Hello")
     }
 
@@ -869,20 +869,20 @@ final class WsClientMessageEncodingTests: XCTestCase {
 @MainActor
 final class StreamingResponseTests: XCTestCase {
     func testAssembledText() {
-        var stream = StreamingResponse(streamId: "s1", from: "mayor/")
+        var stream = StreamingResponse(streamId: "s1", from: "agent-1")
         stream.tokens = ["Hello", " ", "world"]
         XCTAssertEqual(stream.assembledText, "Hello world")
     }
 
     func testEmptyStream() {
-        let stream = StreamingResponse(streamId: "s1", from: "mayor/")
+        let stream = StreamingResponse(streamId: "s1", from: "agent-1")
         XCTAssertEqual(stream.assembledText, "")
         XCTAssertFalse(stream.isComplete)
         XCTAssertNil(stream.messageId)
     }
 
     func testStreamCompletion() {
-        var stream = StreamingResponse(streamId: "s1", from: "mayor/")
+        var stream = StreamingResponse(streamId: "s1", from: "agent-1")
         stream.tokens = ["Done"]
         stream.isComplete = true
         stream.messageId = "msg-final"

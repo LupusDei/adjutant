@@ -37,7 +37,7 @@ final class ProposalDetailViewModelTests: XCTestCase {
         let now = ISO8601DateFormatter().string(from: Date())
         return [
             "id": id ?? testProposalId,
-            "author": "adjutant/polecats/flint",
+            "author": "adjutant/agents/flint",
             "title": "Add voice commands",
             "description": "Users should be able to control the dashboard using voice commands.",
             "type": type,
@@ -75,7 +75,7 @@ final class ProposalDetailViewModelTests: XCTestCase {
         XCTAssertNotNil(viewModel.proposal)
         XCTAssertEqual(viewModel.proposal?.id, testProposalId)
         XCTAssertEqual(viewModel.proposal?.title, "Add voice commands")
-        XCTAssertEqual(viewModel.proposal?.author, "adjutant/polecats/flint")
+        XCTAssertEqual(viewModel.proposal?.author, "adjutant/agents/flint")
         XCTAssertEqual(viewModel.proposal?.type, .product)
         XCTAssertEqual(viewModel.proposal?.status, .pending)
     }

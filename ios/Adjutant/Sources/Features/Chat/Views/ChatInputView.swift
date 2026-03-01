@@ -139,7 +139,7 @@ struct ChatInputView: View {
                 Spacer()
                 ChatInputView(
                     text: $text,
-                    recipientName: "MAYOR",
+                    recipientName: "SYSTEM",
                     isRecordingVoice: isRecording,
                     canSend: !text.isEmpty,
                     onSend: { text = "" },

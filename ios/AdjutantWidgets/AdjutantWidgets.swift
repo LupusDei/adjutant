@@ -2,7 +2,7 @@
 //  AdjutantWidgets.swift
 //  AdjutantWidgets
 //
-//  Created by Gas Town on 2026-01-26.
+//  Created by Adjutant on 2026-01-26.
 //
 
 import SwiftUI

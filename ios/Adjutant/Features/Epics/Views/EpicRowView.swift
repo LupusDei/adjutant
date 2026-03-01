@@ -112,7 +112,7 @@ struct EpicRowView: View {
     let epic = EpicWithProgress(
         epic: BeadInfo(
             id: "adj-abc123",
-            title: "Replace Convoys with Epics view in iOS app",
+            title: "Implement Epics view in iOS app",
             status: "open",
             priority: 1,
             type: "epic",

@@ -176,11 +176,11 @@ private struct UnifiedChatContent: View {
         }
     }
 
-    // MARK: - Header (matches gastown ChatView style)
+    // MARK: - Header
 
     private var headerBar: some View {
         HStack {
-            // Agent/session picker (matches gastown recipient selector style)
+            // Agent/session picker
             Button {
                 loader.showingSessionPicker = true
             } label: {

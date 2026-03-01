@@ -461,8 +461,8 @@ struct BeadsListView: View {
 
         // Apply overseer mode filtering
         if appState.isOverseerMode {
-            let excludedTypes = ["message", "epic", "convoy", "agent", "role", "witness", "wisp", "infrastructure", "coordination", "sync"]
-            let excludedPatterns = ["witness", "wisp", "internal", "sync", "coordination", "mail delivery", "polecat", "crew assignment", "rig status", "heartbeat", "health check"]
+            let excludedTypes = ["message", "epic", "agent", "role", "witness", "wisp", "infrastructure", "coordination", "sync"]
+            let excludedPatterns = ["witness", "wisp", "internal", "sync", "coordination", "mail delivery", "crew assignment", "heartbeat", "health check"]
 
             result = result.filter { bead in
                 let typeLower = bead.type.lowercased()

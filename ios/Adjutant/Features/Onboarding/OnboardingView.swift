@@ -134,7 +134,7 @@ public struct OnboardingView: View {
                 Spacer()
 
                 // Footer
-                CRTText("GAS TOWN INDUSTRIES", style: .caption, color: theme.dim)
+                CRTText("ADJUTANT SYSTEMS", style: .caption, color: theme.dim)
                     .padding(.bottom, CRTTheme.Spacing.lg)
             }
         }

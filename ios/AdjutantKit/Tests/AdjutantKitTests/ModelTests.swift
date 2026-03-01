@@ -48,7 +48,7 @@ final class ModelTests: XCTestCase {
         let json = """
         {
             "id": "gb-53tj",
-            "from": "mayor/",
+            "from": "system",
             "to": "overseer",
             "subject": "Test subject",
             "body": "Test body",
@@ -65,7 +65,7 @@ final class ModelTests: XCTestCase {
         let message = try decoder.decode(Message.self, from: json.data(using: .utf8)!)
 
         XCTAssertEqual(message.id, "gb-53tj")
-        XCTAssertEqual(message.from, "mayor/")
+        XCTAssertEqual(message.from, "system")
         XCTAssertEqual(message.to, "overseer")
         XCTAssertEqual(message.subject, "Test subject")
         XCTAssertEqual(message.body, "Test body")
@@ -82,7 +82,7 @@ final class ModelTests: XCTestCase {
         {
             "id": "gb-reply",
             "from": "user",
-            "to": "mayor/",
+            "to": "user",
             "subject": "RE: Original",
             "body": "Reply body",
             "timestamp": "2024-01-15T11:00:00.000Z",
@@ -109,7 +109,7 @@ final class ModelTests: XCTestCase {
         let json = """
         {
             "id": "test",
-            "from": "mayor/",
+            "from": "system",
             "to": "user",
             "subject": "",
             "body": "",
@@ -124,7 +124,7 @@ final class ModelTests: XCTestCase {
         """
 
         let message = try decoder.decode(Message.self, from: json.data(using: .utf8)!)
-        XCTAssertEqual(message.senderName, "mayor")
+        XCTAssertEqual(message.senderName, "system")
     }
 
     // MARK: - CrewMember Tests
@@ -253,14 +253,14 @@ final class ModelTests: XCTestCase {
         let json = """
         {
             "sources": [],
-            "mode": "gastown"
+            "mode": "swarm"
         }
         """
 
         let response = try decoder.decode(BeadSourcesResponse.self, from: json.data(using: .utf8)!)
 
         XCTAssertTrue(response.sources.isEmpty)
-        XCTAssertEqual(response.mode, "gastown")
+        XCTAssertEqual(response.mode, "swarm")
     }
 
     func testBeadSourcesResponseSwarmMode() throws {
@@ -287,7 +287,7 @@ final class ModelTests: XCTestCase {
         let sources = [BeadSource(name: "proj", path: "/p", hasBeads: true)]
         let response1 = BeadSourcesResponse(sources: sources, mode: "swarm")
         let response2 = BeadSourcesResponse(sources: sources, mode: "swarm")
-        let response3 = BeadSourcesResponse(sources: [], mode: "gastown")
+        let response3 = BeadSourcesResponse(sources: [], mode: "swarm2")
 
         XCTAssertEqual(response1, response2)
         XCTAssertNotEqual(response1, response3)
@@ -318,9 +318,9 @@ final class ModelTests: XCTestCase {
             "status": "in_progress",
             "priority": 1,
             "type": "feature",
-            "assignee": "greenplace/polecat-abc",
-            "rig": "greenplace",
-            "source": "greenplace",
+            "assignee": "adjutant/agent-abc",
+            "rig": "adjutant",
+            "source": "adjutant",
             "labels": ["frontend", "auth"],
             "createdAt": "2024-01-10T08:00:00.000Z",
             "updatedAt": "2024-01-15T09:30:00.000Z"
@@ -602,7 +602,7 @@ final class ModelTests: XCTestCase {
             "items": [
                 {
                     "id": "gb-1",
-                    "from": "mayor/",
+                    "from": "system",
                     "to": "user",
                     "subject": "Test",
                     "body": "Body",

@@ -216,7 +216,7 @@ struct ProposalCard: View {
     ProposalCard(
         proposal: Proposal(
             id: "uuid-001",
-            author: "adjutant/polecats/flint",
+            author: "adjutant/agents/flint",
             title: "Add voice commands for hands-free operation",
             description: "Users should be able to control the dashboard using voice commands. This would improve accessibility and allow hands-free operation during complex workflows.",
             type: .product,
@@ -235,7 +235,7 @@ struct ProposalCard: View {
     ProposalCard(
         proposal: Proposal(
             id: "uuid-002",
-            author: "gastown/witness",
+            author: "adjutant/witness",
             title: "Migrate database to PostgreSQL",
             description: "SQLite is hitting write contention limits under swarm load. PostgreSQL would provide better concurrent write performance and WAL replication for read replicas.",
             type: .engineering,
@@ -252,7 +252,7 @@ struct ProposalCard: View {
     ProposalCard(
         proposal: Proposal(
             id: "uuid-003",
-            author: "gastown/refinery",
+            author: "adjutant/refinery",
             title: "Add dark mode toggle",
             description: "Already a CRT terminal. This is inherently dark mode.",
             type: .product,

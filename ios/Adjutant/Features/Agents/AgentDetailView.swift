@@ -213,7 +213,7 @@ struct AgentDetailView: View {
                 // Agent details card
                 infoCard
 
-                // Terminal for polecats
+                // Terminal for agents with sessions
                 if viewModel.hasTerm {
                     terminalCard
                 } else {
@@ -905,8 +905,8 @@ private struct BeadPickerSheet: View {
     NavigationStack {
         AgentDetailView(
             member: CrewMember(
-                id: "polecat-abc",
-                name: "polecat-abc",
+                id: "agent-abc",
+                name: "agent-abc",
                 type: .agent,
                 status: .working,
                 currentTask: "Implementing feature adj-1234",

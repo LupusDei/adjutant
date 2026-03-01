@@ -127,7 +127,7 @@ struct BeadRowView: View {
     }
 
     private func formatAssignee(_ assignee: String) -> String {
-        // Extract last component (e.g., "adjutant/polecats/flint" -> "flint")
+        // Extract last component (e.g., "adjutant/agents/flint" -> "flint")
         let components = assignee.split(separator: "/")
         if let last = components.last {
             return String(last)
@@ -155,7 +155,7 @@ struct BeadRowView: View {
                 status: "in_progress",
                 priority: 1,
                 type: "feature",
-                assignee: "adjutant/polecats/flint",
+                assignee: "adjutant/agents/flint",
                 rig: "adjutant",
                 source: "adjutant",
                 labels: ["ios", "feature"],

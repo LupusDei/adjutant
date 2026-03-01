@@ -272,7 +272,7 @@ final class SSEGapRecoveryTests: XCTestCase {
     func testSSEEventDecodePayload() {
         let event = SSEEvent(
             type: "agent_status",
-            data: "{\"agentId\":\"polecat-1\",\"status\":\"active\"}",
+            data: "{\"agentId\":\"agent-1\",\"status\":\"active\"}",
             id: "50"
         )
 
@@ -283,7 +283,7 @@ final class SSEGapRecoveryTests: XCTestCase {
 
         let decoded = event.decode(AgentStatus.self)
         XCTAssertNotNil(decoded)
-        XCTAssertEqual(decoded?.agentId, "polecat-1")
+        XCTAssertEqual(decoded?.agentId, "agent-1")
         XCTAssertEqual(decoded?.status, "active")
     }
 
@@ -450,7 +450,7 @@ final class StreamingEndToEndTests: XCTestCase {
     }
 
     func testStreamTokenBuildsAssembledText() {
-        var stream = StreamingResponse(streamId: "s1", from: "mayor/")
+        var stream = StreamingResponse(streamId: "s1", from: "agent-1")
         XCTAssertEqual(stream.assembledText, "")
 
         stream.tokens.append("Hello")
@@ -465,7 +465,7 @@ final class StreamingEndToEndTests: XCTestCase {
     }
 
     func testStreamCompletionSetsFields() {
-        var stream = StreamingResponse(streamId: "s1", from: "mayor/")
+        var stream = StreamingResponse(streamId: "s1", from: "agent-1")
         stream.tokens = ["Complete", " ", "response"]
 
         XCTAssertFalse(stream.isComplete)
@@ -480,8 +480,8 @@ final class StreamingEndToEndTests: XCTestCase {
     }
 
     func testStreamingResponseEquatable() {
-        let stream1 = StreamingResponse(streamId: "s1", from: "mayor/")
-        var stream2 = StreamingResponse(streamId: "s1", from: "mayor/")
+        let stream1 = StreamingResponse(streamId: "s1", from: "agent-1")
+        var stream2 = StreamingResponse(streamId: "s1", from: "agent-1")
         XCTAssertEqual(stream1, stream2)
 
         stream2.tokens = ["token"]
@@ -568,7 +568,7 @@ final class StreamingEndToEndTests: XCTestCase {
             .first()
             .sink { message in
                 XCTAssertEqual(message.id, "ws-msg-1")
-                XCTAssertEqual(message.from, "mayor/")
+                XCTAssertEqual(message.from, "agent-1")
                 XCTAssertEqual(message.body, "Test body")
                 expectation.fulfill()
             }
@@ -576,7 +576,7 @@ final class StreamingEndToEndTests: XCTestCase {
 
         let msg = Message(
             id: "ws-msg-1",
-            from: "mayor/",
+            from: "agent-1",
             to: "user",
             subject: "Test",
             body: "Test body",
@@ -622,7 +622,7 @@ final class StreamTokenDecodingTests: XCTestCase {
             "type": "stream_token",
             "streamId": "stream-42",
             "token": "Hello ",
-            "from": "mayor/",
+            "from": "agent-1",
             "seq": 10,
             "done": false
         }
@@ -632,7 +632,7 @@ final class StreamTokenDecodingTests: XCTestCase {
         XCTAssertEqual(msg.type, "stream_token")
         XCTAssertEqual(msg.streamId, "stream-42")
         XCTAssertEqual(msg.token, "Hello ")
-        XCTAssertEqual(msg.from, "mayor/")
+        XCTAssertEqual(msg.from, "agent-1")
         XCTAssertEqual(msg.seq, 10)
         XCTAssertEqual(msg.done, false)
     }
@@ -733,18 +733,18 @@ final class WsServerMessageFullDecodingTests: XCTestCase {
 
     func testDecodeTypingStarted() throws {
         let json = """
-        {"type":"typing","from":"mayor/","state":"started"}
+        {"type":"typing","from":"agent-1","state":"started"}
         """.data(using: .utf8)!
         let msg = try decoder.decode(WsServerMessage.self, from: json)
 
         XCTAssertEqual(msg.type, "typing")
-        XCTAssertEqual(msg.from, "mayor/")
+        XCTAssertEqual(msg.from, "agent-1")
         XCTAssertEqual(msg.state, "started")
     }
 
     func testDecodeTypingThinking() throws {
         let json = """
-        {"type":"typing","from":"mayor/","state":"thinking"}
+        {"type":"typing","from":"agent-1","state":"thinking"}
         """.data(using: .utf8)!
         let msg = try decoder.decode(WsServerMessage.self, from: json)
 
@@ -753,7 +753,7 @@ final class WsServerMessageFullDecodingTests: XCTestCase {
 
     func testDecodeTypingStopped() throws {
         let json = """
-        {"type":"typing","from":"mayor/","state":"stopped"}
+        {"type":"typing","from":"agent-1","state":"stopped"}
         """.data(using: .utf8)!
         let msg = try decoder.decode(WsServerMessage.self, from: json)
 
@@ -791,7 +791,7 @@ final class WsServerMessageFullDecodingTests: XCTestCase {
         {
             "type": "message",
             "id": "m1",
-            "from": "mayor/",
+            "from": "agent-1",
             "to": "user",
             "body": "Threaded msg",
             "threadId": "thread-42",

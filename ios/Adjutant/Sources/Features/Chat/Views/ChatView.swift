@@ -3,7 +3,7 @@ import AdjutantKit
 
 /// Main chat view for direct messaging with agents.
 /// Features SMS-style bubbles, auto-scroll, typing indicator, and voice input.
-/// Supports chatting with Mayor or any crew agent.
+/// Supports chatting with any crew agent.
 struct ChatView: View {
     @Environment(\.crtTheme) private var theme
     @EnvironmentObject private var coordinator: AppCoordinator
@@ -555,7 +555,7 @@ private struct RecipientSelectorSheet: View {
                 // Recipients list
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        // Mayor row removed — gastown mode no longer exists
+                        // System row removed — only agent recipients remain
 
                         // Other recipients
                         ForEach(filteredRecipients) { crew in
@@ -727,15 +727,15 @@ private struct RecipientSelectorSheet: View {
     }
 
     /// Checks if a bead's assignee matches a given agent ID.
-    /// Handles format differences: assignee may be "rig/type/name" while agent ID could be just "name".
+    /// Handles format differences: assignee may be "project/role/name" while agent ID could be just "name".
     private func assigneeMatches(_ assignee: String?, agentId: String) -> Bool {
         guard let assignee, !assignee.isEmpty else { return false }
         if assignee == agentId { return true }
-        // Match last path component: "adjutant/polecats/toast" matches agent ID "toast"
+        // Match last path component: "adjutant/agents/toast" matches agent ID "toast"
         if let lastComponent = assignee.split(separator: "/").last, String(lastComponent) == agentId {
             return true
         }
-        // Match agent ID as path prefix: agent "adjutant/polecats/toast" matches assignee "toast"
+        // Match agent ID as path prefix: agent "adjutant/agents/toast" matches assignee "toast"
         if let lastComponent = agentId.split(separator: "/").last, String(lastComponent) == assignee {
             return true
         }

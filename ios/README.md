@@ -1,6 +1,6 @@
 # Adjutant iOS App
 
-Retro terminal UI for Gas Town multi-agent orchestration - iOS companion app.
+Retro terminal UI for Adjutant multi-agent orchestration - iOS companion app.
 
 ## Requirements
 
@@ -229,7 +229,7 @@ let agents = try await client.getAgents()
 
 // Send message
 let request = SendMessageRequest(
-    to: "mayor/",
+    to: "user",
     subject: "Hello",
     body: "Test message"
 )

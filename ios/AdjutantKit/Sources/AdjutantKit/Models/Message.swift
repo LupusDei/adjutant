@@ -1,10 +1,10 @@
 import Foundation
 
-/// A mail message in the gastown system
+/// A mail message in the system
 public struct Message: Codable, Identifiable, Equatable, Hashable {
     /// Unique identifier (beads issue ID format, e.g., "gb-53tj")
     public let id: String
-    /// Sender address (e.g., "mayor/", "greenplace/Toast")
+    /// Sender address (e.g., "system", "adjutant/agent-abc")
     public let from: String
     /// Recipient address
     public let to: String
@@ -78,7 +78,7 @@ public struct Message: Codable, Identifiable, Equatable, Hashable {
 
 /// Request body for sending a new message
 public struct SendMessageRequest: Encodable {
-    /// Recipient address (default: "mayor/")
+    /// Recipient address
     public var to: String?
     /// Sender address (default: resolved from environment)
     public var from: String?

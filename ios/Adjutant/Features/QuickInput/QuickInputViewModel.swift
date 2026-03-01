@@ -3,7 +3,7 @@ import Combine
 import AdjutantKit
 
 /// ViewModel for the Quick Input FAB feature.
-/// Manages message composition and sending to the Mayor.
+/// Manages message composition and sending.
 @MainActor
 final class QuickInputViewModel: BaseViewModel {
     // MARK: - Published Properties

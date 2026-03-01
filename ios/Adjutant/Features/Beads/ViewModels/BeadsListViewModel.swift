@@ -219,7 +219,7 @@ final class BeadsListViewModel: BaseViewModel {
     // MARK: - Private Helpers
 
     /// Types excluded from the beads list (matches frontend EXCLUDED_TYPES)
-    private static let excludedTypes: Set<String> = ["message", "epic", "convoy", "agent", "wisp"]
+    private static let excludedTypes: Set<String> = ["message", "epic", "agent", "wisp"]
 
     /// Applies the current filter and search to beads
     /// Note: Rig filtering is now done server-side via the API rig parameter
@@ -423,7 +423,7 @@ extension BeadsListViewModel {
             status: "in_progress",
             priority: 1,
             type: "feature",
-            assignee: "adjutant/polecats/flint",
+            assignee: "adjutant/agents/flint",
             rig: "adjutant",
             source: "adjutant",
             labels: ["ios", "feature"],
@@ -462,7 +462,7 @@ extension BeadsListViewModel {
             status: "closed",
             priority: 3,
             type: "feature",
-            assignee: "adjutant/polecats/flint",
+            assignee: "adjutant/agents/flint",
             rig: "adjutant",
             source: "adjutant",
             labels: ["done"],

@@ -40,7 +40,7 @@ public struct KanbanColumnDefinition {
     }
 }
 
-/// All column definitions in workflow order with Pip-Boy theme colors (Gastown mode).
+/// All column definitions in workflow order with Pip-Boy theme colors.
 public let kanbanColumns: [KanbanColumnDefinition] = [
     KanbanColumnDefinition(id: .open, title: "OPEN", color: Color(hex: 0x00FF00)),
     KanbanColumnDefinition(id: .hooked, title: "HOOKED", color: Color(hex: 0x00FFFF)),

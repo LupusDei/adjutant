@@ -113,7 +113,7 @@ struct TimelineRowView: View {
     // MARK: - Formatting
 
     private func formatAgentName(_ agentId: String) -> String {
-        // Extract last component (e.g., "adjutant/polecats/flint" -> "flint")
+        // Extract last component (e.g., "adjutant/agents/flint" -> "flint")
         let components = agentId.split(separator: "/")
         if let last = components.last {
             return String(last).uppercased()

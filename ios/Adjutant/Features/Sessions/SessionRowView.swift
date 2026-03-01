@@ -124,7 +124,7 @@ struct SessionRowView: View {
             session: ManagedSession(
                 id: "s1",
                 name: "adjutant-main",
-                tmuxSession: "gt-adj-polecat-s1",
+                tmuxSession: "adj-main-s1",
                 tmuxPane: "%0",
                 projectPath: "/Users/dev/adjutant",
                 mode: .swarm,
@@ -144,10 +144,10 @@ struct SessionRowView: View {
             session: ManagedSession(
                 id: "s2",
                 name: "feature-auth",
-                tmuxSession: "gt-adj-polecat-s2",
+                tmuxSession: "adj-auth-s2",
                 tmuxPane: "%1",
                 projectPath: "/Users/dev/auth-service",
-                mode: .gastown,
+                mode: .swarm,
                 status: .idle,
                 workspaceType: .worktree,
                 connectedClients: [],
@@ -163,8 +163,8 @@ struct SessionRowView: View {
         SessionRowView(
             session: ManagedSession(
                 id: "s3",
-                name: "polecat-review",
-                tmuxSession: "gt-adj-polecat-s3",
+                name: "agent-review",
+                tmuxSession: "adj-review-s3",
                 tmuxPane: "%2",
                 projectPath: "/Users/dev/review-app",
                 mode: .swarm,

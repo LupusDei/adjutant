@@ -2,7 +2,7 @@ import Foundation
 import UniformTypeIdentifiers
 import CoreTransferable
 
-/// A bead (issue/task) in the gastown system
+/// A bead (issue/task) in the system
 public struct BeadInfo: Codable, Identifiable, Equatable, Hashable {
     /// Bead ID (e.g., "gb-53tj")
     public let id: String
@@ -18,9 +18,9 @@ public struct BeadInfo: Codable, Identifiable, Equatable, Hashable {
     public let type: String
     /// Assignee address or null
     public let assignee: String?
-    /// Rig name extracted from assignee or null for town-level
+    /// Project/rig name extracted from assignee, or null
     public let rig: String?
-    /// Source database: "town" for hq-*, or rig name for rig-specific beads
+    /// Source project name
     public let source: String
     /// Labels attached to the bead
     public let labels: [String]
@@ -185,7 +185,7 @@ public struct BeadDetail: Codable, Identifiable, Equatable {
 
 // MARK: - Bead Source
 
-/// A bead source represents a project/rig directory that contains beads.
+/// A bead source represents a project directory that contains beads.
 /// Returned by GET /api/beads/sources.
 public struct BeadSource: Codable, Identifiable, Equatable {
     /// Display name (rig name or project name)
@@ -208,7 +208,7 @@ public struct BeadSource: Codable, Identifiable, Equatable {
 public struct BeadSourcesResponse: Codable, Equatable {
     /// Available bead sources
     public let sources: [BeadSource]
-    /// Current deployment mode
+    /// Current operating mode
     public let mode: String
 
     public init(sources: [BeadSource], mode: String) {

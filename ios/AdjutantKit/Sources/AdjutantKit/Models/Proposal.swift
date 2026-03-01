@@ -14,7 +14,7 @@ public enum ProposalStatus: String, Codable, CaseIterable, Sendable {
     case completed
 }
 
-/// A proposal submitted by an agent for review by the Mayor.
+/// A proposal submitted by an agent for review.
 public struct Proposal: Codable, Identifiable, Equatable, Sendable {
     /// Unique identifier (UUID)
     public let id: String

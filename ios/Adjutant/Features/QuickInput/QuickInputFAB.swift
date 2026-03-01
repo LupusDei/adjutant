@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Quick Input Floating Action Button.
-/// Provides rapid message composition to the Mayor from any screen.
+/// Provides rapid message composition from any screen.
 struct QuickInputFAB: View {
     @StateObject private var viewModel = QuickInputViewModel()
     @Environment(\.crtTheme) private var theme
@@ -63,7 +63,7 @@ struct QuickInputFAB: View {
         .buttonStyle(.plain)
         .padding(.trailing, CRTTheme.Spacing.md)
         .padding(.bottom, CRTTheme.Spacing.md)
-        .accessibilityLabel("Quick message to Mayor")
+        .accessibilityLabel("Quick message")
         .accessibilityHint("Double tap to compose a quick message")
     }
 
@@ -110,7 +110,7 @@ struct QuickInputFAB: View {
     private var formHeader: some View {
         HStack {
             // TO badge
-            BadgeView("TO: MAYOR", style: .label)
+            BadgeView("TO: SYSTEM", style: .label)
 
             // FROM badge
             BadgeView("FROM: \(viewModel.identity)", style: .label)

@@ -1,10 +1,10 @@
 # Working with Messages
 
-Learn how to send, receive, and manage messages in the Gas Town system.
+Learn how to send, receive, and manage messages in the Adjutant system.
 
 ## Overview
 
-Messages are the primary communication mechanism in Gas Town. Agents use messages to coordinate work, report status, and escalate issues. AdjutantKit provides a complete API for message operations.
+Messages are the primary communication mechanism in Adjutant. Agents use messages to coordinate work, report status, and escalate issues. AdjutantKit provides a complete API for message operations.
 
 ## Fetching Messages
 
@@ -34,7 +34,7 @@ print(message.body)
 
 ```swift
 // Get messages for a specific rig
-let rigMail = try await client.getMail(rig: "greenplace")
+let rigMail = try await client.getMail(rig: "adjutant")
 ```
 
 ## Sending Messages
@@ -43,7 +43,7 @@ let rigMail = try await client.getMail(rig: "greenplace")
 
 ```swift
 try await client.sendMail(
-    to: "mayor/",
+    to: "user",
     subject: "Status Report",
     body: "All systems operational. No issues to report."
 )
@@ -55,7 +55,7 @@ Messages support priority levels from urgent (0) to lowest (4):
 
 ```swift
 try await client.sendMail(
-    to: "greenplace/witness",
+    to: "adjutant/agent-abc",
     subject: "URGENT: System failure detected",
     body: "Main database is unreachable.",
     priority: .urgent  // P0

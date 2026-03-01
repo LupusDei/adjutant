@@ -48,15 +48,14 @@ public struct ManagedSession: Codable, Identifiable, Equatable, Hashable {
 /// Session operating mode
 public enum SessionMode: String, CaseIterable {
     case swarm
-    case gastown
 }
 
 extension SessionMode: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let rawValue = try container.decode(String.self)
-        // Map legacy "standalone" to .swarm
-        if rawValue == "standalone" {
+        // Map legacy values to .swarm
+        if rawValue == "standalone" || rawValue == "gastown" {
             self = .swarm
             return
         }

@@ -6,7 +6,7 @@ import UIKit
 #endif
 
 /// ViewModel for the agent detail view.
-/// Handles terminal content loading for polecats, bead fetching, message history,
+/// Handles terminal content loading, bead fetching, message history,
 /// and agent lifecycle actions (terminate, assign bead).
 @MainActor
 final class AgentDetailViewModel: BaseViewModel {
@@ -29,7 +29,7 @@ final class AgentDetailViewModel: BaseViewModel {
     /// Currently selected tab
     @Published var selectedTab: Tab = .info
 
-    /// Terminal content (for polecats)
+    /// Terminal content (for agents with sessions)
     @Published private(set) var terminalContent: String?
 
     /// Terminal session name
@@ -138,7 +138,7 @@ final class AgentDetailViewModel: BaseViewModel {
 
     /// Terminal content loading (API removed; terminal is now accessed via session streaming)
     func loadTerminal() async {
-        // Terminal API (getPolecatTerminal) has been removed.
+        // Terminal API has been removed.
         // Terminal content is now viewed via the session terminal streaming feature.
         isLoadingTerminal = false
     }
@@ -296,7 +296,7 @@ final class AgentDetailViewModel: BaseViewModel {
 
     // MARK: - Computed Properties
 
-    /// Whether this agent has a terminal view (agents with sessions)
+    /// Whether this agent has a terminal view
     var hasTerm: Bool {
         member.sessionId != nil
     }
@@ -357,7 +357,7 @@ final class AgentDetailViewModel: BaseViewModel {
         guard let assignee, !assignee.isEmpty else { return false }
         if assignee == member.id { return true }
         if assignee == member.name { return true }
-        // Match last path component: "adjutant/polecats/toast" matches agent "toast"
+        // Match last path component: "adjutant/agents/toast" matches agent "toast"
         if let lastComponent = assignee.split(separator: "/").last {
             if String(lastComponent) == member.name || String(lastComponent) == member.id { return true }
         }

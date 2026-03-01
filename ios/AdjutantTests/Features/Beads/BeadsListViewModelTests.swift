@@ -310,13 +310,6 @@ final class BeadsListViewModelTests: XCTestCase {
             "Epics should be excluded from filtered beads")
     }
 
-    func testExcludedTypesFilterOutConvoys() async {
-        viewModel.currentFilter = .all
-        let filtered = viewModel.filteredBeads
-        XCTAssertTrue(filtered.allSatisfy { $0.type.lowercased() != "convoy" },
-            "Convoys should be excluded from filtered beads")
-    }
-
     func testExcludedTypesFilterOutAgents() async {
         viewModel.currentFilter = .all
         let filtered = viewModel.filteredBeads

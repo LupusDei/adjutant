@@ -99,7 +99,7 @@ final class APIClientTests: XCTestCase {
             "success": true,
             "data": [
                 "sources": [],
-                "mode": "gastown"
+                "mode": "swarm"
             ],
             "timestamp": "2024-01-15T10:30:00.000Z"
         ])
@@ -107,7 +107,7 @@ final class APIClientTests: XCTestCase {
         let response = try await client.getBeadSources()
 
         XCTAssertTrue(response.sources.isEmpty)
-        XCTAssertEqual(response.mode, "gastown")
+        XCTAssertEqual(response.mode, "swarm")
     }
 
     func testGetBeadSourcesSwarmMode() async throws {
@@ -192,9 +192,9 @@ final class APIClientTests: XCTestCase {
                     "status": "in_progress",
                     "priority": 1,
                     "type": "feature",
-                    "assignee": "greenplace/polecat-abc",
-                    "rig": "greenplace",
-                    "source": "greenplace",
+                    "assignee": "adjutant/agent-abc",
+                    "rig": "adjutant",
+                    "source": "adjutant",
                     "labels": ["frontend", "high-priority"],
                     "createdAt": "2024-01-10T08:00:00.000Z",
                     "updatedAt": "2024-01-15T09:30:00.000Z"

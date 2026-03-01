@@ -15,10 +15,10 @@ import ActivityKit
 
 // MARK: - Live Activity Service
 
-/// Service for managing Gastown Live Activities.
+/// Service for managing Adjutant Live Activities.
 ///
 /// Handles starting, updating, and ending Live Activities that display
-/// real-time Gastown status on the lock screen and Dynamic Island.
+/// real-time Adjutant status on the lock screen and Dynamic Island.
 @MainActor
 public final class LiveActivityService: ObservableObject {
 

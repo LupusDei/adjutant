@@ -123,7 +123,6 @@ struct AdjutantWidgetProvider: TimelineProvider {
     }
 
     /// Fetch agents and beads directly from the backend.
-    /// No dependency on Gas Town system status — works in swarm mode.
     private func fetchWidgetData() async -> AdjutantWidgetEntry {
         do {
             let config = getSharedAPIConfig()

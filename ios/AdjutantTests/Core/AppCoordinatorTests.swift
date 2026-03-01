@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import AdjutantKit
 @testable import AdjutantUI
 
 @MainActor
@@ -71,9 +72,10 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.path.count, initialCount + 1)
     }
 
-    func testNavigateToPolecatTerminal() {
+    func testNavigateToAgentDetail() {
         let initialCount = coordinator.path.count
-        coordinator.navigate(to: .polecatTerminal(rig: "greenplace", polecat: "polecat-1"))
+        let member = CrewMember(id: "agent-1", name: "Agent 1", type: .agent, status: .idle)
+        coordinator.navigate(to: .agentDetail(member: member))
 
         XCTAssertEqual(coordinator.path.count, initialCount + 1)
     }

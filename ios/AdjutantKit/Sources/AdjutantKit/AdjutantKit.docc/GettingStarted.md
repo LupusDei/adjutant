@@ -89,7 +89,7 @@ do {
 
 ```swift
 try await client.sendMail(
-    to: "greenplace/witness",
+    to: "adjutant/agent-abc",
     subject: "Alert",
     body: "Detected unusual activity.",
     priority: .high
@@ -100,7 +100,7 @@ try await client.sendMail(
 
 ```swift
 // Get all beads for a rig
-let beads = try await client.getBeads(rig: "greenplace")
+let beads = try await client.getBeads(rig: "adjutant")
 
 // Filter by status
 let openBeads = beads.filter { $0.status == "open" }

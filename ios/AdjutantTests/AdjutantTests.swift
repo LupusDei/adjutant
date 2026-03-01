@@ -2,7 +2,7 @@
 //  AdjutantTests.swift
 //  AdjutantTests
 //
-//  Created by Gas Town on 2026-01-25.
+//  Created by Adjutant on 2026-01-25.
 //
 
 import XCTest

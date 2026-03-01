@@ -82,7 +82,7 @@ final class WebSocketClientTests: XCTestCase {
     }
 
     func testClientMessageOmitsNilSessionFields() throws {
-        let msg = WsClientMessage(type: "message", to: "mayor/", body: "hello")
+        let msg = WsClientMessage(type: "message", to: "agent-1", body: "hello")
         let data = try JSONEncoder().encode(msg)
         let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
 
@@ -152,7 +152,7 @@ final class WebSocketClientTests: XCTestCase {
     func testServerMessageBackwardCompatibility() throws {
         // Existing message types should still decode without session fields
         let json = """
-        {"type":"message","id":"msg-1","from":"mayor/","to":"user","body":"hello","seq":5}
+        {"type":"message","id":"msg-1","from":"agent-1","to":"user","body":"hello","seq":5}
         """
         let msg = try JSONDecoder().decode(WsServerMessage.self, from: json.data(using: .utf8)!)
 

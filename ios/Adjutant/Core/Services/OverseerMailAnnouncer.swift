@@ -2,7 +2,7 @@
 //  OverseerMailAnnouncer.swift
 //  Adjutant
 //
-//  Created by Gas Town on 2026-02-01.
+//  Created by Adjutant on 2026-02-01.
 //
 
 import Foundation

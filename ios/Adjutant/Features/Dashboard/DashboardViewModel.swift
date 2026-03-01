@@ -301,10 +301,10 @@ final class DashboardViewModel: BaseViewModel {
     }
 
     /// Filters beads to only those relevant for OVERSEER view.
-    /// Excludes internal workflow types like wisps, molecules, convoys, etc.
+    /// Excludes internal workflow types like wisps, molecules, etc.
     private func isOverseerRelevant(_ bead: BeadInfo) -> Bool {
         // Types to exclude from OVERSEER view (internal workflow items)
-        let excludedTypes = ["message", "epic", "convoy", "agent", "role", "witness", "wisp", "infrastructure", "coordination", "sync"]
+        let excludedTypes = ["message", "epic", "agent", "role", "witness", "wisp", "infrastructure", "coordination", "sync"]
 
         let typeLower = bead.type.lowercased()
         let idLower = bead.id.lowercased()

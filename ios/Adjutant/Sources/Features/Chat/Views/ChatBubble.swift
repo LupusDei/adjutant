@@ -205,10 +205,10 @@ struct ChatBubble_Previews: PreviewProvider {
 
         let incomingMessage = PersistentMessage(
             id: "test-1",
-            agentId: "mayor",
+            agentId: "system",
             recipient: "user",
             role: .agent,
-            body: "Welcome to Gas Town. How can I help you today?",
+            body: "Welcome to Adjutant. How can I help you today?",
             deliveryStatus: .delivered,
             createdAt: now,
             updatedAt: now
@@ -217,9 +217,9 @@ struct ChatBubble_Previews: PreviewProvider {
         let outgoingMessage = PersistentMessage(
             id: "test-2",
             agentId: "user",
-            recipient: "mayor",
+            recipient: "system",
             role: .user,
-            body: "I need to check the status of my convoy.",
+            body: "I need to check the status of my beads.",
             deliveryStatus: .delivered,
             createdAt: now,
             updatedAt: now

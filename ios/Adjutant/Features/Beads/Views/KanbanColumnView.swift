@@ -114,7 +114,7 @@ struct KanbanColumnView: View {
                     status: "open",
                     priority: 1,
                     type: "feature",
-                    assignee: "adjutant/polecats/flint",
+                    assignee: "adjutant/agents/flint",
                     rig: "adjutant",
                     source: "adjutant",
                     labels: [],

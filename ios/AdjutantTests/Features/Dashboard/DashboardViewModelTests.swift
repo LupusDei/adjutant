@@ -33,24 +33,21 @@ final class DashboardViewModelTests: XCTestCase {
         let workingMember = CrewMember(
             id: "rig/worker1",
             name: "Worker 1",
-            type: .polecat,
-            rig: "rig",
+            type: .agent,
             status: .working,
             unreadMail: 0
         )
         let idleMember = CrewMember(
             id: "rig/worker2",
             name: "Worker 2",
-            type: .polecat,
-            rig: "rig",
+            type: .agent,
             status: .idle,
             unreadMail: 0
         )
         let offlineMember = CrewMember(
             id: "rig/worker3",
             name: "Worker 3",
-            type: .polecat,
-            rig: "rig",
+            type: .agent,
             status: .offline,
             unreadMail: 0
         )
@@ -69,24 +66,21 @@ final class DashboardViewModelTests: XCTestCase {
         let workingMember = CrewMember(
             id: "rig/worker1",
             name: "Worker 1",
-            type: .polecat,
-            rig: "rig",
+            type: .agent,
             status: .working,
             unreadMail: 0
         )
         let stuckMember = CrewMember(
             id: "rig/worker2",
             name: "Worker 2",
-            type: .polecat,
-            rig: "rig",
+            type: .agent,
             status: .stuck,
             unreadMail: 0
         )
         let blockedMember = CrewMember(
             id: "rig/worker3",
             name: "Worker 3",
-            type: .polecat,
-            rig: "rig",
+            type: .agent,
             status: .blocked,
             unreadMail: 0
         )
@@ -204,8 +198,8 @@ final class DashboardViewModelTests: XCTestCase {
             updatedAt: nil
         )
         let moleculeBead = BeadInfo(
-            id: "mol-polecat-work",
-            title: "Polecat molecule",
+            id: "mol-agent-work",
+            title: "Agent molecule",
             status: "open",
             priority: 2,
             type: "epic",
@@ -218,7 +212,7 @@ final class DashboardViewModelTests: XCTestCase {
         )
 
         // Simulate OVERSEER filtering logic
-        let excludedTypes = ["message", "epic", "convoy", "agent", "role", "witness", "wisp", "infrastructure", "coordination", "sync"]
+        let excludedTypes = ["message", "epic", "agent", "role", "witness", "wisp", "infrastructure", "coordination", "sync"]
         let beads = [taskBead, wispBead, moleculeBead]
 
         let filtered = beads.filter { bead in
@@ -257,9 +251,9 @@ final class DashboardViewModelTests: XCTestCase {
             createdAt: "2026-01-25T10:00:00Z",
             updatedAt: nil
         )
-        let polecatBead = BeadInfo(
+        let crewBead = BeadInfo(
             id: "adj-002",
-            title: "Polecat assignment for worker",
+            title: "Crew assignment for worker",
             status: "open",
             priority: 2,
             type: "task",
@@ -285,8 +279,8 @@ final class DashboardViewModelTests: XCTestCase {
         )
 
         // Simulate OVERSEER filtering logic for title patterns
-        let excludedPatterns = ["witness", "wisp", "internal", "sync", "coordination", "mail delivery", "polecat", "crew assignment"]
-        let beads = [regularBead, polecatBead, mergeBead]
+        let excludedPatterns = ["witness", "wisp", "internal", "sync", "coordination", "mail delivery", "crew assignment"]
+        let beads = [regularBead, crewBead, mergeBead]
 
         let filtered = beads.filter { bead in
             let titleLower = bead.title.lowercased()
@@ -313,7 +307,7 @@ final class DashboardViewModelTests: XCTestCase {
     func testMessageSenderName() {
         let message1 = Message(
             id: "msg-1",
-            from: "mayor/",
+            from: "system",
             to: "overseer",
             subject: "Test",
             body: "Body",
@@ -325,11 +319,11 @@ final class DashboardViewModelTests: XCTestCase {
             pinned: false,
             isInfrastructure: false
         )
-        XCTAssertEqual(message1.senderName, "mayor")
+        XCTAssertEqual(message1.senderName, "system")
 
         let message2 = Message(
             id: "msg-2",
-            from: "greenplace/Toast",
+            from: "adjutant/agent-abc",
             to: "overseer",
             subject: "Test",
             body: "Body",
@@ -341,7 +335,7 @@ final class DashboardViewModelTests: XCTestCase {
             pinned: false,
             isInfrastructure: false
         )
-        XCTAssertEqual(message2.senderName, "greenplace/Toast")
+        XCTAssertEqual(message2.senderName, "adjutant/agent-abc")
     }
 
     // MARK: - OVERSEER Mail Filtering Tests
@@ -350,7 +344,7 @@ final class DashboardViewModelTests: XCTestCase {
         // Test that OVERSEER mode filtering excludes wisp and deacon mail sources
         let regularMail = Message(
             id: "msg-1",
-            from: "mayor/",
+            from: "system",
             to: "overseer",
             subject: "Important update",
             body: "System update ready",

@@ -328,7 +328,7 @@ struct SettingsView: View {
 
                 HStack {
                     Spacer()
-                    CRTText("GAS TOWN SYSTEMS", style: .caption, color: theme.dim)
+                    CRTText("ADJUTANT SYSTEMS", style: .caption, color: theme.dim)
                     Spacer()
                 }
             }

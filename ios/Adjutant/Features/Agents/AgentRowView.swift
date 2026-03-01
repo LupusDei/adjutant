@@ -189,8 +189,8 @@ struct AgentRowView: View {
 
         AgentRowView(
             member: CrewMember(
-                id: "polecat-abc",
-                name: "polecat-abc",
+                id: "agent-abc",
+                name: "agent-abc",
                 type: .agent,
                 status: .blocked,
                 currentTask: "Waiting on review",
@@ -201,8 +201,8 @@ struct AgentRowView: View {
 
         AgentRowView(
             member: CrewMember(
-                id: "polecat-xyz",
-                name: "polecat-xyz",
+                id: "agent-xyz",
+                name: "agent-xyz",
                 type: .agent,
                 status: .stuck,
                 currentTask: "Build failing",
@@ -213,8 +213,8 @@ struct AgentRowView: View {
 
         AgentRowView(
             member: CrewMember(
-                id: "polecat-old",
-                name: "polecat-old",
+                id: "agent-old",
+                name: "agent-old",
                 type: .agent,
                 status: .offline,
                 unreadMail: 0

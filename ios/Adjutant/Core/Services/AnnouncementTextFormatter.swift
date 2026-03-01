@@ -121,18 +121,18 @@ public struct AnnouncementTextFormatter {
     }
 
     /// Humanizes a sender identifier for voice synthesis.
-    /// Converts paths like "adjutant/polecats/jasper" to "polecat jasper"
+    /// Converts paths like "adjutant/agents/jasper" to "agent jasper"
     /// - Parameter sender: The sender identifier
     /// - Returns: A human-friendly sender name
     private static func humanizeSender(_ sender: String) -> String {
         let components = sender.split(separator: "/")
 
-        // Handle polecat paths: "rig/polecats/name" -> "polecat name"
-        if components.count >= 3 && components[1] == "polecats" {
-            return "polecat \(components[2])"
+        // Handle agent paths: "project/agents/name" -> "agent name"
+        if components.count >= 3 && (components[1] == "agents" || components[1] == "polecats") {
+            return "agent \(components[2])"
         }
 
-        // Handle crew paths: "rig/crew/name" -> "crew name"
+        // Handle crew paths: "project/crew/name" -> "crew name"
         if components.count >= 3 && components[1] == "crew" {
             return "crew \(components[2])"
         }
