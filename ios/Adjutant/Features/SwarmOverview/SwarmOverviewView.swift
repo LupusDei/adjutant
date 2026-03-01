@@ -157,7 +157,8 @@ struct SwarmOverviewView: View {
                 CRTText(agent.name.uppercased(), style: .body)
                 if let task = agent.currentBead {
                     CRTText(task, style: .caption, color: theme.dim)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
@@ -183,7 +184,7 @@ struct SwarmOverviewView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(theme.dim)
         }
-        .padding(.vertical, CRTTheme.Spacing.xs)
+        .padding(.vertical, CRTTheme.Spacing.sm)
         .padding(.horizontal, CRTTheme.Spacing.sm)
         .background(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
