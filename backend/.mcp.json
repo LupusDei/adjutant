@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "adjutant": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "supergateway",
+        "--sse",
+        "http://localhost:4201/mcp/sse"
+      ]
+    }
+  }
+}
