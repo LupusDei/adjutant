@@ -18,8 +18,14 @@ vi.mock("../../src/services/workspace/index.js", () => ({
   getDeploymentMode: vi.fn(() => "swarm"),
 }));
 
+vi.mock("../../src/services/projects-service.js", () => ({
+  listProjects: vi.fn(() => ({ success: true, data: [] })),
+  getProject: vi.fn(),
+}));
+
 import { beadsRouter } from "../../src/routes/beads.js";
 import { listBeads, listAllBeads, getBead, listBeadSources, listRecentlyClosed } from "../../src/services/beads/index.js";
+import { getProject } from "../../src/services/projects-service.js";
 import type { BeadInfo, BeadDetail, RecentlyClosedBead } from "../../src/services/beads/index.js";
 
 /**
@@ -260,6 +266,96 @@ describe("beads routes", () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.data).toEqual([]);
+    });
+
+    it("should resolve projectId via getProject and use its path", async () => {
+      vi.mocked(getProject).mockReturnValue({
+        success: true,
+        data: {
+          id: "abc123",
+          name: "my-project",
+          path: "/home/user/projects/my-project",
+          mode: "swarm" as const,
+          sessions: [],
+          createdAt: "2026-01-01T00:00:00Z",
+          active: true,
+        },
+      });
+      vi.mocked(listBeads).mockResolvedValue({
+        success: true,
+        data: [],
+      });
+
+      await request(app).get("/api/beads?projectId=abc123");
+
+      expect(getProject).toHaveBeenCalledWith("abc123");
+      expect(listBeads).toHaveBeenCalledWith(
+        expect.objectContaining({ projectPath: "/home/user/projects/my-project" })
+      );
+    });
+
+    it("should let projectId take precedence over project name param", async () => {
+      vi.mocked(getProject).mockReturnValue({
+        success: true,
+        data: {
+          id: "abc123",
+          name: "my-project",
+          path: "/home/user/projects/my-project",
+          mode: "swarm" as const,
+          sessions: [],
+          createdAt: "2026-01-01T00:00:00Z",
+          active: true,
+        },
+      });
+      vi.mocked(listBeads).mockResolvedValue({
+        success: true,
+        data: [],
+      });
+
+      await request(app).get("/api/beads?projectId=abc123&project=other-project");
+
+      expect(getProject).toHaveBeenCalledWith("abc123");
+      expect(listBeads).toHaveBeenCalledWith(
+        expect.objectContaining({ projectPath: "/home/user/projects/my-project" })
+      );
+    });
+
+    it("should fall back to project name param when projectId not found", async () => {
+      vi.mocked(getProject).mockReturnValue({
+        success: false,
+        error: { code: "NOT_FOUND", message: "Project not found" },
+      });
+      vi.mocked(listBeads).mockResolvedValue({
+        success: true,
+        data: [],
+      });
+
+      await request(app).get("/api/beads?projectId=bad-id&project=proj1");
+
+      expect(getProject).toHaveBeenCalledWith("bad-id");
+      // Falls back to project name resolution — proj1 resolved via resolveProjectPath mock
+      expect(listBeads).toHaveBeenCalledWith(
+        expect.objectContaining({ projectPath: "/tmp/workspace/proj1" })
+      );
+    });
+
+    it("should use town defaults when projectId resolution fails and no project name", async () => {
+      vi.mocked(getProject).mockReturnValue({
+        success: false,
+        error: { code: "NOT_FOUND", message: "Project not found" },
+      });
+      vi.mocked(listBeads).mockResolvedValue({
+        success: true,
+        data: [],
+      });
+
+      await request(app).get("/api/beads?projectId=bad-id");
+
+      expect(getProject).toHaveBeenCalledWith("bad-id");
+      // Falls back to town — no projectPath
+      expect(listBeads).toHaveBeenCalledWith(
+        expect.not.objectContaining({ projectPath: expect.anything() })
+      );
     });
   });
 

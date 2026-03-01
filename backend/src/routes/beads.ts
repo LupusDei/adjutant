@@ -13,7 +13,7 @@ import { z } from "zod";
 import { listBeads, listAllBeads, updateBead, getBead, getEpicChildren, listEpicsWithProgress, listBeadSources, listRecentlyClosed, getBeadsGraph, type BeadStatus, type BeadSortField, VALID_SORT_FIELDS } from "../services/beads/index.js";
 import { BeadsGraphResponseSchema } from "../types/beads.js";
 import { resolveProjectPath } from "../services/workspace/index.js";
-import { listProjects } from "../services/projects-service.js";
+import { listProjects, getProject } from "../services/projects-service.js";
 import { success, internalError, badRequest } from "../utils/responses.js";
 
 /** Zod schema for PATCH /api/beads/:id request body */
@@ -35,6 +35,7 @@ export const beadsRouter = Router();
  *   - "town": Query only town (hq-*) database (default)
  *   - "all": Query all databases (town + all projects)
  *   - "<project-name>": Query only that project's database (e.g., "adjutant")
+ * - projectId: Resolve a registered project by ID (takes precedence over `project` name param)
  * - status: Status filter. Options:
  *   - "default": Shows open + in_progress + blocked (active work)
  *   - "open", "in_progress", "blocked", "deferred", "closed": Single status
@@ -49,6 +50,7 @@ export const beadsRouter = Router();
  */
 beadsRouter.get("/", async (req, res) => {
   const projectParam = req.query["project"] as string | undefined;
+  const projectIdParam = req.query["projectId"] as string | undefined;
   const statusParam = req.query["status"] as string | undefined;
   const typeParam = req.query["type"] as string | undefined;
   const limitStr = req.query["limit"] as string | undefined;
@@ -68,11 +70,21 @@ beadsRouter.get("/", async (req, res) => {
   // Default to showing active work (open + in_progress + blocked)
   const status = statusParam ?? "default";
 
+  // Resolve projectId (by ID) — takes precedence over project name param
+  let projectIdPath: string | undefined;
+  if (projectIdParam) {
+    const projectResult = getProject(projectIdParam);
+    if (projectResult.success && projectResult.data) {
+      projectIdPath = projectResult.data.path;
+    }
+  }
+
   // Normalize project parameter: undefined/empty defaults to "town"
   const project = projectParam?.trim() || "town";
 
   // project=all: Query ALL beads databases (town + all projects)
-  if (project === "all") {
+  // (projectId does not apply to "all" mode — it selects a specific project)
+  if (!projectIdPath && project === "all") {
     const excludePrefixes = excludeTown ? ["hq-"] : [];
     const result = await listAllBeads({
       ...(typeParam && { type: typeParam }),
@@ -95,8 +107,9 @@ beadsRouter.get("/", async (req, res) => {
   // project=town or project=<specific>: Query single database
   // For "town", query the town database directly (no projectPath needed)
   // For other projects, resolve their path (check workspace projects, then registered projects)
-  let projectPath: string | undefined;
-  if (project !== "town") {
+  // projectId resolution takes precedence if it succeeded
+  let projectPath: string | undefined = projectIdPath;
+  if (!projectPath && project !== "town") {
     projectPath = resolveProjectPath(project) ?? undefined;
 
     // If workspace project resolution failed, check registered projects by name
@@ -123,9 +136,9 @@ beadsRouter.get("/", async (req, res) => {
   });
 
   if (!result.success) {
-    // For explicit project selection, surface the error so the client
+    // For explicit project selection (by name or ID), surface the error so the client
     // can show a meaningful message (e.g., corrupted beads database)
-    if (project !== "town") {
+    if (project !== "town" || projectIdPath) {
       return res.status(500).json(
         internalError(result.error?.message ?? "Failed to load beads for project")
       );
@@ -195,6 +208,7 @@ beadsRouter.get("/recent-closed", async (req, res) => {
  *
  * Query params:
  * - project: "town" (default), "all", or a specific project name
+ * - projectId: Resolve a registered project by ID (takes precedence over `project` name param)
  * - status: "default" (default), "open", "in_progress", "blocked", "closed", "all"
  * - type: Filter by bead type (e.g., "epic", "task", "bug")
  * - epicId: Filter to a specific epic's sub-tree (client-side hint)
@@ -205,13 +219,23 @@ beadsRouter.get("/recent-closed", async (req, res) => {
  */
 beadsRouter.get("/graph", async (req, res) => {
   const projectParam = req.query["project"] as string | undefined;
+  const projectIdParam = req.query["projectId"] as string | undefined;
   const statusParam = req.query["status"] as string | undefined;
   const typeParam = req.query["type"] as string | undefined;
   const epicIdParam = req.query["epicId"] as string | undefined;
   const excludeTown = req.query["excludeTown"] === "true";
 
+  // Resolve projectId to project name (takes precedence over project name param)
+  let resolvedProject = projectParam;
+  if (projectIdParam) {
+    const projectResult = getProject(projectIdParam);
+    if (projectResult.success && projectResult.data) {
+      resolvedProject = projectResult.data.name;
+    }
+  }
+
   const result = await getBeadsGraph({
-    project: projectParam,
+    project: resolvedProject,
     status: statusParam,
     type: typeParam,
     epicId: epicIdParam,
