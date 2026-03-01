@@ -8,6 +8,7 @@ https://github.com/user-attachments/assets/1aaebcdf-aa24-4e88-9628-27ef91ad34d5
 
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
+- [Claude Code Plugin Setup](#claude-code-plugin-setup)
 - [Features](#features)
 - [Screenshot](#screenshot)
 - [Architecture](#architecture)
@@ -55,6 +56,81 @@ adjutant --help             # Show all options
 ```bash
 npx adjutant
 ```
+
+## Claude Code Plugin Setup
+
+Adjutant integrates with Claude Code via its plugin system, providing agent skills (MCP tools, epic planning, messaging) and automatic PRIME.md injection on session start.
+
+### First-time setup
+
+After installing adjutant globally, run `adjutant init` in any project directory:
+
+```bash
+adjutant init
+```
+
+This performs the following steps:
+
+| Step | What it does |
+|------|-------------|
+| `~/.adjutant/PRIME.md` | Creates a global default agent protocol file |
+| `.adjutant/PRIME.md` | Creates a local override in the current project |
+| `.mcp.json` | Creates/merges MCP server config for adjutant |
+| Plugin marketplace | Registers `LupusDei/adjutant` marketplace via `claude plugin marketplace add` |
+| Plugin install | Installs `adjutant-agent` plugin with user scope |
+| Plugin enable | Enables the plugin in Claude Code settings |
+| Legacy cleanup | Removes old manual hooks from `~/.claude/settings.json` |
+
+All steps are idempotent -- safe to run multiple times.
+
+### Verify installation
+
+```bash
+adjutant doctor
+```
+
+Checks file existence, plugin status, network health, and tool availability.
+
+### How it works
+
+Once installed, the plugin automatically:
+
+1. **SessionStart hook** -- runs `adjutant prime` to inject PRIME.md into every new Claude Code session
+2. **PreCompact hook** -- re-injects PRIME.md before context compaction so agent protocol survives compression
+3. **Skills** -- provides MCP tools, epic planner, broadcast, direct message, and proposal skills
+
+### PRIME.md resolution
+
+`adjutant prime` looks for PRIME.md in this order:
+1. `.adjutant/PRIME.md` in the current directory (project-specific override)
+2. `~/.adjutant/PRIME.md` (global default)
+3. Embedded fallback (bundled with the package)
+
+### Updating the plugin
+
+```bash
+claude plugin marketplace update adjutant-agent
+claude plugin update adjutant-agent@adjutant-agent
+```
+
+### Manual plugin commands
+
+```bash
+claude plugin list                              # Check installed plugins
+claude plugin marketplace add LupusDei/adjutant # Register marketplace
+claude plugin install adjutant-agent --scope user # Install
+claude plugin enable adjutant-agent@adjutant-agent # Enable
+```
+
+### Development mode
+
+For local plugin development without installing from GitHub:
+
+```bash
+claude --plugin-dir /path/to/adjutant
+```
+
+This loads the plugin ephemerally for a single session.
 
 ## Features
 
