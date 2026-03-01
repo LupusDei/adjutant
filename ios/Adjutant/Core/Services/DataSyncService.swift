@@ -328,11 +328,11 @@ public final class DataSyncService: ObservableObject {
 
     /// Manually triggers a beads refresh. Safe to call multiple times (deduplicates).
     /// - Parameters:
-    ///   - rig: Optional rig/project name to fetch beads for. Pass "all" for all, nil defaults to "all".
+    ///   - project: Optional project name to scope beads to. Pass "all" for all, nil defaults to "all".
     ///   - sort: Sort field (e.g., "updated", "priority", "created"). Defaults to "updated".
     ///   - order: Sort order ("asc" or "desc"). Defaults to "desc" for most-recently-active first.
-    public func refreshBeads(rig: String? = nil, sort: String? = nil, order: String? = nil) async {
-        await fetchBeads(rig: rig, sort: sort, order: order)
+    public func refreshBeads(project: String? = nil, sort: String? = nil, order: String? = nil) async {
+        await fetchBeads(project: project, sort: sort, order: order)
     }
 
     /// Refreshes all endpoints, skipping those with fresh cache data.
@@ -466,7 +466,7 @@ public final class DataSyncService: ObservableObject {
         }
     }
 
-    private func fetchBeads(rig: String? = nil, sort: String? = nil, order: String? = nil) async {
+    private func fetchBeads(project: String? = nil, sort: String? = nil, order: String? = nil) async {
         guard !isFetchingBeads else { return }
         isFetchingBeads = true
         defer { isFetchingBeads = false }
@@ -475,8 +475,8 @@ public final class DataSyncService: ObservableObject {
             // Sort by updated date descending by default so recently-active beads appear first
             let effectiveSort = sort ?? "updated"
             let effectiveOrder = order ?? "desc"
-            // Fetch beads for specified rig/project (server-side filtering + sorting)
-            let response = try await apiClient.getBeads(status: .all, sort: effectiveSort, order: effectiveOrder)
+            // Fetch beads for specified project (server-side filtering + sorting)
+            let response = try await apiClient.getBeads(status: .all, sort: effectiveSort, order: effectiveOrder, project: project)
             let sorted = response.sorted {
                 if $0.priority != $1.priority {
                     return $0.priority < $1.priority

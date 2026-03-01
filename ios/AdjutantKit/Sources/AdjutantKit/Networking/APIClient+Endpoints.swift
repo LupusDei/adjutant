@@ -227,7 +227,8 @@ extension APIClient {
         limit: Int? = nil,
         assignee: String? = nil,
         sort: String? = nil,
-        order: String? = nil
+        order: String? = nil,
+        project: String? = nil
     ) async throws -> [BeadInfo] {
         var queryItems: [URLQueryItem] = []
 
@@ -248,6 +249,9 @@ extension APIClient {
         }
         if let order {
             queryItems.append(URLQueryItem(name: "order", value: order))
+        }
+        if let project {
+            queryItems.append(URLQueryItem(name: "project", value: project))
         }
 
         return try await requestWithEnvelope(
