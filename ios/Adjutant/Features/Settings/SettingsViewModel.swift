@@ -124,7 +124,7 @@ final class SettingsViewModel: BaseViewModel {
     }
 
     override func refresh() async {
-        // No-op: power/mode/rig fetches removed
+        // No-op: power/mode/project fetches removed
     }
 
     // MARK: - Theme

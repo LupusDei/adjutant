@@ -72,7 +72,7 @@ function makeAgent(overrides: Partial<CrewMember> = {}): CrewMember {
     id: 'test/agent-1',
     name: 'agent-1',
     type: 'agent',
-    rig: null,
+    project: null,
     status: 'working',
     unreadMail: 0,
     ...overrides,

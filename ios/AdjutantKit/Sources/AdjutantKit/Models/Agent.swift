@@ -47,7 +47,7 @@ public struct CrewMember: Codable, Identifiable, Equatable, Hashable {
         self.sessionId = sessionId
     }
 
-    // Custom CodingKeys to gracefully ignore unknown fields like "rig"
+    // Custom CodingKeys to gracefully ignore unknown fields like "project"
     private enum CodingKeys: String, CodingKey {
         case id, name, type, status, currentTask, unreadMail
         case firstSubject, firstFrom, branch, sessionId

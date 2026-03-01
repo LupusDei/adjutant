@@ -6,7 +6,7 @@ import UIKit
 #endif
 
 /// ViewModel for the Agent List feature.
-/// Handles loading agents, filtering by rig, and searching by name.
+/// Handles loading agents, filtering by project, and searching by name.
 @MainActor
 final class AgentListViewModel: BaseViewModel {
     // MARK: - Published Properties
@@ -175,7 +175,7 @@ final class AgentListViewModel: BaseViewModel {
 
     // MARK: - Filtering
 
-    /// Apply search, rig, and status filters to create grouped display data
+    /// Apply search, project, and status filters to create grouped display data
     private func applyFilters() {
         // Update status counts from full unfiltered list
         updateStatusCounts()

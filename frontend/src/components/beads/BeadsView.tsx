@@ -126,7 +126,7 @@ export function BeadsView({ isActive = true }: BeadsViewProps) {
   }, [viewMode]);
 
   // Filter beads based on search and overseer view
-  // Note: Rig filtering is now done server-side via API parameter
+  // Note: Project filtering is now done server-side via API parameter
   const filteredBeads = useMemo(() => {
     let result = beads;
 

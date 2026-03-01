@@ -319,7 +319,7 @@ final class ModelTests: XCTestCase {
             "priority": 1,
             "type": "feature",
             "assignee": "adjutant/agent-abc",
-            "rig": "adjutant",
+            "project": "adjutant",
             "source": "adjutant",
             "labels": ["frontend", "auth"],
             "createdAt": "2024-01-10T08:00:00.000Z",
@@ -348,7 +348,7 @@ final class ModelTests: XCTestCase {
             "priority": 2,
             "type": "task",
             "assignee": null,
-            "rig": null,
+            "project": null,
             "source": "my-project",
             "labels": [],
             "createdAt": "2024-01-10T08:00:00Z",
@@ -371,16 +371,16 @@ final class ModelTests: XCTestCase {
         let projectBead = try decoder.decode(BeadInfo.self, from: """
         {
             "id": "pb-1", "title": "Project bead", "status": "open", "priority": 2,
-            "type": "task", "assignee": null, "rig": null,
+            "type": "task", "assignee": null, "project": null,
             "source": "my-project", "labels": [],
             "createdAt": "2024-01-10T08:00:00Z", "updatedAt": null
         }
         """.data(using: .utf8)!)
 
-        let rigBead = try decoder.decode(BeadInfo.self, from: """
+        let adjutantBead = try decoder.decode(BeadInfo.self, from: """
         {
-            "id": "rb-1", "title": "Rig bead", "status": "open", "priority": 2,
-            "type": "task", "assignee": null, "rig": "adjutant",
+            "id": "rb-1", "title": "Adjutant bead", "status": "open", "priority": 2,
+            "type": "task", "assignee": null, "project": "adjutant",
             "source": "adjutant", "labels": [],
             "createdAt": "2024-01-10T08:00:00Z", "updatedAt": null
         }
@@ -389,14 +389,14 @@ final class ModelTests: XCTestCase {
         let townBead = try decoder.decode(BeadInfo.self, from: """
         {
             "id": "hq-1", "title": "Town bead", "status": "open", "priority": 2,
-            "type": "task", "assignee": null, "rig": null,
+            "type": "task", "assignee": null, "project": null,
             "source": "town", "labels": [],
             "createdAt": "2024-01-10T08:00:00Z", "updatedAt": null
         }
         """.data(using: .utf8)!)
 
         XCTAssertEqual(projectBead.source, "my-project")
-        XCTAssertEqual(rigBead.source, "adjutant")
+        XCTAssertEqual(adjutantBead.source, "adjutant")
         XCTAssertEqual(townBead.source, "town")
     }
 
@@ -404,7 +404,7 @@ final class ModelTests: XCTestCase {
         let json = """
         {
             "id": "gb-date", "title": "Date test", "status": "open", "priority": 2,
-            "type": "task", "assignee": null, "rig": null,
+            "type": "task", "assignee": null, "project": null,
             "source": "test", "labels": [],
             "createdAt": "2026-02-16T10:30:00Z",
             "updatedAt": "2026-02-16T14:45:00.123Z"

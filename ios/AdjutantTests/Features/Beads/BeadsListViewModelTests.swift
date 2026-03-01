@@ -158,25 +158,25 @@ final class BeadsListViewModelTests: XCTestCase {
         XCTAssertEqual(BeadsListViewModel.BeadFilter.priority.systemImage, "exclamationmark.triangle")
     }
 
-    // MARK: - Rig Options Tests
+    // MARK: - Project Options Tests
 
-    func testRigOptionsExtractsUniqueRigs() async {
+    func testProjectOptionsExtractsUniqueProjects() async {
         // Mock beads have "adjutant" and "town" sources
-        // rigOptions should include "adjutant" but not "town" or "unknown"
-        let rigOptions = viewModel.rigOptions
-        XCTAssertTrue(rigOptions.contains("adjutant"), "Should contain adjutant rig")
-        XCTAssertFalse(rigOptions.contains("town"), "Should not contain town")
-        XCTAssertFalse(rigOptions.contains("unknown"), "Should not contain unknown")
+        // projectOptions should include "adjutant" but not "town" or "unknown"
+        let projectOptions = viewModel.projectOptions
+        XCTAssertTrue(projectOptions.contains("adjutant"), "Should contain adjutant project")
+        XCTAssertFalse(projectOptions.contains("town"), "Should not contain town")
+        XCTAssertFalse(projectOptions.contains("unknown"), "Should not contain unknown")
     }
 
-    func testRigOptionsAreSorted() async {
-        let rigOptions = viewModel.rigOptions
-        XCTAssertEqual(rigOptions, rigOptions.sorted(), "Rig options should be sorted alphabetically")
+    func testProjectOptionsAreSorted() async {
+        let projectOptions = viewModel.projectOptions
+        XCTAssertEqual(projectOptions, projectOptions.sorted(), "Project options should be sorted alphabetically")
     }
 
-    // MARK: - Rig Filter Tests
-    // Note: Rig filtering is now done server-side via the API rig parameter.
-    // These tests verify that changing the rig triggers a reload (not client-side filtering).
+    // MARK: - Project Filter Tests
+    // Note: Project filtering is now done server-side via the API project parameter.
+    // These tests verify that changing the project triggers a reload (not client-side filtering).
 
     func testSourceFilterChangeTriggersFetch() async {
         // Changing source filter should trigger loadBeads() with the new source parameter

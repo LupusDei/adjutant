@@ -99,8 +99,8 @@ try await client.sendMail(
 ### Working with Beads
 
 ```swift
-// Get all beads for a rig
-let beads = try await client.getBeads(rig: "adjutant")
+// Get all beads for a project
+let beads = try await client.getBeads(project: "adjutant")
 
 // Filter by status
 let openBeads = beads.filter { $0.status == "open" }

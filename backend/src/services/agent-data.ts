@@ -139,7 +139,7 @@ export async function collectAgentSnapshot(
     const role = topology.normalizeRole(fields.roleType ?? parsed?.role ?? "");
     if (!role) continue;
 
-    const project = fields.rig ?? parsed?.rig ?? null;
+    const project = fields.project ?? parsed?.project ?? null;
     const name =
       parsed?.name ??
       (topology.isInfrastructure(role)

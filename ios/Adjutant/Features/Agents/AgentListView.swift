@@ -2,7 +2,7 @@ import SwiftUI
 import AdjutantKit
 
 /// Main agent list view showing all agents organized hierarchically.
-/// Features search, rig filtering, and navigation to detail views.
+/// Features search, project filtering, and navigation to detail views.
 struct AgentListView: View {
     @Environment(\.crtTheme) private var theme
     @EnvironmentObject private var coordinator: AppCoordinator

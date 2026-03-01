@@ -83,7 +83,7 @@ export const AGENT_VOICE_MAPPINGS: Record<string, VoiceConfig> = {
     similarityBoost: 0.7,
   },
 
-  // Rig agents (use prefixes for matching)
+  // Project agents (use prefixes for matching)
   witness: {
     voiceId: ELEVENLABS_VOICES.RACHEL,
     name: "Witness (Rachel)",

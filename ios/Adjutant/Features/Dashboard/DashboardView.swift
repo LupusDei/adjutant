@@ -11,7 +11,7 @@ struct DashboardView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: CRTTheme.Spacing.md) {
-                // Header with rig filter and power status
+                // Header with project filter and power status
                 AppHeaderView(
                     title: "ADJUTANT",
                     subtitle: "SYSTEM OVERVIEW",

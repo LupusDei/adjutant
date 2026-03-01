@@ -229,10 +229,10 @@ describe("beads-service", () => {
         exitCode: 0,
       });
 
-      await listBeads({ projectPath: "/custom/rig/path" });
+      await listBeads({ projectPath: "/custom/project/path" });
 
       const options = vi.mocked(execBd).mock.calls[0]?.[1];
-      expect(options?.cwd).toBe("/custom/rig/path");
+      expect(options?.cwd).toBe("/custom/project/path");
     });
 
     it("should handle bd returning empty data", async () => {
@@ -346,7 +346,7 @@ describe("beads-service", () => {
 
       const mockIssue = createBead({
         id: "adj-67tta",
-        title: "Adjutant Rig Task",
+        title: "Adjutant Project Task",
         description: "A project-specific task",
         assignee: "adjutant/agents/quartz",
       });
@@ -361,7 +361,7 @@ describe("beads-service", () => {
 
       expect(result.success).toBe(true);
       expect(result.data?.id).toBe("adj-67tta");
-      expect(result.data?.title).toBe("Adjutant Rig Task");
+      expect(result.data?.title).toBe("Adjutant Project Task");
       expect(result.data?.project).toBe("adjutant");
     });
 

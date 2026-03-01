@@ -502,25 +502,25 @@ public final class DataSyncService: ObservableObject {
 
     // MARK: - Filtered Data Accessors
 
-    /// Returns mail filtered by rig prefix
-    public func mail(forRig rig: String?) -> [Message] {
-        guard let rig = rig else { return mail }
-        let rigPrefix = rig.lowercased() + "/"
+    /// Returns mail filtered by project prefix
+    public func mail(forProject project: String?) -> [Message] {
+        guard let project = project else { return mail }
+        let projectPrefix = project.lowercased() + "/"
         return mail.filter { message in
-            message.from.lowercased().hasPrefix(rigPrefix) ||
-            message.to.lowercased().hasPrefix(rigPrefix)
+            message.from.lowercased().hasPrefix(projectPrefix) ||
+            message.to.lowercased().hasPrefix(projectPrefix)
         }
     }
 
     /// Returns all crew members
-    public func crew(forRig rig: String?) -> [CrewMember] {
+    public func crew(forProject project: String?) -> [CrewMember] {
         return crew
     }
 
-    /// Returns beads filtered by rig
-    public func beads(forRig rig: String?) -> [BeadInfo] {
-        guard let rig = rig else { return beads }
-        return beads.filter { $0.source == rig }
+    /// Returns beads filtered by project
+    public func beads(forProject project: String?) -> [BeadInfo] {
+        guard let project = project else { return beads }
+        return beads.filter { $0.source == project }
     }
 
     /// Returns beads filtered by status
@@ -529,11 +529,11 @@ public final class DataSyncService: ObservableObject {
         return beads.filter { $0.status == status }
     }
 
-    /// Returns beads filtered by rig and status
-    public func beads(forRig rig: String?, status: String?) -> [BeadInfo] {
+    /// Returns beads filtered by project and status
+    public func beads(forProject project: String?, status: String?) -> [BeadInfo] {
         var result = beads
-        if let rig = rig {
-            result = result.filter { $0.source == rig }
+        if let project = project {
+            result = result.filter { $0.source == project }
         }
         if let status = status {
             result = result.filter { $0.status == status }

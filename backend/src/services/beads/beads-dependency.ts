@@ -61,7 +61,7 @@ export function extractGraphEdges(issues: BeadsIssue[]): GraphDependency[] {
  * Builds graph nodes from issues, using a prefixToSource function for source mapping.
  *
  * Maps each BeadsIssue to a GraphNode suitable for dependency graph visualization.
- * The `prefixToSourceFn` callback determines the "source" field (e.g., "town" or rig name)
+ * The `prefixToSourceFn` callback determines the "source" field (e.g., "town" or project name)
  * based on the bead ID prefix.
  *
  * @param issues - Array of BeadsIssue objects to convert

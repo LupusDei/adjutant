@@ -27,13 +27,13 @@ export function isInfrastructureMessage(subject: string): boolean {
 
 export interface AgentFields {
   roleType?: string;
-  rig?: string;
+  project?: string;
   agentState?: string;
   hookBead?: string;
 }
 
 export interface ParsedAgentBead {
-  rig: string | null;
+  project: string | null;
   role: string;
   name: string | null;
 }
@@ -49,30 +49,30 @@ export function parseAgentBeadId(id: string, defaultRig?: string | null): Parsed
   const third = parts[2];
 
   if (parts.length >= 2 && first && first.toLowerCase() === "dog") {
-    return { rig: null, role: "dog", name: parts.slice(1).join("-") };
+    return { project: null, role: "dog", name: parts.slice(1).join("-") };
   }
 
   const knownRoles = ["user", "agent"];
 
   if (defaultRig && parts.length >= 1 && first && knownRoles.includes(first.toLowerCase())) {
     return {
-      rig: defaultRig,
+      project: defaultRig,
       role: first,
       name: parts.length > 1 ? parts.slice(1).join("-") : null,
     };
   }
 
   if (parts.length === 1 && first) {
-    return { rig: null, role: first, name: null };
+    return { project: null, role: first, name: null };
   }
   if (parts.length === 2 && first && second) {
-    return { rig: first, role: second, name: null };
+    return { project: first, role: second, name: null };
   }
   if (parts.length === 3 && first && second && third) {
-    return { rig: first, role: second, name: third };
+    return { project: first, role: second, name: third };
   }
   if (parts.length >= 3 && first && second) {
-    return { rig: first, role: second, name: parts.slice(2).join("-") };
+    return { project: first, role: second, name: parts.slice(2).join("-") };
   }
   return null;
 }
@@ -93,7 +93,11 @@ export function parseAgentFields(description: string): AgentFields {
         fields.roleType = value;
         break;
       case "rig":
-        fields.rig = value;
+        // Backward compat: old agent beads may have "rig:" field
+        fields.project = value;
+        break;
+      case "project":
+        fields.project = value;
         break;
       case "agent_state":
         fields.agentState = value;

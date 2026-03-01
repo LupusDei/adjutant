@@ -47,7 +47,7 @@ const DISPLAY_NAMES: Record<string, string> = {
  * In swarm mode:
  * - There's one "user" (the human operator)
  * - There can be multiple "agent" instances
- * - No rig hierarchy - all agents are at the same level
+ * - No project hierarchy - all agents are at the same level
  * - Session names are simple: "user" or "agent-{name}"
  */
 export class SwarmTopology implements TopologyProvider {
@@ -91,7 +91,7 @@ export class SwarmTopology implements TopologyProvider {
 
     // Handle special case: user
     if (address === "user" || address === "user/") {
-      return { address: "user", role: "user", rig: null, name: null };
+      return { address: "user", role: "user", project: null, name: null };
     }
 
     // Normalize: remove trailing slash
@@ -109,11 +109,11 @@ export class SwarmTopology implements TopologyProvider {
 
       // If it normalizes to a known role, use it
       if (SWARM_ROLES.includes(role)) {
-        return { address, role, rig: null, name: null };
+        return { address, role, project: null, name: null };
       }
 
       // Otherwise, assume it's an agent name
-      return { address, role: "agent", rig: null, name: part };
+      return { address, role: "agent", project: null, name: part };
     }
 
     // Two parts: "agent/{name}" format
@@ -123,18 +123,18 @@ export class SwarmTopology implements TopologyProvider {
 
       const role = this.normalizeRole(first);
       if (role === "agent") {
-        return { address, role: "agent", rig: null, name: second };
+        return { address, role: "agent", project: null, name: second };
       }
 
       // Unknown format - treat first as role, second as name
-      return { address, role: this.normalizeRole(first), rig: null, name: second };
+      return { address, role: this.normalizeRole(first), project: null, name: second };
     }
 
     // More parts - just use first as role, rest as name
     if (parts.length > 2 && parts[0]) {
       const role = this.normalizeRole(parts[0]);
       const name = parts.slice(1).join("/");
-      return { address, role, rig: null, name };
+      return { address, role, project: null, name };
     }
 
     return null;

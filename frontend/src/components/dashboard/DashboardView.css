@@ -80,7 +80,7 @@
   }
 
   .dashboard-crew-card-type,
-  .dashboard-crew-card-rig {
+  .dashboard-crew-card-project {
     font-size: 0.55rem;
   }
 
@@ -415,7 +415,7 @@
   color: var(--crt-phosphor-dim);
 }
 
-.dashboard-crew-card-rig {
+.dashboard-crew-card-project {
   font-size: 0.6rem;
   padding: 1px 4px;
   border: 1px solid var(--crt-phosphor-dim);

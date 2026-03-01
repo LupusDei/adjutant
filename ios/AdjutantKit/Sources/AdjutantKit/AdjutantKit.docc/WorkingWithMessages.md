@@ -30,11 +30,11 @@ let message = try await client.getMessage(id: "gb-53tj")
 print(message.body)
 ```
 
-### Filter by Rig
+### Filter by Project
 
 ```swift
-// Get messages for a specific rig
-let rigMail = try await client.getMail(rig: "adjutant")
+// Get messages for a specific project
+let projectMail = try await client.getMail(project: "adjutant")
 ```
 
 ## Sending Messages

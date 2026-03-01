@@ -20,10 +20,10 @@ export interface VoiceConfig {
 }
 
 /**
- * Mapping from agent/rig identifiers to voice configurations.
+ * Mapping from agent/project identifiers to voice configurations.
  */
 export interface AgentVoiceMapping {
-  [agentOrRig: string]: VoiceConfig;
+  [agentOrProject: string]: VoiceConfig;
 }
 
 /**

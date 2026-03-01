@@ -4,7 +4,7 @@
  * Provides simple status for swarm mode:
  * - Always "running" power state (no power control)
  * - No infrastructure agents
- * - No rig hierarchy
+ * - No project hierarchy
  * - Simple agent list from beads
  */
 
@@ -31,7 +31,7 @@ import type {
  * - Power state is always "running" (no gt binary to control)
  * - No power control capabilities
  * - No infrastructure agents
- * - No rig hierarchy
+ * - No project hierarchy
  */
 export class SwarmStatusProvider implements StatusProvider {
   readonly name = "swarm";

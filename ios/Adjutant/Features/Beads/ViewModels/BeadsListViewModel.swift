@@ -369,15 +369,15 @@ final class BeadsListViewModel: BaseViewModel {
 
     /// Unique project names extracted from bead sources (excludes "town" and "unknown")
     /// Matches frontend BeadsView.tsx projectOptions logic
-    var rigOptions: [String] {
-        var rigs = Set<String>()
+    var projectOptions: [String] {
+        var projects = Set<String>()
         for bead in beads {
             let source = bead.source
             if !source.isEmpty && source != "town" && source != "unknown" {
-                rigs.insert(source)
+                projects.insert(source)
             }
         }
-        return Array(rigs).sorted()
+        return Array(projects).sorted()
     }
 
     /// Count of open beads

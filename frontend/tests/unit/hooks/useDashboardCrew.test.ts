@@ -17,14 +17,14 @@ interface MockAgent {
   name: string;
   type: AgentType;
   status: CrewMemberStatus;
-  rig: string | null;
+  project: string | null;
   currentTask?: string;
 }
 
 const mockAgents: MockAgent[] = [
-  { name: 'Jax', type: 'agent', status: 'working', rig: 'rig1', currentTask: 'Processing data' },
-  { name: 'Kael', type: 'agent', status: 'idle', rig: 'rig2' },
-  { name: 'Zoe', type: 'agent', status: 'blocked', rig: null, currentTask: 'Waiting on dependency' },
+  { name: 'Jax', type: 'agent', status: 'working', project: 'project1', currentTask: 'Processing data' },
+  { name: 'Kael', type: 'agent', status: 'idle', project: 'project2' },
+  { name: 'Zoe', type: 'agent', status: 'blocked', project: null, currentTask: 'Waiting on dependency' },
 ];
 
 describe('useDashboardCrew', () => {
@@ -59,9 +59,9 @@ describe('useDashboardCrew', () => {
 
   it('should generate alerts for blocked and stuck agents', async () => {
     const agentsWithIssues: MockAgent[] = [
-      { name: 'Alice', type: 'agent', status: 'stuck', rig: 'rig1' },
-      { name: 'Bob', type: 'agent', status: 'blocked', rig: 'rig2' },
-      { name: 'Charlie', type: 'agent', status: 'working', rig: 'rig3' },
+      { name: 'Alice', type: 'agent', status: 'stuck', project: 'project1' },
+      { name: 'Bob', type: 'agent', status: 'blocked', project: 'project2' },
+      { name: 'Charlie', type: 'agent', status: 'working', project: 'project3' },
     ];
     vi.mocked(api.agents.list).mockResolvedValue(agentsWithIssues);
 
@@ -90,9 +90,9 @@ describe('useDashboardCrew', () => {
 
   it('should count agents correctly including offline', async () => {
     const agentsWithOffline: MockAgent[] = [
-      { name: 'Active', type: 'agent', status: 'working', rig: 'rig1' },
-      { name: 'Offline1', type: 'agent', status: 'offline', rig: null },
-      { name: 'Offline2', type: 'user', status: 'offline', rig: null },
+      { name: 'Active', type: 'agent', status: 'working', project: 'project1' },
+      { name: 'Offline1', type: 'agent', status: 'offline', project: null },
+      { name: 'Offline2', type: 'user', status: 'offline', project: null },
     ];
     vi.mocked(api.agents.list).mockResolvedValue(agentsWithOffline);
 

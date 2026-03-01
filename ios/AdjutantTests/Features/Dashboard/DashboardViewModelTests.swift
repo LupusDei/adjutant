@@ -31,21 +31,21 @@ final class DashboardViewModelTests: XCTestCase {
     func testActiveCrewMembersFiltersOffline() async {
         // Create mock crew members with different statuses
         let workingMember = CrewMember(
-            id: "rig/worker1",
+            id: "agent/worker1",
             name: "Worker 1",
             type: .agent,
             status: .working,
             unreadMail: 0
         )
         let idleMember = CrewMember(
-            id: "rig/worker2",
+            id: "agent/worker2",
             name: "Worker 2",
             type: .agent,
             status: .idle,
             unreadMail: 0
         )
         let offlineMember = CrewMember(
-            id: "rig/worker3",
+            id: "agent/worker3",
             name: "Worker 3",
             type: .agent,
             status: .offline,
@@ -64,21 +64,21 @@ final class DashboardViewModelTests: XCTestCase {
 
     func testCrewWithIssuesCountsStuckAndBlocked() {
         let workingMember = CrewMember(
-            id: "rig/worker1",
+            id: "agent/worker1",
             name: "Worker 1",
             type: .agent,
             status: .working,
             unreadMail: 0
         )
         let stuckMember = CrewMember(
-            id: "rig/worker2",
+            id: "agent/worker2",
             name: "Worker 2",
             type: .agent,
             status: .stuck,
             unreadMail: 0
         )
         let blockedMember = CrewMember(
-            id: "rig/worker3",
+            id: "agent/worker3",
             name: "Worker 3",
             type: .agent,
             status: .blocked,

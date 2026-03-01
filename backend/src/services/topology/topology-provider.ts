@@ -16,8 +16,8 @@ export interface AgentAddress {
   address: string;
   /** Role/type of the agent */
   role: AgentType;
-  /** Project/rig name if applicable */
-  rig: string | null;
+  /** Project name if applicable */
+  project: string | null;
   /** Agent name within the role */
   name: string | null;
 }
@@ -83,21 +83,21 @@ export interface TopologyProvider {
    * Build an agent address from components.
    *
    * @param role Agent role/type
-   * @param rig Project/rig name (null for infrastructure agents)
+   * @param project Project name (null for infrastructure agents)
    * @param name Agent name (null for project-level or infrastructure agents)
    * @returns Full address string or null if invalid
    */
-  buildAddress(role: AgentType, rig: string | null, name: string | null): string | null;
+  buildAddress(role: AgentType, project: string | null, name: string | null): string | null;
 
   /**
    * Get the tmux session info for an agent.
    *
    * @param role Agent role/type
-   * @param rig Project/rig name (null for infrastructure agents)
+   * @param project Project name (null for infrastructure agents)
    * @param name Agent name (null for project-level agents)
    * @returns Session info or null if not applicable
    */
-  getSessionInfo(role: AgentType, rig: string | null, name: string | null): SessionInfo | null;
+  getSessionInfo(role: AgentType, project: string | null, name: string | null): SessionInfo | null;
 
   /**
    * Check if an agent type is considered infrastructure.
