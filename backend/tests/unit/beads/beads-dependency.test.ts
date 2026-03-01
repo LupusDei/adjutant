@@ -633,6 +633,7 @@ describe("transformClosedEpics", () => {
       closedChildren: 0,
       completionPercent: 1.0,
       assignee: "worker",
+      closedAt: "2026-01-15T00:00:00Z",
     });
   });
 });

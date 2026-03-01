@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
 import { execSync } from "child_process";
-import { join } from "path";
+import { join, resolve } from "path";
 import { homedir } from "os";
 
 // Mock fs, child_process, crypto
@@ -314,7 +314,8 @@ describe("projects-service", () => {
   // ===========================================================================
 
   describe("discoverLocalProjects", () => {
-    const PROJECT_ROOT = process.cwd();
+    // Must match the service's resolve(ADJUTANT_PROJECT_ROOT || cwd())
+    const PROJECT_ROOT = resolve(process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd());
 
     function mockDiscoverFs(dirs: Record<string, { hasGit?: boolean; hasBeads?: boolean; children?: string[] }>) {
       vi.mocked(existsSync).mockImplementation((p: unknown) => {
