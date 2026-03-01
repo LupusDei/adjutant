@@ -160,7 +160,7 @@ export function registerStatusTools(server: McpServer, store: MessageStore, even
       const statusEventInput: Parameters<NonNullable<typeof eventStore>["insertEvent"]>[0] = {
         eventType: "status_change",
         agentId,
-        action: `Status: ${status}`,
+        action: resolvedTask ? `Status: ${status} — ${resolvedTask}` : `Status: ${status}`,
         detail: { status, task: resolvedTask, beadId: resolvedBeadId },
       };
       if (resolvedBeadId) statusEventInput.beadId = resolvedBeadId;
@@ -198,7 +198,7 @@ export function registerStatusTools(server: McpServer, store: MessageStore, even
       eventStore?.insertEvent({
         eventType: "progress_report",
         agentId,
-        action: `Progress: ${percentage}%`,
+        action: task ? `Progress: ${percentage}% — ${task}` : `Progress: ${percentage}%`,
         detail: { task, percentage, description },
       });
 
