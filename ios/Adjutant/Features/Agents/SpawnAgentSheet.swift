@@ -290,8 +290,12 @@ struct SpawnAgentSheet: View {
         errorMessage = nil
 
         do {
-            // Agent spawning API removed — spawn is no longer available
-            throw APIClientError.networkError("Agent spawning is not available in this deployment mode")
+            let _ = try await apiClient.spawnAgent(
+                projectId: project.id,
+                callsign: agentName.isEmpty ? nil : agentName
+            )
+            dismiss()
+            onSpawned()
         } catch {
             isSpawning = false
             errorMessage = "Failed to spawn: \(error.localizedDescription)"

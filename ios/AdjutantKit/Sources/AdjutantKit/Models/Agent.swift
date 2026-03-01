@@ -53,3 +53,24 @@ public struct CrewMember: Codable, Identifiable, Equatable, Hashable {
         case firstSubject, firstFrom, branch, sessionId
     }
 }
+
+/// Request to spawn a new agent session
+public struct SpawnAgentRequest: Encodable {
+    public let projectPath: String?
+    public let projectId: String?
+    public let callsign: String?
+
+    public init(projectPath: String? = nil, projectId: String? = nil, callsign: String? = nil) {
+        self.projectPath = projectPath
+        self.projectId = projectId
+        self.callsign = callsign
+    }
+}
+
+/// Response from spawning a new agent session
+public struct SpawnAgentResponse: Codable {
+    public let sessionId: String?
+    public let callsign: String?
+    public let projectPath: String?
+    public let spawned: Bool
+}

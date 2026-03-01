@@ -19,6 +19,12 @@ extension APIClient {
     public func getAgents() async throws -> [CrewMember] {
         try await requestWithEnvelope(.get, path: "/agents")
     }
+
+    /// Spawn a new agent session
+    public func spawnAgent(projectPath: String? = nil, projectId: String? = nil, callsign: String? = nil) async throws -> SpawnAgentResponse {
+        let request = SpawnAgentRequest(projectPath: projectPath, projectId: projectId, callsign: callsign)
+        return try await requestWithEnvelope(.post, path: "/agents/spawn", body: request)
+    }
 }
 
 // MARK: - Sessions Endpoints
