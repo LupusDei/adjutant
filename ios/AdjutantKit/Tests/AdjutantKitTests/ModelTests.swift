@@ -424,17 +424,17 @@ final class ModelTests: XCTestCase {
     func testBeadInfoEquality() {
         let bead1 = BeadInfo(
             id: "gb-1", title: "Test", status: "open", priority: 2,
-            type: "task", assignee: nil, rig: nil, source: "proj",
+            type: "task", assignee: nil, project: nil, source: "proj",
             labels: ["a"], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil
         )
         let bead2 = BeadInfo(
             id: "gb-1", title: "Test", status: "open", priority: 2,
-            type: "task", assignee: nil, rig: nil, source: "proj",
+            type: "task", assignee: nil, project: nil, source: "proj",
             labels: ["a"], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil
         )
         let bead3 = BeadInfo(
             id: "gb-2", title: "Different", status: "closed", priority: 0,
-            type: "bug", assignee: "someone", rig: "rig1", source: "other",
+            type: "bug", assignee: "someone", project: "rig1", source: "other",
             labels: [], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil
         )
 
@@ -445,12 +445,12 @@ final class ModelTests: XCTestCase {
     func testBeadInfoHashable() {
         let bead1 = BeadInfo(
             id: "gb-1", title: "Test", status: "open", priority: 2,
-            type: "task", assignee: nil, rig: nil, source: "proj",
+            type: "task", assignee: nil, project: nil, source: "proj",
             labels: [], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil
         )
         let bead2 = BeadInfo(
             id: "gb-2", title: "Other", status: "open", priority: 2,
-            type: "task", assignee: nil, rig: nil, source: "proj",
+            type: "task", assignee: nil, project: nil, source: "proj",
             labels: [], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil
         )
 
@@ -464,19 +464,19 @@ final class ModelTests: XCTestCase {
 
     func testBeadInfoPriorityLevels() {
         let p0 = BeadInfo(id: "p0", title: "", status: "open", priority: 0,
-            type: "t", assignee: nil, rig: nil, source: "s",
+            type: "t", assignee: nil, project: nil, source: "s",
             labels: [], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil)
         let p1 = BeadInfo(id: "p1", title: "", status: "open", priority: 1,
-            type: "t", assignee: nil, rig: nil, source: "s",
+            type: "t", assignee: nil, project: nil, source: "s",
             labels: [], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil)
         let p2 = BeadInfo(id: "p2", title: "", status: "open", priority: 2,
-            type: "t", assignee: nil, rig: nil, source: "s",
+            type: "t", assignee: nil, project: nil, source: "s",
             labels: [], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil)
         let p3 = BeadInfo(id: "p3", title: "", status: "open", priority: 3,
-            type: "t", assignee: nil, rig: nil, source: "s",
+            type: "t", assignee: nil, project: nil, source: "s",
             labels: [], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil)
         let p4 = BeadInfo(id: "p4", title: "", status: "open", priority: 4,
-            type: "t", assignee: nil, rig: nil, source: "s",
+            type: "t", assignee: nil, project: nil, source: "s",
             labels: [], createdAt: "2024-01-10T08:00:00Z", updatedAt: nil)
 
         XCTAssertEqual(p0.priorityLevel, .urgent)

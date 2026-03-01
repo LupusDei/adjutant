@@ -117,6 +117,27 @@ final class BeadsListViewModel: BaseViewModel {
         loadSortPreference()
         setupDataSyncObserver()
         loadFromCache()
+        loadActiveProjectScope()
+    }
+
+    /// Loads the active project from the API and sets it as the default source filter.
+    /// This auto-scopes beads to the active project on launch.
+    private func loadActiveProjectScope() {
+        guard let apiClient else { return }
+        Task<Void, Never> {
+            do {
+                let projects = try await apiClient.getProjects()
+                if let activeProject = projects.first(where: { $0.active }) {
+                    // Only set if user hasn't manually selected a different source
+                    if self.selectedSource == nil {
+                        self.selectedSource = activeProject.name
+                        await self.loadBeads()
+                    }
+                }
+            } catch {
+                // Non-critical — beads will show unfiltered
+            }
+        }
     }
 
     /// Loads the saved sort preference from UserDefaults
@@ -142,7 +163,7 @@ final class BeadsListViewModel: BaseViewModel {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newBeads in
                 guard let self = self else { return }
-                // Server already filtered by rig — use results directly.
+                // Server already filtered by project — use results directly.
                 // Empty results are valid (project may have no beads or fetch failed).
                 self.beads = newBeads
                 self.applyFilter()
@@ -195,7 +216,7 @@ final class BeadsListViewModel: BaseViewModel {
         }
 
         await performAsync(showLoading: beads.isEmpty) {
-            await self.dataSync.refreshBeads(rig: self.selectedSource)
+            await self.dataSync.refreshBeads(project: self.selectedSource)
         }
 
         // Fetch bead sources for source filter
@@ -222,7 +243,7 @@ final class BeadsListViewModel: BaseViewModel {
     private static let excludedTypes: Set<String> = ["message", "epic", "agent", "wisp"]
 
     /// Applies the current filter and search to beads
-    /// Note: Rig filtering is now done server-side via the API rig parameter
+    /// Note: Project filtering is now done server-side via the API project parameter
     private func applyFilter() {
         var result = beads
 
@@ -346,8 +367,8 @@ final class BeadsListViewModel: BaseViewModel {
         return sortBeads(result)
     }
 
-    /// Unique rig names extracted from bead sources (excludes "town" and "unknown")
-    /// Matches frontend BeadsView.tsx rigOptions logic
+    /// Unique project names extracted from bead sources (excludes "town" and "unknown")
+    /// Matches frontend BeadsView.tsx projectOptions logic
     var rigOptions: [String] {
         var rigs = Set<String>()
         for bead in beads {
@@ -424,7 +445,7 @@ extension BeadsListViewModel {
             priority: 1,
             type: "feature",
             assignee: "adjutant/agents/flint",
-            rig: "adjutant",
+            project: "adjutant",
             source: "adjutant",
             labels: ["ios", "feature"],
             createdAt: "2026-01-25T10:00:00Z",
@@ -437,7 +458,7 @@ extension BeadsListViewModel {
             priority: 0,
             type: "bug",
             assignee: nil,
-            rig: "adjutant",
+            project: "adjutant",
             source: "adjutant",
             labels: ["bug", "swift"],
             createdAt: "2026-01-25T08:00:00Z",
@@ -450,7 +471,7 @@ extension BeadsListViewModel {
             priority: 2,
             type: "task",
             assignee: "adjutant/crew/bob",
-            rig: "adjutant",
+            project: "adjutant",
             source: "adjutant",
             labels: ["testing"],
             createdAt: "2026-01-24T16:00:00Z",
@@ -463,7 +484,7 @@ extension BeadsListViewModel {
             priority: 3,
             type: "feature",
             assignee: "adjutant/agents/flint",
-            rig: "adjutant",
+            project: "adjutant",
             source: "adjutant",
             labels: ["done"],
             createdAt: "2026-01-15T10:00:00Z",
