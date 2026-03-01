@@ -6,6 +6,11 @@ struct ProjectsListView: View {
     @Environment(\.crtTheme) private var theme
     @StateObject private var viewModel: ProjectsListViewModel
 
+    /// Project selected for activation via long-press context menu
+    @State private var projectToActivate: Project?
+    /// Whether the activation confirmation alert is showing
+    @State private var showActivateConfirmation = false
+
     /// Callback when a project is selected
     var onSelectProject: ((Project) -> Void)?
 
@@ -37,6 +42,21 @@ struct ProjectsListView: View {
         }
         .sheet(isPresented: $viewModel.showingCreateSheet) {
             createProjectSheet
+        }
+        .alert("SWITCH ACTIVE PROJECT", isPresented: $showActivateConfirmation) {
+            Button("Cancel", role: .cancel) {
+                projectToActivate = nil
+            }
+            Button("Switch") {
+                if let project = projectToActivate {
+                    Task<Void, Never> {
+                        await viewModel.activateProject(project)
+                        projectToActivate = nil
+                    }
+                }
+            }
+        } message: {
+            Text("Switch active project to \(projectToActivate?.name ?? "")?")
         }
     }
 
@@ -201,6 +221,22 @@ struct ProjectsListView: View {
                         project: project,
                         onTap: { onSelectProject?(project) }
                     )
+                    .contextMenu {
+                        if !project.active {
+                            Button {
+                                projectToActivate = project
+                                showActivateConfirmation = true
+                            } label: {
+                                Label("Set as Active Project", systemImage: "checkmark.circle")
+                            }
+                        }
+
+                        Button {
+                            onSelectProject?(project)
+                        } label: {
+                            Label("View Details", systemImage: "info.circle")
+                        }
+                    }
                 }
 
                 errorBanner
