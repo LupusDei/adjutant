@@ -90,6 +90,15 @@ extension APIClient {
         try await requestWithEnvelope(.get, path: "/messages/unread")
     }
 
+    /// Broadcast a status update request to all active agents.
+    ///
+    /// Maps to `POST /api/messages/broadcast`
+    ///
+    /// - Returns: A ``BroadcastResponse`` with sent agent names and count.
+    public func broadcastStatusRequest() async throws -> BroadcastResponse {
+        try await requestWithEnvelope(.post, path: "/messages/broadcast")
+    }
+
     /// Search messages by text query.
     ///
     /// Maps to `GET /api/messages/search?q=&agentId=`

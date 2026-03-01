@@ -150,6 +150,17 @@ public struct SendChatMessageRequest: Encodable, Sendable {
     }
 }
 
+/// Response from POST /api/messages/broadcast.
+public struct BroadcastResponse: Codable, Sendable {
+    public let sent: [String]
+    public let count: Int
+
+    public init(sent: [String], count: Int) {
+        self.sent = sent
+        self.count = count
+    }
+}
+
 /// Paginated response for messages list endpoint.
 public struct MessagesListResponse: Codable, Sendable {
     public let items: [PersistentMessage]

@@ -18,6 +18,12 @@ final class SwarmOverviewViewModel: ObservableObject {
     /// Whether the callsign picker sheet is showing (long-press spawn flow)
     @Published var showingCallsignPicker = false
 
+    /// Whether a broadcast status request is in flight
+    @Published var isBroadcasting = false
+
+    /// Brief confirmation text shown after a successful broadcast
+    @Published var broadcastResult: String?
+
     // MARK: - Dependencies
 
     private let apiClient: APIClient
@@ -120,6 +126,25 @@ final class SwarmOverviewViewModel: ObservableObject {
             await refresh()
         } catch {
             errorMessage = "Spawn failed: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Broadcast Status Request
+
+    /// Send "Send me an update" to all active agents.
+    func triggerUpdate() async {
+        isBroadcasting = true
+        defer { isBroadcasting = false }
+
+        do {
+            let response = try await apiClient.broadcastStatusRequest()
+            broadcastResult = "Pinged \(response.count) agent\(response.count == 1 ? "" : "s")"
+            // Auto-dismiss after 2 seconds
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            broadcastResult = nil
+            await refresh()
+        } catch {
+            errorMessage = "Broadcast failed: \(error.localizedDescription)"
         }
     }
 

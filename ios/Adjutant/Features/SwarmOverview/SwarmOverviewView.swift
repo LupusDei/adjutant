@@ -77,22 +77,48 @@ struct SwarmOverviewView: View {
     private func agentsSection(_ agents: [AgentOverview]) -> some View {
         CRTCard(header: "AGENTS", headerBadge: "\(agents.count)") {
             VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
-                // Start Agent button
-                // Tap = spawn with random callsign; Long-press = show callsign picker
-                CRTButton("START AGENT", variant: .secondary, size: .medium) {
-                    if longPressTriggered {
-                        longPressTriggered = false
-                        return
-                    }
-                    Task<Void, Never> { await viewModel.startAgent() }
-                }
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.5)
-                        .onEnded { _ in
-                            longPressTriggered = true
-                            viewModel.showingCallsignPicker = true
+                // Action buttons row
+                HStack(spacing: CRTTheme.Spacing.sm) {
+                    // Start Agent button
+                    // Tap = spawn with random callsign; Long-press = show callsign picker
+                    CRTButton("START AGENT", variant: .secondary, size: .medium) {
+                        if longPressTriggered {
+                            longPressTriggered = false
+                            return
                         }
-                )
+                        Task<Void, Never> { await viewModel.startAgent() }
+                    }
+                    .simultaneousGesture(
+                        LongPressGesture(minimumDuration: 0.5)
+                            .onEnded { _ in
+                                longPressTriggered = true
+                                viewModel.showingCallsignPicker = true
+                            }
+                    )
+
+                    // Trigger Update button — pings all agents for a status update
+                    CRTButton(
+                        viewModel.isBroadcasting ? "PINGING..." : "TRIGGER UPDATE",
+                        variant: .secondary,
+                        size: .medium
+                    ) {
+                        Task<Void, Never> { await viewModel.triggerUpdate() }
+                    }
+                    .disabled(viewModel.isBroadcasting)
+                    .opacity(viewModel.isBroadcasting ? 0.6 : 1.0)
+                }
+
+                // Broadcast confirmation banner
+                if let result = viewModel.broadcastResult {
+                    HStack(spacing: CRTTheme.Spacing.xs) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(CRTTheme.State.success)
+                            .font(.system(size: 12))
+                        CRTText(result.uppercased(), style: .caption, color: CRTTheme.State.success)
+                    }
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.3), value: viewModel.broadcastResult)
+                }
 
                 if agents.isEmpty {
                     VStack(spacing: CRTTheme.Spacing.sm) {

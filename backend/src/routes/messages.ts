@@ -20,6 +20,7 @@ import type { MessageStore } from "../services/message-store.js";
 import { wsBroadcast } from "../services/ws-server.js";
 import { getSessionBridge } from "../services/session-bridge.js";
 
+import { getAgents } from "../services/agents-service.js";
 import {
   success,
   notFound,
@@ -167,6 +168,59 @@ export function createMessagesRouter(store: MessageStore): Router {
     }
 
     return res.status(201).json(success({ messageId: message.id, timestamp: message.createdAt }));
+  });
+
+  // POST /api/messages/broadcast — send a status update request to all active agents
+  router.post("/broadcast", async (_req, res) => {
+    const agentsResult = await getAgents();
+    if (!agentsResult.success || !agentsResult.data) {
+      return res.status(500).json({
+        success: false,
+        error: { code: "AGENTS_ERROR", message: "Failed to fetch agents" },
+      });
+    }
+
+    const activeAgents = agentsResult.data.filter(
+      (a) => a.status !== "offline"
+    );
+
+    const body = "Send me an update";
+    const sent: string[] = [];
+
+    for (const agent of activeAgents) {
+      const message = store.insertMessage({
+        agentId: "user",
+        recipient: agent.name,
+        role: "user",
+        body,
+      });
+
+      wsBroadcast({
+        type: "chat_message",
+        id: message.id,
+        from: "user",
+        to: agent.name,
+        body: message.body,
+        timestamp: message.createdAt,
+      });
+
+      // Deliver to agent's tmux pane
+      try {
+        const bridge = getSessionBridge();
+        const sessions = bridge.registry.findByName(agent.name);
+        for (const session of sessions) {
+          bridge.sendInput(session.id, body).then((ok) => {
+            if (ok) store.markDelivered(message.id);
+          }).catch(() => {});
+        }
+      } catch {
+        // Session bridge not initialized — agent will pull via MCP
+      }
+
+      sent.push(agent.name);
+    }
+
+    return res.json(success({ sent, count: sent.length }));
   });
 
   return router;
