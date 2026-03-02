@@ -24,6 +24,7 @@ import { createProposalStore } from "./services/proposal-store.js";
 import { createEventStore } from "./services/event-store.js";
 import { initMessageDelivery } from "./services/message-delivery.js";
 import { initBeadAssignNotification } from "./services/bead-assign-notification.js";
+import { discoverLocalProjects } from "./services/projects-service.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
@@ -89,6 +90,12 @@ app.use("/mcp", mcpRouter);
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
+
+// Eagerly register the CWD (or ADJUTANT_PROJECT_ROOT) as a project on startup.
+// This ensures the current directory is always registered and active, even when
+// projects.json already has entries from a previous session in a different directory.
+discoverLocalProjects();
+logInfo("CWD project auto-registered on startup");
 
 const server = app.listen(PORT, () => {
   logInfo("backend server listening", { port: PORT });

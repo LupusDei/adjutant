@@ -263,12 +263,13 @@ export function discoverLocalProjects(options?: DiscoverOptions): ProjectsServic
       discovered.push(rootProject);
       logInfo("discovered project root", { id: rootProject.id, name: rootProject.name, path: projectRoot, hasBeads: rootProject.hasBeads });
     } else {
-      // Mark the existing root project as active
+      // Mark the existing root project as active (and deactivate others)
       const existing = store.projects.find((p) => p.path === projectRoot);
       if (existing && !existing.active) {
         for (const p of store.projects) {
           p.active = p.path === projectRoot;
         }
+        existingUpdated = true;
       }
     }
 

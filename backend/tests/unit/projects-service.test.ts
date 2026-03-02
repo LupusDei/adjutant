@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
 import { execSync } from "child_process";
-import { join, resolve } from "path";
+import { join, resolve, basename } from "path";
 import { homedir } from "os";
 
 // Mock fs, child_process, crypto
@@ -413,6 +413,81 @@ describe("projects-service", () => {
       // maxDepth 100 should be clamped to 3 (but still work)
       const result = discoverLocalProjects({ maxDepth: 100 });
       expect(result.success).toBe(true);
+    });
+
+    it("should activate CWD project when already registered but inactive", () => {
+      // Simulate: projects.json has the CWD registered but inactive,
+      // plus another project that IS active (from a previous session).
+      const cwdProject = createMockProject({
+        id: "cwd-proj",
+        name: basename(PROJECT_ROOT),
+        path: PROJECT_ROOT,
+        active: false,
+      });
+      const otherProject = createMockProject({
+        id: "other-proj",
+        name: "other",
+        path: "/Users/test/code/other-project",
+        active: true,
+      });
+
+      // Store already has entries, so the listProjects() auto-seed won't fire
+      vi.mocked(existsSync).mockImplementation((p: unknown) => {
+        const ps = String(p);
+        if (ps === ADJUTANT_DIR || ps === PROJECTS_FILE || ps === PROJECT_ROOT) return true;
+        // Root has .git
+        if (ps === join(PROJECT_ROOT, ".git")) return true;
+        if (ps === join(PROJECT_ROOT, ".beads", "beads.db")) return false;
+        if (ps === "/Users/test/code/other-project") return true;
+        if (ps === join("/Users/test/code/other-project", ".beads", "beads.db")) return false;
+        return false;
+      });
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ projects: [cwdProject, otherProject] }));
+      vi.mocked(readdirSync).mockReturnValue([] as unknown as ReturnType<typeof readdirSync>);
+      vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as ReturnType<typeof statSync>);
+
+      const result = discoverLocalProjects();
+      expect(result.success).toBe(true);
+
+      // Verify the store was saved with CWD active and other inactive
+      expect(writeFileSync).toHaveBeenCalled();
+      const writeCall = vi.mocked(writeFileSync).mock.calls[0];
+      const savedStore = JSON.parse(writeCall[1] as string) as ProjectsStore;
+      const savedCwd = savedStore.projects.find((p) => p.id === "cwd-proj");
+      const savedOther = savedStore.projects.find((p) => p.id === "other-proj");
+      expect(savedCwd?.active).toBe(true);
+      expect(savedOther?.active).toBe(false);
+    });
+
+    it("should persist activation even when no new projects are discovered", () => {
+      // The CWD is already registered but inactive; no hasBeads changes, no new discoveries.
+      // The store should still be saved because activation changed.
+      const cwdProject = createMockProject({
+        id: "cwd-existing",
+        name: basename(PROJECT_ROOT),
+        path: PROJECT_ROOT,
+        active: false,
+        hasBeads: false,
+      });
+
+      vi.mocked(existsSync).mockImplementation((p: unknown) => {
+        const ps = String(p);
+        if (ps === ADJUTANT_DIR || ps === PROJECTS_FILE || ps === PROJECT_ROOT) return true;
+        if (ps === join(PROJECT_ROOT, ".git")) return true;
+        if (ps === join(PROJECT_ROOT, ".beads", "beads.db")) return false;
+        return false;
+      });
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ projects: [cwdProject] }));
+      vi.mocked(readdirSync).mockReturnValue([] as unknown as ReturnType<typeof readdirSync>);
+      vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as ReturnType<typeof statSync>);
+
+      discoverLocalProjects();
+
+      // writeFileSync MUST be called since active flag changed
+      expect(writeFileSync).toHaveBeenCalled();
+      const writeCall = vi.mocked(writeFileSync).mock.calls[0];
+      const savedStore = JSON.parse(writeCall[1] as string) as ProjectsStore;
+      expect(savedStore.projects[0].active).toBe(true);
     });
   });
 
