@@ -87,6 +87,13 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem(STORAGE_KEY);
       }
     } catch { /* ignore */ }
+
+    // Activate the project on the backend so server-side state stays in sync
+    if (projectId) {
+      void api.projects.activate(projectId).catch(() => {
+        // Silent fail -- local state is already updated
+      });
+    }
   }, []);
 
   const refresh = useCallback(() => {
