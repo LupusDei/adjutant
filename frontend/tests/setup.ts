@@ -3,6 +3,21 @@ import "@testing-library/jest-dom/vitest";
 // Configure React Testing Library to use act()
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
+// Polyfill localStorage for jsdom (some versions lack standard methods)
+if (typeof globalThis.localStorage === 'undefined' || typeof globalThis.localStorage.clear !== 'function') {
+  const store = new Map<string, string>();
+  const localStoragePolyfill = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => { store.set(key, String(value)); },
+    removeItem: (key: string) => { store.delete(key); },
+    clear: () => { store.clear(); },
+    get length() { return store.size; },
+    key: (index: number) => [...store.keys()][index] ?? null,
+  };
+  Object.defineProperty(globalThis, 'localStorage', { value: localStoragePolyfill, writable: true });
+  Object.defineProperty(window, 'localStorage', { value: localStoragePolyfill, writable: true });
+}
+
 // Polyfill matchMedia for jsdom
 window.matchMedia = (query: string) => ({
     matches: false,
