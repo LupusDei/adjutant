@@ -31,8 +31,11 @@ interface InitOptions {
 const MCP_CONFIG = {
   mcpServers: {
     adjutant: {
-      command: "npx",
-      args: ["-y", "supergateway", "--sse", "http://localhost:4201/mcp/sse"],
+      type: "http",
+      url: "http://localhost:4201/mcp",
+      headers: {
+        "X-Agent-Id": "${ADJUTANT_AGENT_ID:-unknown}",
+      },
     },
   },
 };

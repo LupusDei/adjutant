@@ -93,12 +93,12 @@ async function checkNetwork(): Promise<CheckResult[]> {
       : { name: "Backend health", status: "fail", message: "run npm run dev" },
   );
 
-  // MCP SSE endpoint (any response means reachable)
-  const mcpStatus = await httpReachable("http://localhost:4201/mcp/sse");
+  // MCP Streamable HTTP endpoint (POST returns a response means reachable)
+  const mcpStatus = await httpReachable("http://localhost:4201/mcp");
   results.push(
     mcpStatus !== null
-      ? { name: "MCP SSE endpoint", status: "pass" }
-      : { name: "MCP SSE endpoint", status: "fail", message: "backend not serving MCP" },
+      ? { name: "MCP endpoint", status: "pass" }
+      : { name: "MCP endpoint", status: "fail", message: "backend not serving MCP" },
   );
 
   return results;
