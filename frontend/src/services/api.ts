@@ -19,7 +19,7 @@ import type {
   ProjectHealth,
 } from '../types';
 import type { DashboardResponse } from '../types/dashboard';
-import type { ProjectOverview } from '../types/overview';
+import type { ProjectOverview, GlobalOverview } from '../types/overview';
 import type {
   SynthesizeRequest,
   SynthesizeResponse,
@@ -182,6 +182,15 @@ export const api = {
   dashboard: {
     async get(): Promise<DashboardResponse> {
       return apiFetch<DashboardResponse>('/dashboard');
+    },
+  },
+
+  /**
+   * Global overview - aggregated across all projects.
+   */
+  overview: {
+    async get(): Promise<GlobalOverview> {
+      return apiFetch<GlobalOverview>('/overview');
     },
   },
 
