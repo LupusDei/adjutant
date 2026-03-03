@@ -1,7 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, costsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createProjectsRouter, createProposalsRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, costsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createProjectsRouter, createProposalsRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { createDashboardService } from "./services/dashboard-service.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
@@ -68,6 +68,7 @@ const eventStore = createEventStore(messageDb);
 app.use("/api/events", createEventsRouter(eventStore));
 app.use("/api/messages", createMessagesRouter(messageStore));
 app.use("/api/projects", createProjectsRouter(messageStore));
+app.use("/api/overview", createOverviewRouter(messageStore));
 app.use("/api/proposals", createProposalsRouter(proposalStore));
 
 // Prune events older than 7 days on startup, then every 6 hours
