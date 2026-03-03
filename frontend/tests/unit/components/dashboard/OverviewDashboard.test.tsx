@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { DashboardView } from '../../../../src/components/dashboard/OverviewDashboard';
-import { useProjectOverview } from '../../../../src/hooks/useProjectOverview';
+import { useOverview } from '../../../../src/hooks/useProjectOverview';
 
-// Mock the project overview hook
+// Mock the overview hook
 vi.mock('../../../../src/hooks/useProjectOverview', () => ({
-  useProjectOverview: vi.fn(),
+  useOverview: vi.fn(),
 }));
 
 // Mock priorityLabel used by OverviewDashboard
@@ -16,16 +16,15 @@ vi.mock('../../../../src/hooks/useDashboardBeads', () => ({
 describe('DashboardView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (useProjectOverview as ReturnType<typeof vi.fn>).mockReturnValue({
+    (useOverview as ReturnType<typeof vi.fn>).mockReturnValue({
       data: {
-        project: { id: 'test', name: 'test', path: '/test', active: true },
+        projects: [{ id: 'test', name: 'test', path: '/test', active: true }],
         beads: { open: [], inProgress: [], recentlyClosed: [] },
         epics: { inProgress: [], recentlyCompleted: [] },
         agents: [],
         unreadMessages: [],
       },
       loading: false,
-      noProject: false,
     });
   });
 
@@ -37,13 +36,13 @@ describe('DashboardView', () => {
     expect(screen.getByText('EPICS')).toBeInTheDocument();
   });
 
-  it('shows no-project state when no project is selected', () => {
-    (useProjectOverview as ReturnType<typeof vi.fn>).mockReturnValue({
+  it('renders empty states when no data is available', () => {
+    (useOverview as ReturnType<typeof vi.fn>).mockReturnValue({
       data: null,
       loading: false,
-      noProject: true,
     });
     render(<DashboardView />);
-    expect(screen.getByText('No active project selected.')).toBeInTheDocument();
+    // With null data, widgets should still render with empty states
+    expect(screen.getByText('AGENTS')).toBeInTheDocument();
   });
 });

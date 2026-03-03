@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 
-import { useProjectOverview } from '../../hooks/useProjectOverview';
+import { useOverview } from '../../hooks/useProjectOverview';
 import { priorityLabel } from '../../hooks/useDashboardBeads';
 import type { AgentOverview, EpicProgress, OverviewBeadSummary, OverviewUnreadSummary } from '../../types/overview';
 import './DashboardView.css';
@@ -106,7 +106,7 @@ interface DashboardViewProps {
 }
 
 export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
-  const { data, loading, noProject } = useProjectOverview();
+  const { data, loading } = useOverview();
 
   // --- Agents ---
   const agents: AgentOverview[] = data?.agents ?? [];
@@ -129,18 +129,6 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
   // --- Epics data ---
   const epicsInProgress: EpicProgress[] = data?.epics?.inProgress ?? [];
   const epicsCompleted: EpicProgress[] = data?.epics?.recentlyCompleted ?? [];
-
-  // No active project state
-  if (noProject) {
-    return (
-      <div className="dashboard-view-container">
-        <div className="dashboard-no-project">
-          <p className="dashboard-empty-text">No active project selected.</p>
-          <p className="dashboard-empty-text">Select a project from the header to view the overview.</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="dashboard-view-container">

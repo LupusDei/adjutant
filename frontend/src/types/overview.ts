@@ -66,3 +66,12 @@ export interface ProjectOverview {
   agents: AgentOverview[];
   unreadMessages: OverviewUnreadSummary[];
 }
+
+/** Global overview response from GET /api/overview (aggregated across all projects). */
+export interface GlobalOverview {
+  projects: Array<{ id: string; name: string; path: string; active: boolean }>;
+  beads: BeadsOverview;
+  epics: EpicsOverview;
+  agents: AgentOverview[];
+  unreadMessages: OverviewUnreadSummary[];
+}
