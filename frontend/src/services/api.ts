@@ -195,6 +195,15 @@ export const api = {
   },
 
   /**
+   * Global overview (aggregated across all projects).
+   */
+  overview: {
+    async get(): Promise<GlobalOverview> {
+      return apiFetch('/overview');
+    },
+  },
+
+  /**
    * Agent operations.
    */
   agents: {
