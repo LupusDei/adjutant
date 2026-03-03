@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { DashboardView } from '../../../../src/components/dashboard/OverviewDashboard';
-import { useDashboard } from '../../../../src/hooks/useDashboard';
+import { useProjectOverview } from '../../../../src/hooks/useProjectOverview';
 
-// Mock the unified dashboard hook
-vi.mock('../../../../src/hooks/useDashboard', () => ({
-  useDashboard: vi.fn(),
+// Mock the project overview hook
+vi.mock('../../../../src/hooks/useProjectOverview', () => ({
+  useProjectOverview: vi.fn(),
 }));
 
 // Mock priorityLabel used by OverviewDashboard
@@ -16,19 +16,34 @@ vi.mock('../../../../src/hooks/useDashboardBeads', () => ({
 describe('DashboardView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (useDashboard as ReturnType<typeof vi.fn>).mockReturnValue({
+    (useProjectOverview as ReturnType<typeof vi.fn>).mockReturnValue({
       data: {
-        epics: { data: null, loading: false, error: null },
-        beads: { data: null, loading: false, error: null },
-        unreadMessages: { data: [], loading: false, error: null },
+        project: { id: 'test', name: 'test', path: '/test', active: true },
+        beads: { open: [], inProgress: [], recentlyClosed: [] },
+        epics: { inProgress: [], recentlyCompleted: [] },
+        agents: [],
+        unreadMessages: [],
       },
       loading: false,
+      noProject: false,
     });
   });
 
   it('renders dashboard widgets', () => {
     render(<DashboardView />);
-    // The dashboard should render without crashing
+    expect(screen.getByText('AGENTS')).toBeInTheDocument();
+    expect(screen.getByText('UNREAD MESSAGES')).toBeInTheDocument();
+    expect(screen.getByText('TASKS')).toBeInTheDocument();
     expect(screen.getByText('EPICS')).toBeInTheDocument();
+  });
+
+  it('shows no-project state when no project is selected', () => {
+    (useProjectOverview as ReturnType<typeof vi.fn>).mockReturnValue({
+      data: null,
+      loading: false,
+      noProject: true,
+    });
+    render(<DashboardView />);
+    expect(screen.getByText('No active project selected.')).toBeInTheDocument();
   });
 });

@@ -1,10 +1,8 @@
 import React, { useMemo } from 'react';
-import { useDashboard } from '../../hooks/useDashboard';
+
+import { useProjectOverview } from '../../hooks/useProjectOverview';
 import { priorityLabel } from '../../hooks/useDashboardBeads';
-import { EpicCard } from '../epics/EpicCard';
-import type { BeadInfo } from '../../types';
-import type { EpicWithProgress } from '../../types/epics';
-import type { EpicWithProgressItem, UnreadAgentSummary } from '../../types/dashboard';
+import type { AgentOverview, EpicProgress, OverviewBeadSummary, OverviewUnreadSummary } from '../../types/overview';
 import './DashboardView.css';
 
 // Simple widget wrapper for dashboard sections
@@ -53,7 +51,7 @@ function formatChatTimestamp(timestamp: string): string {
 }
 
 /** Render a compact bead row with optional completion timestamp */
-function BeadRow({ bead, completedAt }: { bead: BeadInfo; completedAt?: string }) {
+function BeadRow({ bead, completedAt }: { bead: OverviewBeadSummary; completedAt?: string }) {
   return (
     <div className="dashboard-bead-row">
       <span className="dashboard-bead-id">{bead.id}</span>
@@ -68,18 +66,32 @@ function BeadRow({ bead, completedAt }: { bead: BeadInfo; completedAt?: string }
   );
 }
 
-/** Transform server epic response to frontend EpicWithProgress type */
-function toEpicWithProgress(item: EpicWithProgressItem): EpicWithProgress {
-  const isComplete = item.epic.status === 'closed' ||
-    (item.totalCount > 0 && item.closedCount === item.totalCount);
-  return {
-    epic: item.epic,
-    completedCount: item.closedCount,
-    totalCount: item.totalCount,
-    progress: item.progress,
-    progressText: item.totalCount > 0 ? `${item.closedCount}/${item.totalCount}` : '0/0',
-    isComplete,
-  };
+/** Get the CSS class suffix for an agent status */
+function statusIndicatorClass(status: string): string {
+  switch (status) {
+    case 'working': return 'working';
+    case 'idle': return 'idle';
+    case 'blocked': return 'stuck';
+    default: return 'offline';
+  }
+}
+
+/** Get the display label for an agent status */
+function statusLabel(status: string): string {
+  switch (status) {
+    case 'working': return 'WORKING';
+    case 'idle': return 'IDLE';
+    case 'blocked': return 'BLOCKED';
+    default: return 'OFFLINE';
+  }
+}
+
+/** Get progress bar color based on epic completion percentage */
+function getEpicProgressColor(completionPercent: number, status: string): string {
+  if (status === 'closed' || completionPercent >= 100) return '#00FF00';
+  if (completionPercent > 50) return 'var(--crt-phosphor)';
+  if (completionPercent > 0) return '#FFB000';
+  return 'var(--crt-phosphor-dim)';
 }
 
 /** Truncate a message body for preview display */
@@ -94,55 +106,109 @@ interface DashboardViewProps {
 }
 
 export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
-  const { data, loading } = useDashboard();
+  const { data, loading, noProject } = useProjectOverview();
 
-  // --- Per-section errors ---
-  const epicsError = data?.epics?.error;
-  const beadsError = data?.beads?.error;
-  const unreadMsgError = data?.unreadMessages?.error;
+  // --- Agents ---
+  const agents: AgentOverview[] = data?.agents ?? [];
 
-  // --- Unread messages grouped by agent ---
-  const unreadMessages: UnreadAgentSummary[] = data?.unreadMessages?.data ?? [];
+  // --- Unread messages ---
+  const unreadMessages: OverviewUnreadSummary[] = data?.unreadMessages ?? [];
 
   // --- Beads data (tasks only — exclude epics) ---
   const { tasksInProgress, tasksCompleted } = useMemo(() => {
-    const beadsData = data?.beads?.data;
-    if (!beadsData) return { tasksInProgress: [], tasksCompleted: [] };
+    if (!data?.beads) return { tasksInProgress: [], tasksCompleted: [] };
 
-    const filterTasks = (items: BeadInfo[]) => items.filter((b) => b.type !== 'epic');
+    const filterTasks = (items: OverviewBeadSummary[]) => items.filter((b) => b.type !== 'epic');
 
     return {
-      tasksInProgress: filterTasks(beadsData.inProgress.items),
-      tasksCompleted: filterTasks(beadsData.closed.items),
+      tasksInProgress: filterTasks(data.beads.inProgress).slice(0, 7),
+      tasksCompleted: filterTasks(data.beads.recentlyClosed).slice(0, 5),
     };
-  }, [data?.beads?.data]);
+  }, [data?.beads]);
 
-  // --- Epics data (transform EpicWithProgressResponse → EpicWithProgress) ---
-  const { epicsInProgress, epicsCompleted } = useMemo(() => {
-    const raw = data?.epics?.data;
-    if (!raw) return { epicsInProgress: null, epicsCompleted: null };
-    return {
-      epicsInProgress: {
-        items: raw.inProgress.items.map(toEpicWithProgress),
-        totalCount: raw.inProgress.totalCount,
-      },
-      epicsCompleted: {
-        items: raw.completed.items.map(toEpicWithProgress),
-        totalCount: raw.completed.totalCount,
-      },
-    };
-  }, [data?.epics?.data]);
+  // --- Epics data ---
+  const epicsInProgress: EpicProgress[] = data?.epics?.inProgress ?? [];
+  const epicsCompleted: EpicProgress[] = data?.epics?.recentlyCompleted ?? [];
+
+  // No active project state
+  if (noProject) {
+    return (
+      <div className="dashboard-view-container">
+        <div className="dashboard-no-project">
+          <p className="dashboard-empty-text">No active project selected.</p>
+          <p className="dashboard-empty-text">Select a project from the header to view the overview.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="dashboard-view-container">
       <div className="dashboard-view-grid">
 
-        {/* Unread Messages Widget (top, full width) */}
+        {/* Agents Widget (top, full width) */}
+        <DashboardWidget
+          title="AGENTS"
+          className="dashboard-widget-full-width"
+          headerRight={
+            !loading && agents.length > 0 && (
+              <div className="dashboard-header-stats">
+                <span className="dashboard-header-stat dashboard-header-stat-highlight">
+                  {agents.filter((a) => a.status === 'working').length} working
+                </span>
+                <span className="dashboard-header-stat">
+                  {agents.length} total
+                </span>
+              </div>
+            )
+          }
+        >
+          {loading && <p>Loading agents...</p>}
+          {!loading && (
+            <>
+              {agents.length > 0 ? (
+                <div className="dashboard-agents-list">
+                  {agents.map((agent) => (
+                    <div
+                      key={agent.id}
+                      className="dashboard-agent-row"
+                      onClick={() => onNavigateToChat?.(agent.name)}
+                      role={onNavigateToChat ? 'button' : undefined}
+                      tabIndex={onNavigateToChat ? 0 : undefined}
+                      onKeyDown={(e) => {
+                        if (onNavigateToChat && (e.key === 'Enter' || e.key === ' ')) {
+                          e.preventDefault();
+                          onNavigateToChat(agent.name);
+                        }
+                      }}
+                    >
+                      <span className={`dashboard-crew-card-indicator dashboard-indicator-${statusIndicatorClass(agent.status)}`} />
+                      <span className="dashboard-agent-name">{agent.name.toUpperCase()}</span>
+                      <span className={`dashboard-crew-card-status-text dashboard-text-${statusIndicatorClass(agent.status)}`}>
+                        {statusLabel(agent.status)}
+                      </span>
+                      {agent.currentBead && (
+                        <span className="dashboard-agent-task">{truncateBody(agent.currentBead, 60)}</span>
+                      )}
+                      {agent.unreadCount > 0 && (
+                        <span className="dashboard-unread-count">{agent.unreadCount}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="dashboard-empty-text">No agents connected</p>
+              )}
+            </>
+          )}
+        </DashboardWidget>
+
+        {/* Unread Messages Widget (full width) */}
         <DashboardWidget
           title="UNREAD MESSAGES"
           className="dashboard-widget-full-width"
           headerRight={
-            !loading && !unreadMsgError && unreadMessages.length > 0 && (
+            !loading && unreadMessages.length > 0 && (
               <div className="dashboard-header-stats">
                 <span className="dashboard-header-stat dashboard-header-stat-highlight">
                   {unreadMessages.reduce((sum, a) => sum + a.unreadCount, 0)} unread
@@ -152,8 +218,7 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
           }
         >
           {loading && <p>Loading messages...</p>}
-          {!loading && unreadMsgError && <p className="dashboard-view-error-text">Error: {unreadMsgError}</p>}
-          {!loading && !unreadMsgError && (
+          {!loading && (
             <>
               {unreadMessages.length > 0 ? (
                 <div className="dashboard-unread-list">
@@ -189,7 +254,7 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
           title="TASKS"
           className="dashboard-widget-full-width"
           headerRight={
-            !loading && !beadsError && (
+            !loading && (
               <div className="dashboard-header-stats">
                 <span className={`dashboard-header-stat ${tasksInProgress.length > 0 ? 'dashboard-header-stat-highlight' : ''}`}>
                   {tasksInProgress.length} in progress
@@ -200,8 +265,7 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
           }
         >
           {loading && <p>Loading tasks...</p>}
-          {!loading && beadsError && <p className="dashboard-view-error-text">Error: {beadsError}</p>}
-          {!loading && !beadsError && (
+          {!loading && (
             <>
               {tasksInProgress.length > 0 && (
                 <>
@@ -237,38 +301,37 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
           title="EPICS"
           className="dashboard-widget-full-width"
           headerRight={
-            !loading && !epicsError && epicsInProgress && epicsCompleted && (
+            !loading && (
               <div className="dashboard-header-stats">
-                <span className={`dashboard-header-stat ${epicsInProgress.totalCount > 0 ? 'dashboard-header-stat-highlight' : ''}`}>
-                  {epicsInProgress.totalCount} in progress
+                <span className={`dashboard-header-stat ${epicsInProgress.length > 0 ? 'dashboard-header-stat-highlight' : ''}`}>
+                  {epicsInProgress.length} in progress
                 </span>
-                <span className="dashboard-header-stat">{epicsCompleted.totalCount} completed</span>
+                <span className="dashboard-header-stat">{epicsCompleted.length} completed</span>
               </div>
             )
           }
         >
           {loading && <p>Loading epics...</p>}
-          {!loading && epicsError && <p className="dashboard-view-error-text">Error: {epicsError}</p>}
-          {!loading && epicsInProgress && epicsCompleted && (
+          {!loading && (
             <>
-              {epicsInProgress.items.length > 0 ? (
+              {epicsInProgress.length > 0 ? (
                 <div className="dashboard-epics-list">
-                  {epicsInProgress.items.map((epic) => (
-                    <EpicCard key={epic.epic.id} epic={epic} />
+                  {epicsInProgress.map((epic) => (
+                    <OverviewEpicCard key={epic.id} epic={epic} />
                   ))}
                 </div>
               ) : (
                 <p className="dashboard-empty-text">No active epics</p>
               )}
-              {epicsCompleted.items.length > 0 && (
+              {epicsCompleted.length > 0 && (
                 <>
                   <h4 className="dashboard-view-sub-title" style={{ marginTop: '16px' }}>RECENTLY COMPLETED</h4>
                   <div className="dashboard-epics-list">
-                    {epicsCompleted.items.map((epic) => (
-                      <div key={epic.epic.id} className="dashboard-epic-completed-row">
-                        <EpicCard epic={epic} />
-                        {epic.epic.updatedAt && (
-                          <span className="dashboard-epic-completed-time">{formatChatTimestamp(epic.epic.updatedAt)}</span>
+                    {epicsCompleted.map((epic) => (
+                      <div key={epic.id} className="dashboard-epic-completed-row">
+                        <OverviewEpicCard epic={epic} />
+                        {epic.closedAt && (
+                          <span className="dashboard-epic-completed-time">{formatChatTimestamp(epic.closedAt)}</span>
                         )}
                       </div>
                     ))}
@@ -279,6 +342,48 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
           )}
         </DashboardWidget>
 
+      </div>
+    </div>
+  );
+}
+
+/** Inline epic card for the overview — uses EpicProgress directly instead of EpicWithProgress wrapper */
+function OverviewEpicCard({ epic }: { epic: EpicProgress }) {
+  const progressColor = getEpicProgressColor(epic.completionPercent, epic.status);
+  const isComplete = epic.status === 'closed' || epic.completionPercent >= 100;
+  const statusText = isComplete ? 'COMPLETE' : epic.status === 'in_progress' ? 'IN PROGRESS' : epic.status.toUpperCase();
+  const statusColor = isComplete ? '#00FF00' : epic.status === 'in_progress' ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)';
+
+  return (
+    <div className="dashboard-overview-epic-card">
+      <div className="dashboard-overview-epic-header">
+        <span className="dashboard-overview-epic-id">{epic.id.toUpperCase()}</span>
+        <span
+          className="dashboard-overview-epic-status"
+          style={{
+            color: statusColor,
+            borderColor: statusColor,
+            backgroundColor: `${statusColor}15`,
+          }}
+        >
+          {statusText}
+        </span>
+      </div>
+      <div className="dashboard-overview-epic-title">{epic.title}</div>
+      <div className="dashboard-overview-epic-progress">
+        <div className="dashboard-progress-bar">
+          <div
+            className="dashboard-progress-fill"
+            style={{
+              width: `${Math.round(epic.completionPercent)}%`,
+              backgroundColor: progressColor,
+              boxShadow: `0 0 6px ${progressColor}`,
+            }}
+          />
+        </div>
+        <span className="dashboard-progress-text">
+          {epic.closedChildren}/{epic.totalChildren} ({Math.round(epic.completionPercent)}%)
+        </span>
       </div>
     </div>
   );
