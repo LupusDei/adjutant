@@ -97,4 +97,23 @@ program
     }
   });
 
+// Unhook command: remove Adjutant plugin hooks from Claude Code
+program
+  .command('unhook')
+  .description('Remove Adjutant plugin hooks from Claude Code')
+  .action(async () => {
+    try {
+      const { runUnhook } = await import('../dist/cli/commands/unhook.js');
+      const exitCode = await runUnhook();
+      process.exit(exitCode);
+    } catch (error) {
+      if (error.code === 'ERR_MODULE_NOT_FOUND') {
+        console.error('CLI not built. Run: npx tsc -p tsconfig.cli.json');
+        process.exit(1);
+      }
+      console.error('Error:', error.message);
+      process.exit(1);
+    }
+  });
+
 program.parse();
