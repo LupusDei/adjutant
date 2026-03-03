@@ -43,7 +43,7 @@ struct SwarmOverviewView: View {
     // MARK: - Content
 
     @ViewBuilder
-    private func overviewContent(_ overview: ProjectOverviewResponse) -> some View {
+    private func overviewContent(_ overview: GlobalOverviewResponse) -> some View {
         ScrollView {
             VStack(spacing: CRTTheme.Spacing.lg) {
                 // Stale data banner

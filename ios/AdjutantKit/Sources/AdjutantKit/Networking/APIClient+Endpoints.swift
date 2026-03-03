@@ -204,6 +204,11 @@ extension APIClient {
         let encodedId = projectId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? projectId
         return try await requestWithEnvelope(.get, path: "/projects/\(encodedId)/overview")
     }
+
+    /// Get global overview aggregated across all projects.
+    public func getGlobalOverview() async throws -> GlobalOverviewResponse {
+        return try await requestWithEnvelope(.get, path: "/overview")
+    }
 }
 
 // MARK: - Beads Endpoints

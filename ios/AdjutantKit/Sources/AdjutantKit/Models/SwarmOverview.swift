@@ -26,6 +26,32 @@ public struct ProjectOverviewResponse: Codable, Equatable {
     }
 }
 
+// MARK: - Global Overview Response
+
+/// Aggregated overview data from GET /api/overview (project-agnostic).
+/// Same shape as ProjectOverviewResponse but with `projects` (plural array) instead of `project` (singular).
+public struct GlobalOverviewResponse: Codable, Equatable {
+    public let projects: [ProjectSummary]
+    public let beads: BeadsOverview
+    public let epics: EpicsOverview
+    public let agents: [AgentOverview]
+    public let unreadMessages: [OverviewUnreadSummary]?
+
+    public init(
+        projects: [ProjectSummary],
+        beads: BeadsOverview,
+        epics: EpicsOverview,
+        agents: [AgentOverview],
+        unreadMessages: [OverviewUnreadSummary]? = nil
+    ) {
+        self.projects = projects
+        self.beads = beads
+        self.epics = epics
+        self.agents = agents
+        self.unreadMessages = unreadMessages
+    }
+}
+
 // MARK: - Unread Message Summary
 
 /// Unread messages from a single agent for the overview widget.

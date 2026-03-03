@@ -2,12 +2,12 @@ import SwiftUI
 import Combine
 import AdjutantKit
 
-/// ViewModel for the Swarm Overview page — aggregated project dashboard.
+/// ViewModel for the Swarm Overview page — aggregated global dashboard.
 @MainActor
 final class SwarmOverviewViewModel: ObservableObject {
     // MARK: - Published State
 
-    @Published var overview: ProjectOverviewResponse?
+    @Published var overview: GlobalOverviewResponse?
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var lastSuccessfulRefresh: Date?
@@ -40,7 +40,6 @@ final class SwarmOverviewViewModel: ObservableObject {
 
     func onAppear() {
         Task {
-            await loadActiveProject()
             await refresh()
         }
         // Guard against duplicate timers if onAppear fires multiple times
@@ -61,11 +60,6 @@ final class SwarmOverviewViewModel: ObservableObject {
     // MARK: - Data Loading
 
     func refresh() async {
-        guard let projectId = activeProjectId else {
-            errorMessage = "No active project"
-            return
-        }
-
         // Skip if a refresh is already in flight
         guard !isRefreshing else { return }
         isRefreshing = true
@@ -78,17 +72,11 @@ final class SwarmOverviewViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            overview = try await apiClient.getProjectOverview(projectId: projectId)
+            overview = try await apiClient.getGlobalOverview()
             errorMessage = nil
             lastSuccessfulRefresh = Date()
         } catch {
-            // On first load, show the error immediately
-            // On subsequent loads, keep stale data visible with a banner
-            if isFirstLoad {
-                errorMessage = userFriendlyMessage(for: error)
-            } else {
-                errorMessage = userFriendlyMessage(for: error)
-            }
+            errorMessage = userFriendlyMessage(for: error)
         }
     }
 
@@ -112,15 +100,18 @@ final class SwarmOverviewViewModel: ObservableObject {
 
     // MARK: - Agent Spawning
 
-    /// Spawn a new agent for the active project.
+    /// Spawn a new agent.
     /// - Parameter callsign: Optional callsign name; nil for random assignment.
     func startAgent(callsign: String? = nil) async {
-        guard let projectPath = activeProjectPath else {
-            errorMessage = "No active project"
+        // Use the first active project path for spawning, if available
+        guard let projectPath = overview?.projects.first(where: { $0.active })?.path
+                ?? overview?.projects.first?.path else {
+            errorMessage = "No projects available"
             return
         }
 
         // Agent spawning removed — API no longer supports this
+        _ = projectPath
         errorMessage = "Agent spawning is not available in this deployment mode"
     }
 
@@ -140,43 +131,6 @@ final class SwarmOverviewViewModel: ObservableObject {
             await refresh()
         } catch {
             errorMessage = "Broadcast failed: \(error.localizedDescription)"
-        }
-    }
-
-    // MARK: - Helpers
-
-    /// The active project ID from the overview data or fetched from API.
-    private var activeProjectId: String? {
-        if let id = overview?.project.id {
-            return id
-        }
-        // Fall back to fetching projects — the overview itself needs an ID
-        // We'll use a cached approach: try to get from the last known overview,
-        // or fall back to fetching projects list synchronously isn't possible,
-        // so we store it after first successful fetch.
-        return _cachedProjectId
-    }
-
-    /// The active project path for spawning agents.
-    private var activeProjectPath: String? {
-        overview?.project.path
-    }
-
-    /// Cached project ID set during initial load.
-    private var _cachedProjectId: String?
-
-    /// Bootstrap: fetch the active project ID if we don't have one yet.
-    func loadActiveProject() async {
-        guard _cachedProjectId == nil else { return }
-        do {
-            let projects = try await apiClient.getProjects()
-            if let active = projects.first(where: { $0.active }) {
-                _cachedProjectId = active.id
-            } else if let first = projects.first {
-                _cachedProjectId = first.id
-            }
-        } catch {
-            // Will surface as "No active project" on refresh
         }
     }
 
