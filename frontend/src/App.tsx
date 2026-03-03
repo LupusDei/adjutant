@@ -16,7 +16,33 @@ import { ProposalsView } from "./components/proposals/ProposalsView";
 import { TimelineView } from "./components/timeline/TimelineView";
 import { useUnreadCounts } from "./hooks/useUnreadCounts";
 
-export type ThemeId = 'green' | 'red' | 'blue' | 'tan' | 'pink' | 'purple';
+export type ThemeId = 'pipboy' | 'document' | 'starcraft' | 'friendly';
+
+/** Theme configuration — matches iOS CRTTheme.ColorTheme */
+export interface ThemeConfig {
+  id: ThemeId;
+  label: string;
+  crtEffects: boolean;
+}
+
+export const THEME_CONFIGS: Record<ThemeId, ThemeConfig> = {
+  pipboy:    { id: 'pipboy',    label: 'PIP-BOY',    crtEffects: true },
+  document:  { id: 'document',  label: 'DOCUMENT',   crtEffects: false },
+  starcraft: { id: 'starcraft', label: 'STARCRAFT',  crtEffects: true },
+  friendly:  { id: 'friendly',  label: 'FRIENDLY',   crtEffects: false },
+};
+
+/** Migrate legacy theme values from old color-based system */
+function migrateTheme(stored: string | null): ThemeId {
+  if (!stored) return 'pipboy';
+  if (stored in THEME_CONFIGS) return stored as ThemeId;
+  // Legacy color names → pipboy (they were all CRT color variants)
+  const legacyMap: Record<string, ThemeId> = {
+    green: 'pipboy', red: 'pipboy', blue: 'pipboy',
+    tan: 'pipboy', pink: 'pipboy', purple: 'pipboy',
+  };
+  return legacyMap[stored] ?? 'pipboy';
+}
 
 type TabId = "dashboard" | "chat" | "epics" | "crew" | "beads" | "timeline" | "proposals" | "settings";
 
@@ -58,8 +84,9 @@ function AppContent() {
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
   const [chatRecipient, setChatRecipient] = useState('');
   const [theme, setTheme] = useState<ThemeId>(
-    (localStorage.getItem('gt-theme') as ThemeId | null) ?? 'green'
+    () => migrateTheme(localStorage.getItem('gt-theme'))
   );
+  const themeConfig = THEME_CONFIGS[theme];
   const isSmallScreen = useIsSmallScreen();
   const { totalUnread } = useUnreadCounts();
 
@@ -70,7 +97,7 @@ function AppContent() {
   }, [theme]);
 
   return (
-    <CRTScreen showBootSequence={true} enableFlicker={true} enableScanlines={true} enableNoise={true}>
+    <CRTScreen showBootSequence={true} enableFlicker={themeConfig.crtEffects} enableScanlines={themeConfig.crtEffects} enableNoise={themeConfig.crtEffects}>
       <div className="app-container">
         <header className="app-header">
           <h1 className="crt-glow">ADJUTANT</h1>

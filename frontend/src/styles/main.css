@@ -32,9 +32,9 @@
   --color-pipboy-panel: #030803;
   --color-pipboy-panel-border: var(--crt-phosphor-dim);
 
-  /* Fonts - VT323 for authentic terminal look */
-  --font-mono: "VT323", "Share Tech Mono", "Courier New", monospace;
-  --font-display: "Orbitron", "Share Tech Mono", monospace;
+  /* Fonts - use theme-aware fonts with CRT fallback */
+  --font-mono: var(--theme-font, "VT323", "Share Tech Mono", "Courier New", monospace);
+  --font-display: var(--theme-font-display, "Orbitron", "Share Tech Mono", monospace);
 
   /* Shadows with dynamic phosphor glow */
   --shadow-pipboy: 0 0 8px var(--crt-phosphor-glow), 0 0 16px var(--crt-phosphor-bloom);
@@ -49,23 +49,30 @@
 @layer base {
   html {
     font-family: var(--font-mono);
-    background-color: var(--color-pipboy-bg);
-    color: var(--color-pipboy-green);
+    background-color: var(--theme-bg-screen, var(--color-pipboy-bg));
+    color: var(--theme-text-primary, var(--color-pipboy-green));
     font-size: 18px; /* Larger for VT323 readability */
     -webkit-font-smoothing: none; /* Crisp pixel edges */
     -moz-osx-font-smoothing: grayscale;
+    color-scheme: var(--theme-color-scheme, dark);
+  }
+
+  /* Non-CRT themes: use standard font smoothing */
+  html[data-theme='document'],
+  html[data-theme='friendly'] {
+    -webkit-font-smoothing: antialiased;
+    font-size: 16px;
   }
 
   body {
     min-height: 100vh;
-    background-color: var(--color-pipboy-bg);
-    /* Remove default scanlines - CRTScreen handles this now */
+    background-color: var(--theme-bg-screen, var(--color-pipboy-bg));
   }
 
   /* Selection colors */
   ::selection {
-    background-color: var(--color-pipboy-green);
-    color: var(--color-pipboy-bg);
+    background-color: var(--theme-accent, var(--color-pipboy-green));
+    color: var(--theme-bg-screen, var(--color-pipboy-bg));
   }
 
   /* Scrollbar styling */
@@ -75,16 +82,16 @@
   }
 
   ::-webkit-scrollbar-track {
-    background: var(--color-pipboy-bg-light);
+    background: var(--theme-bg-panel, var(--color-pipboy-bg-light));
   }
 
   ::-webkit-scrollbar-thumb {
-    background: var(--color-pipboy-green-dim);
+    background: var(--theme-border-color, var(--color-pipboy-green-dim));
     border-radius: 4px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-pipboy-green);
+    background: var(--theme-text-primary, var(--color-pipboy-green));
   }
 }
 
@@ -103,8 +110,8 @@
     border: 1px solid var(--color-pipboy-green-dim);
     color: var(--color-pipboy-green);
     padding: 0.5rem 1rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    text-transform: var(--theme-text-transform, uppercase);
+    letter-spacing: var(--theme-label-spacing, 0.05em);
     transition: all 0.15s ease;
   }
 
@@ -216,7 +223,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 0.75rem 1rem;
-    border-bottom: 2px solid var(--crt-phosphor-dim);
+    border-bottom: 2px solid var(--theme-border-color, var(--crt-phosphor-dim));
     position: relative;
     flex-shrink: 0;
   }
@@ -243,9 +250,9 @@
     font-family: var(--font-display);
     font-size: 1rem;
     font-weight: 500;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: var(--color-pipboy-green-bright);
+    letter-spacing: var(--theme-letter-spacing, 0.15em);
+    text-transform: var(--theme-text-transform, uppercase);
+    color: var(--crt-phosphor-bright, var(--color-pipboy-green-bright));
     text-shadow:
       0 0 4px var(--color-pipboy-green),
       0 0 8px var(--color-pipboy-green),
@@ -253,6 +260,15 @@
       0 0 32px var(--color-pipboy-green-glow);
     margin: 0;
     animation: header-glow 3s ease-in-out infinite;
+  }
+
+  /* Non-CRT themes: no glow animation on header */
+  [data-theme='document'] .app-header h1,
+  [data-theme='friendly'] .app-header h1 {
+    text-shadow: none;
+    animation: none;
+    font-weight: 700;
+    color: var(--theme-text-primary);
   }
 
   @keyframes header-glow {
@@ -282,15 +298,15 @@
 
   .nav-tab {
     background: rgba(0, 0, 0, 0.4);
-    border: 2px solid var(--crt-phosphor-dim);
+    border: 2px solid var(--theme-border-color, var(--crt-phosphor-dim));
     border-radius: 2px;
-    color: var(--crt-phosphor-dim);
+    color: var(--theme-text-secondary, var(--crt-phosphor-dim));
     padding: 0.75rem 2.5rem;
     font-family: var(--font-display);
     font-size: 1rem;
     font-weight: 600;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
+    letter-spacing: var(--theme-letter-spacing, 0.15em);
+    text-transform: var(--theme-text-transform, uppercase);
     cursor: pointer;
     transition: all 0.2s ease;
     position: relative;
@@ -331,6 +347,37 @@
       0 0 15px var(--crt-phosphor-bloom),
       inset 0 1px 0 rgba(255, 255, 255, 0.2);
     text-shadow: 0 0 8px var(--crt-phosphor-glow);
+  }
+
+  /* Non-CRT themes: clean tab styling */
+  [data-theme='document'] .nav-tab,
+  [data-theme='friendly'] .nav-tab {
+    background: var(--theme-bg-panel);
+    border-color: var(--theme-border-color);
+    color: var(--theme-text-secondary);
+    border-radius: 6px;
+  }
+
+  [data-theme='document'] .nav-tab:hover,
+  [data-theme='friendly'] .nav-tab:hover {
+    border-color: var(--theme-accent);
+    color: var(--theme-text-primary);
+    background: var(--theme-bg-elevated);
+    box-shadow: none;
+  }
+
+  [data-theme='document'] .nav-tab::before,
+  [data-theme='friendly'] .nav-tab::before {
+    display: none;
+  }
+
+  [data-theme='document'] .nav-tab.active,
+  [data-theme='friendly'] .nav-tab.active {
+    background: var(--theme-accent);
+    border-color: var(--theme-accent);
+    color: #FFFFFF;
+    box-shadow: none;
+    text-shadow: none;
   }
 
   .nav-tab:active {

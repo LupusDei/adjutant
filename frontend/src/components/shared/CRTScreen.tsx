@@ -51,8 +51,10 @@ export function CRTScreen({
     setTimeout(() => { setIsBooting(false); }, 1500);
   }, [showBootSequence]);
 
+  const hasCrtEffects = enableFlicker || enableScanlines || enableNoise;
+
   return (
-    <div className="crt-monitor">
+    <div className={`crt-monitor ${!hasCrtEffects ? 'crt-no-effects' : ''}`}>
       {/* Outer monitor bezel */}
       <div className="crt-bezel">
         {/* Screen glass with curvature */}
@@ -78,10 +80,10 @@ export function CRTScreen({
             {enableNoise && <div className="crt-noise" />}
 
             {/* Vignette effect */}
-            <div className="crt-vignette" />
+            {hasCrtEffects && <div className="crt-vignette" />}
 
             {/* Screen reflection/glare */}
-            <div className="crt-glare" />
+            {hasCrtEffects && <div className="crt-glare" />}
           </div>
         </div>
       </div>

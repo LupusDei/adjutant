@@ -7,7 +7,7 @@
    Color Variables - Authentic Phosphor Colors
    ============================================ */
 :root {
-  /* Default Theme (Green) */
+  /* Default Theme: Pip-Boy (Green CRT) */
   --theme-primary-rgb: 32, 194, 14;
   --theme-primary: rgb(var(--theme-primary-rgb));
   --theme-bright: #33FF33;
@@ -35,51 +35,125 @@
   --crt-bezel: #1a1a18;
   --crt-bezel-highlight: #2a2a26;
   --crt-bezel-shadow: #0a0a08;
+
+  /* Theme behavior defaults (CRT on) */
+  --theme-bg-screen: #020502;
+  --theme-bg-panel: #040A04;
+  --theme-bg-elevated: #060F06;
+  --theme-font: 'VT323', 'Share Tech Mono', 'Courier New', monospace;
+  --theme-font-display: 'Orbitron', 'Share Tech Mono', monospace;
+  --theme-text-transform: uppercase;
+  --theme-letter-spacing: 0.15em;
+  --theme-label-spacing: 0.1em;
+  --theme-color-scheme: dark;
+  --theme-border-color: var(--theme-dim);
+  --theme-text-primary: var(--theme-primary);
+  --theme-text-secondary: var(--theme-dim);
+  --theme-accent: var(--theme-primary);
+
+  /* Friendly palette (only used by friendly theme) */
+  --friendly-blue: #4185F4;
+  --friendly-red: #EA4E35;
+  --friendly-yellow: #FBBC05;
+  --friendly-green: #34A853;
+  --friendly-purple: #AC58D8;
+  --friendly-orange: #FF6F42;
 }
 
-[data-theme='red'] {
-  --theme-primary-rgb: 255, 51, 51;
-  --theme-primary: rgb(var(--theme-primary-rgb));
-  --theme-bright: #FF6666;
-  --theme-dim: #880000;
-  --theme-glow: rgba(var(--theme-primary-rgb), 0.6);
-  --theme-bloom: rgba(var(--theme-primary-rgb), 0.2);
+/* ============================================
+   Document Theme — Clean, professional
+   ============================================ */
+[data-theme='document'] {
+  --theme-primary-rgb: 17, 17, 17;
+  --theme-primary: #111111;
+  --theme-bright: #000000;
+  --theme-dim: #767676;
+  --theme-glow: transparent;
+  --theme-bloom: transparent;
+
+  --crt-bg: #FAFAF8;
+  --crt-bg-active: #FFFFFF;
+  --crt-bezel: #E8E8E4;
+  --crt-bezel-highlight: #F0F0EC;
+  --crt-bezel-shadow: #D8D8D4;
+
+  --theme-bg-screen: #FAFAF8;
+  --theme-bg-panel: #FFFFFF;
+  --theme-bg-elevated: #F0F0EE;
+  --theme-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --theme-font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --theme-text-transform: none;
+  --theme-letter-spacing: normal;
+  --theme-label-spacing: 0.02em;
+  --theme-color-scheme: light;
+  --theme-border-color: #D4D4D4;
+  --theme-text-primary: #111111;
+  --theme-text-secondary: #767676;
+  --theme-accent: #2563EB;
 }
 
-[data-theme='blue'] {
-  --theme-primary-rgb: 0, 170, 255;
-  --theme-primary: rgb(var(--theme-primary-rgb));
-  --theme-bright: #33CCFF;
-  --theme-dim: #004488;
-  --theme-glow: rgba(var(--theme-primary-rgb), 0.6);
-  --theme-bloom: rgba(var(--theme-primary-rgb), 0.2);
+/* ============================================
+   StarCraft Theme — Sci-fi electric
+   ============================================ */
+[data-theme='starcraft'] {
+  --theme-primary-rgb: 0, 255, 213;
+  --theme-primary: #00FFD5;
+  --theme-bright: #66FFEC;
+  --theme-dim: #007766;
+  --theme-glow: rgba(0, 255, 213, 0.6);
+  --theme-bloom: rgba(0, 255, 213, 0.2);
+
+  --crt-bg: #04041A;
+  --crt-bg-active: #08082E;
+  --crt-bezel: #0C0820;
+  --crt-bezel-highlight: #1A1040;
+  --crt-bezel-shadow: #040210;
+
+  --theme-bg-screen: #04041A;
+  --theme-bg-panel: #0C0820;
+  --theme-bg-elevated: #160E30;
+  --theme-font: 'VT323', 'Share Tech Mono', 'Courier New', monospace;
+  --theme-font-display: 'Orbitron', 'Share Tech Mono', monospace;
+  --theme-text-transform: uppercase;
+  --theme-letter-spacing: 0.15em;
+  --theme-label-spacing: 0.1em;
+  --theme-color-scheme: dark;
+  --theme-border-color: #007766;
+  --theme-text-primary: #00FFD5;
+  --theme-text-secondary: #007766;
+  --theme-accent: #00FFD5;
 }
 
-[data-theme='tan'] {
-  --theme-primary-rgb: 210, 180, 140;
-  --theme-primary: rgb(var(--theme-primary-rgb));
-  --theme-bright: #F5DEB3;
-  --theme-dim: #8B4513;
-  --theme-glow: rgba(var(--theme-primary-rgb), 0.6);
-  --theme-bloom: rgba(var(--theme-primary-rgb), 0.2);
-}
+/* ============================================
+   Friendly Theme — Playful, multi-color
+   ============================================ */
+[data-theme='friendly'] {
+  --theme-primary-rgb: 88, 86, 214;
+  --theme-primary: #5856D6;
+  --theme-bright: #4185F4;
+  --theme-dim: #878B91;
+  --theme-glow: transparent;
+  --theme-bloom: transparent;
 
-[data-theme='pink'] {
-  --theme-primary-rgb: 255, 105, 180;
-  --theme-primary: rgb(var(--theme-primary-rgb));
-  --theme-bright: #FFB6C1;
-  --theme-dim: #C71585;
-  --theme-glow: rgba(var(--theme-primary-rgb), 0.6);
-  --theme-bloom: rgba(var(--theme-primary-rgb), 0.2);
-}
+  --crt-bg: #F8F7F6;
+  --crt-bg-active: #FFFFFF;
+  --crt-bezel: #EEEDEB;
+  --crt-bezel-highlight: #F5F4F2;
+  --crt-bezel-shadow: #E0DFDD;
 
-[data-theme='purple'] {
-  --theme-primary-rgb: 191, 148, 255;
-  --theme-primary: rgb(var(--theme-primary-rgb));
-  --theme-bright: #DABFFF;
-  --theme-dim: #6A0DAD;
-  --theme-glow: rgba(var(--theme-primary-rgb), 0.6);
-  --theme-bloom: rgba(var(--theme-primary-rgb), 0.2);
+  --theme-bg-screen: #F8F7F6;
+  --theme-bg-panel: #FFFFFF;
+  --theme-bg-elevated: #F3F2F0;
+  --theme-font: ui-rounded, 'SF Pro Rounded', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --theme-font-display: ui-rounded, 'SF Pro Rounded', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --theme-text-transform: none;
+  --theme-letter-spacing: normal;
+  --theme-label-spacing: 0.02em;
+  --theme-color-scheme: light;
+  --theme-border-color: #D8D6D4;
+  --theme-text-primary: #222222;
+  --theme-text-secondary: #6D6D6D;
+  --theme-accent: #4185F4;
 }
 
 /* ============================================
@@ -446,6 +520,116 @@
 
 .crt-glow {
   animation: chromatic-shift 4s ease-in-out infinite;
+}
+
+/* ============================================
+   Non-CRT Theme Overrides
+   Strips CRT effects for Document & Friendly
+   ============================================ */
+
+/* When CRT effects are off, flatten the monitor structure */
+.crt-no-effects .crt-monitor,
+[data-theme='document'] .crt-monitor,
+[data-theme='friendly'] .crt-monitor {
+  background: var(--theme-bg-screen);
+  padding: 0;
+}
+
+.crt-no-effects .crt-bezel,
+[data-theme='document'] .crt-bezel,
+[data-theme='friendly'] .crt-bezel {
+  background: var(--theme-bg-screen);
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+.crt-no-effects .crt-bezel::before,
+.crt-no-effects .crt-bezel::after,
+[data-theme='document'] .crt-bezel::before,
+[data-theme='document'] .crt-bezel::after,
+[data-theme='friendly'] .crt-bezel::before,
+[data-theme='friendly'] .crt-bezel::after {
+  display: none;
+}
+
+.crt-no-effects .crt-glass,
+[data-theme='document'] .crt-glass,
+[data-theme='friendly'] .crt-glass {
+  background: var(--theme-bg-screen);
+  box-shadow: none;
+  border: none;
+  border-radius: 0;
+}
+
+.crt-no-effects .crt-glass::after,
+[data-theme='document'] .crt-glass::after,
+[data-theme='friendly'] .crt-glass::after {
+  display: none;
+}
+
+.crt-no-effects .crt-phosphor,
+[data-theme='document'] .crt-phosphor,
+[data-theme='friendly'] .crt-phosphor {
+  filter: none;
+}
+
+.crt-no-effects .crt-content,
+[data-theme='document'] .crt-content,
+[data-theme='friendly'] .crt-content {
+  font-family: var(--theme-font);
+  color: var(--theme-text-primary);
+}
+
+/* Disable all overlay effects for non-CRT themes */
+.crt-no-effects .crt-scanlines,
+.crt-no-effects .crt-scan-bar,
+.crt-no-effects .crt-noise,
+.crt-no-effects .crt-vignette,
+.crt-no-effects .crt-glare,
+[data-theme='document'] .crt-scanlines,
+[data-theme='document'] .crt-scan-bar,
+[data-theme='document'] .crt-noise,
+[data-theme='document'] .crt-vignette,
+[data-theme='document'] .crt-glare,
+[data-theme='friendly'] .crt-scanlines,
+[data-theme='friendly'] .crt-scan-bar,
+[data-theme='friendly'] .crt-noise,
+[data-theme='friendly'] .crt-vignette,
+[data-theme='friendly'] .crt-glare {
+  display: none !important;
+}
+
+/* Disable flicker animation for non-CRT themes */
+[data-theme='document'] .crt-flicker-active,
+[data-theme='friendly'] .crt-flicker-active {
+  animation: none;
+}
+
+/* Disable chromatic aberration glow for non-CRT themes */
+[data-theme='document'] .crt-glow,
+[data-theme='friendly'] .crt-glow {
+  animation: none;
+  text-shadow: none;
+}
+
+/* Boot sequence adapts to theme */
+[data-theme='document'] .boot-sequence,
+[data-theme='friendly'] .boot-sequence {
+  color: var(--theme-text-primary);
+}
+
+[data-theme='document'] .boot-line,
+[data-theme='friendly'] .boot-line {
+  text-shadow: none;
+  text-transform: var(--theme-text-transform);
+  letter-spacing: var(--theme-letter-spacing);
+}
+
+[data-theme='document'] .boot-ready,
+[data-theme='friendly'] .boot-ready {
+  color: var(--theme-accent);
+  text-shadow: none;
 }
 
 /* ============================================

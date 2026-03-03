@@ -19,6 +19,7 @@ import type {
   ProjectHealth,
 } from '../types';
 import type { DashboardResponse } from '../types/dashboard';
+import type { ProjectOverview } from '../types/overview';
 import type {
   SynthesizeRequest,
   SynthesizeResponse,
@@ -392,6 +393,10 @@ export const api = {
 
     async activate(id: string): Promise<ProjectInfo> {
       return apiFetch(`/projects/${encodeURIComponent(id)}/activate`, { method: 'POST' });
+    },
+
+    async getOverview(id: string): Promise<ProjectOverview> {
+      return apiFetch(`/projects/${encodeURIComponent(id)}/overview`);
     },
   },
 

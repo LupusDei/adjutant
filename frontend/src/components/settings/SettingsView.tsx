@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, type CSSProperties } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { ThemeId } from '../../App';
+import { ThemeId, THEME_CONFIGS } from '../../App';
 import { NotificationSettings, VoiceConfigPanel } from '../voice';
 import { setApiKey, clearApiKey, hasApiKey } from '../../services/api';
 import { useCommunication } from '../../contexts/CommunicationContext';
@@ -24,15 +24,33 @@ interface ThemeOption {
   id: ThemeId;
   label: string;
   color: string;
+  description: string;
+  previewBg: string;
+  previewText: string;
+  crtEffects: boolean;
 }
 
 const THEMES: ThemeOption[] = [
-  { id: 'green', label: 'GAS-BOY', color: '#20C20E' },
-  { id: 'red', label: 'BLOOD-BAG', color: '#FF3333' },
-  { id: 'blue', label: 'VAULT-TEC', color: '#00AAFF' },
-  { id: 'tan', label: 'WASTELAND', color: '#D2B48C' },
-  { id: 'pink', label: 'PINK-MIST', color: '#FF69B4' },
-  { id: 'purple', label: 'RAD-STORM', color: '#BF94FF' },
+  {
+    id: 'pipboy', label: 'PIP-BOY', color: '#20C20E',
+    description: 'Retro CRT terminal',
+    previewBg: '#020502', previewText: '#20C20E', crtEffects: true,
+  },
+  {
+    id: 'document', label: 'DOCUMENT', color: '#111111',
+    description: 'Clean & professional',
+    previewBg: '#FAFAF8', previewText: '#111111', crtEffects: false,
+  },
+  {
+    id: 'starcraft', label: 'STARCRAFT', color: '#00FFD5',
+    description: 'Sci-fi electric',
+    previewBg: '#04041A', previewText: '#00FFD5', crtEffects: true,
+  },
+  {
+    id: 'friendly', label: 'FRIENDLY', color: '#5856D6',
+    description: 'Playful & colorful',
+    previewBg: '#F8F7F6', previewText: '#5856D6', crtEffects: false,
+  },
 ];
 
 interface PriorityOption {
@@ -491,29 +509,69 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
         <section style={styles.section}>
           <h2 style={styles.sectionTitle}>SYSTEM THEME</h2>
           <div style={styles.themeGrid}>
-            {THEMES.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                style={{
-                  ...styles.themeButton,
-                  borderColor: theme === t.id ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)',
-                  borderWidth: theme === t.id ? '2px' : '1px',
-                  padding: theme === t.id ? '7px' : '8px',
-                  backgroundColor: 'transparent',
-                  boxShadow: theme === t.id ? '0 0 8px var(--crt-phosphor-glow)' : 'none',
-                }}
-                onClick={() => { setTheme(t.id); }}
-              >
-                <div style={{ ...styles.themePreview, backgroundColor: t.color }} />
-                <span style={{
-                  ...styles.themeLabel,
-                  color: theme === t.id ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)'
-                }}>
-                  {t.label}
-                </span>
-              </button>
-            ))}
+            {THEMES.map((t) => {
+              const isActive = theme === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  style={{
+                    ...styles.themeCard,
+                    borderColor: isActive ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)',
+                    borderWidth: isActive ? '2px' : '1px',
+                    boxShadow: isActive && THEME_CONFIGS[theme].crtEffects
+                      ? '0 0 12px var(--crt-phosphor-glow)'
+                      : isActive ? `0 0 0 2px ${t.color}33` : 'none',
+                  }}
+                  onClick={() => { setTheme(t.id); }}
+                >
+                  {/* Mini preview window */}
+                  <div style={{
+                    ...styles.themePreviewWindow,
+                    backgroundColor: t.previewBg,
+                    borderColor: t.crtEffects ? `${t.color}44` : '#D4D4D4',
+                  }}>
+                    {/* Scanline overlay for CRT themes */}
+                    {t.crtEffects && (
+                      <div style={{
+                        position: 'absolute',
+                        inset: 0,
+                        background: 'repeating-linear-gradient(0deg, transparent 0px, transparent 1px, rgba(0,0,0,0.15) 1px, rgba(0,0,0,0.15) 2px)',
+                        pointerEvents: 'none',
+                        borderRadius: '3px',
+                      } as CSSProperties} />
+                    )}
+                    {/* Preview text lines */}
+                    <div style={{ color: t.previewText, fontSize: '0.55rem', fontFamily: t.crtEffects ? 'monospace' : 'sans-serif', lineHeight: 1.4, position: 'relative', zIndex: 1 }}>
+                      <div style={{ fontWeight: 'bold', textTransform: t.crtEffects ? 'uppercase' : 'none', letterSpacing: t.crtEffects ? '0.1em' : 'normal' }}>
+                        {t.id === 'pipboy' && '> SYSTEM READY_'}
+                        {t.id === 'document' && 'Adjutant'}
+                        {t.id === 'starcraft' && '// NEXUS ONLINE'}
+                        {t.id === 'friendly' && 'Hello!'}
+                      </div>
+                      <div style={{ opacity: 0.5, marginTop: '2px' }}>
+                        {t.id === 'pipboy' && 'ADJUTANT v52.5'}
+                        {t.id === 'document' && 'Clean interface'}
+                        {t.id === 'starcraft' && 'TEAL PROTOCOL'}
+                        {t.id === 'friendly' && 'Colorful & fun'}
+                      </div>
+                    </div>
+                  </div>
+                  {/* Label + description */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <span style={{
+                      ...styles.themeLabel,
+                      color: isActive ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)',
+                    }}>
+                      {t.label}
+                    </span>
+                    <span style={{ fontSize: '0.6rem', color: 'var(--crt-phosphor-dim)', opacity: 0.7 }}>
+                      {t.description}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </section>
 
@@ -852,28 +910,32 @@ const styles = {
 
   themeGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
     gap: '12px',
   },
 
-  themeButton: {
+  themeCard: {
     display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
+    flexDirection: 'column',
+    gap: '8px',
     padding: '8px',
     border: '1px solid',
     borderRadius: '4px',
     cursor: 'pointer',
     transition: 'all 0.2s ease',
     background: 'transparent',
+    textAlign: 'left',
   } as CSSProperties,
 
-  themePreview: {
-    width: '20px',
-    height: '20px',
-    borderRadius: '2px',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-  },
+  themePreviewWindow: {
+    width: '100%',
+    height: '48px',
+    borderRadius: '3px',
+    border: '1px solid',
+    padding: '6px 8px',
+    overflow: 'hidden',
+    position: 'relative',
+  } as CSSProperties,
 
   themeLabel: {
     fontSize: '0.8rem',

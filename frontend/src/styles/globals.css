@@ -42,21 +42,21 @@
     --pipboy-green-bright: var(--crt-phosphor-bright);
     --pipboy-green-glow: var(--crt-phosphor-glow);
 
-    /* Background Colors */
-    --pipboy-bg: #0a0a0a;
-    --pipboy-bg-panel: #0d1a0d;
-    --pipboy-bg-input: #050805;
+    /* Background Colors — theme-aware */
+    --pipboy-bg: var(--theme-bg-screen, #0a0a0a);
+    --pipboy-bg-panel: var(--theme-bg-panel, #0d1a0d);
+    --pipboy-bg-input: var(--theme-bg-elevated, #050805);
 
-    /* Text Colors */
-    --pipboy-text: var(--crt-phosphor);
-    --pipboy-text-dim: var(--crt-phosphor-dim);
+    /* Text Colors — theme-aware */
+    --pipboy-text: var(--theme-text-primary, var(--crt-phosphor));
+    --pipboy-text-dim: var(--theme-text-secondary, var(--crt-phosphor-dim));
     --pipboy-text-bright: var(--crt-phosphor-bright);
 
     /* Accent Colors */
     --pipboy-amber: #fe9614;
     --pipboy-red: #fe1414;
 
-    font-family: var(--font-mono);
+    font-family: var(--theme-font, var(--font-mono));
     background-color: var(--pipboy-bg);
     color: var(--pipboy-text);
     min-height: 100vh;
@@ -241,14 +241,14 @@
    Button Styles
    ============================================ */
 .pipboy-button {
-  font-family: var(--font-mono);
+  font-family: var(--theme-font, var(--font-mono));
   background: transparent;
   border: 2px solid var(--pipboy-green);
   color: var(--pipboy-text);
   padding: 0.5rem 1rem;
   cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  text-transform: var(--theme-text-transform, uppercase);
+  letter-spacing: var(--theme-label-spacing, 0.1em);
   transition: all 0.15s ease;
   position: relative;
 }
@@ -306,11 +306,54 @@
 }
 
 .pipboy-panel-header {
-  border-bottom: 1px solid var(--pipboy-green-dim);
+  border-bottom: 1px solid var(--theme-border-color, var(--pipboy-green-dim));
   padding-bottom: 0.5rem;
   margin-bottom: 1rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  text-transform: var(--theme-text-transform, uppercase);
+  letter-spacing: var(--theme-label-spacing, 0.1em);
+}
+
+/* Non-CRT theme overrides: disable all glow effects */
+[data-theme='document'] .text-glow,
+[data-theme='document'] .text-glow-bright,
+[data-theme='document'] .text-glow-dim,
+[data-theme='friendly'] .text-glow,
+[data-theme='friendly'] .text-glow-bright,
+[data-theme='friendly'] .text-glow-dim {
+  text-shadow: none;
+}
+
+[data-theme='document'] .pipboy-button:hover,
+[data-theme='friendly'] .pipboy-button:hover {
+  background: var(--theme-accent);
+  color: #FFFFFF;
+  border-color: var(--theme-accent);
+  box-shadow: none;
+}
+
+[data-theme='document'] .pipboy-panel,
+[data-theme='friendly'] .pipboy-panel {
+  background: var(--theme-bg-panel);
+  border-color: var(--theme-border-color);
+}
+
+[data-theme='document'] .pipboy-input,
+[data-theme='friendly'] .pipboy-input {
+  background: var(--theme-bg-panel);
+  border-color: var(--theme-border-color);
+  color: var(--theme-text-primary);
+}
+
+[data-theme='document'] .pipboy-input:focus,
+[data-theme='friendly'] .pipboy-input:focus {
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 2px rgba(var(--theme-primary-rgb, 0, 0, 0), 0.2);
+}
+
+[data-theme='document'] a:hover,
+[data-theme='friendly'] a:hover {
+  text-shadow: none;
+  color: var(--theme-accent);
 }
 
 /* ============================================
@@ -347,10 +390,10 @@
    ============================================ */
 @layer base {
   h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-display);
+    font-family: var(--theme-font-display, var(--font-display));
     color: var(--pipboy-text);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    text-transform: var(--theme-text-transform, uppercase);
+    letter-spacing: var(--theme-label-spacing, 0.05em);
   }
 
   h1 { font-size: 2rem; }
