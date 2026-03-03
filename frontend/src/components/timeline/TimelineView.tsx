@@ -179,7 +179,7 @@ const styles = {
     flexDirection: 'column',
     height: '100%',
     width: '100%',
-    backgroundColor: '#0A0A0A',
+    backgroundColor: 'var(--theme-bg-screen)',
     border: '1px solid var(--crt-phosphor-dim)',
   },
   header: {

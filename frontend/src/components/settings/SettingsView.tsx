@@ -637,7 +637,7 @@ const colors = {
   primary: 'var(--crt-phosphor)',
   primaryDim: 'var(--crt-phosphor-dim)',
   primaryGlow: 'var(--crt-phosphor-glow)',
-  background: '#0A0A0A',
+  background: 'var(--theme-bg-screen)',
   amber: 'var(--crt-amber)',
   red: '#FF4444',
 } as const;

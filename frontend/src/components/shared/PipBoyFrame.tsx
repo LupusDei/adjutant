@@ -77,8 +77,8 @@ const colors = {
   primary: 'var(--crt-phosphor)',      // Classic Pip-Boy green
   primaryDim: 'var(--crt-phosphor-dim)',   // Dimmed green for borders
   primaryGlow: 'var(--crt-phosphor-glow)', // Green with transparency for glow
-  background: '#0A0A0A',   // Near-black background
-  backgroundDark: '#050505', // Darker background for depth
+  background: 'var(--theme-bg-screen)',   // Theme-aware background
+  backgroundDark: 'var(--theme-bg-elevated)', // Theme-aware elevated background
   error: '#FF6B35',        // Amber-orange for errors (CRT warning color)
   errorGlow: '#FF6B3560',  // Error glow with transparency
 } as const;

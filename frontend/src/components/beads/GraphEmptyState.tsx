@@ -54,7 +54,7 @@ const styles = {
     justifyContent: 'center',
     height: '100%',
     width: '100%',
-    backgroundColor: '#0a0a0a',
+    backgroundColor: 'var(--theme-bg-screen)',
   } satisfies CSSProperties,
 
   inner: {
@@ -64,9 +64,9 @@ const styles = {
     alignItems: 'center',
     gap: '12px',
     padding: '32px 40px',
-    border: '1px solid #00550044',
+    border: '1px solid var(--crt-phosphor-dim)',
     borderRadius: '2px',
-    backgroundColor: '#0d0d0d',
+    backgroundColor: 'var(--theme-bg-elevated)',
     boxShadow: 'inset 0 0 30px rgba(0, 170, 0, 0.03)',
     overflow: 'hidden',
   } satisfies CSSProperties,
@@ -82,7 +82,7 @@ const styles = {
   message: {
     fontFamily: '"Share Tech Mono", "Courier New", monospace',
     fontSize: '0.9rem',
-    color: '#00aa00',
+    color: 'var(--crt-phosphor-dim)',
     letterSpacing: '0.15em',
     textTransform: 'uppercase',
     textShadow: '0 0 6px rgba(0, 170, 0, 0.3)',

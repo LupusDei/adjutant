@@ -394,7 +394,7 @@
     line-height: 16px;
     text-align: center;
     background-color: var(--crt-phosphor);
-    color: #0a0a0a;
+    color: var(--theme-bg-screen);
     border-radius: 2px;
     vertical-align: middle;
   }

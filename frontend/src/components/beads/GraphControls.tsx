@@ -103,8 +103,8 @@ const styles = {
     flexDirection: 'column',
     gap: '6px',
     padding: '8px',
-    backgroundColor: '#0a0a0aee',
-    border: '1px solid #00aa0066',
+    backgroundColor: 'var(--theme-bg-screen)',
+    border: '1px solid var(--crt-phosphor-dim)',
     borderRadius: '2px',
     boxShadow: '0 0 8px rgba(0, 170, 0, 0.1)',
     fontFamily: '"Share Tech Mono", monospace',
@@ -120,16 +120,16 @@ const styles = {
 
   label: {
     fontSize: '0.6rem',
-    color: '#00aa00',
+    color: 'var(--crt-phosphor-dim)',
     letterSpacing: '0.1em',
     whiteSpace: 'nowrap',
   } satisfies CSSProperties,
 
   select: {
     flex: 1,
-    backgroundColor: '#050505',
-    color: '#00ff00',
-    border: '1px solid #00aa0066',
+    backgroundColor: 'var(--theme-bg-elevated)',
+    color: 'var(--crt-phosphor)',
+    border: '1px solid var(--crt-phosphor-dim)',
     fontFamily: '"Share Tech Mono", monospace',
     fontSize: '0.65rem',
     padding: '2px 4px',
@@ -140,8 +140,8 @@ const styles = {
 
   button: {
     background: 'transparent',
-    border: '1px solid #00aa0066',
-    color: '#00aa00',
+    border: '1px solid var(--crt-phosphor-dim)',
+    color: 'var(--crt-phosphor-dim)',
     fontFamily: '"Share Tech Mono", monospace',
     fontSize: '0.6rem',
     padding: '4px 8px',

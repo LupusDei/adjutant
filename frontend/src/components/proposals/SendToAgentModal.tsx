@@ -258,7 +258,7 @@ const styles = {
     width: '480px',
     maxWidth: '90vw',
     maxHeight: '80vh',
-    backgroundColor: '#0A0A0A',
+    backgroundColor: 'var(--theme-bg-screen)',
     border: '1px solid var(--crt-phosphor-dim)',
     boxShadow: '0 0 30px rgba(0, 255, 0, 0.15)',
     zIndex: 1101,

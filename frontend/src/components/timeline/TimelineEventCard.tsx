@@ -176,7 +176,7 @@ const styles = {
     fontFamily: '"Share Tech Mono", monospace',
     fontSize: '0.65rem',
     color: 'var(--crt-phosphor-dim)',
-    backgroundColor: '#050505',
+    backgroundColor: 'var(--theme-bg-elevated)',
     border: '1px solid rgba(0, 255, 0, 0.1)',
     padding: '6px 8px',
     margin: 0,

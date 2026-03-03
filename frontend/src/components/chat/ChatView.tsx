@@ -33,7 +33,7 @@ export function ChatView({ isActive = true, initialAgent, onInitialAgentConsumed
       <div style={{
         padding: '8px 16px',
         borderBottom: '1px solid var(--crt-phosphor-dim, #00aa00)',
-        background: '#050505',
+        background: 'var(--theme-bg-elevated)',
         flexShrink: 0,
       }}>
         <ChatAgentSelector

@@ -47,7 +47,7 @@ export function ProjectSelector({ className = '' }: { className?: string }) {
 const colors = {
   primary: 'var(--crt-phosphor)',
   primaryDim: 'var(--crt-phosphor-dim)',
-  background: '#050805',
+  background: 'var(--theme-bg-screen)',
 } as const;
 
 const styles = {

@@ -161,7 +161,7 @@ const styles = {
     flexWrap: 'wrap',
   },
   select: {
-    backgroundColor: '#050505',
+    backgroundColor: 'var(--theme-bg-elevated)',
     color: 'var(--crt-phosphor)',
     border: '1px solid var(--crt-phosphor-dim)',
     fontFamily: '"Share Tech Mono", monospace',
@@ -189,7 +189,7 @@ const styles = {
   },
   chipActive: {
     backgroundColor: 'var(--crt-phosphor)',
-    color: '#0a0a0a',
+    color: 'var(--theme-bg-screen)',
     fontWeight: 'bold',
     textShadow: 'none',
   },
@@ -197,7 +197,7 @@ const styles = {
     position: 'relative',
   },
   beadInput: {
-    backgroundColor: '#050505',
+    backgroundColor: 'var(--theme-bg-elevated)',
     color: 'var(--crt-phosphor)',
     border: '1px solid var(--crt-phosphor-dim)',
     fontFamily: '"Share Tech Mono", monospace',

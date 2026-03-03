@@ -158,7 +158,7 @@ const styles = {
 
   badge: {
     background: 'var(--crt-phosphor)',
-    color: '#0A0A0A',
+    color: 'var(--theme-bg-screen)',
     fontSize: '0.65rem',
     fontWeight: 'bold',
     padding: '1px 5px',
@@ -176,7 +176,7 @@ const styles = {
     left: 0,
     right: 0,
     zIndex: 100,
-    background: '#0A0A0A',
+    background: 'var(--theme-bg-screen)',
     border: '1px solid var(--crt-phosphor-dim)',
     borderTop: 'none',
     maxHeight: '300px',
@@ -186,7 +186,7 @@ const styles = {
 
   filterInput: {
     padding: '6px 10px',
-    background: '#050505',
+    background: 'var(--theme-bg-elevated)',
     border: 'none',
     borderBottom: '1px solid var(--crt-phosphor-dim)',
     color: 'var(--crt-phosphor)',
@@ -223,7 +223,7 @@ const styles = {
 
   optionBadge: {
     background: 'var(--crt-phosphor)',
-    color: '#0A0A0A',
+    color: 'var(--theme-bg-screen)',
     fontSize: '0.6rem',
     fontWeight: 'bold',
     padding: '1px 4px',

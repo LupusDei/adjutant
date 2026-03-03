@@ -21,7 +21,7 @@ const colors = {
   primaryBright: 'var(--crt-phosphor-bright)',
   primaryDim: 'var(--crt-phosphor-dim)',
   primaryGlow: 'var(--crt-phosphor-glow)',
-  backgroundDark: '#050505',
+  backgroundDark: 'var(--theme-bg-elevated)',
   panelBorder: 'var(--crt-phosphor-dim)',
   offlineBorder: '#333333',
   working: 'var(--crt-phosphor-bright)',

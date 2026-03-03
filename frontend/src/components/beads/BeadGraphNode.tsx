@@ -98,12 +98,12 @@ function BeadGraphNodeInner({ data }: NodeProps) {
   );
 
   const selectedGlow = isSelected
-    ? `0 0 12px #00ff00aa, 0 0 24px #00ff0044, inset 0 0 8px #00ff0022`
+    ? `0 0 12px var(--crt-phosphor-glow), 0 0 24px var(--crt-phosphor-glow), inset 0 0 8px var(--crt-phosphor-glow)`
     : `0 0 6px ${statusColor}44, inset 0 0 4px ${statusColor}22`;
 
   const containerStyle: CSSProperties = {
-    background: isSelected ? '#0d1a0d' : '#0a0a0a',
-    border: `${isSelected ? '2px' : '1px'} solid ${isSelected ? '#00ff00' : statusColor}`,
+    background: isSelected ? 'var(--theme-bg-elevated)' : 'var(--theme-bg-screen)',
+    border: `${isSelected ? '2px' : '1px'} solid ${isSelected ? 'var(--crt-phosphor)' : statusColor}`,
     borderRadius: '2px',
     padding: isEpic ? '10px 14px' : '8px 12px',
     minWidth: isEpic ? '220px' : '180px',
@@ -158,7 +158,7 @@ function BeadGraphNodeInner({ data }: NodeProps) {
 
   const assigneeStyle: CSSProperties = {
     fontSize: '0.55rem',
-    color: '#00aa00',
+    color: 'var(--crt-phosphor-dim)',
     marginTop: '3px',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
@@ -180,9 +180,9 @@ function BeadGraphNodeInner({ data }: NodeProps) {
     marginTop: '5px',
     padding: '2px 6px',
     background: 'transparent',
-    border: '1px solid #00aa0066',
+    border: '1px solid var(--crt-phosphor-dim)',
     borderRadius: '1px',
-    color: '#00aa00',
+    color: 'var(--crt-phosphor-dim)',
     fontFamily: '"Share Tech Mono", monospace',
     fontSize: '0.55rem',
     cursor: 'pointer',
@@ -194,10 +194,10 @@ function BeadGraphNodeInner({ data }: NodeProps) {
   const collapsedBadgeStyle: CSSProperties = {
     fontSize: '0.5rem',
     padding: '1px 4px',
-    background: '#00aa0022',
-    border: '1px solid #00aa0044',
+    background: 'rgba(var(--theme-primary-rgb), 0.13)',
+    border: '1px solid var(--crt-phosphor-dim)',
     borderRadius: '1px',
-    color: '#00ff00',
+    color: 'var(--crt-phosphor)',
     letterSpacing: '0.05em',
     whiteSpace: 'nowrap',
   };

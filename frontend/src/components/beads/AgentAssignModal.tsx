@@ -138,7 +138,7 @@ const styles = {
     zIndex: 1000,
   },
   modal: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: 'var(--theme-bg-screen)',
     border: '1px solid var(--crt-phosphor)',
     boxShadow: '0 0 20px rgba(0, 255, 0, 0.15), inset 0 0 30px rgba(0, 0, 0, 0.5)',
     width: '360px',

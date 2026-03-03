@@ -450,7 +450,7 @@ const styles = {
     bottom: 0,
     width: '400px',
     maxWidth: '90vw',
-    backgroundColor: '#0A0A0A',
+    backgroundColor: 'var(--theme-bg-screen)',
     border: '1px solid var(--crt-phosphor-dim)',
     borderRight: 'none',
     boxShadow: '-4px 0 20px rgba(0, 255, 0, 0.1)',

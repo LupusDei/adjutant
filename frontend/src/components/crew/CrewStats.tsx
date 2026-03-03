@@ -339,8 +339,8 @@ const colors = {
   primaryBright: 'var(--crt-phosphor-bright)',
   primaryDim: 'var(--crt-phosphor-dim)',
   primaryGlow: 'var(--crt-phosphor-glow)',
-  background: '#0A0A0A',
-  backgroundDark: '#050505',
+  background: 'var(--theme-bg-screen)',
+  backgroundDark: 'var(--theme-bg-elevated)',
   panelBorder: 'var(--crt-phosphor-dim)',
   // Status colors
   working: 'var(--crt-phosphor-bright)',

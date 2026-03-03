@@ -142,7 +142,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    backgroundColor: '#0A0A0A',
+    backgroundColor: 'var(--theme-bg-screen)',
     border: '1px solid var(--crt-phosphor-dim)',
   },
   header: {
@@ -184,7 +184,7 @@ const styles = {
     letterSpacing: '0.1em',
   },
   select: {
-    backgroundColor: '#050505',
+    backgroundColor: 'var(--theme-bg-elevated)',
     color: 'var(--crt-phosphor)',
     border: '1px solid var(--crt-phosphor-dim)',
     fontFamily: '"Share Tech Mono", monospace',

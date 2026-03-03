@@ -154,7 +154,7 @@
 /* Widget styles */
 .dashboard-widget-container {
   border: 1px solid var(--crt-phosphor-dim);
-  background-color: #0A0A0A;
+  background-color: var(--theme-bg-screen);
   padding: 15px;
   display: flex;
   flex-direction: column;
