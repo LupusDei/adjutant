@@ -19,3 +19,5 @@ export { createMessagesRouter } from "./messages.js";
 export { createProposalsRouter } from "./proposals.js";
 export { createDashboardRouter } from "./dashboard.js";
 export { createOverviewRouter } from "./overview.js";
+export { createPersonasRouter } from "./personas.js";
+export { createCallsignsRouter } from "./callsigns.js";

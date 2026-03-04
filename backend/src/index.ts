@@ -1,7 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, costsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createProjectsRouter, createProposalsRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, costsRouter, createCallsignsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createPersonasRouter, createProjectsRouter, createProposalsRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { createDashboardService } from "./services/dashboard-service.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
@@ -22,6 +22,8 @@ import { registerQueryTools } from "./services/mcp-tools/queries.js";
 import { registerProposalTools } from "./services/mcp-tools/proposals.js";
 import { createProposalStore } from "./services/proposal-store.js";
 import { createEventStore } from "./services/event-store.js";
+import { createPersonaService } from "./services/persona-service.js";
+import { createCallsignToggleService } from "./services/callsign-toggle-service.js";
 import { initMessageDelivery } from "./services/message-delivery.js";
 import { initBeadAssignNotification } from "./services/bead-assign-notification.js";
 import { discoverLocalProjects } from "./services/projects-service.js";
@@ -70,6 +72,12 @@ app.use("/api/messages", createMessagesRouter(messageStore));
 app.use("/api/projects", createProjectsRouter(messageStore));
 app.use("/api/overview", createOverviewRouter(messageStore));
 app.use("/api/proposals", createProposalsRouter(proposalStore));
+
+// Initialize persona and callsign toggle services and mount routes
+const personaService = createPersonaService(messageDb);
+const callsignToggleService = createCallsignToggleService(messageDb);
+app.use("/api/personas", createPersonasRouter(personaService));
+app.use("/api/callsigns", createCallsignsRouter(callsignToggleService));
 
 // Prune events older than 7 days on startup, then every 6 hours
 const PRUNE_DAYS = 7;
