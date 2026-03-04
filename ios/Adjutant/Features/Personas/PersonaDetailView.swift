@@ -1,8 +1,9 @@
 import SwiftUI
 import AdjutantKit
 
-/// Detail view for a persona showing full trait breakdown and prompt preview.
-/// Full implementation in adj-033.5.4.
+/// Detail view for a persona showing full trait breakdown, radar chart, and prompt preview.
+/// Displays trait values as read-only stepped bars grouped by category, with a scrollable
+/// prompt preview section and action buttons for edit and deploy.
 struct PersonaDetailView: View {
     @Environment(\.crtTheme) private var theme
     @Environment(\.dismiss) private var dismiss

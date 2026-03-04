@@ -1,8 +1,13 @@
+#if canImport(UIKit)
+import UIKit
+#endif
 import SwiftUI
 import AdjutantKit
 
 /// Editor view for creating and editing personas with stepped sliders and budget gauge.
-/// Full implementation in adj-033.5.3.
+/// Features segmented volume-meter sliders (20 segments per trait), a 10-segment budget
+/// power gauge with green/amber/red zones, soft-cap enforcement, and trait grouping
+/// into 4 cognitive categories (Engineering, Quality, Product, Craft).
 struct PersonaEditorView: View {
     @Environment(\.crtTheme) private var theme
     @Environment(\.dismiss) private var dismiss
