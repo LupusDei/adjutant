@@ -325,3 +325,15 @@ export function generatePrompt(persona: Persona): string {
 
   return sections.join("\n\n");
 }
+
+/**
+ * Alias for generatePrompt — used by spawn routes for --prompt CLI injection.
+ *
+ * This is the same function as generatePrompt, provided for semantic clarity
+ * in the spawn integration layer where the name "generatePersonaPrompt" reads
+ * more naturally alongside other persona-related operations.
+ *
+ * @param persona - The persona to generate a prompt for
+ * @returns The generated system prompt as a markdown string
+ */
+export const generatePersonaPrompt = generatePrompt;

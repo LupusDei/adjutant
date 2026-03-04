@@ -4,6 +4,7 @@ import type { Persona, TraitValues } from "../../src/types/personas.js";
 import { PERSONA_TRAIT_KEYS } from "../../src/types/personas.js";
 import {
   generatePrompt,
+  generatePersonaPrompt,
   getTier,
   TRAIT_PROMPT_TEMPLATES,
 } from "../../src/services/prompt-generator.js";
@@ -121,6 +122,25 @@ describe("PromptGenerator", () => {
         const template = TRAIT_PROMPT_TEMPLATES[key];
         expect(template.high.length).toBeGreaterThan(template.low.length);
       }
+    });
+  });
+
+  // ==========================================================================
+  // generatePersonaPrompt alias
+  // ==========================================================================
+
+  describe("generatePersonaPrompt alias", () => {
+    it("should be the same function as generatePrompt", () => {
+      expect(generatePersonaPrompt).toBe(generatePrompt);
+    });
+
+    it("should produce identical output to generatePrompt", () => {
+      const persona = makePersona({
+        name: "AliasTest",
+        traits: makeTraits({ architecture_focus: 15, qa_correctness: 12 }),
+      });
+
+      expect(generatePersonaPrompt(persona)).toBe(generatePrompt(persona));
     });
   });
 

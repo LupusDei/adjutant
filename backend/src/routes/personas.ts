@@ -67,6 +67,8 @@ export function createPersonasRouter(service: PersonaService): Router {
   /**
    * GET /api/personas/:id/prompt
    * Returns the generated system prompt for a persona.
+   * Used by the SessionStart hook script to re-inject persona context,
+   * and by spawn routes for initial --prompt CLI injection.
    * Response: { prompt: string, persona: Persona }
    */
   router.get("/:id/prompt", (req, res) => {

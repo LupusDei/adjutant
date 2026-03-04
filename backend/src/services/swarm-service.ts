@@ -9,6 +9,8 @@ import { execFile } from "child_process";
 import { logInfo, logWarn } from "../utils/index.js";
 import { getSessionBridge } from "./session-bridge.js";
 import { pickRandomCallsigns } from "./callsign-service.js";
+import { getPersonaService } from "./persona-service.js";
+import { generatePersonaPrompt } from "./prompt-generator.js";
 
 // ============================================================================
 // Types
@@ -20,6 +22,8 @@ export interface SwarmConfig {
   workspaceType?: "worktree" | "copy";
   coordinatorIndex?: number; // Which agent (0-based) is the coordinator
   baseName?: string;
+  /** Optional persona ID to inject persona prompt and env var for all swarm agents. */
+  personaId?: string | undefined;
 }
 
 export interface SwarmInfo {
@@ -75,10 +79,27 @@ let swarmCounter = 0;
  * Create a swarm of N agents working on a project.
  */
 export async function createSwarm(config: SwarmConfig): Promise<CreateSwarmResult> {
-  const { projectPath, agentCount, workspaceType = "worktree", coordinatorIndex, baseName } = config;
+  const { projectPath, agentCount, workspaceType = "worktree", coordinatorIndex, baseName, personaId } = config;
 
   if (agentCount < 1 || agentCount > 20) {
     return { success: false, error: "Agent count must be between 1 and 20" };
+  }
+
+  // Look up persona if personaId is provided
+  let personaPrompt: string | undefined;
+  let envVars: Record<string, string> | undefined;
+
+  if (personaId) {
+    const personaService = getPersonaService();
+    if (!personaService) {
+      return { success: false, error: "Persona service not initialized" };
+    }
+    const persona = personaService.getPersona(personaId);
+    if (!persona) {
+      return { success: false, error: `Persona '${personaId}' not found` };
+    }
+    personaPrompt = generatePersonaPrompt(persona);
+    envVars = { ADJUTANT_PERSONA_ID: personaId };
   }
 
   const bridge = getSessionBridge();
@@ -92,6 +113,12 @@ export async function createSwarm(config: SwarmConfig): Promise<CreateSwarmResul
     const sessions = bridge.listSessions();
     const picked = pickRandomCallsigns(sessions, agentCount);
     callsignNames.push(...picked.map((c) => c.name));
+  }
+
+  // Build claudeArgs with persona prompt injection
+  const claudeArgs: string[] = [];
+  if (personaPrompt) {
+    claudeArgs.push("--prompt", personaPrompt);
   }
 
   for (let i = 0; i < agentCount; i++) {
@@ -120,6 +147,8 @@ export async function createSwarm(config: SwarmConfig): Promise<CreateSwarmResul
       projectPath: sessionPath,
       mode: "swarm",
       workspaceType: i === 0 ? "primary" : workspaceType,
+      claudeArgs: claudeArgs.length > 0 ? [...claudeArgs] : undefined,
+      envVars,
     });
 
     if (result.success && result.sessionId) {
