@@ -55,6 +55,39 @@ export interface PersonaService {
 // Implementation
 // ============================================================================
 
+// ============================================================================
+// Singleton Accessor
+// ============================================================================
+
+let _instance: PersonaService | null = null;
+
+/**
+ * Get the global PersonaService instance.
+ * Returns null if not yet initialized via initPersonaService().
+ */
+export function getPersonaService(): PersonaService | null {
+  return _instance;
+}
+
+/**
+ * Initialize the global PersonaService singleton.
+ * Called once at startup from index.ts.
+ */
+export function initPersonaService(service: PersonaService): void {
+  _instance = service;
+}
+
+/**
+ * Reset the global singleton (for testing).
+ */
+export function resetPersonaService(): void {
+  _instance = null;
+}
+
+// ============================================================================
+// Factory
+// ============================================================================
+
 export function createPersonaService(db: Database.Database): PersonaService {
   const insertStmt = db.prepare(`
     INSERT INTO personas (id, name, description, traits, created_at, updated_at)

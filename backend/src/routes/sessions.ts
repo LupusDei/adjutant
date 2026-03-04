@@ -22,6 +22,8 @@ import {
   pickRandomCallsign,
 } from "../services/callsign-service.js";
 import { getProject } from "../services/projects-service.js";
+import { getPersonaService } from "../services/persona-service.js";
+import { generatePersonaPrompt } from "../services/prompt-generator.js";
 import {
   success,
   notFound,
@@ -43,6 +45,7 @@ const CreateSessionSchema = z.object({
   mode: z.literal("swarm").optional(),
   workspaceType: z.enum(["primary", "worktree", "copy"]).optional(),
   claudeArgs: z.array(z.string()).optional(),
+  personaId: z.string().min(1).optional(),
 }).refine(
   (data) => data.projectPath || data.projectId,
   { message: "Either projectPath or projectId is required" },
@@ -104,6 +107,7 @@ sessionsRouter.get("/:id", (req, res) => {
 /**
  * POST /api/sessions
  * Create a new session.
+ * Optional personaId injects persona prompt via --prompt and sets ADJUTANT_PERSONA_ID.
  */
 sessionsRouter.post("/", async (req, res) => {
   const parsed = CreateSessionSchema.safeParse(req.body);
@@ -130,6 +134,22 @@ sessionsRouter.post("/", async (req, res) => {
     return res.status(400).json(badRequest("Could not resolve project path"));
   }
 
+  // Look up persona if personaId is provided
+  let persona = null;
+  let personaPrompt: string | undefined;
+
+  if (data.personaId) {
+    const personaService = getPersonaService();
+    if (!personaService) {
+      return res.status(500).json(badRequest("Persona service not initialized"));
+    }
+    persona = personaService.getPersona(data.personaId);
+    if (!persona) {
+      return res.status(404).json(notFound("Persona", data.personaId));
+    }
+    personaPrompt = generatePersonaPrompt(persona);
+  }
+
   // If an explicit name was provided, check for conflicts with active sessions
   if (data.name) {
     const sessions = bridge.listSessions();
@@ -143,17 +163,31 @@ sessionsRouter.post("/", async (req, res) => {
     }
   }
 
-  // Auto-assign a callsign if no name provided
+  // Auto-assign a callsign if no name provided.
+  // Fallback priority: explicit name > random callsign > persona name > project-based name
   const sessions = bridge.listSessions();
   const callsign = pickRandomCallsign(sessions);
-  const name = data.name || callsign?.name || `${basename(projectPath)}-agent`;
+  const name = data.name || callsign?.name || persona?.name || `${basename(projectPath)}-agent`;
+
+  // Build claudeArgs with persona prompt injection
+  const claudeArgs = [...(data.claudeArgs ?? [])];
+  if (personaPrompt) {
+    claudeArgs.push("--prompt", personaPrompt);
+  }
+
+  // Build env vars with persona ID
+  const envVars: Record<string, string> = {};
+  if (data.personaId) {
+    envVars["ADJUTANT_PERSONA_ID"] = data.personaId;
+  }
 
   const result = await bridge.createSession({
     name,
     projectPath,
     mode: data.mode ?? "swarm",
     workspaceType: data.workspaceType ?? "primary",
-    claudeArgs: data.claudeArgs ?? [],
+    claudeArgs,
+    envVars: Object.keys(envVars).length > 0 ? envVars : undefined,
   });
 
   if (!result.success) {

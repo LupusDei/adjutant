@@ -16,9 +16,11 @@ import type { SessionRegistry, SessionMode, WorkspaceType } from "./session-regi
 export interface CreateSessionRequest {
   name: string;
   projectPath: string;
-  mode?: SessionMode;
-  workspaceType?: WorkspaceType;
-  claudeArgs?: string[];
+  mode?: SessionMode | undefined;
+  workspaceType?: WorkspaceType | undefined;
+  claudeArgs?: string[] | undefined;
+  /** Additional environment variables to set in the tmux session before starting Claude. */
+  envVars?: Record<string, string> | undefined;
 }
 
 export interface CreateSessionResult {
@@ -157,6 +159,19 @@ export class LifecycleManager {
         `export ADJUTANT_AGENT_ID=${shellEscape(req.name)}`,
         "Enter",
       ]);
+
+      // Set additional env vars (e.g., ADJUTANT_PERSONA_ID for persona hooks)
+      if (req.envVars) {
+        for (const [key, value] of Object.entries(req.envVars)) {
+          await execTmuxCommand([
+            "send-keys",
+            "-t",
+            tmuxSessionName,
+            `export ${key}=${shellEscape(value)}`,
+            "Enter",
+          ]);
+        }
+      }
 
       // Start Claude Code in the session
       // Always include --dangerously-skip-permissions so agents don't block on prompts.

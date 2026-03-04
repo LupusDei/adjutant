@@ -3,7 +3,7 @@
  *
  * Endpoints:
  * - GET /api/agents - Get all agents as CrewMember list
- * - POST /api/agents/spawn - Create a new agent session
+ * - POST /api/agents/spawn - Create a new agent session (supports personaId)
  * - GET /api/agents/session/:sessionId/terminal - Capture swarm agent terminal content
  */
 
@@ -14,6 +14,8 @@ import { getSessionBridge } from "../services/session-bridge.js";
 import { pickRandomCallsign } from "../services/callsign-service.js";
 import { captureTmuxPane, listTmuxSessions } from "../services/tmux.js";
 import { getProject } from "../services/projects-service.js";
+import { getPersonaService } from "../services/persona-service.js";
+import { generatePersonaPrompt } from "../services/prompt-generator.js";
 import { success, internalError, badRequest, notFound, conflict } from "../utils/responses.js";
 
 export const agentsRouter = Router();
@@ -37,11 +39,13 @@ agentsRouter.get("/", async (_req, res) => {
 /**
  * Request body schema for spawn agent endpoint.
  * Accepts either projectPath (absolute) or projectId (resolved via registry).
+ * Optional personaId to spawn with a specific persona.
  */
 const spawnAgentSchema = z.object({
   projectPath: z.string().min(1).optional(),
   projectId: z.string().min(1).optional(),
   callsign: z.string().optional(),
+  personaId: z.string().min(1).optional(),
 }).refine(
   (data) => data.projectPath || data.projectId,
   { message: "Either projectPath or projectId is required" },
@@ -51,6 +55,7 @@ const spawnAgentSchema = z.object({
  * POST /api/agents/spawn
  * Creates a new agent session for the given project.
  * Accepts either projectPath or projectId (resolved via project registry).
+ * Optional personaId injects persona prompt via --prompt and sets ADJUTANT_PERSONA_ID.
  */
 agentsRouter.post("/spawn", async (req, res) => {
   const parsed = spawnAgentSchema.safeParse(req.body);
@@ -77,6 +82,27 @@ agentsRouter.post("/spawn", async (req, res) => {
     return res.status(400).json(badRequest("Could not resolve project path"));
   }
 
+  // Look up persona if personaId is provided
+  let persona = null;
+  let personaPrompt: string | undefined;
+  const { personaId } = parsed.data;
+
+  if (personaId) {
+    const personaService = getPersonaService();
+    if (!personaService) {
+      return res.status(500).json(
+        internalError("Persona service not initialized")
+      );
+    }
+    persona = personaService.getPersona(personaId);
+    if (!persona) {
+      return res.status(404).json(
+        notFound("Persona", personaId)
+      );
+    }
+    personaPrompt = generatePersonaPrompt(persona);
+  }
+
   const { callsign } = parsed.data;
   const bridge = getSessionBridge();
 
@@ -93,17 +119,31 @@ agentsRouter.post("/spawn", async (req, res) => {
     }
   }
 
-  // Auto-assign callsign if not provided
+  // Auto-assign callsign if not provided.
+  // Fallback priority: explicit callsign > random callsign > persona name > "agent"
   const sessions = bridge.listSessions();
   const auto = pickRandomCallsign(sessions);
-  const name = callsign || auto?.name || "agent";
+  const name = callsign || auto?.name || persona?.name || "agent";
+
+  // Build claudeArgs with persona prompt injection
+  const claudeArgs: string[] = [];
+  if (personaPrompt) {
+    claudeArgs.push("--prompt", personaPrompt);
+  }
+
+  // Build env vars with persona ID
+  const envVars: Record<string, string> = {};
+  if (personaId) {
+    envVars["ADJUTANT_PERSONA_ID"] = personaId;
+  }
 
   const result = await bridge.createSession({
     name,
     projectPath,
     mode: "swarm",
     workspaceType: "primary",
-    claudeArgs: [],
+    claudeArgs,
+    envVars: Object.keys(envVars).length > 0 ? envVars : undefined,
   });
 
   if (!result.success) {
@@ -118,6 +158,7 @@ agentsRouter.post("/spawn", async (req, res) => {
     callsign: session?.name ?? name,
     projectPath,
     spawned: true,
+    ...(persona ? { personaId: persona.id, personaName: persona.name } : {}),
   }));
 });
 
@@ -139,8 +180,8 @@ agentsRouter.get("/session/:sessionId/terminal", async (req, res) => {
   }
 
   // Verify tmux session is running
-  const sessions = await listTmuxSessions();
-  if (!sessions.has(session.tmuxSession)) {
+  const tmuxSessions = await listTmuxSessions();
+  if (!tmuxSessions.has(session.tmuxSession)) {
     return res.status(404).json(
       notFound("Terminal session", session.tmuxSession)
     );

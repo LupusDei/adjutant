@@ -22,7 +22,7 @@ import { registerQueryTools } from "./services/mcp-tools/queries.js";
 import { registerProposalTools } from "./services/mcp-tools/proposals.js";
 import { createProposalStore } from "./services/proposal-store.js";
 import { createEventStore } from "./services/event-store.js";
-import { createPersonaService } from "./services/persona-service.js";
+import { createPersonaService, initPersonaService } from "./services/persona-service.js";
 import { createCallsignToggleService } from "./services/callsign-toggle-service.js";
 import { initMessageDelivery } from "./services/message-delivery.js";
 import { initBeadAssignNotification } from "./services/bead-assign-notification.js";
@@ -75,6 +75,7 @@ app.use("/api/proposals", createProposalsRouter(proposalStore));
 
 // Initialize persona and callsign toggle services and mount routes
 const personaService = createPersonaService(messageDb);
+initPersonaService(personaService);
 const callsignToggleService = createCallsignToggleService(messageDb);
 app.use("/api/personas", createPersonasRouter(personaService));
 app.use("/api/callsigns", createCallsignsRouter(callsignToggleService));
