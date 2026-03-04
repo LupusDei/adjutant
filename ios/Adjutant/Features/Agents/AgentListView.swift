@@ -494,6 +494,14 @@ struct AgentListView: View {
                 .listRowBackground(theme.background.screen)
                 .listRowSeparator(.hidden)
             }
+
+            // Callsign roster toggles (collapsed by default)
+            Section {
+                CallsignRosterSection()
+                    .listRowBackground(theme.background.screen)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets())
+            }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
