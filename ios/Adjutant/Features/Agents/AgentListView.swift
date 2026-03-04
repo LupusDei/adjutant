@@ -427,6 +427,10 @@ struct AgentListView: View {
                             bottom: CRTTheme.Spacing.xs,
                             trailing: CRTTheme.Spacing.md
                         ))
+                        .onLongPressGesture {
+                            coordinator.pendingChatAgentId = member.name
+                            coordinator.selectTab(.chat)
+                        }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button {
                                 coordinator.pendingChatAgentId = member.id

@@ -132,12 +132,15 @@ struct SwarmOverviewView: View {
                 } else {
                     VStack(spacing: CRTTheme.Spacing.xs) {
                         ForEach(agents) { agent in
-                            Button {
-                                coordinator.navigate(to: .agentDetail(member: crewMember(from: agent)))
-                            } label: {
-                                agentRow(agent)
-                            }
-                            .buttonStyle(.plain)
+                            agentRow(agent)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    coordinator.navigate(to: .agentDetail(member: crewMember(from: agent)))
+                                }
+                                .onLongPressGesture {
+                                    coordinator.pendingChatAgentId = agent.name
+                                    coordinator.selectTab(.chat)
+                                }
                         }
                     }
                 }
