@@ -10,7 +10,55 @@ import { listTmuxSessions } from "./tmux.js";
 import { getSessionBridge } from "./session-bridge.js";
 import { getConnectedAgents } from "./mcp-server.js";
 import { getAgentStatuses } from "./mcp-tools/status.js";
+import { listProjects } from "./projects-service.js";
 import type { CrewMember, CrewMemberStatus, AgentType } from "../types/index.js";
+
+// ============================================================================
+// Project Resolution
+// ============================================================================
+
+/**
+ * Builds a map from project paths to project names for quick lookup.
+ * Also indexes parent paths so worktree agents (whose projectPath is inside
+ * .claude/worktrees/) can be matched to their root project.
+ */
+function buildProjectPathMap(): Map<string, string> {
+  const pathToName = new Map<string, string>();
+  const result = listProjects();
+  if (!result.success || !result.data) return pathToName;
+  for (const project of result.data) {
+    pathToName.set(project.path, project.name);
+  }
+  return pathToName;
+}
+
+/**
+ * Resolves a session's projectPath to a registered project name.
+ * Handles both direct project paths and worktree paths (which live
+ * under the project's .claude/worktrees/ directory).
+ */
+function resolveProjectName(projectPath: string, pathMap: Map<string, string>): string {
+  // Direct match
+  const direct = pathMap.get(projectPath);
+  if (direct) return direct;
+
+  // Worktree paths look like: /path/to/project/.claude/worktrees/branch-name
+  // Try stripping .claude/worktrees/* suffix to find the root project
+  const worktreeMarker = "/.claude/worktrees/";
+  const idx = projectPath.indexOf(worktreeMarker);
+  if (idx !== -1) {
+    const rootPath = projectPath.substring(0, idx);
+    const match = pathMap.get(rootPath);
+    if (match) return match;
+  }
+
+  // Fallback: check if projectPath starts with any registered project path
+  for (const [registeredPath, name] of pathMap) {
+    if (projectPath.startsWith(registeredPath + "/")) return name;
+  }
+
+  return "";
+}
 
 // ============================================================================
 // Types
@@ -154,6 +202,7 @@ async function getTmuxAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
     const managedSessions = bridge.listSessions();
 
     const crewMembers: CrewMember[] = [];
+    const projectPathMap = buildProjectPathMap();
 
     // Build a set of tmux sessions already tracked by managed sessions
     const managedTmuxSessions = new Set(
@@ -167,7 +216,7 @@ async function getTmuxAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
         id: session.name,
         name: session.name,
         type: "crew" as AgentType,
-        project: "",
+        project: resolveProjectName(session.projectPath, projectPathMap),
         status: isRunning
           ? session.status === "working"
             ? "working"

@@ -784,6 +784,16 @@
   min-width: 70px;
 }
 
+.dashboard-agent-project {
+  font-size: 0.55rem;
+  color: var(--crt-phosphor-dim);
+  border: 1px solid var(--crt-phosphor-dim);
+  padding: 0 4px;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
 .dashboard-agent-task {
   font-size: 0.75rem;
   color: var(--crt-phosphor-dim);

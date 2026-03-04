@@ -172,6 +172,9 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
                     >
                       <span className={`dashboard-crew-card-indicator dashboard-indicator-${statusIndicatorClass(agent.status)}`} />
                       <span className="dashboard-agent-name">{agent.name.toUpperCase()}</span>
+                      {agent.project && (
+                        <span className="dashboard-agent-project">{agent.project}</span>
+                      )}
                       <span className={`dashboard-crew-card-status-text dashboard-text-${statusIndicatorClass(agent.status)}`}>
                         {statusLabel(agent.status)}
                       </span>

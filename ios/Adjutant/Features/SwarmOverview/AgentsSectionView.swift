@@ -45,9 +45,23 @@ struct AgentsSectionView: View {
                 .fill(statusColor(for: agent.status))
                 .frame(width: 8, height: 8)
 
-            // Name + current bead
+            // Name + project + current bead
             VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxxs) {
-                CRTText(agent.name.uppercased(), style: .body)
+                HStack(spacing: CRTTheme.Spacing.xs) {
+                    CRTText(agent.name.uppercased(), style: .body)
+                    if let project = agent.project, !project.isEmpty {
+                        Text(project.uppercased())
+                            .font(CRTTheme.Typography.font(size: 8, weight: .bold))
+                            .tracking(0.5)
+                            .foregroundColor(theme.dim)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 3)
+                                    .stroke(theme.dim.opacity(0.4), lineWidth: 0.5)
+                            )
+                    }
+                }
                 if let bead = agent.currentBead {
                     CRTText(bead, style: .caption, color: theme.dim)
                 }

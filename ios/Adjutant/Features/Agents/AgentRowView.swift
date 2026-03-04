@@ -34,6 +34,20 @@ struct AgentRowView: View {
 
                         CRTText(member.name, style: .body, glowIntensity: .medium, color: agentColor)
 
+                        // Project badge
+                        if let project = member.project, !project.isEmpty {
+                            Text(project.uppercased())
+                                .font(CRTTheme.Typography.font(size: 8, weight: .bold))
+                                .tracking(0.5)
+                                .foregroundColor(theme.dim)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .stroke(theme.dim.opacity(0.4), lineWidth: 0.5)
+                                )
+                        }
+
                         // Current bead ID badge
                         if let beadId = beadContext.currentBeadId {
                             Text(beadId)

@@ -41,6 +41,7 @@ export interface AgentOverview {
   id: string;
   name: string;
   status: string;
+  project: string | null;
   currentBead: string | null;
   unreadCount: number;
   sessionId: string | null;

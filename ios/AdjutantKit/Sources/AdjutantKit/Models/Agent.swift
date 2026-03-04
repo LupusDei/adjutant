@@ -10,6 +10,8 @@ public struct CrewMember: Codable, Identifiable, Equatable, Hashable {
     public let type: AgentType
     /// Current operational status
     public let status: CrewMemberStatus
+    /// Associated project name (if any)
+    public let project: String?
     /// Current task description (if working)
     public let currentTask: String?
     /// Number of unread messages
@@ -28,6 +30,7 @@ public struct CrewMember: Codable, Identifiable, Equatable, Hashable {
         name: String,
         type: AgentType,
         status: CrewMemberStatus,
+        project: String? = nil,
         currentTask: String? = nil,
         unreadMail: Int? = nil,
         firstSubject: String? = nil,
@@ -39,6 +42,7 @@ public struct CrewMember: Codable, Identifiable, Equatable, Hashable {
         self.name = name
         self.type = type
         self.status = status
+        self.project = project
         self.currentTask = currentTask
         self.unreadMail = unreadMail
         self.firstSubject = firstSubject
@@ -47,9 +51,8 @@ public struct CrewMember: Codable, Identifiable, Equatable, Hashable {
         self.sessionId = sessionId
     }
 
-    // Custom CodingKeys to gracefully ignore unknown fields like "project"
     private enum CodingKeys: String, CodingKey {
-        case id, name, type, status, currentTask, unreadMail
+        case id, name, type, status, project, currentTask, unreadMail
         case firstSubject, firstFrom, branch, sessionId
     }
 }

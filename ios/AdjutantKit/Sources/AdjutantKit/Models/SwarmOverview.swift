@@ -201,6 +201,8 @@ public struct AgentOverview: Codable, Identifiable, Equatable {
     public let name: String
     /// Agent status: "working", "idle", "blocked", or "offline"
     public let status: String
+    /// Associated project name (if any)
+    public let project: String?
     /// Title of the bead the agent is currently working on
     public let currentBead: String?
     public let unreadCount: Int
@@ -210,6 +212,7 @@ public struct AgentOverview: Codable, Identifiable, Equatable {
         id: String,
         name: String,
         status: String,
+        project: String? = nil,
         currentBead: String? = nil,
         unreadCount: Int = 0,
         sessionId: String? = nil
@@ -217,6 +220,7 @@ public struct AgentOverview: Codable, Identifiable, Equatable {
         self.id = id
         self.name = name
         self.status = status
+        self.project = project
         self.currentBead = currentBead
         self.unreadCount = unreadCount
         self.sessionId = sessionId

@@ -202,6 +202,9 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
           }}
         />
         <span style={styles.name}>{agent.name.toUpperCase()}</span>
+        {agent.project && (
+          <span style={styles.projectBadge}>{agent.project.toUpperCase()}</span>
+        )}
         <span style={{ ...styles.statusLabel, color: statusColor }}>
           {killState === 'loading' ? 'TERMINATING...' : displayStatus.toUpperCase()}
         </span>
@@ -405,6 +408,14 @@ const styles = {
   statusLabel: {
     fontSize: '0.65rem',
     letterSpacing: '0.1em',
+    flexShrink: 0,
+  },
+  projectBadge: {
+    fontSize: '0.55rem',
+    border: `1px solid ${colors.primaryDim}`,
+    padding: '1px 4px',
+    letterSpacing: '0.05em',
+    color: colors.primaryDim,
     flexShrink: 0,
   },
   coordinatorBadge: {
