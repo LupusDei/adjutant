@@ -42,6 +42,9 @@ final class AgentListViewModel: BaseViewModel {
     /// Total beads in progress across all agents
     @Published private(set) var totalBeadsInProgress: Int = 0
 
+    /// All personas from the API
+    @Published private(set) var personas: [Persona] = []
+
     // MARK: - Types
 
     /// Grouped crew members by agent type
@@ -111,7 +114,10 @@ final class AgentListViewModel: BaseViewModel {
     override func onAppear() {
         super.onAppear()
         dataSync.subscribeCrew()
-        Task { await fetchBeadCounts() }
+        Task {
+            await fetchBeadCounts()
+            await fetchPersonas()
+        }
     }
 
     override func onDisappear() {
@@ -126,6 +132,18 @@ final class AgentListViewModel: BaseViewModel {
             await self.dataSync.refreshCrew()
         }
         await fetchBeadCounts()
+        await fetchPersonas()
+    }
+
+    /// Fetches personas for the roster section
+    func fetchPersonas() async {
+        do {
+            let fetched = try await apiClient.getPersonas()
+            personas = fetched
+        } catch {
+            // Non-critical: silently fail, leave personas empty
+            print("[AgentListViewModel] Persona fetch failed: \(error.localizedDescription)")
+        }
     }
 
     /// Fetches bead data for agent context display

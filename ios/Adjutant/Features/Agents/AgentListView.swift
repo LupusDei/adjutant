@@ -10,6 +10,9 @@ struct AgentListView: View {
     @State private var showingSpawnSheet = false
     @State private var agentToTerminate: CrewMember?
     @State private var showTerminateConfirmation = false
+    @State private var showingPersonaEditor = false
+    @State private var personaToDeploy: Persona?
+    @State private var selectedPersona: Persona?
 
     /// Callback when an agent is selected
     var onSelectMember: ((CrewMember) -> Void)?
@@ -32,6 +35,15 @@ struct AgentListView: View {
             // Filter bar
             filterBar
 
+            // Persona roster
+            PersonaRosterSection(
+                personas: viewModel.personas,
+                onBuildPersona: { showingPersonaEditor = true },
+                onDeploy: { persona in personaToDeploy = persona },
+                onSelectPersona: { persona in selectedPersona = persona }
+            )
+            .padding(.bottom, CRTTheme.Spacing.xs)
+
             // Content
             contentView
         }
@@ -46,6 +58,21 @@ struct AgentListView: View {
             SpawnAgentSheet {
                 Task { await viewModel.refresh() }
             }
+        }
+        .sheet(isPresented: $showingPersonaEditor) {
+            PersonaEditorView(
+                onSaved: {
+                    Task { await viewModel.fetchPersonas() }
+                }
+            )
+        }
+        .sheet(item: $personaToDeploy) { persona in
+            DeployPersonaSheet(persona: persona) {
+                Task { await viewModel.refresh() }
+            }
+        }
+        .sheet(item: $selectedPersona) { persona in
+            PersonaDetailView(persona: persona)
         }
     }
 
