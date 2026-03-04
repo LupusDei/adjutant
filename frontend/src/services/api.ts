@@ -17,6 +17,10 @@ import type {
   SessionInfo,
   ProjectInfo,
   ProjectHealth,
+  Persona,
+  CreatePersonaInput,
+  UpdatePersonaInput,
+  CallsignListResponse,
 } from '../types';
 import type { DashboardResponse } from '../types/dashboard';
 import type { ProjectOverview, GlobalOverview } from '../types/overview';
@@ -513,6 +517,67 @@ export const api = {
       return apiFetch(`/proposals/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         body: { status },
+      });
+    },
+  },
+
+  /**
+   * Persona operations.
+   */
+  personas: {
+    /** List all personas sorted by name. */
+    async list(): Promise<Persona[]> {
+      return apiFetch('/personas');
+    },
+
+    /** Get a single persona by ID. */
+    async get(id: string): Promise<Persona> {
+      return apiFetch(`/personas/${encodeURIComponent(id)}`);
+    },
+
+    /** Create a new persona. */
+    async create(input: CreatePersonaInput): Promise<Persona> {
+      return apiFetch('/personas', { method: 'POST', body: input });
+    },
+
+    /** Update an existing persona. */
+    async update(id: string, input: UpdatePersonaInput): Promise<Persona> {
+      return apiFetch(`/personas/${encodeURIComponent(id)}`, { method: 'PUT', body: input });
+    },
+
+    /** Delete a persona. */
+    async delete(id: string): Promise<{ deleted: boolean }> {
+      return apiFetch(`/personas/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    },
+
+    /** Get the generated prompt text for a persona. */
+    async getPrompt(id: string): Promise<{ prompt: string; persona: Persona }> {
+      return apiFetch(`/personas/${encodeURIComponent(id)}/prompt`);
+    },
+  },
+
+  /**
+   * Callsign toggle operations.
+   */
+  callsigns: {
+    /** List all callsigns with enabled status and master toggle. */
+    async list(): Promise<CallsignListResponse> {
+      return apiFetch('/callsigns');
+    },
+
+    /** Toggle a single callsign enabled/disabled. */
+    async toggle(name: string, enabled: boolean): Promise<{ name: string; enabled: boolean }> {
+      return apiFetch(`/callsigns/${encodeURIComponent(name)}/toggle`, {
+        method: 'PUT',
+        body: { enabled },
+      });
+    },
+
+    /** Toggle all callsigns at once (master toggle). */
+    async toggleAll(enabled: boolean): Promise<{ masterEnabled: boolean }> {
+      return apiFetch('/callsigns/toggle-all', {
+        method: 'PUT',
+        body: { enabled },
       });
     },
   },

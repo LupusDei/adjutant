@@ -253,6 +253,205 @@ export interface ProjectHealth {
   status: 'healthy' | 'degraded' | 'stale';
 }
 
+// ============================================================================
+// Persona Types
+// ============================================================================
+
+/** The 12 personality trait dimensions. */
+export const PersonaTrait = {
+  ARCHITECTURE_FOCUS: 'architecture_focus',
+  PRODUCT_DESIGN: 'product_design',
+  UIUX_FOCUS: 'uiux_focus',
+  QA_SCALABILITY: 'qa_scalability',
+  QA_CORRECTNESS: 'qa_correctness',
+  TESTING_UNIT: 'testing_unit',
+  TESTING_ACCEPTANCE: 'testing_acceptance',
+  MODULAR_ARCHITECTURE: 'modular_architecture',
+  BUSINESS_OBJECTIVES: 'business_objectives',
+  TECHNICAL_DEPTH: 'technical_depth',
+  CODE_REVIEW: 'code_review',
+  DOCUMENTATION: 'documentation',
+} as const;
+
+export type PersonaTraitKey = (typeof PersonaTrait)[keyof typeof PersonaTrait];
+
+/** All trait keys as an array for iteration. */
+export const PERSONA_TRAIT_KEYS: readonly PersonaTraitKey[] = Object.values(PersonaTrait);
+
+/** Trait values object mapping each trait key to its point allocation (0-20). */
+export type TraitValues = Record<PersonaTraitKey, number>;
+
+/** Maximum points per trait. */
+export const TRAIT_MAX = 20;
+
+/** Total point budget across all traits. */
+export const POINT_BUDGET = 100;
+
+/** A persona entity as returned by the API. */
+export interface Persona {
+  id: string;
+  name: string;
+  description: string;
+  traits: TraitValues;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Input for creating a new persona. */
+export interface CreatePersonaInput {
+  name: string;
+  description?: string;
+  traits: TraitValues;
+}
+
+/** Input for updating an existing persona. */
+export interface UpdatePersonaInput {
+  name?: string;
+  description?: string;
+  traits?: TraitValues;
+}
+
+/** Callsign setting from the API. */
+export interface CallsignSetting {
+  name: string;
+  enabled: boolean;
+}
+
+/** Callsign list response shape. */
+export interface CallsignListResponse {
+  callsigns: CallsignSetting[];
+  masterEnabled: boolean;
+}
+
+/** Trait grouping for UI display. */
+export interface TraitGroup {
+  key: string;
+  label: string;
+  traits: PersonaTraitKey[];
+}
+
+/** Trait display metadata for rendering sliders. */
+export interface TraitDisplayInfo {
+  key: PersonaTraitKey;
+  label: string;
+  description: string;
+  group: string;
+}
+
+/** The 4 cognitive trait groups per designer specs. */
+export const TRAIT_GROUPS: readonly TraitGroup[] = [
+  {
+    key: 'engineering',
+    label: 'ENGINEERING',
+    traits: [PersonaTrait.ARCHITECTURE_FOCUS, PersonaTrait.MODULAR_ARCHITECTURE, PersonaTrait.TECHNICAL_DEPTH],
+  },
+  {
+    key: 'quality',
+    label: 'QUALITY',
+    traits: [PersonaTrait.QA_CORRECTNESS, PersonaTrait.QA_SCALABILITY, PersonaTrait.TESTING_UNIT, PersonaTrait.TESTING_ACCEPTANCE],
+  },
+  {
+    key: 'product',
+    label: 'PRODUCT',
+    traits: [PersonaTrait.PRODUCT_DESIGN, PersonaTrait.UIUX_FOCUS, PersonaTrait.BUSINESS_OBJECTIVES],
+  },
+  {
+    key: 'craft',
+    label: 'CRAFT',
+    traits: [PersonaTrait.CODE_REVIEW, PersonaTrait.DOCUMENTATION],
+  },
+] as const;
+
+/** Display label mapping per designer recommendations (adj-b93s). */
+export const TRAIT_DISPLAY: Record<PersonaTraitKey, TraitDisplayInfo> = {
+  [PersonaTrait.ARCHITECTURE_FOCUS]: {
+    key: PersonaTrait.ARCHITECTURE_FOCUS,
+    label: 'SYSTEM DESIGN',
+    description: 'System design, dependency management, clean abstractions',
+    group: 'engineering',
+  },
+  [PersonaTrait.MODULAR_ARCHITECTURE]: {
+    key: PersonaTrait.MODULAR_ARCHITECTURE,
+    label: 'MODULARITY',
+    description: 'Separation of concerns, clean interfaces, composability',
+    group: 'engineering',
+  },
+  [PersonaTrait.TECHNICAL_DEPTH]: {
+    key: PersonaTrait.TECHNICAL_DEPTH,
+    label: 'DEEP TECH',
+    description: 'Low-level knowledge, performance optimization, algorithms',
+    group: 'engineering',
+  },
+  [PersonaTrait.QA_CORRECTNESS]: {
+    key: PersonaTrait.QA_CORRECTNESS,
+    label: 'CORRECTNESS',
+    description: 'Functional correctness, edge cases, does everything work',
+    group: 'quality',
+  },
+  [PersonaTrait.QA_SCALABILITY]: {
+    key: PersonaTrait.QA_SCALABILITY,
+    label: 'SCALE TESTING',
+    description: 'Performance testing, load handling, scaling concerns',
+    group: 'quality',
+  },
+  [PersonaTrait.TESTING_UNIT]: {
+    key: PersonaTrait.TESTING_UNIT,
+    label: 'UNIT TESTS',
+    description: 'Unit test rigor, TDD discipline, mock strategies',
+    group: 'quality',
+  },
+  [PersonaTrait.TESTING_ACCEPTANCE]: {
+    key: PersonaTrait.TESTING_ACCEPTANCE,
+    label: 'E2E TESTS',
+    description: 'Integration/E2E test coverage, acceptance criteria',
+    group: 'quality',
+  },
+  [PersonaTrait.PRODUCT_DESIGN]: {
+    key: PersonaTrait.PRODUCT_DESIGN,
+    label: 'PRODUCT DESIGN',
+    description: 'Product thinking, user needs, feature completeness',
+    group: 'product',
+  },
+  [PersonaTrait.UIUX_FOCUS]: {
+    key: PersonaTrait.UIUX_FOCUS,
+    label: 'UI/UX FOCUS',
+    description: 'Visual design, interaction patterns, accessibility',
+    group: 'product',
+  },
+  [PersonaTrait.BUSINESS_OBJECTIVES]: {
+    key: PersonaTrait.BUSINESS_OBJECTIVES,
+    label: 'BIZ VALUE',
+    description: 'Business value alignment, ROI thinking, prioritization',
+    group: 'product',
+  },
+  [PersonaTrait.CODE_REVIEW]: {
+    key: PersonaTrait.CODE_REVIEW,
+    label: 'CODE REVIEW',
+    description: 'Review thoroughness, attention to detail, mentoring',
+    group: 'craft',
+  },
+  [PersonaTrait.DOCUMENTATION]: {
+    key: PersonaTrait.DOCUMENTATION,
+    label: 'DOCUMENTATION',
+    description: 'Code comments, README, API docs, inline documentation',
+    group: 'craft',
+  },
+};
+
+/** Compute the sum of all trait values. */
+export function sumTraits(traits: TraitValues): number {
+  return PERSONA_TRAIT_KEYS.reduce((sum, key) => sum + traits[key], 0);
+}
+
+/** Create a zeroed-out trait values object. */
+export function emptyTraits(): TraitValues {
+  const traits = {} as Record<string, number>;
+  for (const key of PERSONA_TRAIT_KEYS) {
+    traits[key] = 0;
+  }
+  return traits as TraitValues;
+}
+
 export * from './epics';
 export * from './kanban';
 export * from './beads-graph';
