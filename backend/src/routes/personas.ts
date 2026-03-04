@@ -2,17 +2,19 @@
  * Persona REST routes for the Adjutant API.
  *
  * Endpoints:
- * - GET    /api/personas      - List all personas
- * - POST   /api/personas      - Create a new persona
- * - GET    /api/personas/:id  - Get a persona by ID
- * - PUT    /api/personas/:id  - Update a persona
- * - DELETE /api/personas/:id  - Delete a persona
+ * - GET    /api/personas          - List all personas
+ * - POST   /api/personas          - Create a new persona
+ * - GET    /api/personas/:id      - Get a persona by ID
+ * - GET    /api/personas/:id/prompt - Get generated prompt for a persona
+ * - PUT    /api/personas/:id      - Update a persona
+ * - DELETE /api/personas/:id      - Delete a persona
  */
 
 import { Router } from "express";
 import { ZodError } from "zod";
 
 import type { PersonaService } from "../services/persona-service.js";
+import { generatePersonaPrompt } from "../services/prompt-generator.js";
 import { success, notFound, conflict, validationError, internalError } from "../utils/responses.js";
 
 /**
@@ -58,6 +60,25 @@ export function createPersonasRouter(service: PersonaService): Router {
       }
 
       const message = err instanceof Error ? err.message : "Failed to create persona";
+      return res.status(500).json(internalError(message));
+    }
+  });
+
+  /**
+   * GET /api/personas/:id/prompt
+   * Returns the generated persona prompt for hook injection.
+   * Used by the SessionStart hook script to re-inject persona context.
+   */
+  router.get("/:id/prompt", (req, res) => {
+    try {
+      const persona = service.getPersona(req.params.id);
+      if (persona === null) {
+        return res.status(404).json(notFound("Persona", req.params.id));
+      }
+      const prompt = generatePersonaPrompt(persona);
+      return res.json(success({ prompt }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to generate prompt";
       return res.status(500).json(internalError(message));
     }
   });
