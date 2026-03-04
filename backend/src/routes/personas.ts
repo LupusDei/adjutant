@@ -2,19 +2,19 @@
  * Persona REST routes for the Adjutant API.
  *
  * Endpoints:
- * - GET    /api/personas          - List all personas
- * - POST   /api/personas          - Create a new persona
- * - GET    /api/personas/:id      - Get a persona by ID
+ * - GET    /api/personas           - List all personas
+ * - POST   /api/personas           - Create a new persona
+ * - GET    /api/personas/:id       - Get a persona by ID
  * - GET    /api/personas/:id/prompt - Get generated prompt for a persona
- * - PUT    /api/personas/:id      - Update a persona
- * - DELETE /api/personas/:id      - Delete a persona
+ * - PUT    /api/personas/:id       - Update a persona
+ * - DELETE /api/personas/:id       - Delete a persona
  */
 
 import { Router } from "express";
 import { ZodError } from "zod";
 
 import type { PersonaService } from "../services/persona-service.js";
-import { generatePersonaPrompt } from "../services/prompt-generator.js";
+import { generatePrompt } from "../services/prompt-generator.js";
 import { success, notFound, conflict, validationError, internalError } from "../utils/responses.js";
 
 /**
@@ -66,8 +66,10 @@ export function createPersonasRouter(service: PersonaService): Router {
 
   /**
    * GET /api/personas/:id/prompt
-   * Returns the generated persona prompt for hook injection.
-   * Used by the SessionStart hook script to re-inject persona context.
+   * Returns the generated system prompt for a persona.
+   * Used by the SessionStart hook script to re-inject persona context,
+   * and by spawn routes for initial --prompt CLI injection.
+   * Response: { prompt: string, persona: Persona }
    */
   router.get("/:id/prompt", (req, res) => {
     try {
@@ -75,8 +77,8 @@ export function createPersonasRouter(service: PersonaService): Router {
       if (persona === null) {
         return res.status(404).json(notFound("Persona", req.params.id));
       }
-      const prompt = generatePersonaPrompt(persona);
-      return res.json(success({ prompt }));
+      const prompt = generatePrompt(persona);
+      return res.json(success({ prompt, persona }));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to generate prompt";
       return res.status(500).json(internalError(message));

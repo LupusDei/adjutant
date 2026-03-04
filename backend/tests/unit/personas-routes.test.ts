@@ -235,6 +235,89 @@ describe("personas-routes", () => {
   });
 
   // ==========================================================================
+  // GET /api/personas/:id/prompt
+  // ==========================================================================
+
+  describe("GET /api/personas/:id/prompt", () => {
+    it("should return generated prompt for an existing persona", async () => {
+      const traits = makeTraits({
+        architecture_focus: 18,
+        qa_correctness: 15,
+        testing_unit: 12,
+      });
+      const createRes = await request(app)
+        .post("/api/personas")
+        .send({ name: "Architect", description: "System design specialist", traits });
+
+      const id = createRes.body.data.id;
+      const res = await request(app).get(`/api/personas/${id}/prompt`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.prompt).toBeTruthy();
+      expect(typeof res.body.data.prompt).toBe("string");
+      // Prompt should contain the persona name
+      expect(res.body.data.prompt).toContain("Architect");
+      // Response should include the persona object
+      expect(res.body.data.persona).toBeTruthy();
+      expect(res.body.data.persona.name).toBe("Architect");
+      expect(res.body.data.persona.id).toBe(id);
+    });
+
+    it("should return 404 for non-existent persona", async () => {
+      const res = await request(app).get("/api/personas/nonexistent/prompt");
+
+      expect(res.status).toBe(404);
+      expect(res.body.success).toBe(false);
+    });
+
+    it("should return a prompt containing architecture instructions for high architecture trait", async () => {
+      const traits = makeTraits({ architecture_focus: 20 });
+      const createRes = await request(app)
+        .post("/api/personas")
+        .send({ name: "PureArchitect", traits });
+
+      const id = createRes.body.data.id;
+      const res = await request(app).get(`/api/personas/${id}/prompt`);
+
+      expect(res.body.data.prompt).toMatch(/architec/i);
+      expect(res.body.data.prompt).toMatch(/design/i);
+    });
+
+    it("should return a minimal prompt for all-zero traits", async () => {
+      const traits = zeroTraits();
+      const createRes = await request(app)
+        .post("/api/personas")
+        .send({ name: "Blank", description: "No specialization", traits });
+
+      const id = createRes.body.data.id;
+      const res = await request(app).get(`/api/personas/${id}/prompt`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.prompt).toContain("Blank");
+      // Should have the generalist fallback
+      expect(res.body.data.prompt).toMatch(/generalist/i);
+    });
+
+    it("should produce deterministic prompts across multiple requests", async () => {
+      const traits = makeTraits({
+        qa_correctness: 18,
+        testing_unit: 15,
+        architecture_focus: 10,
+      });
+      const createRes = await request(app)
+        .post("/api/personas")
+        .send({ name: "Consistent", traits });
+
+      const id = createRes.body.data.id;
+      const res1 = await request(app).get(`/api/personas/${id}/prompt`);
+      const res2 = await request(app).get(`/api/personas/${id}/prompt`);
+
+      expect(res1.body.data.prompt).toBe(res2.body.data.prompt);
+    });
+  });
+
+  // ==========================================================================
   // PUT /api/personas/:id
   // ==========================================================================
 
@@ -335,63 +418,6 @@ describe("personas-routes", () => {
 
       // Empty update is technically valid (no-op), should return 200
       expect(res.status).toBe(200);
-    });
-  });
-
-  // ==========================================================================
-  // GET /api/personas/:id/prompt
-  // ==========================================================================
-
-  describe("GET /api/personas/:id/prompt", () => {
-    it("should return generated prompt for a persona", async () => {
-      const traits = makeTraits({ architecture_focus: 18, technical_depth: 15, modular_architecture: 12 });
-      const createRes = await request(app)
-        .post("/api/personas")
-        .send({ name: "Architect", description: "System design specialist", traits });
-
-      const id = createRes.body.data.id;
-      const res = await request(app).get(`/api/personas/${id}/prompt`);
-
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
-      expect(res.body.data.prompt).toBeTruthy();
-      expect(res.body.data.prompt).toContain("Architect");
-      // Should contain high-value traits
-      expect(res.body.data.prompt).toContain("Architecture Focus");
-    });
-
-    it("should return 404 for non-existent persona ID", async () => {
-      const res = await request(app).get("/api/personas/nonexistent/prompt");
-
-      expect(res.status).toBe(404);
-      expect(res.body.success).toBe(false);
-    });
-
-    it("should return a prompt even for all-zero traits persona", async () => {
-      const traits = zeroTraits();
-      const createRes = await request(app)
-        .post("/api/personas")
-        .send({ name: "Blank", traits });
-
-      const id = createRes.body.data.id;
-      const res = await request(app).get(`/api/personas/${id}/prompt`);
-
-      expect(res.status).toBe(200);
-      expect(res.body.data.prompt).toContain("Blank");
-      expect(res.body.data.prompt).toContain("No specific specializations");
-    });
-
-    it("should include description in prompt when set", async () => {
-      const traits = makeTraits({ code_review: 10 });
-      const createRes = await request(app)
-        .post("/api/personas")
-        .send({ name: "Reviewer", description: "Thorough code reviewer", traits });
-
-      const id = createRes.body.data.id;
-      const res = await request(app).get(`/api/personas/${id}/prompt`);
-
-      expect(res.status).toBe(200);
-      expect(res.body.data.prompt).toContain("Thorough code reviewer");
     });
   });
 

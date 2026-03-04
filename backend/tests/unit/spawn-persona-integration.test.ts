@@ -42,6 +42,7 @@ const mockGeneratePersonaPrompt = vi.fn();
 
 vi.mock("../../src/services/prompt-generator.js", () => ({
   generatePersonaPrompt: (...args: unknown[]) => mockGeneratePersonaPrompt(...args),
+  generatePrompt: (...args: unknown[]) => mockGeneratePersonaPrompt(...args),
 }));
 
 // Mock session bridge for route tests

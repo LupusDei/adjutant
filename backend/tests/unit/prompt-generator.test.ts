@@ -1,21 +1,19 @@
-/**
- * Prompt Generator Unit Tests
- *
- * Tests the persona prompt generation from trait values.
- * The prompt generator converts a Persona's trait allocations into
- * a structured text prompt suitable for --prompt CLI injection.
- */
-
 import { describe, it, expect } from "vitest";
 
-import { generatePersonaPrompt } from "../../src/services/prompt-generator.js";
 import type { Persona, TraitValues } from "../../src/types/personas.js";
 import { PERSONA_TRAIT_KEYS } from "../../src/types/personas.js";
+import {
+  generatePrompt,
+  generatePersonaPrompt,
+  getTier,
+  TRAIT_PROMPT_TEMPLATES,
+} from "../../src/services/prompt-generator.js";
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
+/** Create a valid traits object with all zeros */
 function zeroTraits(): TraitValues {
   const traits = {} as Record<string, number>;
   for (const key of PERSONA_TRAIT_KEYS) {
@@ -24,6 +22,7 @@ function zeroTraits(): TraitValues {
   return traits as TraitValues;
 }
 
+/** Create a valid traits object with specified values, rest zero */
 function makeTraits(overrides: Partial<Record<string, number>>): TraitValues {
   const traits = zeroTraits();
   for (const [key, value] of Object.entries(overrides)) {
@@ -32,185 +31,566 @@ function makeTraits(overrides: Partial<Record<string, number>>): TraitValues {
   return traits;
 }
 
-function makePersona(overrides: Partial<Persona> = {}): Persona {
+/** Create a full Persona object for testing */
+function makePersona(
+  overrides: Partial<Persona> & { traits?: TraitValues },
+): Persona {
   return {
-    id: "test-uuid",
-    name: "TestPersona",
-    description: "",
-    traits: zeroTraits(),
-    createdAt: "2026-03-04T00:00:00.000Z",
-    updatedAt: "2026-03-04T00:00:00.000Z",
-    ...overrides,
+    id: overrides.id ?? "test-id-123",
+    name: overrides.name ?? "TestAgent",
+    description: overrides.description ?? "A test persona",
+    traits: overrides.traits ?? zeroTraits(),
+    createdAt: overrides.createdAt ?? "2026-03-04T00:00:00.000Z",
+    updatedAt: overrides.updatedAt ?? "2026-03-04T00:00:00.000Z",
   };
 }
 
 // ============================================================================
-// Tests
+// Test Suite
 // ============================================================================
 
-describe("generatePersonaPrompt", () => {
-  it("should include persona name in prompt", () => {
-    const persona = makePersona({ name: "Architect" });
-    const prompt = generatePersonaPrompt(persona);
+describe("PromptGenerator", () => {
+  // ==========================================================================
+  // Tier Selection
+  // ==========================================================================
 
-    expect(prompt).toContain("Architect");
-  });
-
-  it("should include description when provided", () => {
-    const persona = makePersona({
-      name: "Architect",
-      description: "A system design specialist focused on clean abstractions",
+  describe("getTier", () => {
+    it("should return 'zero' for value 0", () => {
+      expect(getTier(0)).toBe("zero");
     });
-    const prompt = generatePersonaPrompt(persona);
 
-    expect(prompt).toContain("A system design specialist focused on clean abstractions");
-  });
-
-  it("should not include description when empty", () => {
-    const persona = makePersona({ name: "Architect", description: "" });
-    const prompt = generatePersonaPrompt(persona);
-
-    // Should not have an empty line where description would be
-    const lines = prompt.split("\n").filter(l => l.trim() === "" && l !== "");
-    // Just verify the name is there and no double blank lines
-    expect(prompt).toContain("Architect");
-  });
-
-  it("should list active traits sorted by value descending", () => {
-    const persona = makePersona({
-      name: "Balanced",
-      traits: makeTraits({
-        architecture_focus: 18,
-        testing_unit: 10,
-        code_review: 5,
-      }),
+    it("should return 'low' for values 1-7", () => {
+      expect(getTier(1)).toBe("low");
+      expect(getTier(4)).toBe("low");
+      expect(getTier(7)).toBe("low");
     });
-    const prompt = generatePersonaPrompt(persona);
 
-    // architecture_focus (18) should appear before testing_unit (10)
-    const archIdx = prompt.indexOf("Architecture Focus");
-    const testIdx = prompt.indexOf("Testing: Unit");
-    const reviewIdx = prompt.indexOf("Code Review");
-
-    expect(archIdx).toBeGreaterThan(-1);
-    expect(testIdx).toBeGreaterThan(-1);
-    expect(reviewIdx).toBeGreaterThan(-1);
-    expect(archIdx).toBeLessThan(testIdx);
-    expect(testIdx).toBeLessThan(reviewIdx);
-  });
-
-  it("should omit zero-value traits", () => {
-    const persona = makePersona({
-      name: "Specialist",
-      traits: makeTraits({
-        architecture_focus: 20,
-        // All others are 0
-      }),
+    it("should return 'medium' for values 8-14", () => {
+      expect(getTier(8)).toBe("medium");
+      expect(getTier(11)).toBe("medium");
+      expect(getTier(14)).toBe("medium");
     });
-    const prompt = generatePersonaPrompt(persona);
 
-    // Should contain architecture_focus
-    expect(prompt).toContain("Architecture Focus");
-
-    // Should NOT contain any zero-value traits
-    expect(prompt).not.toContain("Product Design");
-    expect(prompt).not.toContain("UI/UX Focus");
-    expect(prompt).not.toContain("Documentation");
-  });
-
-  it("should show 'No specific specializations' for all-zero traits", () => {
-    const persona = makePersona({
-      name: "Blank",
-      traits: zeroTraits(),
+    it("should return 'high' for values 15-20", () => {
+      expect(getTier(15)).toBe("high");
+      expect(getTier(18)).toBe("high");
+      expect(getTier(20)).toBe("high");
     });
-    const prompt = generatePersonaPrompt(persona);
 
-    expect(prompt).toContain("No specific specializations");
-  });
-
-  it("should label traits as HIGH when value >= 15", () => {
-    const persona = makePersona({
-      name: "HighTrait",
-      traits: makeTraits({ architecture_focus: 15 }),
+    it("should handle exact boundary values correctly", () => {
+      // Verify every boundary transition
+      expect(getTier(0)).toBe("zero");
+      expect(getTier(1)).toBe("low");
+      expect(getTier(7)).toBe("low");
+      expect(getTier(8)).toBe("medium");
+      expect(getTier(14)).toBe("medium");
+      expect(getTier(15)).toBe("high");
+      expect(getTier(20)).toBe("high");
     });
-    const prompt = generatePersonaPrompt(persona);
-
-    expect(prompt).toContain("[HIGH]");
   });
 
-  it("should label traits as MEDIUM when value >= 8 and < 15", () => {
-    const persona = makePersona({
-      name: "MedTrait",
-      traits: makeTraits({ architecture_focus: 10 }),
+  // ==========================================================================
+  // TRAIT_PROMPT_TEMPLATES
+  // ==========================================================================
+
+  describe("TRAIT_PROMPT_TEMPLATES", () => {
+    it("should have templates for all 12 traits", () => {
+      for (const key of PERSONA_TRAIT_KEYS) {
+        expect(TRAIT_PROMPT_TEMPLATES).toHaveProperty(key);
+      }
     });
-    const prompt = generatePersonaPrompt(persona);
 
-    expect(prompt).toContain("[MEDIUM]");
-  });
-
-  it("should label traits as LOW when value >= 1 and < 8", () => {
-    const persona = makePersona({
-      name: "LowTrait",
-      traits: makeTraits({ architecture_focus: 3 }),
+    it("should have low, medium, and high tiers for each trait", () => {
+      for (const key of PERSONA_TRAIT_KEYS) {
+        const template = TRAIT_PROMPT_TEMPLATES[key];
+        expect(template).toHaveProperty("low");
+        expect(template).toHaveProperty("medium");
+        expect(template).toHaveProperty("high");
+        expect(typeof template.low).toBe("string");
+        expect(typeof template.medium).toBe("string");
+        expect(typeof template.high).toBe("string");
+        // Each tier should be non-empty
+        expect(template.low.length).toBeGreaterThan(0);
+        expect(template.medium.length).toBeGreaterThan(0);
+        expect(template.high.length).toBeGreaterThan(0);
+      }
     });
-    const prompt = generatePersonaPrompt(persona);
 
-    expect(prompt).toContain("[LOW]");
+    it("should have progressively longer/stronger text from low to high", () => {
+      // High tier should be more detailed than low tier for each trait
+      for (const key of PERSONA_TRAIT_KEYS) {
+        const template = TRAIT_PROMPT_TEMPLATES[key];
+        expect(template.high.length).toBeGreaterThan(template.low.length);
+      }
+    });
   });
 
-  it("should handle a fully loaded persona with all traits active", () => {
-    const persona = makePersona({
-      name: "Generalist",
-      traits: makeTraits({
-        architecture_focus: 10,
-        product_design: 8,
-        uiux_focus: 8,
-        qa_scalability: 8,
-        qa_correctness: 8,
+  // ==========================================================================
+  // generatePersonaPrompt alias
+  // ==========================================================================
+
+  describe("generatePersonaPrompt alias", () => {
+    it("should be the same function as generatePrompt", () => {
+      expect(generatePersonaPrompt).toBe(generatePrompt);
+    });
+
+    it("should produce identical output to generatePrompt", () => {
+      const persona = makePersona({
+        name: "AliasTest",
+        traits: makeTraits({ architecture_focus: 15, qa_correctness: 12 }),
+      });
+
+      expect(generatePersonaPrompt(persona)).toBe(generatePrompt(persona));
+    });
+  });
+
+  // ==========================================================================
+  // Prompt Generation — Identity & Structure
+  // ==========================================================================
+
+  describe("generatePrompt — identity", () => {
+    it("should include the persona name in the output", () => {
+      const persona = makePersona({ name: "Sentinel" });
+      const prompt = generatePrompt(persona);
+
+      expect(prompt).toContain("Sentinel");
+    });
+
+    it("should include the persona description in the output", () => {
+      const persona = makePersona({
+        name: "Sentinel",
+        description: "A QA-focused agent who catches bugs before they ship",
+      });
+      const prompt = generatePrompt(persona);
+
+      expect(prompt).toContain(
+        "A QA-focused agent who catches bugs before they ship",
+      );
+    });
+
+    it("should start with a heading containing the persona name", () => {
+      const persona = makePersona({ name: "Architect" });
+      const prompt = generatePrompt(persona);
+
+      // First line should be a heading with the persona name
+      const firstLine = prompt.split("\n")[0]!;
+      expect(firstLine).toMatch(/^#\s+.*Architect/);
+    });
+  });
+
+  // ==========================================================================
+  // Prompt Generation — Trait Inclusion / Omission
+  // ==========================================================================
+
+  describe("generatePrompt — trait handling", () => {
+    it("should omit traits with value 0 entirely", () => {
+      const persona = makePersona({
+        name: "Focused",
+        traits: makeTraits({ architecture_focus: 18 }),
+        // all other traits are 0
+      });
+      const prompt = generatePrompt(persona);
+
+      // Should NOT contain low-tier text for zero-value traits
+      expect(prompt).toContain("architecture"); // the active trait
+      // documentation is at 0, its prompt text should be absent
+      expect(prompt).not.toContain(TRAIT_PROMPT_TEMPLATES.documentation.low);
+      expect(prompt).not.toContain(TRAIT_PROMPT_TEMPLATES.documentation.medium);
+      expect(prompt).not.toContain(TRAIT_PROMPT_TEMPLATES.documentation.high);
+    });
+
+    it("should include low-tier text for traits 1-7", () => {
+      const persona = makePersona({
+        name: "Casual",
+        traits: makeTraits({ code_review: 5 }),
+      });
+      const prompt = generatePrompt(persona);
+
+      expect(prompt).toContain(TRAIT_PROMPT_TEMPLATES.code_review.low);
+    });
+
+    it("should include medium-tier text for traits 8-14", () => {
+      const persona = makePersona({
+        name: "Balanced",
+        traits: makeTraits({ testing_unit: 12 }),
+      });
+      const prompt = generatePrompt(persona);
+
+      expect(prompt).toContain(TRAIT_PROMPT_TEMPLATES.testing_unit.medium);
+    });
+
+    it("should include high-tier text for traits 15-20", () => {
+      const persona = makePersona({
+        name: "Expert",
+        traits: makeTraits({ qa_correctness: 18 }),
+      });
+      const prompt = generatePrompt(persona);
+
+      expect(prompt).toContain(TRAIT_PROMPT_TEMPLATES.qa_correctness.high);
+    });
+
+    it("should handle all traits at maximum (budget-impossible but logically valid)", () => {
+      const traits = {} as Record<string, number>;
+      for (const key of PERSONA_TRAIT_KEYS) {
+        traits[key] = 20;
+      }
+      const persona = makePersona({
+        name: "MaxAll",
+        traits: traits as TraitValues,
+      });
+      const prompt = generatePrompt(persona);
+
+      // All high tiers should be present
+      for (const key of PERSONA_TRAIT_KEYS) {
+        expect(prompt).toContain(TRAIT_PROMPT_TEMPLATES[key].high);
+      }
+    });
+
+    it("should produce a minimal prompt for all-zero traits", () => {
+      const persona = makePersona({
+        name: "Blank",
+        description: "A blank persona",
+        traits: zeroTraits(),
+      });
+      const prompt = generatePrompt(persona);
+
+      // Should still have the identity header
+      expect(prompt).toContain("Blank");
+      expect(prompt).toContain("A blank persona");
+
+      // Should NOT contain any trait-specific instructions
+      for (const key of PERSONA_TRAIT_KEYS) {
+        expect(prompt).not.toContain(TRAIT_PROMPT_TEMPLATES[key].low);
+        expect(prompt).not.toContain(TRAIT_PROMPT_TEMPLATES[key].medium);
+        expect(prompt).not.toContain(TRAIT_PROMPT_TEMPLATES[key].high);
+      }
+    });
+  });
+
+  // ==========================================================================
+  // Prompt Generation — Cognitive Grouping
+  // ==========================================================================
+
+  describe("generatePrompt — cognitive grouping", () => {
+    it("should group engineering traits under an Engineering section", () => {
+      const persona = makePersona({
+        name: "Engineer",
+        traits: makeTraits({
+          architecture_focus: 15,
+          modular_architecture: 12,
+          technical_depth: 8,
+        }),
+      });
+      const prompt = generatePrompt(persona);
+
+      // Engineering section should exist
+      expect(prompt).toMatch(/##\s+Engineering/i);
+    });
+
+    it("should group quality traits under a Quality section", () => {
+      const persona = makePersona({
+        name: "QA",
+        traits: makeTraits({
+          qa_correctness: 18,
+          testing_unit: 15,
+        }),
+      });
+      const prompt = generatePrompt(persona);
+
+      expect(prompt).toMatch(/##\s+Quality/i);
+    });
+
+    it("should group product traits under a Product section", () => {
+      const persona = makePersona({
+        name: "PM",
+        traits: makeTraits({
+          product_design: 18,
+          business_objectives: 12,
+        }),
+      });
+      const prompt = generatePrompt(persona);
+
+      expect(prompt).toMatch(/##\s+Product/i);
+    });
+
+    it("should group craft traits under a Craft section", () => {
+      const persona = makePersona({
+        name: "Mentor",
+        traits: makeTraits({
+          code_review: 15,
+          documentation: 12,
+        }),
+      });
+      const prompt = generatePrompt(persona);
+
+      expect(prompt).toMatch(/##\s+Craft/i);
+    });
+
+    it("should omit section headers when all traits in a group are 0", () => {
+      // Only engineering traits active, all others 0
+      const persona = makePersona({
+        name: "PureEngineer",
+        traits: makeTraits({
+          architecture_focus: 18,
+          modular_architecture: 15,
+        }),
+      });
+      const prompt = generatePrompt(persona);
+
+      expect(prompt).toMatch(/##\s+Engineering/i);
+      // Quality, Product, Craft sections should be absent
+      expect(prompt).not.toMatch(/##\s+Quality/i);
+      expect(prompt).not.toMatch(/##\s+Product/i);
+      expect(prompt).not.toMatch(/##\s+Craft/i);
+    });
+  });
+
+  // ==========================================================================
+  // Prompt Generation — Core Identity Section
+  // ==========================================================================
+
+  describe("generatePrompt — core identity", () => {
+    it("should include a Core Identity section summarizing top traits", () => {
+      const persona = makePersona({
+        name: "Sentinel",
+        traits: makeTraits({
+          qa_correctness: 20,
+          testing_unit: 18,
+          architecture_focus: 5,
+        }),
+      });
+      const prompt = generatePrompt(persona);
+
+      expect(prompt).toMatch(/##\s+Core Identity/i);
+    });
+
+    it("should mention the highest-valued traits in the Core Identity", () => {
+      const persona = makePersona({
+        name: "Sentinel",
+        traits: makeTraits({
+          qa_correctness: 20,
+          testing_unit: 18,
+          architecture_focus: 3,
+        }),
+      });
+      const prompt = generatePrompt(persona);
+
+      // Extract core identity section
+      const coreMatch = prompt.match(
+        /## Core Identity\n([\s\S]*?)(?=\n## |$)/,
+      );
+      expect(coreMatch).not.toBeNull();
+      const coreSection = coreMatch![1]!;
+
+      // Should reference the top traits' domains
+      expect(coreSection).toMatch(/correctness|qa|quality/i);
+      expect(coreSection).toMatch(/test/i);
+    });
+  });
+
+  // ==========================================================================
+  // Determinism
+  // ==========================================================================
+
+  describe("generatePrompt — determinism", () => {
+    it("should produce identical output for identical personas", () => {
+      const traits = makeTraits({
+        architecture_focus: 15,
+        qa_correctness: 12,
         testing_unit: 8,
-        testing_acceptance: 8,
-        modular_architecture: 8,
-        business_objectives: 8,
-        technical_depth: 8,
-        code_review: 8,
-        documentation: 10,
-      }),
-    });
-    const prompt = generatePersonaPrompt(persona);
+        documentation: 5,
+      });
 
-    // All 12 traits should appear
-    expect(prompt).toContain("Architecture Focus");
-    expect(prompt).toContain("Product Design");
-    expect(prompt).toContain("UI/UX Focus");
-    expect(prompt).toContain("QA: Scalability");
-    expect(prompt).toContain("QA: Correctness");
-    expect(prompt).toContain("Testing: Unit");
-    expect(prompt).toContain("Testing: Acceptance");
-    expect(prompt).toContain("Modular Architecture");
-    expect(prompt).toContain("Business Objectives");
-    expect(prompt).toContain("Technical Depth");
-    expect(prompt).toContain("Code Review");
-    expect(prompt).toContain("Documentation");
+      const persona1 = makePersona({
+        name: "Alpha",
+        description: "Test persona",
+        traits,
+      });
+      const persona2 = makePersona({
+        name: "Alpha",
+        description: "Test persona",
+        traits,
+      });
+
+      const prompt1 = generatePrompt(persona1);
+      const prompt2 = generatePrompt(persona2);
+
+      expect(prompt1).toBe(prompt2);
+    });
+
+    it("should produce identical output across multiple calls", () => {
+      const persona = makePersona({
+        name: "Consistent",
+        traits: makeTraits({
+          architecture_focus: 18,
+          code_review: 10,
+          qa_correctness: 15,
+        }),
+      });
+
+      const results = Array.from({ length: 5 }, () => generatePrompt(persona));
+
+      // All 5 outputs should be identical
+      for (let i = 1; i < results.length; i++) {
+        expect(results[i]).toBe(results[0]);
+      }
+    });
+
+    it("should produce different output for different trait values", () => {
+      const persona1 = makePersona({
+        name: "Agent",
+        traits: makeTraits({ architecture_focus: 20 }),
+      });
+      const persona2 = makePersona({
+        name: "Agent",
+        traits: makeTraits({ qa_correctness: 20 }),
+      });
+
+      const prompt1 = generatePrompt(persona1);
+      const prompt2 = generatePrompt(persona2);
+
+      expect(prompt1).not.toBe(prompt2);
+    });
+
+    it("should produce different output for different persona names", () => {
+      const traits = makeTraits({ architecture_focus: 15 });
+
+      const prompt1 = generatePrompt(makePersona({ name: "Alpha", traits }));
+      const prompt2 = generatePrompt(makePersona({ name: "Beta", traits }));
+
+      expect(prompt1).not.toBe(prompt2);
+    });
   });
 
-  it("should return a string, not undefined or null", () => {
-    const persona = makePersona({ name: "SafeReturn" });
-    const prompt = generatePersonaPrompt(persona);
+  // ==========================================================================
+  // Behavioral Differentiation
+  // ==========================================================================
 
-    expect(typeof prompt).toBe("string");
-    expect(prompt.length).toBeGreaterThan(0);
+  describe("generatePrompt — behavioral differentiation", () => {
+    it("should produce a QA-heavy prompt that emphasizes testing and correctness", () => {
+      const persona = makePersona({
+        name: "Sentinel",
+        description: "QA specialist",
+        traits: makeTraits({
+          qa_correctness: 20,
+          qa_scalability: 15,
+          testing_unit: 18,
+          testing_acceptance: 15,
+        }),
+      });
+      const prompt = generatePrompt(persona);
+
+      // Should contain strong QA-related instructions
+      expect(prompt).toMatch(/test/i);
+      expect(prompt).toMatch(/correct/i);
+      expect(prompt).toMatch(/edge case/i);
+    });
+
+    it("should produce an architecture-heavy prompt that emphasizes design", () => {
+      const persona = makePersona({
+        name: "Architect",
+        description: "System design specialist",
+        traits: makeTraits({
+          architecture_focus: 20,
+          modular_architecture: 18,
+          technical_depth: 15,
+        }),
+      });
+      const prompt = generatePrompt(persona);
+
+      // Should contain strong architecture-related instructions
+      expect(prompt).toMatch(/design|architec/i);
+      expect(prompt).toMatch(/modular|separation|interface/i);
+    });
+
+    it("should produce a product-heavy prompt that emphasizes user needs", () => {
+      const persona = makePersona({
+        name: "ProductManager",
+        description: "Product thinking specialist",
+        traits: makeTraits({
+          product_design: 20,
+          uiux_focus: 15,
+          business_objectives: 18,
+        }),
+      });
+      const prompt = generatePrompt(persona);
+
+      expect(prompt).toMatch(/user|product/i);
+      expect(prompt).toMatch(/business|value|ROI/i);
+    });
+
+    it("should produce a documentation-heavy prompt that emphasizes writing", () => {
+      const persona = makePersona({
+        name: "Scribe",
+        description: "Documentation specialist",
+        traits: makeTraits({
+          documentation: 20,
+          code_review: 15,
+        }),
+      });
+      const prompt = generatePrompt(persona);
+
+      expect(prompt).toMatch(/document/i);
+      expect(prompt).toMatch(/comment|README|doc/i);
+    });
   });
 
-  it("should handle persona with only description and no active traits", () => {
-    const persona = makePersona({
-      name: "Described",
-      description: "A flexible agent for any task",
-      traits: zeroTraits(),
-    });
-    const prompt = generatePersonaPrompt(persona);
+  // ==========================================================================
+  // Edge Cases
+  // ==========================================================================
 
-    expect(prompt).toContain("Described");
-    expect(prompt).toContain("A flexible agent for any task");
-    expect(prompt).toContain("No specific specializations");
+  describe("generatePrompt — edge cases", () => {
+    it("should handle a persona with empty description", () => {
+      const persona = makePersona({
+        name: "NoDesc",
+        description: "",
+        traits: makeTraits({ architecture_focus: 10 }),
+      });
+      const prompt = generatePrompt(persona);
+
+      expect(prompt).toContain("NoDesc");
+      // Should not have awkward empty lines from missing description
+      expect(prompt).not.toMatch(/\n{4,}/);
+    });
+
+    it("should handle a single trait at value 1 (minimum non-zero)", () => {
+      const persona = makePersona({
+        name: "Minimal",
+        traits: makeTraits({ documentation: 1 }),
+      });
+      const prompt = generatePrompt(persona);
+
+      expect(prompt).toContain(TRAIT_PROMPT_TEMPLATES.documentation.low);
+    });
+
+    it("should handle a single trait at value 20 (maximum)", () => {
+      const persona = makePersona({
+        name: "Maxed",
+        traits: makeTraits({ technical_depth: 20 }),
+      });
+      const prompt = generatePrompt(persona);
+
+      expect(prompt).toContain(TRAIT_PROMPT_TEMPLATES.technical_depth.high);
+    });
+
+    it("should produce well-formed markdown with proper heading hierarchy", () => {
+      const persona = makePersona({
+        name: "WellFormed",
+        traits: makeTraits({
+          architecture_focus: 15,
+          qa_correctness: 12,
+          product_design: 8,
+          code_review: 5,
+        }),
+      });
+      const prompt = generatePrompt(persona);
+
+      // Should have H1 for title
+      expect(prompt).toMatch(/^# /);
+      // Should have H2 sections
+      expect(prompt).toMatch(/\n## /);
+      // Should NOT have H3 or deeper (keep it flat for LLM consumption)
+      expect(prompt).not.toMatch(/\n### /);
+    });
   });
 });
