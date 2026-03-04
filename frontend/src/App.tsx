@@ -13,6 +13,7 @@ import { ProjectProvider } from "./contexts/ProjectContext";
 import { CommunicationProvider } from "./contexts/CommunicationContext";
 import { DashboardView } from "./components/dashboard/OverviewDashboard";
 import { ProposalsView } from "./components/proposals/ProposalsView";
+import { PersonasView } from "./components/personas/PersonasView";
 import { TimelineView } from "./components/timeline/TimelineView";
 import { useUnreadCounts } from "./hooks/useUnreadCounts";
 
@@ -44,7 +45,7 @@ function migrateTheme(stored: string | null): ThemeId {
   return legacyMap[stored] ?? 'pipboy';
 }
 
-type TabId = "dashboard" | "chat" | "epics" | "crew" | "beads" | "timeline" | "proposals" | "settings";
+type TabId = "dashboard" | "chat" | "epics" | "crew" | "beads" | "personas" | "timeline" | "proposals" | "settings";
 
 interface Tab {
   id: TabId;
@@ -58,6 +59,7 @@ const TABS: Tab[] = [
   { id: "epics", label: "EPICS", icon: "📋" },
   { id: "crew", label: "CREW", icon: "👥" },
   { id: "beads", label: "BEADS", icon: "📿" },
+  { id: "personas", label: "PERSONAS", icon: "🎭" },
   { id: "timeline", label: "TIMELINE", icon: "⏱" },
   { id: "proposals", label: "PROPOSALS", icon: "💡" },
   { id: "settings", label: "SETTINGS", icon: "⚙️" },
@@ -160,6 +162,13 @@ function AppContent() {
             aria-hidden={activeTab !== "beads"}
           >
             <BeadsView isActive={activeTab === "beads"} />
+          </section>
+          <section
+            className="tab-view"
+            hidden={activeTab !== "personas"}
+            aria-hidden={activeTab !== "personas"}
+          >
+            <PersonasView isActive={activeTab === "personas"} />
           </section>
           <section
             className="tab-view"

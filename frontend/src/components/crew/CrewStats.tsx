@@ -1,10 +1,12 @@
 import type { CSSProperties } from 'react';
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useSwarmAgents } from '../../hooks/useSwarmAgents';
 import { api, ApiError } from '../../services/api';
-import type { CrewMember } from '../../types';
+import type { CrewMember, Persona } from '../../types';
 import { SwarmAgentCard } from './SwarmAgentCard';
+import { PersonaRosterCard } from '../personas/PersonaRosterCard';
+import { CallsignRoster } from '../personas/CallsignRoster';
 
 // =============================================================================
 // Status Grouping
@@ -66,7 +68,7 @@ export interface CrewStatsProps {
  * Pip-Boy styled crew stats dashboard.
  * Displays agents grouped by status.
  */
-export function CrewStats({ className = '' }: CrewStatsProps) {
+export function CrewStats({ className = '', isActive }: CrewStatsProps) {
   const swarm = useSwarmAgents();
   const agents = swarm.agents;
   const loading = swarm.loading;
@@ -76,9 +78,31 @@ export function CrewStats({ className = '' }: CrewStatsProps) {
   const agentGridStyle = isNarrow
     ? { ...styles.agentGrid, gridTemplateColumns: '1fr' }
     : styles.agentGrid;
+  const personaGridStyle: CSSProperties = isNarrow
+    ? { display: 'grid', gridTemplateColumns: '1fr', gap: '10px' }
+    : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' };
 
   const totalAgents = agents?.length ?? 0;
   const runningAgents = agents?.filter(a => a.status !== 'offline').length ?? 0;
+
+  // Persona roster
+  const [personas, setPersonas] = useState<Persona[]>([]);
+  useEffect(() => {
+    if (!isActive) return;
+    api.personas.list().then(setPersonas).catch(() => {
+      // Personas are optional — fail silently
+    });
+  }, [isActive]);
+
+  const handleDeployPersona = useCallback((persona: Persona) => {
+    // Deploy integration will be wired in Phase 4 (spawn integration)
+    alert(`Deploy ${persona.name}? (Spawn integration coming in Phase 4)`);
+  }, []);
+
+  const handleEditPersona = useCallback((_persona: Persona) => {
+    // Navigate to personas tab — handled by App-level navigation
+    // For now, no-op; users use the PERSONAS tab to edit
+  }, []);
 
   return (
     <section style={styles.container} className={className}>
@@ -109,15 +133,44 @@ export function CrewStats({ className = '' }: CrewStatsProps) {
         )}
 
         {agents && agents.length > 0 && (
-          <>
-            <SwarmSummaryPanel agents={agents} />
-            <SwarmSection agents={agents} gridStyle={agentGridStyle} />
-          </>
+          <SwarmSummaryPanel agents={agents} />
         )}
 
-        {agents && agents.length === 0 && (
+        {/* Persona Roster Section */}
+        {personas.length > 0 && (
+          <div style={styles.section}>
+            <div style={styles.sectionHeader}>
+              <span style={styles.sectionIcon}>{'\u25C7'}</span>
+              <span style={styles.sectionTitle} className="crt-glow">PERSONA ROSTER</span>
+              <span style={styles.sectionLine} />
+              <span style={{ fontSize: '0.7rem', color: colors.primaryDim, letterSpacing: '0.1em' }}>
+                {personas.length}
+              </span>
+            </div>
+            <div style={personaGridStyle}>
+              {personas.map((persona) => (
+                <PersonaRosterCard
+                  key={persona.id}
+                  persona={persona}
+                  onDeploy={handleDeployPersona}
+                  onEdit={handleEditPersona}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Running agents grouped by status */}
+        {agents && agents.length > 0 && (
+          <SwarmSection agents={agents} gridStyle={agentGridStyle} />
+        )}
+
+        {agents && agents.length === 0 && !personas.length && (
           <div style={styles.emptyState}>NO AGENTS CONFIGURED</div>
         )}
+
+        {/* Callsign Roster (collapsible) */}
+        <CallsignRoster />
       </div>
 
       <footer style={styles.footer}>
