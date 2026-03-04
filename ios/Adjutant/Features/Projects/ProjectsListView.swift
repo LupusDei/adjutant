@@ -244,6 +244,7 @@ struct ProjectsListView: View {
             .padding(.horizontal, CRTTheme.Spacing.md)
             .padding(.vertical, CRTTheme.Spacing.sm)
         }
+        .scrollDismissesKeyboard(.interactively)
         .refreshable {
             await viewModel.refresh()
         }

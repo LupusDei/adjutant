@@ -135,6 +135,18 @@ struct CRTTabBar: View {
         .padding(.top, CRTTheme.Spacing.xs)
         .padding(.bottom, CRTTheme.Spacing.sm)
         .background(tabBarBackground)
+        .gesture(
+            DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                .onEnded { value in
+                    // Swipe down on tab bar dismisses keyboard
+                    if value.translation.height > 20 {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
+                    }
+                }
+        )
     }
 
     private var tabBarBackground: some View {

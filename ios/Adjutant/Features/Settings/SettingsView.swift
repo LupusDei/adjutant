@@ -37,6 +37,7 @@ struct SettingsView: View {
             }
             .padding(.vertical, CRTTheme.Spacing.md)
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(theme.background.screen)
         .onAppear {
             viewModel.onAppear()

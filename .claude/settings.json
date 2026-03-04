@@ -2,13 +2,22 @@
   "hooks": {
     "SessionStart": [
       {
-        "command": "scripts/hooks/persona-inject.sh",
-        "description": "Inject persona context on initial session start"
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/hooks/persona-inject.sh"
+          }
+        ]
       },
       {
-        "command": "scripts/hooks/persona-inject.sh",
         "matcher": "compact",
-        "description": "Re-inject persona context after context compaction"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/hooks/persona-inject.sh"
+          }
+        ]
       }
     ]
   }

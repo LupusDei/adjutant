@@ -504,6 +504,7 @@ struct AgentListView: View {
             }
         }
         .listStyle(.plain)
+        .scrollDismissesKeyboard(.interactively)
         .scrollContentBackground(.hidden)
         .background(theme.background.screen)
         .refreshable {
