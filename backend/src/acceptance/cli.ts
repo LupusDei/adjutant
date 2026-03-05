@@ -208,8 +208,15 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err: unknown) => {
-  // eslint-disable-next-line no-console
-  console.error("Acceptance CLI error:", err);
-  process.exit(1);
-});
+// Only run main when this file is the entry point (not when imported for testing)
+const isEntryPoint =
+  process.argv[1] &&
+  import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/"));
+
+if (isEntryPoint) {
+  main().catch((err: unknown) => {
+    // eslint-disable-next-line no-console
+    console.error("Acceptance CLI error:", err);
+    process.exit(1);
+  });
+}
