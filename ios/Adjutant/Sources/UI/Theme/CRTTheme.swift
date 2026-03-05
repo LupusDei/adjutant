@@ -53,7 +53,7 @@ public enum CRTTheme {
             case .pipboy: return Color(red: 0.039, green: 0.373, blue: 0.027)     // #0A5F07
             case .document: return Color(red: 0.420, green: 0.420, blue: 0.420)   // #6B6B6B (exceeds WCAG AA on white)
             case .starcraft: return Color(red: 0.0, green: 0.733, blue: 0.6)       // #00BB99
-            case .friendly: return Color(red: 0.608, green: 0.557, blue: 0.769)    // #9B8EC4 (soft purple)
+            case .friendly: return Color(red: 0.522, green: 0.463, blue: 0.686)    // #8576AF (soft purple, WCAG AA compliant)
             }
         }
 
@@ -81,7 +81,7 @@ public enum CRTTheme {
             case .friendly:
                 return BackgroundSet(
                     screen: Color(red: 0.941, green: 0.925, blue: 1.0),        // #F0ECFF (light lavender)
-                    panel: Color(red: 1.0, green: 0.973, blue: 0.976),         // #FFFBF9 (warm blush white)
+                    panel: Color(red: 1.0, green: 0.984, blue: 0.976),         // #FFFBF9 (warm blush white)
                     elevated: Color(red: 0.941, green: 0.957, blue: 1.0)       // #F0F4FF (light sky)
                 )
             }
@@ -147,7 +147,7 @@ public enum CRTTheme {
             case .pipboy: return dim
             case .document: return Color(red: 0.420, green: 0.420, blue: 0.420)   // #6B6B6B (exceeds WCAG AA)
             case .starcraft: return dim
-            case .friendly: return Color(red: 0.478, green: 0.435, blue: 0.627)    // #7A6FA0 (muted purple)
+            case .friendly: return Color(red: 0.420, green: 0.373, blue: 0.561)    // #6B5F8F (muted purple, WCAG AA compliant)
             }
         }
 

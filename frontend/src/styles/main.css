@@ -465,9 +465,9 @@
   }
 
   [data-theme='friendly'] .nav-tab:nth-child(4).active {
-    background: linear-gradient(135deg, #FF6333 0%, #FF8A5E 100%);
-    border-color: #FF6333;
-    box-shadow: 0 4px 14px rgba(255, 99, 51, 0.35);
+    background: linear-gradient(135deg, #E05525 0%, #FF7A52 100%);
+    border-color: #E05525;
+    box-shadow: 0 4px 14px rgba(224, 85, 37, 0.35);
   }
 
   [data-theme='friendly'] .nav-tab:nth-child(5).active {
