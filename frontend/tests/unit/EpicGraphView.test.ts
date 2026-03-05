@@ -251,4 +251,124 @@ describe('EpicGraphView', () => {
       expect(mockGraphForEpic).toHaveBeenCalledWith('adj-010');
     });
   });
+
+  // ===========================================================================
+  // QA Edge Cases (adj-036.4)
+  // ===========================================================================
+
+  describe('edge cases', () => {
+    it('should render empty state when API returns no nodes', async () => {
+      mockGraphForEpic.mockResolvedValue({ nodes: [], edges: [] });
+
+      render(
+        createElement(EpicGraphView, {
+          epicId: 'adj-010',
+          epicTitle: 'Empty Epic',
+          onClose: mockOnClose,
+        })
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText(/NO DEPENDENCY DATA/i)).toBeTruthy();
+    });
+
+    it('should not render critical path toggle when graph has no nodes', async () => {
+      mockGraphForEpic.mockResolvedValue({ nodes: [], edges: [] });
+
+      render(
+        createElement(EpicGraphView, {
+          epicId: 'adj-010',
+          epicTitle: 'Empty Epic',
+          onClose: mockOnClose,
+        })
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(screen.queryByText('CRITICAL PATH')).toBeNull();
+    });
+
+    it('should render node count indicator when graph has data', async () => {
+      mockGraphForEpic.mockResolvedValue(createMockGraphResponse());
+
+      render(
+        createElement(EpicGraphView, {
+          epicId: 'adj-010',
+          epicTitle: 'Build Feature X',
+          onClose: mockOnClose,
+        })
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Should show "2 NODES / 1 EDGES"
+      expect(screen.getByText(/2 NODES/)).toBeTruthy();
+    });
+
+    it('should have accessible labels on all header buttons', async () => {
+      mockGraphForEpic.mockResolvedValue(createMockGraphResponse());
+
+      render(
+        createElement(EpicGraphView, {
+          epicId: 'adj-010',
+          epicTitle: 'Build Feature X',
+          onClose: mockOnClose,
+        })
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(screen.getByLabelText('Refresh graph')).toBeTruthy();
+      expect(screen.getByLabelText('Fit to viewport')).toBeTruthy();
+      expect(screen.getByLabelText('Close graph')).toBeTruthy();
+    });
+
+    it('should display error message text from the error object', async () => {
+      mockGraphForEpic.mockRejectedValue(new Error('Connection refused'));
+
+      render(
+        createElement(EpicGraphView, {
+          epicId: 'adj-010',
+          epicTitle: 'Error Epic',
+          onClose: mockOnClose,
+        })
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText(/Connection refused/)).toBeTruthy();
+    });
+
+    it('should truncate long epic titles via CSS without breaking layout', async () => {
+      const longTitle = 'A'.repeat(200);
+      mockGraphForEpic.mockResolvedValue(createMockGraphResponse());
+
+      render(
+        createElement(EpicGraphView, {
+          epicId: 'adj-010',
+          epicTitle: longTitle,
+          onClose: mockOnClose,
+        })
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // The title element should exist (rendered, even if visually truncated)
+      expect(screen.getByText(longTitle)).toBeTruthy();
+    });
+  });
 });

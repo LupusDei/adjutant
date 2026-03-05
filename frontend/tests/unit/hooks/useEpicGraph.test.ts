@@ -296,4 +296,168 @@ describe('useEpicGraph', () => {
       expect(mockGraphForEpic).toHaveBeenCalledTimes(2);
     });
   });
+
+  // ===========================================================================
+  // QA Edge Cases (adj-036.4)
+  // ===========================================================================
+
+  describe('edge cases', () => {
+    it('should handle empty graph response (no nodes at all)', async () => {
+      mockGraphForEpic.mockResolvedValue({
+        nodes: [],
+        edges: [],
+      });
+
+      const { result } = renderHook(() => useEpicGraph('adj-010'));
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.loading).toBe(false);
+      expect(result.current.error).toBeNull();
+      expect(result.current.nodes).toEqual([]);
+      expect(result.current.edges).toEqual([]);
+      expect(result.current.criticalPathLength).toBe(0);
+    });
+
+    it('should handle single-node graph (epic with no children)', async () => {
+      mockGraphForEpic.mockResolvedValue({
+        nodes: [
+          {
+            id: 'adj-010',
+            title: 'Lonely Epic',
+            status: 'open',
+            type: 'epic',
+            priority: 1,
+            assignee: null,
+          },
+        ],
+        edges: [],
+      });
+
+      const { result } = renderHook(() => useEpicGraph('adj-010'));
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.nodes).toHaveLength(1);
+      expect(result.current.nodes[0]?.id).toBe('adj-010');
+      expect(result.current.edges).toEqual([]);
+      // Orphan node should still have position
+      expect(result.current.nodes[0]?.position).toBeDefined();
+    });
+
+    it('should handle non-Error rejection from API', async () => {
+      // Some APIs throw strings, not Error objects
+      mockGraphForEpic.mockRejectedValue('string error');
+
+      const { result } = renderHook(() => useEpicGraph('adj-010'));
+
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(result.current.loading).toBe(false);
+      expect(result.current.error).toBeInstanceOf(Error);
+      expect(result.current.error?.message).toBe('string error');
+    });
+
+    it('should clear previous data and error when epicId changes to null', async () => {
+      const mockData = createMockEpicGraphResponse();
+      mockGraphForEpic.mockResolvedValue(mockData);
+
+      const { result, rerender } = renderHook(
+        ({ epicId }: { epicId: string | null }) => useEpicGraph(epicId),
+        { initialProps: { epicId: 'adj-010' as string | null } }
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.nodes).toHaveLength(3);
+
+      // Switch to null
+      rerender({ epicId: null });
+
+      expect(result.current.nodes).toEqual([]);
+      expect(result.current.edges).toEqual([]);
+      expect(result.current.loading).toBe(false);
+      expect(result.current.error).toBeNull();
+    });
+
+    it('should handle graph with mixed status nodes for critical path', async () => {
+      mockGraphForEpic.mockResolvedValue({
+        nodes: [
+          {
+            id: 'adj-010',
+            title: 'Epic',
+            status: 'in_progress',
+            type: 'epic',
+            priority: 1,
+            assignee: null,
+          },
+          {
+            id: 'adj-010.1',
+            title: 'Open Task',
+            status: 'open',
+            type: 'task',
+            priority: 2,
+            assignee: null,
+          },
+          {
+            id: 'adj-010.2',
+            title: 'Closed Task',
+            status: 'closed',
+            type: 'task',
+            priority: 2,
+            assignee: null,
+          },
+        ],
+        edges: [
+          { issueId: 'adj-010', dependsOnId: 'adj-010.1', type: 'depends_on' },
+          { issueId: 'adj-010', dependsOnId: 'adj-010.2', type: 'depends_on' },
+        ],
+      });
+
+      const { result } = renderHook(() => useEpicGraph('adj-010'));
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Critical path should only include non-closed nodes
+      expect(result.current.criticalPath.nodeIds.has('adj-010.2')).toBe(false);
+      // Open and in_progress should be eligible for critical path
+      expect(result.current.criticalPath.nodeIds.has('adj-010')).toBe(true);
+    });
+
+    it('should handle API error and then successful retry', async () => {
+      mockGraphForEpic
+        .mockRejectedValueOnce(new Error('Network error'))
+        .mockResolvedValueOnce(createMockEpicGraphResponse());
+
+      const { result } = renderHook(() => useEpicGraph('adj-010'));
+
+      // First load: error
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(result.current.error).not.toBeNull();
+      expect(result.current.nodes).toEqual([]);
+
+      // Manual refresh: success
+      await act(async () => {
+        await result.current.refresh();
+      });
+
+      expect(result.current.error).toBeNull();
+      expect(result.current.nodes).toHaveLength(3);
+    });
+  });
 });

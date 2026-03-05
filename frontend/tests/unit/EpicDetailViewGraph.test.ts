@@ -145,4 +145,34 @@ describe('EpicDetailView - View Graph button', () => {
 
     expect(screen.queryByLabelText('View dependency graph')).toBeNull();
   });
+
+  // ===========================================================================
+  // QA Edge Case: Escape key isolation (adj-036.4)
+  // ===========================================================================
+
+  it('should NOT close the detail panel when Escape is pressed while graph overlay is open', async () => {
+    render(
+      createElement(EpicDetailView, {
+        epicId: 'adj-010',
+        onClose: mockOnClose,
+      })
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Open the graph overlay
+    const graphButton = screen.getByLabelText('View dependency graph');
+    fireEvent.click(graphButton);
+
+    // Press Escape -- should close the graph overlay but NOT call mockOnClose
+    mockOnClose.mockClear();
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    // The graph overlay should close (close button should be gone)
+    expect(screen.queryByLabelText('Close graph')).toBeNull();
+    // The detail panel's onClose should NOT have been called
+    expect(mockOnClose).not.toHaveBeenCalled();
+  });
 });

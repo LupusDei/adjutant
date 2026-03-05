@@ -257,16 +257,16 @@ export function EpicDetailView(props: EpicDetailViewProps) {
     void refresh();
   }, [refresh]);
 
-  // Close on escape key
+  // Close on escape key -- skip when graph overlay is open (it has its own Escape handler)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !showGraph) {
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => { window.removeEventListener('keydown', handleKeyDown); };
-  }, [onClose]);
+  }, [onClose, showGraph]);
 
   // Don't render if no epic selected
   if (!epicId) return null;

@@ -220,6 +220,249 @@ describe("filterGraphToEpicSubtree", () => {
     // Both parents should be included
     expect(ids).toEqual(["adj-000", "adj-001", "adj-002", "adj-010"]);
   });
+
+  // =========================================================================
+  // QA Edge Cases (adj-036.4)
+  // =========================================================================
+
+  it("should handle epic with exactly one child", () => {
+    const issues: BeadsIssue[] = [
+      createBead({
+        id: "adj-001",
+        title: "Single Child Epic",
+        issue_type: "epic",
+        dependencies: [
+          { issue_id: "adj-001", depends_on_id: "adj-002", type: "parent" },
+        ],
+      }),
+      createBead({ id: "adj-002", title: "Only Child", issue_type: "task" }),
+      createBead({ id: "adj-099", title: "Unrelated", issue_type: "task" }),
+    ];
+
+    const filtered = filterGraphToEpicSubtree(issues, "adj-001");
+
+    expect(filtered).toHaveLength(2);
+    expect(filtered.map((i) => i.id).sort()).toEqual(["adj-001", "adj-002"]);
+  });
+
+  it("should handle very deeply nested hierarchy (5+ levels)", () => {
+    const issues: BeadsIssue[] = [
+      createBead({
+        id: "adj-001",
+        title: "Level 0",
+        issue_type: "epic",
+        dependencies: [
+          { issue_id: "adj-001", depends_on_id: "adj-002", type: "parent" },
+        ],
+      }),
+      createBead({
+        id: "adj-002",
+        title: "Level 1",
+        issue_type: "epic",
+        dependencies: [
+          { issue_id: "adj-002", depends_on_id: "adj-003", type: "parent" },
+        ],
+      }),
+      createBead({
+        id: "adj-003",
+        title: "Level 2",
+        issue_type: "epic",
+        dependencies: [
+          { issue_id: "adj-003", depends_on_id: "adj-004", type: "parent" },
+        ],
+      }),
+      createBead({
+        id: "adj-004",
+        title: "Level 3",
+        issue_type: "epic",
+        dependencies: [
+          { issue_id: "adj-004", depends_on_id: "adj-005", type: "parent" },
+        ],
+      }),
+      createBead({
+        id: "adj-005",
+        title: "Level 4",
+        issue_type: "task",
+        dependencies: [
+          { issue_id: "adj-005", depends_on_id: "adj-006", type: "parent" },
+        ],
+      }),
+      createBead({ id: "adj-006", title: "Level 5 Leaf", issue_type: "task" }),
+      createBead({ id: "adj-099", title: "Unrelated", issue_type: "task" }),
+    ];
+
+    const filtered = filterGraphToEpicSubtree(issues, "adj-001");
+
+    expect(filtered).toHaveLength(6);
+    const ids = filtered.map((i) => i.id).sort();
+    expect(ids).toEqual(["adj-001", "adj-002", "adj-003", "adj-004", "adj-005", "adj-006"]);
+  });
+
+  it("should handle 3-way circular dependencies without infinite loop", () => {
+    const issues: BeadsIssue[] = [
+      createBead({
+        id: "adj-001",
+        title: "A",
+        issue_type: "epic",
+        dependencies: [
+          { issue_id: "adj-001", depends_on_id: "adj-002", type: "parent" },
+        ],
+      }),
+      createBead({
+        id: "adj-002",
+        title: "B",
+        issue_type: "epic",
+        dependencies: [
+          { issue_id: "adj-002", depends_on_id: "adj-003", type: "parent" },
+        ],
+      }),
+      createBead({
+        id: "adj-003",
+        title: "C",
+        issue_type: "epic",
+        dependencies: [
+          { issue_id: "adj-003", depends_on_id: "adj-001", type: "parent" },
+        ],
+      }),
+    ];
+
+    // Must not hang, and should include all 3
+    const filtered = filterGraphToEpicSubtree(issues, "adj-001");
+
+    const ids = filtered.map((i) => i.id).sort();
+    expect(ids).toEqual(["adj-001", "adj-002", "adj-003"]);
+  });
+
+  it("should handle large graph (50+ nodes) without performance issues", () => {
+    const issues: BeadsIssue[] = [];
+    // Create a root epic with 50 children
+    const childDeps = [];
+    for (let i = 1; i <= 50; i++) {
+      const childId = `adj-${String(i).padStart(3, "0")}`;
+      childDeps.push({ issue_id: "adj-root", depends_on_id: childId, type: "parent" });
+      issues.push(createBead({ id: childId, title: `Task ${i}`, issue_type: "task" }));
+    }
+    issues.push(createBead({
+      id: "adj-root",
+      title: "Root Epic",
+      issue_type: "epic",
+      dependencies: childDeps,
+    }));
+    // Add some unrelated beads
+    for (let i = 100; i < 120; i++) {
+      issues.push(createBead({ id: `adj-${i}`, title: `Unrelated ${i}`, issue_type: "task" }));
+    }
+
+    const startTime = Date.now();
+    const filtered = filterGraphToEpicSubtree(issues, "adj-root");
+    const elapsed = Date.now() - startTime;
+
+    expect(filtered).toHaveLength(51); // root + 50 children
+    expect(elapsed).toBeLessThan(100); // Should complete in under 100ms
+  });
+
+  it("should handle mixed status nodes (open, in_progress, closed together)", () => {
+    const issues: BeadsIssue[] = [
+      createBead({
+        id: "adj-001",
+        title: "Mixed Epic",
+        issue_type: "epic",
+        status: "in_progress",
+        dependencies: [
+          { issue_id: "adj-001", depends_on_id: "adj-002", type: "parent" },
+          { issue_id: "adj-001", depends_on_id: "adj-003", type: "parent" },
+          { issue_id: "adj-001", depends_on_id: "adj-004", type: "parent" },
+        ],
+      }),
+      createBead({ id: "adj-002", title: "Open Task", issue_type: "task", status: "open" }),
+      createBead({ id: "adj-003", title: "In Progress Task", issue_type: "task", status: "in_progress" }),
+      createBead({ id: "adj-004", title: "Closed Task", issue_type: "task", status: "closed" }),
+    ];
+
+    const filtered = filterGraphToEpicSubtree(issues, "adj-001");
+
+    // All statuses should be included - filtering is by subtree, not status
+    expect(filtered).toHaveLength(4);
+    const statuses = filtered.map((i) => i.status).sort();
+    expect(statuses).toEqual(["closed", "in_progress", "in_progress", "open"]);
+  });
+
+  it("should work when epicId targets a non-epic type (task)", () => {
+    const issues: BeadsIssue[] = [
+      createBead({
+        id: "adj-001",
+        title: "A Task Being Queried",
+        issue_type: "task",
+        dependencies: [
+          { issue_id: "adj-001", depends_on_id: "adj-002", type: "parent" },
+        ],
+      }),
+      createBead({ id: "adj-002", title: "Sub-Task", issue_type: "task" }),
+      createBead({ id: "adj-099", title: "Unrelated", issue_type: "task" }),
+    ];
+
+    // Should still work - it filters by ID, not by type
+    const filtered = filterGraphToEpicSubtree(issues, "adj-001");
+
+    expect(filtered).toHaveLength(2);
+    expect(filtered.map((i) => i.id).sort()).toEqual(["adj-001", "adj-002"]);
+  });
+
+  it("should handle empty issues array", () => {
+    const filtered = filterGraphToEpicSubtree([], "adj-001");
+    expect(filtered).toEqual([]);
+  });
+
+  it("should handle dependencies pointing to non-existent beads", () => {
+    const issues: BeadsIssue[] = [
+      createBead({
+        id: "adj-001",
+        title: "Epic with phantom deps",
+        issue_type: "epic",
+        dependencies: [
+          { issue_id: "adj-001", depends_on_id: "adj-phantom", type: "parent" },
+          { issue_id: "adj-001", depends_on_id: "adj-002", type: "parent" },
+        ],
+      }),
+      createBead({ id: "adj-002", title: "Real Child", issue_type: "task" }),
+    ];
+
+    const filtered = filterGraphToEpicSubtree(issues, "adj-001");
+
+    // Should include only the epic and the real child, not the phantom
+    expect(filtered).toHaveLength(2);
+    expect(filtered.map((i) => i.id).sort()).toEqual(["adj-001", "adj-002"]);
+  });
+
+  it("should not include parent's other children (siblings of the epic)", () => {
+    const issues: BeadsIssue[] = [
+      createBead({
+        id: "adj-000",
+        title: "Grand Parent",
+        issue_type: "epic",
+        dependencies: [
+          { issue_id: "adj-000", depends_on_id: "adj-001", type: "parent" },
+          { issue_id: "adj-000", depends_on_id: "adj-sibling", type: "parent" },
+        ],
+      }),
+      createBead({
+        id: "adj-001",
+        title: "Target Epic",
+        issue_type: "epic",
+        dependencies: [
+          { issue_id: "adj-001", depends_on_id: "adj-002", type: "parent" },
+        ],
+      }),
+      createBead({ id: "adj-002", title: "Child", issue_type: "task" }),
+      createBead({ id: "adj-sibling", title: "Sibling Epic", issue_type: "epic" }),
+    ];
+
+    const filtered = filterGraphToEpicSubtree(issues, "adj-001");
+
+    const ids = filtered.map((i) => i.id).sort();
+    // Parent is included, but parent's other children (sibling) are NOT
+    expect(ids).toEqual(["adj-000", "adj-001", "adj-002"]);
+  });
 });
 
 // =============================================================================
