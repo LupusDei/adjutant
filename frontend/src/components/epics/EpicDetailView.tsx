@@ -9,6 +9,7 @@ import { useEpicDetail } from '../../hooks';
 import { api } from '../../services/api';
 import type { BeadInfo } from '../../types';
 import { AgentAssignDropdown } from '../shared/AgentAssignDropdown';
+import { EpicGraphView } from './EpicGraphView';
 
 export interface EpicDetailViewProps {
   epicId: string | null;
@@ -223,6 +224,15 @@ export function EpicDetailView(props: EpicDetailViewProps) {
   }, [refresh, props]);
 
   const [copied, setCopied] = useState(false);
+  const [showGraph, setShowGraph] = useState(false);
+
+  const handleOpenGraph = useCallback(() => {
+    setShowGraph(true);
+  }, []);
+
+  const handleCloseGraph = useCallback(() => {
+    setShowGraph(false);
+  }, []);
 
   const handleCopyId = useCallback(() => {
     if (!epic) return;
@@ -268,6 +278,15 @@ export function EpicDetailView(props: EpicDetailViewProps) {
       {/* Backdrop */}
       <div style={styles.backdrop} onClick={onClose} />
 
+      {/* Epic Graph Overlay */}
+      {showGraph && epic && (
+        <EpicGraphView
+          epicId={epicId}
+          epicTitle={epic.title}
+          onClose={handleCloseGraph}
+        />
+      )}
+
       {/* Panel */}
       <div style={styles.panel}>
         {/* Header */}
@@ -276,6 +295,14 @@ export function EpicDetailView(props: EpicDetailViewProps) {
             &lt; BACK
           </button>
           <h2 style={styles.headerTitle}>EPIC DETAIL</h2>
+          <button
+            style={styles.graphButton}
+            onClick={handleOpenGraph}
+            aria-label="View dependency graph"
+            title="View dependency graph"
+          >
+            GRAPH
+          </button>
           <button
             style={styles.refreshButton}
             onClick={handleRefresh}
@@ -471,6 +498,17 @@ const styles = {
     color: 'var(--crt-phosphor)',
     letterSpacing: '0.15em',
     textAlign: 'center',
+  },
+  graphButton: {
+    background: 'none',
+    border: '1px solid var(--crt-phosphor-dim)',
+    color: 'var(--crt-phosphor)',
+    fontSize: '0.65rem',
+    padding: '6px 10px',
+    cursor: 'pointer',
+    letterSpacing: '0.1em',
+    fontFamily: '"Share Tech Mono", monospace',
+    transition: 'all 0.15s ease',
   },
   refreshButton: {
     background: 'none',
