@@ -299,6 +299,15 @@ export const api = {
     async graph(): Promise<BeadsGraphResponse> {
       return apiFetch('/beads/graph');
     },
+
+    /**
+     * Get scoped dependency graph for a single epic and its descendants.
+     * Returns only nodes in the epic subtree plus parent, with filtered edges.
+     * @param epicId The ID of the epic to scope the graph to
+     */
+    async graphForEpic(epicId: string): Promise<BeadsGraphResponse> {
+      return apiFetch(`/beads/graph?epicId=${encodeURIComponent(epicId)}`);
+    },
   },
 
   /**
