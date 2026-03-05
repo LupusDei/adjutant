@@ -33,7 +33,7 @@ public enum CRTTheme {
             case .pipboy: return Color(red: 0.125, green: 0.761, blue: 0.055)     // #20C20E
             case .document: return Color(red: 0.067, green: 0.067, blue: 0.067)   // #111111
             case .starcraft: return Color(red: 0.0, green: 1.0, blue: 0.835)      // #00FFD5
-            case .friendly: return Color(red: 0.345, green: 0.337, blue: 0.839)      // #5856D6 (playful indigo)
+            case .friendly: return Color(red: 0.345, green: 0.337, blue: 0.839)      // #5856D6 (joyful indigo)
             }
         }
 
@@ -43,7 +43,7 @@ public enum CRTTheme {
             case .pipboy: return Color(red: 0.2, green: 1.0, blue: 0.2)           // #33FF33
             case .document: return Color.black                                      // #000000
             case .starcraft: return Color(red: 0.502, green: 1.0, blue: 0.941)     // #80FFF0
-            case .friendly: return Color(red: 0.255, green: 0.522, blue: 0.957)    // #4185F4 (Google blue)
+            case .friendly: return Color(red: 0.231, green: 0.471, blue: 0.906)    // #3B78E7 (vivid blue)
             }
         }
 
@@ -53,7 +53,7 @@ public enum CRTTheme {
             case .pipboy: return Color(red: 0.039, green: 0.373, blue: 0.027)     // #0A5F07
             case .document: return Color(red: 0.463, green: 0.463, blue: 0.463)   // #767676 (WCAG AA on white)
             case .starcraft: return Color(red: 0.0, green: 0.733, blue: 0.6)       // #00BB99
-            case .friendly: return Color(red: 0.529, green: 0.545, blue: 0.569)    // #878B91 (neutral gray)
+            case .friendly: return Color(red: 0.608, green: 0.557, blue: 0.769)    // #9B8EC4 (soft purple)
             }
         }
 
@@ -80,9 +80,9 @@ public enum CRTTheme {
                 )
             case .friendly:
                 return BackgroundSet(
-                    screen: Color(red: 0.973, green: 0.969, blue: 0.965),      // #F8F7F6 (warm neutral)
-                    panel: Color.white,                                         // #FFFFFF
-                    elevated: Color(red: 0.953, green: 0.949, blue: 0.941)     // #F3F2F0 (warm gray)
+                    screen: Color(red: 0.941, green: 0.925, blue: 1.0),        // #F0ECFF (light lavender)
+                    panel: Color(red: 1.0, green: 0.973, blue: 0.976),         // #FFFBF9 (warm blush white)
+                    elevated: Color(red: 0.941, green: 0.957, blue: 1.0)       // #F0F4FF (light sky)
                 )
             }
         }
@@ -117,12 +117,14 @@ public enum CRTTheme {
             switch self {
             case .friendly:
                 return FriendlyColorPalette(
-                    blue: Color(red: 0.255, green: 0.522, blue: 0.957),    // #4185F4
-                    red: Color(red: 0.918, green: 0.306, blue: 0.208),     // #EA4E35
-                    yellow: Color(red: 0.984, green: 0.737, blue: 0.020),  // #FBBC05
-                    green: Color(red: 0.204, green: 0.659, blue: 0.325),   // #34A853
-                    purple: Color(red: 0.675, green: 0.345, blue: 0.847),  // #AC58D8
-                    orange: Color(red: 1.0, green: 0.435, blue: 0.259)     // #FF6F42
+                    blue: Color(red: 0.231, green: 0.471, blue: 0.906),    // #3B78E7
+                    red: Color(red: 0.910, green: 0.271, blue: 0.227),     // #E8453A
+                    yellow: Color(red: 0.976, green: 0.659, blue: 0.145),  // #F9A825
+                    green: Color(red: 0.180, green: 0.620, blue: 0.294),   // #2E9E4B
+                    purple: Color(red: 0.639, green: 0.278, blue: 0.820),  // #A347D1
+                    orange: Color(red: 1.0, green: 0.388, blue: 0.200),    // #FF6333
+                    pink: Color(red: 0.910, green: 0.263, blue: 0.576),    // #E84393
+                    teal: Color(red: 0.0, green: 0.722, blue: 0.580)       // #00B894
                 )
             default:
                 return nil
@@ -135,7 +137,7 @@ public enum CRTTheme {
             case .pipboy: return primary
             case .document: return Color(red: 0.067, green: 0.067, blue: 0.067)   // #111111
             case .starcraft: return primary
-            case .friendly: return Color(red: 0.133, green: 0.133, blue: 0.133)   // #222222
+            case .friendly: return Color(red: 0.176, green: 0.141, blue: 0.322)   // #2D2452 (dark indigo)
             }
         }
 
@@ -145,7 +147,7 @@ public enum CRTTheme {
             case .pipboy: return dim
             case .document: return Color(red: 0.463, green: 0.463, blue: 0.463)   // #767676 (WCAG AA)
             case .starcraft: return dim
-            case .friendly: return Color(red: 0.427, green: 0.427, blue: 0.427)    // #6D6D6D (neutral)
+            case .friendly: return Color(red: 0.478, green: 0.435, blue: 0.627)    // #7A6FA0 (muted purple)
             }
         }
 
@@ -155,7 +157,7 @@ public enum CRTTheme {
             case .pipboy: return primary
             case .document: return Color(red: 0.145, green: 0.388, blue: 0.922)   // #2563EB
             case .starcraft: return primary
-            case .friendly: return Color(red: 0.255, green: 0.522, blue: 0.957)   // #4185F4 (Google blue)
+            case .friendly: return Color(red: 0.345, green: 0.337, blue: 0.839)   // #5856D6 (joyful indigo)
             }
         }
 
@@ -185,19 +187,21 @@ public enum CRTTheme {
 
     // MARK: - Friendly Color Palette
 
-    /// Multi-color palette for the Friendly theme's playful variety.
-    /// Provides 6 named accent colors for components that want color diversity.
+    /// Multi-color palette for the Friendly theme's joyful variety.
+    /// Provides 8 named accent colors for components that want color diversity.
     public struct FriendlyColorPalette {
-        public let blue: Color      // #4185F4
-        public let red: Color       // #EA4E35
-        public let yellow: Color    // #FBBC05
-        public let green: Color     // #34A853
-        public let purple: Color    // #AC58D8
-        public let orange: Color    // #FF6F42
+        public let blue: Color      // #3B78E7
+        public let red: Color       // #E8453A
+        public let yellow: Color    // #F9A825
+        public let green: Color     // #2E9E4B
+        public let purple: Color    // #A347D1
+        public let orange: Color    // #FF6333
+        public let pink: Color      // #E84393
+        public let teal: Color      // #00B894
 
         /// All colors in display order
         public var allColors: [Color] {
-            [blue, red, yellow, green, purple, orange]
+            [blue, red, yellow, green, purple, orange, pink, teal]
         }
 
         /// Returns a consistent color for a given string (e.g. agent name)
@@ -298,6 +302,16 @@ public enum CRTTheme {
         public static let sm: CGFloat = 2
         public static let md: CGFloat = 4
         public static let lg: CGFloat = 6
+
+        /// Friendly theme uses larger radii for a softer, child-friendly look
+        public static func forTheme(_ theme: ColorTheme) -> (sm: CGFloat, md: CGFloat, lg: CGFloat) {
+            switch theme {
+            case .friendly:
+                return (sm: 8, md: 12, lg: 16)
+            default:
+                return (sm: sm, md: md, lg: lg)
+            }
+        }
     }
 
     // MARK: - Animation

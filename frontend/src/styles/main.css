@@ -263,12 +263,32 @@
   }
 
   /* Non-CRT themes: no glow animation on header */
-  [data-theme='document'] .app-header h1,
-  [data-theme='friendly'] .app-header h1 {
+  [data-theme='document'] .app-header h1 {
     text-shadow: none;
     animation: none;
     font-weight: 700;
     color: var(--theme-text-primary);
+  }
+
+  /* Friendly header: bold, colorful with gradient text feel */
+  [data-theme='friendly'] .app-header h1 {
+    text-shadow: none;
+    animation: none;
+    font-weight: 800;
+    color: #5856D6;
+    font-size: 1.1rem;
+    letter-spacing: 0.04em;
+  }
+
+  /* Friendly header border: colorful gradient accent */
+  [data-theme='friendly'] .app-header {
+    border-bottom: 3px solid transparent;
+    border-image: linear-gradient(90deg, #3B78E7, #A347D1, #E84393, #FF6333, #F9A825, #2E9E4B) 1;
+  }
+
+  /* Remove the subtle center line in friendly — the rainbow border is enough */
+  [data-theme='friendly'] .app-header::after {
+    display: none;
   }
 
   @keyframes header-glow {
@@ -371,13 +391,78 @@
     display: none;
   }
 
-  [data-theme='document'] .nav-tab.active,
-  [data-theme='friendly'] .nav-tab.active {
+  [data-theme='document'] .nav-tab.active {
     background: var(--theme-accent);
     border-color: var(--theme-accent);
     color: #FFFFFF;
     box-shadow: none;
     text-shadow: none;
+  }
+
+  /* Friendly tabs: extra rounded with colorful active state */
+  [data-theme='friendly'] .nav-tab {
+    border-radius: 12px;
+    border-width: 2px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    background: #FFFBF9;
+    border-color: #D4CBEF;
+  }
+
+  [data-theme='friendly'] .nav-tab:hover {
+    border-color: var(--theme-accent);
+    color: var(--theme-accent);
+    background: rgba(88, 86, 214, 0.06);
+    box-shadow: 0 2px 8px rgba(88, 86, 214, 0.12);
+    transform: translateY(-1px);
+  }
+
+  [data-theme='friendly'] .nav-tab.active {
+    background: linear-gradient(135deg, #5856D6 0%, #7B59E0 100%);
+    border-color: #5856D6;
+    color: #FFFFFF;
+    box-shadow: 0 4px 14px rgba(88, 86, 214, 0.35);
+    text-shadow: none;
+    transform: translateY(-1px);
+  }
+
+  /* Multi-color nav tabs: each tab gets a unique color when active */
+  [data-theme='friendly'] .nav-tab:nth-child(1).active {
+    background: linear-gradient(135deg, #3B78E7 0%, #5B8FEF 100%);
+    border-color: #3B78E7;
+    box-shadow: 0 4px 14px rgba(59, 120, 231, 0.35);
+  }
+
+  [data-theme='friendly'] .nav-tab:nth-child(2).active {
+    background: linear-gradient(135deg, #2E9E4B 0%, #4DB86A 100%);
+    border-color: #2E9E4B;
+    box-shadow: 0 4px 14px rgba(46, 158, 75, 0.35);
+  }
+
+  [data-theme='friendly'] .nav-tab:nth-child(3).active {
+    background: linear-gradient(135deg, #A347D1 0%, #BB6EDF 100%);
+    border-color: #A347D1;
+    box-shadow: 0 4px 14px rgba(163, 71, 209, 0.35);
+  }
+
+  [data-theme='friendly'] .nav-tab:nth-child(4).active {
+    background: linear-gradient(135deg, #FF6333 0%, #FF8A5E 100%);
+    border-color: #FF6333;
+    box-shadow: 0 4px 14px rgba(255, 99, 51, 0.35);
+  }
+
+  [data-theme='friendly'] .nav-tab:nth-child(5).active {
+    background: linear-gradient(135deg, #E84393 0%, #EE6AAD 100%);
+    border-color: #E84393;
+    box-shadow: 0 4px 14px rgba(232, 67, 147, 0.35);
+  }
+
+  /* Rounded badge for friendly */
+  [data-theme='friendly'] .nav-tab-badge {
+    border-radius: 10px;
+    font-weight: 700;
+    background-color: var(--friendly-red);
+    color: #FFFFFF;
   }
 
   .nav-tab:active {

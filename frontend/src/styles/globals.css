@@ -357,6 +357,92 @@
 }
 
 /* ============================================
+   Friendly Theme — Joyful Overrides
+   Colorful, rounded, child-friendly styling
+   ============================================ */
+
+/* Rounded panels with colorful left accent and soft shadow */
+[data-theme='friendly'] .pipboy-panel {
+  border-radius: 14px;
+  border: 2px solid var(--theme-border-color);
+  border-left: 4px solid var(--theme-accent);
+  box-shadow: 0 2px 12px rgba(88, 86, 214, 0.08);
+}
+
+/* Colorful rounded buttons with playful hover */
+[data-theme='friendly'] .pipboy-button {
+  border-radius: 10px;
+  border-width: 2px;
+  border-color: var(--theme-accent);
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+[data-theme='friendly'] .pipboy-button:hover {
+  background: var(--theme-accent);
+  color: #FFFFFF;
+  border-color: var(--theme-accent);
+  box-shadow: 0 4px 14px rgba(88, 86, 214, 0.3);
+  transform: translateY(-1px);
+}
+
+[data-theme='friendly'] .pipboy-button:active {
+  transform: translateY(0) scale(0.97);
+}
+
+/* Rounded, colorful inputs */
+[data-theme='friendly'] .pipboy-input {
+  border-radius: 10px;
+  border: 2px solid var(--theme-border-color);
+  background: #FFFFFF;
+  transition: all 0.2s ease;
+}
+
+[data-theme='friendly'] .pipboy-input:focus {
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 3px rgba(88, 86, 214, 0.15);
+}
+
+/* Panel headers with bolder weight */
+[data-theme='friendly'] .pipboy-panel-header {
+  font-weight: 700;
+  border-bottom-color: var(--theme-border-color);
+}
+
+/* Colorful scrollbar for Friendly */
+[data-theme='friendly'] ::-webkit-scrollbar-thumb {
+  background: #C4B8FF;
+  border-radius: 10px;
+}
+
+[data-theme='friendly'] ::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-accent);
+}
+
+[data-theme='friendly'] ::-webkit-scrollbar-track {
+  background: #F0ECFF;
+}
+
+/* Selection in friendly purple */
+[data-theme='friendly'] ::selection {
+  background: rgba(88, 86, 214, 0.25);
+  color: #2D2452;
+}
+
+/* Epic cards with rounded corners and colorful hover */
+[data-theme='friendly'] .epic-card-clickable:hover {
+  border-color: var(--theme-accent);
+  background-color: rgba(88, 86, 214, 0.06);
+  box-shadow: 0 4px 16px rgba(88, 86, 214, 0.12);
+  border-radius: 12px;
+}
+
+[data-theme='friendly'] .epic-card-clickable:focus {
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 3px rgba(88, 86, 214, 0.2);
+}
+
+/* ============================================
    Epic Card Styles
    ============================================ */
 .epic-card-clickable:hover {
