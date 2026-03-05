@@ -191,7 +191,7 @@ export interface BeadsGraphOptions {
   status?: string | undefined;
   /** Filter by bead type (e.g., "epic", "task", "bug") */
   type?: string | undefined;
-  /** Filter to a specific epic's sub-tree (client-side hint) */
+  /** Filter to a specific epic's sub-tree (server-side: returns epic, parent, and all descendants) */
   epicId?: string | undefined;
   /** Exclude hq-* town beads when project=all */
   excludeTown?: boolean | undefined;

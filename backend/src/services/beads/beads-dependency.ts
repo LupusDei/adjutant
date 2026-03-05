@@ -244,3 +244,83 @@ export function transformClosedEpics(
       })
     );
 }
+
+// ============================================================================
+// Epic Subtree Filtering
+// ============================================================================
+
+/**
+ * Filters a list of issues to only those in an epic's subtree.
+ *
+ * Returns the epic itself, all its descendants (children, grandchildren, etc.
+ * found by recursively walking `depends_on_id` edges from the epic), and any
+ * parent beads (beads whose dependencies list the epicId as a `depends_on_id`).
+ *
+ * Uses a visited set to handle circular dependencies safely.
+ *
+ * @param issues - Full list of issues (must include dependency data from -v flag)
+ * @param epicId - The bead ID to use as the subtree root
+ * @returns Filtered array containing only the subtree issues
+ */
+export function filterGraphToEpicSubtree(
+  issues: BeadsIssue[],
+  epicId: string
+): BeadsIssue[] {
+  // Build a lookup map: beadId -> issue
+  const issueMap = new Map<string, BeadsIssue>();
+  for (const issue of issues) {
+    issueMap.set(issue.id, issue);
+  }
+
+  // If the epic doesn't exist in the issues, return empty
+  if (!issueMap.has(epicId)) {
+    return [];
+  }
+
+  // Build adjacency: parent -> children (issue_id depends on depends_on_id)
+  // In bd, "issue_id depends_on depends_on_id" means issue_id is the PARENT
+  // and depends_on_id is the CHILD. So to find children of X, look for deps
+  // where issue_id === X.
+  const childrenOf = new Map<string, string[]>();
+  for (const issue of issues) {
+    if (issue.dependencies) {
+      for (const dep of issue.dependencies) {
+        const existing = childrenOf.get(dep.issue_id) ?? [];
+        existing.push(dep.depends_on_id);
+        childrenOf.set(dep.issue_id, existing);
+      }
+    }
+  }
+
+  // Collect the subtree set starting from epicId
+  const subtreeIds = new Set<string>();
+
+  // Recursive descent to find all descendants
+  function collectDescendants(beadId: string): void {
+    if (subtreeIds.has(beadId)) return; // Prevent infinite loops
+    subtreeIds.add(beadId);
+
+    const children = childrenOf.get(beadId) ?? [];
+    for (const childId of children) {
+      if (issueMap.has(childId)) {
+        collectDescendants(childId);
+      }
+    }
+  }
+
+  collectDescendants(epicId);
+
+  // Find parent(s): any bead that has epicId in its depends_on list
+  for (const issue of issues) {
+    if (issue.dependencies) {
+      for (const dep of issue.dependencies) {
+        if (dep.depends_on_id === epicId && dep.issue_id !== epicId) {
+          subtreeIds.add(dep.issue_id);
+        }
+      }
+    }
+  }
+
+  // Filter to only subtree members
+  return issues.filter((issue) => subtreeIds.has(issue.id));
+}

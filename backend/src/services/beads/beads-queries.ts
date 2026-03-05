@@ -42,6 +42,7 @@ import {
 import {
   extractGraphEdges,
   buildGraphNodes,
+  filterGraphToEpicSubtree,
 } from "./beads-dependency.js";
 
 // ============================================================================
@@ -371,6 +372,11 @@ export async function getBeadsGraph(
     let issues = uniqueIssues;
     if (options.excludeTown && project === "all") {
       issues = issues.filter((issue) => !issue.id.startsWith("hq-"));
+    }
+
+    // Filter to epic subtree when epicId is provided
+    if (options.epicId) {
+      issues = filterGraphToEpicSubtree(issues, options.epicId);
     }
 
     const nodes = buildGraphNodes(issues, prefixToSource);

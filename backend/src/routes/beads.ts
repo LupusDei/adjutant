@@ -211,7 +211,7 @@ beadsRouter.get("/recent-closed", async (req, res) => {
  * - projectId: Resolve a registered project by ID (takes precedence over `project` name param)
  * - status: "default" (default), "open", "in_progress", "blocked", "closed", "all"
  * - type: Filter by bead type (e.g., "epic", "task", "bug")
- * - epicId: Filter to a specific epic's sub-tree (client-side hint)
+ * - epicId: Filter to a specific epic's sub-tree (server-side: returns epic, parent, and all descendants)
  * - excludeTown: "true" to exclude hq-* beads when project=all (default: false)
  *
  * Response:

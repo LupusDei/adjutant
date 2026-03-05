@@ -159,4 +159,5 @@ export {
   computeEpicProgressFromDeps,
   buildEpicWithChildren,
   transformClosedEpics,
+  filterGraphToEpicSubtree,
 } from "./beads-dependency.js";
