@@ -118,12 +118,25 @@ public struct CRTTextField: View {
         self.onSubmit = onSubmit
     }
 
+    /// Corner radius adapts to theme
+    private var effectiveCornerRadius: CGFloat {
+        theme.crtEffectsEnabled ? CRTTheme.CornerRadius.sm : CRTTheme.CornerRadius.lg + 2
+    }
+
+    /// Background opacity adapts to theme: non-CRT uses full panel backgrounds
+    private var effectiveBgOpacity: Double {
+        if !theme.crtEffectsEnabled {
+            return 1.0
+        }
+        return isFocused ? 0.8 : 0.5
+    }
+
     public var body: some View {
         HStack(spacing: CRTTheme.Spacing.xs) {
             if let icon = icon {
                 Image(systemName: icon)
                     .font(.system(size: 14))
-                    .foregroundColor(isFocused ? theme.primary : theme.dim)
+                    .foregroundColor(isFocused ? theme.accent : theme.dim)
             }
 
             TextField("", text: $text, prompt: promptText)
@@ -136,14 +149,14 @@ public struct CRTTextField: View {
                 }
         }
         .padding(.horizontal, CRTTheme.Spacing.sm)
-        .padding(.vertical, CRTTheme.Spacing.xs)
+        .padding(.vertical, theme.crtEffectsEnabled ? CRTTheme.Spacing.xs : CRTTheme.Spacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                .fill(theme.background.elevated.opacity(isFocused ? 0.8 : 0.5))
+            RoundedRectangle(cornerRadius: effectiveCornerRadius)
+                .fill(theme.background.elevated.opacity(effectiveBgOpacity))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                .stroke(borderColor, lineWidth: isFocused ? 2 : 1)
+            RoundedRectangle(cornerRadius: effectiveCornerRadius)
+                .stroke(borderColor, lineWidth: isFocused ? (theme.crtEffectsEnabled ? 2 : 1.5) : 1)
         )
         .crtGlow(
             color: theme.primary,
@@ -156,12 +169,15 @@ public struct CRTTextField: View {
     }
 
     private var promptText: Text {
-        Text(placeholder.uppercased())
+        Text(theme.crtEffectsEnabled ? placeholder.uppercased() : placeholder)
             .foregroundColor(theme.dim.opacity(0.6))
     }
 
     private var borderColor: Color {
-        isFocused ? theme.primary : theme.dim.opacity(0.5)
+        if !theme.crtEffectsEnabled {
+            return isFocused ? theme.accent : theme.dim.opacity(0.3)
+        }
+        return isFocused ? theme.primary : theme.dim.opacity(0.5)
     }
 }
 
@@ -215,7 +231,7 @@ public struct CRTTextEditor: View {
         VStack(alignment: .trailing, spacing: CRTTheme.Spacing.xxs) {
             ZStack(alignment: .topLeading) {
                 if text.isEmpty {
-                    Text(placeholder.uppercased())
+                    Text(theme.crtEffectsEnabled ? placeholder.uppercased() : placeholder)
                         .font(CRTTheme.Typography.font(size: 14, theme: theme))
                         .foregroundColor(theme.dim.opacity(0.6))
                         .padding(.horizontal, CRTTheme.Spacing.xs)
@@ -237,12 +253,12 @@ public struct CRTTextEditor: View {
                 }
             .frame(minHeight: minHeight)
             .background(
-                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                    .fill(theme.background.elevated.opacity(isFocused ? 0.8 : 0.5))
+                RoundedRectangle(cornerRadius: editorCornerRadius)
+                    .fill(theme.background.elevated.opacity(editorBgOpacity))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                    .stroke(borderColor, lineWidth: isFocused ? 2 : 1)
+                RoundedRectangle(cornerRadius: editorCornerRadius)
+                    .stroke(borderColor, lineWidth: isFocused ? (theme.crtEffectsEnabled ? 2 : 1.5) : 1)
             )
             .crtGlow(
                 color: theme.primary,
@@ -259,8 +275,24 @@ public struct CRTTextEditor: View {
         .accessibilityValue(text.isEmpty ? "Empty" : "\(text.count) characters")
     }
 
+    /// Corner radius adapts to theme
+    private var editorCornerRadius: CGFloat {
+        theme.crtEffectsEnabled ? CRTTheme.CornerRadius.sm : CRTTheme.CornerRadius.lg + 2
+    }
+
+    /// Background opacity adapts to theme
+    private var editorBgOpacity: Double {
+        if !theme.crtEffectsEnabled {
+            return 1.0
+        }
+        return isFocused ? 0.8 : 0.5
+    }
+
     private var borderColor: Color {
-        isFocused ? theme.primary : theme.dim.opacity(0.5)
+        if !theme.crtEffectsEnabled {
+            return isFocused ? theme.accent : theme.dim.opacity(0.3)
+        }
+        return isFocused ? theme.primary : theme.dim.opacity(0.5)
     }
 
     @ViewBuilder

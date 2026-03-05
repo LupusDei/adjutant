@@ -135,6 +135,21 @@ public struct CRTButton: View {
         self.action = action
     }
 
+    /// Corner radius adapts to theme: larger for non-CRT themes
+    private var effectiveCornerRadius: CGFloat {
+        theme.crtEffectsEnabled ? CRTTheme.CornerRadius.md : CRTTheme.CornerRadius.lg + 2
+    }
+
+    /// Letter spacing adapts to theme
+    private var effectiveTracking: CGFloat {
+        theme.crtEffectsEnabled ? CRTTheme.Typography.wideLetterSpacing : 0
+    }
+
+    /// Border width adapts to theme: thinner for non-CRT themes
+    private var effectiveBorderWidth: CGFloat {
+        theme.crtEffectsEnabled ? 2 : 1
+    }
+
     public var body: some View {
         Button(action: performAction) {
             HStack(spacing: CRTTheme.Spacing.xs) {
@@ -142,19 +157,23 @@ public struct CRTButton: View {
                     LoadingIndicator(size: .small)
                 }
 
-                Text(title.uppercased())
-                    .font(CRTTheme.Typography.font(size: size.fontSize, weight: .bold, theme: theme))
-                    .tracking(CRTTheme.Typography.wideLetterSpacing)
+                Text(theme.crtEffectsEnabled ? title.uppercased() : title)
+                    .font(CRTTheme.Typography.font(
+                        size: size.fontSize,
+                        weight: theme.crtEffectsEnabled ? .bold : .medium,
+                        theme: theme
+                    ))
+                    .tracking(effectiveTracking)
             }
             .padding(.vertical, size.verticalPadding)
             .padding(.horizontal, size.horizontalPadding)
             .foregroundColor(foregroundColor)
             .background(backgroundColor)
             .overlay(
-                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
-                    .stroke(borderColor, lineWidth: 2)
+                RoundedRectangle(cornerRadius: effectiveCornerRadius)
+                    .stroke(borderColor, lineWidth: effectiveBorderWidth)
             )
-            .clipShape(RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md))
+            .clipShape(RoundedRectangle(cornerRadius: effectiveCornerRadius))
             .crtGlow(
                 color: glowColor,
                 radius: isPressed ? 12 : 6,

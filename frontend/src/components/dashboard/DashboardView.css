@@ -886,3 +886,318 @@
     font-size: 0.65rem;
   }
 }
+
+/* ============================================
+   Document Theme — Dashboard Refinements
+   Clean cards, readable spacing, paper-like
+   ============================================ */
+
+[data-theme='document'] .dashboard-view-container {
+  font-family: var(--theme-font);
+  color: var(--theme-text-primary);
+  padding: 24px;
+}
+
+[data-theme='document'] .dashboard-view-main-title {
+  text-shadow: none;
+  color: var(--theme-text-primary);
+  font-weight: 700;
+  font-size: 1.5rem;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  margin-bottom: 24px;
+}
+
+[data-theme='document'] .dashboard-view-grid {
+  gap: 20px;
+}
+
+[data-theme='document'] .dashboard-widget-container {
+  border-color: var(--theme-border-color);
+  background-color: var(--theme-bg-panel);
+  border-radius: var(--theme-border-radius, 8px);
+  padding: var(--theme-panel-padding, 16px);
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+[data-theme='document'] .dashboard-widget-header {
+  border-bottom-color: var(--theme-border-color);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+
+[data-theme='document'] .dashboard-widget-title {
+  color: var(--theme-text-primary);
+  text-shadow: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+[data-theme='document'] .dashboard-header-stat {
+  color: var(--theme-text-secondary);
+  text-transform: none;
+  font-size: 0.8rem;
+}
+
+[data-theme='document'] .dashboard-header-stat-highlight {
+  color: var(--theme-text-primary);
+  text-shadow: none;
+  font-weight: 600;
+}
+
+/* Crew cards */
+[data-theme='document'] .dashboard-crew-card {
+  border-color: var(--theme-border-color);
+  background: var(--theme-bg-screen);
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+
+[data-theme='document'] .dashboard-crew-card-name {
+  color: var(--theme-text-primary);
+  font-size: 0.875rem;
+}
+
+[data-theme='document'] .dashboard-crew-card-type,
+[data-theme='document'] .dashboard-crew-card-project {
+  border-color: var(--theme-border-color);
+  color: var(--theme-text-secondary);
+  border-radius: 3px;
+  font-size: 0.65rem;
+}
+
+[data-theme='document'] .dashboard-crew-card-status-text {
+  font-size: 0.75rem;
+}
+
+[data-theme='document'] .dashboard-text-working {
+  color: #16A34A;
+}
+
+[data-theme='document'] .dashboard-text-idle {
+  color: var(--theme-text-secondary);
+}
+
+[data-theme='document'] .dashboard-text-stuck {
+  color: #DC2626;
+}
+
+[data-theme='document'] .dashboard-indicator-working {
+  background-color: #16A34A;
+  box-shadow: none;
+}
+
+[data-theme='document'] .dashboard-indicator-idle {
+  background-color: #A3A3A3;
+}
+
+[data-theme='document'] .dashboard-indicator-stuck {
+  background-color: #DC2626;
+  box-shadow: none;
+}
+
+/* Epics */
+[data-theme='document'] .dashboard-epics-item {
+  border-color: var(--theme-border-color);
+  background: var(--theme-bg-screen);
+  border-radius: 6px;
+  padding: 14px;
+}
+
+[data-theme='document'] .dashboard-epics-title {
+  color: var(--theme-text-primary);
+}
+
+[data-theme='document'] .dashboard-epics-status {
+  border-radius: 4px;
+  font-size: 0.7rem;
+}
+
+[data-theme='document'] .dashboard-epics-status-active,
+[data-theme='document'] .dashboard-epics-status-in_progress {
+  background: rgba(22, 163, 74, 0.1);
+  color: #16A34A;
+  border-color: #16A34A;
+}
+
+[data-theme='document'] .dashboard-epics-status-completed,
+[data-theme='document'] .dashboard-epics-status-done {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--theme-text-secondary);
+  border-color: var(--theme-border-color);
+}
+
+[data-theme='document'] .dashboard-progress-bar {
+  border-color: var(--theme-border-color);
+  background: var(--theme-bg-elevated);
+  border-radius: 4px;
+  height: 6px;
+}
+
+[data-theme='document'] .dashboard-progress-fill {
+  background: var(--theme-accent);
+  box-shadow: none;
+  border-radius: 4px;
+}
+
+[data-theme='document'] .dashboard-progress-text {
+  color: var(--theme-text-secondary);
+}
+
+/* Bead rows */
+[data-theme='document'] .dashboard-bead-row {
+  border-color: var(--theme-border-color);
+  background: var(--theme-bg-screen);
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+[data-theme='document'] .dashboard-bead-id {
+  color: var(--theme-text-secondary);
+}
+
+[data-theme='document'] .dashboard-bead-title {
+  color: var(--theme-text-primary);
+}
+
+[data-theme='document'] .dashboard-bead-priority {
+  border-radius: 3px;
+  text-transform: none;
+}
+
+/* Unread rows */
+[data-theme='document'] .dashboard-unread-row {
+  border-color: var(--theme-border-color);
+  background: var(--theme-bg-screen);
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+
+[data-theme='document'] .dashboard-unread-row:hover {
+  border-color: var(--theme-accent);
+  background: rgba(37, 99, 235, 0.04);
+}
+
+[data-theme='document'] .dashboard-unread-agent {
+  color: var(--theme-text-primary);
+}
+
+[data-theme='document'] .dashboard-unread-preview {
+  color: var(--theme-text-secondary);
+}
+
+[data-theme='document'] .dashboard-unread-count {
+  color: var(--theme-accent);
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.2);
+  border-radius: 10px;
+}
+
+/* Agent rows */
+[data-theme='document'] .dashboard-agent-row {
+  border-color: var(--theme-border-color);
+  background: var(--theme-bg-screen);
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+
+[data-theme='document'] .dashboard-agent-row:hover {
+  border-color: var(--theme-accent);
+  background: rgba(37, 99, 235, 0.04);
+}
+
+[data-theme='document'] .dashboard-agent-name {
+  color: var(--theme-text-primary);
+}
+
+[data-theme='document'] .dashboard-agent-project {
+  color: var(--theme-text-secondary);
+  border-color: var(--theme-border-color);
+  border-radius: 3px;
+  text-transform: none;
+}
+
+[data-theme='document'] .dashboard-agent-task {
+  color: var(--theme-text-secondary);
+}
+
+/* Status badges */
+[data-theme='document'] .dashboard-status-badge {
+  border-radius: 4px;
+  text-transform: none;
+  font-weight: 500;
+}
+
+[data-theme='document'] .dashboard-status-working {
+  background: rgba(22, 163, 74, 0.1);
+  color: #16A34A;
+  border-color: #16A34A;
+}
+
+[data-theme='document'] .dashboard-status-idle {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--theme-text-secondary);
+  border-color: var(--theme-border-color);
+}
+
+[data-theme='document'] .dashboard-status-stuck {
+  background: rgba(220, 38, 38, 0.1);
+  color: #DC2626;
+  border-color: #DC2626;
+}
+
+/* Stat values */
+[data-theme='document'] .dashboard-stat-value {
+  color: var(--theme-text-primary);
+}
+
+[data-theme='document'] .dashboard-stat-highlight {
+  color: var(--theme-accent);
+  text-shadow: none;
+}
+
+[data-theme='document'] .dashboard-stat-label {
+  color: var(--theme-text-secondary);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Empty state */
+[data-theme='document'] .dashboard-empty-text {
+  color: var(--theme-text-secondary);
+}
+
+/* Mail items */
+[data-theme='document'] .dashboard-mail-subject {
+  color: var(--theme-text-primary);
+}
+
+[data-theme='document'] .dashboard-mail-meta {
+  color: var(--theme-text-secondary);
+}
+
+/* Overview epic cards */
+[data-theme='document'] .dashboard-overview-epic-card {
+  background: var(--theme-bg-screen);
+  border-color: var(--theme-border-color);
+  border-radius: 6px;
+  padding: 14px;
+}
+
+[data-theme='document'] .dashboard-overview-epic-id {
+  color: var(--theme-text-secondary);
+  letter-spacing: normal;
+}
+
+[data-theme='document'] .dashboard-overview-epic-status {
+  border-radius: 4px;
+  letter-spacing: normal;
+}
+
+[data-theme='document'] .dashboard-overview-epic-title {
+  color: var(--theme-text-primary);
+  font-size: 0.875rem;
+}
