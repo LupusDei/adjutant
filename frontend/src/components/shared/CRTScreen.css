@@ -98,29 +98,29 @@
 [data-theme='starcraft'] {
   --theme-primary-rgb: 0, 255, 213;
   --theme-primary: #00FFD5;
-  --theme-bright: #66FFEC;
-  --theme-dim: #007766;
-  --theme-glow: rgba(0, 255, 213, 0.6);
-  --theme-bloom: rgba(0, 255, 213, 0.2);
+  --theme-bright: #80FFF0;
+  --theme-dim: #00BB99;
+  --theme-glow: rgba(0, 255, 213, 0.75);
+  --theme-bloom: rgba(0, 255, 213, 0.35);
 
-  --crt-bg: #04041A;
-  --crt-bg-active: #08082E;
-  --crt-bezel: #0C0820;
-  --crt-bezel-highlight: #1A1040;
-  --crt-bezel-shadow: #040210;
+  --crt-bg: #06041E;
+  --crt-bg-active: #0A0A38;
+  --crt-bezel: #100828;
+  --crt-bezel-highlight: #221450;
+  --crt-bezel-shadow: #04020F;
 
-  --theme-bg-screen: #04041A;
-  --theme-bg-panel: #0C0820;
-  --theme-bg-elevated: #160E30;
+  --theme-bg-screen: #06041E;
+  --theme-bg-panel: #100828;
+  --theme-bg-elevated: #1C1040;
   --theme-font: 'VT323', 'Share Tech Mono', 'Courier New', monospace;
   --theme-font-display: 'Orbitron', 'Share Tech Mono', monospace;
   --theme-text-transform: uppercase;
   --theme-letter-spacing: 0.15em;
   --theme-label-spacing: 0.1em;
   --theme-color-scheme: dark;
-  --theme-border-color: #007766;
+  --theme-border-color: #00BB99;
   --theme-text-primary: #00FFD5;
-  --theme-text-secondary: #007766;
+  --theme-text-secondary: #00BB99;
   --theme-accent: #00FFD5;
 }
 

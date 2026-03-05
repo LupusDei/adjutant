@@ -42,7 +42,7 @@ public enum CRTTheme {
             switch self {
             case .pipboy: return Color(red: 0.2, green: 1.0, blue: 0.2)           // #33FF33
             case .document: return Color.black                                      // #000000
-            case .starcraft: return Color(red: 0.4, green: 1.0, blue: 0.925)      // #66FFEC
+            case .starcraft: return Color(red: 0.502, green: 1.0, blue: 0.941)     // #80FFF0
             case .friendly: return Color(red: 0.255, green: 0.522, blue: 0.957)    // #4185F4 (Google blue)
             }
         }
@@ -52,7 +52,7 @@ public enum CRTTheme {
             switch self {
             case .pipboy: return Color(red: 0.039, green: 0.373, blue: 0.027)     // #0A5F07
             case .document: return Color(red: 0.463, green: 0.463, blue: 0.463)   // #767676 (WCAG AA on white)
-            case .starcraft: return Color(red: 0.0, green: 0.467, blue: 0.4)      // #007766
+            case .starcraft: return Color(red: 0.0, green: 0.733, blue: 0.6)       // #00BB99
             case .friendly: return Color(red: 0.529, green: 0.545, blue: 0.569)    // #878B91 (neutral gray)
             }
         }
@@ -74,9 +74,9 @@ public enum CRTTheme {
                 )
             case .starcraft:
                 return BackgroundSet(
-                    screen: Color(red: 0.016, green: 0.016, blue: 0.102),      // #04041A
-                    panel: Color(red: 0.047, green: 0.031, blue: 0.125),       // #0C0820
-                    elevated: Color(red: 0.086, green: 0.055, blue: 0.188)     // #160E30
+                    screen: Color(red: 0.024, green: 0.016, blue: 0.118),      // #06041E
+                    panel: Color(red: 0.063, green: 0.031, blue: 0.157),       // #100828
+                    elevated: Color(red: 0.110, green: 0.063, blue: 0.251)     // #1C1040
                 )
             case .friendly:
                 return BackgroundSet(

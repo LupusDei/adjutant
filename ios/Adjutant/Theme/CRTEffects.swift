@@ -414,8 +414,9 @@ public struct LightningOverlay: View {
                     ForEach(bolts) { bolt in
                         LightningBoltShape(bolt: bolt, bounds: geometry.size)
                             .stroke(theme.bright.opacity(bolt.opacity), lineWidth: bolt.width)
-                            .shadow(color: theme.primary.opacity(bolt.opacity * 0.6), radius: 8)
-                            .shadow(color: theme.bright.opacity(bolt.opacity * 0.3), radius: 16)
+                            .shadow(color: theme.primary.opacity(bolt.opacity * 0.8), radius: 12)
+                            .shadow(color: theme.bright.opacity(bolt.opacity * 0.5), radius: 24)
+                            .shadow(color: theme.primary.opacity(bolt.opacity * 0.2), radius: 40)
                     }
                 }
                 .onAppear { startLightning(bounds: geometry.size) }
@@ -427,16 +428,16 @@ public struct LightningOverlay: View {
 
     private func startLightning(bounds: CGSize) {
         timer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { _ in
-            // ~8% chance per tick = roughly one strike every 4 seconds
-            guard Double.random(in: 0...1) < 0.08 else { return }
+            // ~12% chance per tick = roughly one strike every 2.5 seconds
+            guard Double.random(in: 0...1) < 0.12 else { return }
 
             let bolt = LightningBolt(
                 id: UUID(),
                 startX: CGFloat.random(in: 0.1...0.9),
                 startY: CGFloat.random(in: 0...0.3),
-                segments: Int.random(in: 4...7),
-                width: CGFloat.random(in: 0.5...1.5),
-                opacity: Double.random(in: 0.15...0.35),
+                segments: Int.random(in: 5...9),
+                width: CGFloat.random(in: 0.8...2.0),
+                opacity: Double.random(in: 0.25...0.50),
                 seed: UInt64.random(in: 0...UInt64.max)
             )
             bolts.append(bolt)
@@ -534,18 +535,19 @@ public struct AmbientGlowOverlay: View {
                             LinearGradient(
                                 colors: [
                                     theme.primary.opacity(0.0),
-                                    theme.primary.opacity(0.08 + phase * 0.06),
-                                    theme.bright.opacity(0.04 + phase * 0.04),
-                                    theme.primary.opacity(0.08 + phase * 0.06),
+                                    theme.primary.opacity(0.12 + phase * 0.10),
+                                    theme.bright.opacity(0.08 + phase * 0.08),
+                                    theme.primary.opacity(0.12 + phase * 0.10),
                                     theme.primary.opacity(0.0)
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
                             ),
-                            lineWidth: 2
+                            lineWidth: 2.5
                         )
-                        .shadow(color: theme.primary.opacity(0.1 + phase * 0.08), radius: 12)
-                        .shadow(color: theme.bright.opacity(0.03 + phase * 0.03), radius: 24)
+                        .shadow(color: theme.primary.opacity(0.15 + phase * 0.12), radius: 16)
+                        .shadow(color: theme.bright.opacity(0.06 + phase * 0.06), radius: 32)
+                        .shadow(color: theme.primary.opacity(0.03 + phase * 0.03), radius: 48)
                 }
             }
             .allowsHitTesting(false)
