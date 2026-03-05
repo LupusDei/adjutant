@@ -93,12 +93,14 @@ export function parseSpecContent(content: string, specPath: string): ParseResult
   const userStories: UserStory[] = [];
   const requirements: Requirement[] = [];
   const edgeCases: string[] = [];
+  const warnings: string[] = [];
 
   let state: ParserState = "SEEKING_STORY";
   let currentStory: UserStory | null = null;
   let currentStoryTextLines: string[] = [];
   let scenarioAccumulator = "";
   let scenarioIndex = 0;
+  let scenarioStartLine = 0;
 
   /**
    * Flush accumulated multi-line scenario text into a Scenario object,
@@ -110,6 +112,11 @@ export function parseSpecContent(content: string, specPath: string): ParseResult
     const scenario = parseGwtLine(scenarioAccumulator.trim(), scenarioIndex);
     if (scenario) {
       currentStory.scenarios.push(scenario);
+    } else {
+      const preview = scenarioAccumulator.trim().slice(0, 60);
+      warnings.push(
+        `Line ~${scenarioStartLine}: Malformed GWT scenario skipped: "${preview}${scenarioAccumulator.trim().length > 60 ? "..." : ""}"`
+      );
     }
     scenarioAccumulator = "";
   }
@@ -138,7 +145,8 @@ export function parseSpecContent(content: string, specPath: string): ParseResult
     currentStoryTextLines = [];
   }
 
-  for (const line of lines) {
+  for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+    const line = lines[lineIdx]!;
     const trimmed = line.trim();
 
     // Check for User Story header — always transitions state
@@ -213,6 +221,7 @@ export function parseSpecContent(content: string, specPath: string): ParseResult
           flushScenario();
           // Start new scenario — strip the numbering prefix
           scenarioIndex++;
+          scenarioStartLine = lineIdx + 1; // 1-based line number
           scenarioAccumulator = trimmed.replace(NUMBERED_ITEM_RE, "");
         } else if (trimmed === "") {
           // Empty line within scenarios section — could be inter-item spacing
@@ -258,6 +267,7 @@ export function parseSpecContent(content: string, specPath: string): ParseResult
     userStories,
     requirements,
     edgeCases,
+    warnings,
   };
 }
 

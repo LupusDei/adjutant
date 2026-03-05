@@ -66,6 +66,7 @@ const SAMPLE_PARSE_RESULT: ParseResult = {
   ],
   requirements: [],
   edgeCases: [],
+  warnings: [],
 };
 
 const SAMPLE_REPORT: AcceptanceReport = {

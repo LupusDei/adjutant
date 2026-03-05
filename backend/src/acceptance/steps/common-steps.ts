@@ -8,6 +8,7 @@
  * @module acceptance/steps/common-steps
  */
 
+import type { TestHarness } from "../test-harness.js";
 import { defineGiven, defineWhen, defineThen } from "../step-registry.js";
 
 // ============================================================================
@@ -25,21 +26,28 @@ defineGiven("the database is initialized", async () => {
  * Seed some proposals into the database via the harness.
  */
 defineGiven(/^proposals exist$/, async (harness) => {
-  // Safe cast: harness is expected to have a `seed` method in real usage
-  const h = harness as { seed?: (type: string) => Promise<void> };
-  if (h.seed) {
-    await h.seed("proposals");
-  }
+  const h = harness as TestHarness;
+  await h.seedProposal({
+    author: "test-agent",
+    title: "Existing proposal",
+    description: "A pre-existing proposal for testing",
+    type: "engineering",
+    project: "adjutant",
+  });
 });
 
 /**
  * Create a single pending proposal via the harness.
  */
 defineGiven(/^a pending proposal$/, async (harness) => {
-  const h = harness as { seed?: (type: string) => Promise<void> };
-  if (h.seed) {
-    await h.seed("pending-proposal");
-  }
+  const h = harness as TestHarness;
+  await h.seedProposal({
+    author: "test-agent",
+    title: "Pending proposal",
+    description: "A pending proposal for testing",
+    type: "product",
+    project: "adjutant",
+  });
 });
 
 /**
@@ -66,19 +74,15 @@ defineGiven(/^an agent (?:is )?connected via MCP$/, async () => {
 defineWhen(
   /^(?:a )?proposal is created via POST \/api\/proposals$/,
   async (harness) => {
-    const h = harness as {
-      request?: { post: (url: string) => { send: (body: unknown) => Promise<unknown> } };
-      lastResponse?: unknown;
-    };
-    if (h.request) {
-      h.lastResponse = await h.request.post("/api/proposals").send({
-        author: "test-agent",
-        title: "Test Proposal",
-        description: "Test description",
-        type: "engineering",
-        project: "adjutant",
-      });
-    }
+    const h = harness as TestHarness;
+    const res = await h.post("/api/proposals", {
+      author: "test-agent",
+      title: "Test Proposal",
+      description: "Test description",
+      type: "engineering",
+      project: "adjutant",
+    });
+    h.lastResponse = res;
   }
 );
 
@@ -88,13 +92,9 @@ defineWhen(
 defineWhen(
   /^GET \/api\/proposals is called/,
   async (harness) => {
-    const h = harness as {
-      request?: { get: (url: string) => Promise<unknown> };
-      lastResponse?: unknown;
-    };
-    if (h.request) {
-      h.lastResponse = await h.request.get("/api/proposals");
-    }
+    const h = harness as TestHarness;
+    const res = await h.get("/api/proposals");
+    h.lastResponse = res;
   }
 );
 
@@ -104,15 +104,12 @@ defineWhen(
 defineWhen(
   /^PATCH \/api\/(\w+)\/([^\s]+) with (.+)$/,
   async (harness, resource, id, body) => {
-    const h = harness as {
-      request?: { patch: (url: string) => { send: (body: unknown) => Promise<unknown> } };
-      lastResponse?: unknown;
-    };
-    if (h.request) {
-      h.lastResponse = await h.request
-        .patch(`/api/${resource}/${id}`)
-        .send(JSON.parse(body));
-    }
+    const h = harness as TestHarness;
+    const res = await h.patch(
+      `/api/${resource}/${id}`,
+      JSON.parse(body) as Record<string, unknown>,
+    );
+    h.lastResponse = res;
   }
 );
 
@@ -126,8 +123,10 @@ defineWhen(
 defineThen(
   /^it is persisted with status "(\w+)"/,
   async (harness, status) => {
-    const h = harness as { lastResponse?: { body?: { data?: { status?: string } } } };
-    const actual = h.lastResponse?.body?.data?.status;
+    const h = harness as TestHarness;
+    // Safe cast: body shape is { data: { status: string } } from proposals API
+    const body = h.lastResponse?.body as { data?: { status?: string } } | undefined;
+    const actual = body?.data?.status;
     if (actual !== status) {
       throw new Error(`Expected status "${status}", got "${actual}"`);
     }
@@ -140,10 +139,10 @@ defineThen(
 defineThen(
   /^only (\w+) proposals are returned sorted by newest first$/,
   async (harness, filterStatus) => {
-    const h = harness as {
-      lastResponse?: { body?: { data?: Array<{ status: string; created_at: string }> } };
-    };
-    const data = h.lastResponse?.body?.data;
+    const h = harness as TestHarness;
+    // Safe cast: body shape is { data: Array<{ status, created_at }> } from proposals list API
+    const body = h.lastResponse?.body as { data?: Array<{ status: string; created_at: string }> } | undefined;
+    const data = body?.data;
     if (!data) {
       throw new Error("No response data found");
     }
@@ -164,7 +163,7 @@ defineThen(
 defineThen(
   /^the response status is (\d+)$/,
   async (harness, statusCode) => {
-    const h = harness as { lastResponse?: { status?: number } };
+    const h = harness as TestHarness;
     const actual = h.lastResponse?.status;
     const expected = parseInt(statusCode, 10);
     if (actual !== expected) {

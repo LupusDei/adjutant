@@ -18,11 +18,11 @@
  */
 
 import { execSync } from "child_process";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { resolve, join } from "path";
 
-import { parseSpec } from "./spec-parser.js";
-import { generateTestFiles } from "./test-generator.js";
+import { parseSpec, parseSpecContent } from "./spec-parser.js";
+import { generateTestFiles, generateFileName } from "./test-generator.js";
 import type { AcceptanceOptions } from "./types.js";
 
 // ============================================================================
@@ -41,6 +41,7 @@ Usage:
 Options:
   --generate    Generate test files from spec.md
   --run         Run acceptance tests (default)
+  --overwrite   Overwrite existing test files during --generate
   --verbose     Show detailed output
   --help        Show this help message
 
@@ -66,12 +67,15 @@ export function parseArgs(argv: string[]): AcceptanceOptions {
   let generate = false;
   let run = false;
   let verbose = false;
+  let overwrite = false;
 
   for (const arg of args) {
     if (arg === "--generate") {
       generate = true;
     } else if (arg === "--run") {
       run = true;
+    } else if (arg === "--overwrite") {
+      overwrite = true;
     } else if (arg === "--verbose") {
       verbose = true;
     } else if (arg === "--help") {
@@ -88,7 +92,7 @@ export function parseArgs(argv: string[]): AcceptanceOptions {
     run = true;
   }
 
-  return { specDir, generate, run, verbose };
+  return { specDir, generate, run, verbose, overwrite };
 }
 
 // ============================================================================
@@ -133,7 +137,7 @@ async function handleGenerate(
   }
 
   const outputDir = DEFAULT_OUTPUT_DIR;
-  const files = await generateTestFiles(parsed, { outputDir });
+  const files = await generateTestFiles(parsed, { outputDir, overwrite: options.overwrite ?? false });
 
   // eslint-disable-next-line no-console
   console.log(`Generated ${files.length} test file(s):`);
@@ -172,6 +176,20 @@ function handleRun(options: AcceptanceOptions): void {
     configPath,
   ];
 
+  // If a specific spec dir was provided, target just that spec's test file
+  if (options.specDir) {
+    const specPath = join(options.specDir, "spec.md");
+    if (existsSync(specPath)) {
+      // Parse the spec to get the feature name for accurate file targeting
+      const parsed = parseSpecContent(
+        readFileSync(specPath, "utf-8"),
+        specPath
+      );
+      const testFile = generateFileName(parsed.featureName);
+      cmd.push(testFile);
+    }
+  }
+
   if (options.verbose) {
     cmd.push("--reporter=verbose");
   }
@@ -203,7 +221,7 @@ async function main(): Promise<void> {
     await handleGenerate(options);
   }
 
-  if (options.run && !options.generate) {
+  if (options.run) {
     handleRun(options);
   }
 }

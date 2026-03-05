@@ -54,6 +54,9 @@ export class TestHarness {
   private _proposalStore: ProposalStore | null = null;
   private _eventStore: EventStore | null = null;
 
+  /** Stores the last API response for step definition assertions */
+  public lastResponse: { status: number; body: unknown } | null = null;
+
   // ── Lifecycle ──────────────────────────────────────────────────────
 
   /**

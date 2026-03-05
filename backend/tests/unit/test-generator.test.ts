@@ -64,6 +64,7 @@ const SIMPLE_PARSE_RESULT: ParseResult = {
     { id: "FR-003", text: "Expose MCP tools for agents", coveredByStories: [2] },
   ],
   edgeCases: ["Empty title should return 400"],
+  warnings: [],
 };
 
 const EMPTY_PARSE_RESULT: ParseResult = {
@@ -72,6 +73,7 @@ const EMPTY_PARSE_RESULT: ParseResult = {
   userStories: [],
   requirements: [],
   edgeCases: [],
+  warnings: [],
 };
 
 // ============================================================================

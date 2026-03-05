@@ -7,6 +7,7 @@
  * @module acceptance/test-generator
  */
 
+import { existsSync } from "fs";
 import { mkdir, writeFile } from "fs/promises";
 import { join, dirname } from "path";
 
@@ -78,8 +79,28 @@ export function generateTestContent(parsed: ParseResult): string {
       `  describe("US${story.storyNumber} - ${story.title} (${story.priority})", () => {`
     );
 
+    // Pre-compute it descriptions and deduplicate within the story
+    const itDescriptions: string[] = [];
     for (const scenario of story.scenarios) {
-      const itDescription = generateItDescription(scenario);
+      itDescriptions.push(generateItDescription(scenario));
+    }
+    const descCounts = new Map<string, number>();
+    const descOccurrence = new Map<string, number>();
+    for (const desc of itDescriptions) {
+      descCounts.set(desc, (descCounts.get(desc) ?? 0) + 1);
+    }
+    for (let i = 0; i < itDescriptions.length; i++) {
+      const desc = itDescriptions[i]!;
+      if ((descCounts.get(desc) ?? 0) > 1) {
+        const occ = (descOccurrence.get(desc) ?? 0) + 1;
+        descOccurrence.set(desc, occ);
+        itDescriptions[i] = `${desc} (scenario ${story.scenarios[i]!.index})`;
+      }
+    }
+
+    for (let si = 0; si < story.scenarios.length; si++) {
+      const scenario = story.scenarios[si]!;
+      const itDescription = itDescriptions[si]!;
       lines.push(
         `    it("${escapeDoubleQuotes(itDescription)}", async () => {`
       );
@@ -122,6 +143,13 @@ export async function generateTestFiles(
   // Ensure output directory exists
   await mkdir(dirname(filePath), { recursive: true });
 
+  // Skip if file already exists and overwrite is not set
+  if (existsSync(filePath) && !options.overwrite) {
+    // eslint-disable-next-line no-console
+    console.log(`Skipping ${filePath} (already exists, use --overwrite to replace)`);
+    return [];
+  }
+
   await writeFile(filePath, content, "utf-8");
 
   return [filePath];
@@ -147,18 +175,32 @@ export function generateFileName(featureName: string): string {
 /**
  * Generate a meaningful `it` description from a scenario's Then clause.
  * Prefixes with "should" and truncates to ~80 chars.
+ *
+ * Handles grammatical transformations:
+ * - "it is persisted" -> "should be persisted"
+ * - "they are returned" -> "should be returned"
+ * - "the system responds" -> "should respond"
  */
 function generateItDescription(scenario: Scenario): string {
-  const thenText = scenario.then.toLowerCase();
-  // Remove leading articles for cleaner description
-  const cleaned = thenText.replace(/^(it |they |the )/, "");
-  const description = `should ${cleaned}`;
+  let text = scenario.then.toLowerCase();
+
+  // Strip leading pronouns/articles
+  text = text.replace(/^(it |they |the system |the |a |an )/, "");
+
+  // Grammatical fix: "is/are" -> "be" when used after "should"
+  if (text.startsWith("is ")) {
+    text = "should " + text.replace(/^is /, "be ");
+  } else if (text.startsWith("are ")) {
+    text = "should " + text.replace(/^are /, "be ");
+  } else {
+    text = "should " + text;
+  }
 
   // Truncate to ~80 chars at a word boundary
-  if (description.length <= 80) {
-    return description;
+  if (text.length <= 80) {
+    return text;
   }
-  const truncated = description.slice(0, 77);
+  const truncated = text.slice(0, 77);
   const lastSpace = truncated.lastIndexOf(" ");
   return lastSpace > 40 ? truncated.slice(0, lastSpace) + "..." : truncated + "...";
 }

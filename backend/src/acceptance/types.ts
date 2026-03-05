@@ -60,6 +60,8 @@ export interface ParseResult {
   requirements: Requirement[];
   /** Edge case descriptions */
   edgeCases: string[];
+  /** Warnings generated during parsing (e.g. malformed GWT scenarios) */
+  warnings: string[];
 }
 
 /**
@@ -99,6 +101,8 @@ export interface AcceptanceOptions {
   generate?: boolean;
   /** Run acceptance tests */
   run?: boolean;
+  /** Overwrite existing test files during generation */
+  overwrite?: boolean;
   /** Enable verbose output */
   verbose?: boolean;
 }
