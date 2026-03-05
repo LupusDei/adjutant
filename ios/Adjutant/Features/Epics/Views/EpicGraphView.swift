@@ -74,6 +74,7 @@ struct EpicGraphView: View {
                     )
                     .cornerRadius(CRTTheme.CornerRadius.md)
             }
+            .accessibilityLabel("Close graph")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("EPIC GRAPH // \(viewModel.epicId.uppercased())")
@@ -108,6 +109,7 @@ struct EpicGraphView: View {
                     )
                     .cornerRadius(CRTTheme.CornerRadius.md)
             }
+            .accessibilityLabel("Refresh graph")
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
@@ -195,6 +197,7 @@ struct EpicGraphView: View {
                     )
                     .cornerRadius(CRTTheme.CornerRadius.md)
             }
+            .accessibilityLabel("Reset zoom and position")
 
             // Critical path toggle
             Button {
@@ -228,12 +231,14 @@ struct EpicGraphView: View {
                     )
                     .cornerRadius(CRTTheme.CornerRadius.md)
             }
+            .accessibilityLabel(viewModel.showCriticalPath ? "Hide critical path" : "Show critical path")
 
             // Node count
             Text("\(viewModel.graphNodes.count)")
                 .font(CRTTheme.Typography.font(size: 10, weight: .medium))
                 .foregroundColor(theme.dim)
                 .frame(width: 32, height: 20)
+                .accessibilityLabel("\(viewModel.graphNodes.count) nodes in graph")
         }
         .padding(CRTTheme.Spacing.sm)
     }

@@ -130,6 +130,8 @@ class DependencyGraphViewModel: ObservableObject {
         let rootIds = allIds.subtracting(childIds)
 
         // Step 2: BFS to assign layers
+        // Guard against cycles: cap iterations at nodeCount^2 to prevent infinite loops.
+        let maxIterations = nodes.count * nodes.count
         var layerAssignment: [String: Int] = [:]
         var queue: [String] = Array(rootIds).sorted() // Sort for determinism
         for rootId in queue {
@@ -137,9 +139,11 @@ class DependencyGraphViewModel: ObservableObject {
         }
 
         var head = 0
-        while head < queue.count {
+        var iterations = 0
+        while head < queue.count && iterations < maxIterations {
             let nodeId = queue[head]
             head += 1
+            iterations += 1
             let currentLayer = layerAssignment[nodeId] ?? 0
 
             for childId in childrenOf[nodeId] ?? [] {

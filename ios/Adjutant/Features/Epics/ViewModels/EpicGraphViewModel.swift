@@ -125,11 +125,15 @@ class EpicGraphViewModel: ObservableObject {
         }
 
         // BFS from the epic through children to assign layers 1, 2, 3...
+        // Guard against cycles: cap iterations at nodeCount^2 to prevent infinite loops.
+        let maxIterations = nodes.count * nodes.count
         var queue: [String] = [epicId]
         var head = 0
-        while head < queue.count {
+        var iterations = 0
+        while head < queue.count && iterations < maxIterations {
             let nodeId = queue[head]
             head += 1
+            iterations += 1
             let currentLayer = layerAssignment[nodeId] ?? 0
 
             for childId in (childrenOf[nodeId] ?? []).sorted() {
