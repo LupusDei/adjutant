@@ -110,9 +110,13 @@ public struct CRTText: View {
     }
 
     public var body: some View {
-        Text(style.isUppercased ? text.uppercased() : text)
-            .font(CRTTheme.Typography.font(size: style.fontSize, weight: style.fontWeight, theme: theme))
-            .tracking(style.letterSpacing)
+        let shouldUppercase = style.isUppercased && theme.crtEffectsEnabled
+        let effectiveTracking = theme.crtEffectsEnabled ? style.letterSpacing : max(style.letterSpacing * 0.3, 0)
+        let effectiveWeight = !theme.crtEffectsEnabled && style == .header ? Font.Weight.semibold : style.fontWeight
+
+        return Text(shouldUppercase ? text.uppercased() : text)
+            .font(CRTTheme.Typography.font(size: style.fontSize, weight: effectiveWeight, theme: theme))
+            .tracking(effectiveTracking)
             .foregroundColor(resolvedColor)
             .crtGlow(
                 color: resolvedColor,

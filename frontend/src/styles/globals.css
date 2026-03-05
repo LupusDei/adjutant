@@ -443,6 +443,107 @@
 }
 
 /* ============================================
+   Document Theme — Typography & Spacing
+   Clean, readable, paper-like feel
+   ============================================ */
+
+/* Typography hierarchy: clear heading sizes with proper weight */
+[data-theme='document'] h1 {
+  font-size: 1.75rem;
+  font-weight: var(--theme-heading-weight, 600);
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+[data-theme='document'] h2 {
+  font-size: 1.35rem;
+  font-weight: var(--theme-heading-weight, 600);
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+}
+
+[data-theme='document'] h3 {
+  font-size: 1.125rem;
+  font-weight: var(--theme-heading-weight, 600);
+  line-height: 1.4;
+}
+
+[data-theme='document'] h4 {
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+/* Panels: clean card styling with subtle shadow */
+[data-theme='document'] .pipboy-panel {
+  border-radius: var(--theme-border-radius, 8px);
+  padding: var(--theme-panel-padding, 16px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+[data-theme='document'] .pipboy-panel-header {
+  border-bottom-color: var(--theme-border-color);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--theme-text-secondary);
+}
+
+/* Buttons: professional, restrained */
+[data-theme='document'] .pipboy-button {
+  border-width: 1px;
+  border-radius: 6px;
+  font-weight: 500;
+  padding: 0.5rem 1.25rem;
+  transition: all 0.15s ease;
+}
+
+[data-theme='document'] .pipboy-button:focus-visible {
+  box-shadow: var(--theme-focus-ring, 0 0 0 2px rgba(37, 99, 235, 0.25));
+  outline: none;
+}
+
+/* Inputs: clean with proper focus states */
+[data-theme='document'] .pipboy-input {
+  border-radius: 6px;
+  padding: 0.625rem 0.75rem;
+  font-size: var(--theme-body-size, 0.9375rem);
+  line-height: var(--theme-line-height, 1.6);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+[data-theme='document'] .pipboy-input:focus {
+  border-color: var(--theme-accent);
+  box-shadow: var(--theme-focus-ring, 0 0 0 2px rgba(37, 99, 235, 0.25));
+}
+
+[data-theme='document'] .pipboy-input::placeholder {
+  color: var(--theme-text-secondary);
+  opacity: 0.6;
+}
+
+/* Scrollbar: subtle and refined */
+[data-theme='document'] ::-webkit-scrollbar-thumb {
+  background: #D0D0CC;
+  border-radius: 4px;
+}
+
+[data-theme='document'] ::-webkit-scrollbar-thumb:hover {
+  background: #B8B8B4;
+}
+
+[data-theme='document'] ::-webkit-scrollbar-track {
+  background: var(--theme-bg-screen);
+}
+
+/* Selection: use accent color */
+[data-theme='document'] ::selection {
+  background: rgba(37, 99, 235, 0.2);
+  color: inherit;
+}
+
+/* ============================================
    Epic Card Styles
    ============================================ */
 .epic-card-clickable:hover {

@@ -51,7 +51,7 @@ public enum CRTTheme {
         public var dim: Color {
             switch self {
             case .pipboy: return Color(red: 0.039, green: 0.373, blue: 0.027)     // #0A5F07
-            case .document: return Color(red: 0.463, green: 0.463, blue: 0.463)   // #767676 (WCAG AA on white)
+            case .document: return Color(red: 0.420, green: 0.420, blue: 0.420)   // #6B6B6B (exceeds WCAG AA on white)
             case .starcraft: return Color(red: 0.0, green: 0.733, blue: 0.6)       // #00BB99
             case .friendly: return Color(red: 0.608, green: 0.557, blue: 0.769)    // #9B8EC4 (soft purple)
             }
@@ -70,7 +70,7 @@ public enum CRTTheme {
                 return BackgroundSet(
                     screen: Color(red: 0.98, green: 0.98, blue: 0.973),        // #FAFAF8
                     panel: Color.white,                                         // #FFFFFF
-                    elevated: Color(red: 0.941, green: 0.941, blue: 0.933)     // #F0F0EE
+                    elevated: Color(red: 0.961, green: 0.961, blue: 0.949)     // #F5F5F2
                 )
             case .starcraft:
                 return BackgroundSet(
@@ -145,7 +145,7 @@ public enum CRTTheme {
         public var textSecondary: Color {
             switch self {
             case .pipboy: return dim
-            case .document: return Color(red: 0.463, green: 0.463, blue: 0.463)   // #767676 (WCAG AA)
+            case .document: return Color(red: 0.420, green: 0.420, blue: 0.420)   // #6B6B6B (exceeds WCAG AA)
             case .starcraft: return dim
             case .friendly: return Color(red: 0.478, green: 0.435, blue: 0.627)    // #7A6FA0 (muted purple)
             }

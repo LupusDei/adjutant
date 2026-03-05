@@ -291,6 +291,25 @@
     display: none;
   }
 
+  /* Document theme: refined header with subtle bottom border */
+  [data-theme='document'] .app-header {
+    border-bottom-color: var(--theme-border-color);
+    border-bottom-width: 1px;
+    padding: 0.875rem 1.25rem;
+    background-color: var(--theme-bg-panel);
+  }
+
+  /* Remove the decorative gradient line — too techy for Document */
+  [data-theme='document'] .app-header::after {
+    display: none;
+  }
+
+  [data-theme='document'] .app-header h1 {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+
   @keyframes header-glow {
     0%, 100% {
       text-shadow:
@@ -463,6 +482,35 @@
     font-weight: 700;
     background-color: var(--friendly-red);
     color: #FFFFFF;
+  }
+
+  /* Document theme: refined nav with generous spacing */
+  [data-theme='document'] .app-nav {
+    gap: 6px;
+    padding: 12px 0;
+    background-color: var(--theme-bg-screen);
+  }
+
+  [data-theme='document'] .nav-tab {
+    font-family: var(--theme-font);
+    font-weight: 500;
+    font-size: 0.875rem;
+    letter-spacing: 0.01em;
+    padding: 0.625rem 1.75rem;
+    border-width: 1px;
+  }
+
+  [data-theme='document'] .nav-tab:focus-visible {
+    box-shadow: var(--theme-focus-ring, 0 0 0 2px rgba(37, 99, 235, 0.25));
+    outline: none;
+  }
+
+  [data-theme='document'] .nav-tab-badge {
+    border-radius: 10px;
+    font-size: 0.6rem;
+    padding: 0 6px;
+    min-width: 18px;
+    line-height: 18px;
   }
 
   .nav-tab:active {

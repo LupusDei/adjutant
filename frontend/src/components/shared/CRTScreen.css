@@ -64,34 +64,53 @@
 
 /* ============================================
    Document Theme — Clean, professional
+   Designed for readability: clear hierarchy,
+   generous whitespace, paper-like warmth.
    ============================================ */
 [data-theme='document'] {
   --theme-primary-rgb: 17, 17, 17;
   --theme-primary: #111111;
   --theme-bright: #000000;
-  --theme-dim: #767676;
+  --theme-dim: #6B6B6B;
   --theme-glow: transparent;
   --theme-bloom: transparent;
 
   --crt-bg: #FAFAF8;
   --crt-bg-active: #FFFFFF;
-  --crt-bezel: #E8E8E4;
-  --crt-bezel-highlight: #F0F0EC;
-  --crt-bezel-shadow: #D8D8D4;
+  --crt-bezel: #EAEAE6;
+  --crt-bezel-highlight: #F2F2EE;
+  --crt-bezel-shadow: #DCDCD8;
 
   --theme-bg-screen: #FAFAF8;
   --theme-bg-panel: #FFFFFF;
-  --theme-bg-elevated: #F0F0EE;
-  --theme-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --theme-font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --theme-bg-elevated: #F5F5F2;
+  --theme-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --theme-font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --theme-text-transform: none;
   --theme-letter-spacing: normal;
-  --theme-label-spacing: 0.02em;
+  --theme-label-spacing: 0.01em;
   --theme-color-scheme: light;
-  --theme-border-color: #D4D4D4;
+  --theme-border-color: #E2E2DE;
   --theme-text-primary: #111111;
-  --theme-text-secondary: #767676;
+  --theme-text-secondary: #6B6B6B;
   --theme-accent: #2563EB;
+
+  /* Document-specific typography */
+  --theme-line-height: 1.6;
+  --theme-heading-weight: 600;
+  --theme-body-size: 0.9375rem;
+
+  /* Document-specific spacing */
+  --theme-content-padding: 16px;
+  --theme-section-gap: 16px;
+  --theme-panel-padding: 16px;
+
+  /* Document-specific borders */
+  --theme-border-radius: 8px;
+  --theme-border-width: 1px;
+
+  /* Document-specific focus ring */
+  --theme-focus-ring: 0 0 0 2px rgba(37, 99, 235, 0.25);
 }
 
 /* ============================================
@@ -582,6 +601,12 @@
 [data-theme='friendly'] .crt-content {
   font-family: var(--theme-font);
   color: var(--theme-text-primary);
+}
+
+/* Document theme: generous content padding and readable line-height */
+[data-theme='document'] .crt-content {
+  padding: var(--theme-content-padding, 16px);
+  line-height: var(--theme-line-height, 1.6);
 }
 
 /* Disable all overlay effects for non-CRT themes */

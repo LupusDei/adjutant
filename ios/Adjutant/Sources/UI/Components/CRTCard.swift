@@ -81,6 +81,23 @@ public struct CRTCard<Content: View>: View {
         self.content = content
     }
 
+    /// Corner radius adapts to theme: larger for non-CRT themes
+    private var effectiveCornerRadius: CGFloat {
+        theme.crtEffectsEnabled ? CRTTheme.CornerRadius.md : CRTTheme.CornerRadius.lg + 2
+    }
+
+    /// Border color and opacity adapt to theme
+    private var effectiveBorderColor: Color {
+        theme.crtEffectsEnabled
+            ? theme.dim.opacity(style.borderOpacity)
+            : theme.dim.opacity(0.25)
+    }
+
+    /// Background opacity: non-CRT themes use full opacity panels
+    private var effectiveBackgroundOpacity: Double {
+        theme.crtEffectsEnabled ? style.backgroundOpacity : 1.0
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let header = header {
@@ -91,16 +108,19 @@ public struct CRTCard<Content: View>: View {
                 .padding(CRTTheme.Spacing.md)
         }
         .background(
-            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
-                .fill(theme.background.panel.opacity(style.backgroundOpacity))
+            RoundedRectangle(cornerRadius: effectiveCornerRadius)
+                .fill(theme.background.panel.opacity(effectiveBackgroundOpacity))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
-                .stroke(theme.dim.opacity(style.borderOpacity), lineWidth: 1)
+            RoundedRectangle(cornerRadius: effectiveCornerRadius)
+                .stroke(effectiveBorderColor, lineWidth: 1)
         )
-        .overlay(
-            cornerBracketsOverlay
-        )
+        .overlay {
+            // Only show corner brackets for CRT themes
+            if theme.crtEffectsEnabled {
+                cornerBracketsOverlay
+            }
+        }
         .crtGlow(
             color: theme.accent,
             radius: 8,
