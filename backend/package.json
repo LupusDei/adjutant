@@ -19,7 +19,9 @@
     "api-key": "tsx src/cli/api-keys.ts",
     "api-key:generate": "tsx src/cli/api-keys.ts generate",
     "api-key:list": "tsx src/cli/api-keys.ts list",
-    "api-key:revoke": "tsx src/cli/api-keys.ts revoke"
+    "api-key:revoke": "tsx src/cli/api-keys.ts revoke",
+    "acceptance": "npx tsx src/acceptance/cli.ts",
+    "acceptance:generate": "npx tsx src/acceptance/cli.ts --generate"
   },
   "keywords": [
     "adjutant",
