@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 
-import { generateTestContent } from "../../src/acceptance/test-generator.js";
+import { generateTestContent, generateFileName } from "../../src/acceptance/test-generator.js";
 import {
   defineGiven,
   defineWhen,
@@ -164,6 +164,32 @@ describe("TestGenerator", () => {
       const content = generateTestContent(SIMPLE_PARSE_RESULT);
 
       expect(content).toContain('import { describe, it, expect, beforeEach, afterEach } from "vitest"');
+    });
+  });
+
+  describe("generateFileName", () => {
+    it("should produce kebab-case file name with .acceptance.test.ts suffix", () => {
+      expect(generateFileName("Agent Proposals System")).toBe(
+        "agent-proposals-system.acceptance.test.ts"
+      );
+    });
+
+    it("should handle special characters and collapse multiple separators", () => {
+      expect(generateFileName("Data Model & Backend API")).toBe(
+        "data-model-backend-api.acceptance.test.ts"
+      );
+    });
+
+    it("should handle single word feature names", () => {
+      expect(generateFileName("Messaging")).toBe(
+        "messaging.acceptance.test.ts"
+      );
+    });
+
+    it("should strip leading and trailing hyphens", () => {
+      expect(generateFileName("  Agent Proposals  ")).toBe(
+        "agent-proposals.acceptance.test.ts"
+      );
     });
   });
 });
