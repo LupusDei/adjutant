@@ -592,10 +592,11 @@ private struct SchemePreviewCard: View {
             // Colorful accent circles — varied sizes for playful feel
             HStack(spacing: 6) {
                 ForEach(Array(friendlyAccentColors.enumerated()), id: \.offset) { index, color in
+                    let sizes: [CGFloat] = [16, 12, 14, 12, 10, 14, 13, 11]
                     Circle()
                         .fill(color)
-                        .frame(width: CGFloat([16, 12, 14, 12, 10, 14][index]),
-                               height: CGFloat([16, 12, 14, 12, 10, 14][index]))
+                        .frame(width: sizes[index % sizes.count],
+                               height: sizes[index % sizes.count])
                 }
 
                 Spacer()
