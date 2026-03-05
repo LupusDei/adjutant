@@ -1201,3 +1201,463 @@
   color: var(--theme-text-primary);
   font-size: 0.875rem;
 }
+
+/* ============================================
+   Friendly Theme — Dashboard Overrides
+   Colorful, rounded, joyful child-friendly feel
+   ============================================ */
+
+[data-theme='friendly'] .dashboard-view-container {
+  font-family: var(--theme-font);
+  color: var(--theme-text-primary);
+  padding: 24px;
+}
+
+[data-theme='friendly'] .dashboard-view-main-title {
+  text-shadow: none;
+  color: #5856D6;
+  font-weight: 800;
+  font-size: 1.5rem;
+  letter-spacing: 0;
+  text-transform: none;
+  margin-bottom: 24px;
+}
+
+[data-theme='friendly'] .dashboard-view-grid {
+  gap: 20px;
+}
+
+/* Widget cards: rounded with colorful left accent */
+[data-theme='friendly'] .dashboard-widget-container {
+  border: 2px solid var(--theme-border-color);
+  border-left: 4px solid var(--theme-accent);
+  background-color: var(--theme-bg-panel);
+  border-radius: 14px;
+  padding: 18px;
+  gap: 12px;
+  box-shadow: 0 2px 12px rgba(88, 86, 214, 0.08);
+}
+
+[data-theme='friendly'] .dashboard-widget-header {
+  border-bottom: 2px solid #E4DDFF;
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+
+[data-theme='friendly'] .dashboard-widget-title {
+  color: var(--theme-text-primary);
+  text-shadow: none;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+[data-theme='friendly'] .dashboard-header-stat {
+  color: var(--theme-text-secondary);
+  text-transform: none;
+  font-size: 0.8rem;
+}
+
+[data-theme='friendly'] .dashboard-header-stat-highlight {
+  color: var(--theme-accent);
+  text-shadow: none;
+  font-weight: 700;
+}
+
+/* Crew cards: rounded with soft background */
+[data-theme='friendly'] .dashboard-crew-card {
+  border: 2px solid #E4DDFF;
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 12px 14px;
+  transition: all 0.2s ease;
+}
+
+[data-theme='friendly'] .dashboard-crew-card:hover {
+  border-color: var(--theme-accent);
+  box-shadow: 0 4px 14px rgba(88, 86, 214, 0.12);
+}
+
+[data-theme='friendly'] .dashboard-crew-card-name {
+  color: var(--theme-text-primary);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+[data-theme='friendly'] .dashboard-crew-card-type,
+[data-theme='friendly'] .dashboard-crew-card-project {
+  border: 1px solid #D4CBEF;
+  color: var(--theme-text-secondary);
+  border-radius: 8px;
+  font-size: 0.65rem;
+  background: var(--theme-bg-elevated);
+}
+
+[data-theme='friendly'] .dashboard-crew-card-status-text {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+[data-theme='friendly'] .dashboard-text-working {
+  color: #2E9E4B;
+}
+
+[data-theme='friendly'] .dashboard-text-idle {
+  color: var(--theme-text-secondary);
+}
+
+[data-theme='friendly'] .dashboard-text-stuck {
+  color: #E8453A;
+}
+
+[data-theme='friendly'] .dashboard-text-offline {
+  color: #8576AF;
+}
+
+[data-theme='friendly'] .dashboard-indicator-working {
+  background-color: #2E9E4B;
+  box-shadow: none;
+}
+
+[data-theme='friendly'] .dashboard-indicator-idle {
+  background-color: #C4B8FF;
+}
+
+[data-theme='friendly'] .dashboard-indicator-stuck {
+  background-color: #E8453A;
+  box-shadow: none;
+}
+
+[data-theme='friendly'] .dashboard-indicator-offline {
+  background-color: #8576AF;
+}
+
+[data-theme='friendly'] .dashboard-crew-card-task-label {
+  color: var(--theme-text-secondary);
+}
+
+[data-theme='friendly'] .dashboard-crew-card-task-text {
+  color: var(--theme-text-secondary);
+}
+
+/* Epics: rounded cards with colorful status badges */
+[data-theme='friendly'] .dashboard-epics-item {
+  border: 2px solid #E4DDFF;
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 14px;
+  transition: all 0.2s ease;
+}
+
+[data-theme='friendly'] .dashboard-epics-item:hover {
+  border-color: var(--theme-accent);
+  box-shadow: 0 4px 14px rgba(88, 86, 214, 0.12);
+}
+
+[data-theme='friendly'] .dashboard-epics-title {
+  color: var(--theme-text-primary);
+  font-weight: 700;
+}
+
+[data-theme='friendly'] .dashboard-epics-status {
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+[data-theme='friendly'] .dashboard-epics-status-active,
+[data-theme='friendly'] .dashboard-epics-status-in_progress {
+  background: rgba(46, 158, 75, 0.12);
+  color: #2E9E4B;
+  border: 1px solid #2E9E4B;
+}
+
+[data-theme='friendly'] .dashboard-epics-status-completed,
+[data-theme='friendly'] .dashboard-epics-status-done {
+  background: rgba(88, 86, 214, 0.08);
+  color: var(--theme-text-secondary);
+  border: 1px solid var(--theme-border-color);
+}
+
+[data-theme='friendly'] .dashboard-epics-status-pending {
+  background: rgba(249, 168, 37, 0.12);
+  color: #D4930D;
+  border: 1px solid #F9A825;
+}
+
+[data-theme='friendly'] .dashboard-epics-issues {
+  color: var(--theme-text-secondary);
+}
+
+/* Progress bar: rounded with indigo fill */
+[data-theme='friendly'] .dashboard-progress-bar {
+  border: 2px solid #E4DDFF;
+  background: var(--theme-bg-elevated);
+  border-radius: 8px;
+  height: 8px;
+}
+
+[data-theme='friendly'] .dashboard-progress-fill {
+  background: linear-gradient(90deg, #5856D6, #7B59E0);
+  box-shadow: none;
+  border-radius: 8px;
+}
+
+[data-theme='friendly'] .dashboard-progress-text {
+  color: var(--theme-text-secondary);
+  font-weight: 600;
+}
+
+/* Bead rows: rounded with soft hover */
+[data-theme='friendly'] .dashboard-bead-row {
+  border: 2px solid #E4DDFF;
+  background: #FFFFFF;
+  border-radius: 10px;
+  padding: 6px 12px;
+  transition: all 0.2s ease;
+}
+
+[data-theme='friendly'] .dashboard-bead-row:hover {
+  border-color: var(--theme-accent);
+  background: rgba(88, 86, 214, 0.04);
+}
+
+[data-theme='friendly'] .dashboard-bead-id {
+  color: var(--theme-text-secondary);
+}
+
+[data-theme='friendly'] .dashboard-bead-title {
+  color: var(--theme-text-primary);
+  font-weight: 600;
+}
+
+[data-theme='friendly'] .dashboard-bead-priority {
+  border-radius: 8px;
+  text-transform: none;
+  font-weight: 600;
+}
+
+[data-theme='friendly'] .dashboard-bead-priority-0 {
+  color: #FFFFFF;
+  background: #E8453A;
+  border-color: #E8453A;
+}
+
+[data-theme='friendly'] .dashboard-bead-priority-1 {
+  color: #D4930D;
+  background: rgba(249, 168, 37, 0.15);
+  border-color: #F9A825;
+}
+
+[data-theme='friendly'] .dashboard-bead-priority-2 {
+  color: var(--theme-text-secondary);
+  border-color: var(--theme-border-color);
+  background: rgba(88, 86, 214, 0.06);
+}
+
+[data-theme='friendly'] .dashboard-bead-priority-3 {
+  color: #8576AF;
+  border-color: #D4CBEF;
+  background: rgba(133, 118, 175, 0.06);
+}
+
+[data-theme='friendly'] .dashboard-bead-priority-4 {
+  color: #A89CC4;
+  border-color: #E4DDFF;
+  background: rgba(164, 156, 196, 0.06);
+}
+
+[data-theme='friendly'] .dashboard-bead-timestamp {
+  color: var(--theme-text-secondary);
+}
+
+[data-theme='friendly'] .dashboard-epic-completed-time {
+  color: var(--theme-text-secondary);
+}
+
+/* Unread rows: rounded with colorful unread count */
+[data-theme='friendly'] .dashboard-unread-row {
+  border: 2px solid #E4DDFF;
+  background: #FFFFFF;
+  border-radius: 10px;
+  padding: 8px 14px;
+  transition: all 0.2s ease;
+}
+
+[data-theme='friendly'] .dashboard-unread-row:hover {
+  border-color: var(--theme-accent);
+  background: rgba(88, 86, 214, 0.04);
+  box-shadow: 0 2px 8px rgba(88, 86, 214, 0.1);
+}
+
+[data-theme='friendly'] .dashboard-unread-agent {
+  color: var(--theme-text-primary);
+  font-weight: 700;
+}
+
+[data-theme='friendly'] .dashboard-unread-preview {
+  color: var(--theme-text-secondary);
+}
+
+[data-theme='friendly'] .dashboard-unread-count {
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #5856D6, #7B59E0);
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+}
+
+/* Agent rows: rounded with playful hover */
+[data-theme='friendly'] .dashboard-agent-row {
+  border: 2px solid #E4DDFF;
+  background: #FFFFFF;
+  border-radius: 10px;
+  padding: 8px 14px;
+  transition: all 0.2s ease;
+}
+
+[data-theme='friendly'] .dashboard-agent-row:hover {
+  border-color: var(--theme-accent);
+  background: rgba(88, 86, 214, 0.04);
+  box-shadow: 0 2px 8px rgba(88, 86, 214, 0.1);
+  transform: translateY(-1px);
+}
+
+[data-theme='friendly'] .dashboard-agent-name {
+  color: var(--theme-text-primary);
+  font-weight: 700;
+}
+
+[data-theme='friendly'] .dashboard-agent-project {
+  color: var(--theme-text-secondary);
+  border: 1px solid #D4CBEF;
+  border-radius: 8px;
+  text-transform: none;
+  background: var(--theme-bg-elevated);
+}
+
+[data-theme='friendly'] .dashboard-agent-task {
+  color: var(--theme-text-secondary);
+}
+
+/* Status badges: rounded pills with colorful fills */
+[data-theme='friendly'] .dashboard-status-badge {
+  border-radius: 10px;
+  text-transform: none;
+  font-weight: 600;
+}
+
+[data-theme='friendly'] .dashboard-status-working {
+  background: rgba(46, 158, 75, 0.12);
+  color: #2E9E4B;
+  border-color: #2E9E4B;
+}
+
+[data-theme='friendly'] .dashboard-status-idle {
+  background: rgba(88, 86, 214, 0.08);
+  color: var(--theme-text-secondary);
+  border-color: #D4CBEF;
+}
+
+[data-theme='friendly'] .dashboard-status-stuck {
+  background: rgba(232, 69, 58, 0.12);
+  color: #E8453A;
+  border-color: #E8453A;
+}
+
+[data-theme='friendly'] .dashboard-status-offline {
+  background: rgba(133, 118, 175, 0.1);
+  color: #8576AF;
+  border-color: #D4CBEF;
+}
+
+/* Stat values */
+[data-theme='friendly'] .dashboard-stat-value {
+  color: var(--theme-text-primary);
+  font-weight: 800;
+}
+
+[data-theme='friendly'] .dashboard-stat-highlight {
+  color: var(--theme-accent);
+  text-shadow: none;
+}
+
+[data-theme='friendly'] .dashboard-stat-label {
+  color: var(--theme-text-secondary);
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 600;
+}
+
+/* Empty state */
+[data-theme='friendly'] .dashboard-empty-text {
+  color: var(--theme-text-secondary);
+}
+
+/* Mail items */
+[data-theme='friendly'] .dashboard-mail-subject {
+  color: var(--theme-text-primary);
+  font-weight: 600;
+}
+
+[data-theme='friendly'] .dashboard-mail-meta {
+  color: var(--theme-text-secondary);
+}
+
+/* Crew alerts: rounded with red fill */
+[data-theme='friendly'] .dashboard-crew-alert {
+  color: #FFFFFF;
+  background: #E8453A;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+/* Overview epic cards */
+[data-theme='friendly'] .dashboard-overview-epic-card {
+  background: #FFFFFF;
+  border: 2px solid #E4DDFF;
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 2px 8px rgba(88, 86, 214, 0.06);
+}
+
+[data-theme='friendly'] .dashboard-overview-epic-id {
+  color: var(--theme-text-secondary);
+  letter-spacing: normal;
+}
+
+[data-theme='friendly'] .dashboard-overview-epic-status {
+  border-radius: 8px;
+  letter-spacing: normal;
+  font-weight: 600;
+}
+
+[data-theme='friendly'] .dashboard-overview-epic-title {
+  color: var(--theme-text-primary);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+/* View sub-title */
+[data-theme='friendly'] .dashboard-view-sub-title {
+  color: var(--theme-accent);
+  text-shadow: none;
+  text-transform: none;
+  font-weight: 700;
+  letter-spacing: normal;
+}
+
+[data-theme='friendly'] .dashboard-view-list-item {
+  color: var(--theme-text-primary);
+}
+
+[data-theme='friendly'] .dashboard-view-list-item-label {
+  color: var(--theme-text-primary);
+}
+
+[data-theme='friendly'] .dashboard-view-error-text {
+  color: #E8453A;
+}
