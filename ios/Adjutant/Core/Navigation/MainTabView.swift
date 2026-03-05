@@ -29,6 +29,13 @@ struct MainTabView: View {
         }
         .background(theme.background.screen)
         .environmentObject(coordinator)
+        .onChange(of: coordinator.selectedTab) { _, _ in
+            // Dismiss keyboard on any tab navigation
+            UIApplication.shared.sendAction(
+                #selector(UIResponder.resignFirstResponder),
+                to: nil, from: nil, for: nil
+            )
+        }
         .onAppear {
             // Start network monitoring
             _ = NetworkMonitor.shared

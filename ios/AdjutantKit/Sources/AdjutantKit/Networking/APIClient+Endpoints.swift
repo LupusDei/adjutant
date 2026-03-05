@@ -306,6 +306,12 @@ extension APIClient {
         try await requestWithEnvelope(.get, path: "/beads/graph")
     }
 
+    /// Get the dependency graph scoped to a specific epic and its descendants.
+    public func getEpicGraph(epicId: String) async throws -> BeadsGraphResponse {
+        let queryItems = [URLQueryItem(name: "epicId", value: epicId)]
+        return try await requestWithEnvelope(.get, path: "/beads/graph", queryItems: queryItems)
+    }
+
     /// Get children of an epic using the dependency graph.
     public func getEpicChildren(epicId: String) async throws -> [BeadInfo] {
         let encodedId = epicId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? epicId

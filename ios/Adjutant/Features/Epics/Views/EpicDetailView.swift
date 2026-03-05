@@ -7,8 +7,12 @@ struct EpicDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var coordinator: AppCoordinator
     @StateObject private var viewModel: EpicDetailViewModel
+    @State private var showGraph = false
+
+    private let epicId: String
 
     init(epicId: String) {
+        self.epicId = epicId
         _viewModel = StateObject(wrappedValue: EpicDetailViewModel(epicId: epicId))
     }
 
@@ -73,6 +77,20 @@ struct EpicDetailView: View {
             ToolbarItem(placement: .principal) {
                 CRTText("EPIC DETAIL", style: .subheader, glowIntensity: .subtle)
             }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showGraph = true
+                } label: {
+                    HStack(spacing: CRTTheme.Spacing.xxxs) {
+                        Image(systemName: "point.3.filled.connected.trianglepath.dotted")
+                            .font(.system(size: 12, weight: .medium))
+                        Text("GRAPH")
+                            .font(CRTTheme.Typography.font(size: 11, weight: .bold))
+                            .tracking(CRTTheme.Typography.letterSpacing)
+                    }
+                    .foregroundColor(theme.primary)
+                }
+            }
         }
         .onAppear {
             viewModel.onAppear()
@@ -82,6 +100,9 @@ struct EpicDetailView: View {
         }
         .refreshable {
             await viewModel.refresh()
+        }
+        .fullScreenCover(isPresented: $showGraph) {
+            EpicGraphView(epicId: epicId, epicTitle: viewModel.epic?.title ?? "")
         }
     }
 
