@@ -1,6 +1,15 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 
 import { generateTestContent } from "../../src/acceptance/test-generator.js";
+import {
+  defineGiven,
+  defineWhen,
+  defineThen,
+  findStep,
+  executeStep,
+  clearSteps,
+  getRegisteredSteps,
+} from "../../src/acceptance/step-registry.js";
 import type { ParseResult } from "../../src/acceptance/types.js";
 
 // ============================================================================
@@ -155,6 +164,135 @@ describe("TestGenerator", () => {
       const content = generateTestContent(SIMPLE_PARSE_RESULT);
 
       expect(content).toContain('import { describe, it, expect, beforeEach, afterEach } from "vitest"');
+    });
+  });
+});
+
+// ============================================================================
+// Tests — Step Definition Registry
+// ============================================================================
+
+describe("StepRegistry", () => {
+  beforeEach(() => {
+    clearSteps();
+  });
+
+  describe("defineGiven / findStep round-trip", () => {
+    it("should register and find a string pattern step", async () => {
+      const fn = async () => { /* no-op */ };
+      defineGiven("the database is initialized", fn);
+
+      const result = findStep("given", "the database is initialized");
+      expect(result).not.toBeNull();
+      expect(result!.step.type).toBe("given");
+      expect(result!.step.fn).toBe(fn);
+      expect(result!.args).toEqual([]);
+    });
+
+    it("should match string patterns case-insensitively", () => {
+      defineGiven("The Database Is Initialized", async () => { /* no-op */ });
+
+      const result = findStep("given", "the database is initialized");
+      expect(result).not.toBeNull();
+    });
+
+    it("should not match across step types", () => {
+      defineWhen("the database is initialized", async () => { /* no-op */ });
+
+      const result = findStep("given", "the database is initialized");
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("regex patterns with capture groups", () => {
+    it("should capture groups from regex patterns", () => {
+      defineThen(/^it is persisted with status "(\w+)"$/, async () => { /* no-op */ });
+
+      const result = findStep("then", 'it is persisted with status "pending"');
+      expect(result).not.toBeNull();
+      expect(result!.args).toEqual(["pending"]);
+    });
+
+    it("should capture multiple groups", () => {
+      defineWhen(
+        /^(\w+) calls (\w+) with (\d+) args$/,
+        async () => { /* no-op */ }
+      );
+
+      const result = findStep("when", "agent calls send_message with 3 args");
+      expect(result).not.toBeNull();
+      expect(result!.args).toEqual(["agent", "send_message", "3"]);
+    });
+
+    it("should return null for non-matching regex", () => {
+      defineThen(/^it is persisted with status "(\w+)"$/, async () => { /* no-op */ });
+
+      const result = findStep("then", "something completely different");
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("executeStep", () => {
+    it("should execute matched step with harness and captured args", async () => {
+      const calls: unknown[] = [];
+      defineThen(
+        /^the status is "(\w+)"$/,
+        async (harness, status) => {
+          calls.push({ harness, status });
+        }
+      );
+
+      const fakeHarness = { name: "test-harness" };
+      await executeStep("then", 'the status is "accepted"', fakeHarness);
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toEqual({
+        harness: fakeHarness,
+        status: "accepted",
+      });
+    });
+
+    it("should throw descriptive error when no step definition found", async () => {
+      await expect(
+        executeStep("given", "the moon is full", {})
+      ).rejects.toThrow(
+        'No step definition found for: Given "the moon is full"'
+      );
+    });
+
+    it("should include registration hint in the error message", async () => {
+      await expect(
+        executeStep("when", "something happens", {})
+      ).rejects.toThrow("defineWhen");
+    });
+  });
+
+  describe("clearSteps", () => {
+    it("should reset the registry to empty", () => {
+      defineGiven("step 1", async () => { /* no-op */ });
+      defineWhen("step 2", async () => { /* no-op */ });
+      defineThen("step 3", async () => { /* no-op */ });
+
+      expect(getRegisteredSteps()).toHaveLength(3);
+
+      clearSteps();
+
+      expect(getRegisteredSteps()).toHaveLength(0);
+      expect(findStep("given", "step 1")).toBeNull();
+    });
+  });
+
+  describe("getRegisteredSteps", () => {
+    it("should return all registered steps as readonly", () => {
+      defineGiven("g1", async () => { /* no-op */ });
+      defineWhen("w1", async () => { /* no-op */ });
+      defineThen("t1", async () => { /* no-op */ });
+
+      const steps = getRegisteredSteps();
+      expect(steps).toHaveLength(3);
+      expect(steps[0]!.type).toBe("given");
+      expect(steps[1]!.type).toBe("when");
+      expect(steps[2]!.type).toBe("then");
     });
   });
 });
