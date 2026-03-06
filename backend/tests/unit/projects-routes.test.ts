@@ -227,29 +227,47 @@ describe("projects routes", () => {
       expect(response.body.error.message).toBe("Git clone failed");
     });
 
-    it("should pass targetDir to createProject when provided with cloneUrl", async () => {
-      const project = createMockProject({
-        path: "/custom/dir/repo",
-        gitRemote: "git@github.com:user/repo.git",
-      });
+    // =========================================================================
+    // POST /api/projects with targetDir (adj-050.1)
+    // =========================================================================
+
+    it("should pass targetDir through to createProject service", async () => {
+      const project = createMockProject({ path: "/tmp/custom/myrepo" });
       vi.mocked(createProject).mockReturnValue({ success: true, data: project });
 
       const response = await request(app)
         .post("/api/projects")
         .send({
-          cloneUrl: "git@github.com:user/repo.git",
-          targetDir: "/custom/dir/repo",
+          cloneUrl: "git@github.com:user/myrepo.git",
+          targetDir: "/tmp/custom/myrepo",
         });
 
       expect(response.status).toBe(201);
       expect(response.body.success).toBe(true);
-      expect(createProject).toHaveBeenCalledWith({
-        cloneUrl: "git@github.com:user/repo.git",
-        targetDir: "/custom/dir/repo",
-      });
+      // Verify createProject was called with targetDir in the input
+      expect(createProject).toHaveBeenCalledWith(
+        expect.objectContaining({ targetDir: "/tmp/custom/myrepo" }),
+      );
     });
 
-    it("should reject empty targetDir string", async () => {
+    it("should accept cloneUrl without targetDir (backward compat)", async () => {
+      const project = createMockProject();
+      vi.mocked(createProject).mockReturnValue({ success: true, data: project });
+
+      const response = await request(app)
+        .post("/api/projects")
+        .send({ cloneUrl: "git@github.com:user/repo.git" });
+
+      expect(response.status).toBe(201);
+      // targetDir should be undefined when not provided
+      expect(createProject).toHaveBeenCalledWith(
+        expect.objectContaining({ cloneUrl: "git@github.com:user/repo.git" }),
+      );
+      const calledWith = vi.mocked(createProject).mock.calls[0][0];
+      expect(calledWith.targetDir).toBeUndefined();
+    });
+
+    it("should reject empty string targetDir via Zod validation", async () => {
       const response = await request(app)
         .post("/api/projects")
         .send({
@@ -257,6 +275,7 @@ describe("projects routes", () => {
           targetDir: "",
         });
 
+      // Zod min(1) should reject empty string
       expect(response.status).toBe(400);
       expect(response.body.success).toBe(false);
     });

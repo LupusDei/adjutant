@@ -41,6 +41,7 @@ const createProjectSchema = z.object({
   cloneUrl: z.string().min(1).optional(),
   name: z.string().min(1).optional(),
   empty: z.boolean().optional(),
+  /** Target directory for clone operations. Overrides default ~/projects/<name>. */
   targetDir: z.string().min(1).optional(),
 }).refine(
   (data) => data.path || data.cloneUrl || (data.empty && data.name),
