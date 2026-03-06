@@ -48,6 +48,7 @@ export class TestHarness {
   private db: Database.Database | null = null;
   private testDir: string | null = null;
   private _request: supertest.Agent | null = null;
+  private destroyed = false;
 
   // Exposed stores for seed helpers
   private _messageStore: MessageStore | null = null;
@@ -63,8 +64,15 @@ export class TestHarness {
    * Set up the full Express app with all injectable routes and a fresh
    * SQLite database. Does NOT call app.listen() — supertest works
    * directly with the Express app instance.
+   *
+   * Throws if the harness has already been destroyed.
    */
   async setup(config?: HarnessConfig): Promise<void> {
+    if (this.destroyed) {
+      throw new Error(
+        "TestHarness has been destroyed and cannot be set up again. Create a new instance instead.",
+      );
+    }
     // 1. Create temp directory
     this.testDir = config?.dbPath ? null : freshTestDir();
     const dbPath = config?.dbPath ?? join(this.testDir!, "test.db");
@@ -111,8 +119,17 @@ export class TestHarness {
 
   /**
    * Clean up: close the database and remove the temp directory.
+   *
+   * Idempotent — safe to call multiple times. After the first call,
+   * subsequent calls are no-ops. Also safe after partial setup (e.g.
+   * if setup() threw midway through, destroy() cleans up whatever was
+   * created).
    */
   async destroy(): Promise<void> {
+    if (this.destroyed) {
+      return;
+    }
+
     if (this.db) {
       try {
         this.db.close();
@@ -132,9 +149,15 @@ export class TestHarness {
     this._messageStore = null;
     this._proposalStore = null;
     this._eventStore = null;
+    this.destroyed = true;
   }
 
   // ── Accessors ──────────────────────────────────────────────────────
+
+  /** Get the temp directory path for cleanup verification in tests. */
+  get testDirPath(): string | null {
+    return this.testDir;
+  }
 
   /** Get the supertest request agent for making HTTP calls. */
   get request(): supertest.Agent {
