@@ -62,11 +62,13 @@ public struct SpawnAgentRequest: Encodable {
     public let projectPath: String?
     public let projectId: String?
     public let callsign: String?
+    public let personaId: String?
 
-    public init(projectPath: String? = nil, projectId: String? = nil, callsign: String? = nil) {
+    public init(projectPath: String? = nil, projectId: String? = nil, callsign: String? = nil, personaId: String? = nil) {
         self.projectPath = projectPath
         self.projectId = projectId
         self.callsign = callsign
+        self.personaId = personaId
     }
 }
 
@@ -76,4 +78,6 @@ public struct SpawnAgentResponse: Codable {
     public let callsign: String?
     public let projectPath: String?
     public let spawned: Bool
+    public let personaId: String?
+    public let personaName: String?
 }

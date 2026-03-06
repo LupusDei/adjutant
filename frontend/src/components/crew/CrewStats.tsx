@@ -94,10 +94,15 @@ export function CrewStats({ className = '', isActive }: CrewStatsProps) {
     });
   }, [isActive]);
 
-  const handleDeployPersona = useCallback((persona: Persona) => {
-    // Deploy integration will be wired in Phase 4 (spawn integration)
-    alert(`Deploy ${persona.name}? (Spawn integration coming in Phase 4)`);
-  }, []);
+  const handleDeployPersona = useCallback(async (persona: Persona) => {
+    try {
+      await api.agents.spawn({ personaId: persona.id });
+      swarm.refresh();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to deploy persona';
+      alert(`Deploy failed: ${message}`);
+    }
+  }, [swarm]);
 
   const handleEditPersona = useCallback((_persona: Persona) => {
     // Navigate to personas tab — handled by App-level navigation

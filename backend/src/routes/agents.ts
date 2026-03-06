@@ -11,7 +11,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { getAgents } from "../services/agents-service.js";
 import { getSessionBridge } from "../services/session-bridge.js";
-import { pickRandomCallsign } from "../services/callsign-service.js";
+import { pickRandomCallsign, nextAvailableName } from "../services/callsign-service.js";
 import { captureTmuxPane, listTmuxSessions } from "../services/tmux.js";
 import { getProject } from "../services/projects-service.js";
 import { getPersonaService } from "../services/persona-service.js";
@@ -46,10 +46,7 @@ const spawnAgentSchema = z.object({
   projectId: z.string().min(1).optional(),
   callsign: z.string().optional(),
   personaId: z.string().min(1).optional(),
-}).refine(
-  (data) => data.projectPath || data.projectId,
-  { message: "Either projectPath or projectId is required" },
-);
+});
 
 /**
  * POST /api/agents/spawn
@@ -78,8 +75,9 @@ agentsRouter.post("/spawn", async (req, res) => {
     projectPath = projectResult.data.path;
   }
 
+  // Fall back to ADJUTANT_PROJECT_ROOT or cwd when no project specified
   if (!projectPath) {
-    return res.status(400).json(badRequest("Could not resolve project path"));
+    projectPath = process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd();
   }
 
   // Look up persona if personaId is provided
@@ -105,10 +103,22 @@ agentsRouter.post("/spawn", async (req, res) => {
 
   const { callsign } = parsed.data;
   const bridge = getSessionBridge();
+  const sessions = bridge.listSessions();
 
-  // Check for name conflicts with active sessions
-  if (callsign) {
-    const sessions = bridge.listSessions();
+  // Resolve agent name based on persona vs non-persona spawn
+  let name: string;
+  if (persona) {
+    // Persona spawn: use explicit callsign or persona name as base, auto-suffix if taken
+    const baseName = callsign || persona.name.toLowerCase();
+    const resolved = nextAvailableName(sessions, baseName);
+    if (!resolved) {
+      return res.status(409).json(
+        conflict(`All name variants for '${baseName}' are in use`)
+      );
+    }
+    name = resolved;
+  } else if (callsign) {
+    // Non-persona with explicit callsign: 409 if taken (original behavior)
     const nameInUse = sessions.some(
       (s) => s.name === callsign && s.status !== "offline"
     );
@@ -117,13 +127,12 @@ agentsRouter.post("/spawn", async (req, res) => {
         conflict(`Agent name '${callsign}' is already in use`)
       );
     }
+    name = callsign;
+  } else {
+    // Non-persona, no callsign: random StarCraft name
+    const auto = pickRandomCallsign(sessions);
+    name = auto?.name || "agent";
   }
-
-  // Auto-assign callsign if not provided.
-  // Fallback priority: explicit callsign > random callsign > persona name > "agent"
-  const sessions = bridge.listSessions();
-  const auto = pickRandomCallsign(sessions);
-  const name = callsign || auto?.name || persona?.name || "agent";
 
   // Build claudeArgs with persona prompt injection
   const claudeArgs: string[] = [];

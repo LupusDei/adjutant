@@ -286,10 +286,11 @@ struct DeployPersonaSheet: View {
         errorMessage = nil
 
         do {
-            // Use the persona name as callsign
+            // Use the persona name as callsign, pass personaId for prompt injection
             let _ = try await apiClient.spawnAgent(
                 projectId: project.id,
-                callsign: callsign.isEmpty ? nil : callsign
+                callsign: callsign.isEmpty ? nil : callsign,
+                personaId: persona.id
             )
             dismiss()
             onDeployed()

@@ -10,7 +10,7 @@
 import { useState, useEffect, useCallback, type CSSProperties } from 'react';
 
 import type { Persona } from '../../types';
-import { api } from '../../services/api';
+import { api, ApiError } from '../../services/api';
 import { PersonaRosterCard } from './PersonaRosterCard';
 import { PersonaEditor } from './PersonaEditor';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
@@ -60,11 +60,15 @@ export function PersonasView({ isActive }: PersonasViewProps) {
     setViewMode('edit');
   }, []);
 
-  const handleDeploy = useCallback((persona: Persona) => {
-    // For now, show a basic deploy confirmation
-    // This will be wired to the spawn system in a later phase
-    alert(`Deploy ${persona.name}? (Spawn integration coming in Phase 4)`);
-  }, []);
+  const handleDeploy = useCallback(async (persona: Persona) => {
+    try {
+      await api.agents.spawn({ personaId: persona.id });
+      void fetchPersonas();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to deploy persona';
+      alert(`Deploy failed: ${message}`);
+    }
+  }, [fetchPersonas]);
 
   const handleSave = useCallback((saved: Persona) => {
     setPersonas(prev => {

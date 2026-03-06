@@ -7,6 +7,7 @@ import {
   pickRandomCallsigns,
   isCallsignAvailable,
   isKnownCallsign,
+  nextAvailableName,
 } from "../../src/services/callsign-service.js";
 
 // ============================================================================
@@ -221,5 +222,46 @@ describe("isKnownCallsign", () => {
     expect(isKnownCallsign("my-agent")).toBe(false);
     expect(isKnownCallsign("agent-1")).toBe(false);
     expect(isKnownCallsign("")).toBe(false);
+  });
+});
+
+// ============================================================================
+// nextAvailableName
+// ============================================================================
+
+describe("nextAvailableName", () => {
+  it("should return baseName when it is available", () => {
+    expect(nextAvailableName([], "slagyr")).toBe("slagyr");
+  });
+
+  it("should return baseName2 when baseName is taken", () => {
+    expect(nextAvailableName(mockSessions("slagyr"), "slagyr")).toBe("slagyr2");
+  });
+
+  it("should skip taken suffixes and find the next available", () => {
+    const sessions = mockSessions("slagyr", "slagyr2", "slagyr3");
+    expect(nextAvailableName(sessions, "slagyr")).toBe("slagyr4");
+  });
+
+  it("should ignore offline sessions when checking availability", () => {
+    const sessions = [{ name: "slagyr", status: "offline" }];
+    expect(nextAvailableName(sessions, "slagyr")).toBe("slagyr");
+  });
+
+  it("should return undefined when all 100 variants are taken", () => {
+    // baseName + baseName2..baseName100 = 100 entries
+    const sessions = [
+      { name: "test", status: "idle" },
+      ...Array.from({ length: 99 }, (_, i) => ({
+        name: `test${i + 2}`,
+        status: "idle",
+      })),
+    ];
+    expect(nextAvailableName(sessions, "test")).toBeUndefined();
+  });
+
+  it("should work with roster callsign names", () => {
+    const sessions = mockSessions("raynor");
+    expect(nextAvailableName(sessions, "raynor")).toBe("raynor2");
   });
 });

@@ -155,3 +155,22 @@ export function isCallsignAvailable(
 export function isKnownCallsign(name: string): boolean {
   return CALLSIGNS.some((c) => c.name === name);
 }
+
+/**
+ * Find the next available name by auto-suffixing with incrementing numbers.
+ * If baseName is available, returns it as-is.
+ * Otherwise tries baseName2, baseName3, ... up to baseName100.
+ * Returns undefined if all 100 variants are taken.
+ */
+export function nextAvailableName(
+  sessions: Array<{ name: string; status: string }>,
+  baseName: string
+): string | undefined {
+  const active = getActiveNames(sessions);
+  if (!active.has(baseName)) return baseName;
+  for (let i = 2; i <= 100; i++) {
+    const candidate = `${baseName}${i}`;
+    if (!active.has(candidate)) return candidate;
+  }
+  return undefined;
+}
