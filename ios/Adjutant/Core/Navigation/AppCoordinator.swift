@@ -69,16 +69,28 @@ final class AppCoordinator: Coordinator, ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
 
+    /// Whether Combine notification observers have been set up
+    private var isStarted = false
+
     // MARK: - Initialization
 
+    /// Lightweight init: only checks for pending deep links from cold start.
+    /// Combine notification observers are deferred to `start()`.
     init() {
-        setupNotificationObservers()
-
         if let agentId = NotificationService.shared.pendingDeepLinkAgentId {
             NotificationService.shared.pendingDeepLinkAgentId = nil
             pendingChatAgentId = agentId
             selectedTab = .chat
         }
+    }
+
+    /// Sets up Combine notification observers for deep linking (navigateToMail,
+    /// navigateToTask, navigateToChat). Call from `.task{}` or `.onAppear` in the
+    /// hosting view. Safe to call multiple times (only runs once).
+    func start() {
+        guard !isStarted else { return }
+        isStarted = true
+        setupNotificationObservers()
     }
 
     // MARK: - Notification Deep Linking

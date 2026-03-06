@@ -42,6 +42,8 @@ public struct ContentView: View {
         .task {
             // Phase B: Complete deferred AppState initialization (theme, observers, dependencies)
             AppState.shared.completeInitialization()
+            // Start DataSyncService Combine subscriptions (SSE integration, priority observer)
+            DataSyncService.shared.start()
             await AppState.shared.checkVoiceAvailability()
         }
     }

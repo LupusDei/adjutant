@@ -39,10 +39,23 @@ public final class NetworkMonitor: ObservableObject {
     private let queue = DispatchQueue(label: "NetworkMonitor")
     private var isMonitoring = false
 
+    /// Whether deferred setup has been performed
+    private var isConfigured = false
+
     // MARK: - Initialization
 
+    /// Lightweight init: creates the NWPathMonitor but does not start it.
+    /// Call `configure()` to begin monitoring. This defers the NWPathMonitor
+    /// path handler setup and queue start off the critical launch path.
     private init() {
         self.monitor = NWPathMonitor()
+    }
+
+    /// Starts network monitoring. Call from `.task{}` or `.onAppear` after first render.
+    /// Safe to call multiple times (only runs once via startMonitoring guard).
+    func configure() {
+        guard !isConfigured else { return }
+        isConfigured = true
         startMonitoring()
     }
 

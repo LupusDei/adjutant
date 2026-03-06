@@ -90,8 +90,21 @@ public final class DataSyncService: ObservableObject {
 
     private var priorityCancellable: AnyCancellable?
 
+    /// Whether Combine subscriptions (SSE integration, priority observer) have been set up
+    private var isStarted = false
+
+    /// Lightweight init: only loads cached data for immediate display.
+    /// Combine subscriptions are deferred to `start()`.
     private init() {
         loadFromCache()
+    }
+
+    /// Sets up Combine subscriptions for SSE integration and communication priority
+    /// observation. Call from `.task{}` or `.onAppear` after first render.
+    /// Safe to call multiple times (only runs once).
+    func start() {
+        guard !isStarted else { return }
+        isStarted = true
         setupSSEIntegration()
         observeCommunicationPriority()
     }

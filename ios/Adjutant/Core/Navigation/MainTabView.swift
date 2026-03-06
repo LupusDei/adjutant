@@ -36,9 +36,11 @@ struct MainTabView: View {
                 to: nil, from: nil, for: nil
             )
         }
-        .onAppear {
+        .task {
+            // Deferred setup: start Combine notification observers for deep linking
+            coordinator.start()
             // Start network monitoring
-            _ = NetworkMonitor.shared
+            NetworkMonitor.shared.configure()
         }
     }
 }
