@@ -250,6 +250,118 @@ describe("projects-service", () => {
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("VALIDATION_ERROR");
     });
+
+    // =========================================================================
+    // createProject with targetDir (clone mode)
+    // =========================================================================
+
+    it("should clone into custom targetDir when provided", () => {
+      mockNoStore();
+      const customDir = "/Users/test/custom/location/myrepo";
+      const parentDir = "/Users/test/custom/location";
+      vi.mocked(existsSync).mockImplementation((p: unknown) => {
+        if (p === ADJUTANT_DIR) return true;
+        // targetDir does NOT exist yet (so clone can proceed)
+        if (p === customDir) return false;
+        // parent directory exists
+        if (p === parentDir) return true;
+        return false;
+      });
+      vi.mocked(execSync).mockReturnValue("");
+
+      const result = createProject({
+        cloneUrl: "git@github.com:user/myrepo.git",
+        targetDir: customDir,
+      });
+      expect(result.success).toBe(true);
+      expect(result.data!.path).toBe(customDir);
+      expect(result.data!.name).toBe("myrepo");
+      expect(result.data!.gitRemote).toBe("git@github.com:user/myrepo.git");
+      // Verify git clone used the custom directory
+      expect(execSync).toHaveBeenCalledWith(
+        expect.stringContaining(customDir),
+        expect.any(Object),
+      );
+    });
+
+    it("should clone into default ~/projects/<name> when targetDir is not provided", () => {
+      mockNoStore();
+      vi.mocked(existsSync).mockImplementation((p: unknown) => {
+        if (p === ADJUTANT_DIR) return true;
+        return false;
+      });
+      vi.mocked(execSync).mockReturnValue("");
+
+      const result = createProject({
+        cloneUrl: "git@github.com:user/myrepo.git",
+      });
+      expect(result.success).toBe(true);
+      const expectedDefault = join(homedir(), "projects", "myrepo");
+      expect(result.data!.path).toBe(expectedDefault);
+    });
+
+    it("should reject clone with targetDir when targetDir already exists", () => {
+      mockNoStore();
+      const customDir = "/Users/test/custom/existing-dir";
+      vi.mocked(existsSync).mockImplementation((p: unknown) => {
+        if (p === ADJUTANT_DIR) return true;
+        if (p === customDir) return true; // already exists
+        return false;
+      });
+
+      const result = createProject({
+        cloneUrl: "git@github.com:user/myrepo.git",
+        targetDir: customDir,
+      });
+      expect(result.success).toBe(false);
+      expect(result.error!.code).toBe("CONFLICT");
+      expect(result.error!.message).toContain(customDir);
+    });
+
+    it("should resolve relative targetDir to absolute path", () => {
+      mockNoStore();
+      const relativeDir = "relative/path/myrepo";
+      const resolvedDir = resolve(relativeDir);
+      vi.mocked(existsSync).mockImplementation((p: unknown) => {
+        if (p === ADJUTANT_DIR) return true;
+        if (p === resolvedDir) return false;
+        // Parent must exist for the resolved path
+        const parentOfResolved = join(resolvedDir, "..");
+        if (p === resolve(parentOfResolved)) return true;
+        return false;
+      });
+      vi.mocked(execSync).mockReturnValue("");
+
+      const result = createProject({
+        cloneUrl: "git@github.com:user/myrepo.git",
+        targetDir: relativeDir,
+      });
+      expect(result.success).toBe(true);
+      // Path should be absolute (resolved)
+      expect(result.data!.path).toBe(resolvedDir);
+    });
+
+    it("should use custom name with targetDir", () => {
+      mockNoStore();
+      const customDir = "/Users/test/custom/location/my-custom-name";
+      const parentDir = "/Users/test/custom/location";
+      vi.mocked(existsSync).mockImplementation((p: unknown) => {
+        if (p === ADJUTANT_DIR) return true;
+        if (p === customDir) return false;
+        if (p === parentDir) return true;
+        return false;
+      });
+      vi.mocked(execSync).mockReturnValue("");
+
+      const result = createProject({
+        cloneUrl: "git@github.com:user/myrepo.git",
+        name: "custom-project-name",
+        targetDir: customDir,
+      });
+      expect(result.success).toBe(true);
+      expect(result.data!.path).toBe(customDir);
+      expect(result.data!.name).toBe("custom-project-name");
+    });
   });
 
   // ===========================================================================

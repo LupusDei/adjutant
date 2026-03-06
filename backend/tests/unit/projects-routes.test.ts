@@ -226,6 +226,40 @@ describe("projects routes", () => {
       expect(response.status).toBe(500);
       expect(response.body.error.message).toBe("Git clone failed");
     });
+
+    it("should pass targetDir to createProject when provided with cloneUrl", async () => {
+      const project = createMockProject({
+        path: "/custom/dir/repo",
+        gitRemote: "git@github.com:user/repo.git",
+      });
+      vi.mocked(createProject).mockReturnValue({ success: true, data: project });
+
+      const response = await request(app)
+        .post("/api/projects")
+        .send({
+          cloneUrl: "git@github.com:user/repo.git",
+          targetDir: "/custom/dir/repo",
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.success).toBe(true);
+      expect(createProject).toHaveBeenCalledWith({
+        cloneUrl: "git@github.com:user/repo.git",
+        targetDir: "/custom/dir/repo",
+      });
+    });
+
+    it("should reject empty targetDir string", async () => {
+      const response = await request(app)
+        .post("/api/projects")
+        .send({
+          cloneUrl: "git@github.com:user/repo.git",
+          targetDir: "",
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+    });
   });
 
   // ===========================================================================

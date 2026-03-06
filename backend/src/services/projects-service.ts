@@ -9,7 +9,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
 import { execSync } from "child_process";
-import { join, resolve, basename } from "path";
+import { join, resolve, basename, dirname } from "path";
 import { randomUUID } from "crypto";
 import { homedir } from "os";
 import { logInfo, logError, logDebug } from "../utils/index.js";
@@ -46,6 +46,7 @@ export interface CreateProjectInput {
   cloneUrl?: string | undefined;
   name?: string | undefined;
   empty?: boolean | undefined;
+  targetDir?: string | undefined;
 }
 
 export interface DiscoverOptions {
@@ -364,7 +365,7 @@ export function createProject(input: CreateProjectInput): ProjectsServiceResult<
     const store = loadStore();
 
     if (input.cloneUrl) {
-      return createFromClone(store, input.cloneUrl, input.name);
+      return createFromClone(store, input.cloneUrl, input.name, input.targetDir);
     }
 
     if (input.empty) {
@@ -420,16 +421,17 @@ function createFromPath(store: ProjectsStore, dirPath: string, name?: string): P
   return { success: true, data: project };
 }
 
-function createFromClone(store: ProjectsStore, cloneUrl: string, name?: string): ProjectsServiceResult<Project> {
+function createFromClone(store: ProjectsStore, cloneUrl: string, name?: string, customTargetDir?: string): ProjectsServiceResult<Project> {
   const projectName = name ?? nameFromCloneUrl(cloneUrl);
-  const targetDir = join(DEFAULT_PROJECTS_BASE, projectName);
+  const targetDir = customTargetDir ? resolve(customTargetDir) : join(DEFAULT_PROJECTS_BASE, projectName);
 
   if (existsSync(targetDir)) {
     return { success: false, error: { code: "CONFLICT", message: `Directory already exists: ${targetDir}` } };
   }
 
   // Ensure parent directory exists
-  mkdirSync(DEFAULT_PROJECTS_BASE, { recursive: true });
+  const parentDir = customTargetDir ? dirname(targetDir) : DEFAULT_PROJECTS_BASE;
+  mkdirSync(parentDir, { recursive: true });
 
   try {
     execSync(`git clone ${cloneUrl} ${targetDir}`, {
@@ -456,7 +458,7 @@ function createFromClone(store: ProjectsStore, cloneUrl: string, name?: string):
   store.projects.push(project);
   saveStore(store);
 
-  logInfo("project created from clone", { id: project.id, name: project.name, cloneUrl });
+  logInfo("project created from clone", { id: project.id, name: project.name, cloneUrl, targetDir });
   return { success: true, data: project };
 }
 
