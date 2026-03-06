@@ -373,9 +373,11 @@ function generateApiCallCode(
   const method = apiCall.method.toLowerCase();
   const path = resolvePath(apiCall.path, precondition);
 
+  const quoted = quotePath(path);
+
   switch (apiCall.method) {
     case "POST":
-      lines.push(`      const res = await harness.post("${path}", {`);
+      lines.push(`      const res = await harness.post(${quoted}, {`);
       if (apiCall.body) {
         for (const [key, value] of Object.entries(apiCall.body)) {
           lines.push(`        ${key}: ${JSON.stringify(value)},`);
@@ -393,10 +395,10 @@ function generateApiCallCode(
           .map(([k, v]) => `${k}: "${v}"`)
           .join(", ");
         lines.push(
-          `      const res = await harness.get("${path}", { ${queryEntries} });`
+          `      const res = await harness.get(${quoted}, { ${queryEntries} });`
         );
       } else {
-        lines.push(`      const res = await harness.get("${path}");`);
+        lines.push(`      const res = await harness.get(${quoted});`);
       }
       break;
 
@@ -404,19 +406,19 @@ function generateApiCallCode(
       if (apiCall.body) {
         const bodyStr = JSON.stringify(apiCall.body);
         lines.push(
-          `      const res = await harness.patch("${path}", ${bodyStr});`
+          `      const res = await harness.patch(${quoted}, ${bodyStr});`
         );
       } else {
-        lines.push(`      const res = await harness.${method}("${path}", {});`);
+        lines.push(`      const res = await harness.${method}(${quoted}, {});`);
       }
       break;
 
     case "PUT":
-      lines.push(`      const res = await harness.request.put("${path}").send({});`);
+      lines.push(`      const res = await harness.request.put(${quoted}).send({});`);
       break;
 
     case "DELETE":
-      lines.push(`      const res = await harness.request.delete("${path}");`);
+      lines.push(`      const res = await harness.request.delete(${quoted});`);
       break;
   }
 
@@ -532,6 +534,18 @@ function resolvePath(
     return path.replace(":id", '${seeded.id}');
   }
   return path;
+}
+
+/**
+ * Wrap a path string in the correct quoting.
+ * Uses backticks for paths containing `${` (template expressions),
+ * double quotes for static paths.
+ */
+function quotePath(path: string): string {
+  if (path.includes("${")) {
+    return `\`${path}\``;
+  }
+  return `"${path}"`;
 }
 
 /**

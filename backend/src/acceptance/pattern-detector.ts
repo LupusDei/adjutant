@@ -92,7 +92,16 @@ export function detectApiCall(whenText: string): DetectedApiCall | null {
     try {
       result.body = JSON.parse(bodyMatch[1]!) as Record<string, unknown>;
     } catch {
-      // Malformed JSON — skip body extraction
+      // Try fixing non-standard JSON (unquoted keys like { status: "accepted" })
+      const fixed = bodyMatch[1]!.replace(
+        /(\{|,)\s*(\w+)\s*:/g,
+        '$1 "$2":',
+      );
+      try {
+        result.body = JSON.parse(fixed) as Record<string, unknown>;
+      } catch {
+        // Truly malformed — skip body extraction
+      }
     }
   }
 
@@ -114,8 +123,9 @@ interface AssertionPattern {
 
 const ASSERTION_PATTERNS: AssertionPattern[] = [
   // "it is persisted with status "pending"" → data.status = "pending"
+  // "status updates to "accepted"" → data.status = "accepted"
   {
-    regex: /status\s+"(\w+)"/i,
+    regex: /status\s+(?:\w+\s+)*?"(\w+)"/i,
     extract: (match) => [
       { path: "data.status", value: match[1]!, matcher: "toBe" },
     ],
@@ -124,6 +134,11 @@ const ASSERTION_PATTERNS: AssertionPattern[] = [
   {
     regex: /generated\s+UUID|a\s+UUID|an?\s+id/i,
     extract: () => [{ path: "data.id", value: null, matcher: "toBeTruthy" }],
+  },
+  // "updated_at is refreshed" → data.updatedAt exists (camelCase API response)
+  {
+    regex: /updated_at\s+is\s+refreshed/i,
+    extract: () => [{ path: "data.updatedAt", value: null, matcher: "toBeTruthy" }],
   },
   // "the response status is 200" → status = 200
   {
@@ -227,9 +242,9 @@ export function detectPrecondition(givenText: string): DetectedPrecondition {
 // Scenario Classification
 // ============================================================================
 
-/** Keywords that indicate a UI-only scenario (checked in When and Then text). */
+/** Keywords that indicate a UI-only scenario (checked in Given, When, and Then text). */
 const UI_KEYWORDS =
-  /\b(?:clicks?|navigates?|taps?|views?|sees?|swipes?|scrolls?|drags?|opens?\s+(?:the\s+)?(?:page|tab|modal|dialog))\b/i;
+  /\b(?:clicks?|navigates?|taps?|views?|sees?|swipes?|scrolls?|drags?|toggles?|filters?|selects?|opens?\s+(?:the\s+)?(?:page|tab|modal|dialog|settings))\b/i;
 
 /** Keywords that indicate agent-behavior scenario. */
 const AGENT_KEYWORDS =
@@ -264,14 +279,14 @@ export function classifyScenario(scenario: Scenario): ScenarioClassification {
     return "api-testable";
   }
 
-  // 3. Check for UI keywords in When and Then
-  const combinedWhenThen = `${scenario.when} ${scenario.then}`;
-  if (UI_KEYWORDS.test(combinedWhenThen)) {
+  // 3. Check for UI keywords in Given, When, and Then
+  const combinedAllClauses = `${scenario.given} ${scenario.when} ${scenario.then}`;
+  if (UI_KEYWORDS.test(combinedAllClauses)) {
     return "ui-only";
   }
 
-  // 4. Check for agent keywords in When and Then
-  if (AGENT_KEYWORDS.test(combinedWhenThen)) {
+  // 4. Check for agent keywords in Given, When, and Then
+  if (AGENT_KEYWORDS.test(combinedAllClauses)) {
     return "agent-behavior";
   }
 

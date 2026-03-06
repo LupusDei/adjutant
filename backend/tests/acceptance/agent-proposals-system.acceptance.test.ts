@@ -67,10 +67,11 @@ describe("Acceptance: Agent Proposals System", () => {
       });
 
       // When PATCH /api/proposals/:id with `{ status: "accepted" }`
-      const res = await harness.patch("/api/proposals/${seeded.id}", {});
+      const res = await harness.patch(`/api/proposals/${seeded.id}`, {"status":"accepted"});
 
       // Then the proposal status updates to "accepted" and updated_at is refreshed
-      expect(res).toBeTruthy();
+      expect(res.body.data.status).toBe("accepted");
+      expect(res.body.data.updatedAt).toBeTruthy();
     });
 
     it("should proposal status updates to \"dismissed\"", async () => {
@@ -84,10 +85,10 @@ describe("Acceptance: Agent Proposals System", () => {
       });
 
       // When PATCH /api/proposals/:id with `{ status: "dismissed" }`
-      const res = await harness.patch("/api/proposals/${seeded.id}", {});
+      const res = await harness.patch(`/api/proposals/${seeded.id}`, {"status":"dismissed"});
 
       // Then the proposal status updates to "dismissed"
-      expect(res).toBeTruthy();
+      expect(res.body.data.status).toBe("dismissed");
     });
 
   });
@@ -131,15 +132,15 @@ describe("Acceptance: Agent Proposals System", () => {
       // Then the proposal disappears from the main view and is accessible via a "Show Dismissed" toggle
     });
 
-    it("should appear in a dimmed/secondary style", async () => {
-      // TODO: implement step definitions
+    it.skip("should appear in a dimmed/secondary style", () => {
+      // Requires browser — not API-testable
       // Given the user toggles "Show Dismissed"
       // When there are dismissed proposals
       // Then they appear in a dimmed/secondary style
     });
 
-    it("should only matching proposals are shown", async () => {
-      // TODO: implement step definitions
+    it.skip("should only matching proposals are shown", () => {
+      // Requires browser — not API-testable
       // Given proposals of mixed types
       // When the user filters by "product" or "engineering"
       // Then only matching proposals are shown

@@ -116,6 +116,23 @@ describe("detectApiCall", () => {
     expect(result).not.toBeNull();
     expect(result!.query).toEqual({ status: "pending", type: "engineering" });
   });
+
+  it("should detect PATCH body with non-standard JSON (unquoted keys)", () => {
+    const result = detectApiCall(
+      'PATCH /api/proposals/:id with `{ status: "accepted" }`',
+    );
+    expect(result).not.toBeNull();
+    expect(result!.method).toBe("PATCH");
+    expect(result!.body).toEqual({ status: "accepted" });
+  });
+
+  it("should detect PATCH body with non-standard JSON (unquoted keys) for dismissed", () => {
+    const result = detectApiCall(
+      'PATCH /api/proposals/:id with `{ status: "dismissed" }`',
+    );
+    expect(result).not.toBeNull();
+    expect(result!.body).toEqual({ status: "dismissed" });
+  });
 });
 
 // ============================================================================
@@ -172,6 +189,35 @@ describe("detectAssertions", () => {
     const dataAssertion = result.find((a) => a.path === "data");
     expect(dataAssertion).toBeDefined();
     expect(dataAssertion!.matcher).toBe("toBeTruthy");
+  });
+
+  it("should detect 'status updates to accepted' as status assertion", () => {
+    const result = detectAssertions(
+      'the proposal status updates to "accepted" and updated_at is refreshed',
+    );
+    const statusAssertion = result.find((a) => a.path === "data.status");
+    expect(statusAssertion).toBeDefined();
+    expect(statusAssertion!.value).toBe("accepted");
+    expect(statusAssertion!.matcher).toBe("toBe");
+  });
+
+  it("should detect 'status updates to dismissed' as status assertion", () => {
+    const result = detectAssertions(
+      'the proposal status updates to "dismissed"',
+    );
+    const statusAssertion = result.find((a) => a.path === "data.status");
+    expect(statusAssertion).toBeDefined();
+    expect(statusAssertion!.value).toBe("dismissed");
+    expect(statusAssertion!.matcher).toBe("toBe");
+  });
+
+  it("should detect updated_at is refreshed as updatedAt assertion (camelCase API)", () => {
+    const result = detectAssertions(
+      'the proposal status updates to "accepted" and updated_at is refreshed',
+    );
+    const updatedAtAssertion = result.find((a) => a.path === "data.updatedAt");
+    expect(updatedAtAssertion).toBeDefined();
+    expect(updatedAtAssertion!.matcher).toBe("toBeTruthy");
   });
 
   it("should return empty array for unrecognized text", () => {
@@ -337,5 +383,32 @@ describe("classifyScenario", () => {
       then: "the response status is 201",
     });
     expect(classifyScenario(scenario)).toBe("api-testable");
+  });
+
+  it("should classify 'user toggles' as ui-only", () => {
+    const scenario = makeScenario({
+      given: 'the user toggles "Show Dismissed"',
+      when: "there are dismissed proposals",
+      then: "they appear in a dimmed/secondary style",
+    });
+    expect(classifyScenario(scenario)).toBe("ui-only");
+  });
+
+  it("should classify 'user filters' as ui-only", () => {
+    const scenario = makeScenario({
+      given: "proposals of mixed types",
+      when: 'the user filters by "product" or "engineering"',
+      then: "only matching proposals are shown",
+    });
+    expect(classifyScenario(scenario)).toBe("ui-only");
+  });
+
+  it("should check Given text for UI keywords too", () => {
+    const scenario = makeScenario({
+      given: "the user opens the settings page",
+      when: "there are pending items",
+      then: "items are displayed",
+    });
+    expect(classifyScenario(scenario)).toBe("ui-only");
   });
 });

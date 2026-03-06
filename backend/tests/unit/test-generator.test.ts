@@ -340,6 +340,15 @@ describe("TestGenerator", () => {
       // Second scenario has "proposals exist" as Given
       expect(content).toContain("harness.seedProposal(");
     });
+
+    it("should generate PATCH with template literal path and real body", () => {
+      const content = generateTestContent(PATCH_PARSE_RESULT);
+
+      // Path should use template literal with seeded.id interpolation
+      expect(content).toContain("harness.patch(`/api/proposals/${seeded.id}`");
+      // Body should contain the actual status from the spec
+      expect(content).toContain('"accepted"');
+    });
   });
 
   describe("generateTestContent (ui-only scenarios)", () => {
