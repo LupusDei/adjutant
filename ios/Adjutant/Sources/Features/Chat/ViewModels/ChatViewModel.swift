@@ -157,12 +157,24 @@ final class ChatViewModel: BaseViewModel {
 
     /// Loads cached chat messages for immediate display.
     /// Falls back to UserDefaults-persisted messages on cold start.
+    /// Decodes persisted messages on a background thread to avoid blocking UI.
     private func loadFromCache() {
-        ResponseCache.shared.loadPersistedChatMessages()
+        // First, check in-memory cache synchronously for instant display
         let cached = ResponseCache.shared.chatMessages(forAgent: selectedRecipient)
         if !cached.isEmpty {
             messages = cached
             lastMessageId = messages.last?.id
+            return
+        }
+
+        // If no in-memory cache, load persisted messages asynchronously
+        Task<Void, Never> {
+            await ResponseCache.shared.loadPersistedChatMessages()
+            let persisted = ResponseCache.shared.chatMessages(forAgent: selectedRecipient)
+            if !persisted.isEmpty {
+                messages = persisted
+                lastMessageId = messages.last?.id
+            }
         }
     }
 
