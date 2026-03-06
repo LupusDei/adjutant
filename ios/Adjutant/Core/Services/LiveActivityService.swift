@@ -48,15 +48,29 @@ public final class LiveActivityService: ObservableObject {
     /// Timer for activity state observation
     private var observationTask: Task<Void, Never>?
 
+    /// Whether deferred setup (support check, state observation) has been performed
+    private var isConfigured = false
+
     // MARK: - Initialization
 
+    /// Lightweight init: does not perform ActivityKit queries or start observation tasks.
+    /// Call `configure()` or any activity method to trigger deferred setup.
     private init() {
-        checkSupport()
-        observeActivityState()
+        // Intentionally empty - defer work to configure()
     }
 
     deinit {
         observationTask?.cancel()
+    }
+
+    /// Performs deferred setup: checks ActivityKit support and starts observing
+    /// activity state changes. Called lazily before first activity operation.
+    /// Safe to call multiple times (only runs once).
+    func configure() {
+        guard !isConfigured else { return }
+        isConfigured = true
+        checkSupport()
+        observeActivityState()
     }
 
     // MARK: - Support Check
@@ -79,6 +93,7 @@ public final class LiveActivityService: ObservableObject {
         townName: String,
         initialState: AdjutantActivityAttributes.ContentState
     ) async -> String? {
+        configure() // Ensure support is checked before first use
         guard isSupported else {
             print("[LiveActivityService] Live Activities not supported")
             return nil
@@ -245,6 +260,7 @@ public final class LiveActivityService: ObservableObject {
         townName: String,
         state: AdjutantActivityAttributes.ContentState
     ) async {
+        configure() // Ensure support is checked before first use
         if hasActiveActivity {
             await updateActivity(with: state)
         } else {

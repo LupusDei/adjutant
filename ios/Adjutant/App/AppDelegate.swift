@@ -42,8 +42,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         UIScrollView.appearance().keyboardDismissMode = .interactive
 
         registerForPushNotifications(application)
-        registerBackgroundTasks()
-        startLiveActivityOnLaunch()
+
+        // Defer BackgroundTaskService and LiveActivityService initialization past first render.
+        // These singletons are not needed for the initial UI frame and their init work
+        // (BGTaskScheduler registration, ActivityKit queries) adds ~125-250ms to launch.
+        DispatchQueue.main.async { [weak self] in
+            self?.registerBackgroundTasks()
+            self?.startLiveActivityOnLaunch()
+        }
         return true
     }
 

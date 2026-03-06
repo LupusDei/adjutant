@@ -69,11 +69,24 @@ public final class NotificationService: NSObject, ObservableObject {
 
     private let notificationCenter = UNUserNotificationCenter.current()
 
+    /// Whether deferred setup (category registration, auth refresh) has been performed
+    private var isConfigured = false
+
     // MARK: - Initialization
 
+    /// Lightweight init: only sets the delegate. Category registration and auth
+    /// status refresh are deferred to `configure()` (called lazily on first use).
     private override init() {
         super.init()
         notificationCenter.delegate = self
+    }
+
+    /// Performs deferred setup: registers notification categories and refreshes
+    /// authorization status. Called lazily before the first notification operation.
+    /// Safe to call multiple times (only runs once).
+    func configure() {
+        guard !isConfigured else { return }
+        isConfigured = true
         registerCategories()
         Task {
             await refreshAuthorizationStatus()
@@ -89,6 +102,7 @@ public final class NotificationService: NSObject, ObservableObject {
     public func requestAuthorization(
         options: UNAuthorizationOptions = [.alert, .badge, .sound]
     ) async -> Bool {
+        configure() // Ensure categories are registered before first use
         do {
             let granted = try await notificationCenter.requestAuthorization(options: options)
             await refreshAuthorizationStatus()
@@ -208,6 +222,7 @@ public final class NotificationService: NSObject, ObservableObject {
         delay: TimeInterval = 0,
         identifier: String? = nil
     ) async -> String {
+        configure() // Ensure categories are registered before first use
         let id = identifier ?? UUID().uuidString
 
         let content = UNMutableNotificationContent()
@@ -273,6 +288,7 @@ public final class NotificationService: NSObject, ObservableObject {
         body: String,
         messageId: String
     ) async -> String {
+        configure() // Ensure categories are registered before first use
         let preview = body.count > 100 ? String(body.prefix(100)) + "..." : body
 
         // Create notification with thread grouping by agent
@@ -405,6 +421,7 @@ public final class NotificationService: NSObject, ObservableObject {
     /// - Returns: The number of new notifications scheduled
     @discardableResult
     public func processNewMessages(_ messages: [Message]) async -> Int {
+        configure() // Ensure categories are registered before first use
         guard isAuthorized else {
             print("[NotificationService] Skipping new mail notifications - not authorized")
             return 0
