@@ -6,6 +6,16 @@ import AdjutantKit
 /// Shows registered projects from the projects API.
 @MainActor
 final class ProjectsListViewModel: BaseViewModel {
+    // MARK: - Types
+
+    /// Mode for the create project sheet
+    enum CreationMode: String, CaseIterable, Identifiable {
+        case cloneUrl = "CLONE URL"
+        case localPath = "LOCAL PATH"
+
+        var id: String { rawValue }
+    }
+
     // MARK: - Published Properties
 
     /// All projects from the projects API
@@ -22,10 +32,25 @@ final class ProjectsListViewModel: BaseViewModel {
     // MARK: - Create Sheet State
 
     /// Whether the create project sheet is showing
-    @Published var showingCreateSheet = false
+    @Published var showingCreateSheet = false {
+        didSet {
+            if !showingCreateSheet {
+                resetCreateSheet()
+            }
+        }
+    }
 
-    /// Path for new project
+    /// Current creation mode (clone URL or local path)
+    @Published var creationMode: CreationMode = .cloneUrl
+
+    /// Path for new project (local path mode)
     @Published var newProjectPath = ""
+
+    /// Clone URL for new project (clone mode)
+    @Published var newCloneUrl = ""
+
+    /// Target directory for cloning into
+    @Published var newTargetDir = ""
 
     /// Optional name override for new project
     @Published var newProjectName = ""
@@ -76,21 +101,57 @@ final class ProjectsListViewModel: BaseViewModel {
         }
     }
 
-    /// Create a project from the create sheet inputs
+    /// Create a project from the create sheet inputs (handles both modes)
     func createProjectFromSheet() async {
-        let path = newProjectPath.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !path.isEmpty else { return }
-
         isCreating = true
         let name = newProjectName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let result = await createFromPath(path, name: name.isEmpty ? nil : name)
+        let optionalName = name.isEmpty ? nil : name
+
+        let result: Project?
+        switch creationMode {
+        case .cloneUrl:
+            let url = newCloneUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !url.isEmpty else {
+                isCreating = false
+                return
+            }
+            let targetDir = newTargetDir.trimmingCharacters(in: .whitespacesAndNewlines)
+            result = await createFromClone(url, targetDir: targetDir.isEmpty ? nil : targetDir, name: optionalName)
+
+        case .localPath:
+            let path = newProjectPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !path.isEmpty else {
+                isCreating = false
+                return
+            }
+            result = await createFromPath(path, name: optionalName)
+        }
+
         isCreating = false
 
         if result != nil {
             showingCreateSheet = false
-            newProjectPath = ""
-            newProjectName = ""
         }
+    }
+
+    /// Create a project by cloning a remote repository
+    func createFromClone(_ url: String, targetDir: String? = nil, name: String? = nil) async -> Project? {
+        await performAsync(showLoading: false) {
+            let project = try await self.apiClient.createProject(
+                CreateProjectRequest(cloneUrl: url, name: name, targetDir: targetDir)
+            )
+            await self.refreshProjects()
+            return project
+        }
+    }
+
+    /// Reset all create sheet fields to defaults
+    private func resetCreateSheet() {
+        creationMode = .cloneUrl
+        newProjectPath = ""
+        newCloneUrl = ""
+        newTargetDir = ""
+        newProjectName = ""
     }
 
     /// Trigger project discovery on the backend
