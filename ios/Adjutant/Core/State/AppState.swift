@@ -63,6 +63,9 @@ final class AppState: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
 
+    /// Whether Phase B (deferred initialization) has completed
+    private(set) var isFullyInitialized = false
+
     // MARK: - Initialization
 
     private static func loadPersistedBaseURL() -> URL {
@@ -77,6 +80,10 @@ final class AppState: ObservableObject {
         UserDefaults.standard.string(forKey: "apiKey")
     }
 
+    /// Phase A: Lightweight bootstrap initialization (sync).
+    /// Only loads baseURL and apiKey needed for first API call, creates APIClient,
+    /// and sets safe defaults for everything else. All other state loading and
+    /// Combine subscription setup is deferred to `completeInitialization()`.
     private init() {
         let persistedURL = Self.loadPersistedBaseURL()
         let persistedAPIKey = Self.loadPersistedAPIKey()
@@ -89,6 +96,15 @@ final class AppState: ObservableObject {
         if let key = persistedAPIKey {
             Self.sharedDefaults?.set(key, forKey: "apiKey")
         }
+    }
+
+    /// Phase B: Deferred initialization (called from `.task{}` after first render).
+    /// Loads persisted theme, overseer mode, voice mute, and communication priority.
+    /// Sets up Combine persistence observers, network recovery observer, and
+    /// registers lazy dependencies. Safe to call multiple times (only runs once).
+    func completeInitialization() {
+        guard !isFullyInitialized else { return }
+        isFullyInitialized = true
 
         loadPersistedState()
         setupNetworkRecoveryObserver()

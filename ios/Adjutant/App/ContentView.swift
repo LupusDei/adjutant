@@ -40,6 +40,8 @@ public struct ContentView: View {
         .tint(themeColor) // Apply theme color to navigation back buttons and other tinted elements
         .preferredColorScheme(appState.currentTheme.colorTheme.preferredColorScheme)
         .task {
+            // Phase B: Complete deferred AppState initialization (theme, observers, dependencies)
+            AppState.shared.completeInitialization()
             await AppState.shared.checkVoiceAvailability()
         }
     }
