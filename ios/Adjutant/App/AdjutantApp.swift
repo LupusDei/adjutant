@@ -21,9 +21,11 @@ struct AdjutantApp: App {
             BackgroundTaskService.shared.handleScenePhaseChange(to: newPhase)
             BeadStatusMonitor.shared.handleScenePhaseChange(to: newPhase)
 
-            // Manage SSE connection based on app lifecycle
+            // Manage SSE connection based on app lifecycle.
+            // start() is deferred to here (post first render) to avoid blocking launch.
             switch newPhase {
             case .active:
+                DataSyncService.shared.start()
                 DataSyncService.shared.startEventStream()
             case .background:
                 DataSyncService.shared.stopEventStream()
