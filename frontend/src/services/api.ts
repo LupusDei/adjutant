@@ -211,6 +211,26 @@ export const api = {
     },
 
     /**
+     * Spawn a new agent session.
+     * When personaId is provided, the agent gets the persona's prompt and auto-suffixed name.
+     */
+    async spawn(params: {
+      personaId?: string;
+      projectPath?: string;
+      projectId?: string;
+      callsign?: string;
+    }): Promise<{
+      sessionId: string;
+      callsign: string;
+      projectPath: string;
+      spawned: boolean;
+      personaId?: string;
+      personaName?: string;
+    }> {
+      return apiFetch('/agents/spawn', { method: 'POST', body: params });
+    },
+
+    /**
      * Get terminal content for a swarm agent by session ID.
      * Returns plain text terminal output for lightweight display.
      */
@@ -419,6 +439,16 @@ export const api = {
 
     async getOverview(id: string): Promise<ProjectOverview> {
       return apiFetch(`/projects/${encodeURIComponent(id)}/overview`);
+    },
+
+    async create(params: {
+      path?: string;
+      cloneUrl?: string;
+      targetDir?: string;
+      name?: string;
+      empty?: boolean;
+    }): Promise<ProjectInfo> {
+      return apiFetch('/projects', { method: 'POST', body: params });
     },
   },
 
