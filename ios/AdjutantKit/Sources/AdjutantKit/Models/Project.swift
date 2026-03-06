@@ -39,12 +39,20 @@ public struct CreateProjectRequest: Encodable {
     public let cloneUrl: String?
     public let name: String?
     public let empty: Bool?
+    public let targetDir: String?
 
-    public init(path: String? = nil, cloneUrl: String? = nil, name: String? = nil, empty: Bool? = nil) {
+    public init(
+        path: String? = nil,
+        cloneUrl: String? = nil,
+        name: String? = nil,
+        empty: Bool? = nil,
+        targetDir: String? = nil
+    ) {
         self.path = path
         self.cloneUrl = cloneUrl
         self.name = name
         self.empty = empty
+        self.targetDir = targetDir
     }
 }
 
