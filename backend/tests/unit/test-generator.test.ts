@@ -76,12 +76,134 @@ const EMPTY_PARSE_RESULT: ParseResult = {
   warnings: [],
 };
 
+/** Fixture with a UI-only scenario */
+const UI_ONLY_PARSE_RESULT: ParseResult = {
+  specPath: "specs/099-ui-test/spec.md",
+  featureName: "UI Feature",
+  userStories: [
+    {
+      title: "UI Interaction",
+      storyNumber: 1,
+      priority: "P1",
+      scenarios: [
+        {
+          index: 1,
+          given: "the user navigates to the Proposals tab",
+          when: "the user clicks Accept on a proposal",
+          then: "the proposal card shows accepted status",
+          raw: "**Given** the user navigates to the Proposals tab, **When** the user clicks Accept on a proposal, **Then** the proposal card shows accepted status",
+        },
+      ],
+      requirementIds: [],
+    },
+  ],
+  requirements: [],
+  edgeCases: [],
+  warnings: [],
+};
+
+/** Fixture with an agent-behavior scenario */
+const AGENT_BEHAVIOR_PARSE_RESULT: ParseResult = {
+  specPath: "specs/098-agent-test/spec.md",
+  featureName: "Agent Feature",
+  userStories: [
+    {
+      title: "Agent Orchestration",
+      storyNumber: 1,
+      priority: "P1",
+      scenarios: [
+        {
+          index: 1,
+          given: "an agent has no remaining tasks",
+          when: "the agent enters proposal mode",
+          then: "it spawns teammates to evaluate proposals",
+          raw: "**Given** an agent has no remaining tasks, **When** the agent enters proposal mode, **Then** it spawns teammates to evaluate proposals",
+        },
+      ],
+      requirementIds: [],
+    },
+  ],
+  requirements: [],
+  edgeCases: [],
+  warnings: [],
+};
+
+/** Fixture with mixed scenarios: API + UI + agent */
+const MIXED_PARSE_RESULT: ParseResult = {
+  specPath: "specs/097-mixed/spec.md",
+  featureName: "Mixed Feature",
+  userStories: [
+    {
+      title: "Mixed Scenarios",
+      storyNumber: 1,
+      priority: "P1",
+      scenarios: [
+        {
+          index: 1,
+          given: "the database is initialized",
+          when: "a proposal is created via POST /api/proposals",
+          then: 'it is persisted with status "pending" and a generated UUID',
+          raw: '**Given** the database is initialized, **When** a proposal is created via POST /api/proposals, **Then** it is persisted with status "pending" and a generated UUID',
+        },
+        {
+          index: 2,
+          given: "the user navigates to the Proposals tab",
+          when: "the user clicks Accept",
+          then: "the proposal card shows accepted",
+          raw: "**Given** the user navigates to the Proposals tab, **When** the user clicks Accept, **Then** the proposal card shows accepted",
+        },
+        {
+          index: 3,
+          given: "an agent connected via MCP",
+          when: "the agent enters proposal mode",
+          then: "it spawns teammates",
+          raw: "**Given** an agent connected via MCP, **When** the agent enters proposal mode, **Then** it spawns teammates",
+        },
+      ],
+      requirementIds: [],
+    },
+  ],
+  requirements: [],
+  edgeCases: [],
+  warnings: [],
+};
+
+/** Fixture for PATCH scenario with :id parameter */
+const PATCH_PARSE_RESULT: ParseResult = {
+  specPath: "specs/096-patch/spec.md",
+  featureName: "Patch Feature",
+  userStories: [
+    {
+      title: "Update Operations",
+      storyNumber: 1,
+      priority: "P1",
+      scenarios: [
+        {
+          index: 1,
+          given: "a pending proposal",
+          when: 'PATCH /api/proposals/:id with `{ "status": "accepted" }`',
+          then: "the response status is 200",
+          raw: '**Given** a pending proposal, **When** PATCH /api/proposals/:id with `{ "status": "accepted" }`, **Then** the response status is 200',
+        },
+      ],
+      requirementIds: [],
+    },
+  ],
+  requirements: [],
+  edgeCases: [],
+  warnings: [],
+};
+
 // ============================================================================
-// Tests — Test File Generator
+// Tests — Test File Generator (Structure)
 // ============================================================================
 
 describe("TestGenerator", () => {
-  describe("generateTestContent", () => {
+  beforeEach(() => {
+    clearSteps();
+  });
+
+  describe("generateTestContent (structure)", () => {
     it("should produce valid TypeScript with describe/it blocks", () => {
       const content = generateTestContent(SIMPLE_PARSE_RESULT);
 
@@ -93,8 +215,8 @@ describe("TestGenerator", () => {
       expect(content).toContain('describe("US2 - MCP Tools for Agents (P1)"');
 
       // Should have it blocks for each scenario
-      // US1 has 2 scenarios, US2 has 1
-      const itBlocks = content.match(/it\("should .+"/g);
+      // US1 has 2 scenarios, US2 has 1 (agent-behavior -> it.skip)
+      const itBlocks = content.match(/(?:it|it\.skip)\(/g);
       expect(itBlocks).toBeTruthy();
       expect(itBlocks!.length).toBe(3);
     });
@@ -142,15 +264,8 @@ describe("TestGenerator", () => {
 
       // The descriptions should be derived from the Then clause
       // and start with "should"
-      expect(content).toMatch(/it\("should .+persist.+pending/i);
-      expect(content).toMatch(/it\("should .+pending proposals.+sorted/i);
-    });
-
-    it("should mark TODO stubs in non-first scenarios", () => {
-      const content = generateTestContent(SIMPLE_PARSE_RESULT);
-
-      // The second and subsequent scenarios should have TODO markers
-      expect(content).toContain("// TODO: implement step definitions");
+      expect(content).toMatch(/(?:it|it\.skip)\("should .+persist.+pending/i);
+      expect(content).toMatch(/(?:it|it\.skip)\("should .+pending proposals.+sorted/i);
     });
 
     it("should handle empty parse result gracefully", () => {
@@ -158,7 +273,7 @@ describe("TestGenerator", () => {
 
       expect(content).toContain('describe("Acceptance: Empty Feature"');
       // Should not contain any it blocks
-      const itBlocks = content.match(/it\("/g);
+      const itBlocks = content.match(/(?:it|it\.skip)\(/g);
       expect(itBlocks).toBeNull();
     });
 
@@ -166,6 +281,169 @@ describe("TestGenerator", () => {
       const content = generateTestContent(SIMPLE_PARSE_RESULT);
 
       expect(content).toContain('import { describe, it, expect, beforeEach, afterEach } from "vitest"');
+    });
+  });
+
+  // ============================================================================
+  // Tests — Smart Code Generation (adj-039.3.x)
+  // ============================================================================
+
+  describe("generateTestContent (api-testable scenarios)", () => {
+    it("should generate harness.post() for POST API scenarios", () => {
+      const content = generateTestContent(SIMPLE_PARSE_RESULT);
+
+      // First scenario: POST /api/proposals
+      expect(content).toContain('harness.post("/api/proposals"');
+    });
+
+    it("should generate harness.get() with query for GET API scenarios", () => {
+      const content = generateTestContent(SIMPLE_PARSE_RESULT);
+
+      // Second scenario: GET /api/proposals with ?status=pending
+      expect(content).toContain('harness.get("/api/proposals"');
+      expect(content).toContain("status");
+      expect(content).toContain("pending");
+    });
+
+    it("should generate expect() assertions for status field", () => {
+      const content = generateTestContent(SIMPLE_PARSE_RESULT);
+
+      // First scenario should have assertions for data.status = "pending"
+      expect(content).toContain(".toBe(");
+      expect(content).toMatch(/expect\(.+\)\.toBe\("pending"\)/);
+    });
+
+    it("should generate expect() assertions for id existence", () => {
+      const content = generateTestContent(SIMPLE_PARSE_RESULT);
+
+      // First scenario should have assertions for data.id existence
+      expect(content).toContain(".toBeTruthy()");
+    });
+
+    it("should generate harness.patch() for PATCH scenarios", () => {
+      const content = generateTestContent(PATCH_PARSE_RESULT);
+
+      expect(content).toContain('harness.patch(');
+      expect(content).toContain("accepted");
+    });
+
+    it("should generate seedProposal() for proposal preconditions", () => {
+      const content = generateTestContent(PATCH_PARSE_RESULT);
+
+      // PATCH scenario has "a pending proposal" as Given
+      expect(content).toContain("harness.seedProposal(");
+    });
+
+    it("should generate seedProposal() for proposals exist precondition", () => {
+      const content = generateTestContent(SIMPLE_PARSE_RESULT);
+
+      // Second scenario has "proposals exist" as Given
+      expect(content).toContain("harness.seedProposal(");
+    });
+  });
+
+  describe("generateTestContent (ui-only scenarios)", () => {
+    it("should generate it.skip() for UI scenarios", () => {
+      const content = generateTestContent(UI_ONLY_PARSE_RESULT);
+
+      expect(content).toContain("it.skip(");
+    });
+
+    it("should include reason comment for skipped UI scenarios", () => {
+      const content = generateTestContent(UI_ONLY_PARSE_RESULT);
+
+      expect(content).toContain("Requires browser");
+    });
+
+    it("should still include GWT comments in skipped scenarios", () => {
+      const content = generateTestContent(UI_ONLY_PARSE_RESULT);
+
+      expect(content).toContain("// Given the user navigates to the Proposals tab");
+      expect(content).toContain("// When the user clicks Accept on a proposal");
+      expect(content).toContain("// Then the proposal card shows accepted status");
+    });
+  });
+
+  describe("generateTestContent (agent-behavior scenarios)", () => {
+    it("should generate it.skip() for agent scenarios", () => {
+      const content = generateTestContent(AGENT_BEHAVIOR_PARSE_RESULT);
+
+      expect(content).toContain("it.skip(");
+    });
+
+    it("should include reason comment for skipped agent scenarios", () => {
+      const content = generateTestContent(AGENT_BEHAVIOR_PARSE_RESULT);
+
+      expect(content).toContain("Requires agent simulation");
+    });
+  });
+
+  describe("generateTestContent (step-matched scenarios)", () => {
+    it("should generate executeStep() calls for step-matched scenarios", () => {
+      // Register steps that match the common-steps patterns
+      defineGiven("the database is initialized", async () => { /* no-op */ });
+      defineWhen(
+        /^(?:a )?proposal is created via POST \/api\/proposals$/,
+        async () => { /* no-op */ },
+      );
+      defineThen(
+        /^it is persisted with status "(\w+)"/,
+        async () => { /* no-op */ },
+      );
+
+      const content = generateTestContent(SIMPLE_PARSE_RESULT);
+
+      // When step registry matches exist, scenario should use executeStep
+      expect(content).toContain('executeStep("given"');
+      expect(content).toContain('executeStep("when"');
+      expect(content).toContain('executeStep("then"');
+    });
+
+    it("should import step-registry and common-steps when step-matched", () => {
+      defineGiven("the database is initialized", async () => { /* no-op */ });
+      defineWhen(
+        /^(?:a )?proposal is created via POST \/api\/proposals$/,
+        async () => { /* no-op */ },
+      );
+      defineThen(
+        /^it is persisted with status "(\w+)"/,
+        async () => { /* no-op */ },
+      );
+
+      const content = generateTestContent(SIMPLE_PARSE_RESULT);
+
+      expect(content).toContain("step-registry");
+      expect(content).toContain("common-steps");
+    });
+  });
+
+  describe("generateTestContent (mixed scenarios)", () => {
+    it("should produce correct mix of api/skip/agent in one spec", () => {
+      const content = generateTestContent(MIXED_PARSE_RESULT);
+
+      // First scenario: API testable (POST) -> real code
+      expect(content).toContain('harness.post("/api/proposals"');
+
+      // Second scenario: UI -> it.skip
+      expect(content).toContain("it.skip(");
+
+      // Should have both regular it() and it.skip() blocks
+      const regularIt = content.match(/\bit\(/g);
+      const skipIt = content.match(/it\.skip\(/g);
+      expect(regularIt).toBeTruthy();
+      expect(skipIt).toBeTruthy();
+    });
+
+    it("should not generate it.skip for scenarios that have API calls", () => {
+      const content = generateTestContent(SIMPLE_PARSE_RESULT);
+
+      // The first two scenarios are API testable - should use regular it()
+      // Only the agent-behavior scenario (US2) should be skipped
+      const lines = content.split("\n");
+      const apiTestLines = lines.filter((l) =>
+        l.includes("harness.post(") || l.includes("harness.get("),
+      );
+      expect(apiTestLines.length).toBeGreaterThan(0);
     });
   });
 

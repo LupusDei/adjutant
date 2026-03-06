@@ -2,7 +2,11 @@
  * Test File Generator — Generates Vitest acceptance test files from parsed specs.
  *
  * Takes a ParseResult (from the spec parser) and generates a `.test.ts` file
- * that developers can fill in with step implementations.
+ * with smart code generation based on scenario classification:
+ * - API-testable scenarios get inline supertest calls
+ * - Step-matched scenarios get executeStep() calls
+ * - UI-only and agent-behavior scenarios get it.skip()
+ * - Unknown scenarios get TODO stubs
  *
  * @module acceptance/test-generator
  */
@@ -11,7 +15,20 @@ import { existsSync } from "fs";
 import { mkdir, writeFile } from "fs/promises";
 import { join, dirname } from "path";
 
-import type { ParseResult, Scenario } from "./types.js";
+import type {
+  ParseResult,
+  Scenario,
+  ScenarioClassification,
+  DetectedApiCall,
+  DetectedAssertion,
+  DetectedPrecondition,
+} from "./types.js";
+import {
+  classifyScenario,
+  detectApiCall,
+  detectAssertions,
+  detectPrecondition,
+} from "./pattern-detector.js";
 
 // ============================================================================
 // Public Types
@@ -32,9 +49,19 @@ export interface GeneratorOptions {
  * Generate test file content from a parsed spec.
  *
  * Produces a string of TypeScript source code containing describe/it blocks
- * for each user story and scenario, with Given/When/Then comments.
+ * for each user story and scenario. Uses pattern detection to generate
+ * executable code instead of TODO stubs wherever possible.
  */
 export function generateTestContent(parsed: ParseResult): string {
+  // Pre-classify all scenarios to determine which imports are needed
+  const classifications = new Map<Scenario, ScenarioClassification>();
+  for (const story of parsed.userStories) {
+    for (const scenario of story.scenarios) {
+      classifications.set(scenario, classifyScenario(scenario));
+    }
+  }
+
+  const hasStepMatched = [...classifications.values()].includes("step-matched");
   const lines: string[] = [];
 
   // File header
@@ -55,6 +82,15 @@ export function generateTestContent(parsed: ParseResult): string {
   lines.push(
     'import { TestHarness } from "../../src/acceptance/test-harness.js";'
   );
+
+  // Conditional imports for step-matched scenarios
+  if (hasStepMatched) {
+    lines.push(
+      'import { executeStep } from "../../src/acceptance/step-registry.js";'
+    );
+    lines.push('import "../../src/acceptance/steps/common-steps.js";');
+  }
+
   lines.push("");
 
   // Outer describe
@@ -69,9 +105,6 @@ export function generateTestContent(parsed: ParseResult): string {
   lines.push("  afterEach(async () => {");
   lines.push("    await harness.destroy();");
   lines.push("  });");
-
-  // Track whether we've generated the first scenario (for example implementation)
-  let isFirstScenario = true;
 
   for (const story of parsed.userStories) {
     lines.push("");
@@ -101,21 +134,9 @@ export function generateTestContent(parsed: ParseResult): string {
     for (let si = 0; si < story.scenarios.length; si++) {
       const scenario = story.scenarios[si]!;
       const itDescription = itDescriptions[si]!;
-      lines.push(
-        `    it("${escapeDoubleQuotes(itDescription)}", async () => {`
-      );
+      const classification = classifications.get(scenario) ?? "unknown";
 
-      if (isFirstScenario) {
-        // First scenario gets a working example skeleton
-        generateExampleBody(lines, scenario);
-        isFirstScenario = false;
-      } else {
-        // Subsequent scenarios get TODO stubs
-        generateTodoBody(lines, scenario);
-      }
-
-      lines.push("    });");
-      lines.push("");
+      generateScenarioBlock(lines, scenario, itDescription, classification);
     }
 
     lines.push("  });");
@@ -156,7 +177,293 @@ export async function generateTestFiles(
 }
 
 // ============================================================================
-// Helpers
+// Scenario Block Generation
+// ============================================================================
+
+/**
+ * Generate a complete it() or it.skip() block for a single scenario.
+ */
+function generateScenarioBlock(
+  lines: string[],
+  scenario: Scenario,
+  itDescription: string,
+  classification: ScenarioClassification
+): void {
+  switch (classification) {
+    case "api-testable":
+      generateApiTestableBlock(lines, scenario, itDescription);
+      break;
+    case "step-matched":
+      generateStepMatchedBlock(lines, scenario, itDescription);
+      break;
+    case "ui-only":
+      generateSkipBlock(lines, scenario, itDescription, "Requires browser — not API-testable");
+      break;
+    case "agent-behavior":
+      generateSkipBlock(lines, scenario, itDescription, "Requires agent simulation — not API-testable");
+      break;
+    default:
+      generateTodoBlock(lines, scenario, itDescription);
+      break;
+  }
+}
+
+/**
+ * Generate an API-testable scenario with inline supertest calls.
+ */
+function generateApiTestableBlock(
+  lines: string[],
+  scenario: Scenario,
+  itDescription: string
+): void {
+  const apiCall = detectApiCall(scenario.when);
+  const assertions = detectAssertions(scenario.then);
+  const precondition = detectPrecondition(scenario.given);
+
+  lines.push(
+    `    it("${escapeDoubleQuotes(itDescription)}", async () => {`
+  );
+
+  // Given clause
+  lines.push(`      // Given ${scenario.given}`);
+  generatePreconditionCode(lines, precondition);
+  lines.push("");
+
+  // When clause
+  lines.push(`      // When ${scenario.when}`);
+  const responseVar = generateApiCallCode(lines, apiCall, precondition);
+  lines.push("");
+
+  // Then clause
+  lines.push(`      // Then ${scenario.then}`);
+  generateAssertionCode(lines, assertions, responseVar);
+
+  lines.push("    });");
+  lines.push("");
+}
+
+/**
+ * Generate a step-matched scenario with executeStep() calls.
+ */
+function generateStepMatchedBlock(
+  lines: string[],
+  scenario: Scenario,
+  itDescription: string
+): void {
+  lines.push(
+    `    it("${escapeDoubleQuotes(itDescription)}", async () => {`
+  );
+
+  lines.push(`      // Given ${scenario.given}`);
+  lines.push(
+    `      await executeStep("given", "${escapeDoubleQuotes(scenario.given)}", harness);`
+  );
+  lines.push("");
+
+  lines.push(`      // When ${scenario.when}`);
+  lines.push(
+    `      await executeStep("when", "${escapeDoubleQuotes(scenario.when)}", harness);`
+  );
+  lines.push("");
+
+  lines.push(`      // Then ${scenario.then}`);
+  lines.push(
+    `      await executeStep("then", "${escapeDoubleQuotes(scenario.then)}", harness);`
+  );
+
+  lines.push("    });");
+  lines.push("");
+}
+
+/**
+ * Generate a skipped scenario with reason comment.
+ */
+function generateSkipBlock(
+  lines: string[],
+  scenario: Scenario,
+  itDescription: string,
+  reason: string
+): void {
+  lines.push(
+    `    it.skip("${escapeDoubleQuotes(itDescription)}", () => {`
+  );
+  lines.push(`      // ${reason}`);
+  lines.push(`      // Given ${scenario.given}`);
+  lines.push(`      // When ${scenario.when}`);
+  lines.push(`      // Then ${scenario.then}`);
+  lines.push("    });");
+  lines.push("");
+}
+
+/**
+ * Generate a TODO stub for unknown scenarios.
+ */
+function generateTodoBlock(
+  lines: string[],
+  scenario: Scenario,
+  itDescription: string
+): void {
+  lines.push(
+    `    it("${escapeDoubleQuotes(itDescription)}", async () => {`
+  );
+  lines.push("      // TODO: implement step definitions");
+  lines.push(`      // Given ${scenario.given}`);
+  lines.push(`      // When ${scenario.when}`);
+  lines.push(`      // Then ${scenario.then}`);
+  lines.push("    });");
+  lines.push("");
+}
+
+// ============================================================================
+// Code Generation Helpers
+// ============================================================================
+
+/**
+ * Generate precondition/seed code from a DetectedPrecondition.
+ */
+function generatePreconditionCode(
+  lines: string[],
+  precondition: DetectedPrecondition
+): void {
+  switch (precondition.type) {
+    case "database":
+      lines.push("      // (harness provides this automatically)");
+      break;
+    case "proposal": {
+      const status = precondition.params?.["status"] as string | undefined;
+      lines.push("      const seeded = await harness.seedProposal({");
+      lines.push('        author: "test-agent",');
+      lines.push(`        title: "${status ? `${capitalize(status)} proposal` : "Test Proposal"}",`);
+      lines.push('        description: "Seeded for testing",');
+      lines.push('        type: "engineering",');
+      lines.push('        project: "adjutant",');
+      lines.push("      });");
+      break;
+    }
+    case "message":
+      lines.push("      await harness.seedMessage({");
+      lines.push('        agentId: "test-agent",');
+      lines.push('        role: "agent",');
+      lines.push('        body: "Seeded message for testing",');
+      lines.push("      });");
+      break;
+    case "agent":
+      lines.push('      await harness.seedAgent({ agentId: "test-agent" });');
+      break;
+    case "none":
+      lines.push("      // (no precondition needed)");
+      break;
+  }
+}
+
+/**
+ * Generate the API call code from a DetectedApiCall.
+ * Returns the variable name used for the response.
+ */
+function generateApiCallCode(
+  lines: string[],
+  apiCall: DetectedApiCall | null,
+  precondition: DetectedPrecondition
+): string {
+  if (!apiCall) {
+    lines.push("      // TODO: implement request");
+    return "res";
+  }
+
+  const method = apiCall.method.toLowerCase();
+  const path = resolvePath(apiCall.path, precondition);
+
+  switch (apiCall.method) {
+    case "POST":
+      lines.push(`      const res = await harness.post("${path}", {`);
+      if (apiCall.body) {
+        for (const [key, value] of Object.entries(apiCall.body)) {
+          lines.push(`        ${key}: ${JSON.stringify(value)},`);
+        }
+      } else {
+        // Generate sensible defaults for POST bodies based on the path
+        generateDefaultPostBody(lines, path);
+      }
+      lines.push("      });");
+      break;
+
+    case "GET":
+      if (apiCall.query && Object.keys(apiCall.query).length > 0) {
+        const queryEntries = Object.entries(apiCall.query)
+          .map(([k, v]) => `${k}: "${v}"`)
+          .join(", ");
+        lines.push(
+          `      const res = await harness.get("${path}", { ${queryEntries} });`
+        );
+      } else {
+        lines.push(`      const res = await harness.get("${path}");`);
+      }
+      break;
+
+    case "PATCH":
+      if (apiCall.body) {
+        const bodyStr = JSON.stringify(apiCall.body);
+        lines.push(
+          `      const res = await harness.patch("${path}", ${bodyStr});`
+        );
+      } else {
+        lines.push(`      const res = await harness.${method}("${path}", {});`);
+      }
+      break;
+
+    case "PUT":
+      lines.push(`      const res = await harness.request.put("${path}").send({});`);
+      break;
+
+    case "DELETE":
+      lines.push(`      const res = await harness.request.delete("${path}");`);
+      break;
+  }
+
+  return "res";
+}
+
+/**
+ * Generate expect() assertions from DetectedAssertions.
+ */
+function generateAssertionCode(
+  lines: string[],
+  assertions: DetectedAssertion[],
+  responseVar: string
+): void {
+  if (assertions.length === 0) {
+    lines.push(`      expect(${responseVar}).toBeTruthy();`);
+    return;
+  }
+
+  for (const assertion of assertions) {
+    const accessor = buildAccessor(responseVar, assertion.path);
+
+    switch (assertion.matcher) {
+      case "toBe":
+        if (typeof assertion.value === "string") {
+          lines.push(`      expect(${accessor}).toBe("${assertion.value}");`);
+        } else {
+          lines.push(`      expect(${accessor}).toBe(${String(assertion.value)});`);
+        }
+        break;
+      case "toBeTruthy":
+        lines.push(`      expect(${accessor}).toBeTruthy();`);
+        break;
+      case "toBeDefined":
+        lines.push(`      expect(${accessor}).toBeDefined();`);
+        break;
+      case "toContain":
+        lines.push(
+          `      expect(${accessor}).toContain(${JSON.stringify(assertion.value)});`
+        );
+        break;
+    }
+  }
+}
+
+// ============================================================================
+// Utility Helpers
 // ============================================================================
 
 /**
@@ -206,33 +513,60 @@ function generateItDescription(scenario: Scenario): string {
 }
 
 /**
- * Generate the body of the first scenario with a working example skeleton.
- */
-function generateExampleBody(lines: string[], scenario: Scenario): void {
-  lines.push(`      // Given ${scenario.given}`);
-  lines.push("      // (harness provides this automatically)");
-  lines.push("");
-  lines.push(`      // When ${scenario.when}`);
-  lines.push("      // TODO: implement request using harness.request");
-  lines.push("");
-  lines.push(`      // Then ${scenario.then}`);
-  lines.push("      // TODO: add assertions");
-  lines.push("      expect(harness).toBeTruthy();");
-}
-
-/**
- * Generate a TODO stub body for subsequent scenarios.
- */
-function generateTodoBody(lines: string[], scenario: Scenario): void {
-  lines.push("      // TODO: implement step definitions");
-  lines.push(`      // Given ${scenario.given}`);
-  lines.push(`      // When ${scenario.when}`);
-  lines.push(`      // Then ${scenario.then}`);
-}
-
-/**
  * Escape double quotes in a string for use inside a double-quoted JS string.
  */
 function escapeDoubleQuotes(s: string): string {
   return s.replace(/"/g, '\\"');
+}
+
+/**
+ * Resolve path parameters. If the path has :id and we have a seeded entity,
+ * replace :id with template expression referencing the seeded variable.
+ */
+function resolvePath(
+  path: string,
+  precondition: DetectedPrecondition
+): string {
+  if (path.includes(":id") && precondition.type !== "none" && precondition.type !== "database") {
+    // Replace :id with interpolated seeded.id
+    return path.replace(":id", '${seeded.id}');
+  }
+  return path;
+}
+
+/**
+ * Build a property accessor expression from a response variable and dot path.
+ */
+function buildAccessor(responseVar: string, path: string): string {
+  if (path === "status") {
+    return `${responseVar}.status`;
+  }
+  // For body paths like "data.status", use res.body.data.status
+  return `${responseVar}.body.${path}`;
+}
+
+/**
+ * Generate default POST body fields based on the endpoint path.
+ */
+function generateDefaultPostBody(lines: string[], path: string): void {
+  if (path.includes("/proposals")) {
+    lines.push('        author: "test-agent",');
+    lines.push('        title: "Test Proposal",');
+    lines.push('        description: "Test description",');
+    lines.push('        type: "engineering",');
+    lines.push('        project: "adjutant",');
+  } else if (path.includes("/messages")) {
+    lines.push('        agentId: "test-agent",');
+    lines.push('        role: "user",');
+    lines.push('        body: "Test message",');
+  } else {
+    lines.push("        // TODO: add request body fields");
+  }
+}
+
+/**
+ * Capitalize first letter.
+ */
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
