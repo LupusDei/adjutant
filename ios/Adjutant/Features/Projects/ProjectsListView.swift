@@ -257,21 +257,24 @@ struct ProjectsListView: View {
             CRTText("ADD PROJECT", style: .subheader, glowIntensity: .medium)
                 .padding(.top, CRTTheme.Spacing.md)
 
-            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
-                CRTText("PROJECT PATH", style: .caption, glowIntensity: .subtle, color: theme.dim)
-                TextField("/path/to/project", text: $viewModel.newProjectPath)
-                    .textFieldStyle(.plain)
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(theme.primary)
-                    .padding(CRTTheme.Spacing.sm)
-                    .background(theme.dim.opacity(0.1))
-                    .cornerRadius(8)
-                    #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    #endif
-                    .disableAutocorrection(true)
+            // Mode picker: Clone URL vs Local Path
+            Picker("Mode", selection: $viewModel.creationMode) {
+                ForEach(ProjectsListViewModel.CreationMode.allCases) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .colorMultiply(theme.primary)
+
+            // Mode-specific fields
+            switch viewModel.creationMode {
+            case .cloneUrl:
+                createSheetCloneFields
+            case .localPath:
+                createSheetPathFields
             }
 
+            // Name field (shared across both modes)
             VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
                 CRTText("NAME (OPTIONAL)", style: .caption, glowIntensity: .subtle, color: theme.dim)
                 TextField("project-name", text: $viewModel.newProjectName)
@@ -303,7 +306,7 @@ struct ProjectsListView: View {
                 }
 
                 Button {
-                    Task { await viewModel.createProjectFromSheet() }
+                    Task<Void, Never> { await viewModel.createProjectFromSheet() }
                 } label: {
                     if viewModel.isCreating {
                         LoadingIndicator(size: .small)
@@ -317,7 +320,7 @@ struct ProjectsListView: View {
                             .cornerRadius(8)
                     }
                 }
-                .disabled(viewModel.newProjectPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isCreating)
+                .disabled(isCreateButtonDisabled)
             }
 
             Spacer()
@@ -325,6 +328,71 @@ struct ProjectsListView: View {
         .padding(.horizontal, CRTTheme.Spacing.md)
         .background(theme.background.screen)
         .presentationDetents([.medium])
+    }
+
+    /// Fields shown in clone URL mode
+    private var createSheetCloneFields: some View {
+        VStack(spacing: CRTTheme.Spacing.md) {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
+                CRTText("REPOSITORY URL", style: .caption, glowIntensity: .subtle, color: theme.dim)
+                TextField("github.com/user/repo", text: $viewModel.newCloneUrl)
+                    .textFieldStyle(.plain)
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundColor(theme.primary)
+                    .padding(CRTTheme.Spacing.sm)
+                    .background(theme.dim.opacity(0.1))
+                    .cornerRadius(8)
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    #endif
+                    .disableAutocorrection(true)
+            }
+
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
+                CRTText("TARGET DIRECTORY", style: .caption, glowIntensity: .subtle, color: theme.dim)
+                TextField("/path/to/clone/into", text: $viewModel.newTargetDir)
+                    .textFieldStyle(.plain)
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundColor(theme.primary)
+                    .padding(CRTTheme.Spacing.sm)
+                    .background(theme.dim.opacity(0.1))
+                    .cornerRadius(8)
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .disableAutocorrection(true)
+            }
+        }
+    }
+
+    /// Fields shown in local path mode
+    private var createSheetPathFields: some View {
+        VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
+            CRTText("PROJECT PATH", style: .caption, glowIntensity: .subtle, color: theme.dim)
+            TextField("/path/to/project", text: $viewModel.newProjectPath)
+                .textFieldStyle(.plain)
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(theme.primary)
+                .padding(CRTTheme.Spacing.sm)
+                .background(theme.dim.opacity(0.1))
+                .cornerRadius(8)
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                #endif
+                .disableAutocorrection(true)
+        }
+    }
+
+    /// Whether the CREATE button should be disabled
+    private var isCreateButtonDisabled: Bool {
+        if viewModel.isCreating { return true }
+        switch viewModel.creationMode {
+        case .cloneUrl:
+            return viewModel.newCloneUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .localPath:
+            return viewModel.newProjectPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
     }
 
     @ViewBuilder
