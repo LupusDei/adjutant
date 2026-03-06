@@ -91,6 +91,62 @@ export interface StepDefinition {
   fn: (harness: unknown, ...args: string[]) => Promise<void>;
 }
 
+// ============================================================================
+// Pattern Detector Types — Used by the smart code generator (adj-039)
+// ============================================================================
+
+/**
+ * Detected API call from When-clause text.
+ *
+ * Pattern detector extracts HTTP method, path, query params, and request body
+ * from scenario When-clauses that describe REST API interactions.
+ */
+export interface DetectedApiCall {
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+  path: string;
+  query?: Record<string, string>;
+  body?: Record<string, unknown>;
+}
+
+/**
+ * Detected assertion from Then-clause text.
+ *
+ * Each assertion describes a single expect() call the generator should emit.
+ */
+export interface DetectedAssertion {
+  /** Dot path into response body, e.g. "data.status" */
+  path: string;
+  /** Expected value, or null for existence check */
+  value: unknown;
+  /** Vitest matcher to use */
+  matcher: "toBe" | "toBeTruthy" | "toBeDefined" | "toContain";
+}
+
+/**
+ * Detected precondition from Given-clause text.
+ *
+ * Tells the generator what seed data or setup is needed before the When step.
+ */
+export interface DetectedPrecondition {
+  /** What kind of seed data is needed */
+  type: "proposal" | "message" | "agent" | "database" | "none";
+  /** Optional parameters for seeding */
+  params?: Record<string, unknown>;
+}
+
+/**
+ * How a scenario should be generated.
+ *
+ * The classifier inspects each scenario's GWT text and determines
+ * which code-generation strategy to use.
+ */
+export type ScenarioClassification =
+  | "api-testable"      // Has detectable API pattern -> inline supertest
+  | "step-matched"      // Matches step registry -> executeStep()
+  | "ui-only"           // Frontend/browser interaction -> it.skip()
+  | "agent-behavior"    // Agent simulation required -> it.skip()
+  | "unknown";          // Unrecognized -> TODO stub
+
 /**
  * CLI options for the acceptance test runner.
  */
