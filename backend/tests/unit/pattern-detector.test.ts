@@ -6,7 +6,7 @@ import {
   detectPrecondition,
   classifyScenario,
 } from "../../src/acceptance/pattern-detector.js";
-import { clearSteps } from "../../src/acceptance/step-registry.js";
+import { clearSteps, defineWhen } from "../../src/acceptance/step-registry.js";
 import type { Scenario } from "../../src/acceptance/types.js";
 
 // ============================================================================
@@ -263,7 +263,6 @@ describe("classifyScenario", () => {
 
   it("should classify scenario with step-registry matches as step-matched", () => {
     // Register a step that matches the When clause
-    const { defineWhen } = require("../../src/acceptance/step-registry.js") as typeof import("../../src/acceptance/step-registry.js");
     defineWhen(
       /^a custom step that matches$/,
       async () => { /* no-op */ },
@@ -317,7 +316,6 @@ describe("classifyScenario", () => {
   it("should prefer step-matched over api-testable", () => {
     // When a scenario has both API patterns AND step-registry matches,
     // step-matched takes priority
-    const { defineWhen } = require("../../src/acceptance/step-registry.js") as typeof import("../../src/acceptance/step-registry.js");
     defineWhen(
       /^a proposal is created via POST \/api\/proposals$/,
       async () => { /* no-op */ },
