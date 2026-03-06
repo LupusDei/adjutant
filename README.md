@@ -272,7 +272,7 @@ APNS_ENVIRONMENT=development    # or "production"
 - Session terminal streaming
 
 ### Themes
-Six built-in retro terminal themes: GAS-BOY, BLOOD-BAG, VAULT-TEC, WASTELAND, PINK-MIST, RAD-STORM
+Four themes: PIP-BOY (green CRT), DOCUMENT (clean professional), STARCRAFT (sci-fi cyan), FRIENDLY (playful purple)
 
 ## Architecture
 
