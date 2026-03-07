@@ -34,7 +34,7 @@ import {
 import type { EpicProgress } from "../services/beads/index.js";
 import { getAgents } from "../services/agents-service.js";
 import type { MessageStore } from "../services/message-store.js";
-import { success, badRequest, notFound, internalError } from "../utils/responses.js";
+import { success, error as errorResponse, badRequest, notFound, internalError } from "../utils/responses.js";
 
 /**
  * Zod schema for file listing query params.
@@ -93,7 +93,7 @@ export function createProjectsRouter(store: MessageStore): Router {
    * List directory contents within a project.
    * Query params: ?path=relative/path (default: project root)
    */
-  router.get("/:id/files", (req, res) => {
+  router.get("/:id/files", async (req, res) => {
     const { id } = req.params;
     const parsed = listFilesSchema.safeParse(req.query);
     if (!parsed.success) {
@@ -102,7 +102,7 @@ export function createProjectsRouter(store: MessageStore): Router {
       );
     }
 
-    const result = listDirectory(id, parsed.data.path);
+    const result = await listDirectory(id, parsed.data.path);
     if (!result.success) {
       if (result.error?.code === "NOT_FOUND") {
         return res.status(404).json(notFound("Directory", parsed.data.path));
@@ -120,7 +120,7 @@ export function createProjectsRouter(store: MessageStore): Router {
    * Read a file's content within a project.
    * Query params: ?path=relative/path/to/file.md
    */
-  router.get("/:id/files/read", (req, res) => {
+  router.get("/:id/files/read", async (req, res) => {
     const { id } = req.params;
     const parsed = readFileSchema.safeParse(req.query);
     if (!parsed.success) {
@@ -129,10 +129,16 @@ export function createProjectsRouter(store: MessageStore): Router {
       );
     }
 
-    const result = readFile(id, parsed.data.path);
+    const result = await readFile(id, parsed.data.path);
     if (!result.success) {
       if (result.error?.code === "NOT_FOUND") {
         return res.status(404).json(notFound("File", parsed.data.path));
+      }
+      // adj-wyvo: return 415 for unsupported file types
+      if (result.error?.code === "UNSUPPORTED_TYPE") {
+        return res.status(415).json(
+          errorResponse("UNSUPPORTED_TYPE", result.error.message),
+        );
       }
       return res.status(400).json(
         badRequest(result.error?.message ?? "Failed to read file"),

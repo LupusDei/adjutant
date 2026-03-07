@@ -7,8 +7,8 @@
  * @module services/files-service
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "fs";
-import { join, resolve, relative, extname } from "path";
+import { readdir, readFile as fsReadFile, stat, lstat } from "fs/promises";
+import { join, resolve, relative, extname, basename } from "path";
 
 import { getProject } from "./projects-service.js";
 import type { ProjectsServiceResult } from "./projects-service.js";
@@ -73,6 +73,47 @@ const TEXT_EXTENSIONS = new Set([
   ".swift",
   ".py",
   ".sh",
+  // Additional common extensions (adj-fnhh)
+  ".rs",
+  ".go",
+  ".rb",
+  ".java",
+  ".c",
+  ".cpp",
+  ".h",
+  ".hpp",
+  ".xml",
+  ".svg",
+  ".sql",
+  ".graphql",
+  ".proto",
+  ".env",
+  ".cfg",
+  ".ini",
+  ".conf",
+  ".r",
+  ".lua",
+  ".zig",
+  ".dockerfile",
+  ".gitignore",
+  ".editorconfig",
+  ".vue",
+  ".svelte",
+]);
+
+/** Known extensionless text files (adj-fnhh) */
+const TEXT_FILENAMES = new Set([
+  "Makefile",
+  "Dockerfile",
+  "LICENSE",
+  "README",
+  "CHANGELOG",
+  "Gemfile",
+  "Rakefile",
+  "Procfile",
+  ".gitignore",
+  ".env.example",
+  ".editorconfig",
 ]);
 
 /** Map of file extension to MIME type */
@@ -92,11 +133,58 @@ const MIME_TYPES: Record<string, string> = {
   ".swift": "text/x-swift",
   ".py": "text/x-python",
   ".sh": "text/x-shellscript",
+  // Additional MIME types (adj-fnhh)
+  ".rs": "text/x-rust",
+  ".go": "text/x-go",
+  ".rb": "text/x-ruby",
+  ".java": "text/x-java",
+  ".c": "text/x-c",
+  ".cpp": "text/x-c++",
+  ".h": "text/x-c",
+  ".hpp": "text/x-c++",
+  ".xml": "application/xml",
+  ".svg": "image/svg+xml",
+  ".sql": "text/x-sql",
+  ".graphql": "text/x-graphql",
+  ".proto": "text/x-protobuf",
+  ".env": "text/plain",
+  ".cfg": "text/plain",
+  ".ini": "text/plain",
+  ".conf": "text/plain",
+  ".r": "text/x-r",
+  ".lua": "text/x-lua",
+  ".zig": "text/x-zig",
+  ".dockerfile": "text/x-dockerfile",
+  ".gitignore": "text/plain",
+  ".editorconfig": "text/plain",
+  ".vue": "text/x-vue",
+  ".svelte": "text/x-svelte",
 };
 
 // ============================================================================
 // Helpers
 // ============================================================================
+
+/**
+ * Check if any component in the path from projectPath to fullPath is a symlink.
+ * Prevents symlink-based path traversal attacks (adj-yil2).
+ */
+async function containsSymlink(projectPath: string, fullPath: string): Promise<boolean> {
+  const rel = relative(projectPath, fullPath);
+  if (!rel) return false;
+  const parts = rel.split("/");
+  let current = projectPath;
+  for (const part of parts) {
+    current = join(current, part);
+    try {
+      const st = await lstat(current);
+      if (st.isSymbolicLink()) return true;
+    } catch {
+      break;
+    }
+  }
+  return false;
+}
 
 /**
  * Validate that a path is safely within a registered project directory.
@@ -106,6 +194,11 @@ function validateProjectPath(
   projectId: string,
   relativePath: string,
 ): { projectPath: string; fullPath: string } | { error: string } {
+  // adj-eual: reject null bytes
+  if (relativePath.includes("\0")) {
+    return { error: "Invalid path: null bytes not allowed" };
+  }
+
   const projectResult = getProject(projectId);
   if (!projectResult.success || !projectResult.data) {
     return { error: `Project '${projectId}' not found` };
@@ -139,10 +232,10 @@ function getMimeType(ext: string): string {
  * Returns entries sorted: directories first, then files, each group alphabetical.
  * Skips hidden files (starting with .) and directories in SKIP_DIRS.
  */
-export function listDirectory(
+export async function listDirectory(
   projectId: string,
   relativePath: string = "",
-): ProjectsServiceResult<DirectoryEntry[]> {
+): Promise<ProjectsServiceResult<DirectoryEntry[]>> {
   const validation = validateProjectPath(projectId, relativePath);
   if ("error" in validation) {
     return {
@@ -153,18 +246,41 @@ export function listDirectory(
 
   const { projectPath, fullPath } = validation;
 
-  if (!existsSync(fullPath)) {
+  // adj-yil2: reject symlinks in the path
+  if (await containsSymlink(projectPath, fullPath)) {
     return {
       success: false,
-      error: {
-        code: "NOT_FOUND",
-        message: `Directory not found: ${relativePath || "/"}`,
-      },
+      error: { code: "VALIDATION_ERROR", message: "Symlinks are not allowed in path" },
     };
   }
 
   try {
-    const entries = readdirSync(fullPath);
+    // Check existence via stat (adj-kxgu: async)
+    let pathStat;
+    try {
+      pathStat = await stat(fullPath);
+    } catch {
+      return {
+        success: false,
+        error: {
+          code: "NOT_FOUND",
+          message: `Directory not found: ${relativePath || "/"}`,
+        },
+      };
+    }
+
+    // adj-byj9: verify the path is a directory
+    if (!pathStat.isDirectory()) {
+      return {
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: `Path is not a directory: ${relativePath || "/"}`,
+        },
+      };
+    }
+
+    const entries = await readdir(fullPath);
     const results: DirectoryEntry[] = [];
 
     for (const name of entries) {
@@ -175,15 +291,15 @@ export function listDirectory(
       const entryFullPath = join(fullPath, name);
 
       try {
-        const stat = statSync(entryFullPath);
+        const entryStat = await stat(entryFullPath);
         const entryRelPath = relative(projectPath, entryFullPath);
 
         results.push({
           name,
           path: entryRelPath,
-          type: stat.isDirectory() ? "directory" : "file",
-          size: stat.isDirectory() ? 0 : stat.size,
-          lastModified: stat.mtime.toISOString(),
+          type: entryStat.isDirectory() ? "directory" : "file",
+          size: entryStat.isDirectory() ? 0 : entryStat.size,
+          lastModified: entryStat.mtime.toISOString(),
         });
       } catch {
         // Skip entries we can't stat (permission issues, etc.)
@@ -215,14 +331,15 @@ export function listDirectory(
  *
  * Validates that the file:
  * - Is within the project directory (no path traversal)
+ * - Does not traverse through symlinks
  * - Exists and is a regular file
  * - Is within the size limit (1MB)
- * - Has a supported text extension
+ * - Has a supported text extension or known text filename
  */
-export function readFile(
+export async function readFile(
   projectId: string,
   relativePath: string,
-): ProjectsServiceResult<FileContent> {
+): Promise<ProjectsServiceResult<FileContent>> {
   const validation = validateProjectPath(projectId, relativePath);
   if ("error" in validation) {
     return {
@@ -231,22 +348,32 @@ export function readFile(
     };
   }
 
-  const { fullPath } = validation;
+  const { projectPath, fullPath } = validation;
 
-  if (!existsSync(fullPath)) {
+  // adj-yil2: reject symlinks in the path
+  if (await containsSymlink(projectPath, fullPath)) {
     return {
       success: false,
-      error: {
-        code: "NOT_FOUND",
-        message: `File not found: ${relativePath}`,
-      },
+      error: { code: "VALIDATION_ERROR", message: "Symlinks are not allowed in path" },
     };
   }
 
   try {
-    const stat = statSync(fullPath);
+    // Check existence via stat (adj-kxgu: async)
+    let fileStat;
+    try {
+      fileStat = await stat(fullPath);
+    } catch {
+      return {
+        success: false,
+        error: {
+          code: "NOT_FOUND",
+          message: `File not found: ${relativePath}`,
+        },
+      };
+    }
 
-    if (!stat.isFile()) {
+    if (!fileStat.isFile()) {
       return {
         success: false,
         error: {
@@ -256,35 +383,38 @@ export function readFile(
       };
     }
 
-    if (stat.size > MAX_FILE_SIZE) {
+    if (fileStat.size > MAX_FILE_SIZE) {
       return {
         success: false,
         error: {
           code: "VALIDATION_ERROR",
-          message: `File too large: ${relativePath} (${stat.size} bytes, max ${MAX_FILE_SIZE})`,
+          message: `File too large: ${relativePath} (${fileStat.size} bytes, max ${MAX_FILE_SIZE})`,
         },
       };
     }
 
+    // adj-fnhh: check both extension and known extensionless filenames
     const ext = extname(relativePath).toLowerCase();
-    if (!TEXT_EXTENSIONS.has(ext)) {
+    const fileName = basename(relativePath);
+    if (!TEXT_EXTENSIONS.has(ext) && !TEXT_FILENAMES.has(fileName)) {
       return {
         success: false,
         error: {
-          code: "VALIDATION_ERROR",
+          // adj-wyvo: use UNSUPPORTED_TYPE instead of VALIDATION_ERROR
+          code: "UNSUPPORTED_TYPE",
           message: `File type not supported: ${ext || "(no extension)"}`,
         },
       };
     }
 
-    const content = readFileSync(fullPath, "utf8");
+    const content = await fsReadFile(fullPath, "utf8");
 
     return {
       success: true,
       data: {
         path: relativePath,
         content,
-        size: stat.size,
+        size: fileStat.size,
         mimeType: getMimeType(ext),
       },
     };

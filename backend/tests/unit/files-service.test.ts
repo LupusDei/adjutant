@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { existsSync, readdirSync, readFileSync, statSync } from "fs";
+import { readdir, readFile as fsReadFile, stat, lstat } from "fs/promises";
 import { join, resolve } from "path";
 
-// Mock fs
-vi.mock("fs", () => ({
-  existsSync: vi.fn(),
-  readdirSync: vi.fn(),
-  readFileSync: vi.fn(),
-  statSync: vi.fn(),
+// Mock fs/promises (adj-kxgu: async fs)
+vi.mock("fs/promises", () => ({
+  readdir: vi.fn(),
+  readFile: vi.fn(),
+  stat: vi.fn(),
+  lstat: vi.fn(),
 }));
 
 // Mock projects-service
@@ -52,9 +52,18 @@ function mockProjectNotFound(): void {
   } as ProjectsServiceResult<Project>);
 }
 
+/** Helper: mock lstat to report no symlinks */
+function mockNoSymlinks(): void {
+  vi.mocked(lstat).mockResolvedValue({
+    isSymbolicLink: () => false,
+  } as unknown as Awaited<ReturnType<typeof lstat>>);
+}
+
 describe("files-service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: no symlinks in path
+    mockNoSymlinks();
   });
 
   // ===========================================================================
@@ -62,35 +71,43 @@ describe("files-service", () => {
   // ===========================================================================
 
   describe("listDirectory", () => {
-    it("should list directory contents for a valid project and path", () => {
+    it("should list directory contents for a valid project and path", async () => {
       mockProjectExists();
 
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readdirSync).mockReturnValue([
-        "README.md",
-        "src",
-        "package.json",
-      ] as unknown as ReturnType<typeof readdirSync>);
-
-      vi.mocked(statSync).mockImplementation((p: unknown) => {
+      vi.mocked(stat).mockImplementation(async (p: unknown) => {
         const ps = String(p);
+        // First call is for the directory check
+        if (ps === resolve(PROJECT_PATH, "")) {
+          return {
+            isDirectory: () => true,
+            isFile: () => false,
+            size: 0,
+            mtime: new Date("2026-01-15T10:00:00.000Z"),
+          } as unknown as Awaited<ReturnType<typeof stat>>;
+        }
         if (ps.endsWith("/src")) {
           return {
             isDirectory: () => true,
             isFile: () => false,
             size: 0,
             mtime: new Date("2026-01-15T10:00:00.000Z"),
-          } as unknown as ReturnType<typeof statSync>;
+          } as unknown as Awaited<ReturnType<typeof stat>>;
         }
         return {
           isDirectory: () => false,
           isFile: () => true,
           size: 1024,
           mtime: new Date("2026-01-15T10:00:00.000Z"),
-        } as unknown as ReturnType<typeof statSync>;
+        } as unknown as Awaited<ReturnType<typeof stat>>;
       });
 
-      const result = listDirectory("proj-1", "");
+      vi.mocked(readdir).mockResolvedValue([
+        "README.md",
+        "src",
+        "package.json",
+      ] as unknown as Awaited<ReturnType<typeof readdir>>);
+
+      const result = await listDirectory("proj-1", "");
       expect(result.success).toBe(true);
       expect(result.data).toBeDefined();
 
@@ -104,37 +121,44 @@ describe("files-service", () => {
       expect(names).toContain("src");
     });
 
-    it("should skip directories in SKIP_DIRS (node_modules, .git, etc)", () => {
+    it("should skip directories in SKIP_DIRS (node_modules, .git, etc)", async () => {
       mockProjectExists();
 
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readdirSync).mockReturnValue([
-        "src",
-        "node_modules",
-        ".git",
-        "dist",
-        "README.md",
-      ] as unknown as ReturnType<typeof readdirSync>);
-
-      vi.mocked(statSync).mockImplementation((p: unknown) => {
+      vi.mocked(stat).mockImplementation(async (p: unknown) => {
         const ps = String(p);
+        if (ps === PROJECT_PATH) {
+          return {
+            isDirectory: () => true,
+            isFile: () => false,
+            size: 0,
+            mtime: new Date("2026-01-15T10:00:00.000Z"),
+          } as unknown as Awaited<ReturnType<typeof stat>>;
+        }
         if (ps.endsWith("/src") || ps.endsWith("/node_modules") || ps.endsWith("/.git") || ps.endsWith("/dist")) {
           return {
             isDirectory: () => true,
             isFile: () => false,
             size: 0,
             mtime: new Date("2026-01-15T10:00:00.000Z"),
-          } as unknown as ReturnType<typeof statSync>;
+          } as unknown as Awaited<ReturnType<typeof stat>>;
         }
         return {
           isDirectory: () => false,
           isFile: () => true,
           size: 100,
           mtime: new Date("2026-01-15T10:00:00.000Z"),
-        } as unknown as ReturnType<typeof statSync>;
+        } as unknown as Awaited<ReturnType<typeof stat>>;
       });
 
-      const result = listDirectory("proj-1", "");
+      vi.mocked(readdir).mockResolvedValue([
+        "src",
+        "node_modules",
+        ".git",
+        "dist",
+        "README.md",
+      ] as unknown as Awaited<ReturnType<typeof readdir>>);
+
+      const result = await listDirectory("proj-1", "");
       expect(result.success).toBe(true);
       const names = result.data!.map((e) => e.name);
       expect(names).toContain("src");
@@ -144,36 +168,43 @@ describe("files-service", () => {
       expect(names).not.toContain("dist");
     });
 
-    it("should skip hidden files (starting with .)", () => {
+    it("should skip hidden files (starting with .)", async () => {
       mockProjectExists();
 
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readdirSync).mockReturnValue([
-        "README.md",
-        ".env",
-        ".gitignore",
-        "src",
-      ] as unknown as ReturnType<typeof readdirSync>);
-
-      vi.mocked(statSync).mockImplementation((p: unknown) => {
+      vi.mocked(stat).mockImplementation(async (p: unknown) => {
         const ps = String(p);
+        if (ps === PROJECT_PATH) {
+          return {
+            isDirectory: () => true,
+            isFile: () => false,
+            size: 0,
+            mtime: new Date("2026-01-15T10:00:00.000Z"),
+          } as unknown as Awaited<ReturnType<typeof stat>>;
+        }
         if (ps.endsWith("/src")) {
           return {
             isDirectory: () => true,
             isFile: () => false,
             size: 0,
             mtime: new Date("2026-01-15T10:00:00.000Z"),
-          } as unknown as ReturnType<typeof statSync>;
+          } as unknown as Awaited<ReturnType<typeof stat>>;
         }
         return {
           isDirectory: () => false,
           isFile: () => true,
           size: 100,
           mtime: new Date("2026-01-15T10:00:00.000Z"),
-        } as unknown as ReturnType<typeof statSync>;
+        } as unknown as Awaited<ReturnType<typeof stat>>;
       });
 
-      const result = listDirectory("proj-1", "");
+      vi.mocked(readdir).mockResolvedValue([
+        "README.md",
+        ".env",
+        ".gitignore",
+        "src",
+      ] as unknown as Awaited<ReturnType<typeof readdir>>);
+
+      const result = await listDirectory("proj-1", "");
       expect(result.success).toBe(true);
       const names = result.data!.map((e) => e.name);
       expect(names).toContain("README.md");
@@ -182,50 +213,60 @@ describe("files-service", () => {
       expect(names).not.toContain(".gitignore");
     });
 
-    it("should reject path traversal attempts", () => {
+    it("should reject path traversal attempts", async () => {
       mockProjectExists();
 
-      const result = listDirectory("proj-1", "../../etc");
+      const result = await listDirectory("proj-1", "../../etc");
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("VALIDATION_ERROR");
       expect(result.error!.message).toContain("Path traversal");
     });
 
-    it("should return NOT_FOUND for non-existent directory", () => {
+    it("should return NOT_FOUND for non-existent directory", async () => {
       mockProjectExists();
 
-      vi.mocked(existsSync).mockReturnValue(false);
+      vi.mocked(stat).mockRejectedValue(new Error("ENOENT: no such file or directory"));
 
-      const result = listDirectory("proj-1", "nonexistent/path");
+      const result = await listDirectory("proj-1", "nonexistent/path");
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("NOT_FOUND");
     });
 
-    it("should return error for non-existent project", () => {
+    it("should return error for non-existent project", async () => {
       mockProjectNotFound();
 
-      const result = listDirectory("nonexistent", "");
+      const result = await listDirectory("nonexistent", "");
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("VALIDATION_ERROR");
       expect(result.error!.message).toContain("not found");
     });
 
-    it("should return entries with correct type, size, and path", () => {
+    it("should return entries with correct type, size, and path", async () => {
       mockProjectExists();
 
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readdirSync).mockReturnValue([
+      vi.mocked(stat).mockImplementation(async (p: unknown) => {
+        const ps = String(p);
+        if (ps === resolve(PROJECT_PATH, "specs")) {
+          return {
+            isDirectory: () => true,
+            isFile: () => false,
+            size: 0,
+            mtime: new Date("2026-03-01T12:00:00.000Z"),
+          } as unknown as Awaited<ReturnType<typeof stat>>;
+        }
+        return {
+          isDirectory: () => false,
+          isFile: () => true,
+          size: 2048,
+          mtime: new Date("2026-03-01T12:00:00.000Z"),
+        } as unknown as Awaited<ReturnType<typeof stat>>;
+      });
+
+      vi.mocked(readdir).mockResolvedValue([
         "spec.md",
-      ] as unknown as ReturnType<typeof readdirSync>);
+      ] as unknown as Awaited<ReturnType<typeof readdir>>);
 
-      vi.mocked(statSync).mockReturnValue({
-        isDirectory: () => false,
-        isFile: () => true,
-        size: 2048,
-        mtime: new Date("2026-03-01T12:00:00.000Z"),
-      } as unknown as ReturnType<typeof statSync>);
-
-      const result = listDirectory("proj-1", "specs");
+      const result = await listDirectory("proj-1", "specs");
       expect(result.success).toBe(true);
       expect(result.data).toHaveLength(1);
 
@@ -237,40 +278,89 @@ describe("files-service", () => {
       expect(entry.lastModified).toBe("2026-03-01T12:00:00.000Z");
     });
 
-    it("should sort entries: directories first, then alphabetically", () => {
+    it("should sort entries: directories first, then alphabetically", async () => {
       mockProjectExists();
 
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readdirSync).mockReturnValue([
-        "zebra.txt",
-        "alpha",
-        "banana.md",
-        "charlie",
-      ] as unknown as ReturnType<typeof readdirSync>);
-
-      vi.mocked(statSync).mockImplementation((p: unknown) => {
+      vi.mocked(stat).mockImplementation(async (p: unknown) => {
         const ps = String(p);
+        if (ps === PROJECT_PATH) {
+          return {
+            isDirectory: () => true,
+            isFile: () => false,
+            size: 0,
+            mtime: new Date("2026-01-01T00:00:00.000Z"),
+          } as unknown as Awaited<ReturnType<typeof stat>>;
+        }
         if (ps.endsWith("/alpha") || ps.endsWith("/charlie")) {
           return {
             isDirectory: () => true,
             isFile: () => false,
             size: 0,
             mtime: new Date("2026-01-01T00:00:00.000Z"),
-          } as unknown as ReturnType<typeof statSync>;
+          } as unknown as Awaited<ReturnType<typeof stat>>;
         }
         return {
           isDirectory: () => false,
           isFile: () => true,
           size: 100,
           mtime: new Date("2026-01-01T00:00:00.000Z"),
-        } as unknown as ReturnType<typeof statSync>;
+        } as unknown as Awaited<ReturnType<typeof stat>>;
       });
 
-      const result = listDirectory("proj-1", "");
+      vi.mocked(readdir).mockResolvedValue([
+        "zebra.txt",
+        "alpha",
+        "banana.md",
+        "charlie",
+      ] as unknown as Awaited<ReturnType<typeof readdir>>);
+
+      const result = await listDirectory("proj-1", "");
       expect(result.success).toBe(true);
       const names = result.data!.map((e) => e.name);
       // Dirs first (alpha, charlie), then files (banana.md, zebra.txt)
       expect(names).toEqual(["alpha", "charlie", "banana.md", "zebra.txt"]);
+    });
+
+    // adj-eual: null byte injection
+    it("should reject paths containing null bytes", async () => {
+      mockProjectExists();
+
+      const result = await listDirectory("proj-1", "foo\0bar");
+      expect(result.success).toBe(false);
+      expect(result.error!.code).toBe("VALIDATION_ERROR");
+      expect(result.error!.message).toContain("null bytes");
+    });
+
+    // adj-byj9: non-directory path
+    it("should reject listing a file path (not a directory)", async () => {
+      mockProjectExists();
+
+      vi.mocked(stat).mockResolvedValue({
+        isDirectory: () => false,
+        isFile: () => true,
+        size: 1024,
+        mtime: new Date("2026-01-01T00:00:00.000Z"),
+      } as unknown as Awaited<ReturnType<typeof stat>>);
+
+      const result = await listDirectory("proj-1", "README.md");
+      expect(result.success).toBe(false);
+      expect(result.error!.code).toBe("VALIDATION_ERROR");
+      expect(result.error!.message).toContain("not a directory");
+    });
+
+    // adj-yil2: symlink traversal
+    it("should reject paths containing symlinks", async () => {
+      mockProjectExists();
+
+      // Override the default no-symlinks mock
+      vi.mocked(lstat).mockResolvedValue({
+        isSymbolicLink: () => true,
+      } as unknown as Awaited<ReturnType<typeof lstat>>);
+
+      const result = await listDirectory("proj-1", "evil-link");
+      expect(result.success).toBe(false);
+      expect(result.error!.code).toBe("VALIDATION_ERROR");
+      expect(result.error!.message).toContain("Symlinks");
     });
   });
 
@@ -279,19 +369,17 @@ describe("files-service", () => {
   // ===========================================================================
 
   describe("readFile", () => {
-    it("should read a valid text file", () => {
+    it("should read a valid text file", async () => {
       mockProjectExists();
 
-      const filePath = join(PROJECT_PATH, "README.md");
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(statSync).mockReturnValue({
+      vi.mocked(stat).mockResolvedValue({
         isFile: () => true,
         isDirectory: () => false,
         size: 256,
-      } as unknown as ReturnType<typeof statSync>);
-      vi.mocked(readFileSync).mockReturnValue("# Hello World\n\nThis is a readme.");
+      } as unknown as Awaited<ReturnType<typeof stat>>);
+      vi.mocked(fsReadFile).mockResolvedValue("# Hello World\n\nThis is a readme.");
 
-      const result = readFile("proj-1", "README.md");
+      const result = await readFile("proj-1", "README.md");
       expect(result.success).toBe(true);
       expect(result.data!.path).toBe("README.md");
       expect(result.data!.content).toBe("# Hello World\n\nThis is a readme.");
@@ -299,123 +387,232 @@ describe("files-service", () => {
       expect(result.data!.mimeType).toBe("text/markdown");
     });
 
-    it("should reject path traversal attempts", () => {
+    it("should reject path traversal attempts", async () => {
       mockProjectExists();
 
-      const result = readFile("proj-1", "../../../etc/passwd");
+      const result = await readFile("proj-1", "../../../etc/passwd");
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("VALIDATION_ERROR");
       expect(result.error!.message).toContain("Path traversal");
     });
 
-    it("should return NOT_FOUND for non-existent file", () => {
+    it("should return NOT_FOUND for non-existent file", async () => {
       mockProjectExists();
 
-      vi.mocked(existsSync).mockReturnValue(false);
+      vi.mocked(stat).mockRejectedValue(new Error("ENOENT: no such file or directory"));
 
-      const result = readFile("proj-1", "does-not-exist.md");
+      const result = await readFile("proj-1", "does-not-exist.md");
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("NOT_FOUND");
     });
 
-    it("should reject files that are too large", () => {
+    it("should reject files that are too large", async () => {
       mockProjectExists();
 
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(statSync).mockReturnValue({
+      vi.mocked(stat).mockResolvedValue({
         isFile: () => true,
         isDirectory: () => false,
         size: 2 * 1024 * 1024, // 2MB, exceeds 1MB limit
-      } as unknown as ReturnType<typeof statSync>);
+      } as unknown as Awaited<ReturnType<typeof stat>>);
 
-      const result = readFile("proj-1", "huge-file.md");
+      const result = await readFile("proj-1", "huge-file.md");
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("VALIDATION_ERROR");
       expect(result.error!.message).toContain("too large");
     });
 
-    it("should reject unsupported file extensions", () => {
+    it("should reject unsupported file extensions with UNSUPPORTED_TYPE code", async () => {
       mockProjectExists();
 
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(statSync).mockReturnValue({
+      vi.mocked(stat).mockResolvedValue({
         isFile: () => true,
         isDirectory: () => false,
         size: 1024,
-      } as unknown as ReturnType<typeof statSync>);
+      } as unknown as Awaited<ReturnType<typeof stat>>);
 
-      const result = readFile("proj-1", "image.png");
+      const result = await readFile("proj-1", "image.png");
       expect(result.success).toBe(false);
-      expect(result.error!.code).toBe("VALIDATION_ERROR");
+      // adj-wyvo: should use UNSUPPORTED_TYPE, not VALIDATION_ERROR
+      expect(result.error!.code).toBe("UNSUPPORTED_TYPE");
       expect(result.error!.message).toContain("not supported");
     });
 
-    it("should return error for non-existent project", () => {
+    it("should return error for non-existent project", async () => {
       mockProjectNotFound();
 
-      const result = readFile("nonexistent", "README.md");
+      const result = await readFile("nonexistent", "README.md");
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("VALIDATION_ERROR");
       expect(result.error!.message).toContain("not found");
     });
 
-    it("should return correct mimeType for different extensions", () => {
+    it("should return correct mimeType for different extensions", async () => {
       mockProjectExists();
 
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(statSync).mockReturnValue({
+      vi.mocked(stat).mockResolvedValue({
         isFile: () => true,
         isDirectory: () => false,
         size: 100,
-      } as unknown as ReturnType<typeof statSync>);
-      vi.mocked(readFileSync).mockReturnValue("content");
+      } as unknown as Awaited<ReturnType<typeof stat>>);
+      vi.mocked(fsReadFile).mockResolvedValue("content");
 
       // Test .ts
-      const tsResult = readFile("proj-1", "index.ts");
+      const tsResult = await readFile("proj-1", "index.ts");
       expect(tsResult.success).toBe(true);
       expect(tsResult.data!.mimeType).toBe("text/typescript");
 
       // Test .json
-      const jsonResult = readFile("proj-1", "package.json");
+      const jsonResult = await readFile("proj-1", "package.json");
       expect(jsonResult.success).toBe(true);
       expect(jsonResult.data!.mimeType).toBe("application/json");
 
       // Test .txt
-      const txtResult = readFile("proj-1", "notes.txt");
+      const txtResult = await readFile("proj-1", "notes.txt");
       expect(txtResult.success).toBe(true);
       expect(txtResult.data!.mimeType).toBe("text/plain");
 
       // Test .yaml
-      const yamlResult = readFile("proj-1", "config.yaml");
+      const yamlResult = await readFile("proj-1", "config.yaml");
       expect(yamlResult.success).toBe(true);
       expect(yamlResult.data!.mimeType).toBe("text/yaml");
     });
 
-    it("should reject reading a directory path", () => {
+    it("should reject reading a directory path", async () => {
       mockProjectExists();
 
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(statSync).mockReturnValue({
+      vi.mocked(stat).mockResolvedValue({
         isFile: () => false,
         isDirectory: () => true,
         size: 0,
-      } as unknown as ReturnType<typeof statSync>);
+      } as unknown as Awaited<ReturnType<typeof stat>>);
 
-      const result = readFile("proj-1", "src");
+      const result = await readFile("proj-1", "src");
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("VALIDATION_ERROR");
       expect(result.error!.message).toContain("not a file");
     });
 
-    it("should handle resolved path that escapes via symlink-like traversal", () => {
+    it("should handle resolved path that escapes via symlink-like traversal", async () => {
       // Even if the relative path looks safe, the resolved path must be within project
       mockProjectExists();
 
       // This tests that resolve() catches traversal even with odd path segments
-      const result = readFile("proj-1", "foo/../../../../../../etc/passwd");
+      const result = await readFile("proj-1", "foo/../../../../../../etc/passwd");
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("VALIDATION_ERROR");
       expect(result.error!.message).toContain("Path traversal");
+    });
+
+    // adj-eual: null byte injection
+    it("should reject paths containing null bytes", async () => {
+      mockProjectExists();
+
+      const result = await readFile("proj-1", "foo\0bar.md");
+      expect(result.success).toBe(false);
+      expect(result.error!.code).toBe("VALIDATION_ERROR");
+      expect(result.error!.message).toContain("null bytes");
+    });
+
+    // adj-yil2: symlink traversal
+    it("should reject paths containing symlinks", async () => {
+      mockProjectExists();
+
+      // Override the default no-symlinks mock
+      vi.mocked(lstat).mockResolvedValue({
+        isSymbolicLink: () => true,
+      } as unknown as Awaited<ReturnType<typeof lstat>>);
+
+      const result = await readFile("proj-1", "evil-link/secret.md");
+      expect(result.success).toBe(false);
+      expect(result.error!.code).toBe("VALIDATION_ERROR");
+      expect(result.error!.message).toContain("Symlinks");
+    });
+
+    // adj-fnhh: known extensionless text filenames
+    it("should allow reading known extensionless text files (Makefile, Dockerfile, etc)", async () => {
+      mockProjectExists();
+
+      vi.mocked(stat).mockResolvedValue({
+        isFile: () => true,
+        isDirectory: () => false,
+        size: 100,
+      } as unknown as Awaited<ReturnType<typeof stat>>);
+      vi.mocked(fsReadFile).mockResolvedValue("all: build\n\nbuild:\n\tgcc -o main main.c");
+
+      const makefileResult = await readFile("proj-1", "Makefile");
+      expect(makefileResult.success).toBe(true);
+      expect(makefileResult.data!.path).toBe("Makefile");
+      expect(makefileResult.data!.mimeType).toBe("text/plain");
+
+      const dockerfileResult = await readFile("proj-1", "Dockerfile");
+      expect(dockerfileResult.success).toBe(true);
+
+      const licenseResult = await readFile("proj-1", "LICENSE");
+      expect(licenseResult.success).toBe(true);
+    });
+
+    // adj-fnhh: new extensions
+    it("should allow reading files with newly added extensions (.rs, .go, .java, etc)", async () => {
+      mockProjectExists();
+
+      vi.mocked(stat).mockResolvedValue({
+        isFile: () => true,
+        isDirectory: () => false,
+        size: 100,
+      } as unknown as Awaited<ReturnType<typeof stat>>);
+      vi.mocked(fsReadFile).mockResolvedValue("fn main() {}");
+
+      const rsResult = await readFile("proj-1", "main.rs");
+      expect(rsResult.success).toBe(true);
+      expect(rsResult.data!.mimeType).toBe("text/x-rust");
+
+      const goResult = await readFile("proj-1", "main.go");
+      expect(goResult.success).toBe(true);
+      expect(goResult.data!.mimeType).toBe("text/x-go");
+
+      const javaResult = await readFile("proj-1", "Main.java");
+      expect(javaResult.success).toBe(true);
+      expect(javaResult.data!.mimeType).toBe("text/x-java");
+
+      const sqlResult = await readFile("proj-1", "schema.sql");
+      expect(sqlResult.success).toBe(true);
+      expect(sqlResult.data!.mimeType).toBe("text/x-sql");
+
+      const xmlResult = await readFile("proj-1", "config.xml");
+      expect(xmlResult.success).toBe(true);
+      expect(xmlResult.data!.mimeType).toBe("application/xml");
+
+      const cResult = await readFile("proj-1", "main.c");
+      expect(cResult.success).toBe(true);
+      expect(cResult.data!.mimeType).toBe("text/x-c");
+
+      const luaResult = await readFile("proj-1", "init.lua");
+      expect(luaResult.success).toBe(true);
+      expect(luaResult.data!.mimeType).toBe("text/x-lua");
+    });
+
+    // adj-fnhh: .env extension
+    it("should allow reading .env and .cfg config files", async () => {
+      mockProjectExists();
+
+      vi.mocked(stat).mockResolvedValue({
+        isFile: () => true,
+        isDirectory: () => false,
+        size: 50,
+      } as unknown as Awaited<ReturnType<typeof stat>>);
+      vi.mocked(fsReadFile).mockResolvedValue("KEY=value");
+
+      const envResult = await readFile("proj-1", "settings.env");
+      expect(envResult.success).toBe(true);
+
+      const cfgResult = await readFile("proj-1", "settings.cfg");
+      expect(cfgResult.success).toBe(true);
+
+      const iniResult = await readFile("proj-1", "settings.ini");
+      expect(iniResult.success).toBe(true);
+
+      const confResult = await readFile("proj-1", "nginx.conf");
+      expect(confResult.success).toBe(true);
     });
   });
 });
