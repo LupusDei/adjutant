@@ -289,11 +289,11 @@ struct SwarmProjectDetailView: View {
     private var filesCard: some View {
         CRTCard(style: .standard) {
             VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
-                Button {
-                    coordinator.navigate(to: .projectFiles(
+                NavigationLink {
+                    FileBrowserView(
                         projectId: viewModel.project.id,
                         projectName: viewModel.project.name
-                    ))
+                    )
                 } label: {
                     HStack {
                         Image(systemName: "folder")

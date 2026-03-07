@@ -134,10 +134,6 @@ private struct TabContent: View {
             ProposalDetailView(proposalId: id)
         case .projectDetail(let project):
             SwarmProjectDetailView(project: project)
-        case .projectFiles(let projectId, let projectName):
-            FileBrowserView(projectId: projectId, projectName: projectName)
-        case .projectFile(let projectId, _, let filePath):
-            FileContentView(projectId: projectId, filePath: filePath)
         case .themeSettings, .voiceSettings:
             SettingsView()
         default:

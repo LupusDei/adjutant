@@ -7,7 +7,6 @@ import AdjutantKit
 struct FileBrowserView: View {
     @Environment(\.crtTheme) private var theme
     @StateObject private var viewModel: FileBrowserViewModel
-    @EnvironmentObject private var coordinator: AppCoordinator
 
     init(projectId: String, projectName: String, initialPath: String = "") {
         // Note: @StateObject wrappedValue closure is evaluated on every parent re-render
@@ -115,50 +114,56 @@ struct FileBrowserView: View {
 
     // MARK: - Entry Row
 
+    @ViewBuilder
     private func entryRow(_ entry: DirectoryEntry) -> some View {
-        Button {
-            if entry.isDirectory {
+        if entry.isDirectory {
+            Button {
                 viewModel.navigateTo(path: entry.path)
-            } else {
-                coordinator.navigate(to: .projectFile(
-                    projectId: viewModel.projectId,
-                    projectName: viewModel.projectName,
-                    filePath: entry.path
-                ))
+            } label: {
+                entryLabel(entry)
             }
-        } label: {
-            HStack(spacing: CRTTheme.Spacing.sm) {
-                Image(systemName: entry.isDirectory ? "folder.fill" : (entry.isMarkdown ? "doc.text" : "doc"))
-                    .font(.system(size: 16))
-                    .foregroundColor(entry.isDirectory ? theme.primary : theme.dim)
-                    .frame(width: 24)
-
-                CRTText(entry.name, style: .body, color: entry.isDirectory ? theme.primary : theme.bright)
-
-                Spacer()
-
-                if !entry.isDirectory {
-                    CRTText(formatFileSize(entry.size), style: .caption, color: theme.dim)
-                }
-
-                if entry.isDirectory {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12))
-                        .foregroundColor(theme.dim)
-                }
+            .buttonStyle(.plain)
+        } else {
+            NavigationLink {
+                FileContentView(projectId: viewModel.projectId, filePath: entry.path)
+            } label: {
+                entryLabel(entry)
             }
-            .padding(.vertical, CRTTheme.Spacing.xs)
-            .padding(.horizontal, CRTTheme.Spacing.sm)
-            .background(
-                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                    .fill(theme.dim.opacity(0.05))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                    .stroke(theme.dim.opacity(0.15), lineWidth: 1)
-            )
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+    }
+
+    private func entryLabel(_ entry: DirectoryEntry) -> some View {
+        HStack(spacing: CRTTheme.Spacing.sm) {
+            Image(systemName: entry.isDirectory ? "folder.fill" : (entry.isMarkdown ? "doc.text" : "doc"))
+                .font(.system(size: 16))
+                .foregroundColor(entry.isDirectory ? theme.primary : theme.dim)
+                .frame(width: 24)
+
+            CRTText(entry.name, style: .body, color: entry.isDirectory ? theme.primary : theme.bright)
+
+            Spacer()
+
+            if !entry.isDirectory {
+                CRTText(formatFileSize(entry.size), style: .caption, color: theme.dim)
+            }
+
+            if entry.isDirectory {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.dim)
+            }
+        }
+        .padding(.vertical, CRTTheme.Spacing.xs)
+        .padding(.horizontal, CRTTheme.Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                .fill(theme.dim.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                .stroke(theme.dim.opacity(0.15), lineWidth: 1)
+        )
     }
 
     // MARK: - Helpers

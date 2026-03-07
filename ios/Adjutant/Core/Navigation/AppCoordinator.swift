@@ -157,7 +157,7 @@ final class AppCoordinator: Coordinator, ObservableObject {
         case .settings:
             selectTab(.settings)
 
-        case .agentDetail, .beadDetail, .epicDetail, .proposalDetail, .projectDetail, .projectFiles, .projectFile:
+        case .agentDetail, .beadDetail, .epicDetail, .proposalDetail, .projectDetail:
             appendToCurrentPath(route)
 
         case .themeSettings, .voiceSettings:
