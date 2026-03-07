@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
-import { execSync } from "child_process";
+import { execSync, execFileSync } from "child_process";
 import { join, resolve, basename } from "path";
 import { homedir } from "os";
 
@@ -16,6 +16,7 @@ vi.mock("fs", () => ({
 
 vi.mock("child_process", () => ({
   execSync: vi.fn(),
+  execFileSync: vi.fn(),
 }));
 
 vi.mock("crypto", () => ({
@@ -222,7 +223,7 @@ describe("projects-service", () => {
         if (p === ADJUTANT_DIR) return true;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({ cloneUrl: "git@github.com:user/myrepo.git" });
       expect(result.success).toBe(true);
@@ -266,7 +267,7 @@ describe("projects-service", () => {
         if (ps === "/tmp/my-custom-dir") return true;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "git@github.com:user/myrepo.git",
@@ -276,9 +277,10 @@ describe("projects-service", () => {
       expect(result.data!.path).toBe("/tmp/my-custom-dir/myrepo");
       expect(result.data!.name).toBe("myrepo");
       expect(result.data!.gitRemote).toBe("git@github.com:user/myrepo.git");
-      // Should call git clone with the custom targetDir
-      expect(execSync).toHaveBeenCalledWith(
-        expect.stringContaining("/tmp/my-custom-dir/myrepo"),
+      // Should call git clone with args array (no shell interpolation)
+      expect(execFileSync).toHaveBeenCalledWith(
+        "git",
+        ["clone", "git@github.com:user/myrepo.git", "/tmp/my-custom-dir/myrepo"],
         expect.any(Object),
       );
     });
@@ -292,7 +294,7 @@ describe("projects-service", () => {
         if (ps === defaultTarget) return false;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "git@github.com:user/myrepo.git",
@@ -300,8 +302,9 @@ describe("projects-service", () => {
       expect(result.success).toBe(true);
       expect(result.data!.path).toBe(defaultTarget);
       // Should call git clone with the default path
-      expect(execSync).toHaveBeenCalledWith(
-        expect.stringContaining(defaultTarget),
+      expect(execFileSync).toHaveBeenCalledWith(
+        "git",
+        ["clone", "git@github.com:user/myrepo.git", defaultTarget],
         expect.any(Object),
       );
     });
@@ -334,7 +337,7 @@ describe("projects-service", () => {
         if (ps === "/tmp/deep/nested/myrepo") return false;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "git@github.com:user/myrepo.git",
@@ -354,7 +357,7 @@ describe("projects-service", () => {
         if (ps === "/tmp/my-dir") return false;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "git@github.com:user/myrepo.git",
@@ -364,6 +367,45 @@ describe("projects-service", () => {
       expect(result.success).toBe(true);
       expect(result.data!.path).toBe("/tmp/my-dir");
       expect(result.data!.name).toBe("custom-name");
+    });
+
+    it("should expand ~ in targetDir to home directory", () => {
+      mockNoStore();
+      const expandedPath = join(homedir(), "code/ai/C4");
+      vi.mocked(existsSync).mockImplementation((p: unknown) => {
+        const ps = String(p);
+        if (ps === ADJUTANT_DIR) return true;
+        if (ps === expandedPath) return false;
+        return false;
+      });
+      vi.mocked(execFileSync).mockReturnValue("");
+
+      const result = createProject({
+        cloneUrl: "git@github.com:user/repo.git",
+        targetDir: "~/code/ai/C4",
+      });
+      expect(result.success).toBe(true);
+      expect(result.data!.path).toBe(expandedPath);
+      expect(execFileSync).toHaveBeenCalledWith(
+        "git",
+        ["clone", "git@github.com:user/repo.git", expandedPath],
+        expect.any(Object),
+      );
+    });
+
+    it("should expand ~ in path to home directory", () => {
+      mockNoStore();
+      const expandedPath = join(homedir(), "code/myapp");
+      vi.mocked(existsSync).mockImplementation((p: unknown) => {
+        const ps = String(p);
+        if (ps === ADJUTANT_DIR) return true;
+        if (ps === expandedPath) return true;
+        return false;
+      });
+
+      const result = createProject({ path: "~/code/myapp" });
+      expect(result.success).toBe(true);
+      expect(result.data!.path).toBe(expandedPath);
     });
 
     it("should ignore targetDir when not using cloneUrl mode", () => {

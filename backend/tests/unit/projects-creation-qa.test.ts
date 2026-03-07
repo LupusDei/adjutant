@@ -9,7 +9,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
-import { execSync } from "child_process";
+import { execSync, execFileSync } from "child_process";
 import { join, resolve } from "path";
 import { homedir } from "os";
 
@@ -25,6 +25,7 @@ vi.mock("fs", () => ({
 
 vi.mock("child_process", () => ({
   execSync: vi.fn(),
+  execFileSync: vi.fn(),
 }));
 
 vi.mock("crypto", () => ({
@@ -83,7 +84,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === defaultTarget) return false;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "https://github.com/user/repo.git",
@@ -102,7 +103,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === defaultTarget) return false;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "https://github.com/user/repo",
@@ -120,7 +121,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === defaultTarget) return false;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "git@github.com:user/myrepo.git",
@@ -137,7 +138,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === "/tmp/clone-target") return false;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "https://github.com/org/project.git",
@@ -163,7 +164,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === resolvedPath) return false;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "git@github.com:user/repo.git",
@@ -184,7 +185,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === resolvedPath) return false;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "git@github.com:user/repo.git",
@@ -244,7 +245,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
       // Simulate git clone failure
       const cloneError = new Error("fatal: repository not found") as Error & { stderr?: string };
       cloneError.stderr = "fatal: repository 'https://github.com/user/nonexistent.git' not found";
-      vi.mocked(execSync).mockImplementation(() => {
+      vi.mocked(execFileSync).mockImplementation(() => {
         throw cloneError;
       });
 
@@ -269,7 +270,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
       });
       const cloneError = new Error("Authentication failed") as Error & { stderr?: string };
       cloneError.stderr = "fatal: Authentication failed for 'https://github.com/private/bad-repo.git'";
-      vi.mocked(execSync).mockImplementation(() => {
+      vi.mocked(execFileSync).mockImplementation(() => {
         throw cloneError;
       });
 
@@ -288,7 +289,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === ADJUTANT_DIR) return true;
         return false;
       });
-      vi.mocked(execSync).mockImplementation(() => {
+      vi.mocked(execFileSync).mockImplementation(() => {
         throw new Error("Unknown clone failure");
       });
 
@@ -306,20 +307,18 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
   // Security: Command injection vectors
   // ===========================================================================
 
-  describe("security: command injection via cloneUrl and targetDir", () => {
-    // NOTE: These tests document the current behavior. The current implementation
-    // uses string interpolation in execSync(), which is susceptible to command
-    // injection. These tests verify the clone command is constructed as expected,
-    // and serve as documentation for the security issue.
+  describe("security: command injection prevention", () => {
+    // execFileSync is used instead of execSync to prevent shell injection.
+    // Arguments are passed as an array, never interpolated into a command string.
 
-    it("should pass cloneUrl directly to git clone command (documents injection risk)", () => {
+    it("should use execFileSync with args array to prevent injection via cloneUrl", () => {
       mockNoStore();
       vi.mocked(existsSync).mockImplementation((p: unknown) => {
         const ps = String(p);
         if (ps === ADJUTANT_DIR) return true;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const maliciousUrl = "https://github.com/user/repo.git; echo pwned";
       createProject({
@@ -327,25 +326,17 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         targetDir: "/tmp/safe-dir",
       });
 
-      // Verify execSync was called — the unsanitized URL is passed directly
-      const callArgs = vi.mocked(execSync).mock.calls[0];
-      expect(callArgs).toBeDefined();
-      const command = callArgs[0] as string;
-      // The command contains the unsanitized URL string-interpolated
-      expect(command).toContain(maliciousUrl);
+      // Verify execFileSync was called with args array (safe from shell injection)
+      expect(execFileSync).toHaveBeenCalledWith(
+        "git",
+        ["clone", maliciousUrl, "/tmp/safe-dir"],
+        expect.any(Object),
+      );
     });
 
-    it("should pass targetDir directly to git clone command (documents injection risk)", () => {
+    it("should use execFileSync with args array to prevent injection via targetDir", () => {
       mockNoStore();
-      vi.mocked(existsSync).mockImplementation((p: unknown) => {
-        const ps = String(p);
-        if (ps === ADJUTANT_DIR) return true;
-        return false;
-      });
-      vi.mocked(execSync).mockReturnValue("");
-
       const maliciousDir = "/tmp/safe; rm -rf /";
-      // resolve() won't sanitize shell metacharacters
       const resolvedDir = resolve(maliciousDir);
       vi.mocked(existsSync).mockImplementation((p: unknown) => {
         const ps = String(p);
@@ -353,18 +344,19 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === resolvedDir) return false;
         return false;
       });
+      vi.mocked(execFileSync).mockReturnValue("");
 
       createProject({
         cloneUrl: "https://github.com/user/repo.git",
         targetDir: maliciousDir,
       });
 
-      const callArgs = vi.mocked(execSync).mock.calls[0];
-      if (callArgs) {
-        const command = callArgs[0] as string;
-        // The command contains the unsanitized dir string-interpolated
-        expect(command).toContain(resolvedDir);
-      }
+      // Verify execFileSync with args array — shell metacharacters are harmless
+      expect(execFileSync).toHaveBeenCalledWith(
+        "git",
+        ["clone", "https://github.com/user/repo.git", resolvedDir],
+        expect.any(Object),
+      );
     });
   });
 
@@ -382,7 +374,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === defaultTarget) return false;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "git@github.com:user/repo.git",
@@ -403,7 +395,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === defaultTarget) return false;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "git@github.com:user/repo.git",
@@ -450,7 +442,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === "/tmp/target-dir") return false;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "git@github.com:user/repo.git",
@@ -474,7 +466,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === ADJUTANT_DIR) return true;
         return false;
       });
-      vi.mocked(execSync).mockImplementation(() => {
+      vi.mocked(execFileSync).mockImplementation(() => {
         throw new Error("clone failed");
       });
 
@@ -503,7 +495,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === defaultTarget) return false;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "git@github.com:org/adjutant.git",
@@ -521,7 +513,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === defaultTarget) return false;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "https://github.com/user/my-project.git",
@@ -539,7 +531,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === defaultTarget) return false;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "https://github.com/user/bare-name",
@@ -557,7 +549,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === defaultTarget) return false;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "git@github.com:org/original-name.git",
@@ -582,7 +574,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === ADJUTANT_DIR) return true;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "git@github.com:user/repo.git",
@@ -599,7 +591,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === ADJUTANT_DIR) return true;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "git@github.com:user/repo.git",
@@ -616,7 +608,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === ADJUTANT_DIR) return true;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "git@github.com:user/repo.git",
@@ -633,7 +625,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === ADJUTANT_DIR) return true;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "git@github.com:user/repo.git",
@@ -652,7 +644,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         if (ps === ADJUTANT_DIR) return true;
         return false;
       });
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
         cloneUrl: "git@github.com:user/repo.git",

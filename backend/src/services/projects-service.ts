@@ -8,7 +8,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
-import { execSync } from "child_process";
+import { execSync, execFileSync } from "child_process";
 import { join, resolve, basename } from "path";
 import { randomUUID } from "crypto";
 import { homedir } from "os";
@@ -137,6 +137,16 @@ function generateId(): string {
 
 function nameFromPath(dirPath: string): string {
   return basename(resolve(dirPath));
+}
+
+/**
+ * Expand leading ~ to the user's home directory.
+ * Node's path.resolve() does NOT expand ~, unlike shell expansion.
+ */
+function expandTilde(p: string): string {
+  if (p === "~") return homedir();
+  if (p.startsWith("~/")) return join(homedir(), p.slice(2));
+  return p;
 }
 
 function nameFromCloneUrl(url: string): string {
@@ -392,7 +402,7 @@ export function createProject(input: CreateProjectInput): ProjectsServiceResult<
 }
 
 function createFromPath(store: ProjectsStore, dirPath: string, name?: string): ProjectsServiceResult<Project> {
-  const absPath = resolve(dirPath);
+  const absPath = resolve(expandTilde(dirPath));
 
   if (!existsSync(absPath)) {
     return { success: false, error: { code: "VALIDATION_ERROR", message: `Path does not exist: ${absPath}` } };
@@ -425,7 +435,7 @@ function createFromPath(store: ProjectsStore, dirPath: string, name?: string): P
 function createFromClone(store: ProjectsStore, cloneUrl: string, name?: string, inputTargetDir?: string): ProjectsServiceResult<Project> {
   const projectName = name ?? nameFromCloneUrl(cloneUrl);
   const targetDir = inputTargetDir
-    ? resolve(inputTargetDir)
+    ? resolve(expandTilde(inputTargetDir))
     : join(DEFAULT_PROJECTS_BASE, projectName);
 
   if (existsSync(targetDir)) {
@@ -437,7 +447,7 @@ function createFromClone(store: ProjectsStore, cloneUrl: string, name?: string, 
   mkdirSync(parentDir, { recursive: true });
 
   try {
-    execSync(`git clone ${cloneUrl} ${targetDir}`, {
+    execFileSync("git", ["clone", cloneUrl, targetDir], {
       encoding: "utf8",
       timeout: 120000,
       stdio: ["pipe", "pipe", "pipe"],
