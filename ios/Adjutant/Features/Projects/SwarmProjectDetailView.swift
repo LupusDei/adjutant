@@ -21,6 +21,7 @@ struct SwarmProjectDetailView: View {
                 projectHeaderCard
                 sessionsCard
                 swarmsCard
+                filesCard
                 actionsCard
             }
             .padding(.horizontal, CRTTheme.Spacing.md)
@@ -281,6 +282,42 @@ struct SwarmProjectDetailView: View {
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
                 .stroke(theme.primary.opacity(0.2), lineWidth: 1)
         )
+    }
+
+    // MARK: - Files Card
+
+    private var filesCard: some View {
+        CRTCard(style: .standard) {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+                Button {
+                    coordinator.navigate(to: .projectFiles(
+                        projectId: viewModel.project.id,
+                        projectName: viewModel.project.name
+                    ))
+                } label: {
+                    HStack {
+                        Image(systemName: "folder")
+                            .foregroundColor(theme.primary)
+                        CRTText("FILES", style: .subheader)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(theme.dim)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                Divider()
+                    .background(theme.dim.opacity(0.3))
+
+                CRTText(
+                    "BROWSE PROJECT FILES AND SPECS",
+                    style: .caption,
+                    glowIntensity: .subtle,
+                    color: theme.dim
+                )
+            }
+        }
     }
 
     // MARK: - Actions Card
