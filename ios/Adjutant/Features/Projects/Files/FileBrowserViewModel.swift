@@ -15,6 +15,7 @@ final class FileBrowserViewModel: BaseViewModel {
     let projectId: String
     let projectName: String
     private let apiClient: APIClient
+    private var navigationTask: Task<Void, Never>?
 
     /// Breadcrumb path components for navigation.
     /// Always starts with the project name at root, then each path segment.
@@ -55,8 +56,12 @@ final class FileBrowserViewModel: BaseViewModel {
     // MARK: - Navigation
 
     /// Navigate to a directory path and reload entries.
+    /// Cancels any in-flight navigation to prevent stale data from a previous request
+    /// overwriting the current directory's entries (adj-3ho9).
     func navigateTo(path: String) {
+        navigationTask?.cancel()
         currentPath = path
-        Task<Void, Never> { await refresh() }
+        entries = []  // Clear stale entries immediately to show loading state (adj-npky)
+        navigationTask = Task<Void, Never> { await refresh() }
     }
 }

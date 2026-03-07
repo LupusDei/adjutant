@@ -10,6 +10,8 @@ struct FileBrowserView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
 
     init(projectId: String, projectName: String, initialPath: String = "") {
+        // Note: @StateObject wrappedValue closure is evaluated on every parent re-render
+        // but only the first instance is retained. This is expected SwiftUI behavior (adj-2mjl).
         _viewModel = StateObject(wrappedValue: FileBrowserViewModel(
             projectId: projectId,
             projectName: projectName,
@@ -69,37 +71,46 @@ struct FileBrowserView: View {
 
     /// Horizontal scrolling breadcrumb bar showing path components.
     /// Each component is tappable to navigate back to that directory level.
+    /// Auto-scrolls to the current (rightmost) breadcrumb on navigation (adj-t9ic).
     private var breadcrumbBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: CRTTheme.Spacing.xxs) {
-                ForEach(Array(viewModel.breadcrumbs.enumerated()), id: \.offset) { index, crumb in
-                    if index > 0 {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 10))
-                            .foregroundColor(theme.dim)
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: CRTTheme.Spacing.xxs) {
+                    ForEach(Array(viewModel.breadcrumbs.enumerated()), id: \.offset) { index, crumb in
+                        if index > 0 {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 10))
+                                .foregroundColor(theme.dim)
+                        }
+                        Button {
+                            viewModel.navigateTo(path: crumb.path)
+                        } label: {
+                            CRTText(
+                                crumb.name.uppercased(),
+                                style: .caption,
+                                color: index == viewModel.breadcrumbs.count - 1 ? theme.primary : theme.dim
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .id(index)
                     }
-                    Button {
-                        viewModel.navigateTo(path: crumb.path)
-                    } label: {
-                        CRTText(
-                            crumb.name.uppercased(),
-                            style: .caption,
-                            color: index == viewModel.breadcrumbs.count - 1 ? theme.primary : theme.dim
-                        )
-                    }
-                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, CRTTheme.Spacing.md)
+                .padding(.vertical, CRTTheme.Spacing.xs)
+            }
+            .onChange(of: viewModel.currentPath) { _, _ in
+                withAnimation {
+                    proxy.scrollTo(viewModel.breadcrumbs.count - 1, anchor: .trailing)
                 }
             }
-            .padding(.horizontal, CRTTheme.Spacing.md)
-            .padding(.vertical, CRTTheme.Spacing.xs)
+            .background(theme.background.panel)
+            .overlay(
+                Rectangle()
+                    .fill(theme.dim.opacity(0.2))
+                    .frame(height: 1),
+                alignment: .bottom
+            )
         }
-        .background(theme.background.panel)
-        .overlay(
-            Rectangle()
-                .fill(theme.dim.opacity(0.2))
-                .frame(height: 1),
-            alignment: .bottom
-        )
     }
 
     // MARK: - Entry Row
@@ -153,9 +164,13 @@ struct FileBrowserView: View {
     // MARK: - Helpers
 
     /// Format byte count into human-readable file size.
+    /// Uses floating-point division and shows one decimal for small KB values (adj-4oxu).
     private func formatFileSize(_ bytes: Int) -> String {
         if bytes < 1024 { return "\(bytes) B" }
-        if bytes < 1024 * 1024 { return "\(bytes / 1024) KB" }
-        return String(format: "%.1f MB", Double(bytes) / (1024 * 1024))
+        let kb = Double(bytes) / 1024.0
+        if kb < 1024 {
+            return kb < 10 ? String(format: "%.1f KB", kb) : "\(Int(kb)) KB"
+        }
+        return String(format: "%.1f MB", kb / 1024.0)
     }
 }
