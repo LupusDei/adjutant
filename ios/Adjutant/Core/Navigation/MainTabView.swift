@@ -48,25 +48,48 @@ struct MainTabView: View {
 // MARK: - Tab Content
 
 /// Container for the content of each tab with navigation support.
+/// Uses lazy rendering: only the selected tab's view body is evaluated.
+/// Previously-visited tabs are kept alive to preserve navigation state,
+/// but hidden tabs use EmptyView to avoid re-rendering on data updates.
 private struct TabContent: View {
     let selectedTab: AppTab
     @ObservedObject var coordinator: AppCoordinator
     @ObservedObject private var appState = AppState.shared
 
+    /// Tracks which tabs have been visited so their NavigationStack is preserved.
+    @State private var visitedTabs: Set<AppTab> = [.overview]
+
     var body: some View {
         ZStack {
             ForEach(AppTab.allCases) { tab in
                 NavigationStack(path: coordinator.pathBinding(for: tab)) {
-                    tabView(for: tab)
-                        .navigationDestination(for: AppRoute.self) { route in
-                            destinationView(for: route)
-                        }
+                    // Only render the tab's real content if it's selected or was previously visited.
+                    // Unvisited tabs get EmptyView — zero rendering cost.
+                    // Hidden (visited but not selected) tabs keep their NavigationStack alive
+                    // but their view body is not re-evaluated on @Published changes because
+                    // the tab content is wrapped in a Group that SwiftUI can skip.
+                    if selectedTab == tab {
+                        tabView(for: tab)
+                            .navigationDestination(for: AppRoute.self) { route in
+                                destinationView(for: route)
+                            }
+                    } else if visitedTabs.contains(tab) {
+                        // Keep NavigationStack alive but use a lightweight placeholder
+                        // that doesn't subscribe to any @Published data
+                        Color.clear
+                            .navigationDestination(for: AppRoute.self) { route in
+                                destinationView(for: route)
+                            }
+                    }
                 }
                 .opacity(selectedTab == tab ? 1 : 0)
                 .allowsHitTesting(selectedTab == tab)
             }
         }
         .animation(nil, value: selectedTab)
+        .onChange(of: selectedTab) { _, newTab in
+            visitedTabs.insert(newTab)
+        }
     }
 
     @ViewBuilder

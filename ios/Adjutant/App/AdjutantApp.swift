@@ -26,7 +26,12 @@ struct AdjutantApp: App {
             switch newPhase {
             case .active:
                 DataSyncService.shared.start()
-                DataSyncService.shared.startEventStream()
+                // Defer SSE reconnection by one RunLoop cycle so the UI can
+                // stabilize first. Without this, the SSE connect + data refresh
+                // cascade saturates the main actor and freezes the UI for 2-5s.
+                DispatchQueue.main.async {
+                    DataSyncService.shared.startEventStream()
+                }
             case .background:
                 DataSyncService.shared.stopEventStream()
             case .inactive:

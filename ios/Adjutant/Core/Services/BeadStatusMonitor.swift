@@ -350,9 +350,21 @@ public final class BeadStatusMonitor: ObservableObject {
         }
     }
 
+    /// Debounced save task to avoid JSON-encoding + UserDefaults write on every single beads update.
+    /// Without debouncing, a warm launch that processes 100+ beads would encode + write 100 times.
+    private var saveDebounceTask: Task<Void, Never>?
+
     private func saveKnownStates() {
-        if let data = try? JSONEncoder().encode(knownBeadStates) {
-            UserDefaults.standard.set(data, forKey: Self.knownStatesKey)
+        saveDebounceTask?.cancel()
+        let states = knownBeadStates
+        saveDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s debounce
+            guard !Task.isCancelled else { return }
+            await Task.detached(priority: .utility) {
+                if let data = try? JSONEncoder().encode(states) {
+                    UserDefaults.standard.set(data, forKey: BeadStatusMonitor.knownStatesKey)
+                }
+            }.value
         }
     }
 
