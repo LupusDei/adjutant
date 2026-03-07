@@ -436,3 +436,32 @@ extension APIClient {
         try await requestWithEnvelope(.put, path: "/voice/defaults", body: config)
     }
 }
+
+// MARK: - Project Files Endpoints
+
+extension APIClient {
+    /// List directory contents within a project
+    public func listProjectFiles(projectId: String, path: String = "") async throws -> [DirectoryEntry] {
+        let encodedId = projectId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? projectId
+        var queryItems: [URLQueryItem] = []
+        if !path.isEmpty {
+            queryItems.append(URLQueryItem(name: "path", value: path))
+        }
+        return try await requestWithEnvelope(
+            .get,
+            path: "/projects/\(encodedId)/files",
+            queryItems: queryItems.isEmpty ? nil : queryItems
+        )
+    }
+
+    /// Read a file's content within a project
+    public func readProjectFile(projectId: String, path: String) async throws -> FileContent {
+        let encodedId = projectId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? projectId
+        let queryItems = [URLQueryItem(name: "path", value: path)]
+        return try await requestWithEnvelope(
+            .get,
+            path: "/projects/\(encodedId)/files/read",
+            queryItems: queryItems
+        )
+    }
+}
