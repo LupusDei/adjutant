@@ -104,6 +104,21 @@ struct MarkdownTextView: View {
                 .fill(theme.dim.opacity(0.4))
                 .frame(height: 1)
                 .padding(.vertical, CRTTheme.Spacing.xxxs)
+
+        case .table(let headers, let alignments, let rows):
+            tableView(headers: headers, alignments: alignments, rows: rows)
+
+        case .taskList(let items):
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxxs) {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    HStack(alignment: .top, spacing: CRTTheme.Spacing.xxs) {
+                        Text(item.checked ? "\u{25AA}" : "\u{25AB}")
+                            .font(CRTTheme.Typography.font(size: fontSize, theme: theme))
+                            .foregroundColor(item.checked ? theme.primary : theme.dim)
+                        inlineText(item.text, size: fontSize)
+                    }
+                }
+            }
         }
     }
 
@@ -121,6 +136,88 @@ struct MarkdownTextView: View {
             // For non-paragraph blocks inside quotes, render as plain text
             EmptyView()
         }
+    }
+
+    // MARK: - Table View
+
+    /// Renders a GFM table with scrollable horizontal container, themed borders, and alignment.
+    @ViewBuilder
+    private func tableView(
+        headers: [[MarkdownInline]],
+        alignments: [TableAlignment],
+        rows: [[[MarkdownInline]]]
+    ) -> some View {
+        let columnCount = headers.count
+        ScrollView(.horizontal, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Header row
+                HStack(spacing: 0) {
+                    ForEach(0..<columnCount, id: \.self) { col in
+                        tableCellView(
+                            inlines: col < headers.count ? headers[col] : [.text("")],
+                            alignment: col < alignments.count ? alignments[col] : .left,
+                            isHeader: true
+                        )
+                        if col < columnCount - 1 {
+                            Rectangle()
+                                .fill(theme.dim.opacity(0.3))
+                                .frame(width: 1)
+                        }
+                    }
+                }
+
+                // Header bottom border
+                Rectangle()
+                    .fill(theme.dim.opacity(0.5))
+                    .frame(height: 1)
+
+                // Data rows
+                ForEach(Array(rows.enumerated()), id: \.offset) { rowIdx, row in
+                    HStack(spacing: 0) {
+                        ForEach(0..<columnCount, id: \.self) { col in
+                            tableCellView(
+                                inlines: col < row.count ? row[col] : [.text("")],
+                                alignment: col < alignments.count ? alignments[col] : .left,
+                                isHeader: false
+                            )
+                            if col < columnCount - 1 {
+                                Rectangle()
+                                    .fill(theme.dim.opacity(0.3))
+                                    .frame(width: 1)
+                            }
+                        }
+                    }
+
+                    // Row separator (except after last row)
+                    if rowIdx < rows.count - 1 {
+                        Rectangle()
+                            .fill(theme.dim.opacity(0.2))
+                            .frame(height: 1)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Renders a single table cell with alignment and optional bold (for headers).
+    @ViewBuilder
+    private func tableCellView(
+        inlines: [MarkdownInline],
+        alignment: TableAlignment,
+        isHeader: Bool
+    ) -> some View {
+        let textAlignment: Alignment = {
+            switch alignment {
+            case .left: return .leading
+            case .center: return .center
+            case .right: return .trailing
+            }
+        }()
+
+        inlineText(inlines, size: fontSize, weight: isHeader ? .bold : .regular)
+            .frame(minWidth: 60, alignment: textAlignment)
+            .padding(.horizontal, CRTTheme.Spacing.xxs)
+            .padding(.vertical, CRTTheme.Spacing.xxxs)
     }
 
     // MARK: - Inline Text
@@ -165,10 +262,19 @@ struct MarkdownTextView: View {
                 .foregroundColor(theme.bright)
 
         case .link(let text, _):
+            // Note: Links are displayed with accent color + underline but are not interactive
+            // within Text concatenation chains. SwiftUI Text does not support tap handlers
+            // on individual segments. For standalone link rendering (e.g. in FileContentView),
+            // consider wrapping in a Button or using Link view outside of Text chains.
             return Text(text)
                 .font(CRTTheme.Typography.font(size: size, weight: baseWeight, theme: theme))
                 .foregroundColor(theme.accent)
                 .underline()
+
+        case .strikethrough(let str):
+            return Text(str)
+                .font(CRTTheme.Typography.font(size: size, weight: baseWeight, theme: theme))
+                .strikethrough()
         }
     }
 }
@@ -200,6 +306,40 @@ struct MarkdownTextView: View {
             ```
 
             That's all you need.
+            """)
+
+            Divider()
+
+            // Table example
+            MarkdownTextView("""
+            ## Agent Status
+
+            | Agent | Status | Tasks |
+            |-------|:------:|------:|
+            | amon | **active** | 3 |
+            | staff-eng | active | 5 |
+            | qa-eng | idle | 0 |
+            """)
+
+            Divider()
+
+            // Task list example
+            MarkdownTextView("""
+            ### Sprint Tasks
+
+            - [x] Parser implementation
+            - [x] Renderer integration
+            - [ ] Theme support
+            - [ ] QA verification
+            """)
+
+            Divider()
+
+            // Strikethrough and underscore emphasis
+            MarkdownTextView("""
+            This has ~~deleted text~~ and _italic_ and __bold__ variants.
+
+            Also ___bold italic___ with underscores works.
             """)
 
             Divider()

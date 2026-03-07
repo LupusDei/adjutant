@@ -2,6 +2,13 @@ import Foundation
 
 // MARK: - Markdown Model
 
+/// Column alignment for table cells (GFM tables).
+enum TableAlignment: Equatable {
+    case left
+    case center
+    case right
+}
+
 /// An inline element within a markdown text block.
 enum MarkdownInline: Equatable {
     case text(String)
@@ -10,6 +17,7 @@ enum MarkdownInline: Equatable {
     case boldItalic(String)
     case code(String)
     case link(text: String, url: String)
+    case strikethrough(String)
 }
 
 /// A block-level markdown element.
@@ -21,6 +29,37 @@ enum MarkdownBlock: Equatable {
     case unorderedList([[MarkdownInline]])
     case orderedList([[MarkdownInline]])
     case horizontalRule
+    case table(headers: [[MarkdownInline]], alignments: [TableAlignment], rows: [[[MarkdownInline]]])
+    case taskList(items: [(checked: Bool, text: [MarkdownInline])])
+}
+
+// Equatable conformance for taskList (tuples aren't automatically Equatable)
+extension MarkdownBlock {
+    static func == (lhs: MarkdownBlock, rhs: MarkdownBlock) -> Bool {
+        switch (lhs, rhs) {
+        case (.paragraph(let a), .paragraph(let b)):
+            return a == b
+        case (.heading(let la, let ta), .heading(let lb, let tb)):
+            return la == lb && ta == tb
+        case (.codeBlock(let la, let ca), .codeBlock(let lb, let cb)):
+            return la == lb && ca == cb
+        case (.blockquote(let a), .blockquote(let b)):
+            return a == b
+        case (.unorderedList(let a), .unorderedList(let b)):
+            return a == b
+        case (.orderedList(let a), .orderedList(let b)):
+            return a == b
+        case (.horizontalRule, .horizontalRule):
+            return true
+        case (.table(let ha, let aa, let ra), .table(let hb, let ab, let rb)):
+            return ha == hb && aa == ab && ra == rb
+        case (.taskList(let a), .taskList(let b)):
+            guard a.count == b.count else { return false }
+            return zip(a, b).allSatisfy { $0.checked == $1.checked && $0.text == $1.text }
+        default:
+            return false
+        }
+    }
 }
 
 // MARK: - Parser
@@ -98,6 +137,46 @@ enum MarkdownParser {
                 continue
             }
 
+            // Table: current line has |, next line is separator row
+            if trimmed.contains("|") && index + 1 < lines.count {
+                let nextTrimmed = lines[index + 1].trimmingCharacters(in: .whitespaces)
+                if isTableSeparator(nextTrimmed) {
+                    let headers = parseTableRow(trimmed)
+                    let alignments = parseTableAlignments(nextTrimmed, columnCount: headers.count)
+                    index += 2 // skip header + separator
+                    var rows: [[[MarkdownInline]]] = []
+                    while index < lines.count {
+                        let rowLine = lines[index].trimmingCharacters(in: .whitespaces)
+                        guard rowLine.contains("|") && !rowLine.isEmpty else { break }
+                        // Stop if we hit another separator (nested tables not supported)
+                        if isTableSeparator(rowLine) { break }
+                        rows.append(parseTableRow(rowLine))
+                        index += 1
+                    }
+                    blocks.append(.table(headers: headers, alignments: alignments, rows: rows))
+                    continue
+                }
+            }
+
+            // Task list: - [ ] or - [x] or - [X]
+            if isTaskListItem(trimmed) {
+                var items: [(checked: Bool, text: [MarkdownInline])] = []
+                while index < lines.count {
+                    let l = lines[index].trimmingCharacters(in: .whitespaces)
+                    if isTaskListItem(l) {
+                        let checked = l.hasPrefix("- [x]") || l.hasPrefix("- [X]")
+                        // Strip "- [ ] " or "- [x] " prefix (6 chars)
+                        let text = String(l.dropFirst(6))
+                        items.append((checked: checked, text: parseInline(text)))
+                    } else {
+                        break
+                    }
+                    index += 1
+                }
+                blocks.append(.taskList(items: items))
+                continue
+            }
+
             // Unordered list
             if isUnorderedListItem(trimmed) {
                 var items: [[MarkdownInline]] = []
@@ -137,8 +216,16 @@ enum MarkdownParser {
                 let lt = l.trimmingCharacters(in: .whitespaces)
                 if lt.isEmpty || lt.hasPrefix("```") || parseHeading(lt) != nil
                     || isHorizontalRule(lt) || lt.hasPrefix("> ") || lt == ">"
-                    || isUnorderedListItem(lt) || isOrderedListItem(lt) {
+                    || isTaskListItem(lt) || isUnorderedListItem(lt) || isOrderedListItem(lt) {
                     break
+                }
+                // Break for table: current line has | and next line is separator
+                if lt.contains("|") {
+                    let nextIdx = index + 1
+                    if nextIdx < lines.count {
+                        let nextLt = lines[nextIdx].trimmingCharacters(in: .whitespaces)
+                        if isTableSeparator(nextLt) { break }
+                    }
                 }
                 paraLines.append(l)
                 index += 1
@@ -193,9 +280,27 @@ enum MarkdownParser {
                 }
             }
 
-            // Bold italic: ***text***
+            // Strikethrough: ~~text~~
+            if i + 1 < chars.count && chars[i] == "~" && chars[i + 1] == "~" {
+                if let result = tryParseDelimited(chars, from: i, delimiter: "~", count: 2) {
+                    flush()
+                    elements.append(.strikethrough(result.content))
+                    i = result.end
+                    continue
+                }
+            }
+
+            // Bold italic: ***text*** or ___text___
             if i + 2 < chars.count && chars[i] == "*" && chars[i + 1] == "*" && chars[i + 2] == "*" {
-                if let result = tryParseDelimited(chars, from: i, count: 3) {
+                if let result = tryParseDelimited(chars, from: i, delimiter: "*", count: 3) {
+                    flush()
+                    elements.append(.boldItalic(result.content))
+                    i = result.end
+                    continue
+                }
+            }
+            if i + 2 < chars.count && chars[i] == "_" && chars[i + 1] == "_" && chars[i + 2] == "_" {
+                if let result = tryParseDelimited(chars, from: i, delimiter: "_", count: 3) {
                     flush()
                     elements.append(.boldItalic(result.content))
                     i = result.end
@@ -203,9 +308,17 @@ enum MarkdownParser {
                 }
             }
 
-            // Bold: **text**
+            // Bold: **text** or __text__
             if i + 1 < chars.count && chars[i] == "*" && chars[i + 1] == "*" {
-                if let result = tryParseDelimited(chars, from: i, count: 2) {
+                if let result = tryParseDelimited(chars, from: i, delimiter: "*", count: 2) {
+                    flush()
+                    elements.append(.bold(result.content))
+                    i = result.end
+                    continue
+                }
+            }
+            if i + 1 < chars.count && chars[i] == "_" && chars[i + 1] == "_" {
+                if let result = tryParseDelimited(chars, from: i, delimiter: "_", count: 2) {
                     flush()
                     elements.append(.bold(result.content))
                     i = result.end
@@ -213,9 +326,17 @@ enum MarkdownParser {
                 }
             }
 
-            // Italic: *text*
+            // Italic: *text* or _text_
             if chars[i] == "*" {
-                if let result = tryParseDelimited(chars, from: i, count: 1) {
+                if let result = tryParseDelimited(chars, from: i, delimiter: "*", count: 1) {
+                    flush()
+                    elements.append(.italic(result.content))
+                    i = result.end
+                    continue
+                }
+            }
+            if chars[i] == "_" {
+                if let result = tryParseDelimited(chars, from: i, delimiter: "_", count: 1) {
                     flush()
                     elements.append(.italic(result.content))
                     i = result.end
@@ -260,7 +381,7 @@ enum MarkdownParser {
     }
 
     private static func tryParseDelimited(
-        _ chars: [Character], from start: Int, count: Int
+        _ chars: [Character], from start: Int, delimiter: Character = "*", count: Int
     ) -> (content: String, end: Int)? {
         let afterOpen = start + count
         guard afterOpen < chars.count else { return nil }
@@ -275,7 +396,7 @@ enum MarkdownParser {
             // Check for closing delimiter
             var match = true
             for j in 0..<count {
-                if chars[i + j] != "*" {
+                if chars[i + j] != delimiter {
                     match = false
                     break
                 }
@@ -324,7 +445,9 @@ enum MarkdownParser {
     }
 
     private static func isUnorderedListItem(_ line: String) -> Bool {
-        line.hasPrefix("- ") || line.hasPrefix("* ")
+        // Exclude task list items (- [ ], - [x], - [X]) from regular unordered lists
+        if isTaskListItem(line) { return false }
+        return line.hasPrefix("- ") || line.hasPrefix("* ")
     }
 
     private static func isOrderedListItem(_ line: String) -> Bool {
@@ -347,5 +470,74 @@ enum MarkdownParser {
         let afterDot = line.index(after: dotIndex)
         guard afterDot < line.endIndex && line[afterDot] == " " else { return line }
         return String(line[line.index(after: afterDot)...])
+    }
+
+    // MARK: - Task List Helpers
+
+    private static func isTaskListItem(_ line: String) -> Bool {
+        line.hasPrefix("- [ ] ") || line.hasPrefix("- [x] ") || line.hasPrefix("- [X] ")
+    }
+
+    // MARK: - Table Helpers
+
+    /// Checks if a line is a GFM table separator (e.g. `|---|:---:|---:|`)
+    private static func isTableSeparator(_ line: String) -> Bool {
+        let stripped = line.trimmingCharacters(in: .whitespaces)
+        guard stripped.contains("|") && stripped.contains("-") else { return false }
+        // Split by | and check each cell is a valid separator cell
+        let cells = splitTableCells(stripped)
+        guard !cells.isEmpty else { return false }
+        return cells.allSatisfy { cell in
+            let c = cell.trimmingCharacters(in: .whitespaces)
+            guard !c.isEmpty else { return true } // empty cells OK in separators
+            // Valid separator cell: optional leading :, one or more -, optional trailing :
+            let pattern = c.filter { $0 != ":" && $0 != "-" && $0 != " " }
+            guard pattern.isEmpty else { return false }
+            return c.contains("-")
+        }
+    }
+
+    /// Parse column alignments from separator row.
+    private static func parseTableAlignments(_ line: String, columnCount: Int) -> [TableAlignment] {
+        let cells = splitTableCells(line)
+        var alignments: [TableAlignment] = []
+        for i in 0..<columnCount {
+            if i < cells.count {
+                let cell = cells[i].trimmingCharacters(in: .whitespaces)
+                let hasLeadingColon = cell.hasPrefix(":")
+                let hasTrailingColon = cell.hasSuffix(":")
+                if hasLeadingColon && hasTrailingColon {
+                    alignments.append(.center)
+                } else if hasTrailingColon {
+                    alignments.append(.right)
+                } else {
+                    alignments.append(.left)
+                }
+            } else {
+                alignments.append(.left)
+            }
+        }
+        return alignments
+    }
+
+    /// Parse a table row into cells, running parseInline on each cell.
+    private static func parseTableRow(_ line: String) -> [[MarkdownInline]] {
+        splitTableCells(line).map { cell in
+            parseInline(cell.trimmingCharacters(in: .whitespaces))
+        }
+    }
+
+    /// Split a table row by `|`, stripping leading/trailing empty segments.
+    private static func splitTableCells(_ line: String) -> [String] {
+        var cells = line.components(separatedBy: "|")
+        // Remove leading empty cell (from leading |)
+        if let first = cells.first, first.trimmingCharacters(in: .whitespaces).isEmpty {
+            cells.removeFirst()
+        }
+        // Remove trailing empty cell (from trailing |)
+        if let last = cells.last, last.trimmingCharacters(in: .whitespaces).isEmpty {
+            cells.removeLast()
+        }
+        return cells
     }
 }
