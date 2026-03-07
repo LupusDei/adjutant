@@ -48,6 +48,8 @@ enum AppRoute: Hashable {
 
     // Project routes
     case projectDetail(project: Project)
+    case projectFiles(projectId: String, projectName: String)
+    case projectFile(projectId: String, projectName: String, filePath: String)
 
     // Settings sub-routes
     case themeSettings
