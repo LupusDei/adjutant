@@ -169,9 +169,9 @@ final class ChatViewModel: BaseViewModel {
     // MARK: - TTS Setup
 
     private func setupPlaybackObservers() {
-        guard let ttsService else { return }
+        guard let service = ttsService else { return }
         // Observe playback state changes
-        ttsService.statePublisher
+        service.statePublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 self?.isPlayingAudio = state.isPlaying
@@ -184,7 +184,7 @@ final class ChatViewModel: BaseViewModel {
 
         // Sync volume from user preferences
         let savedVolume = UserDefaults.standard.double(forKey: "voiceVolume")
-        ttsService.volume = Float(savedVolume == 0 ? 0.8 : savedVolume)
+        self.ttsService?.volume = Float(savedVolume == 0 ? 0.8 : savedVolume)
     }
 
     /// Loads cached chat messages for immediate display.
