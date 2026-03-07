@@ -93,8 +93,12 @@ final class ChatViewModel: BaseViewModel {
     // MARK: - Dependencies
 
     private let apiClient: APIClient
-    private let speechService: (any SpeechRecognitionServiceProtocol)?
-    private var ttsService: any TTSPlaybackServiceProtocol
+    /// Speech service is created lazily on first voice input to avoid blocking
+    /// the main thread with SFSpeechRecognizer init (~3-5 seconds).
+    private var speechService: (any SpeechRecognitionServiceProtocol)?
+    private var speechServiceInitialized = false
+    private var ttsService: (any TTSPlaybackServiceProtocol)?
+    private var ttsServiceResolved = false
     private let wsService: ChatWebSocketService
 
     // MARK: - Private Properties
@@ -124,20 +128,48 @@ final class ChatViewModel: BaseViewModel {
     ) {
         let client = apiClient ?? AppState.shared.apiClient
         self.apiClient = client
+        // Store injected services if provided (for testing); otherwise leave nil for lazy creation.
+        // SpeechRecognitionService init blocks for 3-5s (SFSpeechRecognizer), so we MUST NOT
+        // create it eagerly. TTSPlaybackService also configures AVAudioSession synchronously.
         self.speechService = speechService
-        self.ttsService = ttsService ?? (DependencyContainer.shared.resolveOptional((any TTSPlaybackServiceProtocol).self)
-            ?? TTSPlaybackService(apiClient: client, baseURL: AppState.shared.apiBaseURL))
+        self.speechServiceInitialized = speechService != nil
+        self.ttsService = ttsService
+        self.ttsServiceResolved = ttsService != nil
         self.wsService = wsService ?? ChatWebSocketService()
         super.init()
-        setupSpeechBindings()
-        setupPlaybackObservers()
+        if speechService != nil { setupSpeechBindings() }
+        if ttsService != nil { setupPlaybackObservers() }
         setupWebSocketBindings()
         loadFromCache()
+    }
+
+    // MARK: - Lazy Service Accessors
+
+    /// Lazily resolves TTS service on first use. Avoids AVAudioSession.setActive() during init.
+    private func resolveTTSService() -> (any TTSPlaybackServiceProtocol)? {
+        if ttsServiceResolved { return ttsService }
+        ttsServiceResolved = true
+        let resolved = DependencyContainer.shared.resolveOptional((any TTSPlaybackServiceProtocol).self)
+            ?? TTSPlaybackService(apiClient: apiClient, baseURL: AppState.shared.apiBaseURL)
+        ttsService = resolved
+        setupPlaybackObservers()
+        return resolved
+    }
+
+    /// Lazily creates SpeechRecognitionService on first use. SFSpeechRecognizer init blocks for ~3-5s.
+    private func resolveSpeechService() -> (any SpeechRecognitionServiceProtocol)? {
+        if speechServiceInitialized { return speechService }
+        speechServiceInitialized = true
+        let service = SpeechRecognitionService()
+        speechService = service
+        setupSpeechBindings()
+        return service
     }
 
     // MARK: - TTS Setup
 
     private func setupPlaybackObservers() {
+        guard let ttsService else { return }
         // Observe playback state changes
         ttsService.statePublisher
             .receive(on: DispatchQueue.main)
@@ -629,7 +661,7 @@ final class ChatViewModel: BaseViewModel {
 
     /// Toggle voice recording on/off
     func toggleVoiceRecording() {
-        guard let service = speechService else {
+        guard let service = resolveSpeechService() else {
             speechError = "Speech recognition not available"
             return
         }
@@ -728,7 +760,7 @@ final class ChatViewModel: BaseViewModel {
             let request = SynthesizeRequest(text: message.body, messageId: message.id)
             let response = try await apiClient.synthesizeSpeech(request)
 
-            ttsService.enqueue(
+            resolveTTSService()?.enqueue(
                 text: message.body,
                 response: response,
                 priority: .normal,
@@ -745,7 +777,7 @@ final class ChatViewModel: BaseViewModel {
 
     /// Stops audio playback
     func stopAudio() {
-        ttsService.stop()
+        ttsService?.stop()
         playingMessageId = nil
     }
 

@@ -16,8 +16,9 @@ struct ChatView: View {
     @State private var selectedSession: ManagedSession?
 
     init(apiClient: APIClient, speechService: (any SpeechRecognitionServiceProtocol)? = nil) {
-        let service = speechService ?? SpeechRecognitionService()
-        _viewModel = StateObject(wrappedValue: ChatViewModel(apiClient: apiClient, speechService: service))
+        // Do NOT create SpeechRecognitionService here — SFSpeechRecognizer(locale:) blocks the
+        // main thread for 3-5 seconds. Pass nil and let ChatViewModel create it lazily on first use.
+        _viewModel = StateObject(wrappedValue: ChatViewModel(apiClient: apiClient, speechService: speechService))
     }
 
     var body: some View {
