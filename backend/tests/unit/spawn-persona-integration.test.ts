@@ -67,6 +67,7 @@ vi.mock("../../src/services/callsign-service.js", () => ({
   pickRandomCallsign: vi.fn().mockReturnValue({ name: "raynor", race: "terran" }),
   pickRandomCallsigns: vi.fn().mockReturnValue([{ name: "raynor", race: "terran" }]),
   getCallsigns: vi.fn().mockReturnValue([]),
+  nextAvailableName: vi.fn().mockImplementation((_sessions: unknown[], baseName: string) => baseName),
 }));
 
 // Mock projects service
@@ -256,9 +257,9 @@ describe("POST /api/agents/spawn — persona integration", () => {
       });
 
     expect(response.status).toBe(201);
-    // Name should fall back to persona name when no callsign
+    // Name should fall back to persona name (lowercased) when no callsign
     const createCall = mockBridge.createSession.mock.calls[0][0];
-    expect(createCall.name).toBe("Architect");
+    expect(createCall.name).toBe("architect");
   });
 
   it("should prefer explicit callsign over persona name", async () => {
@@ -666,8 +667,9 @@ describe("All callsigns disabled edge case (adj-033.0.5)", () => {
       });
 
     expect(response.status).toBe(201);
+    // Persona name is lowercased when used as agent name
     const createCall = mockBridge.createSession.mock.calls[0][0];
-    expect(createCall.name).toBe("Architect");
+    expect(createCall.name).toBe("architect");
   });
 
   it("should use explicit callsign even when auto-assignment disabled", async () => {

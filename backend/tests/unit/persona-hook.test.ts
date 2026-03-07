@@ -122,7 +122,7 @@ describe(".claude/settings.json hook registration", () => {
     );
 
     expect(initialHook).toBeDefined();
-    expect(initialHook.command).toBe("scripts/hooks/persona-inject.sh");
+    expect(initialHook.hooks[0].command).toBe("scripts/hooks/persona-inject.sh");
   });
 
   it("should have a hook with 'compact' matcher for post-compaction re-injection", () => {
@@ -134,14 +134,14 @@ describe(".claude/settings.json hook registration", () => {
     );
 
     expect(compactHook).toBeDefined();
-    expect(compactHook.command).toBe("scripts/hooks/persona-inject.sh");
+    expect(compactHook.hooks[0].command).toBe("scripts/hooks/persona-inject.sh");
   });
 
   it("should point both hooks to the same script", () => {
     const content = JSON.parse(readFileSync(SETTINGS_PATH, "utf8"));
     const hooks = content.hooks.SessionStart;
 
-    const commands = hooks.map((h: { command: string }) => h.command);
+    const commands = hooks.map((h: { hooks: Array<{ command: string }> }) => h.hooks[0].command);
     // Both should reference the same script
     expect(new Set(commands).size).toBe(1);
   });
