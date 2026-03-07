@@ -5,6 +5,8 @@
  * - GET    /api/projects              - List all projects
  * - POST   /api/projects              - Create project (from path, clone URL, or empty)
  * - POST   /api/projects/discover     - Scan for and auto-register projects
+ * - GET    /api/projects/:id/files      - List directory contents within a project
+ * - GET    /api/projects/:id/files/read - Read a file's content within a project
  * - GET    /api/projects/:id          - Get single project
  * - GET    /api/projects/:id/overview - Get project overview (beads, epics, agents)
  * - GET    /api/projects/:id/health   - Check project health (path, git, beads)
@@ -23,6 +25,7 @@ import {
   discoverLocalProjects,
   checkProjectHealth,
 } from "../services/projects-service.js";
+import { listDirectory, readFile } from "../services/files-service.js";
 import {
   getProjectOverview,
   computeEpicProgress,
@@ -32,6 +35,20 @@ import type { EpicProgress } from "../services/beads/index.js";
 import { getAgents } from "../services/agents-service.js";
 import type { MessageStore } from "../services/message-store.js";
 import { success, badRequest, notFound, internalError } from "../utils/responses.js";
+
+/**
+ * Zod schema for file listing query params.
+ */
+const listFilesSchema = z.object({
+  path: z.string().optional().default(""),
+});
+
+/**
+ * Zod schema for file read query params.
+ */
+const readFileSchema = z.object({
+  path: z.string().min(1, "File path is required"),
+});
 
 /**
  * Zod schema for project creation.
@@ -65,6 +82,60 @@ export function createProjectsRouter(store: MessageStore): Router {
     if (!result.success) {
       return res.status(500).json(
         internalError(result.error?.message ?? "Failed to list projects")
+      );
+    }
+
+    return res.json(success(result.data));
+  });
+
+  /**
+   * GET /api/projects/:id/files
+   * List directory contents within a project.
+   * Query params: ?path=relative/path (default: project root)
+   */
+  router.get("/:id/files", (req, res) => {
+    const { id } = req.params;
+    const parsed = listFilesSchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json(
+        badRequest(parsed.error.issues[0]?.message ?? "Invalid request"),
+      );
+    }
+
+    const result = listDirectory(id, parsed.data.path);
+    if (!result.success) {
+      if (result.error?.code === "NOT_FOUND") {
+        return res.status(404).json(notFound("Directory", parsed.data.path));
+      }
+      return res.status(400).json(
+        badRequest(result.error?.message ?? "Failed to list directory"),
+      );
+    }
+
+    return res.json(success(result.data));
+  });
+
+  /**
+   * GET /api/projects/:id/files/read
+   * Read a file's content within a project.
+   * Query params: ?path=relative/path/to/file.md
+   */
+  router.get("/:id/files/read", (req, res) => {
+    const { id } = req.params;
+    const parsed = readFileSchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json(
+        badRequest(parsed.error.issues[0]?.message ?? "Invalid request"),
+      );
+    }
+
+    const result = readFile(id, parsed.data.path);
+    if (!result.success) {
+      if (result.error?.code === "NOT_FOUND") {
+        return res.status(404).json(notFound("File", parsed.data.path));
+      }
+      return res.status(400).json(
+        badRequest(result.error?.message ?? "Failed to read file"),
       );
     }
 
