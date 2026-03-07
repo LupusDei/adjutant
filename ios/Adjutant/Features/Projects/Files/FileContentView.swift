@@ -36,6 +36,10 @@ struct FileContentView: View {
                     }
                     .padding(CRTTheme.Spacing.md)
                 }
+                // MarkdownTextView inline text (.text, .bold, .italic, .boldItalic)
+                // does not set foregroundColor — it inherits from the parent context.
+                // Without this, text renders as system default (black on dark bg = invisible).
+                .foregroundColor(theme.primary)
             } else if let error = viewModel.errorMessage {
                 VStack {
                     Spacer()
@@ -45,6 +49,14 @@ struct FileContentView: View {
                         onDismiss: { viewModel.clearError() }
                     )
                     .padding(CRTTheme.Spacing.md)
+                    Spacer()
+                }
+            } else {
+                // Default state before onAppear fires (isLoading=false, no content, no error).
+                // Without this, the Group renders nothing against the dark background = black screen.
+                VStack {
+                    Spacer()
+                    LoadingIndicator(size: .medium)
                     Spacer()
                 }
             }
