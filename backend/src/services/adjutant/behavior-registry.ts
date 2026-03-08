@@ -1,4 +1,6 @@
 import type { EventName } from "../event-bus.js";
+import type { AdjutantState } from "./state-store.js";
+import type { CommunicationManager } from "./communication.js";
 
 /**
  * Event payload as seen by behaviors.
@@ -29,9 +31,9 @@ export interface AdjutantBehavior {
   /** Optional cron expression for periodic behaviors (e.g., "0 * * * *") */
   schedule?: string;
   /** Fast synchronous guard — return false to skip act() */
-  shouldAct(event: BehaviorEvent, state: unknown): boolean;
+  shouldAct(event: BehaviorEvent, state: AdjutantState): boolean;
   /** Async handler that performs the behavior's action */
-  act(event: BehaviorEvent, state: unknown, comm: unknown): Promise<void>;
+  act(event: BehaviorEvent, state: AdjutantState, comm: CommunicationManager): Promise<void>;
 }
 
 /**
@@ -41,11 +43,16 @@ export interface AdjutantBehavior {
 export class BehaviorRegistry {
   private behaviors: AdjutantBehavior[] = [];
 
-  /** Register a behavior. Throws if a behavior with the same name already exists. */
+  /** Register a behavior. Throws if a behavior with the same name already exists or is unreachable. */
   register(behavior: AdjutantBehavior): void {
     if (this.behaviors.some((b) => b.name === behavior.name)) {
       throw new Error(
         `Behavior "${behavior.name}" is already registered`,
+      );
+    }
+    if (behavior.triggers.length === 0 && !behavior.schedule) {
+      throw new Error(
+        `Behavior "${behavior.name}" has no triggers and no schedule — it would never execute`,
       );
     }
     this.behaviors.push(behavior);
@@ -69,5 +76,18 @@ export class BehaviorRegistry {
   /** Get a behavior by name */
   getByName(name: string): AdjutantBehavior | undefined {
     return this.behaviors.find((b) => b.name === name);
+  }
+
+  /** Unregister a behavior by name. Returns true if found and removed. */
+  unregister(name: string): boolean {
+    const idx = this.behaviors.findIndex((b) => b.name === name);
+    if (idx === -1) return false;
+    this.behaviors.splice(idx, 1);
+    return true;
+  }
+
+  /** Remove all registered behaviors. */
+  clear(): void {
+    this.behaviors = [];
   }
 }

@@ -123,4 +123,156 @@ describe("BehaviorRegistry", () => {
     const registry = new BehaviorRegistry();
     expect(registry.getByName("nonexistent")).toBeUndefined();
   });
+
+  // ---------------------------------------------------------------------------
+  // adj-p9i6: Reject dead behaviors (no triggers AND no schedule)
+  // ---------------------------------------------------------------------------
+
+  describe("dead behavior rejection", () => {
+    it("throws when registering behavior with empty triggers and no schedule", () => {
+      const registry = new BehaviorRegistry();
+      expect(() =>
+        registry.register(
+          createTestBehavior({ name: "dead", triggers: [], schedule: undefined }),
+        ),
+      ).toThrow(/no triggers and no schedule/);
+    });
+
+    it("does NOT throw when behavior has only triggers (no schedule)", () => {
+      const registry = new BehaviorRegistry();
+      expect(() =>
+        registry.register(
+          createTestBehavior({ name: "trigger-only", triggers: ["agent:status_changed"] }),
+        ),
+      ).not.toThrow();
+    });
+
+    it("does NOT throw when behavior has only schedule (no triggers)", () => {
+      const registry = new BehaviorRegistry();
+      expect(() =>
+        registry.register(
+          createTestBehavior({ name: "schedule-only", triggers: [], schedule: "0 * * * *" }),
+        ),
+      ).not.toThrow();
+    });
+
+    it("does NOT throw when behavior has both triggers and schedule", () => {
+      const registry = new BehaviorRegistry();
+      expect(() =>
+        registry.register(
+          createTestBehavior({
+            name: "both",
+            triggers: ["agent:status_changed"],
+            schedule: "0 * * * *",
+          }),
+        ),
+      ).not.toThrow();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // adj-5saq: unregister() and clear()
+  // ---------------------------------------------------------------------------
+
+  describe("unregister", () => {
+    it("returns true and removes behavior", () => {
+      const registry = new BehaviorRegistry();
+      registry.register(createTestBehavior({ name: "removable" }));
+      expect(registry.getAll()).toHaveLength(1);
+
+      const result = registry.unregister("removable");
+      expect(result).toBe(true);
+      expect(registry.getAll()).toHaveLength(0);
+      expect(registry.getByName("removable")).toBeUndefined();
+    });
+
+    it("returns false for unknown name", () => {
+      const registry = new BehaviorRegistry();
+      const result = registry.unregister("nonexistent");
+      expect(result).toBe(false);
+    });
+
+    it("can register after unregister with same name", () => {
+      const registry = new BehaviorRegistry();
+      registry.register(createTestBehavior({ name: "reuse" }));
+      registry.unregister("reuse");
+      expect(() =>
+        registry.register(createTestBehavior({ name: "reuse" })),
+      ).not.toThrow();
+      expect(registry.getAll()).toHaveLength(1);
+    });
+  });
+
+  describe("clear", () => {
+    it("empties the registry", () => {
+      const registry = new BehaviorRegistry();
+      registry.register(createTestBehavior({ name: "a" }));
+      registry.register(createTestBehavior({ name: "b" }));
+      registry.register(createTestBehavior({ name: "c" }));
+      expect(registry.getAll()).toHaveLength(3);
+
+      registry.clear();
+      expect(registry.getAll()).toHaveLength(0);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // adj-dfcj: Edge case tests
+  // ---------------------------------------------------------------------------
+
+  describe("edge cases", () => {
+    it("behavior with empty triggers and a schedule appears in getScheduledBehaviors but not getBehaviorsForEvent", () => {
+      const registry = new BehaviorRegistry();
+      registry.register(
+        createTestBehavior({ name: "schedule-only", triggers: [], schedule: "0 * * * *" }),
+      );
+
+      expect(registry.getScheduledBehaviors()).toHaveLength(1);
+      expect(registry.getScheduledBehaviors()[0].name).toBe("schedule-only");
+      expect(registry.getBehaviorsForEvent("agent:status_changed")).toHaveLength(0);
+      expect(registry.getBehaviorsForEvent("bead:created")).toHaveLength(0);
+    });
+
+    it("behavior with both triggers AND schedule appears in both getBehaviorsForEvent and getScheduledBehaviors", () => {
+      const registry = new BehaviorRegistry();
+      registry.register(
+        createTestBehavior({
+          name: "dual",
+          triggers: ["bead:updated"],
+          schedule: "*/5 * * * *",
+        }),
+      );
+
+      const forEvent = registry.getBehaviorsForEvent("bead:updated");
+      expect(forEvent).toHaveLength(1);
+      expect(forEvent[0].name).toBe("dual");
+
+      const scheduled = registry.getScheduledBehaviors();
+      expect(scheduled).toHaveLength(1);
+      expect(scheduled[0].name).toBe("dual");
+    });
+
+    it("getBehaviorsForEvent returns independent array (mutating it doesn't affect the registry)", () => {
+      const registry = new BehaviorRegistry();
+      registry.register(
+        createTestBehavior({ name: "immutable-check", triggers: ["bead:created"] }),
+      );
+
+      const result1 = registry.getBehaviorsForEvent("bead:created");
+      result1.push(createTestBehavior({ name: "injected" }));
+
+      const result2 = registry.getBehaviorsForEvent("bead:created");
+      expect(result2).toHaveLength(1);
+      expect(result2[0].name).toBe("immutable-check");
+    });
+
+    it("behavior with schedule: '' (empty string) is excluded from getScheduledBehaviors", () => {
+      const registry = new BehaviorRegistry();
+      registry.register(
+        createTestBehavior({ name: "empty-schedule", schedule: "" }),
+      );
+
+      expect(registry.getScheduledBehaviors()).toHaveLength(0);
+    });
+  });
 });
