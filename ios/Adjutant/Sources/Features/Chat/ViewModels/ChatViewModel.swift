@@ -92,6 +92,9 @@ final class ChatViewModel: BaseViewModel {
 
     // MARK: - Dependencies
 
+    // Shared formatter (avoid per-call allocation — adj-6yp4.1)
+    private static let isoFormatter = ISO8601DateFormatter()
+
     private let apiClient: APIClient
     /// Speech service is created lazily on first voice input to avoid blocking
     /// the main thread with SFSpeechRecognizer init (~3-5 seconds).
@@ -625,7 +628,7 @@ final class ChatViewModel: BaseViewModel {
         inputText = ""
 
         let clientId = UUID().uuidString
-        let now = ISO8601DateFormatter().string(from: Date())
+        let now = Self.isoFormatter.string(from: Date())
 
         // Create optimistic local message for immediate display
         let optimisticMessage = PersistentMessage(

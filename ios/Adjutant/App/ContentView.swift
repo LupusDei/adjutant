@@ -42,8 +42,7 @@ public struct ContentView: View {
         .task {
             // Phase B: Complete deferred AppState initialization (theme, observers, dependencies)
             AppState.shared.completeInitialization()
-            // Start DataSyncService Combine subscriptions (SSE integration, priority observer)
-            DataSyncService.shared.start()
+            // DataSyncService.shared.start() handled by AdjutantApp scene phase (.active) — adj-6yp4.1
             await AppState.shared.checkVoiceAvailability()
         }
     }

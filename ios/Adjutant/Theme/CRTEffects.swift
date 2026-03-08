@@ -231,7 +231,8 @@ public struct NoiseOverlay: View {
             .allowsHitTesting(false)
             .id(phase)
             .onAppear {
-                timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                // Reduced from 0.1s to 0.5s for CPU/GPU savings (adj-6yp4.1)
+                timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
                     phase = (phase + 1) % 5
                 }
             }

@@ -80,12 +80,19 @@ final class ProposalDetailViewModel: BaseViewModel {
         return formatDate(date)
     }
 
+    // Shared date formatters (avoid per-call allocation — adj-6yp4.1)
+    private static let isoFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoFormatterBasic = ISO8601DateFormatter()
+
     /// Formatted update date
     var formattedUpdatedDate: String {
         guard let proposal else { return "Unknown" }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let date = formatter.date(from: proposal.updatedAt) ?? ISO8601DateFormatter().date(from: proposal.updatedAt)
+        let date = Self.isoFormatterFractional.date(from: proposal.updatedAt)
+            ?? Self.isoFormatterBasic.date(from: proposal.updatedAt)
         guard let date else { return proposal.updatedAt }
         return formatDate(date)
     }

@@ -145,15 +145,17 @@ struct BeadsSectionView: View {
 
     // MARK: - Helpers
 
-    private func relativeTime(from dateString: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    // Shared date formatters (avoid per-call allocation — adj-6yp4.1)
+    private static let isoFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoFormatterBasic = ISO8601DateFormatter()
 
-        // Try with fractional seconds first, then without
-        guard let date = formatter.date(from: dateString) ?? {
-            formatter.formatOptions = [.withInternetDateTime]
-            return formatter.date(from: dateString)
-        }() else {
+    private func relativeTime(from dateString: String) -> String {
+        guard let date = Self.isoFormatterFractional.date(from: dateString)
+                ?? Self.isoFormatterBasic.date(from: dateString) else {
             return dateString
         }
 

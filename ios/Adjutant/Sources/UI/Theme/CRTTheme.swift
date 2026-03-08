@@ -369,9 +369,9 @@ public struct CRTGlowModifier: ViewModifier {
 
     public func body(content: Content) -> some View {
         if theme.crtEffectsEnabled {
+            // Reduced from 3 shadow passes to 2 for GPU performance (adj-6yp4.1)
             content
-                .shadow(color: color.opacity(intensity), radius: radius / 2)
-                .shadow(color: color.opacity(intensity * 0.6), radius: radius)
+                .shadow(color: color.opacity(intensity), radius: radius)
                 .shadow(color: color.opacity(intensity * 0.3), radius: radius * 2)
         } else {
             content

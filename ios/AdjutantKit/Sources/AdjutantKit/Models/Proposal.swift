@@ -53,19 +53,29 @@ public struct Proposal: Codable, Identifiable, Equatable, Sendable {
         self.updatedAt = updatedAt
     }
 
+    // Shared date formatters (avoid per-call allocation — adj-6yp4.1)
+    private static let isoFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoFormatterBasic = ISO8601DateFormatter()
+    private static let relativeDateFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
     /// Parse the createdAt timestamp into a Date
     public var createdDate: Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: createdAt) ?? ISO8601DateFormatter().date(from: createdAt)
+        Self.isoFormatterFractional.date(from: createdAt)
+            ?? Self.isoFormatterBasic.date(from: createdAt)
     }
 
     /// Display-friendly relative date string
     public var relativeDate: String {
         guard let date = createdDate else { return createdAt }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
+        return Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date())
     }
 }
 

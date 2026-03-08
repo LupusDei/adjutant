@@ -15,6 +15,9 @@ import AdjutantUI
 
 class AppDelegate: NSObject, UIApplicationDelegate {
 
+    // Shared formatter (avoid per-call allocation — adj-6yp4.1)
+    private static let isoFormatter = ISO8601DateFormatter()
+
     // MARK: - API Client
 
     /// Creates an APIClient using the persisted server URL from UserDefaults.
@@ -267,7 +270,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             to: "overseer",
             subject: message,
             body: message,
-            timestamp: ISO8601DateFormatter().string(from: Date()),
+            timestamp: Self.isoFormatter.string(from: Date()),
             read: false,
             priority: .high,
             type: .notification,

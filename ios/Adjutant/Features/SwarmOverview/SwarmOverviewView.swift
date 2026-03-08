@@ -634,33 +634,41 @@ struct SwarmOverviewView: View {
         return String(oneLine.prefix(60)) + "..."
     }
 
+    // Shared date formatters (avoid per-call allocation — adj-6yp4.1)
+    private static let isoFormatter = ISO8601DateFormatter()
+    private static let sqliteDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        f.timeZone = TimeZone(identifier: "UTC")
+        return f
+    }()
+    private static let tsFormatterToday: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "h:mma"; f.amSymbol = "am"; f.pmSymbol = "pm"; return f
+    }()
+    private static let tsFormatterThisYear: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "M/d h:mma"; f.amSymbol = "am"; f.pmSymbol = "pm"; return f
+    }()
+    private static let tsFormatterOther: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "M/d/yy h:mma"; f.amSymbol = "am"; f.pmSymbol = "pm"; return f
+    }()
+
     /// Formats a date string like "2/26 8:23pm" matching the chat bubble style.
     private func formatChatTimestamp(_ dateString: String) -> String {
         let date: Date
-        if let d = ISO8601DateFormatter().date(from: dateString) {
+        if let d = Self.isoFormatter.date(from: dateString) {
             date = d
         } else {
-            let fmt = DateFormatter()
-            fmt.dateFormat = "yyyy-MM-dd HH:mm:ss"
-            fmt.timeZone = TimeZone(identifier: "UTC")
-            guard let d = fmt.date(from: dateString) else { return dateString }
+            guard let d = Self.sqliteDateFormatter.date(from: dateString) else { return dateString }
             date = d
         }
 
-        let formatter = DateFormatter()
         let calendar = Calendar.current
-
         if calendar.isDateInToday(date) {
-            formatter.dateFormat = "h:mma"
-        } else if calendar.component(.year, from: date) ==
-                  calendar.component(.year, from: Date()) {
-            formatter.dateFormat = "M/d h:mma"
+            return Self.tsFormatterToday.string(from: date)
+        } else if calendar.component(.year, from: date) == calendar.component(.year, from: Date()) {
+            return Self.tsFormatterThisYear.string(from: date)
         } else {
-            formatter.dateFormat = "M/d/yy h:mma"
+            return Self.tsFormatterOther.string(from: date)
         }
-
-        formatter.amSymbol = "am"
-        formatter.pmSymbol = "pm"
-        return formatter.string(from: date)
     }
 }

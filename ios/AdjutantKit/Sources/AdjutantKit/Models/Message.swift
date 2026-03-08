@@ -63,11 +63,18 @@ public struct Message: Codable, Identifiable, Equatable, Hashable {
         self.isInfrastructure = isInfrastructure
     }
 
+    // Shared date formatters (avoid per-call allocation — adj-6yp4.1)
+    private static let isoFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoFormatterBasic = ISO8601DateFormatter()
+
     /// Parse the timestamp string into a Date
     public var date: Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: timestamp) ?? ISO8601DateFormatter().date(from: timestamp)
+        Self.isoFormatterFractional.date(from: timestamp)
+            ?? Self.isoFormatterBasic.date(from: timestamp)
     }
 
     /// Get the sender name without trailing slash

@@ -178,22 +178,39 @@ struct ChatBubble: View {
         }
     }
 
+    // Shared date formatters (avoid per-call allocation — adj-6yp4.1)
+    private static let timestampFormatterToday: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mma"
+        f.amSymbol = "am"
+        f.pmSymbol = "pm"
+        return f
+    }()
+    private static let timestampFormatterThisYear: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "M/d h:mma"
+        f.amSymbol = "am"
+        f.pmSymbol = "pm"
+        return f
+    }()
+    private static let timestampFormatterOther: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "M/d/yy h:mma"
+        f.amSymbol = "am"
+        f.pmSymbol = "pm"
+        return f
+    }()
+
     /// Format the message timestamp for minimal display (e.g. "2/26 8:02pm")
     private func formatTimestamp(_ date: Date) -> String {
-        let formatter = DateFormatter()
         let calendar = Calendar.current
-
         if calendar.isDateInToday(date) {
-            formatter.dateFormat = "h:mma"
+            return Self.timestampFormatterToday.string(from: date)
         } else if calendar.component(.year, from: date) == calendar.component(.year, from: Date()) {
-            formatter.dateFormat = "M/d h:mma"
+            return Self.timestampFormatterThisYear.string(from: date)
         } else {
-            formatter.dateFormat = "M/d/yy h:mma"
+            return Self.timestampFormatterOther.string(from: date)
         }
-
-        formatter.amSymbol = "am"
-        formatter.pmSymbol = "pm"
-        return formatter.string(from: date)
     }
 }
 

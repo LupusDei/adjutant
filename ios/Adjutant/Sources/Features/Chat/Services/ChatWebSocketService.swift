@@ -46,6 +46,9 @@ final class ChatWebSocketService: ObservableObject {
 
     // MARK: - Dependencies
 
+    // Shared formatter (avoid per-call allocation — adj-6yp4.1)
+    private static let isoFormatter = ISO8601DateFormatter()
+
     private var wsClient: WebSocketClient?
     private var cancellables = Set<AnyCancellable>()
     private var typingTimer: Task<Void, Never>?
@@ -138,7 +141,7 @@ final class ChatWebSocketService: ObservableObject {
         guard let id = msg.id,
               let body = msg.body else { return }
 
-        let now = ISO8601DateFormatter().string(from: Date())
+        let now = Self.isoFormatter.string(from: Date())
         let message = PersistentMessage(
             id: id,
             agentId: msg.from ?? "unknown",

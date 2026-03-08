@@ -69,36 +69,42 @@ struct DashboardView: View {
 
 // MARK: - Chat-style timestamp formatting
 
+// Shared date formatters (avoid per-call allocation — adj-6yp4.1)
+private let _dashboardIsoFormatter = ISO8601DateFormatter()
+private let _dashboardSqliteFormatter: DateFormatter = {
+    let f = DateFormatter()
+    f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+    f.timeZone = TimeZone(identifier: "UTC")
+    return f
+}()
+private let _dashboardTsToday: DateFormatter = {
+    let f = DateFormatter(); f.dateFormat = "h:mma"; f.amSymbol = "am"; f.pmSymbol = "pm"; return f
+}()
+private let _dashboardTsThisYear: DateFormatter = {
+    let f = DateFormatter(); f.dateFormat = "M/d h:mma"; f.amSymbol = "am"; f.pmSymbol = "pm"; return f
+}()
+private let _dashboardTsOther: DateFormatter = {
+    let f = DateFormatter(); f.dateFormat = "M/d/yy h:mma"; f.amSymbol = "am"; f.pmSymbol = "pm"; return f
+}()
+
 /// Formats a date string like "2/26 8:23pm" matching the chat bubble style.
 private func formatChatTimestamp(_ dateString: String) -> String {
-    // Parse ISO 8601 / SQLite datetime
     let date: Date
-    if let d = ISO8601DateFormatter().date(from: dateString) {
+    if let d = _dashboardIsoFormatter.date(from: dateString) {
         date = d
     } else {
-        // Try SQLite format: "2026-02-27 02:35:34"
-        let fmt = DateFormatter()
-        fmt.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        fmt.timeZone = TimeZone(identifier: "UTC")
-        guard let d = fmt.date(from: dateString) else { return dateString }
+        guard let d = _dashboardSqliteFormatter.date(from: dateString) else { return dateString }
         date = d
     }
 
-    let formatter = DateFormatter()
     let calendar = Calendar.current
-
     if calendar.isDateInToday(date) {
-        formatter.dateFormat = "h:mma"
-    } else if calendar.component(.year, from: date) ==
-              calendar.component(.year, from: Date()) {
-        formatter.dateFormat = "M/d h:mma"
+        return _dashboardTsToday.string(from: date)
+    } else if calendar.component(.year, from: date) == calendar.component(.year, from: Date()) {
+        return _dashboardTsThisYear.string(from: date)
     } else {
-        formatter.dateFormat = "M/d/yy h:mma"
+        return _dashboardTsOther.string(from: date)
     }
-
-    formatter.amSymbol = "am"
-    formatter.pmSymbol = "pm"
-    return formatter.string(from: date)
 }
 
 // MARK: - Unread Messages Widget

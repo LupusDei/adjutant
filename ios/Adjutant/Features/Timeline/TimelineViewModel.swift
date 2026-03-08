@@ -45,6 +45,9 @@ final class TimelineViewModel: BaseViewModel {
         case sevenDays = "7d"
         case all = "all"
 
+        // Shared formatter (avoid per-call allocation — adj-6yp4.1)
+        private static let isoFormatter = ISO8601DateFormatter()
+
         var id: String { rawValue }
 
         var label: String {
@@ -68,7 +71,7 @@ final class TimelineViewModel: BaseViewModel {
             ]
             guard let offset = offsets[self] else { return nil }
             let date = Date(timeIntervalSinceNow: -offset)
-            return ISO8601DateFormatter().string(from: date)
+            return Self.isoFormatter.string(from: date)
         }
     }
 

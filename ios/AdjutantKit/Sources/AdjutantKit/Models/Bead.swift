@@ -57,19 +57,25 @@ public struct BeadInfo: Codable, Identifiable, Equatable, Hashable {
         self.updatedAt = updatedAt
     }
 
+    // Shared date formatters (avoid per-call allocation — adj-6yp4.1)
+    private static let isoFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoFormatterBasic = ISO8601DateFormatter()
+
     /// Parse the createdAt timestamp into a Date
     public var createdDate: Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: createdAt) ?? ISO8601DateFormatter().date(from: createdAt)
+        Self.isoFormatterFractional.date(from: createdAt)
+            ?? Self.isoFormatterBasic.date(from: createdAt)
     }
 
     /// Parse the updatedAt timestamp into a Date
     public var updatedDate: Date? {
         guard let updatedAt else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: updatedAt) ?? ISO8601DateFormatter().date(from: updatedAt)
+        return Self.isoFormatterFractional.date(from: updatedAt)
+            ?? Self.isoFormatterBasic.date(from: updatedAt)
     }
 
     /// Get priority as MessagePriority enum
@@ -127,27 +133,32 @@ public struct BeadDetail: Codable, Identifiable, Equatable {
         case dependencies, pinned
     }
 
+    // Shared date formatters (avoid per-call allocation — adj-6yp4.1)
+    private static let isoFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoFormatterBasic = ISO8601DateFormatter()
+
     /// Parse the createdAt timestamp into a Date
     public var createdDate: Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: createdAt) ?? ISO8601DateFormatter().date(from: createdAt)
+        Self.isoFormatterFractional.date(from: createdAt)
+            ?? Self.isoFormatterBasic.date(from: createdAt)
     }
 
     /// Parse the updatedAt timestamp into a Date
     public var updatedDate: Date? {
         guard let updatedAt else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: updatedAt) ?? ISO8601DateFormatter().date(from: updatedAt)
+        return Self.isoFormatterFractional.date(from: updatedAt)
+            ?? Self.isoFormatterBasic.date(from: updatedAt)
     }
 
     /// Parse the closedAt timestamp into a Date
     public var closedDate: Date? {
         guard let closedAt else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: closedAt) ?? ISO8601DateFormatter().date(from: closedAt)
+        return Self.isoFormatterFractional.date(from: closedAt)
+            ?? Self.isoFormatterBasic.date(from: closedAt)
     }
 
     /// Dependencies where this bead blocks another (other beads depend on this one)
