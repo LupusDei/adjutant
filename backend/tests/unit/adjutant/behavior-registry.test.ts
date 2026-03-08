@@ -170,4 +170,50 @@ describe("BehaviorRegistry", () => {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // adj-5saq: unregister() and clear()
+  // ---------------------------------------------------------------------------
+
+  describe("unregister", () => {
+    it("returns true and removes behavior", () => {
+      const registry = new BehaviorRegistry();
+      registry.register(createTestBehavior({ name: "removable" }));
+      expect(registry.getAll()).toHaveLength(1);
+
+      const result = registry.unregister("removable");
+      expect(result).toBe(true);
+      expect(registry.getAll()).toHaveLength(0);
+      expect(registry.getByName("removable")).toBeUndefined();
+    });
+
+    it("returns false for unknown name", () => {
+      const registry = new BehaviorRegistry();
+      const result = registry.unregister("nonexistent");
+      expect(result).toBe(false);
+    });
+
+    it("can register after unregister with same name", () => {
+      const registry = new BehaviorRegistry();
+      registry.register(createTestBehavior({ name: "reuse" }));
+      registry.unregister("reuse");
+      expect(() =>
+        registry.register(createTestBehavior({ name: "reuse" })),
+      ).not.toThrow();
+      expect(registry.getAll()).toHaveLength(1);
+    });
+  });
+
+  describe("clear", () => {
+    it("empties the registry", () => {
+      const registry = new BehaviorRegistry();
+      registry.register(createTestBehavior({ name: "a" }));
+      registry.register(createTestBehavior({ name: "b" }));
+      registry.register(createTestBehavior({ name: "c" }));
+      expect(registry.getAll()).toHaveLength(3);
+
+      registry.clear();
+      expect(registry.getAll()).toHaveLength(0);
+    });
+  });
+
 });

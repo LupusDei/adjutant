@@ -78,4 +78,16 @@ export class BehaviorRegistry {
     return this.behaviors.find((b) => b.name === name);
   }
 
+  /** Unregister a behavior by name. Returns true if found and removed. */
+  unregister(name: string): boolean {
+    const idx = this.behaviors.findIndex((b) => b.name === name);
+    if (idx === -1) return false;
+    this.behaviors.splice(idx, 1);
+    return true;
+  }
+
+  /** Remove all registered behaviors. */
+  clear(): void {
+    this.behaviors = [];
+  }
 }
