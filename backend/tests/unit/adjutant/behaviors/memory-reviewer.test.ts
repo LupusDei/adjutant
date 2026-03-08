@@ -527,5 +527,184 @@ describe("createMemoryReviewer", () => {
         }),
       );
     });
+
+    it("should fire weekly review again after 7+ days have elapsed (adj-89r7)", async () => {
+      const { createMemoryReviewer } = await import(
+        "../../../../src/services/adjutant/behaviors/memory-reviewer.js"
+      );
+      const behavior = createMemoryReviewer(mockStore);
+      const state = createMockState();
+      const comm = createMockComm();
+
+      // Both meta keys set, but last_weekly_review_at was 8 days ago
+      const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+      vi.mocked(state.getMeta).mockImplementation((key: string) => {
+        if (key === "last_review_at") return "2026-03-07T12:00:00Z";
+        if (key === "last_weekly_review_at") return eightDaysAgo;
+        return null;
+      });
+
+      await behavior.act(scheduleEvent, state, comm);
+
+      // Should have performed weekly review (not skipped)
+      expect(state.logDecision).toHaveBeenCalledWith(
+        expect.objectContaining({
+          behavior: "memory-reviewer",
+          action: "weekly_review",
+        }),
+      );
+    });
+
+    it("should NOT fire weekly review if less than 7 days have elapsed (adj-89r7)", async () => {
+      const { createMemoryReviewer } = await import(
+        "../../../../src/services/adjutant/behaviors/memory-reviewer.js"
+      );
+      const behavior = createMemoryReviewer(mockStore);
+      const state = createMockState();
+      const comm = createMockComm();
+
+      // Both meta keys set, but last_weekly_review_at was 3 days ago
+      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+      vi.mocked(state.getMeta).mockImplementation((key: string) => {
+        if (key === "last_review_at") return "2026-03-07T12:00:00Z";
+        if (key === "last_weekly_review_at") return threeDaysAgo;
+        return null;
+      });
+
+      await behavior.act(scheduleEvent, state, comm);
+
+      // Should NOT have performed weekly review
+      expect(state.logDecision).not.toHaveBeenCalled();
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // shouldDecayConfidence fix (adj-b9wo)
+  // --------------------------------------------------------------------------
+
+  describe("confidence decay with updatedAt fallback (adj-b9wo)", () => {
+    const scheduleEvent: BehaviorEvent = {
+      name: "agent:status_changed",
+      data: {},
+      seq: 100,
+    };
+
+    it("should NOT decay a recently-updated learning when lastValidatedAt is null", async () => {
+      const { createMemoryReviewer } = await import(
+        "../../../../src/services/adjutant/behaviors/memory-reviewer.js"
+      );
+      const behavior = createMemoryReviewer(mockStore);
+      const state = createMockState();
+      const comm = createMockComm();
+
+      vi.mocked(state.getMeta).mockImplementation((key: string) => {
+        if (key === "last_review_at") return "2026-03-07T12:00:00Z";
+        if (key === "last_weekly_review_at") return null;
+        return null;
+      });
+
+      // Learning with no lastValidatedAt but was updated 2 days ago
+      const recentLearning = makeLearning({
+        id: 1,
+        confidence: 0.7,
+        lastValidatedAt: null,
+        updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+      vi.mocked(mockStore.queryLearnings).mockReturnValue([recentLearning]);
+
+      await behavior.act(scheduleEvent, state, comm);
+
+      // Should NOT decay because updatedAt is recent (2 days ago < 7 day threshold)
+      expect(mockStore.updateLearning).not.toHaveBeenCalled();
+    });
+
+    it("should decay a stale learning when both lastValidatedAt and updatedAt are old", async () => {
+      const { createMemoryReviewer } = await import(
+        "../../../../src/services/adjutant/behaviors/memory-reviewer.js"
+      );
+      const behavior = createMemoryReviewer(mockStore);
+      const state = createMockState();
+      const comm = createMockComm();
+
+      vi.mocked(state.getMeta).mockImplementation((key: string) => {
+        if (key === "last_review_at") return "2026-03-07T12:00:00Z";
+        if (key === "last_weekly_review_at") return null;
+        return null;
+      });
+
+      // Learning with no lastValidatedAt and was updated 14 days ago
+      const staleLearning = makeLearning({
+        id: 1,
+        confidence: 0.7,
+        lastValidatedAt: null,
+        updatedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+      vi.mocked(mockStore.queryLearnings).mockReturnValue([staleLearning]);
+
+      await behavior.act(scheduleEvent, state, comm);
+
+      // Should decay because updatedAt is old (14 days ago > 7 day threshold)
+      expect(mockStore.updateLearning).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ confidence: expect.any(Number) }),
+      );
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // Startup review recurring filter (adj-2hsg)
+  // --------------------------------------------------------------------------
+
+  describe("startup review recurring action items filter (adj-2hsg)", () => {
+    it("should only include action items that appear in 2+ retros", async () => {
+      const { createMemoryReviewer } = await import(
+        "../../../../src/services/adjutant/behaviors/memory-reviewer.js"
+      );
+      const behavior = createMemoryReviewer(mockStore);
+      const state = createMockState();
+      const comm = createMockComm();
+      vi.mocked(state.getMeta).mockReturnValue(null);
+
+      // "Add tests" appears in 2 retros (recurring), "Fix nudger" appears in only 1
+      const retros = [
+        makeRetrospective({ id: 1, actionItems: '["Add tests", "Fix nudger"]' }),
+        makeRetrospective({ id: 2, actionItems: '["Add tests"]' }),
+        makeRetrospective({ id: 3, actionItems: '["Review PR"]' }),
+      ];
+      vi.mocked(mockStore.getRecentRetrospectives).mockReturnValue(retros);
+
+      await behavior.act(dummyEvent, state, comm);
+
+      expect(comm.queueRoutine).toHaveBeenCalled();
+      const routineMsg = vi.mocked(comm.queueRoutine).mock.calls[0][0];
+      // "Add tests" appears in 2 retros — should be included
+      expect(routineMsg).toContain("Add tests");
+      // "Fix nudger" and "Review PR" appear only once — should NOT be included
+      expect(routineMsg).not.toContain("Fix nudger");
+      expect(routineMsg).not.toContain("Review PR");
+    });
+
+    it("should show nothing when no action items recur across retros", async () => {
+      const { createMemoryReviewer } = await import(
+        "../../../../src/services/adjutant/behaviors/memory-reviewer.js"
+      );
+      const behavior = createMemoryReviewer(mockStore);
+      const state = createMockState();
+      const comm = createMockComm();
+      vi.mocked(state.getMeta).mockReturnValue(null);
+
+      // Each action item only appears once — none are recurring
+      const retros = [
+        makeRetrospective({ id: 1, actionItems: '["Fix bug A"]' }),
+        makeRetrospective({ id: 2, actionItems: '["Fix bug B"]' }),
+      ];
+      vi.mocked(mockStore.getRecentRetrospectives).mockReturnValue(retros);
+      vi.mocked(mockStore.queryLearnings).mockReturnValue([]);
+
+      await behavior.act(dummyEvent, state, comm);
+
+      // No learnings AND no recurring action items — queueRoutine should NOT be called
+      expect(comm.queueRoutine).not.toHaveBeenCalled();
+    });
   });
 });

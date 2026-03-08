@@ -70,11 +70,11 @@ export function createMemoryReviewer(memoryStore: MemoryStore): AdjutantBehavior
       if (!lastReviewAt) {
         // Startup review — first fire
         await performStartupReview(memoryStore, state, comm);
-      } else if (!lastWeeklyReviewAt) {
-        // Weekly review — scheduled or first weekly since startup
+      } else if (shouldRunWeeklyReview(lastWeeklyReviewAt)) {
+        // Weekly review — first weekly since startup, or 7+ days since last weekly
         await performWeeklyReview(memoryStore, state, comm);
       }
-      // If both are set, this is a repeated trigger — skip silently
+      // If weekly review ran recently (<7 days), skip silently
     },
   };
 }
@@ -119,7 +119,7 @@ async function performStartupReview(
     }
   }
   const recurringActionItems = [...actionItemCounts.entries()]
-    .filter(([, count]) => count >= 1)
+    .filter(([, count]) => count >= 2)
     .map(([item]) => item);
 
   // Format the review message
@@ -251,17 +251,36 @@ async function performWeeklyReview(
 // Helpers
 // ============================================================================
 
+/** Minimum number of days between weekly reviews */
+const WEEKLY_REVIEW_INTERVAL_DAYS = 7;
+
+/**
+ * Determine if the weekly review should run.
+ * Returns true if lastWeeklyReviewAt is null (never ran) or 7+ days have elapsed.
+ */
+function shouldRunWeeklyReview(lastWeeklyReviewAt: string | null): boolean {
+  if (!lastWeeklyReviewAt) return true;
+
+  const lastRan = new Date(lastWeeklyReviewAt).getTime();
+  const daysSinceLast = (Date.now() - lastRan) / (1000 * 60 * 60 * 24);
+  return daysSinceLast >= WEEKLY_REVIEW_INTERVAL_DAYS;
+}
+
 /**
  * Determine if a learning's confidence should be decayed.
- * A learning is considered unreinforced if lastValidatedAt is null or
- * older than UNREINFORCED_THRESHOLD_DAYS.
+ *
+ * A learning is considered unreinforced if its most recent activity
+ * (lastValidatedAt or updatedAt) is older than UNREINFORCED_THRESHOLD_DAYS.
+ *
+ * Falls back to updatedAt when lastValidatedAt is null, since
+ * lastValidatedAt is not set by all code paths (e.g., reinforceLearning
+ * only updates confidence and reinforcement_count).
  */
 function shouldDecayConfidence(learning: Learning, nowMs: number): boolean {
-  if (!learning.lastValidatedAt) return true;
+  // Use lastValidatedAt if available, otherwise fall back to updatedAt
+  const referenceDate = learning.lastValidatedAt ?? learning.updatedAt;
+  const lastActivity = new Date(referenceDate).getTime();
+  const daysSinceActivity = (nowMs - lastActivity) / (1000 * 60 * 60 * 24);
 
-  const lastValidated = new Date(learning.lastValidatedAt).getTime();
-  const daysSinceValidated =
-    (nowMs - lastValidated) / (1000 * 60 * 60 * 24);
-
-  return daysSinceValidated > UNREINFORCED_THRESHOLD_DAYS;
+  return daysSinceActivity > UNREINFORCED_THRESHOLD_DAYS;
 }
