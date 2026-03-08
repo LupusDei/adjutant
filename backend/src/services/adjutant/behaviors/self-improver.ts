@@ -14,6 +14,29 @@ const MIN_AVG_CONFIDENCE = 0.6;
 /** Debounce window: only 1 proposal per topic per this many milliseconds */
 const DEBOUNCE_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 
+/** Metadata key prefix for per-topic debounce timestamps */
+const DEBOUNCE_META_PREFIX = "self_improver_debounce_";
+
+/** Metadata key for weekly review gate timestamp */
+const WEEKLY_RUN_META_KEY = "self_improver_last_weekly_run";
+
+/** Categories that map to 'engineering' proposal type */
+const ENGINEERING_CATEGORIES = new Set(["technical", "project"]);
+
+/**
+ * Determine the proposal type from the majority category of learnings.
+ * 'technical' and 'project' -> 'engineering'; everything else -> 'product'.
+ */
+function inferProposalType(learnings: Array<{ category: string }>): "product" | "engineering" {
+  let engineeringCount = 0;
+  for (const l of learnings) {
+    if (ENGINEERING_CATEGORIES.has(l.category)) {
+      engineeringCount++;
+    }
+  }
+  return engineeringCount > learnings.length / 2 ? "engineering" : "product";
+}
+
 /**
  * Create the self-improver behavior.
  *
@@ -22,23 +45,22 @@ const DEBOUNCE_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
  * - Runs weekly on a cron schedule
  * - When a topic accumulates 5+ learnings with avg confidence > 0.6,
  *   creates a proposal for process improvement
- * - Debounces: only 1 proposal per topic per week
+ * - Debounces: only 1 proposal per topic per week (persisted via state metadata)
  */
 export function createSelfImprover(
   memoryStore: MemoryStore,
   proposalStore: ProposalStore,
 ): AdjutantBehavior {
-  /** Track when each topic last had a proposal created: topic -> timestamp */
-  const lastProposalTime = new Map<string, number>();
-
-  function isDebounced(topic: string): boolean {
-    const lastTime = lastProposalTime.get(topic);
-    if (lastTime === undefined) return false;
+  function isDebounced(topic: string, state: AdjutantState): boolean {
+    const raw = state.getMeta(`${DEBOUNCE_META_PREFIX}${topic}`);
+    if (raw === null) return false;
+    const lastTime = parseInt(raw, 10);
+    if (isNaN(lastTime)) return false;
     return Date.now() - lastTime < DEBOUNCE_MS;
   }
 
-  function markProposed(topic: string): void {
-    lastProposalTime.set(topic, Date.now());
+  function markProposed(topic: string, state: AdjutantState): void {
+    state.setMeta(`${DEBOUNCE_META_PREFIX}${topic}`, String(Date.now()));
   }
 
   /**
@@ -48,7 +70,7 @@ export function createSelfImprover(
     topic: string,
     state: AdjutantState,
   ): boolean {
-    if (isDebounced(topic)) {
+    if (isDebounced(topic, state)) {
       return false;
     }
 
@@ -68,6 +90,8 @@ export function createSelfImprover(
       .map((l, i) => `${i + 1}. ${l.content}`)
       .join("\n");
 
+    const proposalType = inferProposalType(learnings);
+
     const proposal = proposalStore.insertProposal({
       author: "adjutant-core",
       title: `Process improvement: ${topic} (${learnings.length} learnings)`,
@@ -81,11 +105,11 @@ export function createSelfImprover(
         "### Suggested Action",
         `Review and consolidate these ${learnings.length} learnings into actionable process improvements.`,
       ].join("\n"),
-      type: "product",
+      type: proposalType,
       project: "adjutant",
     });
 
-    markProposed(topic);
+    markProposed(topic, state);
 
     state.logDecision({
       behavior: "self-improver",
@@ -122,8 +146,16 @@ export function createSelfImprover(
     async act(event: BehaviorEvent, state: AdjutantState, _comm: CommunicationManager): Promise<void> {
       const data = event.data as Record<string, unknown>;
 
-      // Cron tick: run weekly review
+      // Cron tick: run weekly review (gated to once per 7 days)
       if (data["cronTick"] === true) {
+        const lastWeeklyRun = state.getMeta(WEEKLY_RUN_META_KEY);
+        if (lastWeeklyRun !== null) {
+          const elapsed = Date.now() - parseInt(lastWeeklyRun, 10);
+          if (!isNaN(elapsed) && elapsed < DEBOUNCE_MS) {
+            return; // Already ran within the past week
+          }
+        }
+        state.setMeta(WEEKLY_RUN_META_KEY, String(Date.now()));
         weeklyReview(state);
         return;
       }
