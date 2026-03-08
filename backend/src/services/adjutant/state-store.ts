@@ -171,7 +171,8 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
     },
 
     getRecentDecisions(limit: number): DecisionEntry[] {
-      const rows = getRecentDecisionsStmt.all(limit) as DecisionRow[];
+      const safeLimit = Math.max(0, Math.min(limit, 1000));
+      const rows = getRecentDecisionsStmt.all(safeLimit) as DecisionRow[];
       return rows.map(rowToDecision);
     },
 

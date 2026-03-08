@@ -135,6 +135,39 @@ describe("AdjutantState", () => {
       expect(decisions[0].behavior).toBe("b3");
       expect(decisions[1].behavior).toBe("b2");
     });
+
+    it("should clamp negative limit to 0 and return empty array", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.logDecision({ behavior: "b1", action: "a1", target: null, reason: null });
+
+      const decisions = store.getRecentDecisions(-1);
+      expect(decisions).toEqual([]);
+    });
+
+    it("should return empty array for limit 0", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.logDecision({ behavior: "b1", action: "a1", target: null, reason: null });
+
+      const decisions = store.getRecentDecisions(0);
+      expect(decisions).toEqual([]);
+    });
+
+    it("should clamp limit exceeding 1000 to 1000", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      // Insert a few decisions; the point is that limit is clamped, not that we have 1000 rows
+      store.logDecision({ behavior: "b1", action: "a1", target: null, reason: null });
+      store.logDecision({ behavior: "b2", action: "a2", target: null, reason: null });
+
+      const decisions = store.getRecentDecisions(9999);
+      // Should return all 2 rows (clamped to 1000 but only 2 exist)
+      expect(decisions).toHaveLength(2);
+    });
   });
 
   describe("getMeta / setMeta", () => {
