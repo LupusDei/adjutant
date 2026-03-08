@@ -77,26 +77,24 @@ export function createPeriodicSummaryBehavior(): AdjutantBehavior {
     triggers: [],
     schedule: "0 * * * *", // Every hour on the hour
 
-    shouldAct(_event: BehaviorEvent, _state: unknown): boolean {
+    shouldAct(_event: BehaviorEvent, _state: AdjutantState): boolean {
       return true;
     },
 
     async act(
       _event: BehaviorEvent,
-      state: unknown,
-      comm: unknown,
+      state: AdjutantState,
+      comm: CommunicationManager,
     ): Promise<void> {
-      const adjState = state as AdjutantState;
-      const adjComm = comm as CommunicationManager;
 
       // Flush routine messages to include in the prompt
-      const routineMessages = adjComm.flushRoutineQueue();
+      const routineMessages = comm.flushRoutineQueue();
 
       const success = await sendHeartbeat(routineMessages);
 
       if (success) {
-        adjState.setMeta("last_heartbeat_sent", new Date().toISOString());
-        adjState.logDecision({
+        state.setMeta("last_heartbeat_sent", new Date().toISOString());
+        state.logDecision({
           behavior: "periodic-summary",
           action: "heartbeat_sent",
           target: ADJUTANT_TMUX_SESSION,
@@ -106,7 +104,7 @@ export function createPeriodicSummaryBehavior(): AdjutantBehavior {
               : null,
         });
       } else {
-        adjState.logDecision({
+        state.logDecision({
           behavior: "periodic-summary",
           action: "heartbeat_failed",
           target: ADJUTANT_TMUX_SESSION,

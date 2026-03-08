@@ -36,15 +36,13 @@ export function createStaleAgentNudger(): AdjutantBehavior {
     triggers: ["agent:status_changed"],
     schedule: "*/15 * * * *",
 
-    shouldAct(_event: BehaviorEvent, _state: unknown): boolean {
+    shouldAct(_event: BehaviorEvent, _state: AdjutantState): boolean {
       return true;
     },
 
-    async act(_event: BehaviorEvent, state: unknown, comm: unknown): Promise<void> {
-      const adjState = state as AdjutantState;
-      const adjComm = comm as CommunicationManager;
+    async act(_event: BehaviorEvent, state: AdjutantState, comm: CommunicationManager): Promise<void> {
 
-      const profiles = adjState.getAllAgentProfiles();
+      const profiles = state.getAllAgentProfiles();
       const staleAgents: string[] = [];
 
       for (const profile of profiles) {
@@ -52,7 +50,7 @@ export function createStaleAgentNudger(): AdjutantBehavior {
         if (!shouldNudge(profile.agentId)) continue;
 
         // Send nudge
-        await adjComm.messageAgent(
+        await comm.messageAgent(
           profile.agentId,
           "Status check: you haven't reported activity in over an hour. Please update your status or report a blocker.",
         );
@@ -60,7 +58,7 @@ export function createStaleAgentNudger(): AdjutantBehavior {
         lastNudged.set(profile.agentId, Date.now());
         staleAgents.push(profile.agentId);
 
-        adjState.logDecision({
+        state.logDecision({
           behavior: "stale-agent-nudger",
           action: "nudge_sent",
           target: profile.agentId,
@@ -69,7 +67,7 @@ export function createStaleAgentNudger(): AdjutantBehavior {
       }
 
       if (staleAgents.length > 0) {
-        adjComm.queueRoutine(
+        comm.queueRoutine(
           `Nudged ${staleAgents.length} stale agent(s): ${staleAgents.join(", ")}`,
         );
       }

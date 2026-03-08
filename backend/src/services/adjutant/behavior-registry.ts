@@ -1,4 +1,6 @@
 import type { EventName } from "../event-bus.js";
+import type { AdjutantState } from "./state-store.js";
+import type { CommunicationManager } from "./communication.js";
 
 /**
  * Event payload as seen by behaviors.
@@ -29,9 +31,9 @@ export interface AdjutantBehavior {
   /** Optional cron expression for periodic behaviors (e.g., "0 * * * *") */
   schedule?: string;
   /** Fast synchronous guard — return false to skip act() */
-  shouldAct(event: BehaviorEvent, state: unknown): boolean;
+  shouldAct(event: BehaviorEvent, state: AdjutantState): boolean;
   /** Async handler that performs the behavior's action */
-  act(event: BehaviorEvent, state: unknown, comm: unknown): Promise<void>;
+  act(event: BehaviorEvent, state: AdjutantState, comm: CommunicationManager): Promise<void>;
 }
 
 /**
