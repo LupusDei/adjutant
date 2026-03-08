@@ -53,7 +53,10 @@ async function sendHeartbeat(routineMessages: string[]): Promise<boolean> {
       return false;
     }
 
-    return await bridge.sendInput(session.id, prompt);
+    // Collapse to single line — multiline text via tmux send-keys -l puts
+    // Claude Code's TUI into multiline editing mode where Enter doesn't submit
+    const singleLine = prompt.replace(/\n+/g, " ").trim();
+    return await bridge.sendInput(session.id, singleLine);
   } catch {
     return false;
   }

@@ -136,6 +136,20 @@ describe("periodic-summary act()", () => {
     expect(mockSendInput).toHaveBeenCalledWith("session-123", expect.stringContaining("HOURLY HEARTBEAT CHECK"));
   });
 
+  it("collapses prompt to single line (no newlines) for tmux compatibility", async () => {
+    mockFindByTmuxSession.mockReturnValue({ id: "s1" });
+    mockSendInput.mockResolvedValue(true);
+
+    const behavior = createPeriodicSummaryBehavior();
+    const state = createMockState();
+    const comm = createMockComm();
+
+    await behavior.act(makeCronEvent(), state, comm);
+
+    const sentPrompt = mockSendInput.mock.calls[0]![1] as string;
+    expect(sentPrompt).not.toContain("\n");
+  });
+
   it("sets last_heartbeat_sent meta on success", async () => {
     mockFindByTmuxSession.mockReturnValue({ id: "s1" });
     mockSendInput.mockResolvedValue(true);
