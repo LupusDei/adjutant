@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS adjutant_decisions (
 CREATE INDEX IF NOT EXISTS idx_adjutant_decisions_behavior ON adjutant_decisions(behavior);
 CREATE INDEX IF NOT EXISTS idx_adjutant_decisions_created ON adjutant_decisions(created_at);
 
+CREATE INDEX IF NOT EXISTS idx_adjutant_agent_profiles_status_at ON adjutant_agent_profiles(last_status_at);
+
 CREATE TABLE IF NOT EXISTS adjutant_metadata (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL,
