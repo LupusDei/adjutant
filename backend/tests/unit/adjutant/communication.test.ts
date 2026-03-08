@@ -185,6 +185,36 @@ describe("CommunicationManager", () => {
       expect(sendNotificationToAll).not.toHaveBeenCalled();
     });
 
+    it("should truncate APNS body to 200 chars but store full message", async () => {
+      vi.mocked(isAPNsConfigured).mockReturnValue(true);
+      vi.mocked(sendNotificationToAll).mockResolvedValue({
+        success: true,
+        data: { sent: 1, failed: 0, results: [] },
+      });
+
+      const longMessage = "A".repeat(250);
+      const expectedTruncated = "A".repeat(197) + "...";
+
+      const cm = createCommunicationManager(store);
+      await cm.escalate(longMessage);
+
+      // Full message should be stored in the message store (not truncated)
+      expect(store.insertMessage).toHaveBeenCalledWith({
+        agentId: "adjutant-core",
+        recipient: "user",
+        role: "agent",
+        body: longMessage,
+      });
+
+      // APNS notification body should be truncated to exactly 200 chars
+      expect(sendNotificationToAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expectedTruncated,
+        }),
+      );
+      expect(expectedTruncated).toHaveLength(200);
+    });
+
     it("should handle APNS error gracefully", async () => {
       vi.mocked(isAPNsConfigured).mockReturnValue(true);
       vi.mocked(sendNotificationToAll).mockRejectedValue(

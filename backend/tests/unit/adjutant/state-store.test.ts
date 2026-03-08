@@ -81,6 +81,27 @@ describe("AdjutantState", () => {
       expect(profile!.currentTask).toBe("task A");
       expect(profile!.currentBeadId).toBe("bead-1");
     });
+
+    it("should clear a field when explicitly set to null", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({
+        agentId: "agent-1",
+        lastStatus: "working",
+        currentTask: "doing stuff",
+      });
+
+      // Explicitly set currentTask to null
+      store.upsertAgentProfile({
+        agentId: "agent-1",
+        currentTask: null,
+      });
+
+      const profile = store.getAgentProfile("agent-1");
+      expect(profile).not.toBeNull();
+      expect(profile!.currentTask).toBeNull();
+    });
   });
 
   describe("getAllAgentProfiles", () => {
