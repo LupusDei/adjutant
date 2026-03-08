@@ -67,7 +67,7 @@ export async function spawnAdjutant(projectPath: string): Promise<void> {
       name: ADJUTANT_SESSION_NAME,
       projectPath,
       mode: "swarm",
-      claudeArgs: ["--agent-file", ".claude/agents/adjutant.md"],
+      claudeArgs: ["--agent", "adjutant"],
     });
 
     if (result.success) {

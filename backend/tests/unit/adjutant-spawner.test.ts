@@ -65,7 +65,7 @@ describe("adjutant-spawner", () => {
           name: "adjutant-coordinator",
           projectPath: "/tmp/project",
           mode: "swarm",
-          claudeArgs: ["--agent-file", ".claude/agents/adjutant.md"],
+          claudeArgs: ["--agent", "adjutant"],
         })
       );
     });
