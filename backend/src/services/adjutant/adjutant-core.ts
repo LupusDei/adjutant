@@ -42,10 +42,14 @@ let intervalTimers: ReturnType<typeof setInterval>[] = [];
  * Convert simple cron expressions to millisecond intervals.
  *
  * Supported patterns:
- *   "* /N * * * *" → every N minutes  (written without space — escaped here for comment)
- *   "0 * * * *"   → every 60 minutes (top of each hour)
+ *   "* /N * * * *"  → every N minutes  (written without space — escaped here for comment)
+ *   "0 * * * *"     → every 60 minutes (top of each hour)
+ *   "0 * /N * * *"  → every N hours  (written without space — escaped here for comment)
+ *   "0 H * * *"     → once per day (24-hour interval)
+ *   "0 0 * * D"     → weekly (7-day interval)
+ *   "0 0 D * *"     → ~monthly (30-day interval)
  *
- * Throws on unsupported patterns.
+ * Throws on monthly+ (non-wildcard month) patterns.
  */
 export function cronToIntervalMs(schedule: string): number {
   const parts = schedule.trim().split(/\s+/);
@@ -55,10 +59,43 @@ export function cronToIntervalMs(schedule: string): number {
 
   const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
 
-  // All remaining fields must be wildcards for a simple interval
-  if (hour !== "*" || dayOfMonth !== "*" || month !== "*" || dayOfWeek !== "*") {
-    throw new Error(`Unsupported cron expression (only minute-level intervals supported): "${schedule}"`);
+  // Month must always be wildcard
+  if (month !== "*") {
+    throw new Error(`Unsupported cron expression (monthly+ intervals not supported): "${schedule}"`);
   }
+
+  // Weekly schedule: specific dayOfWeek (e.g., "0 0 * * 1" = Monday midnight)
+  if (dayOfWeek !== "*") {
+    return 7 * 24 * 60 * 60 * 1000;
+  }
+
+  // Daily schedule with specific dayOfMonth (e.g., "0 0 1 * *")
+  if (dayOfMonth !== "*") {
+    return 30 * 24 * 60 * 60 * 1000; // ~monthly approximation
+  }
+
+  // Hour-level schedules: minute must be a fixed number, hour is specific or stepped
+  if (hour !== "*") {
+    // "0 */N * * *" → every N hours
+    const hourStep = hour!.match(/^\*\/(\d+)$/);
+    if (hourStep) {
+      const hours = parseInt(hourStep[1]!, 10);
+      if (hours <= 0) {
+        throw new Error(`Invalid hour step value in cron expression: "${schedule}"`);
+      }
+      return hours * 60 * 60 * 1000;
+    }
+
+    // "0 H * * *" → specific hour = once per day (24h interval)
+    const fixedHour = parseInt(hour!, 10);
+    if (!isNaN(fixedHour) && fixedHour >= 0 && fixedHour <= 23) {
+      return 24 * 60 * 60 * 1000;
+    }
+
+    throw new Error(`Unsupported cron hour field "${hour}" in: "${schedule}"`);
+  }
+
+  // Minute-level schedules (hour is "*")
 
   // "*/N" → every N minutes
   const stepMatch = minute!.match(/^\*\/(\d+)$/);

@@ -90,8 +90,39 @@ describe("cronToIntervalMs", () => {
     expect(cronToIntervalMs("*/1 * * * *")).toBe(60 * 1000);
   });
 
-  it("should throw on non-minute-level cron patterns", () => {
-    expect(() => cronToIntervalMs("0 0 * * *")).toThrow("only minute-level");
+  // Hour-level schedules
+  it("should parse '0 23 * * *' to 24 hours (specific hour = daily)", () => {
+    expect(cronToIntervalMs("0 23 * * *")).toBe(24 * 60 * 60 * 1000);
+  });
+
+  it("should parse '0 0 * * *' to 24 hours (midnight = daily)", () => {
+    expect(cronToIntervalMs("0 0 * * *")).toBe(24 * 60 * 60 * 1000);
+  });
+
+  it("should parse '0 */6 * * *' to 6 hours", () => {
+    expect(cronToIntervalMs("0 */6 * * *")).toBe(6 * 60 * 60 * 1000);
+  });
+
+  it("should parse '0 */1 * * *' to 1 hour", () => {
+    expect(cronToIntervalMs("0 */1 * * *")).toBe(1 * 60 * 60 * 1000);
+  });
+
+  // Weekly and monthly schedules
+  it("should parse '0 0 * * 1' to 7 days (weekly on Monday)", () => {
+    expect(cronToIntervalMs("0 0 * * 1")).toBe(7 * 24 * 60 * 60 * 1000);
+  });
+
+  it("should parse '0 0 * * 5' to 7 days (weekly on Friday)", () => {
+    expect(cronToIntervalMs("0 0 * * 5")).toBe(7 * 24 * 60 * 60 * 1000);
+  });
+
+  it("should parse '0 0 1 * *' to ~30 days (monthly)", () => {
+    expect(cronToIntervalMs("0 0 1 * *")).toBe(30 * 24 * 60 * 60 * 1000);
+  });
+
+  // Error cases
+  it("should throw on month-level cron patterns", () => {
+    expect(() => cronToIntervalMs("0 0 1 6 *")).toThrow("monthly+ intervals not supported");
   });
 
   it("should throw on unsupported minute field", () => {
@@ -100,6 +131,10 @@ describe("cronToIntervalMs", () => {
 
   it("should throw on wrong number of fields", () => {
     expect(() => cronToIntervalMs("* * *")).toThrow("expected 5 fields");
+  });
+
+  it("should throw on unsupported hour field", () => {
+    expect(() => cronToIntervalMs("0 abc * * *")).toThrow("Unsupported cron hour field");
   });
 });
 
