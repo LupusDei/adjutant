@@ -446,4 +446,131 @@ describe("AdjutantState", () => {
       expect(behaviors).toEqual(["recent-1", "recent-2"]);
     });
   });
+
+  describe("spawn history", () => {
+    it("should log a spawn and return the ID", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      const id = store.logSpawn("agent-1");
+      expect(id).toBeGreaterThan(0);
+    });
+
+    it("should log spawn with reason and beadId", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      const id = store.logSpawn("agent-1", "handle feature work", "adj-052");
+      expect(id).toBeGreaterThan(0);
+
+      const record = store.getLastSpawn("agent-1");
+      expect(record).not.toBeNull();
+      expect(record!.agentId).toBe("agent-1");
+      expect(record!.reason).toBe("handle feature work");
+      expect(record!.beadId).toBe("adj-052");
+      expect(record!.spawnedAt).toBeTruthy();
+    });
+
+    it("should get history ordered newest first", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.logSpawn("agent-1", "first");
+      store.logSpawn("agent-2", "second");
+      store.logSpawn("agent-3", "third");
+
+      const history = store.getSpawnHistory();
+      expect(history).toHaveLength(3);
+      // Newest first — highest ID first since same-second timestamps
+      expect(history[0].reason).toBe("third");
+      expect(history[1].reason).toBe("second");
+      expect(history[2].reason).toBe("first");
+    });
+
+    it("should respect limit", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.logSpawn("agent-1", "first");
+      store.logSpawn("agent-2", "second");
+      store.logSpawn("agent-3", "third");
+
+      const history = store.getSpawnHistory(2);
+      expect(history).toHaveLength(2);
+      expect(history[0].reason).toBe("third");
+      expect(history[1].reason).toBe("second");
+    });
+
+    it("should get agent-specific history", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.logSpawn("agent-1", "first for agent-1");
+      store.logSpawn("agent-2", "for agent-2");
+      store.logSpawn("agent-1", "second for agent-1");
+
+      const history = store.getAgentSpawnHistory("agent-1");
+      expect(history).toHaveLength(2);
+      expect(history[0].reason).toBe("second for agent-1");
+      expect(history[1].reason).toBe("first for agent-1");
+    });
+
+    it("should mark decommissioned", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      const id = store.logSpawn("agent-1", "will be decommissioned");
+      store.markDecommissioned(id);
+
+      const record = store.getLastSpawn("agent-1");
+      expect(record).not.toBeNull();
+      expect(record!.decommissionedAt).toBeTruthy();
+    });
+
+    it("should get last spawn for agent", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.logSpawn("agent-1", "first");
+      store.logSpawn("agent-1", "second");
+
+      const last = store.getLastSpawn("agent-1");
+      expect(last).not.toBeNull();
+      expect(last!.reason).toBe("second");
+    });
+
+    it("should return null when no spawns", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      const last = store.getLastSpawn("nonexistent-agent");
+      expect(last).toBeNull();
+    });
+
+    it("should count active spawns", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      const id1 = store.logSpawn("agent-1");
+      store.logSpawn("agent-2");
+      store.logSpawn("agent-3");
+
+      // Decommission one
+      store.markDecommissioned(id1);
+
+      const count = store.countActiveSpawns();
+      expect(count).toBe(2);
+    });
+
+    it("should default decommissionedAt to null", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.logSpawn("agent-1", "test spawn");
+
+      const record = store.getLastSpawn("agent-1");
+      expect(record).not.toBeNull();
+      expect(record!.decommissionedAt).toBeNull();
+    });
+  });
 });
