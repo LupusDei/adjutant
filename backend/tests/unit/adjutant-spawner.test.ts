@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Suppress logging
 vi.mock("../../src/utils/index.js", () => ({
@@ -29,7 +29,10 @@ vi.mock("../../src/services/tmux.js", () => ({
 import {
   spawnAdjutant,
   isAdjutantAlive,
+  ensureAdjutantAlive,
 } from "../../src/services/adjutant-spawner.js";
+
+import { logInfo } from "../../src/utils/index.js";
 
 describe("adjutant-spawner", () => {
   beforeEach(() => {
@@ -121,6 +124,108 @@ describe("adjutant-spawner", () => {
 
       const alive = await isAdjutantAlive();
       expect(alive).toBe(false);
+    });
+  });
+
+  // ==========================================================================
+  // ensureAdjutantAlive
+  // ==========================================================================
+
+  describe("ensureAdjutantAlive", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("should return false when Adjutant agent is alive (no recovery needed)", async () => {
+      // Adjutant session exists — no recovery needed
+      mockListTmuxSessions.mockResolvedValue(
+        new Set(["adj-swarm-adjutant", "adj-swarm-other"])
+      );
+
+      const result = await ensureAdjutantAlive("/tmp/project");
+      expect(result).toBe(false);
+      // spawnAdjutant should NOT have been called (we mock createSession to verify)
+      expect(mockCreateSession).not.toHaveBeenCalled();
+    });
+
+    it("should respawn and return true when Adjutant agent is dead", async () => {
+      // First call (isAdjutantAlive): no adjutant session
+      // Second call (spawnAdjutant internal check): still no adjutant session
+      mockListTmuxSessions.mockResolvedValue(new Set(["adj-swarm-other"]));
+      mockCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
+
+      const promise = ensureAdjutantAlive("/tmp/project");
+
+      // Advance past the 10-second stabilization wait
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      const result = await promise;
+      expect(result).toBe(true);
+      expect(mockCreateSession).toHaveBeenCalledOnce();
+    });
+
+    it("should wait 10 seconds during recovery for stabilization", async () => {
+      mockListTmuxSessions.mockResolvedValue(new Set());
+      mockCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
+
+      let resolved = false;
+      const promise = ensureAdjutantAlive("/tmp/project").then((r) => {
+        resolved = true;
+        return r;
+      });
+
+      // Should NOT resolve before 10 seconds
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(resolved).toBe(false);
+
+      // Should resolve at 10 seconds
+      await vi.advanceTimersByTimeAsync(1);
+      expect(resolved).toBe(true);
+
+      await promise;
+    });
+
+    it("should return false on recovery error (graceful)", async () => {
+      // Simulate an unexpected error by making spawnAdjutant's createSession
+      // throw synchronously (bypassing spawnAdjutant's try/catch is not possible,
+      // but we can verify the outer catch by replacing setTimeout with a throwing stub).
+      vi.useRealTimers(); // Undo fake timers for this test
+
+      mockListTmuxSessions.mockResolvedValue(new Set()); // dead
+      mockCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
+
+      // Replace setTimeout so the stabilization wait throws
+      const origSetTimeout = globalThis.setTimeout;
+      // Safe cast: we're replacing setTimeout with a function that throws
+      // to simulate an unexpected runtime error in the stabilization wait
+      globalThis.setTimeout = (() => {
+        throw new Error("runtime error");
+      }) as unknown as typeof globalThis.setTimeout;
+
+      try {
+        const result = await ensureAdjutantAlive("/tmp/project");
+        expect(result).toBe(false);
+      } finally {
+        globalThis.setTimeout = origSetTimeout;
+      }
+    });
+
+    it("should log recovery event when respawning", async () => {
+      mockListTmuxSessions.mockResolvedValue(new Set(["adj-swarm-other"]));
+      mockCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
+
+      const promise = ensureAdjutantAlive("/tmp/project");
+      await vi.advanceTimersByTimeAsync(10_000);
+      await promise;
+
+      expect(logInfo).toHaveBeenCalledWith(
+        "Adjutant agent recovered",
+        expect.objectContaining({ projectPath: "/tmp/project" })
+      );
     });
   });
 });

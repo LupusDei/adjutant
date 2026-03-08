@@ -1,11 +1,10 @@
 /**
- * Adjutant Spawner — creates and checks the Adjutant coordinator agent session.
+ * Adjutant Spawner — creates, checks, and recovers the Adjutant coordinator agent session.
  *
- * Provides two modular functions:
+ * Provides three modular functions:
  * - `spawnAdjutant()`: Idempotently spawns the Adjutant agent in a tmux session
  * - `isAdjutantAlive()`: Checks if the Adjutant agent's tmux session exists
- *
- * Designed for reuse by the scheduler's health check (Phase 3: `ensureAdjutantAlive`).
+ * - `ensureAdjutantAlive()`: Health check with automatic recovery — respawns if dead
  */
 
 import { logInfo, logWarn } from "../utils/index.js";
@@ -76,6 +75,43 @@ export async function isAdjutantAlive(): Promise<boolean> {
     const sessions = await listTmuxSessions();
     return sessions.has(ADJUTANT_TMUX_SESSION);
   } catch {
+    return false;
+  }
+}
+
+/** Stabilization wait after recovery (ms) */
+const RECOVERY_STABILIZATION_MS = 10_000;
+
+/**
+ * Ensure the Adjutant coordinator agent is alive, recovering it if dead.
+ *
+ * Composes `isAdjutantAlive()` and `spawnAdjutant()` into a single health-check
+ * function suitable for use by the scheduler or any other caller.
+ *
+ * @param projectPath - Project root path to pass to `spawnAdjutant()`
+ * @returns `true` if recovery was performed, `false` if already alive or on error
+ */
+export async function ensureAdjutantAlive(
+  projectPath: string,
+): Promise<boolean> {
+  try {
+    const alive = await isAdjutantAlive();
+    if (alive) {
+      return false;
+    }
+
+    // Dead — attempt recovery
+    await spawnAdjutant(projectPath);
+
+    // Wait for the agent to stabilize before returning
+    await new Promise((resolve) =>
+      setTimeout(resolve, RECOVERY_STABILIZATION_MS),
+    );
+
+    logInfo("Adjutant agent recovered", { projectPath });
+    return true;
+  } catch (err) {
+    logWarn("Adjutant recovery failed", { error: String(err) });
     return false;
   }
 }
