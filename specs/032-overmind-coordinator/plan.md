@@ -2,6 +2,47 @@
 
 > **Feature**: 032-overmind-coordinator
 > **Date**: 2026-03-08
+> **Active Epic**: adj-052
+
+## Bead Map — adj-052: The Full Adjutant
+
+```
+adj-052           (root epic, OPEN, P1)
+│
+├── adj-052.1     (epic) Phase 2: Work Assignment [P1]
+│   ├── adj-052.1.1   State store migration for work assignment [P]
+│   ├── adj-052.1.2   Add bead:assigned event to EventBus [P]
+│   ├── adj-052.1.3   Work Assigner behavior (depends on .1.1, .1.2)
+│   ├── adj-052.1.4   Work Rebalancer behavior (depends on .1.1)
+│   └── adj-052.1.5   Integrate Phase 2 into index.ts (depends on .1.3, .1.4)
+│
+├── adj-052.2     (epic) Phase 3: Agent Spawning [P1] (depends on adj-052.1)
+│   ├── adj-052.2.1   Generalize spawner into agent-spawner-service [P]
+│   ├── adj-052.2.2   Spawn history tracking in state store [P]
+│   ├── adj-052.2.3   Agent Spawner behavior (depends on .2.1, .2.2)
+│   ├── adj-052.2.4   Agent Decommissioner behavior (depends on .2.2)
+│   └── adj-052.2.5   Integrate Phase 3 into index.ts (depends on .2.3, .2.4)
+│
+├── adj-052.3     (epic) Phase 4: Build & Quality Monitor [P2] (depends on adj-052.2)
+│   ├── adj-052.3.1   Add build/merge events to EventBus
+│   ├── adj-052.3.2   Build Monitor behavior (depends on .3.1)
+│   ├── adj-052.3.3   Quality Gate behavior [P]
+│   ├── adj-052.3.4   Merge Coordinator behavior (depends on .3.1)
+│   └── adj-052.3.5   Integrate Phase 4 into index.ts (depends on .3.2, .3.3, .3.4)
+│
+└── adj-052.4     (epic) Phase 5: Epic Management [P2] (depends on adj-052.3)
+    ├── adj-052.4.1   Epic progress tracking in state store
+    ├── adj-052.4.2   Epic Planner behavior (depends on .4.1)
+    ├── adj-052.4.3   Epic Closer behavior (depends on .4.1)
+    ├── adj-052.4.4   Progress Reporter behavior (depends on .4.1)
+    ├── adj-052.4.5   Retrospective behavior [P]
+    └── adj-052.4.6   Integrate Phase 5 into index.ts (depends on .4.2-.4.5)
+
+Total: 1 root epic + 4 sub-epics + 21 tasks = 26 beads
+[P] = parallelizable (no blocking dependencies within phase)
+```
+
+---
 
 ## Completed Work
 
