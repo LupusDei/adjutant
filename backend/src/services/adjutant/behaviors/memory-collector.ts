@@ -66,18 +66,38 @@ function inferCategory(content: string): string {
 
 /**
  * Infer a topic from the content by finding the most relevant keyword.
+ *
+ * Scores all categories by match count, picks the best category,
+ * then returns the longest matching keyword from that category
+ * (longer keywords are more specific and thus more relevant).
  */
 function inferTopic(content: string): string {
   const lower = content.toLowerCase();
-  // Look for the most specific keyword match
+
+  let bestCategory = "";
+  let bestScore = 0;
+  let bestKeyword = "";
+
   for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    let score = 0;
+    let longestMatch = "";
     for (const kw of keywords) {
       if (lower.includes(kw)) {
-        return `${category}-${kw}`;
+        score++;
+        if (kw.length > longestMatch.length) {
+          longestMatch = kw;
+        }
       }
     }
+    if (score > bestScore || (score === bestScore && longestMatch.length > bestKeyword.length)) {
+      bestScore = score;
+      bestCategory = category;
+      bestKeyword = longestMatch;
+    }
   }
-  return "general";
+
+  if (bestScore === 0) return "general";
+  return `${bestCategory}-${bestKeyword}`;
 }
 
 // ============================================================================
@@ -187,6 +207,18 @@ function handleMailReceived(
       description: body,
       learningId: learning.id,
     });
+
+    // Emit correction:detected event
+    try {
+      getEventBus().emit("correction:detected", {
+        messageId: data.id,
+        from: data.from,
+        pattern: matchedText,
+        body,
+      });
+    } catch {
+      // EventBus may not be initialized in tests
+    }
 
     // Emit learning:created event
     try {

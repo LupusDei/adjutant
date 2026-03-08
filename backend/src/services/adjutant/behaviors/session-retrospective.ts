@@ -16,13 +16,22 @@ interface SessionMetrics {
 
 /**
  * Gather session metrics from state and memory store.
+ *
+ * Only counts decisions since the given cutoff date (last retro or start of today).
+ * This prevents retrospective metrics from inflating with all-time data.
  */
 function gatherMetrics(
   state: AdjutantState,
   memoryStore: MemoryStore,
+  sinceCutoff: string,
 ): SessionMetrics {
   const today = new Date().toISOString().split("T")[0]!;
-  const decisions = state.getRecentDecisions(500);
+  const allDecisions = state.getRecentDecisions(500);
+
+  // Filter decisions to only those since the cutoff
+  const decisions = allDecisions.filter(
+    (d) => d.createdAt >= sinceCutoff,
+  );
 
   // Beads closed: decisions where action contains "close"
   const beadsClosed = decisions.filter(
@@ -226,7 +235,10 @@ export function createSessionRetrospective(memoryStore: MemoryStore): AdjutantBe
     ): Promise<void> {
       try {
         const today = new Date().toISOString().split("T")[0]!;
-        const metrics = gatherMetrics(state, memoryStore);
+        // Use last retro timestamp as cutoff, or start of today if no previous retro
+        const lastRetroAt = state.getMeta("last_retro_at");
+        const sinceCutoff = lastRetroAt ?? `${today}T00:00:00Z`;
+        const metrics = gatherMetrics(state, memoryStore, sinceCutoff);
 
         // Generate analysis
         const wentWell = generateWentWell(metrics);

@@ -443,3 +443,111 @@ describe("session-retrospective analysis (adj-053.3.2)", () => {
     expect(wentWrong).toEqual([]);
   });
 });
+
+describe("session-retrospective went_well/went_wrong/action_items populated (adj-n3q1)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should never persist a retrospective with null went_well/went_wrong/action_items", async () => {
+    const memoryStore = createMockMemoryStore();
+    const behavior = createSessionRetrospective(memoryStore);
+    const state = createMockState();
+    const comm = createMockComm();
+
+    await behavior.act(makeCronEvent(), state, comm);
+
+    const retroArg = (memoryStore.insertRetrospective as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    // These should be JSON strings, never null or undefined
+    expect(retroArg.wentWell).toBeDefined();
+    expect(retroArg.wentWell).not.toBeNull();
+    expect(retroArg.wentWrong).toBeDefined();
+    expect(retroArg.wentWrong).not.toBeNull();
+    expect(retroArg.actionItems).toBeDefined();
+    expect(retroArg.actionItems).not.toBeNull();
+
+    // They should be parseable JSON arrays
+    expect(() => JSON.parse(retroArg.wentWell)).not.toThrow();
+    expect(() => JSON.parse(retroArg.wentWrong)).not.toThrow();
+    expect(() => JSON.parse(retroArg.actionItems)).not.toThrow();
+  });
+});
+
+describe("session-retrospective date filtering (adj-q0ct)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should only count decisions from today, not old decisions", async () => {
+    const memoryStore = createMockMemoryStore();
+    const behavior = createSessionRetrospective(memoryStore);
+    const state = createMockState();
+    const comm = createMockComm();
+
+    const today = new Date().toISOString().split("T")[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+
+    state.getRecentDecisions.mockReturnValue([
+      // Today's decisions
+      { behavior: "work-assigner", action: "close_bead", target: "adj-001", reason: null, createdAt: `${today}T10:00:00Z` },
+      // Yesterday's decisions - should be excluded
+      { behavior: "work-assigner", action: "close_bead", target: "adj-002", reason: null, createdAt: `${yesterday}T10:00:00Z` },
+      { behavior: "work-assigner", action: "close_bead", target: "adj-003", reason: null, createdAt: `${yesterday}T12:00:00Z` },
+    ]);
+
+    await behavior.act(makeCronEvent(), state, comm);
+
+    const retroArg = (memoryStore.insertRetrospective as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    // Should only count the 1 decision from today, not the 2 from yesterday
+    expect(retroArg.beadsClosed).toBe(1);
+  });
+
+  it("should filter decisions since last retro when last_retro_at is set", async () => {
+    const memoryStore = createMockMemoryStore();
+    const behavior = createSessionRetrospective(memoryStore);
+    const state = createMockState();
+    const comm = createMockComm();
+
+    const today = new Date().toISOString().split("T")[0];
+    const lastRetroAt = new Date(Date.now() - 43200000).toISOString(); // 12 hours ago
+
+    state.getMeta.mockImplementation((key: string) => {
+      if (key === "last_retro_at") return lastRetroAt;
+      return null;
+    });
+
+    state.getRecentDecisions.mockReturnValue([
+      // After last retro (should be included)
+      { behavior: "work-assigner", action: "close_bead", target: "adj-001", reason: null, createdAt: new Date().toISOString() },
+      // Before last retro (should be excluded)
+      { behavior: "work-assigner", action: "close_bead", target: "adj-002", reason: null, createdAt: new Date(Date.now() - 86400000).toISOString() },
+    ]);
+
+    await behavior.act(makeCronEvent(), state, comm);
+
+    const retroArg = (memoryStore.insertRetrospective as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(retroArg.beadsClosed).toBe(1);
+  });
+
+  it("should only count failures from the retro period", async () => {
+    const memoryStore = createMockMemoryStore();
+    const behavior = createSessionRetrospective(memoryStore);
+    const state = createMockState();
+    const comm = createMockComm();
+
+    const today = new Date().toISOString().split("T")[0];
+    const oldDate = new Date(Date.now() - 172800000).toISOString().split("T")[0]; // 2 days ago
+
+    state.getRecentDecisions.mockReturnValue([
+      // Today's failure
+      { behavior: "some", action: "reopen_bead", target: "adj-001", reason: null, createdAt: `${today}T14:00:00Z` },
+      // Old failure - should be excluded
+      { behavior: "some", action: "failure_detected", target: "adj-002", reason: null, createdAt: `${oldDate}T14:00:00Z` },
+    ]);
+
+    await behavior.act(makeCronEvent(), state, comm);
+
+    const retroArg = (memoryStore.insertRetrospective as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(retroArg.beadsFailed).toBe(1);
+  });
+});

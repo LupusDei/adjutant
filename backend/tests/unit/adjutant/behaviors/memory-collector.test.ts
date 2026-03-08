@@ -217,4 +217,82 @@ describe("MemoryCollector Behavior", () => {
       expect(behavior.shouldAct(event, state)).toBe(true);
     });
   });
+
+  describe("correction:detected event emission (adj-3315)", () => {
+    it("should emit correction:detected event when a correction is found", async () => {
+      const { createMemoryCollector } = await import("../../../../src/services/adjutant/behaviors/memory-collector.js");
+      const { getEventBus, resetEventBus } = await import("../../../../src/services/event-bus.js");
+
+      resetEventBus();
+      const bus = getEventBus();
+      const emitted: unknown[] = [];
+      bus.on("correction:detected", (data) => emitted.push(data));
+
+      const behavior = createMemoryCollector(memoryStore);
+      const event = makeMailEvent("don't use any types in the codebase");
+
+      await behavior.act(event, state, comm);
+
+      expect(emitted.length).toBe(1);
+      const payload = emitted[0] as { messageId: string; from: string; pattern: string; body: string };
+      expect(payload.from).toBe("user");
+      expect(payload.pattern).toBeTruthy();
+      expect(payload.body).toBe("don't use any types in the codebase");
+
+      resetEventBus();
+    });
+
+    it("should NOT emit correction:detected for non-user messages", async () => {
+      const { createMemoryCollector } = await import("../../../../src/services/adjutant/behaviors/memory-collector.js");
+      const { getEventBus, resetEventBus } = await import("../../../../src/services/event-bus.js");
+
+      resetEventBus();
+      const bus = getEventBus();
+      const emitted: unknown[] = [];
+      bus.on("correction:detected", (data) => emitted.push(data));
+
+      const behavior = createMemoryCollector(memoryStore);
+      const event = makeMailEvent("don't use any types", "some-agent");
+
+      await behavior.act(event, state, comm);
+
+      expect(emitted.length).toBe(0);
+
+      resetEventBus();
+    });
+  });
+
+  describe("inferTopic relevance (adj-n3r6)", () => {
+    it("should return the most relevant topic (highest keyword match count)", async () => {
+      const { createMemoryCollector } = await import("../../../../src/services/adjutant/behaviors/memory-collector.js");
+      const behavior = createMemoryCollector(memoryStore);
+
+      // Message with many technical keywords: "type", "test", "code", "typescript"
+      // and fewer operational keywords: "bead"
+      // Should infer topic from technical category, not operational
+      const event = makeMailEvent("always use strict type in test code for typescript");
+
+      await behavior.act(event, state, comm);
+
+      const learnings = memoryStore.queryLearnings({});
+      expect(learnings.length).toBeGreaterThanOrEqual(1);
+      // The topic should be from the technical category since it has more matches
+      expect(learnings[0].topic).toMatch(/^technical-/);
+    });
+
+    it("should pick longest matching keyword for topic specificity", async () => {
+      const { createMemoryCollector } = await import("../../../../src/services/adjutant/behaviors/memory-collector.js");
+      const behavior = createMemoryCollector(memoryStore);
+
+      // Message with "typescript" (longer/more specific) and "type" (shorter)
+      const event = makeMailEvent("always use typescript strict mode");
+
+      await behavior.act(event, state, comm);
+
+      const learnings = memoryStore.queryLearnings({});
+      expect(learnings.length).toBeGreaterThanOrEqual(1);
+      // Should pick the more specific keyword "typescript" not just "type"
+      expect(learnings[0].topic).toContain("typescript");
+    });
+  });
 });
