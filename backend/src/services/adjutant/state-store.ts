@@ -22,7 +22,7 @@ export interface DecisionEntry {
 
 export interface AdjutantState {
   getAgentProfile(agentId: string): AgentProfile | null;
-  upsertAgentProfile(profile: Partial<AgentProfile> & { agentId: string }): void;
+  upsertAgentProfile(profile: Partial<Omit<AgentProfile, 'lastStatusAt'>> & { agentId: string }): void;
   getAllAgentProfiles(): AgentProfile[];
   logDecision(entry: Omit<DecisionEntry, "id" | "createdAt">): void;
   getRecentDecisions(limit: number): DecisionEntry[];
@@ -96,6 +96,13 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
     VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?)
   `);
 
+  const updateProfileStmt = db.prepare(`
+    UPDATE adjutant_agent_profiles
+    SET last_status = ?, last_status_at = datetime('now'), last_activity = ?,
+        current_task = ?, current_bead_id = ?, connected_at = ?, disconnected_at = ?
+    WHERE agent_id = ?
+  `);
+
   const logDecisionStmt = db.prepare(`
     INSERT INTO adjutant_decisions (behavior, action, target, reason)
     VALUES (?, ?, ?, ?)
@@ -120,7 +127,7 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
       return row !== undefined ? rowToProfile(row) : null;
     },
 
-    upsertAgentProfile(profile: Partial<AgentProfile> & { agentId: string }): void {
+    upsertAgentProfile(profile: Partial<Omit<AgentProfile, 'lastStatusAt'>> & { agentId: string }): void {
       const existing = getProfileStmt.get(profile.agentId) as AgentProfileRow | undefined;
 
       if (existing !== undefined) {
@@ -134,12 +141,7 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
           disconnected_at: profile.disconnectedAt !== undefined ? profile.disconnectedAt : existing.disconnected_at,
         };
 
-        db.prepare(`
-          UPDATE adjutant_agent_profiles
-          SET last_status = ?, last_status_at = datetime('now'), last_activity = ?,
-              current_task = ?, current_bead_id = ?, connected_at = ?, disconnected_at = ?
-          WHERE agent_id = ?
-        `).run(
+        updateProfileStmt.run(
           merged.last_status,
           merged.last_activity,
           merged.current_task,
@@ -171,7 +173,8 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
     },
 
     getRecentDecisions(limit: number): DecisionEntry[] {
-      const rows = getRecentDecisionsStmt.all(limit) as DecisionRow[];
+      const safeLimit = Math.max(0, Math.min(limit, 1000));
+      const rows = getRecentDecisionsStmt.all(safeLimit) as DecisionRow[];
       return rows.map(rowToDecision);
     },
 

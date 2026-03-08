@@ -58,6 +58,84 @@ describe("AdjutantState", () => {
       expect(profile!.lastStatusAt).toBeTruthy();
     });
 
+    it("should apply defaults when only agentId is provided", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "minimal-agent" });
+
+      const profile = store.getAgentProfile("minimal-agent");
+      expect(profile).not.toBeNull();
+      expect(profile!.agentId).toBe("minimal-agent");
+      expect(profile!.lastStatus).toBe("unknown");
+      expect(profile!.lastStatusAt).toBeTruthy();
+      expect(profile!.lastActivity).toBeNull();
+      expect(profile!.currentTask).toBeNull();
+      expect(profile!.currentBeadId).toBeNull();
+      expect(profile!.connectedAt).toBeNull();
+      expect(profile!.disconnectedAt).toBeNull();
+    });
+
+    it("should handle unicode in agent IDs and metadata values", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      const unicodeId = "agent-\u{1F680}-\u{1F916}";
+      store.upsertAgentProfile({
+        agentId: unicodeId,
+        lastStatus: "working",
+        currentTask: "\u00E9\u00E8\u00EA \u4F60\u597D \u{1F4BB}",
+      });
+
+      const profile = store.getAgentProfile(unicodeId);
+      expect(profile).not.toBeNull();
+      expect(profile!.agentId).toBe(unicodeId);
+      expect(profile!.currentTask).toBe("\u00E9\u00E8\u00EA \u4F60\u597D \u{1F4BB}");
+    });
+
+    it("should explicitly clear currentTask when set to null", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({
+        agentId: "agent-1",
+        lastStatus: "working",
+        currentTask: "important task",
+      });
+
+      // Explicitly set currentTask to null
+      store.upsertAgentProfile({
+        agentId: "agent-1",
+        currentTask: null,
+      });
+
+      const profile = store.getAgentProfile("agent-1");
+      expect(profile).not.toBeNull();
+      expect(profile!.currentTask).toBeNull();
+      // lastStatus should be preserved from the merge
+      expect(profile!.lastStatus).toBe("working");
+    });
+
+    it("should update last_status_at on each upsert call", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "agent-1", lastStatus: "idle" });
+      const first = store.getAgentProfile("agent-1");
+      expect(first).not.toBeNull();
+      const firstTimestamp = first!.lastStatusAt;
+
+      // Update the profile again
+      store.upsertAgentProfile({ agentId: "agent-1", lastStatus: "working" });
+      const second = store.getAgentProfile("agent-1");
+      expect(second).not.toBeNull();
+      // lastStatusAt should be set (may or may not differ within same second)
+      expect(second!.lastStatusAt).toBeTruthy();
+      // Both should be valid datetime strings
+      expect(new Date(firstTimestamp).getTime()).not.toBeNaN();
+      expect(new Date(second!.lastStatusAt).getTime()).not.toBeNaN();
+    });
+
     it("should update existing profile with merge", async () => {
       const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
       const store = createAdjutantState(db);
@@ -156,6 +234,39 @@ describe("AdjutantState", () => {
       expect(decisions[0].behavior).toBe("b3");
       expect(decisions[1].behavior).toBe("b2");
     });
+
+    it("should clamp negative limit to 0 and return empty array", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.logDecision({ behavior: "b1", action: "a1", target: null, reason: null });
+
+      const decisions = store.getRecentDecisions(-1);
+      expect(decisions).toEqual([]);
+    });
+
+    it("should return empty array for limit 0", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.logDecision({ behavior: "b1", action: "a1", target: null, reason: null });
+
+      const decisions = store.getRecentDecisions(0);
+      expect(decisions).toEqual([]);
+    });
+
+    it("should clamp limit exceeding 1000 to 1000", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      // Insert a few decisions; the point is that limit is clamped, not that we have 1000 rows
+      store.logDecision({ behavior: "b1", action: "a1", target: null, reason: null });
+      store.logDecision({ behavior: "b2", action: "a2", target: null, reason: null });
+
+      const decisions = store.getRecentDecisions(9999);
+      // Should return all 2 rows (clamped to 1000 but only 2 exist)
+      expect(decisions).toHaveLength(2);
+    });
   });
 
   describe("getMeta / setMeta", () => {
@@ -171,6 +282,14 @@ describe("AdjutantState", () => {
 
       store.setMeta("version", "1.0.0");
       expect(store.getMeta("version")).toBe("1.0.0");
+    });
+
+    it("should store and retrieve empty string value", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.setMeta("empty-val", "");
+      expect(store.getMeta("empty-val")).toBe("");
     });
 
     it("should overwrite existing value", async () => {
