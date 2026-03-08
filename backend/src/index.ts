@@ -38,6 +38,14 @@ import { createPeriodicSummaryBehavior } from "./services/adjutant/behaviors/per
 import { createStaleAgentNudger } from "./services/adjutant/behaviors/stale-agent-nudger.js";
 import { createWorkAssigner } from "./services/adjutant/behaviors/work-assigner.js";
 import { createWorkRebalancer } from "./services/adjutant/behaviors/work-rebalancer.js";
+import { createMemoryCollector } from "./services/adjutant/behaviors/memory-collector.js";
+import { createSessionRetrospective } from "./services/adjutant/behaviors/session-retrospective.js";
+import { createMemoryReviewer } from "./services/adjutant/behaviors/memory-reviewer.js";
+import { createSelfImprover } from "./services/adjutant/behaviors/self-improver.js";
+import { createAgentDecommissioner } from "./services/adjutant/behaviors/agent-decommissioner.js";
+import { createMemoryStore } from "./services/adjutant/memory-store.js";
+import { registerMemoryTools } from "./services/mcp-tools/memory.js";
+import { createMemoryRouter } from "./routes/memory.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
@@ -78,7 +86,9 @@ const messageDb = initDatabase();
 const messageStore = createMessageStore(messageDb);
 const proposalStore = createProposalStore(messageDb);
 const eventStore = createEventStore(messageDb);
+const memoryStore = createMemoryStore(messageDb);
 app.use("/api/events", createEventsRouter(eventStore));
+app.use("/api/memory", createMemoryRouter(memoryStore));
 app.use("/api/messages", createMessagesRouter(messageStore));
 app.use("/api/projects", createProjectsRouter(messageStore));
 app.use("/api/overview", createOverviewRouter(messageStore));
@@ -160,6 +170,7 @@ const server = app.listen(PORT, () => {
     registerBeadTools(server, eventStore);
     registerQueryTools(server, messageStore);
     registerProposalTools(server, proposalStore);
+    registerMemoryTools(server, memoryStore);
   });
 
   // Initialize message delivery (flushes pending messages when agents connect)
@@ -190,6 +201,11 @@ const server = app.listen(PORT, () => {
   behaviorRegistry.register(createStaleAgentNudger());
   behaviorRegistry.register(createWorkAssigner());
   behaviorRegistry.register(createWorkRebalancer());
+  behaviorRegistry.register(createMemoryCollector(memoryStore));
+  behaviorRegistry.register(createSessionRetrospective(memoryStore));
+  behaviorRegistry.register(createMemoryReviewer(memoryStore));
+  behaviorRegistry.register(createSelfImprover(memoryStore, proposalStore));
+  behaviorRegistry.register(createAgentDecommissioner());
 
   initAdjutantCore({ registry: behaviorRegistry, state: adjutantState, comm: adjutantComm });
   logInfo("Adjutant Core initialized with event-driven behaviors");
