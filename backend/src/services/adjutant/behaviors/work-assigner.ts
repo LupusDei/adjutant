@@ -4,6 +4,7 @@ import type { CommunicationManager } from "../communication.js";
 import { execBd } from "../../bd-client.js";
 import { updateBead } from "../../beads/beads-mutations.js";
 import { getEventBus } from "../../event-bus.js";
+import { getConnectedAgents } from "../../mcp-server.js";
 
 /** Debounce window: don't re-assign within 30 seconds of the last assignment */
 const DEBOUNCE_MS = 30_000;
@@ -19,12 +20,15 @@ interface ReadyBead {
 
 /**
  * Returns true if the agent is truly idle and connected (not a ghost/stale profile).
+ * Cross-references the live MCP connections to prevent assigning to dead agents
+ * whose profile wasn't properly updated (e.g., after a server restart).
  */
-function isTrulyIdle(profile: AgentProfile): boolean {
+function isTrulyIdle(profile: AgentProfile, liveAgentIds: Set<string>): boolean {
   return (
     profile.lastStatus === "idle" &&
     profile.connectedAt !== null &&
-    profile.disconnectedAt === null
+    profile.disconnectedAt === null &&
+    liveAgentIds.has(profile.agentId)
   );
 }
 
@@ -82,8 +86,9 @@ export function createWorkAssigner(): AdjutantBehavior {
       }
 
       // Check if at least one truly idle (connected, not ghost) agent exists
+      const liveAgentIds = new Set(getConnectedAgents().map((a) => a.agentId));
       const profiles = state.getAllAgentProfiles();
-      const hasIdleAgent = profiles.some(isTrulyIdle);
+      const hasIdleAgent = profiles.some((p) => isTrulyIdle(p, liveAgentIds));
       return hasIdleAgent;
     },
 
@@ -94,8 +99,9 @@ export function createWorkAssigner(): AdjutantBehavior {
 
       try {
         // 1. Get all agent profiles and filter to truly idle agents
+        const liveAgentIds = new Set(getConnectedAgents().map((a) => a.agentId));
         const profiles = state.getAllAgentProfiles();
-        const idleAgents = profiles.filter(isTrulyIdle);
+        const idleAgents = profiles.filter((p) => isTrulyIdle(p, liveAgentIds));
 
         if (idleAgents.length === 0) return;
 

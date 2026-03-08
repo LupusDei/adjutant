@@ -18,16 +18,22 @@ vi.mock("../../../../src/services/event-bus.js", () => ({
   })),
 }));
 
+vi.mock("../../../../src/services/mcp-server.js", () => ({
+  getConnectedAgents: vi.fn(() => []),
+}));
+
 // Import mocked modules so we can set up return values
 import { execBd } from "../../../../src/services/bd-client.js";
 import { updateBead } from "../../../../src/services/beads/beads-mutations.js";
 import { getEventBus } from "../../../../src/services/event-bus.js";
+import { getConnectedAgents } from "../../../../src/services/mcp-server.js";
 import { createWorkAssigner } from "../../../../src/services/adjutant/behaviors/work-assigner.js";
 
 // Typed mock references
 const mockExecBd = vi.mocked(execBd);
 const mockUpdateBead = vi.mocked(updateBead);
 const mockGetEventBus = vi.mocked(getEventBus);
+const mockGetConnectedAgents = vi.mocked(getConnectedAgents);
 
 function createMockState() {
   return {
@@ -85,6 +91,17 @@ describe("createWorkAssigner", () => {
 
     mockEmit = vi.fn();
     mockGetEventBus.mockReturnValue({ emit: mockEmit } as ReturnType<typeof getEventBus>);
+
+    // Default: all agents from tests are "connected" in MCP.
+    // Individual tests override this when testing ghost/disconnected scenarios.
+    mockGetConnectedAgents.mockReturnValue([
+      { agentId: "agent-1" },
+      { agentId: "agent-no-affinity" },
+      { agentId: "agent-with-affinity" },
+      { agentId: "real-agent" },
+      { agentId: "older-idle" },
+      { agentId: "newer-idle" },
+    ] as ReturnType<typeof getConnectedAgents>);
   });
 
   afterEach(() => {
@@ -166,6 +183,28 @@ describe("createWorkAssigner", () => {
         disconnectedAt: "2026-01-01T11:00:00Z",  // disconnected = ghost
       }),
     ]);
+
+    // Ghost not in live MCP connections
+    mockGetConnectedAgents.mockReturnValue([]);
+
+    expect(behavior.shouldAct(dummyEvent, state)).toBe(false);
+  });
+
+  it("shouldAct returns false when idle agent has no live MCP connection", () => {
+    const behavior = createWorkAssigner();
+    const state = createMockState();
+    state.getMeta.mockReturnValue(null);
+    state.getAllAgentProfiles.mockReturnValue([
+      makeProfile({
+        agentId: "uncle-bob",
+        lastStatus: "idle",
+        connectedAt: "2026-01-01T10:00:00Z",
+        disconnectedAt: null, // Profile says connected, but agent is dead
+      }),
+    ]);
+
+    // uncle-bob NOT in live MCP connections (server restarted)
+    mockGetConnectedAgents.mockReturnValue([]);
 
     expect(behavior.shouldAct(dummyEvent, state)).toBe(false);
   });
@@ -274,6 +313,11 @@ describe("createWorkAssigner", () => {
     const behavior = createWorkAssigner();
     const state = createMockState();
     const comm = createMockComm();
+
+    // Only real-agent is in live MCP connections
+    mockGetConnectedAgents.mockReturnValue([
+      { agentId: "real-agent" },
+    ] as ReturnType<typeof getConnectedAgents>);
 
     state.getAllAgentProfiles.mockReturnValue([
       // Ghost agent: idle but disconnected

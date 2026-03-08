@@ -193,6 +193,14 @@ const server = app.listen(PORT, () => {
 
   // Initialize Adjutant Core — event-driven behavior dispatch
   const adjutantState = createAdjutantState(messageDb);
+
+  // On server restart, no agents are connected — mark all as disconnected
+  // so work-assigner doesn't assign beads to dead agents.
+  const staleMarked = adjutantState.markAllDisconnected();
+  if (staleMarked > 0) {
+    logInfo("Marked stale agent profiles as disconnected on startup", { count: staleMarked });
+  }
+
   const adjutantComm = createCommunicationManager(messageStore);
   const behaviorRegistry = new BehaviorRegistry();
 

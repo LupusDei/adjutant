@@ -709,4 +709,42 @@ describe("AdjutantState", () => {
       expect(record!.decommissionedAt).toBeNull();
     });
   });
+
+  describe("markAllDisconnected", () => {
+    it("should mark all connected profiles as disconnected", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      // Two connected agents
+      store.upsertAgentProfile({ agentId: "agent-1", lastStatus: "idle", connectedAt: "2026-01-01T10:00:00Z", disconnectedAt: null });
+      store.upsertAgentProfile({ agentId: "agent-2", lastStatus: "working", connectedAt: "2026-01-01T10:00:00Z", disconnectedAt: null });
+      // One already disconnected
+      store.upsertAgentProfile({ agentId: "agent-3", lastStatus: "disconnected", connectedAt: "2026-01-01T09:00:00Z", disconnectedAt: "2026-01-01T10:00:00Z" });
+
+      const count = store.markAllDisconnected();
+      expect(count).toBe(2);
+
+      const p1 = store.getAgentProfile("agent-1");
+      expect(p1!.lastStatus).toBe("disconnected");
+      expect(p1!.disconnectedAt).not.toBeNull();
+
+      const p2 = store.getAgentProfile("agent-2");
+      expect(p2!.lastStatus).toBe("disconnected");
+      expect(p2!.disconnectedAt).not.toBeNull();
+
+      // Agent-3 should be unchanged
+      const p3 = store.getAgentProfile("agent-3");
+      expect(p3!.disconnectedAt).toBe("2026-01-01T10:00:00Z");
+    });
+
+    it("should return 0 when no connected profiles exist", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "agent-1", lastStatus: "disconnected", connectedAt: "2026-01-01T09:00:00Z", disconnectedAt: "2026-01-01T10:00:00Z" });
+
+      const count = store.markAllDisconnected();
+      expect(count).toBe(0);
+    });
+  });
 });

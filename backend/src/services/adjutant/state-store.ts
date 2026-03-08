@@ -55,6 +55,8 @@ export interface AdjutantState {
   getLastSpawn(agentId: string): SpawnRecord | null;
   /** Count spawns that have not been decommissioned. */
   countActiveSpawns(): number;
+  /** Mark all profiles with disconnectedAt IS NULL as disconnected (for server restart cleanup). Returns count updated. */
+  markAllDisconnected(): number;
 }
 
 interface AgentProfileRow {
@@ -200,6 +202,12 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
     SELECT COUNT(*) AS count FROM adjutant_spawn_history WHERE decommissioned_at IS NULL
   `);
 
+  const markAllDisconnectedStmt = db.prepare(`
+    UPDATE adjutant_agent_profiles
+    SET disconnected_at = datetime('now'), last_status = 'disconnected'
+    WHERE disconnected_at IS NULL AND connected_at IS NOT NULL
+  `);
+
   return {
     getAgentProfile(agentId: string): AgentProfile | null {
       const row = getProfileStmt.get(agentId) as AgentProfileRow | undefined;
@@ -312,6 +320,11 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
     countActiveSpawns(): number {
       const row = countActiveSpawnsStmt.get() as { count: number };
       return row.count;
+    },
+
+    markAllDisconnected(): number {
+      const result = markAllDisconnectedStmt.run();
+      return result.changes;
     },
   };
 }
