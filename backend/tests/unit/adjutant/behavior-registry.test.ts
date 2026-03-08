@@ -123,4 +123,51 @@ describe("BehaviorRegistry", () => {
     const registry = new BehaviorRegistry();
     expect(registry.getByName("nonexistent")).toBeUndefined();
   });
+
+  // ---------------------------------------------------------------------------
+  // adj-p9i6: Reject dead behaviors (no triggers AND no schedule)
+  // ---------------------------------------------------------------------------
+
+  describe("dead behavior rejection", () => {
+    it("throws when registering behavior with empty triggers and no schedule", () => {
+      const registry = new BehaviorRegistry();
+      expect(() =>
+        registry.register(
+          createTestBehavior({ name: "dead", triggers: [], schedule: undefined }),
+        ),
+      ).toThrow(/no triggers and no schedule/);
+    });
+
+    it("does NOT throw when behavior has only triggers (no schedule)", () => {
+      const registry = new BehaviorRegistry();
+      expect(() =>
+        registry.register(
+          createTestBehavior({ name: "trigger-only", triggers: ["agent:status_changed"] }),
+        ),
+      ).not.toThrow();
+    });
+
+    it("does NOT throw when behavior has only schedule (no triggers)", () => {
+      const registry = new BehaviorRegistry();
+      expect(() =>
+        registry.register(
+          createTestBehavior({ name: "schedule-only", triggers: [], schedule: "0 * * * *" }),
+        ),
+      ).not.toThrow();
+    });
+
+    it("does NOT throw when behavior has both triggers and schedule", () => {
+      const registry = new BehaviorRegistry();
+      expect(() =>
+        registry.register(
+          createTestBehavior({
+            name: "both",
+            triggers: ["agent:status_changed"],
+            schedule: "0 * * * *",
+          }),
+        ),
+      ).not.toThrow();
+    });
+  });
+
 });

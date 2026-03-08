@@ -43,11 +43,16 @@ export interface AdjutantBehavior {
 export class BehaviorRegistry {
   private behaviors: AdjutantBehavior[] = [];
 
-  /** Register a behavior. Throws if a behavior with the same name already exists. */
+  /** Register a behavior. Throws if a behavior with the same name already exists or is unreachable. */
   register(behavior: AdjutantBehavior): void {
     if (this.behaviors.some((b) => b.name === behavior.name)) {
       throw new Error(
         `Behavior "${behavior.name}" is already registered`,
+      );
+    }
+    if (behavior.triggers.length === 0 && !behavior.schedule) {
+      throw new Error(
+        `Behavior "${behavior.name}" has no triggers and no schedule — it would never execute`,
       );
     }
     this.behaviors.push(behavior);
@@ -72,4 +77,5 @@ export class BehaviorRegistry {
   getByName(name: string): AdjutantBehavior | undefined {
     return this.behaviors.find((b) => b.name === name);
   }
+
 }
