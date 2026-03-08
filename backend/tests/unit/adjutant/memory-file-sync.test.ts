@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdirSync, rmSync, readFileSync, existsSync } from "node:fs";
+import { mkdirSync, rmSync, readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type Database from "better-sqlite3";
@@ -312,6 +312,54 @@ describe("Memory File Sync (adj-053.5.2)", () => {
         expect(content).not.toContain("Old rule that was replaced");
         expect(content).toContain("New improved rule");
       }
+    });
+
+    it("should sanitize topic names containing path traversal characters (adj-lau5)", async () => {
+      const { syncMemoryFiles } = await import("../../../src/services/adjutant/memory-file-sync.js");
+
+      // Insert a learning with a malicious topic that tries path traversal
+      insertHighConfidenceLearning("../../etc/passwd", "Malicious content", 0.9, 5);
+
+      const result = await syncMemoryFiles(store, memoryDir, memoryMdPath);
+
+      expect(result.topicsWritten).toBe(1);
+      // The file should be created INSIDE memoryDir, not outside
+      expect(existsSync(join(memoryDir, "etcpasswd.md"))).toBe(true);
+      // Should NOT have written outside the directory
+      const parentDir = join(memoryDir, "..");
+      expect(existsSync(join(parentDir, "passwd.md"))).toBe(false);
+    });
+
+    it("should sanitize topic names with slashes and special characters (adj-lau5)", async () => {
+      const { syncMemoryFiles } = await import("../../../src/services/adjutant/memory-file-sync.js");
+
+      insertHighConfidenceLearning("foo/bar\\baz", "Content with slashes", 0.9, 5);
+
+      const result = await syncMemoryFiles(store, memoryDir, memoryMdPath);
+
+      expect(result.topicsWritten).toBe(1);
+      // Should sanitize to safe filename
+      const files = readdirSync(memoryDir).filter(f => f !== "MEMORY.md");
+      expect(files.length).toBe(1);
+      // Filename should not contain slashes or backslashes
+      expect(files[0]).not.toContain("/");
+      expect(files[0]).not.toContain("\\");
+    });
+
+    it("should truncate excessively long topic names (adj-lau5)", async () => {
+      const { syncMemoryFiles } = await import("../../../src/services/adjutant/memory-file-sync.js");
+
+      const longTopic = "a".repeat(300);
+      insertHighConfidenceLearning(longTopic, "Content with long topic", 0.9, 5);
+
+      const result = await syncMemoryFiles(store, memoryDir, memoryMdPath);
+
+      expect(result.topicsWritten).toBe(1);
+      const files = readdirSync(memoryDir).filter(f => f !== "MEMORY.md");
+      expect(files.length).toBe(1);
+      // Filename (without .md) should be at most 100 chars
+      const nameWithoutExt = files[0].replace(".md", "");
+      expect(nameWithoutExt.length).toBeLessThanOrEqual(100);
     });
 
     it("should return correct sync result stats", async () => {

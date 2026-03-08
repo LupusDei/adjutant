@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync, readFileSync, existsSync, unlinkSync, readdirSync } from "node:fs";
-import { join, basename } from "node:path";
+import { join, basename, resolve } from "node:path";
 import type { MemoryStore, Learning } from "./memory-store.js";
 
 // ============================================================================
@@ -17,6 +17,9 @@ const PRUNE_CONFIDENCE_THRESHOLD = 0.3;
 
 /** Maximum lines allowed in MEMORY.md */
 const MAX_MEMORY_LINES = 180;
+
+/** Maximum length for a sanitized topic filename (excluding .md extension) */
+const MAX_TOPIC_FILENAME_LENGTH = 100;
 
 /** Sentinel marking the start of auto-generated content in MEMORY.md */
 const AUTO_SECTION_HEADER = "## Auto-Generated Learnings";
@@ -77,6 +80,7 @@ export async function syncMemoryFiles(
 
   // 3. Write per-topic .md files (sorted by confidence descending within each)
   let learningsExported = 0;
+  const writtenFilenames = new Set<string>();
   for (const [topic, learnings] of topicGroups) {
     const sorted = learnings.sort((a, b) => b.confidence - a.confidence);
     const lines = [
@@ -90,8 +94,9 @@ export async function syncMemoryFiles(
     }
     lines.push("");
 
-    const topicFilePath = join(memoryDir, `${topic}.md`);
+    const topicFilePath = safeTopicPath(memoryDir, topic);
     writeFileSync(topicFilePath, lines.join("\n"), "utf-8");
+    writtenFilenames.add(basename(topicFilePath));
     learningsExported += sorted.length;
   }
 
@@ -103,8 +108,8 @@ export async function syncMemoryFiles(
     // Skip MEMORY.md itself
     if (topic === "MEMORY") continue;
 
-    // If this topic was just written (has qualifying learnings), skip pruning
-    if (topicGroups.has(topic)) continue;
+    // If this file was just written, skip pruning
+    if (writtenFilenames.has(topicFile)) continue;
 
     // Check if ALL learnings for this topic are below prune threshold
     const topicLearnings = memoryStore.queryLearnings({
@@ -135,6 +140,43 @@ export async function syncMemoryFiles(
 // ============================================================================
 // Helpers
 // ============================================================================
+
+/**
+ * Sanitize a topic string for use as a filename.
+ * Strips path separators, limits to alphanumeric + hyphens, and truncates length.
+ */
+export function sanitizeTopicFilename(topic: string): string {
+  // Remove path separators and dots used for traversal
+  let safe = topic.replace(/[/\\]/g, "");
+  // Remove leading dots to prevent hidden files or traversal
+  safe = safe.replace(/^\.+/, "");
+  // Replace any remaining non-alphanumeric, non-hyphen characters with empty string
+  safe = safe.replace(/[^a-zA-Z0-9-]/g, "");
+  // Truncate to max length
+  if (safe.length > MAX_TOPIC_FILENAME_LENGTH) {
+    safe = safe.slice(0, MAX_TOPIC_FILENAME_LENGTH);
+  }
+  // Fallback if completely empty after sanitization
+  if (safe.length === 0) {
+    safe = "unnamed-topic";
+  }
+  return safe;
+}
+
+/**
+ * Build a safe file path for a topic file, validating it stays within memoryDir.
+ */
+function safeTopicPath(memoryDir: string, topic: string): string {
+  const safeName = sanitizeTopicFilename(topic);
+  const filePath = join(memoryDir, `${safeName}.md`);
+  // Final defense: ensure resolved path is within memoryDir
+  const resolved = resolve(filePath);
+  const resolvedDir = resolve(memoryDir);
+  if (!resolved.startsWith(resolvedDir + "/") && resolved !== resolvedDir) {
+    return join(memoryDir, "unnamed-topic.md");
+  }
+  return filePath;
+}
 
 /**
  * Get all .md files in the memory directory (excluding MEMORY.md).
