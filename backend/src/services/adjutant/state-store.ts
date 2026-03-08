@@ -22,6 +22,15 @@ export interface DecisionEntry {
   createdAt: string;
 }
 
+export interface SpawnRecord {
+  id: number;
+  agentId: string;
+  spawnedAt: string;
+  reason: string | null;
+  beadId: string | null;
+  decommissionedAt: string | null;
+}
+
 export interface AdjutantState {
   getAgentProfile(agentId: string): AgentProfile | null;
   upsertAgentProfile(profile: Partial<Omit<AgentProfile, 'lastStatusAt'>> & { agentId: string }): void;
@@ -34,6 +43,18 @@ export interface AdjutantState {
   setMeta(key: string, value: string): void;
   /** Delete decisions older than the given number of days. Returns count of deleted rows. */
   pruneOldDecisions(olderThanDays: number): number;
+  /** Log a new agent spawn event */
+  logSpawn(agentId: string, reason?: string, beadId?: string): number;
+  /** Get spawn history, newest first */
+  getSpawnHistory(limit?: number): SpawnRecord[];
+  /** Get spawn history for a specific agent */
+  getAgentSpawnHistory(agentId: string): SpawnRecord[];
+  /** Mark a spawn record as decommissioned */
+  markDecommissioned(spawnId: number): void;
+  /** Get the most recent spawn for an agent (or null) */
+  getLastSpawn(agentId: string): SpawnRecord | null;
+  /** Count active (not decommissioned) spawns */
+  countActiveSpawns(): number;
 }
 
 interface AgentProfileRow {
@@ -56,6 +77,15 @@ interface DecisionRow {
   target: string | null;
   reason: string | null;
   created_at: string;
+}
+
+interface SpawnHistoryRow {
+  id: number;
+  agent_id: string;
+  spawned_at: string;
+  reason: string | null;
+  bead_id: string | null;
+  decommissioned_at: string | null;
 }
 
 interface MetaRow {
@@ -87,6 +117,17 @@ function rowToDecision(row: DecisionRow): DecisionEntry {
     target: row.target,
     reason: row.reason,
     createdAt: row.created_at,
+  };
+}
+
+function rowToSpawnRecord(row: SpawnHistoryRow): SpawnRecord {
+  return {
+    id: row.id,
+    agentId: row.agent_id,
+    spawnedAt: row.spawned_at,
+    reason: row.reason,
+    beadId: row.bead_id,
+    decommissionedAt: row.decommissioned_at,
   };
 }
 
@@ -132,6 +173,31 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
   const setMetaStmt = db.prepare(`
     INSERT OR REPLACE INTO adjutant_metadata (key, value, updated_at)
     VALUES (?, ?, datetime('now'))
+  `);
+
+  const logSpawnStmt = db.prepare(`
+    INSERT INTO adjutant_spawn_history (agent_id, reason, bead_id)
+    VALUES (?, ?, ?)
+  `);
+
+  const getSpawnHistoryStmt = db.prepare(`
+    SELECT * FROM adjutant_spawn_history ORDER BY spawned_at DESC LIMIT ?
+  `);
+
+  const getAgentSpawnHistoryStmt = db.prepare(`
+    SELECT * FROM adjutant_spawn_history WHERE agent_id = ? ORDER BY spawned_at DESC
+  `);
+
+  const markDecommissionedStmt = db.prepare(`
+    UPDATE adjutant_spawn_history SET decommissioned_at = datetime('now') WHERE id = ?
+  `);
+
+  const getLastSpawnStmt = db.prepare(`
+    SELECT * FROM adjutant_spawn_history WHERE agent_id = ? ORDER BY spawned_at DESC LIMIT 1
+  `);
+
+  const countActiveSpawnsStmt = db.prepare(`
+    SELECT COUNT(*) AS count FROM adjutant_spawn_history WHERE decommissioned_at IS NULL
   `);
 
   return {
@@ -216,6 +282,35 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
       );
       const result = stmt.run(olderThanDays);
       return result.changes;
+    },
+
+    logSpawn(agentId: string, reason?: string, beadId?: string): number {
+      const result = logSpawnStmt.run(agentId, reason ?? null, beadId ?? null);
+      return Number(result.lastInsertRowid);
+    },
+
+    getSpawnHistory(limit = 50): SpawnRecord[] {
+      const rows = getSpawnHistoryStmt.all(limit) as SpawnHistoryRow[];
+      return rows.map(rowToSpawnRecord);
+    },
+
+    getAgentSpawnHistory(agentId: string): SpawnRecord[] {
+      const rows = getAgentSpawnHistoryStmt.all(agentId) as SpawnHistoryRow[];
+      return rows.map(rowToSpawnRecord);
+    },
+
+    markDecommissioned(spawnId: number): void {
+      markDecommissionedStmt.run(spawnId);
+    },
+
+    getLastSpawn(agentId: string): SpawnRecord | null {
+      const row = getLastSpawnStmt.get(agentId) as SpawnHistoryRow | undefined;
+      return row !== undefined ? rowToSpawnRecord(row) : null;
+    },
+
+    countActiveSpawns(): number {
+      const row = countActiveSpawnsStmt.get() as { count: number };
+      return row.count;
     },
   };
 }
