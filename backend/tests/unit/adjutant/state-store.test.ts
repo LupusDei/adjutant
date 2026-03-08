@@ -302,6 +302,87 @@ describe("AdjutantState", () => {
     });
   });
 
+  describe("assignmentCount and lastEpicId fields", () => {
+    it("should include assignmentCount and lastEpicId in agent profile", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({
+        agentId: "agent-assign",
+        lastStatus: "working",
+        assignmentCount: 3,
+        lastEpicId: "adj-052",
+      });
+
+      const profile = store.getAgentProfile("agent-assign");
+      expect(profile).not.toBeNull();
+      expect(profile!.assignmentCount).toBe(3);
+      expect(profile!.lastEpicId).toBe("adj-052");
+    });
+
+    it("should default assignmentCount to 0 for new profiles", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "agent-default-count" });
+
+      const profile = store.getAgentProfile("agent-default-count");
+      expect(profile).not.toBeNull();
+      expect(profile!.assignmentCount).toBe(0);
+    });
+
+    it("should default lastEpicId to null for new profiles", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "agent-default-epic" });
+
+      const profile = store.getAgentProfile("agent-default-epic");
+      expect(profile).not.toBeNull();
+      expect(profile!.lastEpicId).toBeNull();
+    });
+
+    it("should update assignmentCount via upsert", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "agent-count", lastStatus: "idle" });
+      store.upsertAgentProfile({ agentId: "agent-count", assignmentCount: 5 });
+
+      const profile = store.getAgentProfile("agent-count");
+      expect(profile).not.toBeNull();
+      expect(profile!.assignmentCount).toBe(5);
+    });
+
+    it("should update lastEpicId via upsert", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "agent-epic", lastStatus: "idle" });
+      store.upsertAgentProfile({ agentId: "agent-epic", lastEpicId: "adj-052" });
+
+      const profile = store.getAgentProfile("agent-epic");
+      expect(profile).not.toBeNull();
+      expect(profile!.lastEpicId).toBe("adj-052");
+    });
+  });
+
+  describe("incrementAssignmentCount", () => {
+    it("should increment assignment count atomically", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "agent-inc", lastStatus: "idle" });
+
+      store.incrementAssignmentCount("agent-inc");
+      store.incrementAssignmentCount("agent-inc");
+
+      const profile = store.getAgentProfile("agent-inc");
+      expect(profile).not.toBeNull();
+      expect(profile!.assignmentCount).toBe(2);
+    });
+  });
+
   describe("pruneOldDecisions", () => {
     it("should return 0 when no old decisions exist", async () => {
       const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
