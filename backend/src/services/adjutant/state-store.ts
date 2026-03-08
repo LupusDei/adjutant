@@ -22,7 +22,7 @@ export interface DecisionEntry {
 
 export interface AdjutantState {
   getAgentProfile(agentId: string): AgentProfile | null;
-  upsertAgentProfile(profile: Partial<AgentProfile> & { agentId: string }): void;
+  upsertAgentProfile(profile: Partial<Omit<AgentProfile, 'lastStatusAt'>> & { agentId: string }): void;
   getAllAgentProfiles(): AgentProfile[];
   logDecision(entry: Omit<DecisionEntry, "id" | "createdAt">): void;
   getRecentDecisions(limit: number): DecisionEntry[];
@@ -125,7 +125,7 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
       return row !== undefined ? rowToProfile(row) : null;
     },
 
-    upsertAgentProfile(profile: Partial<AgentProfile> & { agentId: string }): void {
+    upsertAgentProfile(profile: Partial<Omit<AgentProfile, 'lastStatusAt'>> & { agentId: string }): void {
       const existing = getProfileStmt.get(profile.agentId) as AgentProfileRow | undefined;
 
       if (existing !== undefined) {
