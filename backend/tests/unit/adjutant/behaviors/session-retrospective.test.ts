@@ -444,6 +444,35 @@ describe("session-retrospective analysis (adj-053.3.2)", () => {
   });
 });
 
+describe("session-retrospective went_well/went_wrong/action_items populated (adj-n3q1)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should never persist a retrospective with null went_well/went_wrong/action_items", async () => {
+    const memoryStore = createMockMemoryStore();
+    const behavior = createSessionRetrospective(memoryStore);
+    const state = createMockState();
+    const comm = createMockComm();
+
+    await behavior.act(makeCronEvent(), state, comm);
+
+    const retroArg = (memoryStore.insertRetrospective as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    // These should be JSON strings, never null or undefined
+    expect(retroArg.wentWell).toBeDefined();
+    expect(retroArg.wentWell).not.toBeNull();
+    expect(retroArg.wentWrong).toBeDefined();
+    expect(retroArg.wentWrong).not.toBeNull();
+    expect(retroArg.actionItems).toBeDefined();
+    expect(retroArg.actionItems).not.toBeNull();
+
+    // They should be parseable JSON arrays
+    expect(() => JSON.parse(retroArg.wentWell)).not.toThrow();
+    expect(() => JSON.parse(retroArg.wentWrong)).not.toThrow();
+    expect(() => JSON.parse(retroArg.actionItems)).not.toThrow();
+  });
+});
+
 describe("session-retrospective date filtering (adj-q0ct)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
