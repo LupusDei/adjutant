@@ -109,6 +109,7 @@ export async function spawnAgent(
       projectPath: req.projectPath,
       mode,
       ...(claudeArgs.length > 0 ? { claudeArgs } : {}),
+      ...(req.initialPrompt ? { initialPrompt: req.initialPrompt } : {}),
     });
 
     if (result.success) {

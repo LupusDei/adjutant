@@ -91,12 +91,36 @@ export function createAgentSpawnerBehavior(projectPath: string): AdjutantBehavio
 
         const readyBeads = result.data;
 
-        // 8. Spawn a new agent
+        // 8. Build an initial prompt so the agent knows what to work on
+        const topBeads = readyBeads
+          .sort((a, b) => a.priority - b.priority)
+          .slice(0, 3);
+        const beadList = topBeads
+          .map((b) => `- ${b.id} (P${b.priority}): ${b.title}`)
+          .join("\n");
+
+        const initialPrompt = [
+          `You are an auto-spawned worker agent. There are ${readyBeads.length} ready bead(s) waiting for work.`,
+          ``,
+          `Top priority beads:`,
+          beadList,
+          ``,
+          `Pick the highest-priority bead and start working on it:`,
+          `1. Run \`bd show <id>\` to read the bead details`,
+          `2. Run \`bd update <id> --assignee=<your-name> --status=in_progress\` to claim it`,
+          `3. Report status via MCP: set_status({ status: "working", task: "..." })`,
+          `4. Do the work, run build + tests, commit, and push`,
+          `5. Run \`bd close <id>\` when done`,
+          `6. Check \`bd ready\` for more work`,
+        ].join("\n");
+
+        // 9. Spawn a new agent
         const agentName = `worker-${Date.now()}`;
         const spawnResult = await spawnAgent({
           name: agentName,
           projectPath,
           mode: "swarm",
+          initialPrompt,
         });
 
         if (spawnResult.success) {

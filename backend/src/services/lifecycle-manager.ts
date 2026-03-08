@@ -21,6 +21,8 @@ export interface CreateSessionRequest {
   claudeArgs?: string[] | undefined;
   /** Additional environment variables to set in the tmux session before starting Claude. */
   envVars?: Record<string, string> | undefined;
+  /** Prompt to inject into the session after Claude starts (via tmux send-keys). */
+  initialPrompt?: string | undefined;
 }
 
 export interface CreateSessionResult {
@@ -193,11 +195,32 @@ export class LifecycleManager {
       // before pipe-pane can attach to the pane.
       await this.waitForPane(tmuxPane);
 
+      // If an initial prompt was provided, inject it after Claude is ready.
+      // Use -l (literal) flag to prevent tmux from interpreting special characters.
+      if (req.initialPrompt) {
+        // Brief delay to let Claude Code finish initialization
+        await new Promise((resolve) => setTimeout(resolve, 3_000));
+        await execTmuxCommand([
+          "send-keys",
+          "-t",
+          tmuxSessionName,
+          "-l",
+          req.initialPrompt,
+        ]);
+        await execTmuxCommand([
+          "send-keys",
+          "-t",
+          tmuxSessionName,
+          "Enter",
+        ]);
+      }
+
       this.registry.updateStatus(session.id, "idle");
 
       logInfo("Session created", {
         sessionId: session.id,
         tmuxSession: tmuxSessionName,
+        hasInitialPrompt: !!req.initialPrompt,
       });
 
       return { success: true, sessionId: session.id };
