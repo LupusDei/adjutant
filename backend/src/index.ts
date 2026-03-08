@@ -107,11 +107,15 @@ const PRUNE_DAYS = 7;
 const PRUNE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 const startupPruned = eventStore.pruneOldEvents(PRUNE_DAYS);
-logInfo("Event pruning", { deletedCount: startupPruned });
+if (startupPruned > 0) {
+  logInfo("Pruned old timeline events", { deletedCount: startupPruned, olderThanDays: PRUNE_DAYS });
+}
 
 setInterval(() => {
   const deletedCount = eventStore.pruneOldEvents(PRUNE_DAYS);
-  logInfo("Event pruning", { deletedCount });
+  if (deletedCount > 0) {
+    logInfo("Pruned old timeline events", { deletedCount, olderThanDays: PRUNE_DAYS });
+  }
 }, PRUNE_INTERVAL_MS);
 
 const dashboardService = createDashboardService(messageStore);
