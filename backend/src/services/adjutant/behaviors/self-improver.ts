@@ -1,0 +1,138 @@
+import type { AdjutantBehavior, BehaviorEvent } from "../behavior-registry.js";
+import type { AdjutantState } from "../state-store.js";
+import type { CommunicationManager } from "../communication.js";
+import type { MemoryStore } from "../memory-store.js";
+import type { ProposalStore } from "../../proposal-store.js";
+import type { LearningCreatedEvent } from "../../event-bus.js";
+
+/** Minimum number of learnings in a topic before proposing improvements */
+const MIN_LEARNINGS_FOR_PROPOSAL = 5;
+
+/** Minimum average confidence threshold for a topic to qualify */
+const MIN_AVG_CONFIDENCE = 0.6;
+
+/** Debounce window: only 1 proposal per topic per this many milliseconds */
+const DEBOUNCE_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
+
+/**
+ * Create the self-improver behavior.
+ *
+ * This behavior:
+ * - Triggers on learning:created events
+ * - Runs weekly on a cron schedule
+ * - When a topic accumulates 5+ learnings with avg confidence > 0.6,
+ *   creates a proposal for process improvement
+ * - Debounces: only 1 proposal per topic per week
+ */
+export function createSelfImprover(
+  memoryStore: MemoryStore,
+  proposalStore: ProposalStore,
+): AdjutantBehavior {
+  /** Track when each topic last had a proposal created: topic -> timestamp */
+  const lastProposalTime = new Map<string, number>();
+
+  function isDebounced(topic: string): boolean {
+    const lastTime = lastProposalTime.get(topic);
+    if (lastTime === undefined) return false;
+    return Date.now() - lastTime < DEBOUNCE_MS;
+  }
+
+  function markProposed(topic: string): void {
+    lastProposalTime.set(topic, Date.now());
+  }
+
+  /**
+   * Check a specific topic and create a proposal if it qualifies.
+   */
+  function checkTopicAndPropose(
+    topic: string,
+    state: AdjutantState,
+  ): boolean {
+    if (isDebounced(topic)) {
+      return false;
+    }
+
+    const learnings = memoryStore.queryLearnings({ topic });
+    if (learnings.length < MIN_LEARNINGS_FOR_PROPOSAL) {
+      return false;
+    }
+
+    const avgConfidence = learnings.reduce((sum, l) => sum + l.confidence, 0) / learnings.length;
+    if (avgConfidence < MIN_AVG_CONFIDENCE) {
+      return false;
+    }
+
+    // Build proposal description from accumulated learnings
+    const learningsSummary = learnings
+      .slice(0, 10)
+      .map((l, i) => `${i + 1}. ${l.content}`)
+      .join("\n");
+
+    const proposal = proposalStore.insertProposal({
+      author: "adjutant-core",
+      title: `Process improvement: ${topic} (${learnings.length} learnings)`,
+      description: [
+        `## Topic: ${topic}`,
+        "",
+        `Based on ${learnings.length} accumulated learnings with average confidence ${avgConfidence.toFixed(2)}:`,
+        "",
+        learningsSummary,
+        "",
+        "### Suggested Action",
+        `Review and consolidate these ${learnings.length} learnings into actionable process improvements.`,
+      ].join("\n"),
+      type: "product",
+      project: "adjutant",
+    });
+
+    markProposed(topic);
+
+    state.logDecision({
+      behavior: "self-improver",
+      action: "proposal_created",
+      target: proposal.id,
+      reason: `Topic "${topic}" has ${learnings.length} learnings (avg confidence: ${avgConfidence.toFixed(2)})`,
+    });
+
+    return true;
+  }
+
+  /**
+   * Weekly review: check all topics with 5+ learnings.
+   */
+  function weeklyReview(state: AdjutantState): void {
+    const topicFreqs = memoryStore.getTopicFrequency();
+
+    for (const { topic, count } of topicFreqs) {
+      if (count >= MIN_LEARNINGS_FOR_PROPOSAL) {
+        checkTopicAndPropose(topic, state);
+      }
+    }
+  }
+
+  return {
+    name: "self-improver",
+    triggers: ["learning:created"],
+    schedule: "0 * * * *", // Hourly (actual weekly logic handled in act via meta check)
+
+    shouldAct(_event: BehaviorEvent, _state: AdjutantState): boolean {
+      return true;
+    },
+
+    async act(event: BehaviorEvent, state: AdjutantState, _comm: CommunicationManager): Promise<void> {
+      const data = event.data as Record<string, unknown>;
+
+      // Cron tick: run weekly review
+      if (data["cronTick"] === true) {
+        weeklyReview(state);
+        return;
+      }
+
+      // learning:created event: check the specific topic
+      const learningEvent = event.data as LearningCreatedEvent;
+      if (learningEvent.topic) {
+        checkTopicAndPropose(learningEvent.topic, state);
+      }
+    },
+  };
+}
