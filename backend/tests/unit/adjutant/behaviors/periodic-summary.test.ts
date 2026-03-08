@@ -1,9 +1,20 @@
-const { mockExecFile } = vi.hoisted(() => ({
-  mockExecFile: vi.fn(),
+// Suppress logging
+vi.mock("../../../../src/utils/index.js", () => ({
+  logInfo: vi.fn(),
+  logWarn: vi.fn(),
+  logError: vi.fn(),
+  logDebug: vi.fn(),
 }));
 
-vi.mock("child_process", () => ({
-  execFile: mockExecFile,
+// Mock session bridge
+const mockSendInput = vi.fn();
+const mockFindByTmuxSession = vi.fn();
+const mockBridge = {
+  registry: { findByTmuxSession: mockFindByTmuxSession },
+  sendInput: mockSendInput,
+};
+vi.mock("../../../../src/services/session-bridge.js", () => ({
+  getSessionBridge: () => mockBridge,
 }));
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -43,25 +54,6 @@ function makeCronEvent(): BehaviorEvent {
     data: { cronTick: true, behavior: "periodic-summary" },
     seq: 1,
   };
-}
-
-/**
- * Helper: make mockExecFile call its callback with success or error.
- */
-function setupExecFileSuccess() {
-  mockExecFile.mockImplementation(
-    (_cmd: string, _args: string[], cb: (err: Error | null) => void) => {
-      cb(null);
-    },
-  );
-}
-
-function setupExecFileFailure() {
-  mockExecFile.mockImplementation(
-    (_cmd: string, _args: string[], cb: (err: Error | null) => void) => {
-      cb(new Error("tmux not found"));
-    },
-  );
 }
 
 describe("createPeriodicSummaryBehavior", () => {
@@ -128,8 +120,10 @@ describe("periodic-summary act()", () => {
     vi.clearAllMocks();
   });
 
-  it("sends tmux commands when tmux succeeds", async () => {
-    setupExecFileSuccess();
+  it("sends prompt via session bridge sendInput", async () => {
+    const mockSession = { id: "session-123", tmuxPane: "adj-swarm-adjutant-coordinator:1.1" };
+    mockFindByTmuxSession.mockReturnValue(mockSession);
+    mockSendInput.mockResolvedValue(true);
 
     const behavior = createPeriodicSummaryBehavior();
     const state = createMockState();
@@ -137,21 +131,14 @@ describe("periodic-summary act()", () => {
 
     await behavior.act(makeCronEvent(), state, comm);
 
-    // Should call execFile twice: once for send-keys -l (text), once for Enter
-    expect(mockExecFile).toHaveBeenCalledTimes(2);
-
-    const firstCall = mockExecFile.mock.calls[0];
-    expect(firstCall[0]).toBe("tmux");
-    expect(firstCall[1]).toContain("send-keys");
-    expect(firstCall[1]).toContain("-l");
-
-    const secondCall = mockExecFile.mock.calls[1];
-    expect(secondCall[0]).toBe("tmux");
-    expect(secondCall[1]).toContain("Enter");
+    expect(mockFindByTmuxSession).toHaveBeenCalledWith("adj-swarm-adjutant-coordinator");
+    expect(mockSendInput).toHaveBeenCalledOnce();
+    expect(mockSendInput).toHaveBeenCalledWith("session-123", expect.stringContaining("HOURLY HEARTBEAT CHECK"));
   });
 
   it("sets last_heartbeat_sent meta on success", async () => {
-    setupExecFileSuccess();
+    mockFindByTmuxSession.mockReturnValue({ id: "s1" });
+    mockSendInput.mockResolvedValue(true);
 
     const behavior = createPeriodicSummaryBehavior();
     const state = createMockState();
@@ -167,7 +154,8 @@ describe("periodic-summary act()", () => {
   });
 
   it("logs decision on success", async () => {
-    setupExecFileSuccess();
+    mockFindByTmuxSession.mockReturnValue({ id: "s1" });
+    mockSendInput.mockResolvedValue(true);
 
     const behavior = createPeriodicSummaryBehavior();
     const state = createMockState();
@@ -184,8 +172,8 @@ describe("periodic-summary act()", () => {
     });
   });
 
-  it("logs failure decision when tmux fails", async () => {
-    setupExecFileFailure();
+  it("logs failure when session is not in registry", async () => {
+    mockFindByTmuxSession.mockReturnValue(undefined);
 
     const behavior = createPeriodicSummaryBehavior();
     const state = createMockState();
@@ -193,20 +181,38 @@ describe("periodic-summary act()", () => {
 
     await behavior.act(makeCronEvent(), state, comm);
 
-    expect(state.logDecision).toHaveBeenCalledOnce();
+    expect(mockSendInput).not.toHaveBeenCalled();
     expect(state.logDecision).toHaveBeenCalledWith({
       behavior: "periodic-summary",
       action: "heartbeat_failed",
       target: "adj-swarm-adjutant-coordinator",
       reason: "tmux send-keys failed — session may not exist",
     });
+    expect(state.setMeta).not.toHaveBeenCalled();
+  });
 
-    // Should NOT set meta on failure
+  it("logs failure when sendInput returns false", async () => {
+    mockFindByTmuxSession.mockReturnValue({ id: "s1" });
+    mockSendInput.mockResolvedValue(false);
+
+    const behavior = createPeriodicSummaryBehavior();
+    const state = createMockState();
+    const comm = createMockComm();
+
+    await behavior.act(makeCronEvent(), state, comm);
+
+    expect(state.logDecision).toHaveBeenCalledWith({
+      behavior: "periodic-summary",
+      action: "heartbeat_failed",
+      target: "adj-swarm-adjutant-coordinator",
+      reason: "tmux send-keys failed — session may not exist",
+    });
     expect(state.setMeta).not.toHaveBeenCalled();
   });
 
   it("flushes routine queue from comm manager", async () => {
-    setupExecFileSuccess();
+    mockFindByTmuxSession.mockReturnValue({ id: "s1" });
+    mockSendInput.mockResolvedValue(true);
 
     const behavior = createPeriodicSummaryBehavior();
     const state = createMockState();
@@ -217,6 +223,12 @@ describe("periodic-summary act()", () => {
 
     expect(comm.flushRoutineQueue).toHaveBeenCalledOnce();
 
+    // The prompt should include routine messages
+    const sentPrompt = mockSendInput.mock.calls[0]![1] as string;
+    expect(sentPrompt).toContain("ROUTINE NOTES");
+    expect(sentPrompt).toContain("msg1");
+    expect(sentPrompt).toContain("msg2");
+
     // The decision log should note the routine messages
     expect(state.logDecision).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -225,29 +237,17 @@ describe("periodic-summary act()", () => {
     );
   });
 
-  it("handles tmux failure gracefully (no throw)", async () => {
-    setupExecFileFailure();
+  it("handles sendInput failure gracefully (no throw)", async () => {
+    mockFindByTmuxSession.mockReturnValue({ id: "s1" });
+    mockSendInput.mockRejectedValue(new Error("tmux error"));
 
     const behavior = createPeriodicSummaryBehavior();
     const state = createMockState();
     const comm = createMockComm();
 
-    // Should not throw
+    // Should not throw — the act() must be resilient
     await expect(
       behavior.act(makeCronEvent(), state, comm),
     ).resolves.toBeUndefined();
-  });
-
-  it("does not send Enter if first send-keys fails", async () => {
-    setupExecFileFailure();
-
-    const behavior = createPeriodicSummaryBehavior();
-    const state = createMockState();
-    const comm = createMockComm();
-
-    await behavior.act(makeCronEvent(), state, comm);
-
-    // Only the first call should be made; Enter should not be sent
-    expect(mockExecFile).toHaveBeenCalledTimes(1);
   });
 });

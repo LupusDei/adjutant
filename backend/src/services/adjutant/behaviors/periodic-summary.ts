@@ -1,9 +1,8 @@
-import { execFile } from "child_process";
-
 import type { AdjutantBehavior, BehaviorEvent } from "../behavior-registry.js";
 import type { AdjutantState } from "../state-store.js";
 import type { CommunicationManager } from "../communication.js";
 import { ADJUTANT_TMUX_SESSION } from "../../adjutant-spawner.js";
+import { getSessionBridge } from "../../session-bridge.js";
 
 /**
  * Build the heartbeat prompt that gets injected into the Adjutant agent's tmux pane.
@@ -36,38 +35,28 @@ export function getHeartbeatPrompt(routineMessages: string[]): string {
 }
 
 /**
- * Send text to a tmux session. Returns true on success.
- */
-function tmuxSendKeys(args: string[]): Promise<boolean> {
-  return new Promise((resolve) => {
-    execFile("tmux", args, (err) => {
-      resolve(!err);
-    });
-  });
-}
-
-/**
  * Send the heartbeat prompt to the Adjutant tmux session.
+ *
+ * Routes through SessionBridge.sendInput() → InputRouter which properly
+ * resolves the tmux pane reference and handles the Enter key submission.
+ * Direct tmux send-keys targeting a session name (instead of a pane) was
+ * unreliable — the text would paste into the input buffer but Enter
+ * wouldn't submit it.
  */
 async function sendHeartbeat(routineMessages: string[]): Promise<boolean> {
   const prompt = getHeartbeatPrompt(routineMessages);
 
-  const sent = await tmuxSendKeys([
-    "send-keys",
-    "-t",
-    ADJUTANT_TMUX_SESSION,
-    "-l",
-    prompt,
-  ]);
-  if (!sent) return false;
+  try {
+    const bridge = getSessionBridge();
+    const session = bridge.registry.findByTmuxSession(ADJUTANT_TMUX_SESSION);
+    if (!session) {
+      return false;
+    }
 
-  await tmuxSendKeys([
-    "send-keys",
-    "-t",
-    ADJUTANT_TMUX_SESSION,
-    "Enter",
-  ]);
-  return true;
+    return await bridge.sendInput(session.id, prompt);
+  } catch {
+    return false;
+  }
 }
 
 export function createPeriodicSummaryBehavior(): AdjutantBehavior {
