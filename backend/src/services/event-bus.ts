@@ -89,6 +89,28 @@ export interface LearningCreatedEvent {
   sourceType: string;
 }
 
+export interface BuildFailedEvent {
+  agentId: string;
+  exitCode: number;
+  errorOutput: string;
+  streamId: string;
+}
+
+export interface BuildPassedEvent {
+  agentId: string;
+  streamId: string;
+}
+
+export interface MergeCompletedEvent {
+  branch: string;
+  beadId: string;
+}
+
+export interface MergeConflictEvent {
+  branch: string;
+  conflictFiles: string[];
+}
+
 /**
  * Map of event names to their payload types.
  */
@@ -109,6 +131,10 @@ export interface EventMap {
   "mcp:agent_disconnected": McpAgentDisconnectedEvent;
   "correction:detected": CorrectionDetectedEvent;
   "learning:created": LearningCreatedEvent;
+  "build:failed": BuildFailedEvent;
+  "build:passed": BuildPassedEvent;
+  "merge:completed": MergeCompletedEvent;
+  "merge:conflict": MergeConflictEvent;
 }
 
 export type EventName = keyof EventMap;
@@ -183,6 +209,7 @@ class EventBus {
       "bead:created", "bead:updated", "bead:closed", "bead:assigned",
       "agent:status_changed", "stream:status",
       "correction:detected", "learning:created",
+      "build:failed", "build:passed", "merge:completed", "merge:conflict",
     ];
     for (const e of events) {
       const count = this.emitter.listenerCount(e);

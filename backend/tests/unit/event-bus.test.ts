@@ -387,6 +387,202 @@ describe("EventBus", () => {
     });
   });
 
+  describe("build:failed event", () => {
+    it("should emit and receive build:failed events", () => {
+      const bus = getEventBus();
+      const handler = vi.fn();
+
+      bus.on("build:failed", handler);
+      bus.emit("build:failed", {
+        agentId: "engineer-1",
+        exitCode: 1,
+        errorOutput: "error TS2345: Argument of type 'string' is not assignable",
+        streamId: "stream-42",
+      });
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(handler).toHaveBeenCalledWith(
+        {
+          agentId: "engineer-1",
+          exitCode: 1,
+          errorOutput: "error TS2345: Argument of type 'string' is not assignable",
+          streamId: "stream-42",
+        },
+        1,
+      );
+    });
+
+    it("should include build:failed in wildcard subscription", () => {
+      const bus = getEventBus();
+      const handler = vi.fn();
+
+      bus.onAny(handler);
+      bus.emit("build:failed", {
+        agentId: "engineer-2",
+        exitCode: 2,
+        errorOutput: "npm ERR!",
+        streamId: "stream-99",
+      });
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(handler).toHaveBeenCalledWith(
+        "build:failed",
+        expect.objectContaining({ agentId: "engineer-2", exitCode: 2 }),
+        1,
+      );
+    });
+
+    it("should include build:failed in listener counts", () => {
+      const bus = getEventBus();
+
+      bus.on("build:failed", vi.fn());
+      const counts = bus.listenerCounts();
+
+      expect(counts["build:failed"]).toBe(1);
+    });
+  });
+
+  describe("build:passed event", () => {
+    it("should emit and receive build:passed events", () => {
+      const bus = getEventBus();
+      const handler = vi.fn();
+
+      bus.on("build:passed", handler);
+      bus.emit("build:passed", {
+        agentId: "engineer-1",
+        streamId: "stream-43",
+      });
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(handler).toHaveBeenCalledWith(
+        { agentId: "engineer-1", streamId: "stream-43" },
+        1,
+      );
+    });
+
+    it("should include build:passed in wildcard subscription", () => {
+      const bus = getEventBus();
+      const handler = vi.fn();
+
+      bus.onAny(handler);
+      bus.emit("build:passed", {
+        agentId: "engineer-3",
+        streamId: "stream-50",
+      });
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(handler).toHaveBeenCalledWith(
+        "build:passed",
+        expect.objectContaining({ agentId: "engineer-3" }),
+        1,
+      );
+    });
+
+    it("should include build:passed in listener counts", () => {
+      const bus = getEventBus();
+
+      bus.on("build:passed", vi.fn());
+      const counts = bus.listenerCounts();
+
+      expect(counts["build:passed"]).toBe(1);
+    });
+  });
+
+  describe("merge:completed event", () => {
+    it("should emit and receive merge:completed events", () => {
+      const bus = getEventBus();
+      const handler = vi.fn();
+
+      bus.on("merge:completed", handler);
+      bus.emit("merge:completed", {
+        branch: "feature/adj-052.3.1",
+        beadId: "adj-052.3.1",
+      });
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(handler).toHaveBeenCalledWith(
+        { branch: "feature/adj-052.3.1", beadId: "adj-052.3.1" },
+        1,
+      );
+    });
+
+    it("should include merge:completed in wildcard subscription", () => {
+      const bus = getEventBus();
+      const handler = vi.fn();
+
+      bus.onAny(handler);
+      bus.emit("merge:completed", {
+        branch: "fix/race-condition",
+        beadId: "adj-qv4q",
+      });
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(handler).toHaveBeenCalledWith(
+        "merge:completed",
+        expect.objectContaining({ branch: "fix/race-condition" }),
+        1,
+      );
+    });
+
+    it("should include merge:completed in listener counts", () => {
+      const bus = getEventBus();
+
+      bus.on("merge:completed", vi.fn());
+      const counts = bus.listenerCounts();
+
+      expect(counts["merge:completed"]).toBe(1);
+    });
+  });
+
+  describe("merge:conflict event", () => {
+    it("should emit and receive merge:conflict events", () => {
+      const bus = getEventBus();
+      const handler = vi.fn();
+
+      bus.on("merge:conflict", handler);
+      bus.emit("merge:conflict", {
+        branch: "feature/adj-052.3.2",
+        conflictFiles: ["src/services/event-bus.ts", "src/types/index.ts"],
+      });
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(handler).toHaveBeenCalledWith(
+        {
+          branch: "feature/adj-052.3.2",
+          conflictFiles: ["src/services/event-bus.ts", "src/types/index.ts"],
+        },
+        1,
+      );
+    });
+
+    it("should include merge:conflict in wildcard subscription", () => {
+      const bus = getEventBus();
+      const handler = vi.fn();
+
+      bus.onAny(handler);
+      bus.emit("merge:conflict", {
+        branch: "feature/broken",
+        conflictFiles: ["package.json"],
+      });
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(handler).toHaveBeenCalledWith(
+        "merge:conflict",
+        expect.objectContaining({ branch: "feature/broken" }),
+        1,
+      );
+    });
+
+    it("should include merge:conflict in listener counts", () => {
+      const bus = getEventBus();
+
+      bus.on("merge:conflict", vi.fn());
+      const counts = bus.listenerCounts();
+
+      expect(counts["merge:conflict"]).toBe(1);
+    });
+  });
+
   describe("all event types", () => {
     it("should handle bead:updated event", () => {
       const bus = getEventBus();

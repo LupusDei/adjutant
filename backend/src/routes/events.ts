@@ -41,6 +41,10 @@ const EVENT_TYPE_MAP: Record<EventName, string> = {
   "mcp:agent_disconnected": "mcp_agent_disconnected",
   "correction:detected": "correction_detected",
   "learning:created": "learning_created",
+  "build:failed": "build_failed",
+  "build:passed": "build_passed",
+  "merge:completed": "merge_completed",
+  "merge:conflict": "merge_conflict",
 };
 
 /** Heartbeat interval (15 seconds) */
