@@ -179,7 +179,7 @@ describe("periodic-summary act()", () => {
     expect(state.logDecision).toHaveBeenCalledWith({
       behavior: "periodic-summary",
       action: "heartbeat_sent",
-      target: "adj-swarm-adjutant",
+      target: "adj-swarm-adjutant-coordinator",
       reason: null,
     });
   });
@@ -197,7 +197,7 @@ describe("periodic-summary act()", () => {
     expect(state.logDecision).toHaveBeenCalledWith({
       behavior: "periodic-summary",
       action: "heartbeat_failed",
-      target: "adj-swarm-adjutant",
+      target: "adj-swarm-adjutant-coordinator",
       reason: "tmux send-keys failed — session may not exist",
     });
 

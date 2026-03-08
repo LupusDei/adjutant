@@ -3,8 +3,7 @@ import { execFile } from "child_process";
 import type { AdjutantBehavior, BehaviorEvent } from "../behavior-registry.js";
 import type { AdjutantState } from "../state-store.js";
 import type { CommunicationManager } from "../communication.js";
-
-const ADJUTANT_TMUX_SESSION = "adj-swarm-adjutant";
+import { ADJUTANT_TMUX_SESSION } from "../../adjutant-spawner.js";
 
 /**
  * Build the heartbeat prompt that gets injected into the Adjutant agent's tmux pane.

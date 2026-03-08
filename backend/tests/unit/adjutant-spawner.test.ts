@@ -53,16 +53,17 @@ describe("adjutant-spawner", () => {
       expect(mockCreateSession).toHaveBeenCalledOnce();
       expect(mockCreateSession).toHaveBeenCalledWith(
         expect.objectContaining({
-          name: "adjutant",
+          name: "adjutant-coordinator",
           projectPath: "/tmp/project",
           mode: "swarm",
+          claudeArgs: ["--agent-file", ".claude/agents/adjutant.md"],
         })
       );
     });
 
     it("should skip spawn when session already exists", async () => {
       mockListTmuxSessions.mockResolvedValue(
-        new Set(["adj-swarm-adjutant", "adj-swarm-other"])
+        new Set(["adj-swarm-adjutant-coordinator", "adj-swarm-other"])
       );
 
       await spawnAdjutant("/tmp/project");
@@ -96,7 +97,7 @@ describe("adjutant-spawner", () => {
   describe("isAdjutantAlive", () => {
     it("should return true when session exists", async () => {
       mockListTmuxSessions.mockResolvedValue(
-        new Set(["adj-swarm-adjutant", "adj-swarm-other"])
+        new Set(["adj-swarm-adjutant-coordinator", "adj-swarm-other"])
       );
 
       const alive = await isAdjutantAlive();
@@ -143,7 +144,7 @@ describe("adjutant-spawner", () => {
     it("should return false when Adjutant agent is alive (no recovery needed)", async () => {
       // Adjutant session exists — no recovery needed
       mockListTmuxSessions.mockResolvedValue(
-        new Set(["adj-swarm-adjutant", "adj-swarm-other"])
+        new Set(["adj-swarm-adjutant-coordinator", "adj-swarm-other"])
       );
 
       const result = await ensureAdjutantAlive("/tmp/project");

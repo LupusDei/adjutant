@@ -15,8 +15,8 @@ import { listTmuxSessions } from "./tmux.js";
 // Constants
 // ============================================================================
 
-const ADJUTANT_SESSION_NAME = "adjutant";
-const ADJUTANT_TMUX_SESSION = `adj-swarm-${ADJUTANT_SESSION_NAME}`;
+const ADJUTANT_SESSION_NAME = "adjutant-coordinator";
+export const ADJUTANT_TMUX_SESSION = `adj-swarm-${ADJUTANT_SESSION_NAME}`;
 
 // ============================================================================
 // Public API
@@ -50,6 +50,7 @@ export async function spawnAdjutant(projectPath: string): Promise<void> {
       name: ADJUTANT_SESSION_NAME,
       projectPath,
       mode: "swarm",
+      claudeArgs: ["--agent-file", ".claude/agents/adjutant.md"],
     });
 
     if (result.success) {
