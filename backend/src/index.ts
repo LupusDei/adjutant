@@ -36,6 +36,8 @@ import { agentLifecycleBehavior } from "./services/adjutant/behaviors/agent-life
 import { createHealthMonitorBehavior } from "./services/adjutant/behaviors/health-monitor.js";
 import { createPeriodicSummaryBehavior } from "./services/adjutant/behaviors/periodic-summary.js";
 import { createStaleAgentNudger } from "./services/adjutant/behaviors/stale-agent-nudger.js";
+import { createWorkAssigner } from "./services/adjutant/behaviors/work-assigner.js";
+import { createWorkRebalancer } from "./services/adjutant/behaviors/work-rebalancer.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
@@ -186,6 +188,8 @@ const server = app.listen(PORT, () => {
   behaviorRegistry.register(createHealthMonitorBehavior(projectRoot));
   behaviorRegistry.register(createPeriodicSummaryBehavior());
   behaviorRegistry.register(createStaleAgentNudger());
+  behaviorRegistry.register(createWorkAssigner());
+  behaviorRegistry.register(createWorkRebalancer());
 
   initAdjutantCore({ registry: behaviorRegistry, state: adjutantState, comm: adjutantComm });
   logInfo("Adjutant Core initialized with event-driven behaviors");
