@@ -193,4 +193,16 @@ const server = app.listen(PORT, () => {
 
   initAdjutantCore({ registry: behaviorRegistry, state: adjutantState, comm: adjutantComm });
   logInfo("Adjutant Core initialized with event-driven behaviors");
+
+  // Prune old decisions on startup, then every 6 hours (reuse PRUNE_INTERVAL_MS)
+  const DECISION_PRUNE_DAYS = 30;
+  const decisionsPruned = adjutantState.pruneOldDecisions(DECISION_PRUNE_DAYS);
+  logInfo("Decision pruning", { deletedCount: decisionsPruned });
+
+  setInterval(() => {
+    const deletedCount = adjutantState.pruneOldDecisions(DECISION_PRUNE_DAYS);
+    if (deletedCount > 0) {
+      logInfo("Decision pruning", { deletedCount });
+    }
+  }, PRUNE_INTERVAL_MS);
 });

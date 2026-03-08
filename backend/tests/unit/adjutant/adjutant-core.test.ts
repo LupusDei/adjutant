@@ -51,6 +51,7 @@ function createMockState(): AdjutantState {
     getRecentDecisions: vi.fn(() => []),
     getMeta: vi.fn(() => null),
     setMeta: vi.fn(),
+    pruneOldDecisions: vi.fn(() => 0),
   };
 }
 

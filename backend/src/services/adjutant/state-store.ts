@@ -28,6 +28,8 @@ export interface AdjutantState {
   getRecentDecisions(limit: number): DecisionEntry[];
   getMeta(key: string): string | null;
   setMeta(key: string, value: string): void;
+  /** Delete decisions older than the given number of days. Returns count of deleted rows. */
+  pruneOldDecisions(olderThanDays: number): number;
 }
 
 interface AgentProfileRow {
@@ -180,6 +182,14 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
 
     setMeta(key: string, value: string): void {
       setMetaStmt.run(key, value);
+    },
+
+    pruneOldDecisions(olderThanDays: number): number {
+      const stmt = db.prepare(
+        "DELETE FROM adjutant_decisions WHERE created_at < datetime('now', '-' || ? || ' days')",
+      );
+      const result = stmt.run(olderThanDays);
+      return result.changes;
     },
   };
 }

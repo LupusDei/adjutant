@@ -182,4 +182,68 @@ describe("AdjutantState", () => {
       expect(store.getMeta("version")).toBe("2.0.0");
     });
   });
+
+  describe("pruneOldDecisions", () => {
+    it("should return 0 when no old decisions exist", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      // Insert a recent decision (defaults to now)
+      store.logDecision({ behavior: "b1", action: "a1", target: null, reason: null });
+
+      const pruned = store.pruneOldDecisions(30);
+      expect(pruned).toBe(0);
+
+      // Decision should still be there
+      const decisions = store.getRecentDecisions(10);
+      expect(decisions).toHaveLength(1);
+    });
+
+    it("should delete decisions older than threshold", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      // Insert an old decision directly via SQL
+      db.prepare(
+        "INSERT INTO adjutant_decisions (behavior, action, target, reason, created_at) VALUES (?, ?, ?, ?, ?)",
+      ).run("old-behavior", "old-action", null, null, "2020-01-01T00:00:00.000Z");
+
+      // Insert a recent decision via the API
+      store.logDecision({ behavior: "recent", action: "a1", target: null, reason: null });
+
+      const pruned = store.pruneOldDecisions(30);
+      expect(pruned).toBe(1);
+
+      // Only the recent decision should remain
+      const decisions = store.getRecentDecisions(10);
+      expect(decisions).toHaveLength(1);
+      expect(decisions[0].behavior).toBe("recent");
+    });
+
+    it("should preserve recent decisions", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      // Insert 3 old decisions
+      const insertOld = db.prepare(
+        "INSERT INTO adjutant_decisions (behavior, action, target, reason, created_at) VALUES (?, ?, ?, ?, ?)",
+      );
+      insertOld.run("old-1", "a1", null, null, "2020-01-01T00:00:00.000Z");
+      insertOld.run("old-2", "a2", null, null, "2020-06-15T00:00:00.000Z");
+      insertOld.run("old-3", "a3", null, null, "2021-03-01T00:00:00.000Z");
+
+      // Insert 2 recent decisions
+      store.logDecision({ behavior: "recent-1", action: "r1", target: null, reason: null });
+      store.logDecision({ behavior: "recent-2", action: "r2", target: null, reason: null });
+
+      const pruned = store.pruneOldDecisions(30);
+      expect(pruned).toBe(3);
+
+      // Only the 2 recent decisions should remain
+      const decisions = store.getRecentDecisions(10);
+      expect(decisions).toHaveLength(2);
+      const behaviors = decisions.map((d) => d.behavior).sort();
+      expect(behaviors).toEqual(["recent-1", "recent-2"]);
+    });
+  });
 });
