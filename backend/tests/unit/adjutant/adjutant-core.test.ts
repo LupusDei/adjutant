@@ -138,9 +138,9 @@ describe("AdjutantCore", () => {
 
       initAdjutantCore({ registry, state, comm });
 
-      // Advance 5 minutes — should fire once
+      // Advance 5 minutes — fires once from interval + once from 60s startup fire
       vi.advanceTimersByTime(5 * 60 * 1000);
-      expect(scheduled.shouldAct).toHaveBeenCalledOnce();
+      expect(scheduled.shouldAct).toHaveBeenCalledTimes(2);
     });
 
     it("should not register timers for non-scheduled behaviors", () => {
@@ -165,10 +165,10 @@ describe("AdjutantCore", () => {
 
       initAdjutantCore({ registry, state, comm });
 
-      // After 15 minutes: b1 fires 3 times, b2 fires 1 time
+      // After 15 minutes: b1 fires 3 interval + 1 startup = 4, b2 fires 1 interval + 1 startup = 2
       vi.advanceTimersByTime(15 * 60 * 1000);
-      expect(b1.shouldAct).toHaveBeenCalledTimes(3);
-      expect(b2.shouldAct).toHaveBeenCalledOnce();
+      expect(b1.shouldAct).toHaveBeenCalledTimes(4);
+      expect(b2.shouldAct).toHaveBeenCalledTimes(2);
     });
 
     it("should be idempotent — second call is a no-op", () => {
@@ -348,13 +348,38 @@ describe("AdjutantCore", () => {
 
       initAdjutantCore({ registry, state, comm });
 
-      // Advance by 1 hour
+      // Advance by 1 hour — 1 interval tick + 1 startup fire at 60s = 2
       vi.advanceTimersByTime(60 * 60 * 1000);
 
       await vi.waitFor(() => {
-        expect(behavior.shouldAct).toHaveBeenCalledOnce();
-        expect(behavior.act).toHaveBeenCalledOnce();
+        expect(behavior.shouldAct).toHaveBeenCalledTimes(2);
+        expect(behavior.act).toHaveBeenCalledTimes(2);
       });
+    });
+
+    it("should fire startup event after 60-second delay", () => {
+      const behavior = createTestBehavior({
+        name: "periodic",
+        triggers: [],
+        schedule: "*/5 * * * *",
+      });
+      registry.register(behavior);
+
+      initAdjutantCore({ registry, state, comm });
+
+      // At 59 seconds — startup hasn't fired yet, no interval yet either
+      vi.advanceTimersByTime(59_999);
+      expect(behavior.shouldAct).not.toHaveBeenCalled();
+
+      // At 60 seconds — startup fire triggers
+      vi.advanceTimersByTime(1);
+      expect(behavior.shouldAct).toHaveBeenCalledOnce();
+
+      // Verify startup event data
+      const event = (behavior.shouldAct as ReturnType<typeof vi.fn>).mock.calls[0]![0] as BehaviorEvent;
+      expect(event.data).toEqual(
+        expect.objectContaining({ cronTick: true, startup: true }),
+      );
     });
 
     it("should not fire missed executions after sleep", () => {
@@ -370,8 +395,8 @@ describe("AdjutantCore", () => {
       // Advance 1 hour — setInterval fires at each interval, no catch-up spam
       vi.advanceTimersByTime(60 * 60 * 1000);
 
-      // setInterval fires 12 times (60/5), not a flood of "missed" executions
-      expect(behavior.shouldAct).toHaveBeenCalledTimes(12);
+      // setInterval fires 12 times (60/5) + 1 startup fire at 60s = 13
+      expect(behavior.shouldAct).toHaveBeenCalledTimes(13);
     });
   });
 

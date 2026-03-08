@@ -152,6 +152,22 @@ export function initAdjutantCore(deps: AdjutantCoreDeps): void {
     });
   }
 
+  // Fire all scheduled behaviors once after a 60-second startup delay
+  // so the user doesn't wait a full interval for the first report.
+  const STARTUP_DELAY_MS = 60_000;
+  const startupTimer = setTimeout(() => {
+    for (const behavior of scheduled) {
+      const startupEvent: BehaviorEvent = {
+        name: (behavior.triggers[0] ?? "agent:status_changed") as EventName,
+        data: { cronTick: true, behavior: behavior.name, startup: true },
+        seq: 0,
+      };
+      dispatchEvent(startupEvent, [behavior], state, comm);
+    }
+    logInfo("AdjutantCore: Startup fire completed for scheduled behaviors");
+  }, STARTUP_DELAY_MS);
+  intervalTimers.push(startupTimer as unknown as ReturnType<typeof setInterval>);
+
   initialized = true;
   logInfo("AdjutantCore initialized", {
     behaviors: registry.getAll().length,

@@ -172,11 +172,7 @@ const server = app.listen(PORT, () => {
   const projectRoot = process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd();
   getSessionBridge()
     .init()
-    .then(() => {
-      return spawnAdjutant(projectRoot).then(() => {
-        logInfo("Adjutant coordinator agent spawned");
-      });
-    })
+    .then(() => spawnAdjutant(projectRoot))
     .catch((err) => {
       logInfo("session bridge init failed (non-fatal)", { error: String(err) });
     });
