@@ -8,6 +8,7 @@ import cron from "node-cron";
 import type { ScheduledTask } from "node-cron";
 
 import { logInfo, logWarn } from "../utils/index.js";
+import { ensureAdjutantAlive } from "./adjutant-spawner.js";
 
 // ============================================================================
 // Constants
@@ -18,6 +19,9 @@ const ADJUTANT_TMUX_SESSION = "adj-swarm-adjutant";
 
 /** Cron expression: every hour on the hour */
 const HEARTBEAT_CRON = "0 * * * *";
+
+/** Extra wait (ms) after recovery before sending heartbeat, to let the agent boot */
+const POST_RECOVERY_WAIT_MS = 5_000;
 
 // ============================================================================
 // State
@@ -60,6 +64,11 @@ export function getHeartbeatPrompt(): string {
 /**
  * Sends the heartbeat prompt to the Adjutant agent tmux pane.
  *
+ * Before sending, runs a health check via `ensureAdjutantAlive()` to recover
+ * the agent if its tmux session has died. If recovery occurs, waits an
+ * additional 5 seconds to let the agent boot and connect to MCP before
+ * injecting the prompt.
+ *
  * Uses `execFile` (not `exec`) to avoid shell injection. The `-l` flag on
  * `tmux send-keys` sends literal text. `Enter` is sent as a separate command
  * without `-l` so tmux interprets it as a keypress.
@@ -68,6 +77,29 @@ export function getHeartbeatPrompt(): string {
  * and the function resolves normally -- it never throws.
  */
 export async function sendHeartbeat(): Promise<void> {
+  // Health check: ensure the Adjutant agent is alive before sending
+  const projectPath =
+    process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd();
+
+  let recovered = false;
+  try {
+    recovered = await ensureAdjutantAlive(projectPath);
+  } catch (err) {
+    logWarn("Health check failed, proceeding with heartbeat", {
+      error: String(err),
+    });
+  }
+
+  // If recovery happened, wait for the agent to boot and connect to MCP
+  if (recovered) {
+    logInfo("Waiting for recovered Adjutant agent to stabilize", {
+      waitMs: POST_RECOVERY_WAIT_MS,
+    });
+    await new Promise((resolve) =>
+      setTimeout(resolve, POST_RECOVERY_WAIT_MS),
+    );
+  }
+
   const prompt = getHeartbeatPrompt();
 
   // Step 1: Send the prompt text literally

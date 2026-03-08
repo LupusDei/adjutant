@@ -2,10 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { ScheduledTask } from "node-cron";
 
 // vi.hoisted ensures these are available when vi.mock factories run (they are hoisted)
-const { mockExecFile, mockSchedule } = vi.hoisted(() => ({
-  mockExecFile: vi.fn(),
-  mockSchedule: vi.fn(),
-}));
+const { mockExecFile, mockSchedule, mockEnsureAdjutantAlive } = vi.hoisted(
+  () => ({
+    mockExecFile: vi.fn(),
+    mockSchedule: vi.fn(),
+    mockEnsureAdjutantAlive: vi.fn(),
+  }),
+);
 
 vi.mock("child_process", () => ({
   execFile: mockExecFile,
@@ -14,6 +17,10 @@ vi.mock("child_process", () => ({
 vi.mock("node-cron", () => ({
   default: { schedule: mockSchedule },
   schedule: mockSchedule,
+}));
+
+vi.mock("../../src/services/adjutant-spawner.js", () => ({
+  ensureAdjutantAlive: mockEnsureAdjutantAlive,
 }));
 
 import {
@@ -206,6 +213,108 @@ describe("Scheduler", () => {
       const prompt = getHeartbeatPrompt();
       expect(prompt).toContain("send_message");
       expect(prompt).toContain("user");
+    });
+  });
+
+  // ==========================================================================
+  // Health Check Integration (adj-051.3.2)
+  // ==========================================================================
+
+  describe("sendHeartbeat health check integration", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      // Default: execFile succeeds
+      mockExecFile.mockImplementation(
+        (
+          _cmd: string,
+          _args: string[],
+          cb: (err: Error | null, stdout: string, stderr: string) => void,
+        ) => {
+          cb(null, "", "");
+        },
+      );
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("should run health check before sending heartbeat", async () => {
+      // No recovery needed
+      mockEnsureAdjutantAlive.mockResolvedValue(false);
+
+      const callOrder: string[] = [];
+      mockEnsureAdjutantAlive.mockImplementation(async () => {
+        callOrder.push("healthCheck");
+        return false;
+      });
+      mockExecFile.mockImplementation(
+        (
+          _cmd: string,
+          _args: string[],
+          cb: (err: Error | null, stdout: string, stderr: string) => void,
+        ) => {
+          callOrder.push("tmux");
+          cb(null, "", "");
+        },
+      );
+
+      await sendHeartbeat();
+
+      expect(callOrder[0]).toBe("healthCheck");
+      expect(callOrder[1]).toBe("tmux");
+      expect(mockEnsureAdjutantAlive).toHaveBeenCalledOnce();
+    });
+
+    it("should wait 5 seconds after recovery before sending heartbeat", async () => {
+      // Recovery happened
+      mockEnsureAdjutantAlive.mockResolvedValue(true);
+
+      let tmuxCalled = false;
+      mockExecFile.mockImplementation(
+        (
+          _cmd: string,
+          _args: string[],
+          cb: (err: Error | null, stdout: string, stderr: string) => void,
+        ) => {
+          tmuxCalled = true;
+          cb(null, "", "");
+        },
+      );
+
+      const promise = sendHeartbeat();
+
+      // Health check completes immediately (mocked), but recovery wait should delay tmux
+      await vi.advanceTimersByTimeAsync(4_999);
+      expect(tmuxCalled).toBe(false);
+
+      // After 5 seconds, tmux should proceed
+      await vi.advanceTimersByTimeAsync(1);
+      expect(tmuxCalled).toBe(true);
+
+      await promise;
+    });
+
+    it("should proceed immediately when no recovery needed", async () => {
+      // No recovery
+      mockEnsureAdjutantAlive.mockResolvedValue(false);
+
+      await sendHeartbeat();
+
+      // tmux should have been called immediately (no extra wait)
+      expect(mockExecFile).toHaveBeenCalled();
+    });
+
+    it("should still send heartbeat even if health check fails", async () => {
+      // Health check throws
+      mockEnsureAdjutantAlive.mockRejectedValue(
+        new Error("health check crashed"),
+      );
+
+      await sendHeartbeat();
+
+      // tmux should still have been called despite health check failure
+      expect(mockExecFile).toHaveBeenCalled();
     });
   });
 });
