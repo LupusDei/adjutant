@@ -27,6 +27,7 @@ import { createCallsignToggleService } from "./services/callsign-toggle-service.
 import { initMessageDelivery } from "./services/message-delivery.js";
 import { initBeadAssignNotification } from "./services/bead-assign-notification.js";
 import { discoverLocalProjects } from "./services/projects-service.js";
+import { spawnAdjutant } from "./services/adjutant-spawner.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
@@ -162,6 +163,12 @@ const server = app.listen(PORT, () => {
   // a Claude Code session if none are alive for the project root.
   getSessionBridge()
     .init()
+    .then(() => {
+      const projectRoot = process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd();
+      return spawnAdjutant(projectRoot).then(() => {
+        logInfo("Adjutant coordinator agent spawned");
+      });
+    })
     .catch((err) => {
       logInfo("session bridge init failed (non-fatal)", { error: String(err) });
     });
