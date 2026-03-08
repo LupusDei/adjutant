@@ -28,6 +28,7 @@ import { initMessageDelivery } from "./services/message-delivery.js";
 import { initBeadAssignNotification } from "./services/bead-assign-notification.js";
 import { discoverLocalProjects } from "./services/projects-service.js";
 import { spawnAdjutant } from "./services/adjutant-spawner.js";
+import { startScheduler } from "./services/scheduler.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
@@ -172,4 +173,8 @@ const server = app.listen(PORT, () => {
     .catch((err) => {
       logInfo("session bridge init failed (non-fatal)", { error: String(err) });
     });
+
+  // Start Adjutant heartbeat scheduler (hourly cron → tmux prompt injection)
+  startScheduler();
+  logInfo("Adjutant heartbeat scheduler started");
 });
