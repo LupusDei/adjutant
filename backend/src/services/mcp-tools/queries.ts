@@ -25,6 +25,7 @@ interface AgentInfo {
   connectedAt?: string | undefined;
   sessionId?: string | undefined;
   currentTask?: string | undefined;
+  lastActivity?: string | undefined;
 }
 
 // ============================================================================
@@ -80,6 +81,7 @@ function registerListAgents(server: McpServer): void {
           currentTask: agent.currentTask,
           sessionId: conn?.sessionId,
           connectedAt: conn?.connectedAt,
+          lastActivity: agent.lastActivity,
         });
       }
 
