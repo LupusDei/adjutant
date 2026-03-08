@@ -269,6 +269,177 @@ describe("Memory Store Migration (011-memory-store.sql)", () => {
     });
   });
 
+  describe("FTS5 content-sync read behavior (adj-obbm)", () => {
+    it("should return full learning data through FTS5 join", () => {
+      // Insert a learning
+      db.prepare(
+        "INSERT INTO adjutant_learnings (category, topic, content, source_type) VALUES (?, ?, ?, ?)"
+      ).run("technical", "typescript-strict", "Always use strict mode in TypeScript", "user_correction");
+
+      // Query via FTS5 join and verify we get full learning data back
+      const rows = db.prepare(`
+        SELECT l.* FROM adjutant_learnings l
+        INNER JOIN adjutant_learnings_fts fts ON l.id = fts.rowid
+        WHERE adjutant_learnings_fts MATCH ?
+        AND l.superseded_by IS NULL
+        ORDER BY rank
+        LIMIT 10
+      `).all("strict mode") as Array<{ id: number; category: string; topic: string; content: string; source_type: string; confidence: number }>;
+
+      expect(rows.length).toBe(1);
+      expect(rows[0].id).toBe(1);
+      expect(rows[0].category).toBe("technical");
+      expect(rows[0].topic).toBe("typescript-strict");
+      expect(rows[0].content).toBe("Always use strict mode in TypeScript");
+      expect(rows[0].source_type).toBe("user_correction");
+      expect(rows[0].confidence).toBe(0.5);
+    });
+
+    it("should return multiple matches ranked by relevance", () => {
+      db.prepare(
+        "INSERT INTO adjutant_learnings (category, topic, content, source_type) VALUES (?, ?, ?, ?)"
+      ).run("technical", "typescript", "Use strict mode always", "user_correction");
+      db.prepare(
+        "INSERT INTO adjutant_learnings (category, topic, content, source_type) VALUES (?, ?, ?, ?)"
+      ).run("operational", "workflow", "Check status before work", "user_correction");
+      db.prepare(
+        "INSERT INTO adjutant_learnings (category, topic, content, source_type) VALUES (?, ?, ?, ?)"
+      ).run("technical", "strict-rules", "Strict typing prevents bugs", "user_correction");
+
+      const rows = db.prepare(`
+        SELECT l.id FROM adjutant_learnings l
+        INNER JOIN adjutant_learnings_fts fts ON l.id = fts.rowid
+        WHERE adjutant_learnings_fts MATCH ?
+        ORDER BY rank
+      `).all("strict") as Array<{ id: number }>;
+
+      // Should find the two entries mentioning "strict"
+      expect(rows.length).toBe(2);
+    });
+
+    it("should not return data from deleted learnings via FTS5", () => {
+      db.prepare(
+        "INSERT INTO adjutant_learnings (category, topic, content, source_type) VALUES (?, ?, ?, ?)"
+      ).run("technical", "deleted-test", "unique searchable content xyz", "user_correction");
+
+      // Verify it's found
+      let found = db.prepare(
+        "SELECT rowid FROM adjutant_learnings_fts WHERE adjutant_learnings_fts MATCH ?"
+      ).all("xyz") as Array<{ rowid: number }>;
+      expect(found.length).toBe(1);
+
+      // Delete and verify it's gone from FTS
+      db.prepare("DELETE FROM adjutant_learnings WHERE id = 1").run();
+      found = db.prepare(
+        "SELECT rowid FROM adjutant_learnings_fts WHERE adjutant_learnings_fts MATCH ?"
+      ).all("xyz") as Array<{ rowid: number }>;
+      expect(found.length).toBe(0);
+    });
+  });
+
+  describe("schema constraints (migration 013)", () => {
+    it("should reject empty category (adj-3kyx)", () => {
+      expect(() => {
+        db.prepare(
+          "INSERT INTO adjutant_learnings (category, topic, content, source_type) VALUES (?, ?, ?, ?)"
+        ).run("", "topic", "content", "user_correction");
+      }).toThrow();
+    });
+
+    it("should reject empty topic (adj-3kyx)", () => {
+      expect(() => {
+        db.prepare(
+          "INSERT INTO adjutant_learnings (category, topic, content, source_type) VALUES (?, ?, ?, ?)"
+        ).run("operational", "", "content", "user_correction");
+      }).toThrow();
+    });
+
+    it("should reject empty content (adj-3kyx)", () => {
+      expect(() => {
+        db.prepare(
+          "INSERT INTO adjutant_learnings (category, topic, content, source_type) VALUES (?, ?, ?, ?)"
+        ).run("operational", "topic", "", "user_correction");
+      }).toThrow();
+    });
+
+    it("should reject confidence below 0 (adj-fz5d)", () => {
+      expect(() => {
+        db.prepare(
+          "INSERT INTO adjutant_learnings (category, topic, content, source_type, confidence) VALUES (?, ?, ?, ?, ?)"
+        ).run("operational", "topic", "content", "user_correction", -0.1);
+      }).toThrow();
+    });
+
+    it("should reject confidence above 1 (adj-fz5d)", () => {
+      expect(() => {
+        db.prepare(
+          "INSERT INTO adjutant_learnings (category, topic, content, source_type, confidence) VALUES (?, ?, ?, ?, ?)"
+        ).run("operational", "topic", "content", "user_correction", 1.5);
+      }).toThrow();
+    });
+
+    it("should allow confidence at boundaries 0 and 1 (adj-fz5d)", () => {
+      db.prepare(
+        "INSERT INTO adjutant_learnings (category, topic, content, source_type, confidence) VALUES (?, ?, ?, ?, ?)"
+      ).run("operational", "topic-zero", "content zero", "user_correction", 0.0);
+      db.prepare(
+        "INSERT INTO adjutant_learnings (category, topic, content, source_type, confidence) VALUES (?, ?, ?, ?, ?)"
+      ).run("operational", "topic-one", "content one", "user_correction", 1.0);
+
+      const rows = db.prepare("SELECT confidence FROM adjutant_learnings ORDER BY id").all() as Array<{ confidence: number }>;
+      expect(rows[0].confidence).toBe(0.0);
+      expect(rows[1].confidence).toBe(1.0);
+    });
+
+    it("should reject duplicate session_date in retrospectives (adj-bcsy)", () => {
+      db.prepare(
+        "INSERT INTO adjutant_retrospectives (session_date) VALUES (?)"
+      ).run("2026-03-08");
+
+      expect(() => {
+        db.prepare(
+          "INSERT INTO adjutant_retrospectives (session_date) VALUES (?)"
+        ).run("2026-03-08");
+      }).toThrow();
+    });
+
+    it("should allow different session_dates in retrospectives (adj-bcsy)", () => {
+      db.prepare(
+        "INSERT INTO adjutant_retrospectives (session_date) VALUES (?)"
+      ).run("2026-03-08");
+      db.prepare(
+        "INSERT INTO adjutant_retrospectives (session_date) VALUES (?)"
+      ).run("2026-03-09");
+
+      const count = db.prepare("SELECT COUNT(*) as cnt FROM adjutant_retrospectives").get() as { cnt: number };
+      expect(count.cnt).toBe(2);
+    });
+
+    it("should SET NULL on superseded_by when referenced learning is deleted (adj-hw2m)", () => {
+      // Insert two learnings
+      db.prepare(
+        "INSERT INTO adjutant_learnings (category, topic, content, source_type) VALUES (?, ?, ?, ?)"
+      ).run("operational", "old", "old content", "user_correction");
+      db.prepare(
+        "INSERT INTO adjutant_learnings (category, topic, content, source_type) VALUES (?, ?, ?, ?)"
+      ).run("operational", "new", "new content", "user_correction");
+
+      // Set superseded_by on learning 1 -> 2
+      db.prepare("UPDATE adjutant_learnings SET superseded_by = 2 WHERE id = 1").run();
+
+      // Verify FK is set
+      const before = db.prepare("SELECT superseded_by FROM adjutant_learnings WHERE id = 1").get() as { superseded_by: number | null };
+      expect(before.superseded_by).toBe(2);
+
+      // Delete learning 2 (the target of superseded_by)
+      db.prepare("DELETE FROM adjutant_learnings WHERE id = 2").run();
+
+      // superseded_by should be NULL now
+      const after = db.prepare("SELECT superseded_by FROM adjutant_learnings WHERE id = 1").get() as { superseded_by: number | null };
+      expect(after.superseded_by).toBeNull();
+    });
+  });
+
   describe("indexes", () => {
     it("should create index on learnings.category", () => {
       const row = db.prepare(

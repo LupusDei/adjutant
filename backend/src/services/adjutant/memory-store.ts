@@ -231,6 +231,22 @@ export interface MemoryStore {
 }
 
 // ============================================================================
+// FTS5 query sanitization
+// ============================================================================
+
+/**
+ * Sanitize a string for safe use in FTS5 MATCH queries.
+ * Wraps the input in double quotes to treat it as a literal phrase,
+ * escaping internal double quotes per FTS5 syntax.
+ * Returns null for empty/whitespace-only input.
+ */
+function sanitizeFts5Query(input: string): string | null {
+  const trimmed = input.trim();
+  if (trimmed.length === 0) return null;
+  return '"' + trimmed.replace(/"/g, '""') + '"';
+}
+
+// ============================================================================
 // Factory
 // ============================================================================
 
@@ -394,14 +410,21 @@ export function createMemoryStore(db: Database.Database): MemoryStore {
       }
 
       const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-      const limit = query.limit !== undefined ? `LIMIT ${Math.max(0, Math.min(query.limit, 1000))}` : "";
+      const hasLimit = query.limit !== undefined;
+      const limitClause = hasLimit ? "LIMIT ?" : "";
+      if (hasLimit) {
+        params.push(Math.max(0, Math.min(query.limit!, 1000)));
+      }
 
-      const sql = `SELECT * FROM adjutant_learnings ${where} ORDER BY updated_at DESC ${limit}`;
+      const sql = `SELECT * FROM adjutant_learnings ${where} ORDER BY updated_at DESC ${limitClause}`;
       const rows = db.prepare(sql).all(...params) as LearningRow[];
       return rows.map(rowToLearning);
     },
 
     searchLearnings(searchText: string, limit = 20): Learning[] {
+      const sanitized = sanitizeFts5Query(searchText);
+      if (sanitized === null) return [];
+
       const rows = db.prepare(`
         SELECT l.* FROM adjutant_learnings l
         INNER JOIN adjutant_learnings_fts fts ON l.id = fts.rowid
@@ -409,25 +432,22 @@ export function createMemoryStore(db: Database.Database): MemoryStore {
         AND l.superseded_by IS NULL
         ORDER BY rank
         LIMIT ?
-      `).all(searchText, limit) as LearningRow[];
+      `).all(sanitized, limit) as LearningRow[];
       return rows.map(rowToLearning);
     },
 
     findSimilarLearnings(topic: string, contentQuery: string): Learning[] {
-      // First try to find by topic AND FTS match
-      try {
-        const rows = db.prepare(`
-          SELECT l.* FROM adjutant_learnings l
-          INNER JOIN adjutant_learnings_fts fts ON l.id = fts.rowid
-          WHERE l.topic = ? AND adjutant_learnings_fts MATCH ?
-          AND l.superseded_by IS NULL
-          LIMIT 10
-        `).all(topic, contentQuery) as LearningRow[];
-        return rows.map(rowToLearning);
-      } catch {
-        // FTS5 can throw on malformed queries; fall back to topic-only match
-        return [];
-      }
+      const sanitized = sanitizeFts5Query(contentQuery);
+      if (sanitized === null) return [];
+
+      const rows = db.prepare(`
+        SELECT l.* FROM adjutant_learnings l
+        INNER JOIN adjutant_learnings_fts fts ON l.id = fts.rowid
+        WHERE l.topic = ? AND adjutant_learnings_fts MATCH ?
+        AND l.superseded_by IS NULL
+        LIMIT 10
+      `).all(topic, sanitized) as LearningRow[];
+      return rows.map(rowToLearning);
     },
 
     reinforceLearning(id: number): void {
@@ -435,6 +455,24 @@ export function createMemoryStore(db: Database.Database): MemoryStore {
     },
 
     supersedeLearning(oldId: number, newId: number): void {
+      // Check for circular supersede chains: walk from newId following
+      // superseded_by links — if we ever reach oldId, it's a cycle.
+      let currentId: number | null = newId;
+      const visited = new Set<number>();
+      while (currentId !== null) {
+        if (currentId === oldId) {
+          throw new Error(
+            `Circular supersede chain detected: setting learning ${oldId} superseded_by ${newId} would create a cycle`
+          );
+        }
+        if (visited.has(currentId)) break;
+        visited.add(currentId);
+        const row = db.prepare(
+          "SELECT superseded_by FROM adjutant_learnings WHERE id = ?"
+        ).get(currentId) as { superseded_by: number | null } | undefined;
+        currentId = row?.superseded_by ?? null;
+      }
+
       db.transaction(() => {
         transferReinforcementStmt.run(oldId, newId);
         supersedeStmt.run(newId, oldId);
@@ -442,16 +480,27 @@ export function createMemoryStore(db: Database.Database): MemoryStore {
     },
 
     pruneStale(staleThresholdDays: number): number {
-      // Apply 5% decay per week to learnings not updated recently
-      const result = db.prepare(`
-        UPDATE adjutant_learnings
-        SET confidence = confidence * 0.95,
-            updated_at = datetime('now')
-        WHERE updated_at < datetime('now', '-' || ? || ' days')
-        AND superseded_by IS NULL
-        AND confidence > 0.05
-      `).run(staleThresholdDays);
-      return result.changes;
+      return db.transaction(() => {
+        // Delete learnings with very low confidence that are stale (effectively dead)
+        const deleteResult = db.prepare(`
+          DELETE FROM adjutant_learnings
+          WHERE updated_at < datetime('now', '-' || ? || ' days')
+          AND superseded_by IS NULL
+          AND confidence < 0.1
+        `).run(staleThresholdDays);
+
+        // Apply 5% decay to remaining stale learnings
+        const decayResult = db.prepare(`
+          UPDATE adjutant_learnings
+          SET confidence = confidence * 0.95,
+              updated_at = datetime('now')
+          WHERE updated_at < datetime('now', '-' || ? || ' days')
+          AND superseded_by IS NULL
+          AND confidence > 0.05
+        `).run(staleThresholdDays);
+
+        return deleteResult.changes + decayResult.changes;
+      })();
     },
 
     // ==== Retrospectives ====

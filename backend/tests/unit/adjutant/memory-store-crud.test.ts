@@ -454,7 +454,8 @@ describe("MemoryStore", () => {
         sourceType: "user_correction",
       });
 
-      const similar = store.findSimilarLearnings("bead-workflow", "assign yourself bead");
+      // Use a phrase that appears contiguously in the content (FTS5 phrase match)
+      const similar = store.findSimilarLearnings("bead-workflow", "assign yourself");
       expect(similar.length).toBeGreaterThan(0);
     });
 
@@ -468,6 +469,193 @@ describe("MemoryStore", () => {
 
       const similar = store.findSimilarLearnings("completely-different", "unrelated content about python");
       expect(similar).toHaveLength(0);
+    });
+
+    it("should sanitize FTS5 special characters in contentQuery (adj-adqi)", () => {
+      store.insertLearning({
+        category: "operational",
+        topic: "bead-workflow",
+        content: "Always assign yourself to a bead before starting work",
+        sourceType: "user_correction",
+      });
+
+      // These FTS5 special characters should not cause errors
+      const malicious = 'test OR DROP TABLE --';
+      const result = store.findSimilarLearnings("bead-workflow", malicious);
+      // Should not throw, just return results (possibly empty)
+      expect(Array.isArray(result)).toBe(true);
+    });
+
+    it("should handle FTS5 operators in contentQuery without injection (adj-adqi)", () => {
+      store.insertLearning({
+        category: "operational",
+        topic: "test-topic",
+        content: "Important content about testing",
+        sourceType: "user_correction",
+      });
+
+      // FTS5 operator characters that should be escaped
+      const queries = [
+        'test" OR "1"="1',
+        "NOT something",
+        "col1:value",
+        "test*",
+        "{near}",
+        "test AND drop",
+      ];
+
+      for (const q of queries) {
+        const result = store.findSimilarLearnings("test-topic", q);
+        expect(Array.isArray(result)).toBe(true);
+      }
+    });
+  });
+
+  // =========================================================================
+  // FTS5 Sanitization (adj-adqi)
+  // =========================================================================
+
+  describe("searchLearnings FTS5 sanitization", () => {
+    it("should sanitize FTS5 special characters in search queries (adj-adqi)", () => {
+      store.insertLearning({
+        category: "technical",
+        topic: "typescript",
+        content: "Always use strict mode in TypeScript projects",
+        sourceType: "user_correction",
+      });
+
+      // FTS5 special operators should not cause injection
+      const malicious = 'strict" OR "1"="1';
+      const result = store.searchLearnings(malicious);
+      expect(Array.isArray(result)).toBe(true);
+    });
+
+    it("should handle empty and whitespace-only queries gracefully (adj-adqi)", () => {
+      store.insertLearning({
+        category: "technical",
+        topic: "test",
+        content: "test content",
+        sourceType: "user_correction",
+      });
+
+      const result1 = store.searchLearnings("");
+      expect(Array.isArray(result1)).toBe(true);
+
+      const result2 = store.searchLearnings("   ");
+      expect(Array.isArray(result2)).toBe(true);
+    });
+
+    it("should find results with sanitized queries (adj-adqi)", () => {
+      store.insertLearning({
+        category: "technical",
+        topic: "typescript",
+        content: "Always use strict mode in TypeScript projects",
+        sourceType: "user_correction",
+      });
+
+      // Normal query should still work after sanitization
+      const result = store.searchLearnings("strict mode");
+      expect(result.length).toBeGreaterThan(0);
+      expect(result[0].content).toContain("strict mode");
+    });
+  });
+
+  // =========================================================================
+  // queryLearnings LIMIT parameterization (adj-7i2s)
+  // =========================================================================
+
+  describe("queryLearnings LIMIT parameterization", () => {
+    it("should use parameterized LIMIT instead of string interpolation (adj-7i2s)", () => {
+      for (let i = 0; i < 5; i++) {
+        store.insertLearning({ category: "operational", topic: "t", content: `content ${i}`, sourceType: "user_correction" });
+      }
+
+      // This should work safely with parameterized query
+      const results = store.queryLearnings({ limit: 3 });
+      expect(results).toHaveLength(3);
+    });
+
+    it("should handle limit of 0 (adj-7i2s)", () => {
+      store.insertLearning({ category: "operational", topic: "t", content: "content", sourceType: "user_correction" });
+      const results = store.queryLearnings({ limit: 0 });
+      expect(results).toHaveLength(0);
+    });
+  });
+
+  // =========================================================================
+  // pruneStale deletion (adj-o8v6)
+  // =========================================================================
+
+  describe("pruneStale deletion", () => {
+    it("should delete learnings with confidence below deletion threshold (adj-o8v6)", () => {
+      // Insert a stale learning with very low confidence via raw SQL
+      db.prepare(
+        "INSERT INTO adjutant_learnings (category, topic, content, source_type, confidence, reinforcement_count, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run("operational", "very-stale", "very stale content", "user_correction", 0.05, 1, "2024-01-01T00:00:00", "2024-01-01T00:00:00");
+
+      const staleBeforePrune = store.getLearning(1);
+      expect(staleBeforePrune).not.toBeNull();
+      expect(staleBeforePrune!.confidence).toBe(0.05);
+
+      store.pruneStale(7);
+
+      // Very low confidence learning should be deleted
+      const staleAfterPrune = store.getLearning(1);
+      expect(staleAfterPrune).toBeNull();
+    });
+
+    it("should decay confidence of moderately stale learnings without deleting (adj-o8v6)", () => {
+      // Insert a stale learning with moderate confidence
+      db.prepare(
+        "INSERT INTO adjutant_learnings (category, topic, content, source_type, confidence, reinforcement_count, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run("operational", "moderate-stale", "moderate stale", "user_correction", 0.5, 1, "2024-01-01T00:00:00", "2024-01-01T00:00:00");
+
+      store.pruneStale(7);
+
+      // Should still exist but with decayed confidence
+      const after = store.getLearning(1);
+      expect(after).not.toBeNull();
+      expect(after!.confidence).toBeLessThan(0.5);
+    });
+  });
+
+  // =========================================================================
+  // Circular supersede detection (adj-c7ao)
+  // =========================================================================
+
+  describe("supersedeLearning circular detection", () => {
+    it("should throw when creating a circular supersede chain (adj-c7ao)", () => {
+      const l1 = store.insertLearning({ category: "operational", topic: "t1", content: "old rule", sourceType: "user_correction" });
+      const l2 = store.insertLearning({ category: "operational", topic: "t1", content: "new rule", sourceType: "user_correction" });
+
+      // l1 superseded by l2
+      store.supersedeLearning(l1.id, l2.id);
+
+      // Trying to supersede l2 by l1 should throw (circular)
+      expect(() => store.supersedeLearning(l2.id, l1.id)).toThrow(/circular/i);
+    });
+
+    it("should throw on longer circular supersede chains (adj-c7ao)", () => {
+      const l1 = store.insertLearning({ category: "operational", topic: "t1", content: "v1", sourceType: "user_correction" });
+      const l2 = store.insertLearning({ category: "operational", topic: "t1", content: "v2", sourceType: "user_correction" });
+      const l3 = store.insertLearning({ category: "operational", topic: "t1", content: "v3", sourceType: "user_correction" });
+
+      // l1 -> l2 -> l3
+      store.supersedeLearning(l1.id, l2.id);
+      store.supersedeLearning(l2.id, l3.id);
+
+      // Trying to supersede l3 by l1 should throw (l1 -> l2 -> l3 -> l1)
+      expect(() => store.supersedeLearning(l3.id, l1.id)).toThrow(/circular/i);
+    });
+
+    it("should allow valid non-circular supersede (adj-c7ao)", () => {
+      const l1 = store.insertLearning({ category: "operational", topic: "t1", content: "v1", sourceType: "user_correction" });
+      const l2 = store.insertLearning({ category: "operational", topic: "t1", content: "v2", sourceType: "user_correction" });
+      const l3 = store.insertLearning({ category: "operational", topic: "t1", content: "v3", sourceType: "user_correction" });
+
+      // l1 -> l2, then l2 -> l3 — no cycle
+      store.supersedeLearning(l1.id, l2.id);
+      expect(() => store.supersedeLearning(l2.id, l3.id)).not.toThrow();
     });
   });
 });

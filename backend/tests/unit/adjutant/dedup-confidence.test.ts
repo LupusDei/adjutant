@@ -48,7 +48,8 @@ describe("Deduplication + Confidence Scoring (adj-053.2.3)", () => {
         sourceType: "user_correction",
       });
 
-      const similar = store.findSimilarLearnings("bead-workflow", "assign bead before starting");
+      // Use a contiguous phrase from the content (FTS5 phrase match after sanitization)
+      const similar = store.findSimilarLearnings("bead-workflow", "assign yourself");
       expect(similar.length).toBeGreaterThan(0);
     });
 
@@ -338,13 +339,15 @@ describe("Deduplication + Confidence Scoring (adj-053.2.3)", () => {
       expect(pruned).toBe(0);
     });
 
-    it("should NOT decay learnings with very low confidence", () => {
+    it("should DELETE learnings with very low confidence instead of decaying (adj-o8v6)", () => {
       db.prepare(
         "INSERT INTO adjutant_learnings (category, topic, content, source_type, confidence, reinforcement_count, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
       ).run("operational", "weak", "weak content", "user_correction", 0.03, 1, "2024-01-01T00:00:00", "2024-01-01T00:00:00");
 
       const pruned = store.pruneStale(7);
-      expect(pruned).toBe(0);
+      expect(pruned).toBe(1); // Deleted instead of ignored
+      // Learning should be gone
+      expect(store.getLearning(1)).toBeNull();
     });
 
     it("should apply cumulative decay on repeated calls", () => {
