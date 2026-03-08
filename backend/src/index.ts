@@ -42,6 +42,7 @@ import { createMemoryCollector } from "./services/adjutant/behaviors/memory-coll
 import { createSessionRetrospective } from "./services/adjutant/behaviors/session-retrospective.js";
 import { createMemoryReviewer } from "./services/adjutant/behaviors/memory-reviewer.js";
 import { createSelfImprover } from "./services/adjutant/behaviors/self-improver.js";
+import { createAgentSpawnerBehavior } from "./services/adjutant/behaviors/agent-spawner.js";
 import { createAgentDecommissioner } from "./services/adjutant/behaviors/agent-decommissioner.js";
 import { createMemoryStore } from "./services/adjutant/memory-store.js";
 import { registerMemoryTools } from "./services/mcp-tools/memory.js";
@@ -205,6 +206,7 @@ const server = app.listen(PORT, () => {
   behaviorRegistry.register(createSessionRetrospective(memoryStore));
   behaviorRegistry.register(createMemoryReviewer(memoryStore));
   behaviorRegistry.register(createSelfImprover(memoryStore, proposalStore));
+  behaviorRegistry.register(createAgentSpawnerBehavior(projectRoot));
   behaviorRegistry.register(createAgentDecommissioner());
 
   initAdjutantCore({ registry: behaviorRegistry, state: adjutantState, comm: adjutantComm });
