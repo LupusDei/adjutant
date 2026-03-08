@@ -43,17 +43,17 @@ export interface AdjutantState {
   setMeta(key: string, value: string): void;
   /** Delete decisions older than the given number of days. Returns count of deleted rows. */
   pruneOldDecisions(olderThanDays: number): number;
-  /** Log a new agent spawn event */
+  /** Log a new agent spawn. Returns the spawn record ID. */
   logSpawn(agentId: string, reason?: string, beadId?: string): number;
-  /** Get spawn history, newest first */
+  /** Get spawn history ordered newest first. */
   getSpawnHistory(limit?: number): SpawnRecord[];
-  /** Get spawn history for a specific agent */
+  /** Get spawn history for a specific agent, ordered newest first. */
   getAgentSpawnHistory(agentId: string): SpawnRecord[];
-  /** Mark a spawn record as decommissioned */
+  /** Mark a spawn record as decommissioned. */
   markDecommissioned(spawnId: number): void;
-  /** Get the most recent spawn for an agent (or null) */
+  /** Get the most recent spawn for an agent, or null if none. */
   getLastSpawn(agentId: string): SpawnRecord | null;
-  /** Count active (not decommissioned) spawns */
+  /** Count spawns that have not been decommissioned. */
   countActiveSpawns(): number;
 }
 
@@ -79,6 +79,12 @@ interface DecisionRow {
   created_at: string;
 }
 
+interface MetaRow {
+  key: string;
+  value: string;
+  updated_at: string;
+}
+
 interface SpawnHistoryRow {
   id: number;
   agent_id: string;
@@ -86,12 +92,6 @@ interface SpawnHistoryRow {
   reason: string | null;
   bead_id: string | null;
   decommissioned_at: string | null;
-}
-
-interface MetaRow {
-  key: string;
-  value: string;
-  updated_at: string;
 }
 
 function rowToProfile(row: AgentProfileRow): AgentProfile {
@@ -181,11 +181,11 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
   `);
 
   const getSpawnHistoryStmt = db.prepare(`
-    SELECT * FROM adjutant_spawn_history ORDER BY spawned_at DESC LIMIT ?
+    SELECT * FROM adjutant_spawn_history ORDER BY id DESC LIMIT ?
   `);
 
   const getAgentSpawnHistoryStmt = db.prepare(`
-    SELECT * FROM adjutant_spawn_history WHERE agent_id = ? ORDER BY spawned_at DESC
+    SELECT * FROM adjutant_spawn_history WHERE agent_id = ? ORDER BY id DESC
   `);
 
   const markDecommissionedStmt = db.prepare(`
@@ -193,7 +193,7 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
   `);
 
   const getLastSpawnStmt = db.prepare(`
-    SELECT * FROM adjutant_spawn_history WHERE agent_id = ? ORDER BY spawned_at DESC LIMIT 1
+    SELECT * FROM adjutant_spawn_history WHERE agent_id = ? ORDER BY id DESC LIMIT 1
   `);
 
   const countActiveSpawnsStmt = db.prepare(`
@@ -289,8 +289,9 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
       return Number(result.lastInsertRowid);
     },
 
-    getSpawnHistory(limit = 50): SpawnRecord[] {
-      const rows = getSpawnHistoryStmt.all(limit) as SpawnHistoryRow[];
+    getSpawnHistory(limit?: number): SpawnRecord[] {
+      const safeLimit = limit !== undefined ? Math.max(0, Math.min(limit, 1000)) : 1000;
+      const rows = getSpawnHistoryStmt.all(safeLimit) as SpawnHistoryRow[];
       return rows.map(rowToSpawnRecord);
     },
 
