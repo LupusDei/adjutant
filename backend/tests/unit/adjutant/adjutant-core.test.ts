@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { ScheduledTask } from "node-cron";
 
-const { mockSchedule, mockOnAny, mockOffAny } = vi.hoisted(() => ({
-  mockSchedule: vi.fn(),
+const { mockOnAny, mockOffAny } = vi.hoisted(() => ({
   mockOnAny: vi.fn(),
   mockOffAny: vi.fn(),
 }));
@@ -13,12 +11,6 @@ vi.mock("../../../src/utils/index.js", () => ({
   logWarn: vi.fn(),
   logError: vi.fn(),
   logDebug: vi.fn(),
-}));
-
-// Mock node-cron
-vi.mock("node-cron", () => ({
-  default: { schedule: mockSchedule },
-  schedule: mockSchedule,
 }));
 
 // Mock EventBus
@@ -32,6 +24,7 @@ vi.mock("../../../src/services/event-bus.js", () => ({
 import {
   initAdjutantCore,
   stopAdjutantCore,
+  cronToIntervalMs,
 } from "../../../src/services/adjutant/adjutant-core.js";
 import type { AdjutantBehavior, BehaviorEvent } from "../../../src/services/adjutant/behavior-registry.js";
 import { BehaviorRegistry } from "../../../src/services/adjutant/behavior-registry.js";
@@ -80,6 +73,36 @@ function createTestBehavior(overrides: Partial<AdjutantBehavior> = {}): Adjutant
 // Tests
 // ---------------------------------------------------------------------------
 
+describe("cronToIntervalMs", () => {
+  it("should parse */5 * * * * to 5 minutes", () => {
+    expect(cronToIntervalMs("*/5 * * * *")).toBe(5 * 60 * 1000);
+  });
+
+  it("should parse */15 * * * * to 15 minutes", () => {
+    expect(cronToIntervalMs("*/15 * * * *")).toBe(15 * 60 * 1000);
+  });
+
+  it("should parse 0 * * * * to 60 minutes", () => {
+    expect(cronToIntervalMs("0 * * * *")).toBe(60 * 60 * 1000);
+  });
+
+  it("should parse */1 * * * * to 1 minute", () => {
+    expect(cronToIntervalMs("*/1 * * * *")).toBe(60 * 1000);
+  });
+
+  it("should throw on non-minute-level cron patterns", () => {
+    expect(() => cronToIntervalMs("0 0 * * *")).toThrow("only minute-level");
+  });
+
+  it("should throw on unsupported minute field", () => {
+    expect(() => cronToIntervalMs("1,30 * * * *")).toThrow("Unsupported cron minute field");
+  });
+
+  it("should throw on wrong number of fields", () => {
+    expect(() => cronToIntervalMs("* * *")).toThrow("expected 5 fields");
+  });
+});
+
 describe("AdjutantCore", () => {
   let registry: BehaviorRegistry;
   let state: AdjutantState;
@@ -87,14 +110,15 @@ describe("AdjutantCore", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
     registry = new BehaviorRegistry();
     state = createMockState();
     comm = createMockComm();
-    mockSchedule.mockReturnValue({ stop: vi.fn() } as unknown as ScheduledTask);
   });
 
   afterEach(() => {
     stopAdjutantCore();
+    vi.useRealTimers();
   });
 
   describe("initAdjutantCore", () => {
@@ -104,21 +128,22 @@ describe("AdjutantCore", () => {
       expect(mockOnAny).toHaveBeenCalledWith(expect.any(Function));
     });
 
-    it("should register cron jobs for scheduled behaviors", () => {
+    it("should register interval timers for scheduled behaviors", () => {
       const scheduled = createTestBehavior({
         name: "scheduled-behavior",
-        schedule: "0 * * * *",
+        schedule: "*/5 * * * *",
         triggers: [],
       });
       registry.register(scheduled);
 
       initAdjutantCore({ registry, state, comm });
 
-      expect(mockSchedule).toHaveBeenCalledOnce();
-      expect(mockSchedule).toHaveBeenCalledWith("0 * * * *", expect.any(Function));
+      // Advance 5 minutes — should fire once
+      vi.advanceTimersByTime(5 * 60 * 1000);
+      expect(scheduled.shouldAct).toHaveBeenCalledOnce();
     });
 
-    it("should not register cron jobs for non-scheduled behaviors", () => {
+    it("should not register timers for non-scheduled behaviors", () => {
       const eventOnly = createTestBehavior({
         name: "event-only",
         triggers: ["agent:status_changed"],
@@ -127,18 +152,23 @@ describe("AdjutantCore", () => {
 
       initAdjutantCore({ registry, state, comm });
 
-      expect(mockSchedule).not.toHaveBeenCalled();
+      // Advance time — should not fire
+      vi.advanceTimersByTime(60 * 60 * 1000);
+      expect(eventOnly.shouldAct).not.toHaveBeenCalled();
     });
 
-    it("should register multiple cron jobs for multiple scheduled behaviors", () => {
-      const b1 = createTestBehavior({ name: "b1", schedule: "0 * * * *", triggers: [] });
-      const b2 = createTestBehavior({ name: "b2", schedule: "*/5 * * * *", triggers: [] });
+    it("should register timers for multiple scheduled behaviors", () => {
+      const b1 = createTestBehavior({ name: "b1", schedule: "*/5 * * * *", triggers: [] });
+      const b2 = createTestBehavior({ name: "b2", schedule: "*/15 * * * *", triggers: [] });
       registry.register(b1);
       registry.register(b2);
 
       initAdjutantCore({ registry, state, comm });
 
-      expect(mockSchedule).toHaveBeenCalledTimes(2);
+      // After 15 minutes: b1 fires 3 times, b2 fires 1 time
+      vi.advanceTimersByTime(15 * 60 * 1000);
+      expect(b1.shouldAct).toHaveBeenCalledTimes(3);
+      expect(b2.shouldAct).toHaveBeenCalledOnce();
     });
 
     it("should be idempotent — second call is a no-op", () => {
@@ -203,8 +233,7 @@ describe("AdjutantCore", () => {
 
       handler("agent:status_changed", {}, 1);
 
-      // Give microtask queue time
-      await new Promise((r) => setTimeout(r, 10));
+      await vi.advanceTimersByTimeAsync(10);
 
       expect(behavior.shouldAct).toHaveBeenCalledOnce();
       expect(behavior.act).not.toHaveBeenCalled();
@@ -227,7 +256,7 @@ describe("AdjutantCore", () => {
 
       handler("agent:status_changed", {}, 1);
 
-      await new Promise((r) => setTimeout(r, 10));
+      await vi.advanceTimersByTimeAsync(10);
 
       expect(behavior.shouldAct).not.toHaveBeenCalled();
       expect(behavior.act).not.toHaveBeenCalled();
@@ -302,14 +331,14 @@ describe("AdjutantCore", () => {
       // Should not throw
       expect(() => handler("agent:status_changed", {}, 1)).not.toThrow();
 
-      await new Promise((r) => setTimeout(r, 10));
+      await vi.advanceTimersByTimeAsync(10);
 
       expect(behavior.act).not.toHaveBeenCalled();
     });
   });
 
   describe("scheduled behavior dispatch", () => {
-    it("should call shouldAct and act on cron tick", async () => {
+    it("should call shouldAct and act on interval tick", async () => {
       const behavior = createTestBehavior({
         name: "periodic",
         triggers: [],
@@ -319,20 +348,30 @@ describe("AdjutantCore", () => {
 
       initAdjutantCore({ registry, state, comm });
 
-      // Extract the cron callback
-      const cronCallback = mockSchedule.mock.calls[0]![1] as () => void;
-
-      // Simulate cron tick
-      cronCallback();
+      // Advance by 1 hour
+      vi.advanceTimersByTime(60 * 60 * 1000);
 
       await vi.waitFor(() => {
         expect(behavior.shouldAct).toHaveBeenCalledOnce();
         expect(behavior.act).toHaveBeenCalledOnce();
       });
+    });
 
-      // Verify scheduled event has name "cron:<behavior-name>"
-      const calledEvent = (behavior.shouldAct as ReturnType<typeof vi.fn>).mock.calls[0]![0] as BehaviorEvent;
-      expect(calledEvent.name).toBe("agent:status_changed"); // uses first trigger or falls back
+    it("should not fire missed executions after sleep", () => {
+      const behavior = createTestBehavior({
+        name: "periodic",
+        triggers: [],
+        schedule: "*/5 * * * *",
+      });
+      registry.register(behavior);
+
+      initAdjutantCore({ registry, state, comm });
+
+      // Advance 1 hour — setInterval fires at each interval, no catch-up spam
+      vi.advanceTimersByTime(60 * 60 * 1000);
+
+      // setInterval fires 12 times (60/5), not a flood of "missed" executions
+      expect(behavior.shouldAct).toHaveBeenCalledTimes(12);
     });
   });
 
@@ -344,13 +383,10 @@ describe("AdjutantCore", () => {
       expect(mockOffAny).toHaveBeenCalledOnce();
     });
 
-    it("should stop all cron jobs", () => {
-      const mockStop = vi.fn();
-      mockSchedule.mockReturnValue({ stop: mockStop } as unknown as ScheduledTask);
-
+    it("should stop all interval timers", () => {
       const behavior = createTestBehavior({
         name: "periodic",
-        schedule: "0 * * * *",
+        schedule: "*/5 * * * *",
         triggers: [],
       });
       registry.register(behavior);
@@ -358,7 +394,9 @@ describe("AdjutantCore", () => {
       initAdjutantCore({ registry, state, comm });
       stopAdjutantCore();
 
-      expect(mockStop).toHaveBeenCalledOnce();
+      // Advance time — timer should be cleared, no more calls
+      vi.advanceTimersByTime(30 * 60 * 1000);
+      expect(behavior.shouldAct).not.toHaveBeenCalled();
     });
 
     it("should be safe to call without init", () => {

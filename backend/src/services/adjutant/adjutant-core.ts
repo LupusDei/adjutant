@@ -2,16 +2,13 @@
  * Adjutant Core — event-driven dispatch engine.
  *
  * Subscribes to the EventBus via onAny() and dispatches matching events
- * to registered behaviors. Scheduled behaviors run via node-cron.
+ * to registered behaviors. Scheduled behaviors run via setInterval.
  *
  * Usage:
  *   initAdjutantCore({ registry, state, comm })
  *   // ... later ...
  *   stopAdjutantCore()
  */
-
-import cron from "node-cron";
-import type { ScheduledTask } from "node-cron";
 
 import { getEventBus, type EventName } from "../event-bus.js";
 import type { BehaviorRegistry, BehaviorEvent, AdjutantBehavior } from "./behavior-registry.js";
@@ -35,7 +32,51 @@ export interface AdjutantCoreDeps {
 
 let initialized = false;
 let eventHandler: ((event: EventName, data: unknown, seq: number) => void) | null = null;
-let cronTasks: ScheduledTask[] = [];
+let intervalTimers: ReturnType<typeof setInterval>[] = [];
+
+// ============================================================================
+// Cron-to-Interval
+// ============================================================================
+
+/**
+ * Convert simple cron expressions to millisecond intervals.
+ *
+ * Supported patterns:
+ *   "* /N * * * *" → every N minutes  (written without space — escaped here for comment)
+ *   "0 * * * *"   → every 60 minutes (top of each hour)
+ *
+ * Throws on unsupported patterns.
+ */
+export function cronToIntervalMs(schedule: string): number {
+  const parts = schedule.trim().split(/\s+/);
+  if (parts.length !== 5) {
+    throw new Error(`Unsupported cron expression (expected 5 fields): "${schedule}"`);
+  }
+
+  const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
+
+  // All remaining fields must be wildcards for a simple interval
+  if (hour !== "*" || dayOfMonth !== "*" || month !== "*" || dayOfWeek !== "*") {
+    throw new Error(`Unsupported cron expression (only minute-level intervals supported): "${schedule}"`);
+  }
+
+  // "*/N" → every N minutes
+  const stepMatch = minute!.match(/^\*\/(\d+)$/);
+  if (stepMatch) {
+    const minutes = parseInt(stepMatch[1]!, 10);
+    if (minutes <= 0) {
+      throw new Error(`Invalid step value in cron expression: "${schedule}"`);
+    }
+    return minutes * 60 * 1000;
+  }
+
+  // "0" → every 60 minutes (top of hour)
+  if (minute === "0") {
+    return 60 * 60 * 1000;
+  }
+
+  throw new Error(`Unsupported cron minute field "${minute}" in: "${schedule}"`);
+}
 
 // ============================================================================
 // Event Dispatch
@@ -70,7 +111,7 @@ function dispatchEvent(
 /**
  * Initialize the Adjutant Core.
  *
- * Subscribes to EventBus via onAny() and registers cron jobs for
+ * Subscribes to EventBus via onAny() and registers interval timers for
  * scheduled behaviors. Idempotent — second call is a no-op.
  */
 export function initAdjutantCore(deps: AdjutantCoreDeps): void {
@@ -92,20 +133,22 @@ export function initAdjutantCore(deps: AdjutantCoreDeps): void {
   getEventBus().onAny(eventHandler);
   logInfo("AdjutantCore: EventBus subscription active");
 
-  // Register cron jobs for scheduled behaviors
+  // Register interval timers for scheduled behaviors
   const scheduled = registry.getScheduledBehaviors();
   for (const behavior of scheduled) {
-    const task = cron.schedule(behavior.schedule!, () => {
+    const intervalMs = cronToIntervalMs(behavior.schedule!);
+    const timer = setInterval(() => {
       const cronEvent: BehaviorEvent = {
         name: (behavior.triggers[0] ?? "agent:status_changed") as EventName,
         data: { cronTick: true, behavior: behavior.name },
         seq: 0,
       };
       dispatchEvent(cronEvent, [behavior], state, comm);
-    });
-    cronTasks.push(task);
-    logInfo(`AdjutantCore: Cron registered for "${behavior.name}"`, {
+    }, intervalMs);
+    intervalTimers.push(timer);
+    logInfo(`AdjutantCore: Interval registered for "${behavior.name}"`, {
       schedule: behavior.schedule,
+      intervalMs,
     });
   }
 
@@ -119,7 +162,7 @@ export function initAdjutantCore(deps: AdjutantCoreDeps): void {
 /**
  * Stop the Adjutant Core.
  *
- * Unsubscribes from EventBus and stops all cron jobs.
+ * Unsubscribes from EventBus and clears all interval timers.
  * Safe to call without init.
  */
 export function stopAdjutantCore(): void {
@@ -128,10 +171,10 @@ export function stopAdjutantCore(): void {
     eventHandler = null;
   }
 
-  for (const task of cronTasks) {
-    task.stop();
+  for (const timer of intervalTimers) {
+    clearInterval(timer);
   }
-  cronTasks = [];
+  intervalTimers = [];
 
   initialized = false;
 }
