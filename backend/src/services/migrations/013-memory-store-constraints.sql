@@ -77,8 +77,12 @@ CREATE TABLE adjutant_retrospectives_new (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Deduplicate: keep the row with the highest id for each session_date
 INSERT INTO adjutant_retrospectives_new
-  SELECT * FROM adjutant_retrospectives;
+  SELECT * FROM adjutant_retrospectives
+  WHERE id IN (
+    SELECT MAX(id) FROM adjutant_retrospectives GROUP BY session_date
+  );
 
 DROP TABLE adjutant_retrospectives;
 ALTER TABLE adjutant_retrospectives_new RENAME TO adjutant_retrospectives;
