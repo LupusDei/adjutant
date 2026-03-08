@@ -9,6 +9,8 @@ export interface AgentProfile {
   currentBeadId: string | null;
   connectedAt: string | null;
   disconnectedAt: string | null;
+  assignmentCount: number;
+  lastEpicId: string | null;
 }
 
 export interface DecisionEntry {
@@ -24,6 +26,8 @@ export interface AdjutantState {
   getAgentProfile(agentId: string): AgentProfile | null;
   upsertAgentProfile(profile: Partial<Omit<AgentProfile, 'lastStatusAt'>> & { agentId: string }): void;
   getAllAgentProfiles(): AgentProfile[];
+  /** Atomically increment the assignment count for the given agent. */
+  incrementAssignmentCount(agentId: string): void;
   logDecision(entry: Omit<DecisionEntry, "id" | "createdAt">): void;
   getRecentDecisions(limit: number): DecisionEntry[];
   getMeta(key: string): string | null;
@@ -41,6 +45,8 @@ interface AgentProfileRow {
   current_bead_id: string | null;
   connected_at: string | null;
   disconnected_at: string | null;
+  assignment_count: number;
+  last_epic_id: string | null;
 }
 
 interface DecisionRow {
@@ -68,6 +74,8 @@ function rowToProfile(row: AgentProfileRow): AgentProfile {
     currentBeadId: row.current_bead_id,
     connectedAt: row.connected_at,
     disconnectedAt: row.disconnected_at,
+    assignmentCount: row.assignment_count,
+    lastEpicId: row.last_epic_id,
   };
 }
 
@@ -92,15 +100,20 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
   );
 
   const insertProfileStmt = db.prepare(`
-    INSERT INTO adjutant_agent_profiles (agent_id, last_status, last_status_at, last_activity, current_task, current_bead_id, connected_at, disconnected_at)
-    VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?)
+    INSERT INTO adjutant_agent_profiles (agent_id, last_status, last_status_at, last_activity, current_task, current_bead_id, connected_at, disconnected_at, assignment_count, last_epic_id)
+    VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const updateProfileStmt = db.prepare(`
     UPDATE adjutant_agent_profiles
     SET last_status = ?, last_status_at = datetime('now'), last_activity = ?,
-        current_task = ?, current_bead_id = ?, connected_at = ?, disconnected_at = ?
+        current_task = ?, current_bead_id = ?, connected_at = ?, disconnected_at = ?,
+        assignment_count = ?, last_epic_id = ?
     WHERE agent_id = ?
+  `);
+
+  const incrementAssignmentCountStmt = db.prepare(`
+    UPDATE adjutant_agent_profiles SET assignment_count = assignment_count + 1 WHERE agent_id = ?
   `);
 
   const logDecisionStmt = db.prepare(`
@@ -139,6 +152,8 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
           current_bead_id: profile.currentBeadId !== undefined ? profile.currentBeadId : existing.current_bead_id,
           connected_at: profile.connectedAt !== undefined ? profile.connectedAt : existing.connected_at,
           disconnected_at: profile.disconnectedAt !== undefined ? profile.disconnectedAt : existing.disconnected_at,
+          assignment_count: profile.assignmentCount !== undefined ? profile.assignmentCount : existing.assignment_count,
+          last_epic_id: profile.lastEpicId !== undefined ? profile.lastEpicId : existing.last_epic_id,
         };
 
         updateProfileStmt.run(
@@ -148,6 +163,8 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
           merged.current_bead_id,
           merged.connected_at,
           merged.disconnected_at,
+          merged.assignment_count,
+          merged.last_epic_id,
           profile.agentId,
         );
       } else {
@@ -159,6 +176,8 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
           profile.currentBeadId ?? null,
           profile.connectedAt ?? null,
           profile.disconnectedAt ?? null,
+          profile.assignmentCount ?? 0,
+          profile.lastEpicId ?? null,
         );
       }
     },
@@ -166,6 +185,10 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
     getAllAgentProfiles(): AgentProfile[] {
       const rows = getAllProfilesStmt.all() as AgentProfileRow[];
       return rows.map(rowToProfile);
+    },
+
+    incrementAssignmentCount(agentId: string): void {
+      incrementAssignmentCountStmt.run(agentId);
     },
 
     logDecision(entry: Omit<DecisionEntry, "id" | "createdAt">): void {
