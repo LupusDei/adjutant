@@ -216,4 +216,63 @@ describe("BehaviorRegistry", () => {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // adj-dfcj: Edge case tests
+  // ---------------------------------------------------------------------------
+
+  describe("edge cases", () => {
+    it("behavior with empty triggers and a schedule appears in getScheduledBehaviors but not getBehaviorsForEvent", () => {
+      const registry = new BehaviorRegistry();
+      registry.register(
+        createTestBehavior({ name: "schedule-only", triggers: [], schedule: "0 * * * *" }),
+      );
+
+      expect(registry.getScheduledBehaviors()).toHaveLength(1);
+      expect(registry.getScheduledBehaviors()[0].name).toBe("schedule-only");
+      expect(registry.getBehaviorsForEvent("agent:status_changed")).toHaveLength(0);
+      expect(registry.getBehaviorsForEvent("bead:created")).toHaveLength(0);
+    });
+
+    it("behavior with both triggers AND schedule appears in both getBehaviorsForEvent and getScheduledBehaviors", () => {
+      const registry = new BehaviorRegistry();
+      registry.register(
+        createTestBehavior({
+          name: "dual",
+          triggers: ["bead:updated"],
+          schedule: "*/5 * * * *",
+        }),
+      );
+
+      const forEvent = registry.getBehaviorsForEvent("bead:updated");
+      expect(forEvent).toHaveLength(1);
+      expect(forEvent[0].name).toBe("dual");
+
+      const scheduled = registry.getScheduledBehaviors();
+      expect(scheduled).toHaveLength(1);
+      expect(scheduled[0].name).toBe("dual");
+    });
+
+    it("getBehaviorsForEvent returns independent array (mutating it doesn't affect the registry)", () => {
+      const registry = new BehaviorRegistry();
+      registry.register(
+        createTestBehavior({ name: "immutable-check", triggers: ["bead:created"] }),
+      );
+
+      const result1 = registry.getBehaviorsForEvent("bead:created");
+      result1.push(createTestBehavior({ name: "injected" }));
+
+      const result2 = registry.getBehaviorsForEvent("bead:created");
+      expect(result2).toHaveLength(1);
+      expect(result2[0].name).toBe("immutable-check");
+    });
+
+    it("behavior with schedule: '' (empty string) is excluded from getScheduledBehaviors", () => {
+      const registry = new BehaviorRegistry();
+      registry.register(
+        createTestBehavior({ name: "empty-schedule", schedule: "" }),
+      );
+
+      expect(registry.getScheduledBehaviors()).toHaveLength(0);
+    });
+  });
 });
