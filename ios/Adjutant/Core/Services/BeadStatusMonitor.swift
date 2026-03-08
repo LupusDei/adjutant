@@ -113,6 +113,11 @@ public final class BeadStatusMonitor: ObservableObject {
     /// - Returns: `true` if the notification was handled successfully
     @discardableResult
     public func handlePushNotification(_ payload: PushNotificationPayload) async -> Bool {
+        // Wait for AppState persisted preferences (isVoiceMuted, etc.) to load.
+        // Without this, push notifications arriving during the ~50-500ms startup
+        // window would read default values instead of persisted ones. (adj-qv4q)
+        await AppState.shared.waitForServicesReady()
+
         // Only handle bead-related notifications
         guard payload.type == .beadUpdate || payload.type == .beadHooked || payload.type == .beadCompleted else {
             print("[BeadStatusMonitor] Ignoring non-bead notification type: \(payload.type)")

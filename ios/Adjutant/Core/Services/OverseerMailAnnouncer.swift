@@ -59,6 +59,11 @@ public final class OverseerMailAnnouncer: ObservableObject {
     /// - Returns: `true` if the notification was handled successfully
     @discardableResult
     public func handlePushNotification(_ payload: PushNotificationPayload) async -> Bool {
+        // Wait for AppState persisted preferences (isVoiceMuted, etc.) to load.
+        // Without this, push notifications arriving during the ~50-500ms startup
+        // window would read default values instead of persisted ones. (adj-qv4q)
+        await AppState.shared.waitForServicesReady()
+
         guard payload.type == .mail else {
             print("[OverseerMailAnnouncer] Ignoring non-mail notification type: \(payload.type)")
             return false
@@ -111,6 +116,9 @@ public final class OverseerMailAnnouncer: ObservableObject {
     /// - Returns: Number of messages announced
     @discardableResult
     public func processMessages(_ messages: [Message]) async -> Int {
+        // Ensure persisted preferences are loaded before reading isVoiceMuted. (adj-qv4q)
+        await AppState.shared.waitForServicesReady()
+
         guard !AppState.shared.isVoiceMuted else {
             print("[OverseerMailAnnouncer] Voice is muted, skipping announcements")
             return 0

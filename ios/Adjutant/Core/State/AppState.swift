@@ -66,6 +66,15 @@ final class AppState: ObservableObject {
     /// Whether Phase B (deferred initialization) has completed
     private(set) var isFullyInitialized = false
 
+    /// Whether persisted state (theme, voiceMuted, etc.) has been loaded.
+    /// Separate from `isFullyInitialized` because `loadPersistedStateAsync()` runs
+    /// on a background thread and completes after `completeInitialization()` returns.
+    private var isPersistedStateLoaded = false
+
+    /// Continuations waiting for services + persisted state to be ready.
+    /// Resumed once both `isFullyInitialized` and `isPersistedStateLoaded` are true.
+    private var servicesReadyContinuations: [CheckedContinuation<Void, Never>] = []
+
     // MARK: - Initialization
 
     private static func loadPersistedBaseURL() -> URL {
@@ -120,6 +129,9 @@ final class AppState: ObservableObject {
 
         setupNetworkRecoveryObserver()
         registerDependencies()
+
+        // Check if persisted state already loaded (unlikely but possible if Task ran fast)
+        resumeServicesReadyContinuationsIfNeeded()
     }
 
     private func registerDependencies() {
@@ -150,6 +162,33 @@ final class AppState: ObservableObject {
     private func recreateAPIClient() {
         let config = APIClientConfiguration(baseURL: apiBaseURL, apiKey: apiKey)
         apiClient = APIClient(configuration: config)
+    }
+
+    // MARK: - Services Ready Gate
+
+    /// Whether all initialization is complete: Phase B finished AND persisted state loaded.
+    var isServicesReady: Bool {
+        isFullyInitialized && isPersistedStateLoaded
+    }
+
+    /// Waits until Phase B initialization AND persisted state loading have completed.
+    /// Returns immediately if already ready. Push notification handlers should call
+    /// this before accessing state like `isVoiceMuted` or `isVoiceAvailable`.
+    func waitForServicesReady() async {
+        if isServicesReady { return }
+        await withCheckedContinuation { continuation in
+            servicesReadyContinuations.append(continuation)
+        }
+    }
+
+    /// Resumes all waiting continuations if both init phases are complete.
+    private func resumeServicesReadyContinuationsIfNeeded() {
+        guard isServicesReady else { return }
+        let continuations = servicesReadyContinuations
+        servicesReadyContinuations.removeAll()
+        for continuation in continuations {
+            continuation.resume()
+        }
     }
 
     // MARK: - State Updates
@@ -255,6 +294,9 @@ final class AppState: ObservableObject {
                let priority = CommunicationPriority(rawValue: priorityRaw) {
                 self.communicationPriority = priority
             }
+
+            self.isPersistedStateLoaded = true
+            self.resumeServicesReadyContinuationsIfNeeded()
         }
     }
 
