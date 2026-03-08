@@ -94,6 +94,13 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
     VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?)
   `);
 
+  const updateProfileStmt = db.prepare(`
+    UPDATE adjutant_agent_profiles
+    SET last_status = ?, last_status_at = datetime('now'), last_activity = ?,
+        current_task = ?, current_bead_id = ?, connected_at = ?, disconnected_at = ?
+    WHERE agent_id = ?
+  `);
+
   const logDecisionStmt = db.prepare(`
     INSERT INTO adjutant_decisions (behavior, action, target, reason)
     VALUES (?, ?, ?, ?)
@@ -132,12 +139,7 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
           disconnected_at: profile.disconnectedAt !== undefined ? profile.disconnectedAt : existing.disconnected_at,
         };
 
-        db.prepare(`
-          UPDATE adjutant_agent_profiles
-          SET last_status = ?, last_status_at = datetime('now'), last_activity = ?,
-              current_task = ?, current_bead_id = ?, connected_at = ?, disconnected_at = ?
-          WHERE agent_id = ?
-        `).run(
+        updateProfileStmt.run(
           merged.last_status,
           merged.last_activity,
           merged.current_task,
