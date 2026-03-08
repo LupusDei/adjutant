@@ -9,10 +9,19 @@ vi.mock("../../src/utils/index.js", () => ({
 }));
 
 // Mock session bridge
-const mockCreateSession = vi.fn();
-const mockLifecycle = { createSession: mockCreateSession };
+const mockBridgeCreateSession = vi.fn();
+const mockDiscoverSessions = vi.fn();
+const mockRegistrySave = vi.fn();
+const mockFindByTmuxSession = vi.fn();
+const mockLifecycle = { discoverSessions: mockDiscoverSessions };
+const mockRegistry = {
+  findByTmuxSession: mockFindByTmuxSession,
+  save: mockRegistrySave,
+};
 const mockBridge = {
   lifecycle: mockLifecycle,
+  registry: mockRegistry,
+  createSession: mockBridgeCreateSession,
   init: vi.fn(),
 };
 
@@ -44,14 +53,14 @@ describe("adjutant-spawner", () => {
   // ==========================================================================
 
   describe("spawnAdjutant", () => {
-    it("should spawn when no existing session", async () => {
+    it("should spawn via bridge.createSession when no existing session", async () => {
       mockListTmuxSessions.mockResolvedValue(new Set(["adj-swarm-other"]));
-      mockCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
+      mockBridgeCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
 
       await spawnAdjutant("/tmp/project");
 
-      expect(mockCreateSession).toHaveBeenCalledOnce();
-      expect(mockCreateSession).toHaveBeenCalledWith(
+      expect(mockBridgeCreateSession).toHaveBeenCalledOnce();
+      expect(mockBridgeCreateSession).toHaveBeenCalledWith(
         expect.objectContaining({
           name: "adjutant-coordinator",
           projectPath: "/tmp/project",
@@ -61,19 +70,43 @@ describe("adjutant-spawner", () => {
       );
     });
 
-    it("should skip spawn when session already exists", async () => {
+    it("should skip spawn when session already exists and is in registry", async () => {
       mockListTmuxSessions.mockResolvedValue(
         new Set(["adj-swarm-adjutant-coordinator", "adj-swarm-other"])
       );
+      mockFindByTmuxSession.mockReturnValue({ name: "adjutant-coordinator" });
 
       await spawnAdjutant("/tmp/project");
 
-      expect(mockCreateSession).not.toHaveBeenCalled();
+      expect(mockBridgeCreateSession).not.toHaveBeenCalled();
+      expect(mockDiscoverSessions).not.toHaveBeenCalled();
+    });
+
+    it("should re-register orphaned session when tmux exists but not in registry", async () => {
+      mockListTmuxSessions.mockResolvedValue(
+        new Set(["adj-swarm-adjutant-coordinator", "adj-swarm-other"])
+      );
+      // First call: not in registry. Second call (after discover): found.
+      const rediscovered = { name: "adj-swarm-adjutant-coordinator", projectPath: "." };
+      mockFindByTmuxSession
+        .mockReturnValueOnce(undefined)   // Before discover
+        .mockReturnValueOnce(rediscovered); // After discover
+      mockDiscoverSessions.mockResolvedValue(["s1"]);
+      mockRegistrySave.mockResolvedValue(undefined);
+
+      await spawnAdjutant("/tmp/project");
+
+      expect(mockDiscoverSessions).toHaveBeenCalledWith("adj-swarm-adjutant-coordinator");
+      expect(rediscovered.name).toBe("adjutant-coordinator");
+      expect(rediscovered.projectPath).toBe("/tmp/project");
+      expect(mockRegistrySave).toHaveBeenCalled();
+      expect(mockBridgeCreateSession).not.toHaveBeenCalled();
+      expect(logInfo).toHaveBeenCalledWith("Re-registered orphaned Adjutant session");
     });
 
     it("should not throw when createSession fails", async () => {
       mockListTmuxSessions.mockResolvedValue(new Set());
-      mockCreateSession.mockResolvedValue({
+      mockBridgeCreateSession.mockResolvedValue({
         success: false,
         error: "session limit reached",
       });
@@ -150,14 +183,14 @@ describe("adjutant-spawner", () => {
       const result = await ensureAdjutantAlive("/tmp/project");
       expect(result).toBe(false);
       // spawnAdjutant should NOT have been called (we mock createSession to verify)
-      expect(mockCreateSession).not.toHaveBeenCalled();
+      expect(mockBridgeCreateSession).not.toHaveBeenCalled();
     });
 
     it("should respawn and return true when Adjutant agent is dead", async () => {
       // First call (isAdjutantAlive): no adjutant session
       // Second call (spawnAdjutant internal check): still no adjutant session
       mockListTmuxSessions.mockResolvedValue(new Set(["adj-swarm-other"]));
-      mockCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
+      mockBridgeCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
 
       const promise = ensureAdjutantAlive("/tmp/project");
 
@@ -166,12 +199,12 @@ describe("adjutant-spawner", () => {
 
       const result = await promise;
       expect(result).toBe(true);
-      expect(mockCreateSession).toHaveBeenCalledOnce();
+      expect(mockBridgeCreateSession).toHaveBeenCalledOnce();
     });
 
     it("should wait 10 seconds during recovery for stabilization", async () => {
       mockListTmuxSessions.mockResolvedValue(new Set());
-      mockCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
+      mockBridgeCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
 
       let resolved = false;
       const promise = ensureAdjutantAlive("/tmp/project").then((r) => {
@@ -191,13 +224,10 @@ describe("adjutant-spawner", () => {
     });
 
     it("should return false on recovery error (graceful)", async () => {
-      // Simulate an unexpected error by making spawnAdjutant's createSession
-      // throw synchronously (bypassing spawnAdjutant's try/catch is not possible,
-      // but we can verify the outer catch by replacing setTimeout with a throwing stub).
       vi.useRealTimers(); // Undo fake timers for this test
 
       mockListTmuxSessions.mockResolvedValue(new Set()); // dead
-      mockCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
+      mockBridgeCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
 
       // Replace setTimeout so the stabilization wait throws
       const origSetTimeout = globalThis.setTimeout;
@@ -217,7 +247,7 @@ describe("adjutant-spawner", () => {
 
     it("should log recovery event when respawning", async () => {
       mockListTmuxSessions.mockResolvedValue(new Set(["adj-swarm-other"]));
-      mockCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
+      mockBridgeCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
 
       const promise = ensureAdjutantAlive("/tmp/project");
       await vi.advanceTimersByTimeAsync(10_000);

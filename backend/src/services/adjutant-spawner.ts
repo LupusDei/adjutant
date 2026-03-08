@@ -26,6 +26,8 @@ export const ADJUTANT_TMUX_SESSION = `adj-swarm-${ADJUTANT_SESSION_NAME}`;
  * Spawn the Adjutant coordinator agent in a tmux session.
  *
  * Idempotent: if the session already exists, logs and returns without error.
+ * If the tmux session exists but isn't tracked by the registry (e.g. after
+ * a backend restart), re-registers it so it appears in the agents list.
  * Never throws — all errors are caught and logged.
  */
 export async function spawnAdjutant(projectPath: string): Promise<void> {
@@ -39,14 +41,29 @@ export async function spawnAdjutant(projectPath: string): Promise<void> {
       sessions = new Set();
     }
 
+    const bridge = getSessionBridge();
+
     if (sessions.has(ADJUTANT_TMUX_SESSION)) {
+      // Tmux session exists — ensure it's tracked in the registry so it
+      // appears in the agents list. Without this, an orphaned session
+      // (survived a backend restart) would be invisible to the dashboard.
+      if (!bridge.registry.findByTmuxSession(ADJUTANT_TMUX_SESSION)) {
+        await bridge.lifecycle.discoverSessions(ADJUTANT_TMUX_SESSION);
+        // Fix metadata: discoverSessions uses the tmux name as fallback
+        const rediscovered = bridge.registry.findByTmuxSession(ADJUTANT_TMUX_SESSION);
+        if (rediscovered) {
+          rediscovered.name = ADJUTANT_SESSION_NAME;
+          rediscovered.projectPath = projectPath;
+        }
+        await bridge.registry.save();
+        logInfo("Re-registered orphaned Adjutant session");
+      }
       logInfo("Adjutant session already exists, skipping spawn");
       return;
     }
 
-    // Spawn via LifecycleManager
-    const bridge = getSessionBridge();
-    const result = await bridge.lifecycle.createSession({
+    // Spawn via SessionBridge (persists registry to disk)
+    const result = await bridge.createSession({
       name: ADJUTANT_SESSION_NAME,
       projectPath,
       mode: "swarm",
