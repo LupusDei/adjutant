@@ -77,6 +77,9 @@ public final class DataSyncService: ObservableObject {
     private var isFetchingCrew = false
     private var isFetchingBeads = false
 
+    /// Last time WidgetCenter.reloadTimelines was called (throttled to max once per 30s)
+    private var lastWidgetReloadTime: Date = .distantPast
+
     /// Subscriber counts for each endpoint (start polling when > 0)
     private var mailSubscriberCount = 0
     private var crewSubscriberCount = 0
@@ -440,6 +443,18 @@ public final class DataSyncService: ObservableObject {
         beadsPollingTask = nil
     }
 
+    // MARK: - Widget Reload Throttling
+
+    /// Reloads widget timelines at most once per 30 seconds.
+    /// Multiple crew/beads fetches on foreground transition would otherwise
+    /// trigger rapid redundant widget reloads on the main thread.
+    private func throttledWidgetReload() {
+        let now = Date()
+        guard now.timeIntervalSince(lastWidgetReloadTime) > 30.0 else { return }
+        lastWidgetReloadTime = now
+        WidgetCenter.shared.reloadTimelines(ofKind: "AdjutantWidget")
+    }
+
     // MARK: - Fetch Methods (Deduplicated)
 
     private func fetchMail() async {
@@ -460,7 +475,7 @@ public final class DataSyncService: ObservableObject {
 
             // Update cache
             ResponseCache.shared.updateCrewMembers(agents)
-            WidgetCenter.shared.reloadTimelines(ofKind: "AdjutantWidget")
+            throttledWidgetReload()
 
             // Auto-adjust communication priority based on agent activity
             let hasActiveAgents = agents.contains { $0.status == .working || $0.status == .blocked }
@@ -490,20 +505,25 @@ public final class DataSyncService: ObservableObject {
             let effectiveOrder = order ?? "desc"
             // Fetch beads for specified project (server-side filtering + sorting)
             let response = try await apiClient.getBeads(status: .all, sort: effectiveSort, order: effectiveOrder, project: project)
-            let sorted = response.sorted {
-                if $0.priority != $1.priority {
-                    return $0.priority < $1.priority
+
+            // Sort off the main actor to avoid blocking UI during large bead lists
+            let sorted = await Task.detached(priority: .userInitiated) {
+                response.sorted {
+                    if $0.priority != $1.priority {
+                        return $0.priority < $1.priority
+                    }
+                    return ($0.updatedDate ?? $0.createdDate ?? Date.distantPast) >
+                           ($1.updatedDate ?? $1.createdDate ?? Date.distantPast)
                 }
-                return ($0.updatedDate ?? $0.createdDate ?? Date.distantPast) >
-                       ($1.updatedDate ?? $1.createdDate ?? Date.distantPast)
-            }
+            }.value
+
             beads = sorted
             beadsError = nil
             lastBeadsUpdate = Date()
 
             // Update cache
             ResponseCache.shared.updateBeads(sorted)
-            WidgetCenter.shared.reloadTimelines(ofKind: "AdjutantWidget")
+            throttledWidgetReload()
 
         } catch {
             print("[DataSyncService] Beads fetch failed: \(error.localizedDescription)")

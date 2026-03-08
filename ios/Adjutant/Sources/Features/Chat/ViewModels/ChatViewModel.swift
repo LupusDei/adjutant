@@ -117,6 +117,12 @@ final class ChatViewModel: BaseViewModel {
     /// Typing debounce timer
     private var typingDebounceTask: Task<Void, Never>?
     private var lastTypingSentAt: Date = .distantPast
+    /// Timestamp of the last refresh request (onAppear or foreground).
+    /// Used to throttle redundant refreshes from overlapping triggers
+    /// (onAppear, didBecomeActive, WebSocket connect all fire within ~1s).
+    private var lastRefreshRequestTime: Date = .distantPast
+    /// Minimum interval between refresh bursts (seconds)
+    private let refreshThrottleInterval: TimeInterval = 3.0
 
     // MARK: - Initialization
 
@@ -273,6 +279,7 @@ final class ChatViewModel: BaseViewModel {
         // Don't call super.onAppear() — it fires refresh() before recipients are loaded.
         // Instead, load recipients first, then refresh explicitly.
         connectionState = .connecting
+        lastRefreshRequestTime = Date()
         Task {
             await loadRecipients()
             await refresh()
@@ -305,8 +312,13 @@ final class ChatViewModel: BaseViewModel {
             connectionState = .connected
             pollingTask?.cancel()
             pollingTask = nil
-            // Do an initial refresh to seed messages from server
-            Task { await refresh() }
+            // Only refresh if no recent refresh is in flight (avoids duplicate
+            // API calls when WS connects right after onAppear/foreground refresh).
+            let timeSinceRefresh = Date().timeIntervalSince(lastRefreshRequestTime)
+            if timeSinceRefresh > refreshThrottleInterval {
+                lastRefreshRequestTime = Date()
+                Task { await refresh() }
+            }
 
         case .connecting, .authenticating:
             connectionState = .connecting
@@ -344,58 +356,75 @@ final class ChatViewModel: BaseViewModel {
             let response = try await self.apiClient.getMessages(agentId: self.selectedRecipient, limit: 50)
             self.markConnectionSuccess()
 
-            var serverMessages = response.items.sorted { msg1, msg2 in
-                (msg1.date ?? Date.distantPast) < (msg2.date ?? Date.distantPast)
-            }
+            // Capture state for off-main-actor processing.
+            // All sorting, filtering, and deduplication runs on a background thread
+            // to avoid blocking the UI during the merge.
+            let capturedConfirmedIds = self.confirmedClientIds
+            let capturedPending = self.pendingLocalMessages
+            let capturedExisting = self.messages
 
-            // Remove pending local messages that have been confirmed by server
-            let confirmedIds = self.confirmedClientIds
-            let pending = self.pendingLocalMessages
-            for (clientId, localMsg) in pending {
-                if confirmedIds.contains(clientId) {
-                    self.pendingLocalMessages.removeValue(forKey: clientId)
-                } else if serverMessages.contains(where: { self.isConfirmedMessage(local: localMsg, server: $0) }) {
-                    self.pendingLocalMessages.removeValue(forKey: clientId)
-                }
-            }
+            let result = await Task.detached(priority: .userInitiated) {
+                ChatViewModel.processMessages(
+                    serverItems: response.items,
+                    confirmedClientIds: capturedConfirmedIds,
+                    pendingLocalMessages: capturedPending,
+                    existingMessages: capturedExisting
+                )
+            }.value
 
-            // Merge remaining pending local messages with server messages
-            let remainingPending = Array(self.pendingLocalMessages.values)
-            if !remainingPending.isEmpty {
-                serverMessages.append(contentsOf: remainingPending)
-                serverMessages.sort { msg1, msg2 in
-                    (msg1.date ?? Date.distantPast) < (msg2.date ?? Date.distantPast)
-                }
-            }
-
-            // Deduplicate by ID (WebSocket + API fetch can produce duplicates)
-            var seen = Set<String>()
-            serverMessages = serverMessages.filter { seen.insert($0.id).inserted }
-
-            // Filter out system events but keep announcements
-            serverMessages = serverMessages.filter { $0.role == .user || $0.role == .agent || $0.role == .announcement }
-
-            // Merge server messages with any remaining local-only messages
-            let serverIds = Set(serverMessages.map { $0.id })
-            let localOnly = self.messages.filter { msg in
-                msg.id.hasPrefix("local-") && !serverIds.contains(msg.id)
-            }
-            if !localOnly.isEmpty {
-                serverMessages.append(contentsOf: localOnly)
-                serverMessages.sort { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
-            }
-
-            self.messages = serverMessages
+            // Apply processed results back on main actor (single batch update)
+            self.pendingLocalMessages = result.updatedPending
+            self.messages = result.messages
             self.hasMoreHistory = response.hasMore
-            self.lastMessageId = serverMessages.filter { !$0.id.hasPrefix("local-") }.last?.id
-            ResponseCache.shared.updateChatMessages(self.messages, forAgent: self.selectedRecipient)
+            self.lastMessageId = result.messages.filter { !$0.id.hasPrefix("local-") }.last?.id
+            ResponseCache.shared.updateChatMessages(result.messages, forAgent: self.selectedRecipient)
             self.scrollToBottomTrigger = UUID()
         }
     }
 
-    /// Check if a server message confirms a pending local message
-    private func isConfirmedMessage(local: PersistentMessage, server: PersistentMessage) -> Bool {
-        return local.body == server.body && server.role == .user
+    /// Processes server messages off the main actor: sorts, deduplicates, merges with pending/local messages.
+    /// This is a pure function with no side effects, safe to run on any thread.
+    nonisolated private static func processMessages(
+        serverItems: [PersistentMessage],
+        confirmedClientIds: Set<String>,
+        pendingLocalMessages: [String: PersistentMessage],
+        existingMessages: [PersistentMessage]
+    ) -> (messages: [PersistentMessage], updatedPending: [String: PersistentMessage]) {
+        var msgs = serverItems.sorted { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
+
+        // Remove pending local messages confirmed by server
+        var updatedPending = pendingLocalMessages
+        for (clientId, localMsg) in updatedPending {
+            if confirmedClientIds.contains(clientId) {
+                updatedPending.removeValue(forKey: clientId)
+            } else if msgs.contains(where: { localMsg.body == $0.body && $0.role == .user }) {
+                updatedPending.removeValue(forKey: clientId)
+            }
+        }
+
+        // Merge remaining pending local messages
+        let remaining = Array(updatedPending.values)
+        if !remaining.isEmpty {
+            msgs.append(contentsOf: remaining)
+            msgs.sort { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
+        }
+
+        // Deduplicate by ID
+        var seen = Set<String>()
+        msgs = msgs.filter { seen.insert($0.id).inserted }
+
+        // Filter to chat-relevant roles
+        msgs = msgs.filter { $0.role == .user || $0.role == .agent || $0.role == .announcement }
+
+        // Merge local-only messages not yet on server
+        let serverIds = Set(msgs.map { $0.id })
+        let localOnly = existingMessages.filter { $0.id.hasPrefix("local-") && !serverIds.contains($0.id) }
+        if !localOnly.isEmpty {
+            msgs.append(contentsOf: localOnly)
+            msgs.sort { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
+        }
+
+        return (msgs, updatedPending)
     }
 
     /// Loads available recipients from the API
@@ -866,12 +895,17 @@ final class ChatViewModel: BaseViewModel {
     // MARK: - Connection State
 
     /// Refresh chat messages and recipients when the app returns to foreground.
-    /// Ensures messages and agent list are up-to-date after being backgrounded or suspended.
+    /// Throttled: skips if a refresh was requested within the last few seconds
+    /// (e.g., from onAppear or a recent tab switch) to avoid saturating the main actor
+    /// with redundant API calls.
     private func observeForegroundTransitions() {
         NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self = self else { return }
+                let now = Date()
+                guard now.timeIntervalSince(self.lastRefreshRequestTime) > self.refreshThrottleInterval else { return }
+                self.lastRefreshRequestTime = now
                 Task {
                     await self.loadRecipients()
                     await self.refresh()

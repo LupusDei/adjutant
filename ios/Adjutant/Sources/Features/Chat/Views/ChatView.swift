@@ -180,10 +180,10 @@ struct ChatView: View {
         .onChange(of: coordinator.selectedTab) { _, newTab in
             if newTab == .chat {
                 scrollToBottom()
-                Task {
-                    await viewModel.loadRecipients()
-                    await viewModel.refresh()
-                }
+                // Note: loadRecipients + refresh are NOT called here.
+                // ChatView is recreated on each tab switch (lazy rendering),
+                // so onAppear() already fires a full refresh. Calling it here
+                // too caused duplicate API calls that saturated the main actor.
             }
         }
         .fullScreenCover(item: $selectedSession) { session in
