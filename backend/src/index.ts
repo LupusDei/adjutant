@@ -28,7 +28,14 @@ import { initMessageDelivery } from "./services/message-delivery.js";
 import { initBeadAssignNotification } from "./services/bead-assign-notification.js";
 import { discoverLocalProjects } from "./services/projects-service.js";
 import { spawnAdjutant } from "./services/adjutant-spawner.js";
-import { startScheduler } from "./services/scheduler.js";
+import { initAdjutantCore } from "./services/adjutant/adjutant-core.js";
+import { BehaviorRegistry } from "./services/adjutant/behavior-registry.js";
+import { createAdjutantState } from "./services/adjutant/state-store.js";
+import { createCommunicationManager } from "./services/adjutant/communication.js";
+import { agentLifecycleBehavior } from "./services/adjutant/behaviors/agent-lifecycle.js";
+import { createHealthMonitorBehavior } from "./services/adjutant/behaviors/health-monitor.js";
+import { createPeriodicSummaryBehavior } from "./services/adjutant/behaviors/periodic-summary.js";
+import { createStaleAgentNudger } from "./services/adjutant/behaviors/stale-agent-nudger.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
@@ -162,10 +169,10 @@ const server = app.listen(PORT, () => {
   // Initialize Session Bridge v2 (tmux session management)
   // init() loads persisted sessions, verifies tmux state, and auto-creates
   // a Claude Code session if none are alive for the project root.
+  const projectRoot = process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd();
   getSessionBridge()
     .init()
     .then(() => {
-      const projectRoot = process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd();
       return spawnAdjutant(projectRoot).then(() => {
         logInfo("Adjutant coordinator agent spawned");
       });
@@ -174,7 +181,16 @@ const server = app.listen(PORT, () => {
       logInfo("session bridge init failed (non-fatal)", { error: String(err) });
     });
 
-  // Start Adjutant heartbeat scheduler (hourly cron → tmux prompt injection)
-  startScheduler();
-  logInfo("Adjutant heartbeat scheduler started");
+  // Initialize Adjutant Core — event-driven behavior dispatch
+  const adjutantState = createAdjutantState(messageDb);
+  const adjutantComm = createCommunicationManager(messageStore);
+  const behaviorRegistry = new BehaviorRegistry();
+
+  behaviorRegistry.register(agentLifecycleBehavior);
+  behaviorRegistry.register(createHealthMonitorBehavior(projectRoot));
+  behaviorRegistry.register(createPeriodicSummaryBehavior());
+  behaviorRegistry.register(createStaleAgentNudger());
+
+  initAdjutantCore({ registry: behaviorRegistry, state: adjutantState, comm: adjutantComm });
+  logInfo("Adjutant Core initialized with event-driven behaviors");
 });
