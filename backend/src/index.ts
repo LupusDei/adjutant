@@ -35,15 +35,17 @@ import { createCommunicationManager } from "./services/adjutant/communication.js
 import { agentLifecycleBehavior } from "./services/adjutant/behaviors/agent-lifecycle.js";
 import { createHealthMonitorBehavior } from "./services/adjutant/behaviors/health-monitor.js";
 import { createPeriodicSummaryBehavior } from "./services/adjutant/behaviors/periodic-summary.js";
-import { createStaleAgentNudger } from "./services/adjutant/behaviors/stale-agent-nudger.js";
-import { createWorkAssigner } from "./services/adjutant/behaviors/work-assigner.js";
-import { createWorkRebalancer } from "./services/adjutant/behaviors/work-rebalancer.js";
+// DISABLED (adj-052 not ready)
+// import { createStaleAgentNudger } from "./services/adjutant/behaviors/stale-agent-nudger.js";
+// import { createWorkAssigner } from "./services/adjutant/behaviors/work-assigner.js";
+// import { createWorkRebalancer } from "./services/adjutant/behaviors/work-rebalancer.js";
 import { createMemoryCollector } from "./services/adjutant/behaviors/memory-collector.js";
 import { createSessionRetrospective } from "./services/adjutant/behaviors/session-retrospective.js";
 import { createMemoryReviewer } from "./services/adjutant/behaviors/memory-reviewer.js";
 import { createSelfImprover } from "./services/adjutant/behaviors/self-improver.js";
-import { createAgentSpawnerBehavior } from "./services/adjutant/behaviors/agent-spawner.js";
-import { createAgentDecommissioner } from "./services/adjutant/behaviors/agent-decommissioner.js";
+// DISABLED (adj-052 not ready)
+// import { createAgentSpawnerBehavior } from "./services/adjutant/behaviors/agent-spawner.js";
+// import { createAgentDecommissioner } from "./services/adjutant/behaviors/agent-decommissioner.js";
 import { createMemoryStore } from "./services/adjutant/memory-store.js";
 import { registerMemoryTools } from "./services/mcp-tools/memory.js";
 import { createMemoryRouter } from "./routes/memory.js";
@@ -211,15 +213,17 @@ const server = app.listen(PORT, () => {
   behaviorRegistry.register(agentLifecycleBehavior);
   behaviorRegistry.register(createHealthMonitorBehavior(projectRoot));
   behaviorRegistry.register(createPeriodicSummaryBehavior());
-  behaviorRegistry.register(createStaleAgentNudger());
-  behaviorRegistry.register(createWorkAssigner());
-  behaviorRegistry.register(createWorkRebalancer());
+  // DISABLED (adj-052 not ready — re-enable strategically)
+  // behaviorRegistry.register(createStaleAgentNudger());
+  // behaviorRegistry.register(createWorkAssigner());
+  // behaviorRegistry.register(createWorkRebalancer());
   behaviorRegistry.register(createMemoryCollector(memoryStore));
   behaviorRegistry.register(createSessionRetrospective(memoryStore));
   behaviorRegistry.register(createMemoryReviewer(memoryStore));
   behaviorRegistry.register(createSelfImprover(memoryStore, proposalStore));
-  behaviorRegistry.register(createAgentSpawnerBehavior(projectRoot));
-  behaviorRegistry.register(createAgentDecommissioner());
+  // DISABLED (adj-052 not ready — re-enable strategically)
+  // behaviorRegistry.register(createAgentSpawnerBehavior(projectRoot));
+  // behaviorRegistry.register(createAgentDecommissioner());
 
   initAdjutantCore({ registry: behaviorRegistry, state: adjutantState, comm: adjutantComm });
   logInfo("Adjutant Core initialized with event-driven behaviors");

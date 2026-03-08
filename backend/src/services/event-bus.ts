@@ -45,6 +45,12 @@ export interface BeadClosedEvent {
   id: string;
   title: string;
   closedAt: string;
+  /** Bead type (epic, task, bug). Used by quality-gate to skip epics. */
+  type?: string;
+  /** Close reason (e.g., "by-design", "deferred"). Used by quality-gate to skip non-completion closures. */
+  reason?: string;
+  /** Agent who owned the bead. Used by quality-gate to check build status. */
+  assignee?: string;
 }
 
 export interface BeadAssignedEvent {
