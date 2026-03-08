@@ -211,6 +211,62 @@ describe("EventBus", () => {
     });
   });
 
+  describe("bead:assigned event", () => {
+    it("should emit and receive bead:assigned events", () => {
+      const bus = getEventBus();
+      const handler = vi.fn();
+
+      bus.on("bead:assigned", handler);
+      bus.emit("bead:assigned", {
+        beadId: "adj-052.1.3",
+        agentId: "engineer-1",
+        assignedBy: "work-assigner",
+      });
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(handler).toHaveBeenCalledWith(
+        {
+          beadId: "adj-052.1.3",
+          agentId: "engineer-1",
+          assignedBy: "work-assigner",
+        },
+        1, // seq
+      );
+    });
+
+    it("should include bead:assigned in wildcard subscription", () => {
+      const bus = getEventBus();
+      const handler = vi.fn();
+
+      bus.onAny(handler);
+      bus.emit("bead:assigned", {
+        beadId: "adj-052.1.4",
+        agentId: "engineer-2",
+        assignedBy: "work-rebalancer",
+      });
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(handler).toHaveBeenCalledWith(
+        "bead:assigned",
+        {
+          beadId: "adj-052.1.4",
+          agentId: "engineer-2",
+          assignedBy: "work-rebalancer",
+        },
+        1, // seq
+      );
+    });
+
+    it("should include bead:assigned in listener counts", () => {
+      const bus = getEventBus();
+
+      bus.on("bead:assigned", vi.fn());
+      const counts = bus.listenerCounts();
+
+      expect(counts["bead:assigned"]).toBe(1);
+    });
+  });
+
   describe("all event types", () => {
     it("should handle bead:updated event", () => {
       const bus = getEventBus();

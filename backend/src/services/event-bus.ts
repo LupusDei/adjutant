@@ -47,6 +47,12 @@ export interface BeadClosedEvent {
   closedAt: string;
 }
 
+export interface BeadAssignedEvent {
+  beadId: string;
+  agentId: string;
+  assignedBy: string;  // behavior name that made the assignment
+}
+
 export interface AgentStatusEvent {
   agent: string;
   status: string;
@@ -78,6 +84,7 @@ export interface EventMap {
   "bead:created": BeadCreatedEvent;
   "bead:updated": BeadUpdatedEvent;
   "bead:closed": BeadClosedEvent;
+  "bead:assigned": BeadAssignedEvent;
   "agent:status_changed": AgentStatusEvent;
   "stream:status": StreamStatusEvent;
   "session:cost": Record<string, unknown>;
@@ -157,7 +164,7 @@ class EventBus {
     counts["*"] = this.emitter.listenerCount("*");
     const events: EventName[] = [
       "mail:received", "mail:read",
-      "bead:created", "bead:updated", "bead:closed",
+      "bead:created", "bead:updated", "bead:closed", "bead:assigned",
       "agent:status_changed", "stream:status",
     ];
     for (const e of events) {

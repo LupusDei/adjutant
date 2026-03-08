@@ -28,6 +28,7 @@ const EVENT_TYPE_MAP: Record<EventName, string> = {
   "bead:created": "bead_update",
   "bead:updated": "bead_update",
   "bead:closed": "bead_update",
+  "bead:assigned": "bead_update",
   "agent:status_changed": "agent_status",
   "mail:received": "mail_received",
   "mail:read": "mail_read",
