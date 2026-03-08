@@ -9,6 +9,9 @@ import { getConnectedAgents } from "../../mcp-server.js";
 /** Debounce window: don't re-assign within 30 seconds of the last assignment */
 const DEBOUNCE_MS = 30_000;
 
+/** Agent IDs excluded from work assignment (coordinator/monitor roles). adj-spyk fix. */
+const EXCLUDED_AGENT_IDS = new Set(["adjutant-coordinator"]);
+
 /** Shape of a bead returned by `bd ready --json` */
 interface ReadyBead {
   id: string;
@@ -28,7 +31,8 @@ function isTrulyIdle(profile: AgentProfile, liveAgentIds: Set<string>): boolean 
     profile.lastStatus === "idle" &&
     profile.connectedAt !== null &&
     profile.disconnectedAt === null &&
-    liveAgentIds.has(profile.agentId)
+    liveAgentIds.has(profile.agentId) &&
+    !EXCLUDED_AGENT_IDS.has(profile.agentId)
   );
 }
 

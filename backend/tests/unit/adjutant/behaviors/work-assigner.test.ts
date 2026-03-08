@@ -658,6 +658,75 @@ describe("createWorkAssigner", () => {
     );
   });
 
+  it("should exclude coordinator/monitor agents from assignment", async () => {
+    const behavior = createWorkAssigner();
+    const state = createMockState();
+    const comm = createMockComm();
+
+    // adjutant-coordinator is idle and connected, but should be excluded
+    mockGetConnectedAgents.mockReturnValue([
+      { agentId: "adjutant-coordinator" },
+      { agentId: "worker-1" },
+    ] as ReturnType<typeof getConnectedAgents>);
+
+    state.getAllAgentProfiles.mockReturnValue([
+      makeProfile({
+        agentId: "adjutant-coordinator",
+        lastStatus: "idle",
+        connectedAt: "2026-01-01T11:00:00Z",
+        disconnectedAt: null,
+      }),
+      makeProfile({
+        agentId: "worker-1",
+        lastStatus: "idle",
+        connectedAt: "2026-01-01T11:00:00Z",
+        disconnectedAt: null,
+      }),
+    ]);
+
+    mockExecBd.mockResolvedValue({
+      success: true,
+      data: [
+        { id: "adj-022", title: "Decompose beads-repository", priority: 1, type: "task" },
+      ],
+      exitCode: 0,
+    });
+
+    mockUpdateBead.mockResolvedValue({
+      success: true,
+      data: { id: "adj-022", status: "in_progress", assignee: "worker-1" },
+    });
+
+    await behavior.act(dummyEvent, state, comm);
+
+    // Should assign to worker-1, NOT adjutant-coordinator
+    expect(mockUpdateBead).toHaveBeenCalledWith("adj-022", {
+      status: "in_progress",
+      assignee: "worker-1",
+    });
+  });
+
+  it("shouldAct returns false when only excluded agents are idle", () => {
+    const behavior = createWorkAssigner();
+    const state = createMockState();
+
+    mockGetConnectedAgents.mockReturnValue([
+      { agentId: "adjutant-coordinator" },
+    ] as ReturnType<typeof getConnectedAgents>);
+
+    state.getMeta.mockReturnValue(null);
+    state.getAllAgentProfiles.mockReturnValue([
+      makeProfile({
+        agentId: "adjutant-coordinator",
+        lastStatus: "idle",
+        connectedAt: "2026-01-01T11:00:00Z",
+        disconnectedAt: null,
+      }),
+    ]);
+
+    expect(behavior.shouldAct(dummyEvent, state)).toBe(false);
+  });
+
   it("should prefer most recently idle agent as tiebreaker", async () => {
     const behavior = createWorkAssigner();
     const state = createMockState();
