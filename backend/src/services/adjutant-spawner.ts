@@ -1,5 +1,6 @@
 /**
- * Adjutant Spawner — creates, checks, and recovers the Adjutant coordinator agent session.
+ * Adjutant Spawner — thin wrapper around agent-spawner-service for the
+ * Adjutant coordinator agent.
  *
  * Provides three modular functions:
  * - `spawnAdjutant()`: Idempotently spawns the Adjutant agent in a tmux session
@@ -8,15 +9,19 @@
  */
 
 import { logInfo, logWarn } from "../utils/index.js";
-import { getSessionBridge } from "./session-bridge.js";
-import { listTmuxSessions } from "./tmux.js";
+
+import {
+  spawnAgent,
+  isAgentAlive,
+  getAgentTmuxSession,
+} from "./agent-spawner-service.js";
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 const ADJUTANT_SESSION_NAME = "adjutant-coordinator";
-export const ADJUTANT_TMUX_SESSION = `adj-swarm-${ADJUTANT_SESSION_NAME}`;
+export const ADJUTANT_TMUX_SESSION = getAgentTmuxSession(ADJUTANT_SESSION_NAME);
 
 // ============================================================================
 // Public API
@@ -31,55 +36,12 @@ export const ADJUTANT_TMUX_SESSION = `adj-swarm-${ADJUTANT_SESSION_NAME}`;
  * Never throws — all errors are caught and logged.
  */
 export async function spawnAdjutant(projectPath: string): Promise<void> {
-  try {
-    // Check if session already exists
-    let sessions: Set<string>;
-    try {
-      sessions = await listTmuxSessions();
-    } catch {
-      // tmux not running or unavailable — proceed with spawn attempt
-      sessions = new Set();
-    }
-
-    const bridge = getSessionBridge();
-
-    if (sessions.has(ADJUTANT_TMUX_SESSION)) {
-      // Tmux session exists — ensure it's tracked in the registry so it
-      // appears in the agents list. Without this, an orphaned session
-      // (survived a backend restart) would be invisible to the dashboard.
-      if (!bridge.registry.findByTmuxSession(ADJUTANT_TMUX_SESSION)) {
-        await bridge.lifecycle.discoverSessions(ADJUTANT_TMUX_SESSION);
-        // Fix metadata: discoverSessions uses the tmux name as fallback
-        const rediscovered = bridge.registry.findByTmuxSession(ADJUTANT_TMUX_SESSION);
-        if (rediscovered) {
-          rediscovered.name = ADJUTANT_SESSION_NAME;
-          rediscovered.projectPath = projectPath;
-        }
-        await bridge.registry.save();
-        logInfo("Re-registered orphaned Adjutant session");
-      }
-      logInfo("Adjutant session already exists, skipping spawn");
-      return;
-    }
-
-    // Spawn via SessionBridge (persists registry to disk)
-    const result = await bridge.createSession({
-      name: ADJUTANT_SESSION_NAME,
-      projectPath,
-      mode: "swarm",
-      claudeArgs: ["--agent", "adjutant"],
-    });
-
-    if (result.success) {
-      logInfo("Adjutant coordinator agent spawned", {
-        sessionId: result.sessionId,
-      });
-    } else {
-      logWarn("Adjutant spawn failed", { error: result.error });
-    }
-  } catch (err) {
-    logWarn("Adjutant spawn error", { error: String(err) });
-  }
+  await spawnAgent({
+    name: ADJUTANT_SESSION_NAME,
+    projectPath,
+    agentFile: "adjutant",
+    mode: "swarm",
+  });
 }
 
 /**
@@ -89,12 +51,7 @@ export async function spawnAdjutant(projectPath: string): Promise<void> {
  * Designed for reuse by health-check and recovery logic.
  */
 export async function isAdjutantAlive(): Promise<boolean> {
-  try {
-    const sessions = await listTmuxSessions();
-    return sessions.has(ADJUTANT_TMUX_SESSION);
-  } catch {
-    return false;
-  }
+  return isAgentAlive(ADJUTANT_SESSION_NAME);
 }
 
 /** Stabilization wait after recovery (ms) */

@@ -101,7 +101,10 @@ describe("adjutant-spawner", () => {
       expect(rediscovered.projectPath).toBe("/tmp/project");
       expect(mockRegistrySave).toHaveBeenCalled();
       expect(mockBridgeCreateSession).not.toHaveBeenCalled();
-      expect(logInfo).toHaveBeenCalledWith("Re-registered orphaned Adjutant session");
+      expect(logInfo).toHaveBeenCalledWith(
+        "Re-registered orphaned agent session",
+        expect.objectContaining({ name: "adjutant-coordinator" })
+      );
     });
 
     it("should not throw when createSession fails", async () => {
