@@ -17,6 +17,7 @@ import { logError } from "../../utils/index.js";
 import { autoCompleteEpics } from "../beads/index.js";
 import { getProjectContextBySession, getAgentBySession } from "../mcp-server.js";
 import type { EventStore } from "../event-store.js";
+import { getEventBus } from "../event-bus.js";
 
 // =============================================================================
 // Mutex for serializing bd access
@@ -130,6 +131,14 @@ export function registerBeadTools(server: McpServer, eventStore?: EventStore): v
 
         const data = result.data as Record<string, unknown> | undefined;
         const createdId = data?.['id'] ?? "unknown";
+
+        getEventBus().emit("bead:created", {
+          id: String(createdId),
+          title,
+          status: "open",
+          type,
+        });
+
         return {
           content: [{ type: "text" as const, text: `Created bead ${createdId}: ${title}` }],
         };

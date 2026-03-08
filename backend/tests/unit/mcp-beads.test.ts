@@ -8,6 +8,16 @@ vi.mock("../../src/utils/index.js", () => ({
   logDebug: vi.fn(),
 }));
 
+// Mock event-bus
+const { mockEmit } = vi.hoisted(() => {
+  const mockEmit = vi.fn();
+  return { mockEmit };
+});
+
+vi.mock("../../src/services/event-bus.js", () => ({
+  getEventBus: () => ({ emit: mockEmit }),
+}));
+
 // Mock bd-client
 const { mockExecBd } = vi.hoisted(() => {
   const mockExecBd = vi.fn();
@@ -708,6 +718,78 @@ describe("MCP Bead Tools", () => {
 
       expect(maxConcurrentCalls).toBe(1);
       expect(mockExecBd).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  // ===========================================================================
+  // bead:created event emission
+  // ===========================================================================
+
+  describe("create_bead event emission", () => {
+    it("should emit bead:created event after successful create_bead", async () => {
+      mockExecBd.mockResolvedValue({
+        success: true,
+        data: { id: "adj-xyz1", title: "Test bead" },
+        exitCode: 0,
+      });
+
+      const handler = getToolHandler("create_bead");
+      await handler({
+        title: "Test bead",
+        description: "A test",
+        type: "task",
+        priority: 2,
+      });
+
+      expect(mockEmit).toHaveBeenCalledOnce();
+      expect(mockEmit).toHaveBeenCalledWith("bead:created", {
+        id: "adj-xyz1",
+        title: "Test bead",
+        status: "open",
+        type: "task",
+      });
+    });
+
+    it("should NOT emit bead:created event when create_bead fails", async () => {
+      mockExecBd.mockResolvedValue({
+        success: false,
+        error: { code: "COMMAND_FAILED", message: "bd create failed" },
+        exitCode: 1,
+      });
+
+      const handler = getToolHandler("create_bead");
+      await handler({
+        title: "Fail bead",
+        description: "Will fail",
+        type: "bug",
+        priority: 1,
+      });
+
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it("should use 'unknown' as id when data has no id field", async () => {
+      mockExecBd.mockResolvedValue({
+        success: true,
+        data: {},
+        exitCode: 0,
+      });
+
+      const handler = getToolHandler("create_bead");
+      await handler({
+        title: "No-id bead",
+        description: "Missing id",
+        type: "epic",
+        priority: 0,
+      });
+
+      expect(mockEmit).toHaveBeenCalledOnce();
+      expect(mockEmit).toHaveBeenCalledWith("bead:created", {
+        id: "unknown",
+        title: "No-id bead",
+        status: "open",
+        type: "epic",
+      });
     });
   });
 });
