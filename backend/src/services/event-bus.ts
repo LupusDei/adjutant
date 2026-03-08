@@ -75,6 +75,20 @@ export interface McpAgentDisconnectedEvent {
   sessionId: string;
 }
 
+export interface CorrectionDetectedEvent {
+  messageId: string;
+  from: string;
+  pattern: string;  // which regex pattern matched
+  body: string;     // the message body
+}
+
+export interface LearningCreatedEvent {
+  learningId: number;
+  category: string;
+  topic: string;
+  sourceType: string;
+}
+
 /**
  * Map of event names to their payload types.
  */
@@ -93,6 +107,8 @@ export interface EventMap {
   "stream:output": Record<string, unknown>;
   "mcp:agent_connected": McpAgentConnectedEvent;
   "mcp:agent_disconnected": McpAgentDisconnectedEvent;
+  "correction:detected": CorrectionDetectedEvent;
+  "learning:created": LearningCreatedEvent;
 }
 
 export type EventName = keyof EventMap;
@@ -166,6 +182,7 @@ class EventBus {
       "mail:received", "mail:read",
       "bead:created", "bead:updated", "bead:closed", "bead:assigned",
       "agent:status_changed", "stream:status",
+      "correction:detected", "learning:created",
     ];
     for (const e of events) {
       const count = this.emitter.listenerCount(e);

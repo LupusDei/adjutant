@@ -267,6 +267,126 @@ describe("EventBus", () => {
     });
   });
 
+  describe("correction:detected event", () => {
+    it("should emit and receive correction:detected events", () => {
+      const bus = getEventBus();
+      const handler = vi.fn();
+
+      bus.on("correction:detected", handler);
+      bus.emit("correction:detected", {
+        messageId: "msg-123",
+        from: "user",
+        pattern: "no, actually",
+        body: "No, actually you should use SQLite here",
+      });
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(handler).toHaveBeenCalledWith(
+        {
+          messageId: "msg-123",
+          from: "user",
+          pattern: "no, actually",
+          body: "No, actually you should use SQLite here",
+        },
+        1, // seq
+      );
+    });
+
+    it("should include correction:detected in wildcard subscription", () => {
+      const bus = getEventBus();
+      const handler = vi.fn();
+
+      bus.onAny(handler);
+      bus.emit("correction:detected", {
+        messageId: "msg-456",
+        from: "user",
+        pattern: "that's wrong",
+        body: "That's wrong, use a mutex instead",
+      });
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(handler).toHaveBeenCalledWith(
+        "correction:detected",
+        {
+          messageId: "msg-456",
+          from: "user",
+          pattern: "that's wrong",
+          body: "That's wrong, use a mutex instead",
+        },
+        1, // seq
+      );
+    });
+
+    it("should include correction:detected in listener counts", () => {
+      const bus = getEventBus();
+
+      bus.on("correction:detected", vi.fn());
+      const counts = bus.listenerCounts();
+
+      expect(counts["correction:detected"]).toBe(1);
+    });
+  });
+
+  describe("learning:created event", () => {
+    it("should emit and receive learning:created events", () => {
+      const bus = getEventBus();
+      const handler = vi.fn();
+
+      bus.on("learning:created", handler);
+      bus.emit("learning:created", {
+        learningId: 42,
+        category: "correction",
+        topic: "database",
+        sourceType: "user_correction",
+      });
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(handler).toHaveBeenCalledWith(
+        {
+          learningId: 42,
+          category: "correction",
+          topic: "database",
+          sourceType: "user_correction",
+        },
+        1, // seq
+      );
+    });
+
+    it("should include learning:created in wildcard subscription", () => {
+      const bus = getEventBus();
+      const handler = vi.fn();
+
+      bus.onAny(handler);
+      bus.emit("learning:created", {
+        learningId: 7,
+        category: "preference",
+        topic: "architecture",
+        sourceType: "bead_outcome",
+      });
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(handler).toHaveBeenCalledWith(
+        "learning:created",
+        {
+          learningId: 7,
+          category: "preference",
+          topic: "architecture",
+          sourceType: "bead_outcome",
+        },
+        1, // seq
+      );
+    });
+
+    it("should include learning:created in listener counts", () => {
+      const bus = getEventBus();
+
+      bus.on("learning:created", vi.fn());
+      const counts = bus.listenerCounts();
+
+      expect(counts["learning:created"]).toBe(1);
+    });
+  });
+
   describe("all event types", () => {
     it("should handle bead:updated event", () => {
       const bus = getEventBus();

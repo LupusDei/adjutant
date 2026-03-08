@@ -39,6 +39,8 @@ const EVENT_TYPE_MAP: Record<EventName, string> = {
   "stream:output": "stream_output",
   "mcp:agent_connected": "mcp_agent_connected",
   "mcp:agent_disconnected": "mcp_agent_disconnected",
+  "correction:detected": "correction_detected",
+  "learning:created": "learning_created",
 };
 
 /** Heartbeat interval (15 seconds) */
