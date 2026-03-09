@@ -214,10 +214,10 @@ const PRECONDITION_PATTERNS: PreconditionPattern[] = [
     regex: /agent\s+(?:is\s+)?connected/i,
     extract: () => ({ type: "agent" }),
   },
-  // "a persona exists" / "a persona named X exists"
+  // "a persona exists" / "a persona named X exists" / "no personas exist"
   {
-    regex: /persona\s+(?:named\s+\w+\s+)?exist/i,
-    extract: () => ({ type: "agent", params: { entity: "persona" } }),
+    regex: /persona/i,
+    extract: () => ({ type: "persona" }),
   },
   // "a bead exists" / "beads exist"
   {

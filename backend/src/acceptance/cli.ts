@@ -60,7 +60,7 @@ Examples:
   npx tsx src/acceptance/cli.ts   (runs all acceptance tests)
 `.trim();
 
-const SPECS_DIR = resolve(import.meta.dirname ?? ".", "../../specs");
+const SPECS_DIR = resolve(import.meta.dirname ?? ".", "../../../specs");
 
 // ============================================================================
 // Spec Discovery
@@ -365,7 +365,7 @@ function handleRun(options: AcceptanceOptions): void {
  * Show a spec coverage report: which specs have tests and their status.
  */
 function handleReport(): void {
-  const specsDir = resolve(import.meta.dirname ?? ".", "../../specs");
+  const specsDir = resolve(import.meta.dirname ?? ".", "../../../specs");
   const testsDir = resolve(
     import.meta.dirname ?? ".",
     "../../tests/acceptance"

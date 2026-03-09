@@ -129,7 +129,7 @@ export interface DetectedAssertion {
  */
 export interface DetectedPrecondition {
   /** What kind of seed data is needed */
-  type: "proposal" | "message" | "agent" | "database" | "none";
+  type: "proposal" | "message" | "agent" | "persona" | "database" | "none";
   /** Optional parameters for seeding */
   params?: Record<string, unknown>;
 }
