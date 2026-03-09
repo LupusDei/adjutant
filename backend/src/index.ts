@@ -104,8 +104,8 @@ const callsignToggleService = createCallsignToggleService(messageDb);
 app.use("/api/personas", createPersonasRouter(personaService));
 app.use("/api/callsigns", createCallsignsRouter(callsignToggleService));
 
-// Initialize cost tracker (loads persisted cost data from ~/.adjutant/costs.json)
-initCostTracker();
+// Initialize cost tracker with SQLite database
+initCostTracker(messageDb);
 
 // Prune events older than 7 days on startup, then every 6 hours
 const PRUNE_DAYS = 7;
