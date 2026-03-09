@@ -25,6 +25,7 @@ const EVENT_TYPES = [
   { value: 'message_sent', label: 'MESSAGE', icon: '\u{1F4AC}' },
   { value: 'bead_updated', label: 'BEAD UPD', icon: '\u{1F4DD}' },
   { value: 'bead_closed', label: 'BEAD CLOSE', icon: '\u2705' },
+  { value: 'coordinator_action', label: 'COORD', icon: '\u{1F4BB}' },
 ] as const;
 
 export interface TimelineFiltersProps {

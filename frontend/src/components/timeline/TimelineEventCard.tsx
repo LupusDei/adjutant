@@ -16,6 +16,7 @@ const EVENT_TYPE_CONFIG: Record<string, { icon: string; label: string; color: st
   message_sent: { icon: '\u{1F4AC}', label: 'MESSAGE', color: 'var(--crt-phosphor)' },
   bead_updated: { icon: '\u{1F4DD}', label: 'BEAD UPD', color: 'var(--crt-phosphor)' },
   bead_closed: { icon: '\u2705', label: 'CLOSED', color: '#44ff44' },
+  coordinator_action: { icon: '\u{1F4BB}', label: 'COORD', color: '#ffcc00' },
 };
 
 export interface TimelineEventCardProps {
@@ -30,6 +31,7 @@ export function TimelineEventCard({ event, isNew }: TimelineEventCardProps) {
     setExpanded((prev) => !prev);
   }, []);
 
+  const isCoordAction = event.eventType === 'coordinator_action';
   const config = EVENT_TYPE_CONFIG[event.eventType] ?? {
     icon: '\u{1F50D}',
     label: event.eventType.toUpperCase(),
@@ -63,7 +65,12 @@ export function TimelineEventCard({ event, isNew }: TimelineEventCardProps) {
         </span>
 
         {/* Action text */}
-        <span style={styles.action}>{event.action}</span>
+        <span style={{
+          ...styles.action,
+          ...(isCoordAction ? { color: '#ffcc00' } : {}),
+        }}>
+          {isCoordAction ? '>> ' : ''}{event.action}
+        </span>
 
         {/* Bead tag */}
         {event.beadId && (
@@ -79,9 +86,32 @@ export function TimelineEventCard({ event, isNew }: TimelineEventCardProps) {
       {/* Expanded detail */}
       {expanded && hasDetail && (
         <div style={styles.detail}>
-          <pre style={styles.detailPre}>
-            {JSON.stringify(event.detail, null, 2)}
-          </pre>
+          {isCoordAction && event.detail ? (
+            <div style={styles.coordDetail}>
+              {event.detail.behavior && (
+                <div style={styles.coordField}>
+                  <span style={styles.coordLabel}>BEHAVIOR:</span>{' '}
+                  <span style={styles.coordValue}>{String(event.detail.behavior)}</span>
+                </div>
+              )}
+              {event.detail.target && (
+                <div style={styles.coordField}>
+                  <span style={styles.coordLabel}>TARGET:</span>{' '}
+                  <span style={styles.coordValue}>{String(event.detail.target)}</span>
+                </div>
+              )}
+              {event.detail.reason && (
+                <div style={styles.coordField}>
+                  <span style={styles.coordLabel}>REASON:</span>{' '}
+                  <span style={styles.coordReason}>{String(event.detail.reason)}</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <pre style={styles.detailPre}>
+              {JSON.stringify(event.detail, null, 2)}
+            </pre>
+          )}
         </div>
       )}
     </div>
@@ -184,5 +214,36 @@ const styles = {
     maxHeight: '150px',
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-all',
+  },
+  coordDetail: {
+    fontFamily: '"Share Tech Mono", monospace',
+    fontSize: '0.7rem',
+    padding: '6px 8px',
+    backgroundColor: 'var(--theme-bg-elevated)',
+    border: '1px solid rgba(255, 204, 0, 0.15)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '3px',
+  },
+  coordField: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'baseline',
+  },
+  coordLabel: {
+    color: '#ffcc00',
+    fontSize: '0.6rem',
+    letterSpacing: '0.08em',
+    flexShrink: 0,
+    fontWeight: 'bold',
+  },
+  coordValue: {
+    color: 'var(--crt-phosphor)',
+    letterSpacing: '0.04em',
+  },
+  coordReason: {
+    color: 'var(--crt-phosphor-dim)',
+    letterSpacing: '0.04em',
+    fontStyle: 'italic',
   },
 } satisfies Record<string, CSSProperties>;
