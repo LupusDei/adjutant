@@ -156,6 +156,43 @@ schedule_check({ delay: "30m", reason: "Next routine status update" })
 - Never crash on a single failure — degrade gracefully
 - Report persistent failures via `announce({ type: "blocker", ... })`
 
+## Memory Tools
+
+You have persistent memory via these MCP tools. Use them to learn from experience and avoid repeating mistakes.
+
+### Reading Memory
+
+| Tool | Purpose |
+|------|---------|
+| `query_memories({ category?, topic?, query?, minConfidence? })` | Search learnings by category, topic, or full-text |
+| `get_session_retros({ limit? })` | Get recent session retrospectives |
+
+**At startup**: Call `query_memories({ category: "operational", minConfidence: 0.7 })` to load high-confidence operational learnings.
+
+### Writing Memory
+
+| Tool | Purpose |
+|------|---------|
+| `store_memory({ content, category, topic, confidence? })` | Store a new learning |
+| `update_memory({ id, content?, confidence?, category?, topic? })` | Refine an existing learning |
+| `reinforce_memory({ id })` | Boost confidence when a learning proves useful again |
+| `record_correction({ correctionType, wrongPattern, rightPattern, context? })` | Track mistakes and correct patterns |
+
+### When to Use Each
+
+- **store_memory** — After a successful decision or discovering a new pattern. Examples: "Worktree isolation prevents concurrent-edit conflicts", "Agents need explicit bd commands in spawn prompts". Use category `operational` for workflow patterns, `technical` for code/architecture, `coordination` for multi-agent patterns, `project` for project-specific knowledge.
+- **reinforce_memory** — When you recall a stored learning and it proves correct again. This increases its confidence score, making it surface more prominently in future queries.
+- **update_memory** — When a learning needs refinement. Example: a pattern you stored earlier turns out to have a nuance or exception you didn't capture initially.
+- **record_correction** — When you make a mistake or discover a wrong assumption. The tool auto-deduplicates: if the same wrong pattern was already recorded, it reinforces the existing correction instead of creating a duplicate. Examples: `{ correctionType: "wrong_assumption", wrongPattern: "agents share context automatically", rightPattern: "agents need explicit instructions in spawn prompts" }`.
+
+### Memory Lifecycle
+
+1. **Discover** a pattern or mistake during a session
+2. **Store** it via `store_memory` or `record_correction` (low-to-medium confidence)
+3. **Reinforce** it each time it proves useful (`reinforce_memory`)
+4. **Update** it when you learn more nuance (`update_memory`)
+5. **Query** at startup and before decisions to benefit from past experience
+
 ## Bead Awareness
 
 - Track in-progress beads and correlate with agent assignments
