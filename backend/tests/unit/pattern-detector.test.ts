@@ -412,3 +412,34 @@ describe("classifyScenario", () => {
     expect(classifyScenario(scenario)).toBe("ui-only");
   });
 });
+
+// ============================================================================
+// Bug fixes — adj-058.17: Precondition detector for additional entity types
+// ============================================================================
+
+describe("detectPrecondition — extended entity types (adj-058.17)", () => {
+  it("should detect persona preconditions", () => {
+    const result = detectPrecondition("a persona exists");
+    expect(result.type).not.toBe("none");
+  });
+
+  it("should detect persona with name", () => {
+    const result = detectPrecondition("a persona named Raynor exists");
+    expect(result.type).not.toBe("none");
+  });
+
+  it("should detect bead preconditions", () => {
+    const result = detectPrecondition("a bead exists with status open");
+    expect(result.type).not.toBe("none");
+  });
+
+  it("should detect event preconditions", () => {
+    const result = detectPrecondition("events exist in the store");
+    expect(result.type).not.toBe("none");
+  });
+
+  it("should detect session preconditions", () => {
+    const result = detectPrecondition("an active session exists");
+    expect(result.type).not.toBe("none");
+  });
+});

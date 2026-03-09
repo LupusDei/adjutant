@@ -522,11 +522,18 @@ function generateApiCallCode(
       break;
 
     case "PUT":
-      lines.push(`      const res = await harness.request.put(${quoted}).send({});`);
+      if (apiCall.body) {
+        const bodyStr = JSON.stringify(apiCall.body);
+        lines.push(
+          `      const res = await harness.put(${quoted}, ${bodyStr});`
+        );
+      } else {
+        lines.push(`      const res = await harness.put(${quoted}, {});`);
+      }
       break;
 
     case "DELETE":
-      lines.push(`      const res = await harness.request.delete(${quoted});`);
+      lines.push(`      const res = await harness.delete(${quoted});`);
       break;
   }
 
@@ -826,25 +833,30 @@ function truncateDescription(text: string): string {
 }
 
 /**
- * Escape double quotes in a string for use inside a double-quoted JS string.
+ * Escape special characters in a string for use inside a double-quoted JS string.
+ * Escapes backslashes first (to avoid double-escaping), then double quotes.
  */
 function escapeDoubleQuotes(s: string): string {
-  return s.replace(/"/g, '\\"');
+  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
 /**
- * Resolve path parameters. If the path has :id and we have a seeded entity,
- * replace :id with template expression referencing the seeded variable.
+ * Resolve path parameters. If the path has :paramName and we have a seeded entity,
+ * replace the first :id (or :paramName) with template expression referencing seeded.id,
+ * and remove any remaining :paramName segments (secondary params aren't seeded).
  */
 function resolvePath(
   path: string,
   precondition: DetectedPrecondition
 ): string {
-  if (path.includes(":id") && precondition.type !== "none" && precondition.type !== "database") {
-    // Replace :id with interpolated seeded.id
-    return path.replace(":id", '${seeded.id}');
+  if (!path.includes(":") || precondition.type === "none" || precondition.type === "database") {
+    return path;
   }
-  return path;
+  // Replace first :paramName with seeded.id
+  let resolved = path.replace(/:(\w+)/, '${seeded.id}');
+  // Replace any remaining :paramName with a placeholder variable
+  resolved = resolved.replace(/:(\w+)/g, (_match, param: string) => `\${${param}}`);
+  return resolved;
 }
 
 /**
