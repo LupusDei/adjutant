@@ -24,6 +24,10 @@ public struct CrewMember: Codable, Identifiable, Equatable, Hashable {
     public let branch: String?
     /// Session ID for linking to session chat
     public let sessionId: String?
+    /// Session cost in dollars (from backend CostTracker)
+    public let cost: Double?
+    /// Estimated context window usage percentage (0-100)
+    public let contextPercent: Double?
 
     public init(
         id: String,
@@ -36,7 +40,9 @@ public struct CrewMember: Codable, Identifiable, Equatable, Hashable {
         firstSubject: String? = nil,
         firstFrom: String? = nil,
         branch: String? = nil,
-        sessionId: String? = nil
+        sessionId: String? = nil,
+        cost: Double? = nil,
+        contextPercent: Double? = nil
     ) {
         self.id = id
         self.name = name
@@ -49,11 +55,13 @@ public struct CrewMember: Codable, Identifiable, Equatable, Hashable {
         self.firstFrom = firstFrom
         self.branch = branch
         self.sessionId = sessionId
+        self.cost = cost
+        self.contextPercent = contextPercent
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, name, type, status, project, currentTask, unreadMail
-        case firstSubject, firstFrom, branch, sessionId
+        case firstSubject, firstFrom, branch, sessionId, cost, contextPercent
     }
 }
 
