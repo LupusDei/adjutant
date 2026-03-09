@@ -59,6 +59,10 @@ export interface CrewMember {
   swarmId?: string;
   /** Whether this agent is the merge coordinator (swarm mode) */
   isCoordinator?: boolean;
+  /** Session cost in dollars (from backend CostTracker) */
+  cost?: number;
+  /** Estimated context window usage percentage (0-100) */
+  contextPercent?: number;
 }
 
 // ============================================================================
