@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync
 import { join } from "path";
 import { tmpdir } from "os";
 
-import { parseArgs, discoverSpecs } from "../../src/acceptance/cli.js";
+import { parseArgs, discoverSpecs, createDebounce } from "../../src/acceptance/cli.js";
 import { generateTestContent, generateTestFiles } from "../../src/acceptance/test-generator.js";
 import { formatReport, countResults } from "../../src/acceptance/reporter.js";
 import type { ParseResult } from "../../src/acceptance/types.js";
@@ -161,6 +161,29 @@ describe("AcceptanceCLI", () => {
       expect(opts.all).toBe(true);
       expect(opts.generate).toBe(true);
       expect(opts.verbose).toBe(true);
+    });
+
+    it("should parse --watch flag", () => {
+      const opts = parseArgs(["node", "cli.ts", "--watch"]);
+      expect(opts.watch).toBe(true);
+    });
+
+    it("should default watch to false when not specified", () => {
+      const opts = parseArgs(["node", "cli.ts", "--generate"]);
+      expect(opts.watch).toBe(false);
+    });
+
+    it("should combine --watch with spec dir", () => {
+      const opts = parseArgs(["node", "cli.ts", "specs/017-agent-proposals", "--watch"]);
+      expect(opts.watch).toBe(true);
+      expect(opts.specDir).toBe("specs/017-agent-proposals");
+    });
+
+    it("should not set --run as default when --watch is set", () => {
+      const opts = parseArgs(["node", "cli.ts", "--watch"]);
+      expect(opts.watch).toBe(true);
+      // --watch is its own mode, should not default to --run
+      expect(opts.run).toBe(false);
     });
   });
 
@@ -357,6 +380,72 @@ describe("AcceptanceCLI", () => {
       expect(output).toContain("0 passed");
       expect(output).toContain("0 failed");
       expect(output).toContain("0 pending");
+    });
+  });
+
+  // ============================================================================
+  // Tests — Debounce utility
+  // ============================================================================
+
+  describe("createDebounce", () => {
+    it("should call the function after the delay", async () => {
+      let called = 0;
+      const debounced = createDebounce(() => { called++; }, 50);
+
+      debounced();
+      expect(called).toBe(0);
+
+      await new Promise(r => setTimeout(r, 80));
+      expect(called).toBe(1);
+    });
+
+    it("should only call once when triggered multiple times within delay", async () => {
+      let called = 0;
+      const debounced = createDebounce(() => { called++; }, 50);
+
+      debounced();
+      debounced();
+      debounced();
+
+      await new Promise(r => setTimeout(r, 80));
+      expect(called).toBe(1);
+    });
+
+    it("should reset the timer on each call", async () => {
+      let called = 0;
+      const debounced = createDebounce(() => { called++; }, 100);
+
+      debounced();
+      await new Promise(r => setTimeout(r, 60));
+      debounced(); // reset timer
+      await new Promise(r => setTimeout(r, 60));
+      // Only 120ms since first call, but only 60ms since reset — should not have fired
+      expect(called).toBe(0);
+
+      await new Promise(r => setTimeout(r, 60));
+      // Now 120ms since reset — should have fired
+      expect(called).toBe(1);
+    });
+
+    it("should pass arguments to the callback", async () => {
+      let receivedPath = "";
+      const debounced = createDebounce((path: string) => { receivedPath = path; }, 50);
+
+      debounced("specs/017/spec.md");
+
+      await new Promise(r => setTimeout(r, 80));
+      expect(receivedPath).toBe("specs/017/spec.md");
+    });
+
+    it("should be cancellable via cancel method", async () => {
+      let called = 0;
+      const debounced = createDebounce(() => { called++; }, 50);
+
+      debounced();
+      debounced.cancel();
+
+      await new Promise(r => setTimeout(r, 80));
+      expect(called).toBe(0);
     });
   });
 });

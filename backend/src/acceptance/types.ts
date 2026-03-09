@@ -167,6 +167,8 @@ export interface AcceptanceOptions {
   all?: boolean;
   /** Sync mode: regenerate while preserving manual edits */
   sync?: boolean;
+  /** Watch mode: watch spec files and auto-regenerate/re-run on change */
+  watch?: boolean;
 }
 
 /**

@@ -46,6 +46,7 @@ Options:
   --report      Show spec coverage report (which specs have tests)
   --overwrite   Overwrite existing test files during --generate
   --sync        Regenerate preserving manual edits (use with --generate)
+  --watch       Watch spec.md files and auto-regenerate/re-run on change
   --verbose     Show detailed output
   --help        Show this help message
 
@@ -54,6 +55,8 @@ Examples:
   npx tsx src/acceptance/cli.ts specs/017-agent-proposals --run
   npx tsx src/acceptance/cli.ts --all --generate   (generate for all specs)
   npx tsx src/acceptance/cli.ts --report
+  npx tsx src/acceptance/cli.ts --watch            (watch all specs)
+  npx tsx src/acceptance/cli.ts specs/017 --watch  (watch one spec)
   npx tsx src/acceptance/cli.ts   (runs all acceptance tests)
 `.trim();
 
@@ -135,6 +138,7 @@ export function parseArgs(argv: string[]): AcceptanceOptions {
   let overwrite = false;
   let all = false;
   let sync = false;
+  let watch = false;
 
   for (const arg of args) {
     if (arg === "--generate") {
@@ -151,6 +155,8 @@ export function parseArgs(argv: string[]): AcceptanceOptions {
       verbose = true;
     } else if (arg === "--all") {
       all = true;
+    } else if (arg === "--watch") {
+      watch = true;
     } else if (arg === "--help") {
       // eslint-disable-next-line no-console
       console.log(USAGE);
@@ -161,11 +167,11 @@ export function parseArgs(argv: string[]): AcceptanceOptions {
   }
 
   // Default to --run if no action flag is set
-  if (!generate && !run && !report) {
+  if (!generate && !run && !report && !watch) {
     run = true;
   }
 
-  return { specDir, generate, run, report, verbose, overwrite, all, sync };
+  return { specDir, generate, run, report, verbose, overwrite, all, sync, watch };
 }
 
 // ============================================================================
@@ -373,11 +379,190 @@ function handleReport(): void {
 }
 
 // ============================================================================
+// Debounce Utility
+// ============================================================================
+
+/**
+ * Create a debounced version of a function that delays invocation until
+ * after `delayMs` milliseconds have elapsed since the last call.
+ * The returned function also has a `.cancel()` method.
+ *
+ * @param fn - Function to debounce
+ * @param delayMs - Delay in milliseconds
+ * @returns Debounced function with cancel method
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic debounce needs flexible args
+export function createDebounce<T extends (...args: any[]) => void>(
+  fn: T,
+  delayMs: number
+): ((...args: Parameters<T>) => void) & { cancel: () => void } {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const debounced = (...args: Parameters<T>): void => {
+    if (timer !== null) {
+      clearTimeout(timer);
+    }
+    timer = setTimeout(() => {
+      timer = null;
+      fn(...args);
+    }, delayMs);
+  };
+
+  debounced.cancel = (): void => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
+
+  return debounced;
+}
+
+// ============================================================================
+// Watch Mode
+// ============================================================================
+
+/**
+ * Debounce delay for watch mode file change events (milliseconds).
+ */
+const WATCH_DEBOUNCE_MS = 500;
+
+/**
+ * Handle a single spec change: regenerate (with sync) and re-run tests.
+ */
+async function processSpecChange(
+  specDir: string,
+  specName: string,
+  options: AcceptanceOptions
+): Promise<void> {
+  // eslint-disable-next-line no-console
+  console.log(`\n--- spec changed: ${specName} ---\n`);
+
+  try {
+    // Re-generate with sync mode to preserve manual edits
+    const specPath = join(specDir, "spec.md");
+    const parsed = await parseSpec(specPath);
+    const outputDir = DEFAULT_OUTPUT_DIR;
+
+    await generateTestFiles(parsed, {
+      outputDir,
+      overwrite: false,
+      sync: true,
+    });
+
+    // eslint-disable-next-line no-console
+    console.log(`Regenerated test files for ${specName}`);
+
+    // Re-run tests for this spec
+    handleRun({ ...options, specDir, run: true });
+  } catch (err: unknown) {
+    // eslint-disable-next-line no-console
+    console.error(`Error processing spec change for ${specName}:`, err);
+  }
+}
+
+/**
+ * Watch spec.md files for changes and auto-regenerate/re-run tests.
+ * Uses Node's built-in fs.watch() with recursive option.
+ */
+async function handleWatch(options: AcceptanceOptions): Promise<void> {
+  const { watch: fsWatch } = await import("fs");
+
+  // Determine what to watch
+  const watchDir = options.specDir
+    ? resolve(options.specDir)
+    : SPECS_DIR;
+
+  if (!existsSync(watchDir)) {
+    // eslint-disable-next-line no-console
+    console.error(`Error: watch directory not found: ${watchDir}`);
+    process.exit(1);
+  }
+
+  // Initial run: generate + run tests
+  // eslint-disable-next-line no-console
+  console.log("Running initial generate + test pass...\n");
+
+  if (options.specDir) {
+    // Single spec
+    await handleGenerate({ ...options, generate: true, sync: true });
+    handleRun({ ...options, run: true });
+  } else {
+    // All specs
+    await handleGenerateAll({ ...options, generate: true, sync: true, all: true });
+    handleRun({ ...options, run: true });
+  }
+
+  // eslint-disable-next-line no-console
+  console.log("\nWatching for spec changes...\n");
+
+  // Per-spec debounce map so concurrent edits to different specs don't collide
+  const debouncers = new Map<string, ReturnType<typeof createDebounce>>();
+
+  const watcher = fsWatch(watchDir, { recursive: true }, (_event, filename) => {
+    if (!filename) return;
+
+    // Only react to spec.md file changes
+    if (!filename.endsWith("spec.md")) return;
+
+    // Extract the spec directory name from the filename
+    // filename is relative to watchDir, e.g. "017-agent-proposals/spec.md"
+    // or just "spec.md" if watching a single spec dir
+    const parts = filename.split("/");
+    let specName: string;
+    let specFullDir: string;
+
+    if (parts.length >= 2) {
+      // Watching specs/ root — filename is like "017-agent-proposals/spec.md"
+      specName = parts[0]!;
+      specFullDir = join(watchDir, specName);
+    } else {
+      // Watching a single spec dir — filename is "spec.md"
+      specName = basename(watchDir);
+      specFullDir = watchDir;
+    }
+
+    // Get or create a debouncer for this spec
+    if (!debouncers.has(specName)) {
+      debouncers.set(
+        specName,
+        createDebounce(() => {
+          void processSpecChange(specFullDir, specName, options);
+        }, WATCH_DEBOUNCE_MS)
+      );
+    }
+
+    debouncers.get(specName)!();
+  });
+
+  // Clean exit on SIGINT
+  process.on("SIGINT", () => {
+    // eslint-disable-next-line no-console
+    console.log("\nStopping watch mode...");
+    watcher.close();
+    for (const d of debouncers.values()) {
+      d.cancel();
+    }
+    process.exit(0);
+  });
+
+  // Keep the process alive
+  await new Promise(() => {
+    // Never resolves — process stays alive until SIGINT
+  });
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv);
+
+  if (options.watch) {
+    await handleWatch(options);
+    return;
+  }
 
   if (options.generate) {
     if (options.all) {
