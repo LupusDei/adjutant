@@ -1,5 +1,6 @@
 import type { EventName } from "../event-bus.js";
 import type { AdjutantState } from "./state-store.js";
+import type { AgentRole } from "./state-store.js";
 import type { CommunicationManager } from "./communication.js";
 
 /**
@@ -30,6 +31,8 @@ export interface AdjutantBehavior {
   triggers: EventName[];
   /** Optional cron expression for periodic behaviors (e.g., "0 * * * *") */
   schedule?: string;
+  /** Optional role filter — skip this behavior for agents with any of these roles */
+  excludeRoles?: AgentRole[];
   /** Fast synchronous guard — return false to skip act() */
   shouldAct(event: BehaviorEvent, state: AdjutantState): boolean;
   /** Async handler that performs the behavior's action */
