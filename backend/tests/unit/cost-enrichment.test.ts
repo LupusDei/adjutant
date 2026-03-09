@@ -167,6 +167,22 @@ describe("estimateContextPercent", () => {
       realEstimateContextPercent(entryWithoutWrite)
     );
   });
+
+  it("should return exactly 50 at the 50% boundary", () => {
+    const entry = makeCostEntry({
+      tokens: { input: 100000, output: 0, cacheRead: 0, cacheWrite: 0 },
+    });
+    // 100000 / 200000 = 50%
+    expect(realEstimateContextPercent(entry)).toBe(50);
+  });
+
+  it("should return exactly 100 at the cap boundary", () => {
+    const entry = makeCostEntry({
+      tokens: { input: 200000, output: 0, cacheRead: 0, cacheWrite: 0 },
+    });
+    // 200000 / 200000 = 100% (exactly at limit)
+    expect(realEstimateContextPercent(entry)).toBe(100);
+  });
 });
 
 // ============================================================================
