@@ -251,6 +251,28 @@ export class TestHarness {
   }
 
   /**
+   * Seed a bead by inserting a system message marker.
+   * Beads are managed via the `bd` CLI in production, so in tests
+   * we simulate their existence with a marker message.
+   */
+  async seedBead(opts: {
+    title: string;
+    type?: string;
+    status?: string;
+  }): Promise<{ id: string; title: string }> {
+    if (!this._messageStore) {
+      throw new Error("TestHarness.seedBead() called before setup()");
+    }
+    const beadId = `bead-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    this._messageStore.insertMessage({
+      agentId: "system",
+      role: "system",
+      body: `Bead created: ${opts.title} [id: ${beadId}, type: ${opts.type ?? "task"}, status: ${opts.status ?? "open"}]`,
+    });
+    return { id: beadId, title: opts.title };
+  }
+
+  /**
    * Create a proposal via the real proposal store.
    */
   async seedProposal(opts: {
