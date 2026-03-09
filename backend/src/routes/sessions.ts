@@ -107,7 +107,7 @@ sessionsRouter.get("/:id", (req, res) => {
 /**
  * POST /api/sessions
  * Create a new session.
- * Optional personaId injects persona prompt via --prompt and sets ADJUTANT_PERSONA_ID.
+ * Optional personaId injects persona prompt via initialPrompt (paste-buffer) and sets ADJUTANT_PERSONA_ID.
  */
 sessionsRouter.post("/", async (req, res) => {
   const parsed = CreateSessionSchema.safeParse(req.body);

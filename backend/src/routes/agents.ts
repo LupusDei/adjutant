@@ -52,7 +52,7 @@ const spawnAgentSchema = z.object({
  * POST /api/agents/spawn
  * Creates a new agent session for the given project.
  * Accepts either projectPath or projectId (resolved via project registry).
- * Optional personaId injects persona prompt via --prompt and sets ADJUTANT_PERSONA_ID.
+ * Optional personaId injects persona prompt via initialPrompt (paste-buffer) and sets ADJUTANT_PERSONA_ID.
  */
 agentsRouter.post("/spawn", async (req, res) => {
   const parsed = spawnAgentSchema.safeParse(req.body);

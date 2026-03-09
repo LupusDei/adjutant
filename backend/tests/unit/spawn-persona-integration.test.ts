@@ -3,13 +3,14 @@
  *
  * Tests that all spawn paths (agents route, sessions route)
  * correctly handle personaId: look up persona, generate prompt, inject via
- * --prompt CLI flag, and set ADJUTANT_PERSONA_ID env var.
+ * initialPrompt (atomic paste-buffer), and set ADJUTANT_PERSONA_ID env var.
  *
  * Covers QA findings:
  * - adj-033.0.3: ADJUTANT_PERSONA_ID env var in tmux session
  * - adj-033.0.5: All callsigns disabled edge case
  * - adj-033.0.7: Dual spawn paths (agents.ts + sessions.ts)
- * - adj-033.0.8: Injection via --prompt flag
+ * - adj-9lqx: Persona prompt via initialPrompt instead of --prompt CLI arg
+ *   (multi-line prompt text breaks shell command via tmux send-keys)
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
