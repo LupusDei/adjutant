@@ -227,66 +227,10 @@ describe("createIdleProposalNudge", () => {
     });
   });
 
-  describe("act — skips coordinator agents", () => {
-    it("does not schedule a check when the idle agent is 'adjutant-coordinator'", async () => {
+  describe("excludeRoles — coordinator exclusion", () => {
+    it("has excludeRoles set to coordinator", () => {
       const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
-      const event = makeIdleEvent("adjutant-coordinator");
-
-      (state.getAgentProfile as ReturnType<typeof vi.fn>).mockReturnValue({
-        agentId: "adjutant-coordinator",
-        lastStatus: "idle",
-        disconnectedAt: null,
-        connectedAt: "2026-03-09T10:00:00Z",
-      });
-
-      await behavior.act(event, state, comm);
-
-      expect(stimulusEngine.scheduleCheck).not.toHaveBeenCalled();
-      expect(state.logDecision).not.toHaveBeenCalled();
-    });
-
-    it("does not schedule a check when the idle agent is 'adjutant'", async () => {
-      const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
-      const event = makeIdleEvent("adjutant");
-
-      (state.getAgentProfile as ReturnType<typeof vi.fn>).mockReturnValue({
-        agentId: "adjutant",
-        lastStatus: "idle",
-        disconnectedAt: null,
-        connectedAt: "2026-03-09T10:00:00Z",
-      });
-
-      await behavior.act(event, state, comm);
-
-      expect(stimulusEngine.scheduleCheck).not.toHaveBeenCalled();
-    });
-
-    it("does not schedule a check when the idle agent is 'adjutant-core'", async () => {
-      const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
-      const event = makeIdleEvent("adjutant-core");
-
-      (state.getAgentProfile as ReturnType<typeof vi.fn>).mockReturnValue({
-        agentId: "adjutant-core",
-        lastStatus: "idle",
-        disconnectedAt: null,
-        connectedAt: "2026-03-09T10:00:00Z",
-      });
-
-      await behavior.act(event, state, comm);
-
-      expect(stimulusEngine.scheduleCheck).not.toHaveBeenCalled();
-    });
-
-    it("still clears debounce key when coordinator transitions to non-idle", async () => {
-      const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
-      const event = makeWorkingEvent("adjutant-coordinator");
-
-      await behavior.act(event, state, comm);
-
-      expect(state.setMeta).toHaveBeenCalledWith(
-        "idle_nudge_check_adjutant-coordinator",
-        "",
-      );
+      expect(behavior.excludeRoles).toEqual(["coordinator"]);
     });
   });
 
