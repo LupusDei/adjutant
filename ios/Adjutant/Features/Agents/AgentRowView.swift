@@ -63,6 +63,11 @@ struct AgentRowView: View {
                                         .stroke(agentColor.opacity(0.3), lineWidth: 0.5)
                                 )
                         }
+
+                        Spacer(minLength: 0)
+
+                        // Cost and context indicators (top-right)
+                        costContextView
                     }
 
                     // Status label
@@ -128,6 +133,56 @@ struct AgentRowView: View {
         StatusDot(statusType, size: 10, pulse: shouldPulse)
     }
 
+    // MARK: - Cost & Context
+
+    @ViewBuilder
+    private var costContextView: some View {
+        HStack(spacing: 4) {
+            if let cost = member.cost {
+                Text(String(format: "$%.2f", cost))
+                    .font(CRTTheme.Typography.font(size: 9, weight: .regular))
+                    .foregroundColor(theme.dim)
+            }
+
+            if let ctx = member.contextPercent {
+                HStack(spacing: 2) {
+                    Text("CTX")
+                        .font(CRTTheme.Typography.font(size: 8, weight: .bold))
+                        .foregroundColor(contextColor(for: ctx).opacity(0.7))
+
+                    // Compact progress bar
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(theme.dim.opacity(0.2))
+                            .frame(width: 20, height: 3)
+
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(contextColor(for: ctx))
+                            .frame(width: max(1, 20 * CGFloat(min(ctx, 100)) / 100), height: 3)
+                    }
+
+                    Text(String(format: "%.0f%%", ctx))
+                        .font(CRTTheme.Typography.font(size: 8, weight: .bold))
+                        .foregroundColor(contextColor(for: ctx))
+                }
+            }
+        }
+    }
+
+    /// Color for context usage based on threshold: green < 50%, yellow 50-75%, orange 75-90%, red > 90%
+    private func contextColor(for percent: Double) -> Color {
+        switch percent {
+        case ..<50:
+            return theme.primary
+        case 50..<75:
+            return CRTTheme.State.warning
+        case 75..<90:
+            return Color(red: 1.0, green: 0.5, blue: 0.0) // Orange
+        default:
+            return CRTTheme.State.error
+        }
+    }
+
     // MARK: - Status Helpers
 
     private var statusType: BadgeView.Style.StatusType {
@@ -185,7 +240,9 @@ struct AgentRowView: View {
                 status: .working,
                 currentTask: "Coordinating infrastructure",
                 unreadMail: 3,
-                firstSubject: "Status update"
+                firstSubject: "Status update",
+                cost: 1.23,
+                contextPercent: 42
             ),
             onTap: {}
         )
@@ -196,7 +253,9 @@ struct AgentRowView: View {
                 name: "Watcher",
                 type: .agent,
                 status: .idle,
-                unreadMail: 0
+                unreadMail: 0,
+                cost: 0.05,
+                contextPercent: 12
             ),
             onTap: {}
         )
@@ -208,7 +267,9 @@ struct AgentRowView: View {
                 type: .agent,
                 status: .blocked,
                 currentTask: "Waiting on review",
-                unreadMail: 1
+                unreadMail: 1,
+                cost: 3.50,
+                contextPercent: 67
             ),
             onTap: {}
         )
@@ -220,7 +281,9 @@ struct AgentRowView: View {
                 type: .agent,
                 status: .stuck,
                 currentTask: "Build failing",
-                unreadMail: 5
+                unreadMail: 5,
+                cost: 8.99,
+                contextPercent: 92
             ),
             onTap: {}
         )
