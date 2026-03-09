@@ -3,11 +3,13 @@
  * Pip-Boy terminal aesthetic matching the rest of the UI.
  */
 
-import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useEpicDetail } from '../../hooks';
+import { useBeadCost } from '../../hooks/useBeadCost';
 import { api } from '../../services/api';
 import type { BeadInfo } from '../../types';
+import type { BeadCostResult } from '../../services/api-costs';
 import { AgentAssignDropdown } from '../shared/AgentAssignDropdown';
 import { EpicGraphView } from './EpicGraphView';
 
@@ -193,6 +195,71 @@ function SubtaskSection({
   );
 }
 
+/** Format a number with commas. */
+function formatNumber(n: number): string {
+  return n.toLocaleString();
+}
+
+/**
+ * Cost breakdown section for an epic.
+ * Shows total cost, per-session breakdown, and token summary.
+ */
+function CostBreakdownSection({ costData }: { costData: BeadCostResult }) {
+  if (costData.totalCost === 0 && costData.sessions.length === 0) {
+    return null;
+  }
+
+  return (
+    <div style={styles.section}>
+      <div style={styles.sectionHeader}>
+        <h4 style={styles.sectionTitle}>COST BREAKDOWN</h4>
+        <span style={styles.sectionCount}>${costData.totalCost.toFixed(2)}</span>
+      </div>
+
+      {/* Per-session cost table */}
+      {costData.sessions.length > 0 && (
+        <table style={costStyles.table}>
+          <thead>
+            <tr>
+              <th style={costStyles.th}>SESSION</th>
+              <th style={{ ...costStyles.th, textAlign: 'right' }}>COST</th>
+            </tr>
+          </thead>
+          <tbody>
+            {costData.sessions
+              .sort((a, b) => b.cost - a.cost)
+              .map((session) => (
+                <tr key={session.sessionId} style={costStyles.tr}>
+                  <td style={costStyles.td}>
+                    {session.sessionId.slice(0, 16)}
+                  </td>
+                  <td style={{ ...costStyles.td, textAlign: 'right', fontWeight: 'bold' }}>
+                    ${session.cost.toFixed(2)}
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      )}
+
+      {/* Token summary */}
+      <div style={costStyles.tokenSection}>
+        <div style={costStyles.tokenHeader}>TOKEN SUMMARY</div>
+        <div style={costStyles.tokenGrid}>
+          <span style={costStyles.tokenLabel}>Input:</span>
+          <span style={costStyles.tokenValue}>{formatNumber(costData.tokenBreakdown.input)}</span>
+          <span style={costStyles.tokenLabel}>Output:</span>
+          <span style={costStyles.tokenValue}>{formatNumber(costData.tokenBreakdown.output)}</span>
+          <span style={costStyles.tokenLabel}>Cache Read:</span>
+          <span style={costStyles.tokenValue}>{formatNumber(costData.tokenBreakdown.cacheRead)}</span>
+          <span style={costStyles.tokenLabel}>Cache Write:</span>
+          <span style={costStyles.tokenValue}>{formatNumber(costData.tokenBreakdown.cacheWrite)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function EpicDetailView(props: EpicDetailViewProps) {
   const { epicId, onClose, onBeadClick, refreshTrigger = 0 } = props;
   const {
@@ -222,6 +289,18 @@ export function EpicDetailView(props: EpicDetailViewProps) {
     void refresh();
     props.onAssign?.();
   }, [refresh, props]);
+
+  // Compute child IDs for epic cost aggregation
+  const childIds = useMemo(
+    () => subtasks.length > 0 ? subtasks.map((s) => s.id) : undefined,
+    [subtasks]
+  );
+
+  // Fetch aggregated cost for this epic (including all children)
+  const { cost: epicCost } = useBeadCost(epicId, {
+    children: childIds,
+    enabled: !!epic && subtasks.length > 0,
+  });
 
   const [copied, setCopied] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
@@ -430,6 +509,9 @@ export function EpicDetailView(props: EpicDetailViewProps) {
                 onSubtaskClick={handleSubtaskClick}
                 onAssign={handleAssign}
               />
+
+              {/* Cost Breakdown */}
+              {epicCost && <CostBreakdownSection costData={epicCost} />}
 
               {/* Empty state */}
               {subtasks.length === 0 && !loading && (
@@ -767,5 +849,59 @@ const styles = {
     fontSize: '0.75rem',
     color: 'var(--crt-phosphor-dim)',
     opacity: 0.6,
+  },
+} satisfies Record<string, CSSProperties>;
+
+/** Styles for the cost breakdown section. */
+const costStyles = {
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    fontSize: '0.75rem',
+    fontFamily: '"Share Tech Mono", monospace',
+    marginBottom: '10px',
+  },
+  th: {
+    textAlign: 'left',
+    padding: '4px 6px',
+    color: 'var(--crt-phosphor-dim)',
+    fontWeight: 'normal',
+    fontSize: '0.6rem',
+    letterSpacing: '0.1em',
+    borderBottom: '1px solid rgba(0, 255, 0, 0.1)',
+  },
+  tr: {
+    borderBottom: '1px solid rgba(0, 255, 0, 0.05)',
+  },
+  td: {
+    padding: '4px 6px',
+    color: 'var(--crt-phosphor)',
+  },
+  tokenSection: {
+    marginTop: '10px',
+    padding: '8px',
+    backgroundColor: 'rgba(0, 255, 0, 0.02)',
+    border: '1px solid rgba(0, 255, 0, 0.1)',
+    borderRadius: '2px',
+  },
+  tokenHeader: {
+    fontSize: '0.6rem',
+    color: 'var(--crt-phosphor-dim)',
+    letterSpacing: '0.15em',
+    marginBottom: '6px',
+  },
+  tokenGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'auto 1fr',
+    gap: '4px 12px',
+    fontSize: '0.7rem',
+  },
+  tokenLabel: {
+    color: 'var(--crt-phosphor-dim)',
+  },
+  tokenValue: {
+    color: 'var(--crt-phosphor)',
+    textAlign: 'right',
+    fontFamily: '"Share Tech Mono", monospace',
   },
 } satisfies Record<string, CSSProperties>;
