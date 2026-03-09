@@ -34,7 +34,8 @@ import { createAdjutantState } from "./services/adjutant/state-store.js";
 import { createCommunicationManager } from "./services/adjutant/communication.js";
 import { agentLifecycleBehavior } from "./services/adjutant/behaviors/agent-lifecycle.js";
 import { createHealthMonitorBehavior } from "./services/adjutant/behaviors/health-monitor.js";
-import { createPeriodicSummaryBehavior } from "./services/adjutant/behaviors/periodic-summary.js";
+// DISABLED (adj-054 — replaced by stimulus engine)
+// import { createPeriodicSummaryBehavior } from "./services/adjutant/behaviors/periodic-summary.js";
 // DISABLED (adj-052 not ready)
 // import { createStaleAgentNudger } from "./services/adjutant/behaviors/stale-agent-nudger.js";
 // import { createWorkAssigner } from "./services/adjutant/behaviors/work-assigner.js";
@@ -48,7 +49,9 @@ import { createSelfImprover } from "./services/adjutant/behaviors/self-improver.
 // import { createAgentDecommissioner } from "./services/adjutant/behaviors/agent-decommissioner.js";
 import { createMemoryStore } from "./services/adjutant/memory-store.js";
 import { SignalAggregator } from "./services/adjutant/signal-aggregator.js";
+import { StimulusEngine, buildSituationPrompt, buildBootstrapPrompt, type StateSnapshot } from "./services/adjutant/stimulus-engine.js";
 import { getEventBus } from "./services/event-bus.js";
+import { ADJUTANT_TMUX_SESSION } from "./services/adjutant-spawner.js";
 import { registerMemoryTools } from "./services/mcp-tools/memory.js";
 import { registerCoordinationTools } from "./services/mcp-tools/coordination.js";
 import { createMemoryRouter } from "./routes/memory.js";
@@ -221,7 +224,8 @@ const server = app.listen(PORT, () => {
 
   behaviorRegistry.register(agentLifecycleBehavior);
   behaviorRegistry.register(createHealthMonitorBehavior(projectRoot));
-  behaviorRegistry.register(createPeriodicSummaryBehavior());
+  // DISABLED (adj-054 — replaced by stimulus engine)
+  // behaviorRegistry.register(createPeriodicSummaryBehavior());
   // DISABLED (adj-052 not ready — re-enable strategically)
   // behaviorRegistry.register(createStaleAgentNudger());
   // behaviorRegistry.register(createWorkAssigner());
@@ -237,15 +241,93 @@ const server = app.listen(PORT, () => {
   initAdjutantCore({ registry: behaviorRegistry, state: adjutantState, comm: adjutantComm });
   logInfo("Adjutant Core initialized with event-driven behaviors");
 
-  // Signal Aggregator — classifies EventBus events for stimulus engine
+  // Signal Aggregator + Stimulus Engine — replaces periodic-summary
   const signalAggregator = new SignalAggregator();
+  const stimulusEngine = new StimulusEngine();
+
+  // Wire critical signals from aggregator to stimulus engine
   signalAggregator.onCritical((signal) => {
-    logInfo("SignalAggregator: critical signal", { event: signal.event, id: signal.id });
+    stimulusEngine.handleCriticalSignal(signal);
   });
+
+  // Connect aggregator to EventBus
   getEventBus().onAny((event, data) => {
     signalAggregator.ingest(event, data);
+    // Also trigger watches in the stimulus engine
+    stimulusEngine.triggerWatch(event, data);
   });
-  logInfo("SignalAggregator: connected to EventBus");
+
+  // Stimulus engine wake callback — inject prompt into adjutant tmux session
+  stimulusEngine.onWake((reason) => {
+    const bridge = getSessionBridge();
+    const session = bridge.registry.findByTmuxSession(ADJUTANT_TMUX_SESSION);
+    if (!session) {
+      logInfo("StimulusEngine: wake skipped — no adjutant session", { reason: reason.type });
+      return;
+    }
+
+    // Build state snapshot from adjutant state
+    const profiles = adjutantState.getAllAgentProfiles();
+    const stateSnapshot: StateSnapshot = {
+      activeAgents: profiles.filter(p => p.disconnectedAt === null).length,
+      workingAgents: profiles.filter(p => p.lastStatus === "working").length,
+      blockedAgents: profiles.filter(p => p.lastStatus === "blocked").length,
+      idleAgents: profiles.filter(p => p.lastStatus === "idle").length,
+      inProgressBeads: 0, // Will be populated by the adjutant via list_beads
+      readyBeads: 0,      // Will be populated by the adjutant via list_beads
+    };
+
+    const prompt = buildSituationPrompt({
+      wakeReason: reason.reason ?? reason.type,
+      signals: reason.signal ? [reason.signal] : [],
+      contextSnapshot: signalAggregator.drain(),
+      stateSnapshot,
+      pendingSchedule: stimulusEngine.getPendingSchedule(),
+      recentDecisions: adjutantState.getRecentDecisions(5),
+    });
+
+    bridge.sendInput(session.id, prompt).then((success) => {
+      if (success) {
+        adjutantState.logDecision({
+          behavior: "stimulus-engine",
+          action: `wake_${reason.type}`,
+          target: reason.reason ?? null,
+          reason: reason.signal ? `signal: ${reason.signal.event}` : null,
+        });
+      } else {
+        logInfo("StimulusEngine: prompt injection failed", { reason: reason.type });
+      }
+    }).catch(() => {
+      logInfo("StimulusEngine: prompt injection error", { reason: reason.type });
+    });
+  });
+
+  // Bootstrap prompt — fires 60s after startup to orient the adjutant
+  const BOOTSTRAP_DELAY_MS = 60_000;
+  setTimeout(() => {
+    const bridge = getSessionBridge();
+    const session = bridge.registry.findByTmuxSession(ADJUTANT_TMUX_SESSION);
+    if (!session) {
+      logInfo("StimulusEngine: bootstrap skipped — no adjutant session");
+      return;
+    }
+    const bootstrapPrompt = buildBootstrapPrompt();
+    bridge.sendInput(session.id, bootstrapPrompt).then((success) => {
+      if (success) {
+        adjutantState.logDecision({
+          behavior: "stimulus-engine",
+          action: "bootstrap",
+          target: ADJUTANT_TMUX_SESSION,
+          reason: "Startup orientation prompt",
+        });
+        logInfo("StimulusEngine: bootstrap prompt sent");
+      }
+    }).catch(() => {
+      logInfo("StimulusEngine: bootstrap prompt failed");
+    });
+  }, BOOTSTRAP_DELAY_MS);
+
+  logInfo("StimulusEngine: connected to EventBus + SignalAggregator");
 
   // Prune old decisions on startup, then every 6 hours (reuse PRUNE_INTERVAL_MS)
   const DECISION_PRUNE_DAYS = 30;
