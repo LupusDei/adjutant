@@ -882,4 +882,99 @@ describe("AdjutantState", () => {
       ]);
     });
   });
+
+  describe("isCoordinator", () => {
+    it("should return true for agent with role='coordinator' in profile", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "my-coordinator", role: "coordinator" });
+      expect(store.isCoordinator("my-coordinator")).toBe(true);
+    });
+
+    it("should return false for agent with role='worker' in profile", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "my-worker", role: "worker" });
+      expect(store.isCoordinator("my-worker")).toBe(false);
+    });
+
+    it("should return false for agent with role='qa' in profile", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "my-qa", role: "qa" });
+      expect(store.isCoordinator("my-qa")).toBe(false);
+    });
+
+    it("should fall back to KNOWN_COORDINATOR_IDS when no profile exists", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      // No profile — but agent ID is in the known list
+      expect(store.isCoordinator("adjutant-coordinator")).toBe(true);
+      expect(store.isCoordinator("adjutant")).toBe(true);
+      expect(store.isCoordinator("adjutant-core")).toBe(true);
+    });
+
+    it("should return false for unknown agent not in KNOWN_COORDINATOR_IDS", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      expect(store.isCoordinator("random-agent")).toBe(false);
+    });
+
+    it("should prefer profile role over KNOWN_COORDINATOR_IDS fallback", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      // Profile exists with coordinator role — should use profile
+      store.upsertAgentProfile({ agentId: "adjutant-coordinator", role: "coordinator" });
+      expect(store.isCoordinator("adjutant-coordinator")).toBe(true);
+    });
+  });
+
+  describe("getAgentsByRole", () => {
+    it("should return agents filtered by role", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "coord-1", role: "coordinator" });
+      store.upsertAgentProfile({ agentId: "worker-1", role: "worker" });
+      store.upsertAgentProfile({ agentId: "worker-2", role: "worker" });
+      store.upsertAgentProfile({ agentId: "qa-1", role: "qa" });
+
+      const coordinators = store.getAgentsByRole("coordinator");
+      expect(coordinators).toHaveLength(1);
+      expect(coordinators[0].agentId).toBe("coord-1");
+
+      const workers = store.getAgentsByRole("worker");
+      expect(workers).toHaveLength(2);
+      const workerIds = workers.map((p) => p.agentId).sort();
+      expect(workerIds).toEqual(["worker-1", "worker-2"]);
+
+      const qas = store.getAgentsByRole("qa");
+      expect(qas).toHaveLength(1);
+      expect(qas[0].agentId).toBe("qa-1");
+    });
+
+    it("should return empty array when no agents have the given role", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "worker-1", role: "worker" });
+
+      const coordinators = store.getAgentsByRole("coordinator");
+      expect(coordinators).toEqual([]);
+    });
+
+    it("should return empty array when no agents exist", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      const workers = store.getAgentsByRole("worker");
+      expect(workers).toEqual([]);
+    });
+  });
 });

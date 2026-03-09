@@ -75,6 +75,10 @@ export interface AdjutantState {
   getRecentDecisionsWithOutcomes(limit: number): DecisionEntry[];
   /** Find decisions targeting a specific bead/agent (for linking outcomes). */
   getDecisionsForTarget(target: string, limit?: number): DecisionEntry[];
+  /** Check if an agent is a coordinator (by profile role or known ID fallback). */
+  isCoordinator(agentId: string): boolean;
+  /** Get all agent profiles with the given role. */
+  getAgentsByRole(role: AgentRole): AgentProfile[];
 }
 
 interface AgentProfileRow {
@@ -244,6 +248,10 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
     SELECT * FROM adjutant_decisions WHERE target = ? ORDER BY id DESC LIMIT ?
   `);
 
+  const getAgentsByRoleStmt = db.prepare(
+    "SELECT * FROM adjutant_agent_profiles WHERE role = ? ORDER BY agent_id",
+  );
+
   return {
     getAgentProfile(agentId: string): AgentProfile | null {
       const row = getProfileStmt.get(agentId) as AgentProfileRow | undefined;
@@ -380,6 +388,19 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
       const safeLimit = limit !== undefined ? Math.max(0, Math.min(limit, 100)) : 10;
       const rows = getDecisionsForTargetStmt.all(target, safeLimit) as DecisionRow[];
       return rows.map(rowToDecision);
+    },
+
+    isCoordinator(agentId: string): boolean {
+      const profile = getProfileStmt.get(agentId) as AgentProfileRow | undefined;
+      if (profile !== undefined) {
+        return profile.role === "coordinator";
+      }
+      return KNOWN_COORDINATOR_IDS.has(agentId);
+    },
+
+    getAgentsByRole(role: AgentRole): AgentProfile[] {
+      const rows = getAgentsByRoleStmt.all(role) as AgentProfileRow[];
+      return rows.map(rowToProfile);
     },
   };
 }
