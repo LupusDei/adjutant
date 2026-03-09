@@ -1,0 +1,386 @@
+/**
+ * MCP Coordination Tools for Adjutant.
+ *
+ * LLM-controlled action tools: spawn_worker, assign_bead, nudge_agent,
+ * decommission_agent, rebalance_work. These are restricted to the
+ * adjutant agent only (adj-054.3.6 access guard).
+ */
+
+import { z } from "zod";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { getAgentBySession } from "../mcp-server.js";
+import { spawnAgent } from "../agent-spawner-service.js";
+import { updateBead } from "../beads/beads-mutations.js";
+import { getSessionBridge } from "../session-bridge.js";
+import { getEventBus } from "../event-bus.js";
+import { execBd } from "../bd-client.js";
+import { logInfo, logWarn } from "../../utils/index.js";
+import type { AdjutantState } from "../adjutant/state-store.js";
+import type { MessageStore } from "../message-store.js";
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+/** Agent IDs that can use coordination tools */
+const ALLOWED_AGENTS = new Set(["adjutant-coordinator", "adjutant"]);
+
+/** Agent IDs that cannot be decommissioned */
+const PROTECTED_AGENTS = new Set(["adjutant-coordinator", "adjutant"]);
+
+/** Counter for auto-generated agent names */
+let autoNameCounter = 0;
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Check that the calling agent is adjutant or adjutant-coordinator.
+ * Returns the agentId on success, or null on failure.
+ */
+function checkAccess(sessionId: string | undefined): string | null {
+  if (!sessionId) return null;
+  const agentId = getAgentBySession(sessionId);
+  if (!agentId) return null;
+  if (!ALLOWED_AGENTS.has(agentId)) return null;
+  return agentId;
+}
+
+/**
+ * Resolve the calling agent, checking access. Returns agentId or returns
+ * an error result. Caller must check the `error` field to decide whether
+ * to early-return.
+ */
+function resolveCallerOrError(sessionId: string | undefined): { agentId: string; error?: undefined } | { agentId?: undefined; error: ReturnType<typeof restrictedResult> | ReturnType<typeof unknownSessionResult> } {
+  if (!sessionId) return { error: unknownSessionResult() };
+  const agentId = getAgentBySession(sessionId);
+  if (!agentId) return { error: unknownSessionResult() };
+  if (!ALLOWED_AGENTS.has(agentId)) return { error: restrictedResult() };
+  return { agentId };
+}
+
+function unknownSessionResult() {
+  return {
+    content: [{ type: "text" as const, text: "Unknown agent: session not found" }],
+    isError: true as const,
+  };
+}
+
+function restrictedResult() {
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({ error: "Coordination tools are restricted to the adjutant agent" }),
+    }],
+  };
+}
+
+function jsonResult(data: Record<string, unknown>) {
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(data) }],
+  };
+}
+
+function generateAgentName(): string {
+  autoNameCounter++;
+  return `agent-${autoNameCounter}`;
+}
+
+/** Reset auto-name counter (for testing). */
+export function _resetAutoNameCounter(): void {
+  autoNameCounter = 0;
+}
+
+// ============================================================================
+// Tool Registration
+// ============================================================================
+
+/**
+ * Register all coordination MCP tools on the given server.
+ */
+export function registerCoordinationTools(
+  server: McpServer,
+  state: AdjutantState,
+  messageStore: MessageStore,
+): void {
+  // --------------------------------------------------------------------------
+  // spawn_worker
+  // --------------------------------------------------------------------------
+  server.tool(
+    "spawn_worker",
+    "Spawn a new agent worker with a specific task prompt",
+    {
+      prompt: z.string().describe("The task prompt for the new agent"),
+      beadId: z.string().optional().describe("Optional bead to associate with the spawn"),
+      agentName: z.string().optional().describe("Optional name (auto-generated if omitted)"),
+    },
+    async ({ prompt, beadId, agentName }, extra) => {
+      const callerAgentId = checkAccess(extra.sessionId);
+      if (!callerAgentId) {
+        const resolved = resolveCallerOrError(extra.sessionId);
+        // Safe: resolved.error is always defined when agentId is undefined
+        return resolved.error!;
+      }
+
+      const name = agentName ?? generateAgentName();
+
+      const result = await spawnAgent({
+        name,
+        projectPath: process.cwd(),
+        initialPrompt: prompt,
+      });
+
+      if (!result.success) {
+        logWarn("spawn_worker failed", { name, error: result.error });
+        return jsonResult({ success: false, error: result.error ?? "Spawn failed" });
+      }
+
+      state.logDecision({
+        behavior: "adjutant",
+        action: "spawn_worker",
+        target: name,
+        reason: `Spawned with prompt: ${prompt.slice(0, 100)}`,
+      });
+
+      state.logSpawn(name, `Spawned via spawn_worker tool`, beadId);
+
+      logInfo("spawn_worker: agent spawned", { name, sessionId: result.sessionId });
+
+      return jsonResult({
+        success: true,
+        agentName: name,
+        sessionId: result.sessionId,
+      });
+    },
+  );
+
+  // --------------------------------------------------------------------------
+  // assign_bead
+  // --------------------------------------------------------------------------
+  server.tool(
+    "assign_bead",
+    "Assign a bead to a specific agent with reasoning",
+    {
+      beadId: z.string().describe("The bead to assign"),
+      agentId: z.string().describe("The agent to assign it to"),
+      reason: z.string().describe("Why this assignment makes sense"),
+    },
+    async ({ beadId, agentId, reason }, extra) => {
+      const callerAgentId = checkAccess(extra.sessionId);
+      if (!callerAgentId) {
+        const resolved = resolveCallerOrError(extra.sessionId);
+        return resolved.error!;
+      }
+
+      const result = await updateBead(beadId, {
+        assignee: agentId,
+        status: "in_progress",
+      });
+
+      if (!result.success) {
+        logWarn("assign_bead failed", { beadId, agentId, error: result.error });
+        return jsonResult({
+          success: false,
+          error: result.error?.message ?? "Failed to assign bead",
+        });
+      }
+
+      // Update agent profile in state store
+      state.upsertAgentProfile({
+        agentId,
+        currentBeadId: beadId,
+      });
+
+      // Emit bead:assigned event
+      getEventBus().emit("bead:assigned", {
+        beadId,
+        agentId,
+        assignedBy: callerAgentId,
+      });
+
+      state.logDecision({
+        behavior: "adjutant",
+        action: "assign_bead",
+        target: beadId,
+        reason,
+      });
+
+      logInfo("assign_bead: bead assigned", { beadId, agentId });
+
+      return jsonResult({ success: true, beadId, agentId });
+    },
+  );
+
+  // --------------------------------------------------------------------------
+  // nudge_agent
+  // --------------------------------------------------------------------------
+  server.tool(
+    "nudge_agent",
+    "Send a targeted prompt to an agent's tmux session to nudge them",
+    {
+      agentId: z.string().describe("The agent to nudge"),
+      message: z.string().describe("The nudge message/prompt"),
+    },
+    async ({ agentId, message }, extra) => {
+      const callerAgentId = checkAccess(extra.sessionId);
+      if (!callerAgentId) {
+        const resolved = resolveCallerOrError(extra.sessionId);
+        return resolved.error!;
+      }
+
+      const bridge = getSessionBridge();
+      const sessions = bridge.registry.findByName(agentId);
+
+      if (!sessions || sessions.length === 0) {
+        return jsonResult({
+          success: false,
+          error: `Agent session not found: ${agentId}`,
+        });
+      }
+
+      // Collapse to single line for tmux compatibility
+      const singleLine = message.replace(/\n+/g, " ").trim();
+
+      // Send to the first matching session — length check above guarantees index 0 exists
+      const session = sessions[0]!;
+      const sent = await bridge.sendInput(session.id, singleLine);
+
+      if (!sent) {
+        return jsonResult({
+          success: false,
+          error: `Failed to send input to agent: ${agentId}`,
+        });
+      }
+
+      state.logDecision({
+        behavior: "adjutant",
+        action: "nudge_agent",
+        target: agentId,
+        reason: `Nudge: ${singleLine.slice(0, 100)}`,
+      });
+
+      logInfo("nudge_agent: message sent", { agentId });
+
+      return jsonResult({ success: true, agentId });
+    },
+  );
+
+  // --------------------------------------------------------------------------
+  // decommission_agent
+  // --------------------------------------------------------------------------
+  server.tool(
+    "decommission_agent",
+    "Gracefully shut down an idle agent",
+    {
+      agentId: z.string().describe("The agent to decommission"),
+      reason: z.string().describe("Why decommissioning"),
+    },
+    async ({ agentId, reason }, extra) => {
+      const callerAgentId = checkAccess(extra.sessionId);
+      if (!callerAgentId) {
+        const resolved = resolveCallerOrError(extra.sessionId);
+        return resolved.error!;
+      }
+
+      // Validate: cannot decommission protected agents
+      if (PROTECTED_AGENTS.has(agentId)) {
+        return jsonResult({
+          success: false,
+          error: `Cannot decommission protected agent: ${agentId}`,
+        });
+      }
+
+      // Send shutdown message to the agent via message store
+      messageStore.insertMessage({
+        agentId: callerAgentId,
+        recipient: agentId,
+        role: "agent",
+        body: `Shutdown requested: ${reason}. Please bd sync and shut down gracefully.`,
+      });
+
+      // Mark spawn as decommissioned if applicable
+      const lastSpawn = state.getLastSpawn(agentId);
+      if (lastSpawn && !lastSpawn.decommissionedAt) {
+        state.markDecommissioned(lastSpawn.id);
+      }
+
+      state.logDecision({
+        behavior: "adjutant",
+        action: "decommission_agent",
+        target: agentId,
+        reason,
+      });
+
+      logInfo("decommission_agent: shutdown requested", { agentId, reason });
+
+      return jsonResult({ success: true, agentId });
+    },
+  );
+
+  // --------------------------------------------------------------------------
+  // rebalance_work
+  // --------------------------------------------------------------------------
+  server.tool(
+    "rebalance_work",
+    "Return an agent's in-progress beads to the open pool",
+    {
+      agentId: z.string().describe("The agent whose work to rebalance"),
+      reason: z.string().optional().describe("Why rebalancing"),
+    },
+    async ({ agentId, reason }, extra) => {
+      const callerAgentId = checkAccess(extra.sessionId);
+      if (!callerAgentId) {
+        const resolved = resolveCallerOrError(extra.sessionId);
+        return resolved.error!;
+      }
+
+      // Find all in-progress beads assigned to the agent
+      const listResult = await execBd(
+        ["list", "--status", "in_progress", "--assignee", agentId, "--json"],
+      );
+
+      if (!listResult.success || !listResult.data) {
+        logWarn("rebalance_work: failed to list beads", { agentId, error: listResult.error });
+        return jsonResult({
+          success: true,
+          rebalancedBeads: [],
+          error: "Failed to list beads",
+        });
+      }
+
+      const beads = listResult.data as Array<{ id: string; title?: string }>;
+      const rebalancedIds: string[] = [];
+
+      for (const bead of beads) {
+        const result = await updateBead(bead.id, {
+          status: "open",
+          assignee: "",
+        });
+
+        if (result.success) {
+          rebalancedIds.push(bead.id);
+
+          state.logDecision({
+            behavior: "adjutant",
+            action: "rebalance_work",
+            target: bead.id,
+            reason: reason ?? `Rebalanced from ${agentId}`,
+          });
+        } else {
+          logWarn("rebalance_work: failed to unassign bead", {
+            beadId: bead.id,
+            error: result.error,
+          });
+        }
+      }
+
+      logInfo("rebalance_work: beads rebalanced", { agentId, count: rebalancedIds.length });
+
+      return jsonResult({
+        success: true,
+        rebalancedBeads: rebalancedIds,
+      });
+    },
+  );
+}

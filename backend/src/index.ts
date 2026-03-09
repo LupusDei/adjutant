@@ -48,6 +48,7 @@ import { createSelfImprover } from "./services/adjutant/behaviors/self-improver.
 // import { createAgentDecommissioner } from "./services/adjutant/behaviors/agent-decommissioner.js";
 import { createMemoryStore } from "./services/adjutant/memory-store.js";
 import { registerMemoryTools } from "./services/mcp-tools/memory.js";
+import { registerCoordinationTools } from "./services/mcp-tools/coordination.js";
 import { createMemoryRouter } from "./routes/memory.js";
 
 const app = express();
@@ -171,14 +172,9 @@ const server = app.listen(PORT, () => {
   // Each Streamable HTTP session gets its own McpServer; the registrar
   // is called on each new instance to wire up tools.
   initMcpServer();
-  setToolRegistrar((server) => {
-    registerMessagingTools(server, messageStore, eventStore);
-    registerStatusTools(server, messageStore, eventStore);
-    registerBeadTools(server, eventStore);
-    registerQueryTools(server, messageStore);
-    registerProposalTools(server, proposalStore);
-    registerMemoryTools(server, memoryStore);
-  });
+  // Tool registrar is set later (after adjutantState is created)
+  // so coordination tools have access to the state store.
+  // See setToolRegistrar call below.
 
   // Initialize message delivery (flushes pending messages when agents connect)
   initMessageDelivery(messageStore);
@@ -199,6 +195,17 @@ const server = app.listen(PORT, () => {
 
   // Initialize Adjutant Core — event-driven behavior dispatch
   const adjutantState = createAdjutantState(messageDb);
+
+  // Set tool registrar now that adjutantState is available
+  setToolRegistrar((server) => {
+    registerMessagingTools(server, messageStore, eventStore);
+    registerStatusTools(server, messageStore, eventStore);
+    registerBeadTools(server, eventStore);
+    registerQueryTools(server, messageStore);
+    registerProposalTools(server, proposalStore);
+    registerMemoryTools(server, memoryStore);
+    registerCoordinationTools(server, adjutantState, messageStore);
+  });
 
   // On server restart, no agents are connected — mark all as disconnected
   // so work-assigner doesn't assign beads to dead agents.
