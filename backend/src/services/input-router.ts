@@ -19,6 +19,24 @@ export interface QueuedInput {
 }
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/**
+ * Delay (ms) between sending literal text and Enter via tmux send-keys.
+ * Without this, the Enter key can arrive before tmux finishes processing the
+ * text paste, causing the submission to be lost and prompts to stack up.
+ */
+const SEND_ENTER_DELAY_MS = 50;
+
+/**
+ * Window (ms) within which duplicate text sent to the same pane is suppressed.
+ * Prevents the same prompt from being injected multiple times when multiple
+ * systems (stimulus engine, message delivery, etc.) fire in quick succession.
+ */
+const DEDUP_WINDOW_MS = 5_000;
+
+// ============================================================================
 // Helpers
 // ============================================================================
 
@@ -41,6 +59,8 @@ function execTmuxCommand(args: string[]): Promise<string> {
 export class InputRouter {
   private registry: SessionRegistry;
   private queues = new Map<string, QueuedInput[]>();
+  /** Track recent inputs per pane for deduplication: pane → { text, timestamp } */
+  private recentInputs = new Map<string, { text: string; sentAt: number }>();
 
   constructor(registry: SessionRegistry) {
     this.registry = registry;
@@ -161,9 +181,28 @@ export class InputRouter {
     try {
       // Strip trailing newlines — we send Enter separately
       const clean = text.replace(/\n+$/, "");
+
+      // Deduplication: skip if the same text was sent to this pane recently
+      const now = Date.now();
+      const recent = this.recentInputs.get(tmuxPane);
+      if (recent && recent.text === clean && now - recent.sentAt < DEDUP_WINDOW_MS) {
+        logInfo("Skipping duplicate input", { tmuxPane, textLength: clean.length });
+        return true; // Report success — the message was already delivered
+      }
+
       // Use -l for literal text (prevents interpreting spaces/special chars as key names)
       await execTmuxCommand(["send-keys", "-t", tmuxPane, "-l", clean]);
+
+      // Brief delay to let tmux finish processing the literal text before sending Enter.
+      // Without this, Enter can arrive before the paste is complete, causing it to be
+      // lost and prompts to stack in the input buffer (adj-53kf).
+      await new Promise((r) => setTimeout(r, SEND_ENTER_DELAY_MS));
+
       await execTmuxCommand(["send-keys", "-t", tmuxPane, "Enter"]);
+
+      // Track for deduplication
+      this.recentInputs.set(tmuxPane, { text: clean, sentAt: Date.now() });
+
       return true;
     } catch (err) {
       logWarn("Failed to deliver input", {

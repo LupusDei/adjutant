@@ -207,6 +207,10 @@ export class LifecycleManager {
           "-l",
           req.initialPrompt,
         ]);
+        // Brief delay to let tmux finish processing the literal text before
+        // sending Enter. Without this, Enter can arrive before the paste is
+        // complete, causing the submission to be lost (adj-53kf).
+        await new Promise((resolve) => setTimeout(resolve, 50));
         await execTmuxCommand([
           "send-keys",
           "-t",

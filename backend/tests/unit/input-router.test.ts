@@ -275,4 +275,115 @@ describe("InputRouter", () => {
       expect(router.getQueueLength("unknown")).toBe(0);
     });
   });
+
+  // ==========================================================================
+  // Delay between text and Enter (adj-53kf)
+  // ==========================================================================
+
+  describe("send-keys delay", () => {
+    it("should send Enter after the literal text, not simultaneously", async () => {
+      const session = registry.create({
+        name: "test",
+        tmuxSession: "adj-test",
+        projectPath: "/tmp",
+      });
+      registry.updateStatus(session.id, "idle");
+
+      const callOrder: string[] = [];
+      mockExecFile.mockImplementation(
+        (
+          _cmd: string,
+          args: string[],
+          _opts: unknown,
+          cb: (err: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          if (args[0] === "send-keys") {
+            // Track whether this is the literal text or Enter call
+            if (args.includes("-l")) {
+              callOrder.push("literal");
+            } else if (args.includes("Enter")) {
+              callOrder.push("enter");
+            }
+          }
+          cb(null, "", "");
+        }
+      );
+
+      await router.sendInput(session.id, "test message");
+
+      // Literal text must come before Enter
+      expect(callOrder).toEqual(["literal", "enter"]);
+    });
+  });
+
+  // ==========================================================================
+  // Deduplication (adj-53kf)
+  // ==========================================================================
+
+  describe("deduplication", () => {
+    it("should suppress duplicate text sent to the same pane within 5 seconds", async () => {
+      const session = registry.create({
+        name: "test",
+        tmuxSession: "adj-test",
+        projectPath: "/tmp",
+      });
+      registry.updateStatus(session.id, "idle");
+
+      // First send should succeed
+      const first = await router.sendInput(session.id, "SITUATION -- wake up");
+      expect(first).toBe(true);
+
+      // Count tmux calls after first send
+      const callsAfterFirst = mockExecFile.mock.calls.length;
+
+      // Second identical send should be suppressed (no new tmux calls)
+      const second = await router.sendInput(session.id, "SITUATION -- wake up");
+      expect(second).toBe(true); // Returns true (already delivered)
+      expect(mockExecFile.mock.calls.length).toBe(callsAfterFirst);
+    });
+
+    it("should allow different text to the same pane", async () => {
+      const session = registry.create({
+        name: "test",
+        tmuxSession: "adj-test",
+        projectPath: "/tmp",
+      });
+      registry.updateStatus(session.id, "idle");
+
+      await router.sendInput(session.id, "first message");
+      const callsAfterFirst = mockExecFile.mock.calls.length;
+
+      const result = await router.sendInput(session.id, "different message");
+      expect(result).toBe(true);
+      // Should have made new tmux calls
+      expect(mockExecFile.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+    });
+
+    it("should allow same text after the dedup window expires", async () => {
+      const session = registry.create({
+        name: "test",
+        tmuxSession: "adj-test",
+        projectPath: "/tmp",
+      });
+      registry.updateStatus(session.id, "idle");
+
+      // Mock Date.now to control time without affecting setTimeout
+      const realDateNow = Date.now;
+      let fakeNow = realDateNow.call(Date);
+      vi.spyOn(Date, "now").mockImplementation(() => fakeNow);
+
+      await router.sendInput(session.id, "repeated prompt");
+      const callsAfterFirst = mockExecFile.mock.calls.length;
+
+      // Advance past the dedup window (5 seconds)
+      fakeNow += 6_000;
+
+      const result = await router.sendInput(session.id, "repeated prompt");
+      expect(result).toBe(true);
+      // Should have made new tmux calls (not suppressed)
+      expect(mockExecFile.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+
+      vi.spyOn(Date, "now").mockRestore();
+    });
+  });
 });
