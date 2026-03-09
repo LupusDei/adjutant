@@ -1,7 +1,7 @@
 /**
- * Tests for MCP memory tools (query_memories, get_session_retros).
+ * Tests for MCP memory tools.
  *
- * Bead: adj-053.4.2
+ * Beads: adj-053.4.2, adj-053.6.1, adj-053.6.2, adj-053.6.3
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -9,6 +9,7 @@ import type {
   MemoryStore,
   Learning,
   Retrospective,
+  Correction,
 } from "../../src/services/adjutant/memory-store.js";
 
 // ============================================================================
@@ -47,6 +48,21 @@ function makeRetrospective(overrides: Partial<Retrospective> & { id: number }): 
     actionItems: overrides.actionItems ?? '["Add more tests"]',
     metrics: overrides.metrics ?? null,
     createdAt: overrides.createdAt ?? "2026-03-08T23:00:00Z",
+  };
+}
+
+function makeCorrection(overrides: Partial<Correction> & { id: number }): Correction {
+  return {
+    id: overrides.id,
+    messageId: overrides.messageId ?? null,
+    correctionType: overrides.correctionType ?? "wrong_pattern",
+    pattern: overrides.pattern ?? "test pattern",
+    description: overrides.description ?? "Test correction description",
+    learningId: overrides.learningId ?? null,
+    recurrenceCount: overrides.recurrenceCount ?? 0,
+    lastRecurrenceAt: overrides.lastRecurrenceAt ?? null,
+    resolved: overrides.resolved ?? false,
+    createdAt: overrides.createdAt ?? "2026-03-08T12:00:00Z",
   };
 }
 
@@ -110,17 +126,21 @@ describe("MCP Memory Tools", () => {
   });
 
   describe("registerMemoryTools", () => {
-    it("should register both memory tools on the MCP server", async () => {
+    it("should register all memory tools on the MCP server", async () => {
       const { registerMemoryTools } = await import("../../src/services/mcp-tools/memory.js");
       const { mockServer } = createMockServer();
 
       // Safe cast: mockServer has the tool() method which is all registerMemoryTools uses
       registerMemoryTools(mockServer as never, mockStore);
 
-      expect(mockServer.tool).toHaveBeenCalledTimes(2);
+      expect(mockServer.tool).toHaveBeenCalledTimes(6);
       const toolNames = mockServer.tool.mock.calls.map((call: unknown[]) => call[0]);
       expect(toolNames).toContain("query_memories");
       expect(toolNames).toContain("get_session_retros");
+      expect(toolNames).toContain("store_memory");
+      expect(toolNames).toContain("update_memory");
+      expect(toolNames).toContain("reinforce_memory");
+      expect(toolNames).toContain("record_correction");
     });
   });
 
@@ -336,6 +356,264 @@ describe("MCP Memory Tools", () => {
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.retrospectives).toEqual([]);
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // store_memory (adj-053.6.1)
+  // --------------------------------------------------------------------------
+
+  describe("store_memory", () => {
+    it("should create a learning with required params and return it", async () => {
+      const { registerMemoryTools } = await import("../../src/services/mcp-tools/memory.js");
+      const { mockServer, handlers } = createMockServer();
+      registerMemoryTools(mockServer as never, mockStore);
+
+      const created = makeLearning({ id: 1, category: "technical", topic: "testing", content: "Always write tests first" });
+      vi.mocked(mockStore.insertLearning).mockReturnValue(created);
+
+      const handler = handlers.get("store_memory")!;
+      expect(handler).toBeDefined();
+
+      const result = await handler(
+        { content: "Always write tests first", category: "technical", topic: "testing" },
+        { sessionId: "test-session" },
+      );
+
+      expect(mockStore.insertLearning).toHaveBeenCalledWith({
+        content: "Always write tests first",
+        category: "technical",
+        topic: "testing",
+        sourceType: "agent",
+        sourceRef: "unknown",
+        confidence: 0.5,
+      });
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.learning.id).toBe(1);
+      expect(parsed.learning.content).toBe("Always write tests first");
+    });
+
+    it("should use agent name from session as sourceRef when available", async () => {
+      const { registerMemoryTools } = await import("../../src/services/mcp-tools/memory.js");
+      const { mockServer, handlers } = createMockServer();
+      registerMemoryTools(mockServer as never, mockStore, {
+        getAgentBySession: (sid: string) => sid === "known-session" ? "adjutant" : undefined,
+      });
+
+      const created = makeLearning({ id: 2, sourceRef: "adjutant" });
+      vi.mocked(mockStore.insertLearning).mockReturnValue(created);
+
+      const handler = handlers.get("store_memory")!;
+      await handler(
+        { content: "Test", category: "operational", topic: "test" },
+        { sessionId: "known-session" },
+      );
+
+      expect(mockStore.insertLearning).toHaveBeenCalledWith(
+        expect.objectContaining({ sourceRef: "adjutant" }),
+      );
+    });
+
+    it("should respect optional source and confidence params", async () => {
+      const { registerMemoryTools } = await import("../../src/services/mcp-tools/memory.js");
+      const { mockServer, handlers } = createMockServer();
+      registerMemoryTools(mockServer as never, mockStore);
+
+      const created = makeLearning({ id: 3, confidence: 0.9, sourceRef: "custom-source" });
+      vi.mocked(mockStore.insertLearning).mockReturnValue(created);
+
+      const handler = handlers.get("store_memory")!;
+      await handler(
+        { content: "High confidence", category: "project", topic: "arch", source: "custom-source", confidence: 0.9 },
+        { sessionId: "test-session" },
+      );
+
+      expect(mockStore.insertLearning).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceRef: "custom-source",
+          confidence: 0.9,
+        }),
+      );
+    });
+
+    it("should default confidence to 0.5 when not provided", async () => {
+      const { registerMemoryTools } = await import("../../src/services/mcp-tools/memory.js");
+      const { mockServer, handlers } = createMockServer();
+      registerMemoryTools(mockServer as never, mockStore);
+
+      const created = makeLearning({ id: 4, confidence: 0.5 });
+      vi.mocked(mockStore.insertLearning).mockReturnValue(created);
+
+      const handler = handlers.get("store_memory")!;
+      await handler(
+        { content: "Default confidence", category: "operational", topic: "test" },
+        {},
+      );
+
+      expect(mockStore.insertLearning).toHaveBeenCalledWith(
+        expect.objectContaining({ confidence: 0.5 }),
+      );
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // update_memory (adj-053.6.2)
+  // --------------------------------------------------------------------------
+
+  describe("update_memory", () => {
+    it("should update a learning and return success", async () => {
+      const { registerMemoryTools } = await import("../../src/services/mcp-tools/memory.js");
+      const { mockServer, handlers } = createMockServer();
+      registerMemoryTools(mockServer as never, mockStore);
+
+      const handler = handlers.get("update_memory")!;
+      expect(handler).toBeDefined();
+
+      const result = await handler(
+        { id: 1, content: "Updated content", confidence: 0.8 },
+        {},
+      );
+
+      expect(mockStore.updateLearning).toHaveBeenCalledWith(1, {
+        content: "Updated content",
+        confidence: 0.8,
+      });
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.success).toBe(true);
+    });
+
+    it("should only pass provided update fields", async () => {
+      const { registerMemoryTools } = await import("../../src/services/mcp-tools/memory.js");
+      const { mockServer, handlers } = createMockServer();
+      registerMemoryTools(mockServer as never, mockStore);
+
+      const handler = handlers.get("update_memory")!;
+      await handler({ id: 5, topic: "new-topic" }, {});
+
+      expect(mockStore.updateLearning).toHaveBeenCalledWith(5, { topic: "new-topic" });
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // reinforce_memory (adj-053.6.2)
+  // --------------------------------------------------------------------------
+
+  describe("reinforce_memory", () => {
+    it("should reinforce a learning and return the updated learning", async () => {
+      const { registerMemoryTools } = await import("../../src/services/mcp-tools/memory.js");
+      const { mockServer, handlers } = createMockServer();
+      registerMemoryTools(mockServer as never, mockStore);
+
+      const reinforced = makeLearning({ id: 1, reinforcementCount: 3, confidence: 0.7 });
+      vi.mocked(mockStore.getLearning).mockReturnValue(reinforced);
+
+      const handler = handlers.get("reinforce_memory")!;
+      expect(handler).toBeDefined();
+
+      const result = await handler({ id: 1 }, {});
+
+      expect(mockStore.reinforceLearning).toHaveBeenCalledWith(1);
+      expect(mockStore.getLearning).toHaveBeenCalledWith(1);
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.success).toBe(true);
+      expect(parsed.learning.reinforcementCount).toBe(3);
+    });
+
+    it("should return error when learning not found after reinforcement", async () => {
+      const { registerMemoryTools } = await import("../../src/services/mcp-tools/memory.js");
+      const { mockServer, handlers } = createMockServer();
+      registerMemoryTools(mockServer as never, mockStore);
+
+      vi.mocked(mockStore.getLearning).mockReturnValue(null);
+
+      const handler = handlers.get("reinforce_memory")!;
+      const result = await handler({ id: 999 }, {});
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.error).toBeDefined();
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // record_correction (adj-053.6.3)
+  // --------------------------------------------------------------------------
+
+  describe("record_correction", () => {
+    it("should create a new correction when no similar one exists", async () => {
+      const { registerMemoryTools } = await import("../../src/services/mcp-tools/memory.js");
+      const { mockServer, handlers } = createMockServer();
+      registerMemoryTools(mockServer as never, mockStore);
+
+      vi.mocked(mockStore.findSimilarCorrection).mockReturnValue(null);
+      const created = makeCorrection({ id: 1, correctionType: "wrong_assumption", pattern: "SQLite locks", description: "SQLite uses WAL mode" });
+      vi.mocked(mockStore.insertCorrection).mockReturnValue(created);
+
+      const handler = handlers.get("record_correction")!;
+      expect(handler).toBeDefined();
+
+      const result = await handler(
+        { correctionType: "wrong_assumption", wrongPattern: "SQLite locks", rightPattern: "SQLite uses WAL mode" },
+        {},
+      );
+
+      expect(mockStore.findSimilarCorrection).toHaveBeenCalledWith("wrong_assumption", "SQLite locks");
+      expect(mockStore.insertCorrection).toHaveBeenCalledWith({
+        correctionType: "wrong_assumption",
+        pattern: "SQLite locks",
+        description: "SQLite uses WAL mode",
+      });
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.correction.id).toBe(1);
+      expect(parsed.isNew).toBe(true);
+    });
+
+    it("should reinforce existing correction when a similar one exists", async () => {
+      const { registerMemoryTools } = await import("../../src/services/mcp-tools/memory.js");
+      const { mockServer, handlers } = createMockServer();
+      registerMemoryTools(mockServer as never, mockStore);
+
+      const existing = makeCorrection({ id: 5, correctionType: "wrong_assumption", pattern: "SQLite locks", recurrenceCount: 2 });
+      vi.mocked(mockStore.findSimilarCorrection).mockReturnValue(existing);
+
+      const handler = handlers.get("record_correction")!;
+      const result = await handler(
+        { correctionType: "wrong_assumption", wrongPattern: "SQLite locks", rightPattern: "SQLite uses WAL mode" },
+        {},
+      );
+
+      expect(mockStore.incrementRecurrence).toHaveBeenCalledWith(5);
+      expect(mockStore.insertCorrection).not.toHaveBeenCalled();
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.correction.id).toBe(5);
+      expect(parsed.isNew).toBe(false);
+      expect(parsed.reinforced).toBe(true);
+    });
+
+    it("should include optional context in the correction description", async () => {
+      const { registerMemoryTools } = await import("../../src/services/mcp-tools/memory.js");
+      const { mockServer, handlers } = createMockServer();
+      registerMemoryTools(mockServer as never, mockStore);
+
+      vi.mocked(mockStore.findSimilarCorrection).mockReturnValue(null);
+      const created = makeCorrection({ id: 2, description: "Use WAL mode. Context: During build-monitor implementation" });
+      vi.mocked(mockStore.insertCorrection).mockReturnValue(created);
+
+      const handler = handlers.get("record_correction")!;
+      await handler(
+        { correctionType: "wrong_approach", wrongPattern: "polling", rightPattern: "Use WAL mode", context: "During build-monitor implementation" },
+        {},
+      );
+
+      expect(mockStore.insertCorrection).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description: "Use WAL mode. Context: During build-monitor implementation",
+        }),
+      );
     });
   });
 });

@@ -12,7 +12,7 @@ import { initAgentStatusStream } from "./services/agent-status-stream.js";
 import { initTerminalStream } from "./services/terminal-stream.js";
 import { initStreamingBridge } from "./services/streaming-bridge.js";
 import { getSessionBridge } from "./services/session-bridge.js";
-import { initMcpServer, setToolRegistrar } from "./services/mcp-server.js";
+import { initMcpServer, setToolRegistrar, getAgentBySession } from "./services/mcp-server.js";
 import { initDatabase } from "./services/database.js";
 import { createMessageStore } from "./services/message-store.js";
 import { registerMessagingTools } from "./services/mcp-tools/messaging.js";
@@ -225,7 +225,7 @@ const server = app.listen(PORT, () => {
     registerBeadTools(server, eventStore);
     registerQueryTools(server, messageStore);
     registerProposalTools(server, proposalStore);
-    registerMemoryTools(server, memoryStore);
+    registerMemoryTools(server, memoryStore, { getAgentBySession });
     registerCoordinationTools(server, adjutantState, messageStore, stimulusEngine);
   });
 
