@@ -19,6 +19,7 @@ import { z } from "zod";
 import type { MessageStore } from "../services/message-store.js";
 import { wsBroadcast } from "../services/ws-server.js";
 import { getSessionBridge } from "../services/session-bridge.js";
+import { getEventBus } from "../services/event-bus.js";
 
 import { getAgents } from "../services/agents-service.js";
 import {
@@ -147,6 +148,15 @@ export function createMessagesRouter(store: MessageStore): Router {
       timestamp: message.createdAt,
       threadId: message.threadId ?? undefined,
       metadata: message.metadata ?? undefined,
+    });
+
+    // Emit on EventBus so the signal aggregator can classify user→agent messages
+    getEventBus().emit("mail:received", {
+      id: message.id,
+      from: "user",
+      to,
+      subject: "",
+      preview: message.body.slice(0, 200),
     });
 
     // NOTE: No APNs push here — this is the user→agent direction.

@@ -89,6 +89,33 @@ describe("SignalAggregator", () => {
       aggregator.ingest("build:passed", { agentId: "w1", streamId: "s1" });
       expect(onCriticalSpy).not.toHaveBeenCalled();
     });
+
+    it("classifies mail:received from user to agent as context", () => {
+      aggregator.ingest("mail:received", { id: "m1", from: "user", to: "engineer-1", subject: "", preview: "do X" });
+      expect(onCriticalSpy).not.toHaveBeenCalled();
+      const snap = aggregator.snapshot();
+      expect(snap["mail:received"]).toHaveLength(1);
+      expect((snap["mail:received"]![0]!.data as Record<string, unknown>).to).toBe("engineer-1");
+    });
+
+    it("classifies mail:received from user to adjutant-coordinator as context (not filtered)", () => {
+      aggregator.ingest("mail:received", { id: "m2", from: "user", to: "adjutant-coordinator", subject: "", preview: "hey" });
+      expect(onCriticalSpy).not.toHaveBeenCalled();
+      const snap = aggregator.snapshot();
+      expect(snap["mail:received"]).toHaveLength(1);
+    });
+
+    it("classifies mail:received from user to adjutant-core as context", () => {
+      aggregator.ingest("mail:received", { id: "m3", from: "user", to: "adjutant-core", subject: "", preview: "hey" });
+      expect(onCriticalSpy).not.toHaveBeenCalled();
+    });
+
+    it("buffers multiple user→agent messages as separate signals (unique message IDs)", () => {
+      aggregator.ingest("mail:received", { id: "m1", from: "user", to: "engineer-1", subject: "", preview: "do X" });
+      aggregator.ingest("mail:received", { id: "m2", from: "user", to: "engineer-2", subject: "", preview: "do Y" });
+      const snap = aggregator.snapshot();
+      expect(snap["mail:received"]).toHaveLength(2);
+    });
   });
 
   // ======================================================================

@@ -39,6 +39,9 @@ export type SignalSnapshot = Record<string, Signal[]>;
 // Classification
 // ============================================================================
 
+/** Agent IDs that belong to the adjutant itself — messages TO these are not context signals. */
+const ADJUTANT_IDS = new Set(["adjutant-coordinator", "adjutant", "adjutant-core"]);
+
 /**
  * Classify an event into critical or context urgency.
  *
@@ -49,7 +52,12 @@ export type SignalSnapshot = Record<string, Signal[]>;
  *   - agent:status_changed with status "blocked"
  *   - bead:created with priority 0 or 1
  *
- * Everything else is context (accumulate silently).
+ * Context events (accumulate silently):
+ *   - mail:received from user to a non-adjutant agent (user→agent instructions)
+ *   - Everything else not classified as critical
+ *
+ * Ignored:
+ *   - mail:received from user to the adjutant itself (handled directly, not a context signal)
  */
 function classify(event: EventName, data: unknown): SignalUrgency {
   switch (event) {
@@ -71,6 +79,21 @@ function classify(event: EventName, data: unknown): SignalUrgency {
       const priority = payload?.["priority"];
       if (typeof priority === "number" && priority <= 1) {
         return "critical";
+      }
+      return "context";
+    }
+
+    case "mail:received": {
+      // User→agent messages are context signals so the adjutant stays aware
+      // of instructions given to other agents. Messages to the adjutant itself
+      // are handled directly and classified as "ignore" (return context but
+      // with dedup key that collapses — effectively a no-op since the adjutant
+      // already processes its own mail).
+      const payload = data as Record<string, unknown> | null | undefined;
+      const from = payload?.["from"] as string | undefined;
+      const to = payload?.["to"] as string | undefined;
+      if (from === "user" && to && !ADJUTANT_IDS.has(to)) {
+        return "context";
       }
       return "context";
     }
