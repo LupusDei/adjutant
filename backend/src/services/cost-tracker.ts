@@ -234,6 +234,18 @@ export function resetCostTracker(): void {
   alertedSessions.clear();
 }
 
+/**
+ * Estimate context window usage percentage from a CostEntry's token counts.
+ * Uses input + output + cacheRead tokens (excludes cacheWrite which doesn't
+ * consume context window space).
+ */
+const DEFAULT_CONTEXT_LIMIT = 200_000; // Claude Opus/Sonnet context window
+
+export function estimateContextPercent(entry: CostEntry, contextLimit = DEFAULT_CONTEXT_LIMIT): number {
+  const totalUsed = entry.tokens.input + entry.tokens.output + entry.tokens.cacheRead;
+  return Math.min(100, Math.round((totalUsed / contextLimit) * 100));
+}
+
 // ============================================================================
 // Private
 // ============================================================================
