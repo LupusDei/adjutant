@@ -157,6 +157,8 @@ export interface AcceptanceOptions {
   generate?: boolean;
   /** Run acceptance tests */
   run?: boolean;
+  /** Show spec coverage report */
+  report?: boolean;
   /** Overwrite existing test files during generation */
   overwrite?: boolean;
   /** Enable verbose output */
