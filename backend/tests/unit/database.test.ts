@@ -117,7 +117,7 @@ describe("database", () => {
           .prepare("SELECT * FROM migrations")
           .all() as Array<{ name: string }>;
         // Should have one entry per migration file, each applied exactly once
-        expect(migrations).toHaveLength(15);
+        expect(migrations).toHaveLength(16);
         expect(migrations[0]?.name).toBe("001-initial.sql");
         expect(migrations[1]?.name).toBe("002-device-tokens.sql");
         expect(migrations[2]?.name).toBe("003-proposals.sql");
@@ -133,6 +133,7 @@ describe("database", () => {
         expect(migrations[12]?.name).toBe("013-memory-store-constraints.sql");
         expect(migrations[13]?.name).toBe("014-decision-outcomes.sql");
         expect(migrations[14]?.name).toBe("015-agent-role.sql");
+        expect(migrations[15]?.name).toBe("016-agent-costs.sql");
       } finally {
         db.close();
       }
@@ -196,6 +197,103 @@ describe("database", () => {
         ).run();
         const row = db.prepare("SELECT delivery_status FROM messages WHERE id = 't2'").get() as { delivery_status: string };
         expect(row.delivery_status).toBe("pending");
+      } finally {
+        db.close();
+      }
+    });
+
+    it("should create agent_costs table with correct columns", async () => {
+      const { createDatabase, runMigrations } = await import("../../src/services/database.js");
+      const db = createDatabase(join(testDir, "test.db"));
+      try {
+        runMigrations(db);
+        const columns = db.prepare("PRAGMA table_info(agent_costs)").all() as Array<{ name: string }>;
+        const colNames = columns.map((c) => c.name);
+        expect(colNames).toContain("id");
+        expect(colNames).toContain("session_id");
+        expect(colNames).toContain("agent_id");
+        expect(colNames).toContain("bead_id");
+        expect(colNames).toContain("project_path");
+        expect(colNames).toContain("input_tokens");
+        expect(colNames).toContain("output_tokens");
+        expect(colNames).toContain("cache_read_tokens");
+        expect(colNames).toContain("cache_write_tokens");
+        expect(colNames).toContain("total_cost");
+        expect(colNames).toContain("recorded_at");
+      } finally {
+        db.close();
+      }
+    });
+
+    it("should create agent_costs indexes", async () => {
+      const { createDatabase, runMigrations } = await import("../../src/services/database.js");
+      const db = createDatabase(join(testDir, "test.db"));
+      try {
+        runMigrations(db);
+        const indexes = db
+          .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='agent_costs'")
+          .all() as Array<{ name: string }>;
+        const indexNames = indexes.map((i) => i.name);
+        expect(indexNames).toContain("idx_agent_costs_session");
+        expect(indexNames).toContain("idx_agent_costs_bead");
+        expect(indexNames).toContain("idx_agent_costs_recorded");
+      } finally {
+        db.close();
+      }
+    });
+
+    it("should create cost_budgets table with correct columns", async () => {
+      const { createDatabase, runMigrations } = await import("../../src/services/database.js");
+      const db = createDatabase(join(testDir, "test.db"));
+      try {
+        runMigrations(db);
+        const columns = db.prepare("PRAGMA table_info(cost_budgets)").all() as Array<{ name: string }>;
+        const colNames = columns.map((c) => c.name);
+        expect(colNames).toContain("id");
+        expect(colNames).toContain("scope");
+        expect(colNames).toContain("scope_id");
+        expect(colNames).toContain("budget_amount");
+        expect(colNames).toContain("warning_percent");
+        expect(colNames).toContain("critical_percent");
+        expect(colNames).toContain("created_at");
+        expect(colNames).toContain("updated_at");
+      } finally {
+        db.close();
+      }
+    });
+
+    it("should allow inserting into agent_costs table", async () => {
+      const { createDatabase, runMigrations } = await import("../../src/services/database.js");
+      const db = createDatabase(join(testDir, "test.db"));
+      try {
+        runMigrations(db);
+        db.prepare(
+          `INSERT INTO agent_costs (session_id, agent_id, bead_id, project_path, input_tokens, output_tokens, total_cost)
+           VALUES ('sess-1', 'agent-1', 'adj-001', '/project', 1000, 500, 0.05)`
+        ).run();
+        const row = db.prepare("SELECT * FROM agent_costs WHERE session_id = 'sess-1'").get() as Record<string, unknown>;
+        expect(row.session_id).toBe("sess-1");
+        expect(row.agent_id).toBe("agent-1");
+        expect(row.total_cost).toBe(0.05);
+        expect(row.recorded_at).toBeDefined();
+      } finally {
+        db.close();
+      }
+    });
+
+    it("should allow inserting into cost_budgets table", async () => {
+      const { createDatabase, runMigrations } = await import("../../src/services/database.js");
+      const db = createDatabase(join(testDir, "test.db"));
+      try {
+        runMigrations(db);
+        db.prepare(
+          `INSERT INTO cost_budgets (scope, scope_id, budget_amount, warning_percent, critical_percent)
+           VALUES ('session', 'sess-1', 10.0, 80, 100)`
+        ).run();
+        const row = db.prepare("SELECT * FROM cost_budgets WHERE scope_id = 'sess-1'").get() as Record<string, unknown>;
+        expect(row.scope).toBe("session");
+        expect(row.budget_amount).toBe(10.0);
+        expect(row.warning_percent).toBe(80);
       } finally {
         db.close();
       }
