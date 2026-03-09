@@ -238,14 +238,15 @@ export class TestHarness {
    * registration marker. This makes the agent visible in the
    * message store's agent-related queries.
    */
-  async seedAgent(opts: { agentId: string; name?: string }): Promise<void> {
+  async seedAgent(opts: { agentId: string; name?: string; status?: string }): Promise<void> {
     if (!this._messageStore) {
       throw new Error("TestHarness.seedAgent() called before setup()");
     }
+    const statusSuffix = opts.status ? ` [status: ${opts.status}]` : "";
     this._messageStore.insertMessage({
       agentId: opts.agentId,
       role: "system",
-      body: `Agent registered: ${opts.name ?? opts.agentId}`,
+      body: `Agent registered: ${opts.name ?? opts.agentId}${statusSuffix}`,
     });
   }
 
