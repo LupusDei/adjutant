@@ -16,21 +16,6 @@ enum SendToAgentMode {
     func trigger(proposalId: String) -> String {
         "Use /\(skillName) \(proposalId)"
     }
-
-    /// Build the message body for discuss mode (includes proposal content for agent context).
-    func discussMessage(proposal: Proposal) -> String {
-        """
-        Please review this proposal and prepare to discuss it with me. \
-        Do NOT execute or implement it — just read it, think about it critically, \
-        and be ready to discuss pros, cons, feasibility, and alternatives.
-
-        **Proposal: \(proposal.title)**
-        Type: \(proposal.type.rawValue)
-        Author: \(proposal.author)
-
-        \(proposal.description)
-        """
-    }
 }
 
 /// Sheet for choosing how to send an accepted proposal to an agent.
@@ -485,13 +470,10 @@ struct SendToAgentSheet: View {
         isSending = true
         errorMessage = nil
 
-        let messageBody: String
-        switch mode {
-        case .discuss:
-            messageBody = mode.discussMessage(proposal: proposal)
-        case .execute:
-            messageBody = mode.trigger(proposalId: proposal.id)
-        }
+        // Always use the skill trigger format — the skill fetches the full
+        // proposal from the backend.  Sending raw text caused agents to
+        // interpret proposal descriptions as work instructions (adj-ckku).
+        let messageBody = mode.trigger(proposalId: proposal.id)
 
         do {
             switch selectedTab {

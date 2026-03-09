@@ -209,7 +209,9 @@ export function SendToAgentModal({ proposal, mode = 'execute', onClose, onSent }
                 autoFocus
               />
               <div style={styles.spawnHint}>
-                A new agent will be spawned and given this proposal as its initial task.
+                {mode === 'discuss'
+                  ? 'A new agent will be spawned and asked to review this proposal for discussion.'
+                  : 'A new agent will be spawned and given this proposal as its initial task.'}
               </div>
             </div>
           )}
