@@ -16,6 +16,7 @@ import { captureTmuxPane, listTmuxSessions } from "../services/tmux.js";
 import { getProject } from "../services/projects-service.js";
 import { getPersonaService } from "../services/persona-service.js";
 import { generatePersonaPrompt } from "../services/prompt-generator.js";
+import { writeAgentFile } from "../services/agent-file-writer.js";
 import { success, internalError, badRequest, notFound, conflict } from "../utils/responses.js";
 
 export const agentsRouter = Router();
@@ -52,7 +53,7 @@ const spawnAgentSchema = z.object({
  * POST /api/agents/spawn
  * Creates a new agent session for the given project.
  * Accepts either projectPath or projectId (resolved via project registry).
- * Optional personaId injects persona prompt via --prompt and sets ADJUTANT_PERSONA_ID.
+ * Optional personaId writes .claude/agents/<name>.md and passes --agent flag, sets ADJUTANT_PERSONA_ID.
  */
 agentsRouter.post("/spawn", async (req, res) => {
   const parsed = spawnAgentSchema.safeParse(req.body);
@@ -140,16 +141,21 @@ agentsRouter.post("/spawn", async (req, res) => {
     envVars["ADJUTANT_PERSONA_ID"] = personaId;
   }
 
-  // Persona prompt is injected via initialPrompt (atomic paste-buffer) instead of
-  // --prompt CLI arg. The multi-line prompt text contains newlines and # characters
-  // that break when passed through tmux send-keys as a shell command string.
+  // Write persona prompt as .claude/agents/<name>.md and pass --agent flag
+  // instead of injecting via paste-buffer (FR-001, FR-002, FR-005).
+  let claudeArgs: string[] | undefined;
+  if (personaPrompt && persona) {
+    const agentName = await writeAgentFile(projectPath, persona.name, personaPrompt);
+    claudeArgs = ["--agent", agentName];
+  }
+
   const result = await bridge.createSession({
     name,
     projectPath,
     mode: "swarm",
     workspaceType: "primary",
+    claudeArgs,
     envVars: Object.keys(envVars).length > 0 ? envVars : undefined,
-    initialPrompt: personaPrompt,
   });
 
   if (!result.success) {
