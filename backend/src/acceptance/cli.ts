@@ -23,6 +23,7 @@ import { resolve, join, basename } from "path";
 
 import { parseSpec, parseSpecContent } from "./spec-parser.js";
 import { generateTestFiles, generateFileName } from "./test-generator.js";
+import { scanSpecCoverage, formatCoverageReport } from "./reporter.js";
 import type { AcceptanceOptions, DiscoveredSpec } from "./types.js";
 
 // ============================================================================
@@ -42,6 +43,7 @@ Options:
   --generate    Generate test files from spec.md
   --all         Process all specs in the specs/ directory
   --run         Run acceptance tests (default)
+  --report      Show spec coverage report (which specs have tests)
   --overwrite   Overwrite existing test files during --generate
   --verbose     Show detailed output
   --help        Show this help message
@@ -50,6 +52,7 @@ Examples:
   npx tsx src/acceptance/cli.ts specs/017-agent-proposals --generate
   npx tsx src/acceptance/cli.ts specs/017-agent-proposals --run
   npx tsx src/acceptance/cli.ts --all --generate   (generate for all specs)
+  npx tsx src/acceptance/cli.ts --report
   npx tsx src/acceptance/cli.ts   (runs all acceptance tests)
 `.trim();
 
@@ -126,6 +129,7 @@ export function parseArgs(argv: string[]): AcceptanceOptions {
   let specDir = "";
   let generate = false;
   let run = false;
+  let report = false;
   let verbose = false;
   let overwrite = false;
   let all = false;
@@ -135,6 +139,8 @@ export function parseArgs(argv: string[]): AcceptanceOptions {
       generate = true;
     } else if (arg === "--run") {
       run = true;
+    } else if (arg === "--report") {
+      report = true;
     } else if (arg === "--overwrite") {
       overwrite = true;
     } else if (arg === "--verbose") {
@@ -150,12 +156,12 @@ export function parseArgs(argv: string[]): AcceptanceOptions {
     }
   }
 
-  // Default to --run if neither flag is set
-  if (!generate && !run) {
+  // Default to --run if no action flag is set
+  if (!generate && !run && !report) {
     run = true;
   }
 
-  return { specDir, generate, run, verbose, overwrite, all };
+  return { specDir, generate, run, report, verbose, overwrite, all };
 }
 
 // ============================================================================
@@ -337,6 +343,27 @@ function handleRun(options: AcceptanceOptions): void {
 }
 
 // ============================================================================
+// Report Mode
+// ============================================================================
+
+/**
+ * Show a spec coverage report: which specs have tests and their status.
+ */
+function handleReport(): void {
+  const specsDir = resolve(import.meta.dirname ?? ".", "../../specs");
+  const testsDir = resolve(
+    import.meta.dirname ?? ".",
+    "../../tests/acceptance"
+  );
+
+  const entries = scanSpecCoverage(specsDir, testsDir);
+  const output = formatCoverageReport(entries);
+
+  // eslint-disable-next-line no-console
+  console.log(output);
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -349,6 +376,10 @@ async function main(): Promise<void> {
     } else {
       await handleGenerate(options);
     }
+  }
+
+  if (options.report) {
+    handleReport();
   }
 
   if (options.run) {
