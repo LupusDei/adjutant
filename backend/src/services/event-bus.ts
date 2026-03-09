@@ -117,6 +117,13 @@ export interface MergeConflictEvent {
   conflictFiles: string[];
 }
 
+export interface CoordinatorActionEvent {
+  behavior: string;
+  action: string;
+  target: string | null;
+  reason: string | null;
+}
+
 /**
  * Map of event names to their payload types.
  */
@@ -141,6 +148,7 @@ export interface EventMap {
   "build:passed": BuildPassedEvent;
   "merge:completed": MergeCompletedEvent;
   "merge:conflict": MergeConflictEvent;
+  "coordinator:action": CoordinatorActionEvent;
 }
 
 export type EventName = keyof EventMap;
@@ -215,7 +223,7 @@ class EventBus {
       "bead:created", "bead:updated", "bead:closed", "bead:assigned",
       "agent:status_changed", "stream:status",
       "correction:detected", "learning:created",
-      "build:failed", "build:passed", "merge:completed", "merge:conflict",
+      "build:failed", "build:passed", "merge:completed", "merge:conflict", "coordinator:action",
     ];
     for (const e of events) {
       const count = this.emitter.listenerCount(e);

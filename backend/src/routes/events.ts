@@ -45,6 +45,7 @@ const EVENT_TYPE_MAP: Record<EventName, string> = {
   "build:passed": "build_passed",
   "merge:completed": "merge_completed",
   "merge:conflict": "merge_conflict",
+  "coordinator:action": "coordinator_action",
 };
 
 /** Heartbeat interval (15 seconds) */

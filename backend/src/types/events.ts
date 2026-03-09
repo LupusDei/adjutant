@@ -7,6 +7,7 @@ export const EventType = z.enum([
   "message_sent",
   "bead_updated",
   "bead_closed",
+  "coordinator_action",
 ]);
 export type EventType = z.infer<typeof EventType>;
 
