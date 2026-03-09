@@ -313,6 +313,32 @@ export function registerCoordinationTools(
         });
       }
 
+      // Guard: refuse to decommission agents that are actively working or recently active
+      const profile = state.getAgentProfile(agentId);
+      if (profile) {
+        // Never decommission a working agent
+        if (profile.lastStatus === "working") {
+          return jsonResult({
+            success: false,
+            error: `Cannot decommission agent "${agentId}" — currently working on: ${profile.currentTask ?? "unknown task"}. Wait until the agent is idle or done.`,
+          });
+        }
+
+        // Grace period: don't decommission agents active in the last 10 minutes
+        // (unless they explicitly reported "done")
+        if (profile.lastStatus !== "done" && profile.lastStatusAt) {
+          const lastActiveMs = Date.now() - new Date(profile.lastStatusAt).getTime();
+          const GRACE_PERIOD_MS = 10 * 60 * 1000; // 10 minutes
+          if (lastActiveMs < GRACE_PERIOD_MS) {
+            const minutesAgo = Math.round(lastActiveMs / 60_000);
+            return jsonResult({
+              success: false,
+              error: `Cannot decommission agent "${agentId}" — recently active (${minutesAgo}m ago, status: ${profile.lastStatus}). Wait at least 10 minutes after last activity.`,
+            });
+          }
+        }
+      }
+
       // Send shutdown message to the agent via message store
       messageStore.insertMessage({
         agentId: callerAgentId,

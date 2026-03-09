@@ -1137,6 +1137,122 @@ describe("MCP Coordination Tools", () => {
       expect(state.markDecommissioned).not.toHaveBeenCalled();
     });
 
+    it("should refuse to decommission an agent with status 'working'", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const state = createMockState();
+      (state.getAgentProfile as ReturnType<typeof vi.fn>).mockReturnValue({
+        agentId: "worker-1",
+        lastStatus: "working",
+        lastStatusAt: new Date().toISOString(),
+        currentTask: "Implementing feature X",
+        disconnectedAt: null,
+      });
+
+      const handler = getToolHandler("decommission_agent", state);
+      const result = await handler(
+        { agentId: "worker-1", reason: "Idle cleanup" },
+        { sessionId: "adj-session" },
+      );
+
+      const data = parseResult(result);
+      expect(data.success).toBe(false);
+      expect(data.error).toContain("working");
+      expect(mockInsertMessage).not.toHaveBeenCalled();
+    });
+
+    it("should refuse to decommission an agent active within last 10 minutes", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const state = createMockState();
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      (state.getAgentProfile as ReturnType<typeof vi.fn>).mockReturnValue({
+        agentId: "worker-1",
+        lastStatus: "idle",
+        lastStatusAt: fiveMinutesAgo,
+        currentTask: null,
+        disconnectedAt: null,
+      });
+
+      const handler = getToolHandler("decommission_agent", state);
+      const result = await handler(
+        { agentId: "worker-1", reason: "Idle cleanup" },
+        { sessionId: "adj-session" },
+      );
+
+      const data = parseResult(result);
+      expect(data.success).toBe(false);
+      expect(data.error).toContain("recently active");
+      expect(mockInsertMessage).not.toHaveBeenCalled();
+    });
+
+    it("should allow decommission of agent idle for over 10 minutes", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const state = createMockState();
+      const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+      (state.getAgentProfile as ReturnType<typeof vi.fn>).mockReturnValue({
+        agentId: "worker-1",
+        lastStatus: "idle",
+        lastStatusAt: twentyMinutesAgo,
+        currentTask: null,
+        disconnectedAt: null,
+      });
+
+      const messageStore = createMockMessageStore();
+      const handler = getToolHandler("decommission_agent", state, messageStore);
+      const result = await handler(
+        { agentId: "worker-1", reason: "Idle cleanup" },
+        { sessionId: "adj-session" },
+      );
+
+      const data = parseResult(result);
+      expect(data.success).toBe(true);
+      expect(mockInsertMessage).toHaveBeenCalled();
+    });
+
+    it("should allow decommission when agent has status 'done'", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const state = createMockState();
+      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+      (state.getAgentProfile as ReturnType<typeof vi.fn>).mockReturnValue({
+        agentId: "worker-1",
+        lastStatus: "done",
+        lastStatusAt: twoMinutesAgo,
+        currentTask: "Completed feature X",
+        disconnectedAt: null,
+      });
+
+      const messageStore = createMockMessageStore();
+      const handler = getToolHandler("decommission_agent", state, messageStore);
+      const result = await handler(
+        { agentId: "worker-1", reason: "Work complete" },
+        { sessionId: "adj-session" },
+      );
+
+      const data = parseResult(result);
+      expect(data.success).toBe(true);
+      expect(mockInsertMessage).toHaveBeenCalled();
+    });
+
+    it("should allow decommission when no agent profile exists", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const state = createMockState();
+      (state.getAgentProfile as ReturnType<typeof vi.fn>).mockReturnValue(null);
+
+      const messageStore = createMockMessageStore();
+      const handler = getToolHandler("decommission_agent", state, messageStore);
+      const result = await handler(
+        { agentId: "unknown-agent", reason: "Cleanup" },
+        { sessionId: "adj-session" },
+      );
+
+      const data = parseResult(result);
+      expect(data.success).toBe(true);
+    });
+
     it("should skip markDecommissioned when spawn is already decommissioned", async () => {
       mockGetAgentBySession.mockReturnValue("adjutant");
 
