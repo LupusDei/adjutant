@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, writeFileSync, existsSync, readFileSync, rmSync } from "fs";
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
-import { parseArgs } from "../../src/acceptance/cli.js";
+import { parseArgs, discoverSpecs } from "../../src/acceptance/cli.js";
 import { generateTestContent, generateTestFiles } from "../../src/acceptance/test-generator.js";
 import { formatReport, countResults } from "../../src/acceptance/reporter.js";
 import type { ParseResult } from "../../src/acceptance/types.js";
@@ -143,6 +143,97 @@ describe("AcceptanceCLI", () => {
       ]);
       expect(opts.specDir).toBe("specs/017");
       expect(opts.generate).toBe(true);
+    });
+
+    it("should parse --all flag", () => {
+      const opts = parseArgs(["node", "cli.ts", "--all", "--generate"]);
+      expect(opts.all).toBe(true);
+      expect(opts.generate).toBe(true);
+    });
+
+    it("should default all to false when not specified", () => {
+      const opts = parseArgs(["node", "cli.ts", "--generate"]);
+      expect(opts.all).toBe(false);
+    });
+
+    it("should combine --all with --verbose", () => {
+      const opts = parseArgs(["node", "cli.ts", "--all", "--generate", "--verbose"]);
+      expect(opts.all).toBe(true);
+      expect(opts.generate).toBe(true);
+      expect(opts.verbose).toBe(true);
+    });
+  });
+
+  // ============================================================================
+  // Tests — Spec Discovery (--all flag)
+  // ============================================================================
+
+  describe("discoverSpecs", () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = mkdtempSync(join(tmpdir(), "acceptance-discover-"));
+    });
+
+    afterEach(() => {
+      rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it("should find spec directories containing spec.md", () => {
+      // Create two spec dirs with spec.md
+      const specA = join(tmpDir, "001-feature-a");
+      const specB = join(tmpDir, "002-feature-b");
+      mkdirSync(specA);
+      mkdirSync(specB);
+      writeFileSync(join(specA, "spec.md"), SAMPLE_SPEC);
+      writeFileSync(join(specB, "spec.md"), SAMPLE_SPEC);
+
+      const result = discoverSpecs(tmpDir);
+      expect(result).toHaveLength(2);
+      expect(result.map(r => r.dirName).sort()).toEqual(["001-feature-a", "002-feature-b"]);
+    });
+
+    it("should skip directories without spec.md", () => {
+      const specA = join(tmpDir, "001-feature-a");
+      const noSpec = join(tmpDir, "002-no-spec");
+      mkdirSync(specA);
+      mkdirSync(noSpec);
+      writeFileSync(join(specA, "spec.md"), SAMPLE_SPEC);
+      // no spec.md in noSpec
+
+      const result = discoverSpecs(tmpDir);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.dirName).toBe("001-feature-a");
+    });
+
+    it("should skip specs without GWT scenarios", () => {
+      const specA = join(tmpDir, "001-with-gwt");
+      const specB = join(tmpDir, "002-no-gwt");
+      mkdirSync(specA);
+      mkdirSync(specB);
+      writeFileSync(join(specA, "spec.md"), SAMPLE_SPEC);
+      writeFileSync(join(specB, "spec.md"), "# Feature Specification: Empty\n\nNo user stories here.\n");
+
+      const result = discoverSpecs(tmpDir);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.dirName).toBe("001-with-gwt");
+      expect(result[0]!.parsed.userStories.length).toBeGreaterThan(0);
+    });
+
+    it("should skip non-directory entries (files)", () => {
+      const specA = join(tmpDir, "001-feature-a");
+      mkdirSync(specA);
+      writeFileSync(join(specA, "spec.md"), SAMPLE_SPEC);
+      // Create a plain file (not a directory) at specs root
+      writeFileSync(join(tmpDir, "some-file.md"), "not a spec dir");
+
+      const result = discoverSpecs(tmpDir);
+      expect(result).toHaveLength(1);
+    });
+
+    it("should return empty array when specs directory is empty", () => {
+      const result = discoverSpecs(tmpDir);
+      expect(result).toEqual([]);
     });
   });
 

@@ -161,4 +161,18 @@ export interface AcceptanceOptions {
   overwrite?: boolean;
   /** Enable verbose output */
   verbose?: boolean;
+  /** Process all specs in the specs/ directory */
+  all?: boolean;
+}
+
+/**
+ * Result of discovering a spec directory with parseable GWT scenarios.
+ */
+export interface DiscoveredSpec {
+  /** Directory name (e.g. "017-agent-proposals") */
+  dirName: string;
+  /** Full path to the spec directory */
+  dirPath: string;
+  /** Parsed spec result */
+  parsed: ParseResult;
 }
