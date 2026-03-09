@@ -178,6 +178,7 @@ function getToolHandler(
   state?: AdjutantState,
   messageStore?: MessageStore,
   stimulusEngine?: StimulusEngine,
+  projectRoot?: string,
 ): (...args: unknown[]) => Promise<unknown> {
   const server = createMockServer();
   registerCoordinationTools(
@@ -185,6 +186,7 @@ function getToolHandler(
     state ?? createMockState(),
     messageStore ?? createMockMessageStore(),
     stimulusEngine ?? createMockStimulusEngine(),
+    projectRoot,
   );
 
   const call = mockTool.mock.calls.find(
@@ -294,6 +296,28 @@ describe("MCP Coordination Tools", () => {
       // Auto-generated name should be defined
       expect(data.agentName).toBeDefined();
       expect(typeof data.agentName).toBe("string");
+    });
+
+    it("should pass projectRoot to spawnAgent instead of process.cwd()", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+      mockSpawnAgent.mockResolvedValue({
+        success: true,
+        sessionId: "session-42",
+        tmuxSession: "adj-swarm-worker-1",
+      });
+
+      const projectRoot = "/Users/test/code/ai/adjutant";
+      const handler = getToolHandler("spawn_worker", undefined, undefined, undefined, projectRoot);
+      await handler(
+        { prompt: "Build the feature", agentName: "worker-1" },
+        { sessionId: "adj-session" },
+      );
+
+      expect(mockSpawnAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectPath: projectRoot,
+        }),
+      );
     });
 
     it("should return error when spawn fails", async () => {

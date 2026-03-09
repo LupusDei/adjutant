@@ -125,7 +125,9 @@ export function registerCoordinationTools(
   state: AdjutantState,
   messageStore: MessageStore,
   stimulusEngine?: StimulusEngine,
+  projectRoot?: string,
 ): void {
+  const resolvedProjectRoot = projectRoot ?? process.env["ADJUTANT_PROJECT_ROOT"] ?? process.cwd();
   // --------------------------------------------------------------------------
   // spawn_worker
   // --------------------------------------------------------------------------
@@ -149,7 +151,7 @@ export function registerCoordinationTools(
 
       const result = await spawnAgent({
         name,
-        projectPath: process.cwd(),
+        projectPath: resolvedProjectRoot,
         initialPrompt: prompt,
       });
 
