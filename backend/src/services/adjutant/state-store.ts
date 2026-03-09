@@ -1,5 +1,14 @@
 import type Database from "better-sqlite3";
 
+export type AgentRole = "coordinator" | "worker" | "qa";
+
+/** Well-known agent IDs that are always treated as coordinators. */
+export const KNOWN_COORDINATOR_IDS = new Set([
+  "adjutant-coordinator",
+  "adjutant",
+  "adjutant-core",
+]);
+
 export interface AgentProfile {
   agentId: string;
   lastStatus: string;
@@ -11,6 +20,7 @@ export interface AgentProfile {
   disconnectedAt: string | null;
   assignmentCount: number;
   lastEpicId: string | null;
+  role: AgentRole;
 }
 
 export interface DecisionEntry {
@@ -78,6 +88,7 @@ interface AgentProfileRow {
   disconnected_at: string | null;
   assignment_count: number;
   last_epic_id: string | null;
+  role: string;
 }
 
 interface DecisionRow {
@@ -118,6 +129,7 @@ function rowToProfile(row: AgentProfileRow): AgentProfile {
     disconnectedAt: row.disconnected_at,
     assignmentCount: row.assignment_count,
     lastEpicId: row.last_epic_id,
+    role: (row.role as AgentRole) ?? "worker",
   };
 }
 
@@ -155,15 +167,15 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
   );
 
   const insertProfileStmt = db.prepare(`
-    INSERT INTO adjutant_agent_profiles (agent_id, last_status, last_status_at, last_activity, current_task, current_bead_id, connected_at, disconnected_at, assignment_count, last_epic_id)
-    VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO adjutant_agent_profiles (agent_id, last_status, last_status_at, last_activity, current_task, current_bead_id, connected_at, disconnected_at, assignment_count, last_epic_id, role)
+    VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const updateProfileStmt = db.prepare(`
     UPDATE adjutant_agent_profiles
     SET last_status = ?, last_status_at = datetime('now'), last_activity = ?,
         current_task = ?, current_bead_id = ?, connected_at = ?, disconnected_at = ?,
-        assignment_count = ?, last_epic_id = ?
+        assignment_count = ?, last_epic_id = ?, role = ?
     WHERE agent_id = ?
   `);
 
@@ -252,6 +264,7 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
           disconnected_at: profile.disconnectedAt !== undefined ? profile.disconnectedAt : existing.disconnected_at,
           assignment_count: profile.assignmentCount !== undefined ? profile.assignmentCount : existing.assignment_count,
           last_epic_id: profile.lastEpicId !== undefined ? profile.lastEpicId : existing.last_epic_id,
+          role: profile.role !== undefined ? profile.role : existing.role,
         };
 
         updateProfileStmt.run(
@@ -263,6 +276,7 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
           merged.disconnected_at,
           merged.assignment_count,
           merged.last_epic_id,
+          merged.role,
           profile.agentId,
         );
       } else {
@@ -276,6 +290,7 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
           profile.disconnectedAt ?? null,
           profile.assignmentCount ?? 0,
           profile.lastEpicId ?? null,
+          profile.role ?? "worker",
         );
       }
     },

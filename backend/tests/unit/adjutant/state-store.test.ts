@@ -806,4 +806,80 @@ describe("AdjutantState", () => {
       expect(decisions[0].outcomeAt).toBeNull();
     });
   });
+
+  describe("AgentRole and role field", () => {
+    it("should default role to 'worker' for new profiles", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "agent-worker" });
+
+      const profile = store.getAgentProfile("agent-worker");
+      expect(profile).not.toBeNull();
+      expect(profile!.role).toBe("worker");
+    });
+
+    it("should store and retrieve role='coordinator'", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "agent-coord", role: "coordinator" });
+
+      const profile = store.getAgentProfile("agent-coord");
+      expect(profile).not.toBeNull();
+      expect(profile!.role).toBe("coordinator");
+    });
+
+    it("should store and retrieve role='qa'", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "agent-qa", role: "qa" });
+
+      const profile = store.getAgentProfile("agent-qa");
+      expect(profile).not.toBeNull();
+      expect(profile!.role).toBe("qa");
+    });
+
+    it("should preserve role on merge when not provided in upsert", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "agent-merge", role: "coordinator" });
+      store.upsertAgentProfile({ agentId: "agent-merge", lastStatus: "working" });
+
+      const profile = store.getAgentProfile("agent-merge");
+      expect(profile).not.toBeNull();
+      expect(profile!.role).toBe("coordinator");
+      expect(profile!.lastStatus).toBe("working");
+    });
+
+    it("should update role via upsert", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "agent-upgrade", role: "worker" });
+      store.upsertAgentProfile({ agentId: "agent-upgrade", role: "coordinator" });
+
+      const profile = store.getAgentProfile("agent-upgrade");
+      expect(profile).not.toBeNull();
+      expect(profile!.role).toBe("coordinator");
+    });
+
+    it("should include role in getAllAgentProfiles", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.upsertAgentProfile({ agentId: "coord-1", role: "coordinator" });
+      store.upsertAgentProfile({ agentId: "worker-1", role: "worker" });
+
+      const profiles = store.getAllAgentProfiles();
+      expect(profiles).toHaveLength(2);
+      const roles = profiles.map((p) => ({ id: p.agentId, role: p.role })).sort((a, b) => a.id.localeCompare(b.id));
+      expect(roles).toEqual([
+        { id: "coord-1", role: "coordinator" },
+        { id: "worker-1", role: "worker" },
+      ]);
+    });
+  });
 });
