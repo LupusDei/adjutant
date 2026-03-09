@@ -11,6 +11,7 @@ import { getSessionBridge } from "./session-bridge.js";
 import { getConnectedAgents } from "./mcp-server.js";
 import { getAgentStatuses } from "./mcp-tools/status.js";
 import { listProjects } from "./projects-service.js";
+import { getSessionCost, estimateContextPercent } from "./cost-tracker.js";
 import type { CrewMember, CrewMemberStatus, AgentType } from "../types/index.js";
 
 // ============================================================================
@@ -178,6 +179,28 @@ function enrichWithMcpStatus(members: CrewMember[]): void {
 }
 
 // ============================================================================
+// Cost Data Enrichment
+// ============================================================================
+
+/**
+ * Enriches CrewMembers with cost and context window data from CostTracker.
+ * Only sets cost/contextPercent for online agents that have a sessionId
+ * with corresponding cost data. Offline agents are skipped.
+ */
+function enrichWithCostData(members: CrewMember[]): void {
+  for (const member of members) {
+    if (member.status === "offline") continue;
+    if (!member.sessionId) continue;
+
+    const costEntry = getSessionCost(member.sessionId);
+    if (!costEntry) continue;
+
+    member.cost = costEntry.cost;
+    member.contextPercent = estimateContextPercent(costEntry);
+  }
+}
+
+// ============================================================================
 // Service Functions
 // ============================================================================
 
@@ -249,6 +272,7 @@ async function getTmuxAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
 
     enrichWithSessionData(crewMembers);
     enrichWithMcpStatus(crewMembers);
+    enrichWithCostData(crewMembers);
     crewMembers.sort((a, b) => a.name.localeCompare(b.name));
     emitStatusChanges(crewMembers);
     return { success: true, data: crewMembers };

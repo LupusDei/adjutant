@@ -64,6 +64,7 @@ function classify(event: EventName, data: unknown): SignalUrgency {
     case "build:failed":
     case "mcp:agent_disconnected":
     case "merge:conflict":
+    case "agent:spawn_failed":
       return "critical";
 
     case "agent:status_changed": {
