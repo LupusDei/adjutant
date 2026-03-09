@@ -34,7 +34,11 @@
     "tunnel:auto": "./scripts/tunnel.sh --no-wait",
     "setup": "npm run build:cli && node dist/cli/index.js init",
     "doctor": "npm run build:cli && node dist/cli/index.js doctor",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "acceptance": "npm run --prefix backend acceptance",
+    "acceptance:generate": "npm run --prefix backend acceptance -- --generate",
+    "acceptance:all": "npm run --prefix backend acceptance -- --all --generate",
+    "acceptance:report": "npm run --prefix backend acceptance -- --report"
   },
   "keywords": [
     "dashboard",
