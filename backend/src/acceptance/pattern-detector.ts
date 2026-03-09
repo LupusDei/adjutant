@@ -76,8 +76,10 @@ export function detectApiCall(whenText: string): DetectedApiCall | null {
     const queryString = queryMatch[1]!;
     const query: Record<string, string> = {};
     for (const pair of queryString.split("&")) {
-      const [key, value] = pair.split("=");
-      if (key && value) {
+      const eqIdx = pair.indexOf("=");
+      if (eqIdx > 0) {
+        const key = pair.slice(0, eqIdx);
+        const value = pair.slice(eqIdx + 1);
         query[key] = value;
       }
     }

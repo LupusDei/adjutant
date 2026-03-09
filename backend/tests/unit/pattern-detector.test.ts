@@ -117,6 +117,15 @@ describe("detectApiCall", () => {
     expect(result!.query).toEqual({ status: "pending", type: "engineering" });
   });
 
+  // adj-058.10: query param values containing = should not be truncated
+  it("should preserve query param values containing = sign", () => {
+    const result = detectApiCall(
+      "GET /api/items is called with `?filter=a=b&name=test`",
+    );
+    expect(result).not.toBeNull();
+    expect(result!.query).toEqual({ filter: "a=b", name: "test" });
+  });
+
   it("should detect PATCH body with non-standard JSON (unquoted keys)", () => {
     const result = detectApiCall(
       'PATCH /api/proposals/:id with `{ status: "accepted" }`',

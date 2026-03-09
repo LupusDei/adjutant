@@ -156,10 +156,11 @@ function getSymbol(status: ScenarioStatus): string {
   }
 }
 
-/** Pad a string to a fixed width, truncating if needed */
+/** Pad a string to a fixed width. If too long, truncate with ellipsis to preserve box alignment. */
 function padRight(s: string, width: number): string {
-  if (s.length >= width) {
-    return s.slice(0, width);
+  if (width <= 0) return s;
+  if (s.length > width) {
+    return width > 3 ? s.slice(0, width - 3) + "..." : s.slice(0, width);
   }
   return s + " ".repeat(width - s.length);
 }
