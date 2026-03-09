@@ -40,11 +40,24 @@ function createMockState(): AdjutantState {
     getAgentProfile: vi.fn(() => null),
     upsertAgentProfile: vi.fn(),
     getAllAgentProfiles: vi.fn(() => []),
+    incrementAssignmentCount: vi.fn(),
     logDecision: vi.fn(),
     getRecentDecisions: vi.fn(() => []),
     getMeta: vi.fn(() => null),
     setMeta: vi.fn(),
     pruneOldDecisions: vi.fn(() => 0),
+    logSpawn: vi.fn(() => 1),
+    getSpawnHistory: vi.fn(() => []),
+    getAgentSpawnHistory: vi.fn(() => []),
+    markDecommissioned: vi.fn(),
+    getLastSpawn: vi.fn(() => null),
+    countActiveSpawns: vi.fn(() => 0),
+    markAllDisconnected: vi.fn(() => 0),
+    recordOutcome: vi.fn(),
+    getRecentDecisionsWithOutcomes: vi.fn(() => []),
+    getDecisionsForTarget: vi.fn(() => []),
+    isCoordinator: vi.fn(() => false),
+    getAgentsByRole: vi.fn(() => []),
   };
 }
 
@@ -432,6 +445,203 @@ describe("AdjutantCore", () => {
 
       // setInterval fires 12 times (60/5) + 1 startup fire at 60s = 13
       expect(behavior.shouldAct).toHaveBeenCalledTimes(13);
+    });
+  });
+
+  describe("excludeRoles filtering", () => {
+    it("should skip behavior with excludeRoles=['coordinator'] for coordinator events", async () => {
+      const behavior = createTestBehavior({
+        name: "worker-only",
+        triggers: ["agent:status_changed"],
+        excludeRoles: ["coordinator"],
+      });
+      registry.register(behavior);
+
+      // Mock getAgentProfile to return a coordinator profile
+      (state.getAgentProfile as ReturnType<typeof vi.fn>).mockReturnValue({
+        agentId: "adjutant-coordinator",
+        role: "coordinator",
+        lastStatus: "working",
+        lastStatusAt: "2026-01-01",
+        lastActivity: null,
+        currentTask: null,
+        currentBeadId: null,
+        connectedAt: null,
+        disconnectedAt: null,
+        assignmentCount: 0,
+        lastEpicId: null,
+      });
+
+      initAdjutantCore({ registry, state, comm });
+
+      const handler = mockOnAny.mock.calls[0]![0] as (
+        event: string,
+        data: unknown,
+        seq: number,
+      ) => void;
+
+      handler("agent:status_changed", { agent: "adjutant-coordinator", status: "working" }, 1);
+
+      await vi.advanceTimersByTimeAsync(10);
+
+      // Behavior should be skipped entirely — no shouldAct or act calls
+      expect(behavior.shouldAct).not.toHaveBeenCalled();
+      expect(behavior.act).not.toHaveBeenCalled();
+    });
+
+    it("should run behavior with excludeRoles=['coordinator'] for worker events", async () => {
+      const behavior = createTestBehavior({
+        name: "worker-only",
+        triggers: ["agent:status_changed"],
+        excludeRoles: ["coordinator"],
+      });
+      registry.register(behavior);
+
+      // Mock getAgentProfile to return a worker profile
+      (state.getAgentProfile as ReturnType<typeof vi.fn>).mockReturnValue({
+        agentId: "engineer-1",
+        role: "worker",
+        lastStatus: "working",
+        lastStatusAt: "2026-01-01",
+        lastActivity: null,
+        currentTask: null,
+        currentBeadId: null,
+        connectedAt: null,
+        disconnectedAt: null,
+        assignmentCount: 0,
+        lastEpicId: null,
+      });
+
+      initAdjutantCore({ registry, state, comm });
+
+      const handler = mockOnAny.mock.calls[0]![0] as (
+        event: string,
+        data: unknown,
+        seq: number,
+      ) => void;
+
+      handler("agent:status_changed", { agent: "engineer-1", status: "working" }, 1);
+
+      await vi.waitFor(() => {
+        expect(behavior.shouldAct).toHaveBeenCalledOnce();
+        expect(behavior.act).toHaveBeenCalledOnce();
+      });
+    });
+
+    it("should run behavior without excludeRoles for all events (backward compatible)", async () => {
+      const behavior = createTestBehavior({
+        name: "all-agents",
+        triggers: ["agent:status_changed"],
+        // No excludeRoles
+      });
+      registry.register(behavior);
+
+      initAdjutantCore({ registry, state, comm });
+
+      const handler = mockOnAny.mock.calls[0]![0] as (
+        event: string,
+        data: unknown,
+        seq: number,
+      ) => void;
+
+      handler("agent:status_changed", { agent: "adjutant-coordinator", status: "working" }, 1);
+
+      await vi.waitFor(() => {
+        expect(behavior.shouldAct).toHaveBeenCalledOnce();
+        expect(behavior.act).toHaveBeenCalledOnce();
+      });
+    });
+
+    it("should not filter events without agent ID in data", async () => {
+      const behavior = createTestBehavior({
+        name: "worker-only",
+        triggers: ["bead:created"],
+        excludeRoles: ["coordinator"],
+      });
+      registry.register(behavior);
+
+      initAdjutantCore({ registry, state, comm });
+
+      const handler = mockOnAny.mock.calls[0]![0] as (
+        event: string,
+        data: unknown,
+        seq: number,
+      ) => void;
+
+      // Event data has no agent/agentId field
+      handler("bead:created", { id: "adj-100", title: "test", status: "open", type: "task" }, 1);
+
+      await vi.waitFor(() => {
+        expect(behavior.shouldAct).toHaveBeenCalledOnce();
+        expect(behavior.act).toHaveBeenCalledOnce();
+      });
+    });
+
+    it("should extract agent ID from 'agentId' field (mcp events)", async () => {
+      const behavior = createTestBehavior({
+        name: "worker-only",
+        triggers: ["mcp:agent_connected"],
+        excludeRoles: ["coordinator"],
+      });
+      registry.register(behavior);
+
+      // Mock: coordinator profile
+      (state.getAgentProfile as ReturnType<typeof vi.fn>).mockReturnValue({
+        agentId: "adjutant",
+        role: "coordinator",
+        lastStatus: "connected",
+        lastStatusAt: "2026-01-01",
+        lastActivity: null,
+        currentTask: null,
+        currentBeadId: null,
+        connectedAt: null,
+        disconnectedAt: null,
+        assignmentCount: 0,
+        lastEpicId: null,
+      });
+
+      initAdjutantCore({ registry, state, comm });
+
+      const handler = mockOnAny.mock.calls[0]![0] as (
+        event: string,
+        data: unknown,
+        seq: number,
+      ) => void;
+
+      handler("mcp:agent_connected", { agentId: "adjutant", sessionId: "s1" }, 1);
+
+      await vi.advanceTimersByTimeAsync(10);
+
+      expect(behavior.shouldAct).not.toHaveBeenCalled();
+      expect(behavior.act).not.toHaveBeenCalled();
+    });
+
+    it("should default to 'worker' when no profile exists for the agent", async () => {
+      const behavior = createTestBehavior({
+        name: "non-worker-only",
+        triggers: ["agent:status_changed"],
+        excludeRoles: ["worker"],
+      });
+      registry.register(behavior);
+
+      // getAgentProfile returns null (no profile)
+      (state.getAgentProfile as ReturnType<typeof vi.fn>).mockReturnValue(null);
+
+      initAdjutantCore({ registry, state, comm });
+
+      const handler = mockOnAny.mock.calls[0]![0] as (
+        event: string,
+        data: unknown,
+        seq: number,
+      ) => void;
+
+      handler("agent:status_changed", { agent: "unknown-agent", status: "working" }, 1);
+
+      await vi.advanceTimersByTimeAsync(10);
+
+      // Should be skipped because no profile defaults to "worker" and excludeRoles includes "worker"
+      expect(behavior.shouldAct).not.toHaveBeenCalled();
+      expect(behavior.act).not.toHaveBeenCalled();
     });
   });
 

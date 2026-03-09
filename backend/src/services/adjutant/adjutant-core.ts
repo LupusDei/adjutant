@@ -13,6 +13,7 @@
 import { getEventBus, type EventName } from "../event-bus.js";
 import type { BehaviorRegistry, BehaviorEvent, AdjutantBehavior } from "./behavior-registry.js";
 import type { AdjutantState } from "./state-store.js";
+import type { AgentRole } from "./state-store.js";
 import type { CommunicationManager } from "./communication.js";
 import { logInfo, logWarn } from "../../utils/index.js";
 
@@ -119,6 +120,44 @@ export function cronToIntervalMs(schedule: string): number {
 // Event Dispatch
 // ============================================================================
 
+/**
+ * Extract the agent ID from event data.
+ * Events use different field names: `agent` (status events), `agentId` (MCP events).
+ * Returns null if no agent ID can be found.
+ */
+function extractAgentId(data: unknown): string | null {
+  if (data == null || typeof data !== "object") return null;
+  const record = data as Record<string, unknown>;
+  if (typeof record["agentId"] === "string") return record["agentId"];
+  if (typeof record["agent"] === "string") return record["agent"];
+  return null;
+}
+
+/**
+ * Check whether a behavior should be skipped due to excludeRoles filtering.
+ * Returns true if the behavior should be skipped.
+ */
+function shouldExcludeByRole(
+  behavior: AdjutantBehavior,
+  event: BehaviorEvent,
+  state: AdjutantState,
+): boolean {
+  if (!behavior.excludeRoles || behavior.excludeRoles.length === 0) {
+    return false;
+  }
+
+  const agentId = extractAgentId(event.data);
+  if (agentId === null) {
+    // No agent ID in event data — don't filter, let the behavior run
+    return false;
+  }
+
+  const profile = state.getAgentProfile(agentId);
+  const role: AgentRole = profile?.role ?? "worker";
+
+  return behavior.excludeRoles.includes(role);
+}
+
 function dispatchEvent(
   event: BehaviorEvent,
   behaviors: AdjutantBehavior[],
@@ -126,6 +165,11 @@ function dispatchEvent(
   comm: CommunicationManager,
 ): void {
   for (const behavior of behaviors) {
+    // Check excludeRoles guard before shouldAct
+    if (shouldExcludeByRole(behavior, event, state)) {
+      continue;
+    }
+
     try {
       if (!behavior.shouldAct(event, state)) {
         continue;
