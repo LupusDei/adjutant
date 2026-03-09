@@ -266,15 +266,16 @@ describe("SessionBridge", () => {
       const sent = await bridge.sendInput(session.id, "fix the bug");
       expect(sent).toBe(true);
 
+      // Should use atomic set-buffer + paste-buffer (adj-twhj)
       expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
-        ["send-keys", "-t", session.tmuxPane, "-l", "fix the bug"],
+        expect.arrayContaining(["set-buffer", "-b", expect.any(String), "fix the bug\n"]),
         expect.anything(),
         expect.any(Function)
       );
       expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
-        ["send-keys", "-t", session.tmuxPane, "Enter"],
+        expect.arrayContaining(["paste-buffer", "-t", session.tmuxPane]),
         expect.anything(),
         expect.any(Function)
       );
