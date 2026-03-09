@@ -34,19 +34,10 @@ import { createAdjutantState } from "./services/adjutant/state-store.js";
 import { createCommunicationManager } from "./services/adjutant/communication.js";
 import { agentLifecycleBehavior } from "./services/adjutant/behaviors/agent-lifecycle.js";
 import { createHealthMonitorBehavior } from "./services/adjutant/behaviors/health-monitor.js";
-// DISABLED (adj-054 — replaced by stimulus engine)
-// import { createPeriodicSummaryBehavior } from "./services/adjutant/behaviors/periodic-summary.js";
-// DISABLED (adj-052 not ready)
-// import { createStaleAgentNudger } from "./services/adjutant/behaviors/stale-agent-nudger.js";
-// import { createWorkAssigner } from "./services/adjutant/behaviors/work-assigner.js";
-// import { createWorkRebalancer } from "./services/adjutant/behaviors/work-rebalancer.js";
 import { createMemoryCollector } from "./services/adjutant/behaviors/memory-collector.js";
 import { createSessionRetrospective } from "./services/adjutant/behaviors/session-retrospective.js";
 import { createMemoryReviewer } from "./services/adjutant/behaviors/memory-reviewer.js";
 import { createSelfImprover } from "./services/adjutant/behaviors/self-improver.js";
-// DISABLED (adj-052 not ready)
-// import { createAgentSpawnerBehavior } from "./services/adjutant/behaviors/agent-spawner.js";
-// import { createAgentDecommissioner } from "./services/adjutant/behaviors/agent-decommissioner.js";
 import { createMemoryStore } from "./services/adjutant/memory-store.js";
 import { SignalAggregator } from "./services/adjutant/signal-aggregator.js";
 import { StimulusEngine, buildSituationPrompt, buildBootstrapPrompt, type StateSnapshot } from "./services/adjutant/stimulus-engine.js";
@@ -204,8 +195,7 @@ const server = app.listen(PORT, () => {
   // Tool registrar is set after stimulusEngine creation (below)
   // so coordination tools have access to both adjutantState and stimulusEngine.
 
-  // On server restart, no agents are connected — mark all as disconnected
-  // so work-assigner doesn't assign beads to dead agents.
+  // On server restart, no agents are connected — mark all as disconnected.
   const staleMarked = adjutantState.markAllDisconnected();
   if (staleMarked > 0) {
     logInfo("Marked stale agent profiles as disconnected on startup", { count: staleMarked });
@@ -216,19 +206,10 @@ const server = app.listen(PORT, () => {
 
   behaviorRegistry.register(agentLifecycleBehavior);
   behaviorRegistry.register(createHealthMonitorBehavior(projectRoot));
-  // DISABLED (adj-054 — replaced by stimulus engine)
-  // behaviorRegistry.register(createPeriodicSummaryBehavior());
-  // DISABLED (adj-052 not ready — re-enable strategically)
-  // behaviorRegistry.register(createStaleAgentNudger());
-  // behaviorRegistry.register(createWorkAssigner());
-  // behaviorRegistry.register(createWorkRebalancer());
   behaviorRegistry.register(createMemoryCollector(memoryStore));
   behaviorRegistry.register(createSessionRetrospective(memoryStore));
   behaviorRegistry.register(createMemoryReviewer(memoryStore));
   behaviorRegistry.register(createSelfImprover(memoryStore, proposalStore));
-  // DISABLED (adj-052 not ready — re-enable strategically)
-  // behaviorRegistry.register(createAgentSpawnerBehavior(projectRoot));
-  // behaviorRegistry.register(createAgentDecommissioner());
 
   initAdjutantCore({ registry: behaviorRegistry, state: adjutantState, comm: adjutantComm });
   logInfo("Adjutant Core initialized with event-driven behaviors");
