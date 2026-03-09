@@ -9,11 +9,11 @@ import Foundation
 import Combine
 import AdjutantKit
 
-/// Monitors bead status changes and triggers voice announcements.
+/// Monitors bead status changes for UI state tracking.
 ///
 /// Polls the /api/beads endpoint periodically to detect status changes.
-/// When beads are hooked, moved to in_progress, or completed, triggers
-/// announcements through the TTS playback service.
+/// Voice synthesis is on-demand only — this monitor tracks state but does
+/// not automatically trigger TTS.
 @MainActor
 public final class BeadStatusMonitor: ObservableObject {
     // MARK: - Constants
@@ -50,9 +50,6 @@ public final class BeadStatusMonitor: ObservableObject {
     /// Cancellables for Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
 
-    /// Reference to TTS service for announcements
-    private var ttsService: (any TTSPlaybackServiceProtocol)?
-
     // MARK: - Initialization
 
     private init() {
@@ -68,9 +65,6 @@ public final class BeadStatusMonitor: ObservableObject {
 
         isMonitoring = true
         lastError = nil
-
-        // Resolve TTS service from DI container
-        ttsService = DependencyContainer.shared.resolveOptional((any TTSPlaybackServiceProtocol).self)
 
         // Subscribe to DataSyncService beads updates
         dataSync.$beads
@@ -113,109 +107,28 @@ public final class BeadStatusMonitor: ObservableObject {
     /// - Returns: `true` if the notification was handled successfully
     @discardableResult
     public func handlePushNotification(_ payload: PushNotificationPayload) async -> Bool {
-        // Wait for AppState persisted preferences (isVoiceMuted, etc.) to load.
-        // Without this, push notifications arriving during the ~50-500ms startup
-        // window would read default values instead of persisted ones. (adj-qv4q)
         await AppState.shared.waitForServicesReady()
 
         // Only handle bead-related notifications
         guard payload.type == .beadUpdate || payload.type == .beadHooked || payload.type == .beadCompleted else {
-            print("[BeadStatusMonitor] Ignoring non-bead notification type: \(payload.type)")
             return false
         }
 
         guard let beadData = payload.beadData else {
-            print("[BeadStatusMonitor] Failed to parse bead notification data")
             return false
         }
 
         // Skip wisp beads - internal workflow items
         guard !beadData.beadId.contains("wisp") else {
-            print("[BeadStatusMonitor] Skipping wisp bead notification")
             return false
         }
 
-        guard !AppState.shared.isVoiceMuted else {
-            print("[BeadStatusMonitor] Voice is muted, skipping push announcement")
-            // Still update known state even if muted
-            knownBeadStates[beadData.beadId] = beadData.currentStatus
-            saveKnownStates()
-            return false
-        }
-
-        guard AppState.shared.isVoiceAvailable else {
-            print("[BeadStatusMonitor] Voice not available, skipping push announcement")
-            knownBeadStates[beadData.beadId] = beadData.currentStatus
-            saveKnownStates()
-            return false
-        }
-
-        // Determine if we should announce based on status transition
-        let shouldAnnounce: Bool
-        switch payload.type {
-        case .beadCompleted:
-            shouldAnnounce = true
-        case .beadUpdate where beadData.currentStatus == "in_progress":
-            shouldAnnounce = true
-        case .beadUpdate where beadData.currentStatus == "closed":
-            shouldAnnounce = true
-        default:
-            // Don't announce hooked or other status changes
-            shouldAnnounce = false
-        }
-
-        if shouldAnnounce {
-            print("[BeadStatusMonitor] Handling push notification for bead \(beadData.beadId)")
-            await announceBeadFromPush(beadData, notificationType: payload.type)
-        }
-
-        // Update known state
+        // Update known state (no automatic voice synthesis — on-demand only)
         knownBeadStates[beadData.beadId] = beadData.currentStatus
         saveKnownStates()
         changesDetectedCount += 1
 
-        return shouldAnnounce
-    }
-
-    /// Announces a bead update from push notification
-    private func announceBeadFromPush(_ beadData: BeadNotificationData, notificationType: PushNotificationType) async {
-        let tts = ttsService ?? DependencyContainer.shared.resolveOptional((any TTSPlaybackServiceProtocol).self)
-        guard let ttsService = tts else {
-            print("[BeadStatusMonitor] TTS service not available for push announcement")
-            return
-        }
-
-        let text = AnnouncementTextFormatter.formatStatusChange(
-            title: beadData.title,
-            oldStatus: beadData.previousStatus,
-            newStatus: beadData.currentStatus
-        )
-
-        do {
-            let apiClient = AppState.shared.apiClient
-            let request = SynthesizeRequest(text: text)
-            let response = try await apiClient.synthesizeSpeech(request)
-
-            // Activate audio session for background playback
-            VoiceAnnouncementService.shared.activateForBackgroundPlayback()
-
-            ttsService.enqueue(
-                text: text,
-                response: response,
-                priority: .high,
-                metadata: [
-                    "source": "BeadStatusMonitor",
-                    "beadId": beadData.beadId,
-                    "trigger": "push"
-                ]
-            )
-
-            // Start playback immediately
-            ttsService.play()
-
-        } catch {
-            print("[BeadStatusMonitor] Failed to synthesize push announcement: \(error.localizedDescription)")
-        }
+        return true
     }
 
     // MARK: - Data Processing
@@ -225,13 +138,8 @@ public final class BeadStatusMonitor: ObservableObject {
         lastPollDate = Date()
         lastError = nil
 
-        // Detect changes
-        let changes = detectChanges(in: beads)
-
-        // Announce changes if not muted
-        if !AppState.shared.isVoiceMuted {
-            await announceChanges(changes)
-        }
+        // Detect changes (for UI state tracking only — no automatic voice synthesis)
+        _ = detectChanges(in: beads)
 
         // Update known states
         updateKnownStates(from: beads)
@@ -303,42 +211,6 @@ public final class BeadStatusMonitor: ObservableObject {
         return changes
     }
 
-    // MARK: - Announcements
-
-    private func announceChanges(_ changes: [BeadChange]) async {
-        guard let ttsService = ttsService else {
-            print("[BeadStatusMonitor] TTS service not available")
-            return
-        }
-
-        guard AppState.shared.isVoiceAvailable else {
-            print("[BeadStatusMonitor] Voice not available")
-            return
-        }
-
-        for change in changes {
-            let text = change.announcementText
-            await synthesizeAndEnqueue(text: text, ttsService: ttsService)
-        }
-    }
-
-    private func synthesizeAndEnqueue(text: String, ttsService: any TTSPlaybackServiceProtocol) async {
-        do {
-            let apiClient = AppState.shared.apiClient
-            let request = SynthesizeRequest(text: text)
-            let response = try await apiClient.synthesizeSpeech(request)
-
-            ttsService.enqueue(
-                text: text,
-                response: response,
-                priority: .high,
-                metadata: ["source": "BeadStatusMonitor"]
-            )
-        } catch {
-            print("[BeadStatusMonitor] Failed to synthesize announcement: \(error.localizedDescription)")
-        }
-    }
-
     // MARK: - State Management
 
     private func updateKnownStates(from beads: [BeadInfo]) {
@@ -380,36 +252,16 @@ public final class BeadStatusMonitor: ObservableObject {
     }
 }
 
-// MARK: - BeadChange Text Formatting
-
-extension BeadStatusMonitor.BeadChange {
-    /// Formats this bead change into announcement text using the shared formatter.
-    var announcementText: String {
-        let newStatus: String
-        switch changeType {
-        case .inProgress: newStatus = "in_progress"
-        case .completed: newStatus = "closed"
-        }
-        return AnnouncementTextFormatter.formatStatusChange(
-            title: bead.title,
-            oldStatus: previousStatus,
-            newStatus: newStatus
-        )
-    }
-}
-
 // MARK: - Scene Phase Integration
 
 extension BeadStatusMonitor {
     /// Call this when the app's scene phase changes.
-    /// Starts monitoring when active and continues in background for audio announcements.
+    /// Starts monitoring when active for UI state tracking.
     public func handleScenePhaseChange(to phase: ScenePhase) {
         switch phase {
         case .active:
             startMonitoring()
         case .background:
-            // Keep monitoring in background to enable audio announcements
-            // The "audio" background mode in Info.plist allows this
             print("[BeadStatusMonitor] Continuing monitoring in background")
         case .inactive:
             // Keep monitoring during brief inactive periods
