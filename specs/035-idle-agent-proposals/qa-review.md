@@ -2,7 +2,7 @@
 
 **Reviewer**: qa-1
 **Date**: 2026-03-09
-**Status**: Phase A Complete (Spec Review) | Phase B Pending (Code Review)
+**Status**: Phase A Complete (Spec Review) | Phase B Complete (Code Review)
 **Epic**: adj-057
 
 ---
@@ -185,24 +185,149 @@ Should "accepted" proposals be included in the context? An accepted proposal tha
 
 ## Phase B: Code Review
 
-**Status**: Waiting for engineer-1 to push branch `fix/adj-057.1-idle-proposal-nudge`
+**Status**: Complete
+**Branch**: `fix/adj-057.1-idle-proposal-nudge` (commit `bd8ef925`)
+**Tests**: 15/15 passing
 
-Will update this section when the branch is available.
+### Code Review Checklist
 
-### Code Review Checklist (Pending)
+- [x] `createIdleProposalNudge` matches spec -- factory pattern, correct dependencies
+- [x] ONLY calls `stimulusEngine.scheduleCheck()` -- never `comm.messageAgent()`
+- [x] No `schedule` property (no cron) -- `behavior.schedule` is undefined
+- [x] Does NOT import CommunicationManager for use -- imports type only for `act()` signature compliance
+- [x] Debounce uses namespaced meta key (`idle_nudge_check_`) -- no collision with self-improver (`self_improver_debounce_`)
+- [x] Debounce resets on non-idle transition -- `act()` clears meta key when `data.status !== "idle"`
+- [ ] `buildScheduleReason()` includes all required context -- **INCOMPLETE: Phase 1 only has agent ID, no proposal context yet**
+- [ ] 12-proposal cap uses `>=` not `>` -- **NOT IMPLEMENTED YET (planned for adj-057.1.6)**
+- [x] Disconnected agents skipped -- checks `profile.disconnectedAt !== null`
+- [x] Tests cover core acceptance scenarios (15 tests covering idle trigger, skip working, skip disconnected, debounce, debounce reset, no comm usage)
+- [ ] Handles simultaneous idle agents independently -- **No test for this yet**
+- [x] scheduleCheck delay is exactly 300000ms (`IDLE_CHECK_DELAY_MS = 300_000`)
+- [x] `shouldAct` filters for status=idle only
+- [ ] Error handling for ProposalStore queries -- **Not addressed (proposal queries not yet implemented)**
+- [x] `_comm` parameter naming convention -- used correctly
 
-- [ ] `createIdleProposalNudge` matches spec
-- [ ] ONLY calls `stimulusEngine.scheduleCheck()` -- never `comm.messageAgent()`
-- [ ] No `schedule` property (no cron)
-- [ ] Does NOT import CommunicationManager
-- [ ] Debounce uses namespaced meta key (not colliding with self-improver)
-- [ ] Debounce resets on non-idle transition
-- [ ] `buildScheduleReason()` includes all required context
-- [ ] 12-proposal cap uses `>=` not `>`
-- [ ] Disconnected agents skipped
-- [ ] Tests cover all acceptance scenarios
-- [ ] Handles simultaneous idle agents independently
-- [ ] scheduleCheck delay is exactly 300000ms
-- [ ] `shouldAct` filters for status=idle only
-- [ ] Error handling for ProposalStore queries
-- [ ] `_comm` parameter naming convention
+### B1. BUG: shouldAct Rejects Non-Idle Events But act() Handles Them
+
+**Severity**: Medium (logic inconsistency)
+
+The `shouldAct()` method returns `false` for non-idle status changes:
+
+```typescript
+shouldAct(event: BehaviorEvent, _state: AdjutantState): boolean {
+  if (event.name !== "agent:status_changed") return false;
+  const data = event.data as AgentStatusEvent;
+  return data.status === "idle";  // Returns false for "working"
+}
+```
+
+But `act()` contains logic to handle non-idle events (debounce reset):
+
+```typescript
+async act(event: BehaviorEvent, state: AdjutantState, _comm: CommunicationManager): Promise<void> {
+  const data = event.data as AgentStatusEvent;
+  const agentId = data.agent;
+
+  // If agent transitions to non-idle, clear debounce
+  if (data.status !== "idle") {
+    state.setMeta(`${DEBOUNCE_META_PREFIX}${agentId}`, "");
+    return;
+  }
+  // ...
+```
+
+**Problem**: The behavior registry calls `shouldAct()` first. If it returns `false`, `act()` is never called. This means when an agent transitions from idle to working, `shouldAct` returns `false`, and the debounce-clearing logic in `act()` never executes. The debounce key remains set forever for that agent.
+
+**Impact**: This is exactly the bug predicted in finding A6. An agent that goes idle -> working -> idle will never get a second nudge because the debounce key from the first idle period is never cleared.
+
+**Fix**: Change `shouldAct` to return `true` for ALL `agent:status_changed` events (not just idle ones), so `act()` can handle both idle (schedule check) and non-idle (clear debounce) transitions.
+
+**This is a correctness bug that must be fixed before merge.**
+
+---
+
+### B2. ISSUE: Test for Debounce Reset Is Misleading
+
+**Severity**: Medium (test does not catch the bug)
+
+The test "allows a new check after agent transitions through non-idle state" manually sets `getMeta` to return `null` to simulate the debounce being cleared:
+
+```typescript
+// Agent goes working — behavior should clear debounce via act on working event
+const workingEvent = makeWorkingEvent("agent-1");
+await behavior.act(workingEvent, state, comm);
+
+// Agent goes idle again — debounce was cleared so new check is allowed
+// (getMeta returns null because setMeta was called to clear it during working transition)
+(state.getMeta as ReturnType<typeof vi.fn>).mockReturnValue(null);
+await behavior.act(makeIdleEvent("agent-1"), state, comm);
+```
+
+The test calls `behavior.act()` directly, bypassing `shouldAct()`. In production, the behavior registry calls `shouldAct()` first, which returns `false` for working events, so `act()` is never invoked. The test passes but does not reflect real behavior.
+
+**Fix**: The test should either:
+1. Simulate the full behavior registry flow (call `shouldAct` then `act` only if it returns true), OR
+2. At minimum, assert that `shouldAct` returns `true` for non-idle events (if the fix from B1 is applied)
+
+---
+
+### B3. OBSERVATION: buildScheduleReason Is a Stub
+
+**Severity**: Low (expected, this is Phase 1)
+
+The `buildScheduleReason()` function is a placeholder that only includes the agent ID:
+
+```typescript
+function buildScheduleReason(agentId: string, _proposalStore: ProposalStore): string {
+  return `Agent "${agentId}" has been idle for 5 minutes. Consider nudging them to work on proposals.`;
+}
+```
+
+This is expected per the plan (proposal context added in adj-057.1.4, cap in adj-057.1.6). But it means the current implementation does NOT satisfy FR-004 or FR-005 yet.
+
+**Not blocking for this phase**, but Phase 2 must be reviewed separately.
+
+---
+
+### B4. OBSERVATION: No Registration in index.ts Yet
+
+**Severity**: Low (expected, planned for adj-057.2.1)
+
+The behavior is not yet registered in `backend/src/index.ts`. This is planned for T007.
+
+---
+
+### B5. QUESTION: Debounce Clears to Empty String, Not null
+
+The debounce reset sets the meta key to an empty string:
+
+```typescript
+state.setMeta(`${DEBOUNCE_META_PREFIX}${agentId}`, "");
+```
+
+But the debounce check tests for truthiness:
+
+```typescript
+const existingCheckId = state.getMeta(`${DEBOUNCE_META_PREFIX}${agentId}`);
+if (existingCheckId) return;
+```
+
+Empty string `""` is falsy in JavaScript, so this works correctly. However, it would be cleaner and more explicit to delete the key entirely (if the API supported it) or to compare against `null`. The current approach works but relies on JS truthiness semantics.
+
+**Severity**: Low (works correctly, but fragile if someone changes the check to `!== null`)
+
+---
+
+### Phase B Summary
+
+| ID | Severity | Category | Summary |
+|----|----------|----------|---------|
+| B1 | **High** | Bug | `shouldAct` rejects non-idle events, preventing debounce reset in `act()` -- agents only get one nudge ever |
+| B2 | Medium | Test Gap | Debounce reset test bypasses `shouldAct`, masking B1 bug |
+| B3 | Low | Expected | `buildScheduleReason` is a stub (proposal context not yet implemented) |
+| B4 | Low | Expected | Behavior not yet registered in index.ts |
+| B5 | Low | Fragility | Debounce clear uses empty string -- works via JS truthiness but fragile |
+
+**Blocking issues**: B1 (High) -- `shouldAct` must return `true` for all `agent:status_changed` events so debounce reset logic in `act()` can execute. Without this fix, the debounce is never cleared and agents get at most one nudge per lifetime.
+
+**B2** should also be fixed alongside B1 -- the test needs to reflect the actual behavior registry flow.
