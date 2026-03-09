@@ -196,7 +196,8 @@ function enrichWithCostData(members: CrewMember[]): void {
     if (!costEntry) continue;
 
     member.cost = costEntry.cost;
-    member.contextPercent = estimateContextPercent(costEntry);
+    // Prefer direct context % from Claude Code status bar over estimated
+    member.contextPercent = costEntry.contextPercent ?? estimateContextPercent(costEntry);
   }
 }
 

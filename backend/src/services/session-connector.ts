@@ -356,15 +356,24 @@ export class SessionConnector {
 
     // Lines after the overlap are genuinely new
     const added = newContent.slice(overlapLen);
-    if (added.length === 0) return [];
 
-    // Reset parser for a fresh parse of the new content
-    parser.reset();
+    // Parse conversation events from new content
     const events: OutputEvent[] = [];
-    for (const line of added) {
-      events.push(...parser.parseLine(line));
+    if (added.length > 0) {
+      parser.reset();
+      for (const line of added) {
+        events.push(...parser.parseLine(line));
+      }
+      events.push(...parser.flush());
     }
-    events.push(...parser.flush());
+
+    // Also scan raw lines for status bar context/cost data that
+    // extractConversation filters out. Claude Code's status bar shows
+    // context usage as "NN% ❯❯❯" and optionally "Context left until auto-compact: N%".
+    const statusBarEvent = this.extractStatusBarCost(newLines);
+    if (statusBarEvent) {
+      events.push(statusBarEvent);
+    }
 
     return events;
   }
@@ -408,6 +417,52 @@ export class SessionConnector {
     }
 
     return result;
+  }
+
+  /**
+   * Extract context window usage from Claude Code's status bar.
+   *
+   * Claude Code's TUI status bar shows context usage in this format:
+   *   ~/code/ai/adjutant main 31% ❯❯❯
+   *
+   * And optionally on the right side:
+   *   Context left until auto-compact: 6%
+   *
+   * These lines are filtered out by extractConversation() since they're
+   * TUI chrome, so we scan raw lines separately.
+   */
+  private extractStatusBarCost(lines: string[]): OutputEvent | null {
+    // Pattern: "NN% ❯❯❯" in the status bar — this is context usage percentage
+    const STATUS_BAR = /(\d+)%\s*❯❯/;
+    // Pattern: "Context left until auto-compact: N%" — remaining context
+    const CONTEXT_LEFT = /Context left[^:]*:\s*(\d+)%/;
+
+    for (const line of lines) {
+      const statusMatch = line.match(STATUS_BAR);
+      if (statusMatch) {
+        const contextUsedPercent = parseInt(statusMatch[1] ?? "0", 10);
+        // Claude Code shows total tokens used as percentage of context window.
+        // Convert to approximate token count: percent * 200k / 100
+        const estimatedTokens = Math.round((contextUsedPercent / 100) * 200_000);
+
+        // Check for remaining context on the same or nearby lines
+        const leftMatch = line.match(CONTEXT_LEFT);
+        const contextLeftPercent = leftMatch ? parseInt(leftMatch[1] ?? "0", 10) : undefined;
+
+        return {
+          type: "cost_update",
+          tokens: {
+            input: estimatedTokens,
+          },
+          // We can't determine dollar cost from the status bar — only context %
+          // Store the raw context percent for direct use
+          contextPercent: contextUsedPercent,
+          contextLeftPercent,
+        } as OutputEvent;
+      }
+    }
+
+    return null;
   }
 
 }

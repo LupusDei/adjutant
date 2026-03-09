@@ -40,6 +40,10 @@ export type OutputEvent =
         cacheWrite?: number;
       };
       cost?: number;
+      /** Context window usage percentage (0-100) from Claude Code status bar */
+      contextPercent?: number;
+      /** Context remaining until auto-compact (from status bar) */
+      contextLeftPercent?: number;
     }
   | { type: "raw"; data: string };
 

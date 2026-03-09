@@ -155,6 +155,7 @@ export class SessionBridge {
             recordCostUpdate(sessionId, projectPath, {
               ...(event.tokens ? { tokens: event.tokens } : {}),
               ...(event.cost !== undefined ? { cost: event.cost } : {}),
+              ...(event.contextPercent !== undefined ? { contextPercent: event.contextPercent } : {}),
             });
           }
         }

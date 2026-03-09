@@ -25,6 +25,8 @@ export interface CostEntry {
   };
   cost: number;
   lastUpdated: string;
+  /** Direct context window usage % from Claude Code status bar (0-100) */
+  contextPercent?: number;
 }
 
 export interface CostSummary {
@@ -166,6 +168,7 @@ export function recordCostUpdate(
   update: {
     tokens?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
     cost?: number;
+    contextPercent?: number;
     agentId?: string;
     beadId?: string;
   }
@@ -202,6 +205,11 @@ export function recordCostUpdate(
   // Update cost
   if (update.cost !== undefined) {
     entry.cost = Math.max(entry.cost, update.cost);
+  }
+
+  // Update context percent (direct from Claude Code status bar)
+  if (update.contextPercent !== undefined) {
+    entry.contextPercent = update.contextPercent;
   }
 
   entry.lastUpdated = new Date().toISOString();
