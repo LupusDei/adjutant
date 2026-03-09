@@ -26,6 +26,7 @@ import {
   checkBudget,
   getBurnRate,
   getBeadCost,
+  getEpicCost,
 } from "../../src/services/cost-tracker.js";
 import type Database from "better-sqlite3";
 
@@ -362,6 +363,70 @@ describe("cost-tracker", () => {
       const entry = getSessionCost("sess-1");
       expect(entry!.cost).toBe(0.09);
       expect(entry!.tokens.input).toBe(900);
+    });
+
+    it("should handle budget with zero amount", () => {
+      upsertBudget({ scope: "session", scopeId: "sess-1", amount: 0 });
+      recordCostUpdate("sess-1", "/project", { cost: 5.0 });
+      const status = checkBudget("sess-1");
+      expect(status).toBeDefined();
+      // percentUsed should be 0 (not Infinity) when budget amount is 0
+      expect(status!.percentUsed).toBe(0);
+      expect(Number.isFinite(status!.percentUsed)).toBe(true);
+    });
+
+    it("should handle very large cost values (>$1000)", () => {
+      recordCostUpdate("sess-1", "/project", {
+        cost: 1500.99,
+        tokens: { input: 5000000, output: 2000000, cacheRead: 1000000, cacheWrite: 500000 },
+      });
+      const entry = getSessionCost("sess-1");
+      expect(entry!.cost).toBe(1500.99);
+      expect(entry!.tokens.input).toBe(5000000);
+    });
+
+    it("should handle very large token counts (>1M)", () => {
+      recordCostUpdate("sess-1", "/project", {
+        cost: 50.0,
+        tokens: { input: 2000000, output: 1000000, cacheRead: 500000, cacheWrite: 250000 },
+      });
+      const summary = getCostSummary();
+      expect(summary.totalTokens.input).toBe(2000000);
+      expect(summary.totalTokens.output).toBe(1000000);
+    });
+
+    it("should use custom budget thresholds for status", () => {
+      // Custom thresholds: warn at 50%, critical at 75%
+      upsertBudget({ scope: "session", scopeId: "sess-1", amount: 100, warningPercent: 50, criticalPercent: 75 });
+
+      // 60% spent — should be warning (above 50% custom threshold)
+      recordCostUpdate("sess-1", "/project", { cost: 60.0 });
+      const statusWarning = checkBudget("sess-1");
+      expect(statusWarning!.status).toBe("warning");
+
+      // 80% spent — should be critical (above 75% custom threshold, but not >100%)
+      recordCostUpdate("sess-1", "/project", { cost: 80.0 });
+      const statusCritical = checkBudget("sess-1");
+      expect(statusCritical!.status).toBe("critical");
+    });
+
+    it("should return null for per-bead cost when bead has no sessions", () => {
+      // Record costs but for a different bead
+      recordCostUpdate("sess-1", "/project", { cost: 5.0, beadId: "adj-001" });
+      expect(getBeadCost("adj-999")).toBeNull();
+    });
+
+    it("should deduplicate sessions in epic cost when session spans multiple beads", () => {
+      // Same session works on two child beads
+      recordCostUpdate("sess-1", "/project", { cost: 10.0, beadId: "adj-001.1" });
+      recordCostUpdate("sess-1", "/project", { cost: 15.0, beadId: "adj-001.2" });
+
+      // Cost entries for sess-1 will be updated to latest (15.0) since upsert uses max
+      const epicResult = getEpicCost("adj-001", ["adj-001.1", "adj-001.2"]);
+      // Should not double-count the session
+      expect(epicResult).toBeDefined();
+      expect(epicResult!.sessions).toHaveLength(1);
+      expect(epicResult!.totalCost).toBe(15.0);
     });
   });
 });

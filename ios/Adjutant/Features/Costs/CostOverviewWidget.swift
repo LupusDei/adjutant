@@ -48,7 +48,8 @@ struct CostOverviewWidget: View {
 
                     // Budget bar (if exists)
                     if let budget = viewModel.primaryBudget {
-                        budgetMiniBar(budget)
+                        let spend = budget.spendStatus(totalSpent: viewModel.costSummary?.totalCost ?? 0)
+                        budgetMiniBar(budget, spend: spend)
                     }
                 } else if viewModel.errorMessage != nil {
                     EmptyStateView(
@@ -72,7 +73,7 @@ struct CostOverviewWidget: View {
 
     // MARK: - Budget Mini Bar
 
-    private func budgetMiniBar(_ budget: BudgetStatus) -> some View {
+    private func budgetMiniBar(_ budget: BudgetStatus, spend: BudgetSpendStatus) -> some View {
         VStack(spacing: CRTTheme.Spacing.xxs) {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
@@ -80,25 +81,25 @@ struct CostOverviewWidget: View {
                         .fill(theme.dim.opacity(0.15))
                         .frame(height: 6)
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(budgetColor(budget))
-                        .frame(width: geo.size.width * min(budget.percentUsed / 100.0, 1.0), height: 6)
+                        .fill(budgetColor(spend))
+                        .frame(width: geo.size.width * min(spend.percentUsed / 100.0, 1.0), height: 6)
                 }
             }
             .frame(height: 6)
 
             HStack {
                 CRTText(
-                    "\(formatDollars(budget.spent)) / \(formatDollars(budget.amount))",
+                    "\(formatDollars(spend.spent)) / \(formatDollars(spend.budget))",
                     style: .caption,
                     glowIntensity: .none,
                     color: theme.dim
                 )
                 Spacer()
                 CRTText(
-                    String(format: "%.0f%%", budget.percentUsed),
+                    String(format: "%.0f%%", spend.percentUsed),
                     style: .caption,
                     glowIntensity: .none,
-                    color: budgetColor(budget)
+                    color: budgetColor(spend)
                 )
             }
         }
@@ -112,8 +113,8 @@ struct CostOverviewWidget: View {
         }
     }
 
-    private func budgetColor(_ budget: BudgetStatus) -> Color {
-        switch budget.status {
+    private func budgetColor(_ spend: BudgetSpendStatus) -> Color {
+        switch spend.status {
         case "exceeded", "critical": return CRTTheme.State.error
         case "warning": return CRTTheme.State.warning
         default: return CRTTheme.State.success

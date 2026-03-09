@@ -29,7 +29,8 @@ struct CostDashboardView: View {
 
                     // Budget bar (if budget exists)
                     if let budget = viewModel.primaryBudget {
-                        budgetCard(budget)
+                        let spend = budget.spendStatus(totalSpent: viewModel.costSummary?.totalCost ?? 0)
+                        budgetCard(budget, spend: spend)
                     }
 
                     // Per-agent breakdown
@@ -143,13 +144,13 @@ struct CostDashboardView: View {
 
     // MARK: - Budget Card
 
-    private func budgetCard(_ budget: BudgetStatus) -> some View {
+    private func budgetCard(_ budget: BudgetStatus, spend: BudgetSpendStatus) -> some View {
         CRTCard(style: .standard) {
             VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
                 HStack {
                     CRTText("BUDGET", style: .caption, glowIntensity: .subtle, color: theme.dim)
                     Spacer()
-                    BadgeView(budget.status.uppercased(), style: .status(budgetStatusType(budget)))
+                    BadgeView(spend.status.uppercased(), style: .status(budgetStatusType(spend)))
                 }
 
                 // Progress bar
@@ -162,12 +163,12 @@ struct CostDashboardView: View {
 
                         // Progress fill
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(budgetColor(budget))
+                            .fill(budgetColor(spend))
                             .frame(
-                                width: geometry.size.width * min(budget.percentUsed / 100.0, 1.0),
+                                width: geometry.size.width * min(spend.percentUsed / 100.0, 1.0),
                                 height: 12
                             )
-                            .crtGlow(color: budgetColor(budget), radius: 4, intensity: 0.5)
+                            .crtGlow(color: budgetColor(spend), radius: 4, intensity: 0.5)
 
                         // Warning threshold line
                         Rectangle()
@@ -187,19 +188,19 @@ struct CostDashboardView: View {
                 // Budget text
                 HStack {
                     CRTText(
-                        "\(viewModel.formatDollars(budget.spent)) / \(viewModel.formatDollars(budget.amount))",
+                        "\(viewModel.formatDollars(spend.spent)) / \(viewModel.formatDollars(spend.budget))",
                         style: .body,
                         glowIntensity: .subtle,
-                        color: budgetColor(budget)
+                        color: budgetColor(spend)
                     )
 
                     Spacer()
 
                     CRTText(
-                        String(format: "%.0f%%", budget.percentUsed),
+                        String(format: "%.0f%%", spend.percentUsed),
                         style: .mono,
                         glowIntensity: .medium,
-                        color: budgetColor(budget)
+                        color: budgetColor(spend)
                     )
                 }
             }
@@ -207,8 +208,8 @@ struct CostDashboardView: View {
         .padding(.horizontal, CRTTheme.Spacing.md)
     }
 
-    private func budgetColor(_ budget: BudgetStatus) -> Color {
-        switch budget.status {
+    private func budgetColor(_ spend: BudgetSpendStatus) -> Color {
+        switch spend.status {
         case "exceeded": return CRTTheme.State.error
         case "critical": return CRTTheme.State.error
         case "warning": return CRTTheme.State.warning
@@ -216,8 +217,8 @@ struct CostDashboardView: View {
         }
     }
 
-    private func budgetStatusType(_ budget: BudgetStatus) -> BadgeView.Style.StatusType {
-        switch budget.status {
+    private func budgetStatusType(_ spend: BudgetSpendStatus) -> BadgeView.Style.StatusType {
+        switch spend.status {
         case "exceeded", "critical": return .warning
         case "warning": return .info
         default: return .success

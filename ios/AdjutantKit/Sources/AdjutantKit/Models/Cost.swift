@@ -123,8 +123,9 @@ public struct BurnRate: Codable, Equatable {
 
 // MARK: - Budget Status
 
-/// Budget configuration and current spend status.
-/// Returned by GET /api/costs/budget.
+/// Budget record returned by GET /api/costs/budget.
+/// Matches the backend BudgetRecord shape exactly.
+/// Spend status is computed client-side from the cost summary.
 public struct BudgetStatus: Codable, Identifiable, Equatable {
     /// Unique budget identifier
     public let id: Int
@@ -133,47 +134,82 @@ public struct BudgetStatus: Codable, Identifiable, Equatable {
     /// Scope target identifier (session ID or project path), nil for global
     public let scopeId: String?
     /// Budget amount in dollars
-    public let amount: Double
+    public let budgetAmount: Double
     /// Percentage threshold for warning alerts
     public let warningPercent: Double
     /// Percentage threshold for critical alerts
     public let criticalPercent: Double
-    /// Current amount spent in dollars
-    public let spent: Double
-    /// Current spend as percentage of budget (0-100)
-    public let percentUsed: Double
-    /// Current budget status: "ok", "warning", "critical", or "exceeded"
-    public let status: String
+    /// Creation timestamp (ISO 8601)
+    public let createdAt: String
+    /// Last update timestamp (ISO 8601)
+    public let updatedAt: String
 
     public init(
         id: Int,
         scope: String,
         scopeId: String?,
-        amount: Double,
+        budgetAmount: Double,
         warningPercent: Double,
         criticalPercent: Double,
-        spent: Double,
-        percentUsed: Double,
-        status: String
+        createdAt: String,
+        updatedAt: String
     ) {
         self.id = id
         self.scope = scope
         self.scopeId = scopeId
-        self.amount = amount
+        self.budgetAmount = budgetAmount
         self.warningPercent = warningPercent
         self.criticalPercent = criticalPercent
-        self.spent = spent
-        self.percentUsed = percentUsed
-        self.status = status
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
 
-    /// Remaining budget amount
-    public var remaining: Double {
-        max(0, amount - spent)
+    /// Compute spend status given the current total spent.
+    public func spendStatus(totalSpent: Double) -> BudgetSpendStatus {
+        let pctUsed = budgetAmount > 0 ? (totalSpent / budgetAmount) * 100.0 : 0
+        let label: String
+        if pctUsed > 100 {
+            label = "exceeded"
+        } else if pctUsed >= criticalPercent {
+            label = "critical"
+        } else if pctUsed >= warningPercent {
+            label = "warning"
+        } else {
+            label = "ok"
+        }
+        return BudgetSpendStatus(
+            budget: budgetAmount,
+            spent: totalSpent,
+            percentUsed: pctUsed,
+            status: label,
+            remaining: max(0, budgetAmount - totalSpent)
+        )
     }
 }
 
+/// Computed spend status for a budget (not from API — derived client-side).
+public struct BudgetSpendStatus: Equatable {
+    public let budget: Double
+    public let spent: Double
+    public let percentUsed: Double
+    public let status: String
+    public let remaining: Double
+}
+
 // MARK: - Bead Cost
+
+/// Per-session cost entry within a bead cost result.
+public struct BeadSessionCost: Codable, Equatable {
+    public let sessionId: String
+    public let cost: Double
+    public let tokens: TokenBreakdown
+
+    public init(sessionId: String, cost: Double, tokens: TokenBreakdown) {
+        self.sessionId = sessionId
+        self.cost = cost
+        self.tokens = tokens
+    }
+}
 
 /// Cost data for a bead (issue/task), optionally aggregated with children.
 /// Returned by GET /api/costs/by-bead/:id.
@@ -182,17 +218,20 @@ public struct BeadCost: Codable, Equatable {
     public let beadId: String
     /// Total dollar cost for this bead (and children if requested)
     public let totalCost: Double
-    /// Number of sessions that contributed to this bead's cost
-    public let sessionCount: Int
+    /// Per-session cost breakdown
+    public let sessions: [BeadSessionCost]
     /// Token usage breakdown
     public let tokenBreakdown: TokenBreakdown
 
-    public init(beadId: String, totalCost: Double, sessionCount: Int, tokenBreakdown: TokenBreakdown) {
+    public init(beadId: String, totalCost: Double, sessions: [BeadSessionCost], tokenBreakdown: TokenBreakdown) {
         self.beadId = beadId
         self.totalCost = totalCost
-        self.sessionCount = sessionCount
+        self.sessions = sessions
         self.tokenBreakdown = tokenBreakdown
     }
+
+    /// Number of sessions that contributed to this bead's cost
+    public var sessionCount: Int { sessions.count }
 }
 
 // MARK: - Create Budget Request

@@ -45,18 +45,19 @@ function trendColor(trend: BurnRate['trend']): string {
   }
 }
 
-/** Get the budget bar color based on percentage used. */
-function budgetBarColor(percentUsed: number): string {
-  if (percentUsed >= 100) return '#FF4444';
-  if (percentUsed >= 80) return '#FFB000';
+/** Get the budget bar color based on percentage used and budget thresholds. */
+function budgetBarColor(percentUsed: number, warningPercent: number, criticalPercent: number): string {
+  if (percentUsed > 100) return '#FF4444';
+  if (percentUsed >= criticalPercent) return '#FF4444';
+  if (percentUsed >= warningPercent) return '#FFB000';
   return 'var(--crt-phosphor)';
 }
 
-/** Get the budget status label. */
-function budgetStatusLabel(percentUsed: number): string {
-  if (percentUsed >= 100) return 'EXCEEDED';
-  if (percentUsed >= 95) return 'CRITICAL';
-  if (percentUsed >= 80) return 'WARNING';
+/** Get the budget status label based on percentage used and budget thresholds. */
+function budgetStatusLabel(percentUsed: number, warningPercent: number, criticalPercent: number): string {
+  if (percentUsed > 100) return 'EXCEEDED';
+  if (percentUsed >= criticalPercent) return 'CRITICAL';
+  if (percentUsed >= warningPercent) return 'WARNING';
   return 'OK';
 }
 
@@ -140,8 +141,8 @@ function BudgetBar({ budget, totalSpent }: { budget: BudgetRecord; totalSpent: n
   const percentUsed = budget.budgetAmount > 0
     ? (totalSpent / budget.budgetAmount) * 100
     : 0;
-  const barColor = budgetBarColor(percentUsed);
-  const statusText = budgetStatusLabel(percentUsed);
+  const barColor = budgetBarColor(percentUsed, budget.warningPercent, budget.criticalPercent);
+  const statusText = budgetStatusLabel(percentUsed, budget.warningPercent, budget.criticalPercent);
   const clampedPercent = Math.min(percentUsed, 100);
 
   return (
