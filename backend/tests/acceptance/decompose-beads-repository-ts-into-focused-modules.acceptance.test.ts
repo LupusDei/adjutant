@@ -1,6 +1,6 @@
 /**
  * Acceptance Tests: Decompose beads-repository.ts into Focused Modules
- * Generated from: /Users/Reason/code/ai/adjutant/.claude/worktrees/agent-ad5a6715/specs/021-beads-repository-decompose/spec.md
+ * Generated from: ../specs/021-beads-repository-decompose/spec.md
  *
  * DO NOT EDIT GENERATED STRUCTURE — add step implementations only.
  */

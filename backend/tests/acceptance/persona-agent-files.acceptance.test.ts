@@ -1,6 +1,6 @@
 /**
  * Acceptance Tests: Persona Agent Files
- * Generated from: /Users/Reason/code/ai/adjutant/.claude/worktrees/agent-ad5a6715/specs/036-persona-agent-files/spec.md
+ * Generated from: ../specs/036-persona-agent-files/spec.md
  *
  * DO NOT EDIT GENERATED STRUCTURE — add step implementations only.
  */

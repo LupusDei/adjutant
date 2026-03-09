@@ -1,6 +1,6 @@
 /**
  * Acceptance Tests: Persistent Self-Correcting Memory System
- * Generated from: /Users/Reason/code/ai/adjutant/.claude/worktrees/agent-ad5a6715/specs/033-persistent-memory/spec.md
+ * Generated from: ../specs/033-persistent-memory/spec.md
  *
  * DO NOT EDIT GENERATED STRUCTURE — add step implementations only.
  */

@@ -1,6 +1,6 @@
 /**
  * Acceptance Tests: Batch Dashboard Initialization
- * Generated from: /Users/Reason/code/ai/adjutant/.claude/worktrees/agent-ad5a6715/specs/020-batch-dashboard/spec.md
+ * Generated from: ../specs/020-batch-dashboard/spec.md
  *
  * DO NOT EDIT GENERATED STRUCTURE — add step implementations only.
  */

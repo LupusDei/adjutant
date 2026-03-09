@@ -1,6 +1,6 @@
 /**
  * Acceptance Tests: Adjutant Bootstrap & Developer Setup
- * Generated from: /Users/Reason/code/ai/adjutant/.claude/worktrees/agent-ad5a6715/specs/011-bootstrap-setup/spec.md
+ * Generated from: ../specs/011-bootstrap-setup/spec.md
  *
  * DO NOT EDIT GENERATED STRUCTURE — add step implementations only.
  */

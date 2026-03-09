@@ -1,6 +1,6 @@
 /**
  * Acceptance Tests: Agent Activity Timeline & Audit Log
- * Generated from: /Users/Reason/code/ai/adjutant/.claude/worktrees/agent-ad5a6715/specs/028-agent-timeline/spec.md
+ * Generated from: ../specs/028-agent-timeline/spec.md
  *
  * DO NOT EDIT GENERATED STRUCTURE — add step implementations only.
  */

@@ -1,6 +1,6 @@
 /**
  * Acceptance Tests: Agent Task Assignment
- * Generated from: /Users/Reason/code/ai/adjutant/.claude/worktrees/agent-ad5a6715/specs/013-agent-task-assignment/spec.md
+ * Generated from: ../specs/013-agent-task-assignment/spec.md
  *
  * DO NOT EDIT GENERATED STRUCTURE — add step implementations only.
  */

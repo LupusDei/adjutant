@@ -1,6 +1,6 @@
 /**
  * Acceptance Tests: CLI Launcher
- * Generated from: /Users/Reason/code/ai/adjutant/.claude/worktrees/agent-ad5a6715/specs/002-cli-launcher/spec.md
+ * Generated from: ../specs/002-cli-launcher/spec.md
  *
  * DO NOT EDIT GENERATED STRUCTURE — add step implementations only.
  */

@@ -1,6 +1,6 @@
 /**
  * Acceptance Tests: StarCraft Callsign System for Agent Spawning
- * Generated from: /Users/Reason/code/ai/adjutant/.claude/worktrees/agent-ad5a6715/specs/014-starcraft-callsigns/spec.md
+ * Generated from: ../specs/014-starcraft-callsigns/spec.md
  *
  * DO NOT EDIT GENERATED STRUCTURE — add step implementations only.
  */

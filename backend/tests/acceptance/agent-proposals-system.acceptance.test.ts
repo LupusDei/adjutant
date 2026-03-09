@@ -1,6 +1,6 @@
 /**
  * Acceptance Tests: Agent Proposals System
- * Generated from: /Users/Reason/code/ai/adjutant/.claude/worktrees/agent-ad5a6715/specs/017-agent-proposals/spec.md
+ * Generated from: ../specs/017-agent-proposals/spec.md
  *
  * DO NOT EDIT GENERATED STRUCTURE — add step implementations only.
  */

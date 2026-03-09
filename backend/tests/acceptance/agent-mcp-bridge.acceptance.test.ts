@@ -1,6 +1,6 @@
 /**
  * Acceptance Tests: Agent MCP Bridge
- * Generated from: /Users/Reason/code/ai/adjutant/.claude/worktrees/agent-ad5a6715/specs/008-agent-mcp-bridge/spec.md
+ * Generated from: ../specs/008-agent-mcp-bridge/spec.md
  *
  * DO NOT EDIT GENERATED STRUCTURE — add step implementations only.
  */

@@ -1,6 +1,6 @@
 /**
  * Acceptance Tests: Multi-Project Discovery & Agent Spawning
- * Generated from: /Users/Reason/code/ai/adjutant/.claude/worktrees/agent-ad5a6715/specs/023-multi-project-discovery/spec.md
+ * Generated from: ../specs/023-multi-project-discovery/spec.md
  *
  * DO NOT EDIT GENERATED STRUCTURE — add step implementations only.
  */

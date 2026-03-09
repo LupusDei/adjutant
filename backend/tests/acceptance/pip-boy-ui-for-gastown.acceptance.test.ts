@@ -1,6 +1,6 @@
 /**
  * Acceptance Tests: Pip-Boy UI for Gastown
- * Generated from: /Users/Reason/code/ai/adjutant/.claude/worktrees/agent-ad5a6715/specs/001-pipboy-ui/spec.md
+ * Generated from: ../specs/001-pipboy-ui/spec.md
  *
  * DO NOT EDIT GENERATED STRUCTURE — add step implementations only.
  */

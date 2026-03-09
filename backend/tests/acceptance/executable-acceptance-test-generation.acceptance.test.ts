@@ -1,6 +1,6 @@
 /**
  * Acceptance Tests: Executable Acceptance Test Generation
- * Generated from: /Users/Reason/code/ai/adjutant/.claude/worktrees/agent-ad5a6715/specs/031-executable-acceptance-tests/spec.md
+ * Generated from: ../specs/031-executable-acceptance-tests/spec.md
  *
  * DO NOT EDIT GENERATED STRUCTURE — add step implementations only.
  */

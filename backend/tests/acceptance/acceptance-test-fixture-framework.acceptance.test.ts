@@ -1,6 +1,6 @@
 /**
  * Acceptance Tests: Acceptance Test Fixture Framework
- * Generated from: /Users/Reason/code/ai/adjutant/.claude/worktrees/agent-ad5a6715/specs/030-acceptance-test-fixtures/spec.md
+ * Generated from: ../specs/030-acceptance-test-fixtures/spec.md
  *
  * DO NOT EDIT GENERATED STRUCTURE — add step implementations only.
  */
