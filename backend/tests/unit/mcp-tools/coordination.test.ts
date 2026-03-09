@@ -109,7 +109,7 @@ const { mockInsertMessage } = vi.hoisted(() => {
 // ============================================================================
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerCoordinationTools } from "../../../src/services/mcp-tools/coordination.js";
+import { registerCoordinationTools, _resetAutoNameCounter } from "../../../src/services/mcp-tools/coordination.js";
 import type { AdjutantState } from "../../../src/services/adjutant/state-store.js";
 import type { MessageStore } from "../../../src/services/message-store.js";
 import type { StimulusEngine } from "../../../src/services/adjutant/stimulus-engine.js";
@@ -140,6 +140,9 @@ function createMockState(): AdjutantState {
     getLastSpawn: vi.fn().mockReturnValue(null),
     countActiveSpawns: vi.fn().mockReturnValue(0),
     markAllDisconnected: vi.fn().mockReturnValue(0),
+    recordOutcome: vi.fn(),
+    getRecentDecisionsWithOutcomes: vi.fn().mockReturnValue([]),
+    getDecisionsForTarget: vi.fn().mockReturnValue([]),
   };
 }
 
@@ -208,6 +211,7 @@ function parseResult(result: unknown): Record<string, unknown> {
 describe("MCP Coordination Tools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    _resetAutoNameCounter();
   });
 
   // ==========================================================================
@@ -932,6 +936,225 @@ describe("MCP Coordination Tools", () => {
 
       const r = result as { content: Array<{ text: string }>; isError?: boolean };
       expect(r.isError).toBe(true);
+    });
+
+    it("should set isError on restricted result for non-adjutant agents", async () => {
+      mockGetAgentBySession.mockReturnValue("worker-5");
+
+      const handler = getToolHandler("spawn_worker");
+      const result = await handler(
+        { prompt: "test" },
+        { sessionId: "worker-session" },
+      );
+
+      const r = result as { content: Array<{ text: string }>; isError?: boolean };
+      expect(r.isError).toBe(true);
+    });
+  });
+
+  // ==========================================================================
+  // Auto-name counter (adj-054.7 — QA)
+  // ==========================================================================
+
+  describe("auto-name counter", () => {
+    it("should generate sequential agent names", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+      mockSpawnAgent.mockResolvedValue({ success: true, sessionId: "s1" });
+
+      const handler = getToolHandler("spawn_worker");
+      const result1 = await handler({ prompt: "work 1" }, { sessionId: "adj-session" });
+      const result2 = await handler({ prompt: "work 2" }, { sessionId: "adj-session" });
+
+      const data1 = parseResult(result1);
+      const data2 = parseResult(result2);
+      expect(data1.agentName).toBe("agent-1");
+      expect(data2.agentName).toBe("agent-2");
+    });
+
+    it("should reset counter between tests via _resetAutoNameCounter", () => {
+      // _resetAutoNameCounter is called in beforeEach, so counter starts at 0
+      // This test verifies the reset worked by checking names start fresh
+      mockGetAgentBySession.mockReturnValue("adjutant");
+      mockSpawnAgent.mockResolvedValue({ success: true, sessionId: "s1" });
+
+      const handler = getToolHandler("spawn_worker");
+      return handler({ prompt: "first spawn" }, { sessionId: "adj-session" }).then((result) => {
+        const data = parseResult(result);
+        expect(data.agentName).toBe("agent-1");
+      });
+    });
+  });
+
+  // ==========================================================================
+  // schedule_check edge cases (adj-054.7 — QA)
+  // ==========================================================================
+
+  describe("schedule_check edge cases", () => {
+    it("should reject zero-value delays like '0s'", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const handler = getToolHandler("schedule_check");
+      const result = await handler(
+        { delay: "0s", reason: "Immediate" },
+        { sessionId: "adj-session" },
+      );
+
+      const data = parseResult(result);
+      expect(data.success).toBe(false);
+      expect(data.error).toContain("Invalid delay");
+    });
+
+    it("should reject zero-value delays like '0m'", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const handler = getToolHandler("schedule_check");
+      const result = await handler(
+        { delay: "0m", reason: "Immediate" },
+        { sessionId: "adj-session" },
+      );
+
+      const data = parseResult(result);
+      expect(data.success).toBe(false);
+      expect(data.error).toContain("Invalid delay");
+    });
+
+    it("should return error when stimulus engine is unavailable", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const server = createMockServer();
+      const state = createMockState();
+      const messageStore = createMockMessageStore();
+      // Register without stimulus engine
+      registerCoordinationTools(server, state, messageStore, undefined);
+
+      const call = mockTool.mock.calls.find((c: unknown[]) => c[0] === "schedule_check");
+      const handler = call![3] as (...args: unknown[]) => Promise<unknown>;
+      const result = await handler(
+        { delay: "5m", reason: "test" },
+        { sessionId: "adj-session" },
+      );
+
+      const data = parseResult(result);
+      expect(data.success).toBe(false);
+      expect(data.error).toContain("not available");
+    });
+  });
+
+  // ==========================================================================
+  // watch_for edge cases (adj-054.7 — QA)
+  // ==========================================================================
+
+  describe("watch_for edge cases", () => {
+    it("should reject zero-value timeout like '0m'", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const handler = getToolHandler("watch_for");
+      const result = await handler(
+        { event: "bead:closed", timeout: "0m", reason: "test" },
+        { sessionId: "adj-session" },
+      );
+
+      const data = parseResult(result);
+      expect(data.success).toBe(false);
+      expect(data.error).toContain("Invalid timeout");
+    });
+
+    it("should return error when stimulus engine is unavailable", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const server = createMockServer();
+      const state = createMockState();
+      const messageStore = createMockMessageStore();
+      registerCoordinationTools(server, state, messageStore, undefined);
+
+      const call = mockTool.mock.calls.find((c: unknown[]) => c[0] === "watch_for");
+      const handler = call![3] as (...args: unknown[]) => Promise<unknown>;
+      const result = await handler(
+        { event: "bead:closed", reason: "test" },
+        { sessionId: "adj-session" },
+      );
+
+      const data = parseResult(result);
+      expect(data.success).toBe(false);
+      expect(data.error).toContain("not available");
+    });
+  });
+
+  // ==========================================================================
+  // nudge_agent edge cases (adj-054.7 — QA)
+  // ==========================================================================
+
+  describe("nudge_agent edge cases", () => {
+    it("should return error when sendInput fails", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+      mockFindByName.mockReturnValue([{ id: "session-42", status: "idle" }]);
+      mockSendInput.mockResolvedValue(false);
+
+      const handler = getToolHandler("nudge_agent");
+      const result = await handler(
+        { agentId: "worker-1", message: "Hello" },
+        { sessionId: "adj-session" },
+      );
+
+      const data = parseResult(result);
+      expect(data.success).toBe(false);
+      expect(data.error).toContain("Failed to send");
+    });
+
+    it("should return error when findByName returns null", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+      mockFindByName.mockReturnValue(null);
+
+      const handler = getToolHandler("nudge_agent");
+      const result = await handler(
+        { agentId: "ghost", message: "Hello" },
+        { sessionId: "adj-session" },
+      );
+
+      const data = parseResult(result);
+      expect(data.success).toBe(false);
+      expect(data.error).toContain("not found");
+    });
+  });
+
+  // ==========================================================================
+  // decommission_agent edge cases (adj-054.7 — QA)
+  // ==========================================================================
+
+  describe("decommission_agent edge cases", () => {
+    it("should skip markDecommissioned when no spawn record exists", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const state = createMockState();
+      (state.getLastSpawn as ReturnType<typeof vi.fn>).mockReturnValue(null);
+
+      const handler = getToolHandler("decommission_agent", state);
+      await handler(
+        { agentId: "worker-1", reason: "Done" },
+        { sessionId: "adj-session" },
+      );
+
+      expect(state.markDecommissioned).not.toHaveBeenCalled();
+    });
+
+    it("should skip markDecommissioned when spawn is already decommissioned", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const state = createMockState();
+      (state.getLastSpawn as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: 5,
+        agentId: "worker-1",
+        spawnedAt: "2026-03-09T00:00:00Z",
+        decommissionedAt: "2026-03-09T01:00:00Z",
+      });
+
+      const handler = getToolHandler("decommission_agent", state);
+      await handler(
+        { agentId: "worker-1", reason: "Done" },
+        { sessionId: "adj-session" },
+      );
+
+      expect(state.markDecommissioned).not.toHaveBeenCalled();
     });
   });
 });

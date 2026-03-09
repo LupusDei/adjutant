@@ -75,6 +75,7 @@ function restrictedResult() {
       type: "text" as const,
       text: JSON.stringify({ error: "Coordination tools are restricted to the adjutant agent" }),
     }],
+    isError: true as const,
   };
 }
 
@@ -92,6 +93,7 @@ function parseDelay(delay: string): number | null {
   const match = delay.match(/^(\d+)(s|m|h)$/);
   if (!match) return null;
   const value = parseInt(match[1]!, 10);
+  if (value <= 0) return null;
   const unit = match[2]!;
   switch (unit) {
     case "s": return value * 1_000;

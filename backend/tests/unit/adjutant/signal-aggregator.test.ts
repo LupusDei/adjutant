@@ -286,4 +286,77 @@ describe("SignalAggregator", () => {
       expect(rate).toBeLessThanOrEqual(10);
     });
   });
+
+  // ======================================================================
+  // Edge cases (adj-054.7 — QA)
+  // ======================================================================
+
+  describe("edge cases", () => {
+    it("handles null data without crashing", () => {
+      // null data should classify as context and not crash dedupKey
+      expect(() => {
+        aggregator.ingest("build:passed", null);
+      }).not.toThrow();
+      expect(aggregator.bufferSize()).toBe(1);
+    });
+
+    it("handles undefined data without crashing", () => {
+      expect(() => {
+        aggregator.ingest("build:passed", undefined);
+      }).not.toThrow();
+    });
+
+    it("handles primitive data without crashing", () => {
+      expect(() => {
+        aggregator.ingest("build:passed", 42);
+      }).not.toThrow();
+      expect(() => {
+        aggregator.ingest("build:passed", "string-data");
+      }).not.toThrow();
+    });
+
+    it("classifies agent:status_changed with null data as context (not crash)", () => {
+      expect(() => {
+        aggregator.ingest("agent:status_changed", null);
+      }).not.toThrow();
+      expect(onCriticalSpy).not.toHaveBeenCalled();
+    });
+
+    it("classifies bead:created with non-numeric priority as context", () => {
+      aggregator.ingest("bead:created", { id: "adj-100", priority: "high" });
+      expect(onCriticalSpy).not.toHaveBeenCalled();
+    });
+
+    it("classifies bead:created with missing priority as context", () => {
+      aggregator.ingest("bead:created", { id: "adj-100" });
+      expect(onCriticalSpy).not.toHaveBeenCalled();
+    });
+
+    it("prunes ingestTimestamps to prevent memory leak during heavy traffic", () => {
+      // Ingest 200 signals to trigger timestamp pruning
+      for (let i = 0; i < 200; i++) {
+        aggregator.ingest("build:passed", { agentId: `w${i}`, streamId: `s${i}` });
+      }
+      // Advance 6 minutes so all timestamps are old
+      vi.advanceTimersByTime(6 * 60 * 1000);
+      // Ingest more to trigger pruning of old timestamps
+      for (let i = 0; i < 200; i++) {
+        aggregator.ingest("build:passed", { agentId: `w${i + 200}`, streamId: `s${i + 200}` });
+      }
+      // signalsPerMinute should only count recent ones
+      const rate = aggregator.signalsPerMinute();
+      // Should reflect ~200 signals in the last 5 minutes, not 400
+      expect(rate).toBeLessThan(60); // 200 / ~5min = ~40/min
+    });
+
+    it("snapshot returns defensive copies (modifying result does not affect buffer)", () => {
+      aggregator.ingest("build:passed", { agentId: "w1", streamId: "s1" });
+      const snap = aggregator.snapshot();
+      // Modify the snapshot
+      snap["build:passed"]![0]!.count = 999;
+      // Original buffer should be unaffected
+      const snap2 = aggregator.snapshot();
+      expect(snap2["build:passed"]![0]!.count).toBe(1);
+    });
+  });
 });

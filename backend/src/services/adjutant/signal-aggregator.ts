@@ -59,16 +59,16 @@ function classify(event: EventName, data: unknown): SignalUrgency {
       return "critical";
 
     case "agent:status_changed": {
-      const payload = data as Record<string, unknown>;
-      if (payload["status"] === "blocked") {
+      const payload = data as Record<string, unknown> | null | undefined;
+      if (payload?.["status"] === "blocked") {
         return "critical";
       }
       return "context";
     }
 
     case "bead:created": {
-      const payload = data as Record<string, unknown>;
-      const priority = payload["priority"];
+      const payload = data as Record<string, unknown> | null | undefined;
+      const priority = payload?.["priority"];
       if (typeof priority === "number" && priority <= 1) {
         return "critical";
       }
@@ -123,6 +123,12 @@ export class SignalAggregator {
   ingest(event: EventName, data: unknown): void {
     const now = new Date();
     this.ingestTimestamps.push(now.getTime());
+
+    // Prune ingest timestamps older than 5 minutes to prevent unbounded growth
+    const fiveMinAgo = now.getTime() - 5 * 60 * 1000;
+    if (this.ingestTimestamps.length > 100) {
+      this.ingestTimestamps = this.ingestTimestamps.filter((t) => t >= fiveMinAgo);
+    }
 
     // Lazy cleanup: prune expired signals
     this.pruneExpired(now);

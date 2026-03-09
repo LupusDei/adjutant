@@ -238,6 +238,113 @@ describe("StimulusEngine", () => {
       expect(wakeSpy).toHaveBeenCalledOnce();
       expect(spy2).toHaveBeenCalledOnce();
     });
+
+    it("does not break engine if callback throws", () => {
+      const throwingSpy = vi.fn(() => { throw new Error("boom"); });
+      const spy2 = vi.fn();
+      engine = new StimulusEngine();
+      engine.onWake(throwingSpy);
+      engine.onWake(spy2);
+      engine.handleCriticalSignal(makeSignal());
+      expect(throwingSpy).toHaveBeenCalledOnce();
+      expect(spy2).toHaveBeenCalledOnce();
+    });
+  });
+
+  // ======================================================================
+  // Edge cases (adj-054.7 — QA)
+  // ======================================================================
+
+  describe("edge cases", () => {
+    it("triggerWatch with null data skips watches with filters", () => {
+      engine.registerWatch("bead:closed", { id: "adj-100" });
+      engine.triggerWatch("bead:closed", null);
+      expect(wakeSpy).not.toHaveBeenCalled();
+    });
+
+    it("triggerWatch with null data fires watches without filters", () => {
+      engine.registerWatch("bead:closed", undefined, undefined, "No filter watch");
+      engine.triggerWatch("bead:closed", null);
+      expect(wakeSpy).toHaveBeenCalledOnce();
+    });
+
+    it("cancelCheck with non-existent ID does not crash", () => {
+      expect(() => engine.cancelCheck("nonexistent-id")).not.toThrow();
+    });
+
+    it("cancelWatch with non-existent ID does not crash", () => {
+      expect(() => engine.cancelWatch("nonexistent-id")).not.toThrow();
+    });
+
+    it("destroy clears cooldown queue and timer", () => {
+      // Trigger a wake to start cooldown
+      engine.handleCriticalSignal(makeSignal());
+      expect(wakeSpy).toHaveBeenCalledTimes(1);
+
+      // Queue signals during cooldown
+      engine.handleCriticalSignal(makeSignal({ id: "s2" }));
+      engine.handleCriticalSignal(makeSignal({ id: "s3" }));
+
+      // Destroy should clear everything
+      engine.destroy();
+
+      // Advance past cooldown — queued signals should NOT fire
+      vi.advanceTimersByTime(91_000);
+      expect(wakeSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("destroy clears all scheduled checks", () => {
+      engine.scheduleCheck(60_000, "Check A");
+      engine.scheduleCheck(120_000, "Check B");
+      engine.destroy();
+
+      vi.advanceTimersByTime(120_000);
+      expect(wakeSpy).not.toHaveBeenCalled();
+    });
+
+    it("destroy clears all watches with timeout timers", () => {
+      engine.registerWatch("bead:closed", undefined, 60_000, "Watch A");
+      engine.destroy();
+
+      vi.advanceTimersByTime(60_000);
+      expect(wakeSpy).not.toHaveBeenCalled();
+    });
+
+    it("getPendingSchedule returns empty when nothing is pending", () => {
+      const pending = engine.getPendingSchedule();
+      expect(pending.checks).toHaveLength(0);
+      expect(pending.watches).toHaveLength(0);
+    });
+
+    it("multiple watches for same event fire independently", () => {
+      engine.registerWatch("bead:closed", { id: "adj-100" }, undefined, "Watch 1");
+      engine.registerWatch("bead:closed", { id: "adj-100" }, undefined, "Watch 2");
+
+      engine.triggerWatch("bead:closed", { id: "adj-100" });
+      // Both should fire (though second may be queued by cooldown)
+      // First fires immediately, second is queued
+      expect(wakeSpy).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(91_000);
+      expect(wakeSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("cooldown timer fires latest queued reason", () => {
+      // First wake
+      engine.handleCriticalSignal(makeSignal({ id: "s1", event: "build:failed" }));
+      expect(wakeSpy).toHaveBeenCalledTimes(1);
+
+      // Queue two during cooldown — latest should win
+      engine.scheduleCheck(0, "Early check");
+      vi.advanceTimersByTime(1); // Fire the 0ms setTimeout
+      engine.scheduleCheck(0, "Late check");
+      vi.advanceTimersByTime(1); // Fire the second 0ms setTimeout
+
+      // Advance past cooldown
+      vi.advanceTimersByTime(91_000);
+      expect(wakeSpy).toHaveBeenCalledTimes(2);
+      const lastReason: WakeReason = wakeSpy.mock.calls[1]![0];
+      expect(lastReason.reason).toBe("Late check");
+    });
   });
 });
 
