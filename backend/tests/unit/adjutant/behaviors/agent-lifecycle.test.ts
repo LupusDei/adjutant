@@ -60,7 +60,7 @@ describe("agentLifecycleBehavior", () => {
   });
 
   describe("act — mcp:agent_connected", () => {
-    it("upserts agent profile with connectedAt and logs decision and queues routine", async () => {
+    it("upserts agent profile with connectedAt, infers role, logs decision, and queues routine", async () => {
       const state = createMockState();
       const comm = createMockComm();
       const event: BehaviorEvent = {
@@ -71,12 +71,18 @@ describe("agentLifecycleBehavior", () => {
 
       await agentLifecycleBehavior.act(event, state, comm);
 
-      expect(state.upsertAgentProfile).toHaveBeenCalledOnce();
+      // Two upsert calls: first for connection status, second for role inference
+      expect(state.upsertAgentProfile).toHaveBeenCalledTimes(2);
       const profileArg = state.upsertAgentProfile.mock.calls[0][0];
       expect(profileArg.agentId).toBe("agent-alpha");
       expect(profileArg.lastStatus).toBe("connected");
       expect(profileArg.connectedAt).toBeDefined();
       expect(profileArg.disconnectedAt).toBeNull();
+
+      // Second call sets role (worker for non-coordinator IDs)
+      const roleArg = state.upsertAgentProfile.mock.calls[1][0];
+      expect(roleArg.agentId).toBe("agent-alpha");
+      expect(roleArg.role).toBe("worker");
 
       expect(state.logDecision).toHaveBeenCalledOnce();
       expect(state.logDecision).toHaveBeenCalledWith({
@@ -163,6 +169,93 @@ describe("agentLifecycleBehavior", () => {
 
       const profileArg = state.upsertAgentProfile.mock.calls[0][0];
       expect(profileArg.currentTask).toBeNull();
+    });
+  });
+
+  describe("act — role inference on connect", () => {
+    it("should set role='coordinator' for known coordinator IDs", async () => {
+      const state = createMockState();
+      const comm = createMockComm();
+      const event: BehaviorEvent = {
+        name: "mcp:agent_connected",
+        data: { agentId: "adjutant-coordinator", sessionId: "session-1" },
+        seq: 1,
+      };
+
+      await agentLifecycleBehavior.act(event, state, comm);
+
+      // First call: initial upsert with connected status
+      // Second call: role inference upsert
+      expect(state.upsertAgentProfile).toHaveBeenCalledTimes(2);
+      const roleCall = state.upsertAgentProfile.mock.calls[1][0];
+      expect(roleCall.agentId).toBe("adjutant-coordinator");
+      expect(roleCall.role).toBe("coordinator");
+    });
+
+    it("should set role='coordinator' for 'adjutant' agent ID", async () => {
+      const state = createMockState();
+      const comm = createMockComm();
+      const event: BehaviorEvent = {
+        name: "mcp:agent_connected",
+        data: { agentId: "adjutant", sessionId: "session-2" },
+        seq: 2,
+      };
+
+      await agentLifecycleBehavior.act(event, state, comm);
+
+      expect(state.upsertAgentProfile).toHaveBeenCalledTimes(2);
+      const roleCall = state.upsertAgentProfile.mock.calls[1][0];
+      expect(roleCall.role).toBe("coordinator");
+    });
+
+    it("should set role='coordinator' for 'adjutant-core' agent ID", async () => {
+      const state = createMockState();
+      const comm = createMockComm();
+      const event: BehaviorEvent = {
+        name: "mcp:agent_connected",
+        data: { agentId: "adjutant-core", sessionId: "session-3" },
+        seq: 3,
+      };
+
+      await agentLifecycleBehavior.act(event, state, comm);
+
+      expect(state.upsertAgentProfile).toHaveBeenCalledTimes(2);
+      const roleCall = state.upsertAgentProfile.mock.calls[1][0];
+      expect(roleCall.role).toBe("coordinator");
+    });
+
+    it("should set role='worker' for non-coordinator agent IDs", async () => {
+      const state = createMockState();
+      const comm = createMockComm();
+      const event: BehaviorEvent = {
+        name: "mcp:agent_connected",
+        data: { agentId: "engineer-1", sessionId: "session-4" },
+        seq: 4,
+      };
+
+      await agentLifecycleBehavior.act(event, state, comm);
+
+      expect(state.upsertAgentProfile).toHaveBeenCalledTimes(2);
+      const roleCall = state.upsertAgentProfile.mock.calls[1][0];
+      expect(roleCall.agentId).toBe("engineer-1");
+      expect(roleCall.role).toBe("worker");
+    });
+
+    it("should not set role on disconnect events", async () => {
+      const state = createMockState();
+      const comm = createMockComm();
+      const event: BehaviorEvent = {
+        name: "mcp:agent_disconnected",
+        data: { agentId: "adjutant-coordinator", sessionId: "session-5" },
+        seq: 5,
+      };
+
+      await agentLifecycleBehavior.act(event, state, comm);
+
+      // Only one call for the disconnect upsert — no role inference
+      expect(state.upsertAgentProfile).toHaveBeenCalledOnce();
+      const disconnectCall = state.upsertAgentProfile.mock.calls[0][0];
+      expect(disconnectCall.role).toBeUndefined();
     });
   });
 

@@ -1,5 +1,6 @@
 import type { AdjutantBehavior, BehaviorEvent } from "../behavior-registry.js";
 import type { AdjutantState } from "../state-store.js";
+import { KNOWN_COORDINATOR_IDS } from "../state-store.js";
 import type { CommunicationManager } from "../communication.js";
 import type {
   EventName,
@@ -34,6 +35,16 @@ export const agentLifecycleBehavior: AdjutantBehavior = {
           connectedAt: new Date().toISOString(),
           disconnectedAt: null,
         });
+
+        // Infer role on connect: coordinators from known IDs, otherwise worker
+        const inferredRole = KNOWN_COORDINATOR_IDS.has(data.agentId)
+          ? "coordinator" as const
+          : "worker" as const;
+        state.upsertAgentProfile({
+          agentId: data.agentId,
+          role: inferredRole,
+        });
+
         state.logDecision({
           behavior: "agent-lifecycle",
           action: "agent_connected",
