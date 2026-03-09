@@ -28,6 +28,7 @@ import { initMessageDelivery } from "./services/message-delivery.js";
 import { initBeadAssignNotification } from "./services/bead-assign-notification.js";
 import { discoverLocalProjects } from "./services/projects-service.js";
 import { spawnAdjutant } from "./services/adjutant-spawner.js";
+import { wireSpawnHealthChecks } from "./services/agent-spawner-service.js";
 import { initAdjutantCore } from "./services/adjutant/adjutant-core.js";
 import { BehaviorRegistry } from "./services/adjutant/behavior-registry.js";
 import { createAdjutantState } from "./services/adjutant/state-store.js";
@@ -172,6 +173,9 @@ const server = app.listen(PORT, () => {
   // Tool registrar is set later (after adjutantState is created)
   // so coordination tools have access to the state store.
   // See setToolRegistrar call below.
+
+  // Wire spawn health checks — cancel pending timers when agents connect via MCP
+  wireSpawnHealthChecks();
 
   // Initialize message delivery (flushes pending messages when agents connect)
   initMessageDelivery(messageStore);
