@@ -12,9 +12,52 @@
  */
 
 import { logInfo, logWarn } from "../utils/index.js";
+import { getEventBus } from "./event-bus.js";
 import { getSessionBridge } from "./session-bridge.js";
 import type { SessionMode } from "./session-registry.js";
 import { listTmuxSessions } from "./tmux.js";
+
+// ============================================================================
+// Spawn Health Check
+// ============================================================================
+
+/** How long to wait for an agent to connect via MCP after spawn */
+export const SPAWN_HEALTH_CHECK_DELAY_MS = 30_000;
+
+/** Pending health check timers keyed by agent name */
+const pendingHealthChecks = new Map<string, NodeJS.Timeout>();
+
+/**
+ * Cancel a pending spawn health check for an agent.
+ * Returns true if a timer was found and cancelled, false otherwise.
+ */
+export function cancelSpawnHealthCheck(agentName: string): boolean {
+  const timer = pendingHealthChecks.get(agentName);
+  if (timer) {
+    clearTimeout(timer);
+    pendingHealthChecks.delete(agentName);
+    logInfo("Spawn health check cancelled — agent connected", { name: agentName });
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Get the number of pending health checks (for diagnostics).
+ */
+export function pendingHealthCheckCount(): number {
+  return pendingHealthChecks.size;
+}
+
+/**
+ * Wire MCP agent_connected events to cancel pending spawn health checks.
+ * Call this once during server initialization.
+ */
+export function wireSpawnHealthChecks(): void {
+  getEventBus().on("mcp:agent_connected", (data) => {
+    cancelSpawnHealthCheck(data.agentId);
+  });
+}
 
 // ============================================================================
 // Types
@@ -117,6 +160,24 @@ export async function spawnAgent(
         name: req.name,
         sessionId: result.sessionId,
       });
+
+      // Schedule health check — verify agent connects via MCP within timeout
+      const timer = setTimeout(() => {
+        pendingHealthChecks.delete(req.name);
+        getEventBus().emit("agent:spawn_failed", {
+          agentId: req.name,
+          reason: "no_mcp_connect",
+          tmuxSession,
+        });
+        logWarn("Spawn health check failed — agent did not connect via MCP", {
+          name: req.name,
+          tmuxSession,
+        });
+      }, SPAWN_HEALTH_CHECK_DELAY_MS);
+      // Don't block Node.js exit on this timer
+      timer.unref();
+      pendingHealthChecks.set(req.name, timer);
+
       return {
         success: true,
         sessionId: result.sessionId,
