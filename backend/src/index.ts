@@ -239,7 +239,10 @@ const server = app.listen(PORT, () => {
   });
 
   // Connect aggregator to EventBus
+  // Skip coordinator:action to prevent feedback loop — the adjutant's own
+  // actions should not re-enter the signal aggregator or trigger watches.
   getEventBus().onAny((event, data) => {
+    if (event === "coordinator:action") return;
     signalAggregator.ingest(event, data);
     // Also trigger watches in the stimulus engine
     stimulusEngine.triggerWatch(event, data);
