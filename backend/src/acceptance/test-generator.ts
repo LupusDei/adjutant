@@ -483,29 +483,232 @@ export function generateFileName(featureName: string): string {
 
 /**
  * Generate a meaningful `it` description from a scenario's Then clause.
- * Prefixes with "should" and truncates to ~80 chars.
- *
- * Handles grammatical transformations:
- * - "it is persisted" -> "should be persisted"
- * - "they are returned" -> "should be returned"
- * - "the system responds" -> "should respond"
+ * Delegates to descriptionFromThen for grammar transformations.
  */
 function generateItDescription(scenario: Scenario): string {
-  let text = scenario.then.toLowerCase();
+  return descriptionFromThen(scenario.then);
+}
 
-  // Strip leading pronouns/articles
-  text = text.replace(/^(it |they |the system |the |a |an )/, "");
-
-  // Grammatical fix: "is/are" -> "be" when used after "should"
-  if (text.startsWith("is ")) {
-    text = "should " + text.replace(/^is /, "be ");
-  } else if (text.startsWith("are ")) {
-    text = "should " + text.replace(/^are /, "be ");
-  } else {
-    text = "should " + text;
+/**
+ * Transform a Then-clause into a grammatical "should ..." test description.
+ *
+ * Handles:
+ * - Strip leading articles/pronouns (it, they, the, a, an, each)
+ * - Passive "is/are VERB-ed" -> "be VERB-ed" or active form
+ * - Third-person verbs: "responds" -> "respond", "includes" -> "include"
+ * - "X updates to Y and Z is refreshed" -> "update X to Y and refresh Z"
+ * - "each X has Y" -> "have Y for each X"
+ * - Lowercase first verb after "should"
+ * - Truncate at ~80 chars on word boundary
+ *
+ * @param thenText - The Then clause text from a GWT scenario
+ * @returns A "should ..." description string
+ */
+export function descriptionFromThen(thenText: string): string {
+  if (!thenText || !thenText.trim()) {
+    return "should handle empty then clause";
   }
 
-  // Truncate to ~80 chars at a word boundary
+  let text = thenText.trim();
+
+  // Try specialized pattern transforms first
+  const specialized = trySpecializedTransforms(text);
+  if (specialized) {
+    return truncateDescription(specialized);
+  }
+
+  // General approach: strip leading subject, fix verb, prepend "should"
+
+  // Strip leading pronouns/articles (preserve original case in rest)
+  const stripped = text.replace(
+    /^(it |they |the system |the response |the |a |an |each )/i,
+    ""
+  ).trim();
+
+  const lowerStripped = stripped.toLowerCase();
+
+  // If we stripped "each X verb Y", restructure to "verb Y for each X"
+  if (/^each /i.test(text)) {
+    const eachResult = transformEachClause(lowerStripped);
+    if (eachResult) {
+      return truncateDescription("should " + eachResult);
+    }
+  }
+
+  // Handle "is/are + past participle" -> "be + past participle"
+  // Preserve case of the rest (e.g., "ID")
+  if (/^is /i.test(lowerStripped)) {
+    return truncateDescription("should " + stripped.replace(/^is /i, "be "));
+  }
+  if (/^are /i.test(lowerStripped)) {
+    return truncateDescription("should " + stripped.replace(/^are /i, "be "));
+  }
+
+  // De-conjugate third-person present verbs: "responds" -> "respond"
+  const deconj = deconjugateLeadingVerb(lowerStripped);
+
+  return truncateDescription("should " + deconj);
+}
+
+/**
+ * Try to match and transform specialized patterns that need more
+ * than simple subject stripping.
+ */
+function trySpecializedTransforms(text: string): string | null {
+  // Pattern: "X are returned Y" -> "should return X Y"
+  // e.g. "only pending proposals are returned sorted by newest first"
+  // Skip when subject is just a pronoun (they, it, etc.)
+  const areReturnedMatch = text.match(
+    /^(?:only )?(.+?)\s+are\s+returned\b(.*)$/i
+  );
+  if (areReturnedMatch) {
+    const subject = areReturnedMatch[1]!.toLowerCase();
+    const isPronoun = /^(they|it|these|those)$/i.test(subject.replace(/^only\s+/, ""));
+    if (!isPronoun) {
+      const rest = areReturnedMatch[2]!.toLowerCase().trim();
+      const onlyPrefix = /^only /i.test(text) ? "only " : "";
+      const cleanSubject = subject.replace(/^only\s+/, "");
+      return `should return ${onlyPrefix}${cleanSubject}${rest ? " " + rest : ""}`;
+    }
+  }
+
+  // Pattern: "X updates to Y and Z is refreshed"
+  // -> "should update X to Y and refresh Z"
+  const updatesAndRefreshed = text.match(
+    /^(.+?)\s+updates?\s+to\s+(.+?)\s+and\s+(.+?)\s+is\s+refreshed$/i
+  );
+  if (updatesAndRefreshed) {
+    const subject = updatesAndRefreshed[1]!.toLowerCase();
+    const target = updatesAndRefreshed[2]!;
+    const refreshTarget = updatesAndRefreshed[3]!.toLowerCase();
+    return `should update ${subject} to ${target} and refresh ${refreshTarget}`;
+  }
+
+  // Pattern: "a/an X is VERBed" -> "should VERB a/an X"
+  const articlePassive = text.match(
+    /^(a|an)\s+(.+?)\s+is\s+(\w+ed)\b(.*)$/i
+  );
+  if (articlePassive) {
+    const article = articlePassive[1]!.toLowerCase();
+    const noun = articlePassive[2]!.toLowerCase();
+    const verb = depassivize(articlePassive[3]!.toLowerCase());
+    const rest = articlePassive[4]!.toLowerCase().trim();
+    return `should ${verb} ${article} ${noun}${rest ? " " + rest : ""}`;
+  }
+
+  // Pattern: "the discussion is appended to the proposal"
+  // -> "should append the discussion to the proposal"
+  const theXIsVerbed = text.match(
+    /^the\s+(.+?)\s+is\s+(\w+ed)\b(.*)$/i
+  );
+  if (theXIsVerbed) {
+    const noun = theXIsVerbed[1]!.toLowerCase();
+    const verb = depassivize(theXIsVerbed[2]!.toLowerCase());
+    const rest = theXIsVerbed[3]!.toLowerCase().trim();
+    return `should ${verb} the ${noun}${rest ? " " + rest : ""}`;
+  }
+
+  return null;
+}
+
+/**
+ * Transform "X has/have Y" after "each" was stripped.
+ * "proposal has required fields" -> "have required fields for each proposal"
+ */
+function transformEachClause(text: string): string | null {
+  const hasMatch = text.match(/^(.+?)\s+has\s+(.+)$/i);
+  if (hasMatch) {
+    return `have ${hasMatch[2]!.toLowerCase()} for each ${hasMatch[1]!.toLowerCase()}`;
+  }
+  return null;
+}
+
+/**
+ * Convert a past participle back to base form for active voice.
+ * "returned" -> "return", "appended" -> "append", "created" -> "create"
+ */
+function depassivize(pastParticiple: string): string {
+  // Common irregular forms
+  const irregulars: Record<string, string> = {
+    returned: "return",
+    created: "create",
+    persisted: "persist",
+    appended: "append",
+    refreshed: "refresh",
+    included: "include",
+    received: "receive",
+    sorted: "sort",
+  };
+
+  if (irregulars[pastParticiple]) {
+    return irregulars[pastParticiple]!;
+  }
+
+  // Regular: remove -ed, handle doubling and -e stems
+  if (pastParticiple.endsWith("ied")) {
+    return pastParticiple.slice(0, -3) + "y";
+  }
+  if (pastParticiple.endsWith("ed")) {
+    const stem = pastParticiple.slice(0, -2);
+    // If stem ends with doubled consonant, remove one
+    if (stem.length >= 2 && stem[stem.length - 1] === stem[stem.length - 2]) {
+      return stem.slice(0, -1);
+    }
+    // Check if "stem + e" looks more natural (e.g., "saved" -> "save")
+    if (pastParticiple.endsWith("ted") || pastParticiple.endsWith("ded")) {
+      return stem + "e";
+    }
+    return stem;
+  }
+
+  return pastParticiple;
+}
+
+/**
+ * De-conjugate a leading third-person present verb.
+ * "responds with 200" -> "respond with 200"
+ * "includes proposals" -> "include proposals"
+ * "has required fields" -> "have required fields"
+ */
+function deconjugateLeadingVerb(text: string): string {
+  // Special case: "has" -> "have"
+  if (/^has\b/.test(text)) {
+    return text.replace(/^has\b/, "have");
+  }
+
+  // Words ending in -es where base form drops the -es
+  // "responds" -> "respond", but "includes" -> "include"
+  const esMatch = text.match(/^(\w+)(es)\b(.*)/);
+  if (esMatch) {
+    const stem = esMatch[1]!;
+    const rest = esMatch[3]!;
+    // "includes" -> "include" (stem ends in consonant before -es -> add e)
+    if (/[sc]h$/.test(stem) || /[sxz]$/.test(stem)) {
+      // "matches" -> "match", "fixes" -> "fix"
+      return stem + rest;
+    }
+    // "includes" -> the stem is "includ", we want "include"
+    return stem + "e" + rest;
+  }
+
+  // Words ending in -s (simple third person)
+  const sMatch = text.match(/^(\w+)s\b(.*)/);
+  if (sMatch) {
+    const stem = sMatch[1]!;
+    const rest = sMatch[2]!;
+    // Don't strip 's' from short words or words where it's not a verb inflection
+    if (stem.length >= 3) {
+      return stem + rest;
+    }
+  }
+
+  return text;
+}
+
+/**
+ * Truncate a description to ~80 chars at a word boundary.
+ */
+function truncateDescription(text: string): string {
   if (text.length <= 80) {
     return text;
   }
