@@ -13,7 +13,8 @@
 import { randomUUID } from "crypto";
 
 import type { EventName } from "../event-bus.js";
-import type { Signal } from "./signal-aggregator.js";
+import type { Signal, SignalSnapshot } from "./signal-aggregator.js";
+import type { DecisionEntry } from "./state-store.js";
 
 // ============================================================================
 // Types
@@ -344,4 +345,161 @@ export class StimulusEngine {
       }
     }, delayMs);
   }
+}
+
+// ============================================================================
+// State snapshot type for prompt building
+// ============================================================================
+
+export interface StateSnapshot {
+  activeAgents: number;
+  workingAgents: number;
+  blockedAgents: number;
+  idleAgents: number;
+  inProgressBeads: number;
+  readyBeads: number;
+}
+
+// ============================================================================
+// Situation prompt builder
+// ============================================================================
+
+export interface SituationPromptInput {
+  wakeReason: string;
+  signals: Signal[];
+  contextSnapshot: SignalSnapshot;
+  stateSnapshot: StateSnapshot;
+  pendingSchedule: PendingSchedule;
+  recentDecisions: DecisionEntry[];
+}
+
+/**
+ * Build the situation prompt for the adjutant.
+ * Returns a single-line string for tmux injection.
+ */
+export function buildSituationPrompt(input: SituationPromptInput): string {
+  const lines: string[] = [];
+
+  lines.push(`SITUATION -- ${input.wakeReason}`);
+  lines.push("");
+
+  // What Happened
+  lines.push("## What Happened");
+  for (const signal of input.signals) {
+    const summary = summarizeSignalData(signal);
+    lines.push(`- [CRITICAL] ${signal.event} -- ${summary}`);
+  }
+  for (const [eventName, signals] of Object.entries(input.contextSnapshot)) {
+    for (const signal of signals) {
+      const summary = summarizeSignalData(signal);
+      const countStr = signal.count > 1 ? ` (x${signal.count})` : "";
+      lines.push(`- [context] ${eventName} -- ${summary}${countStr}`);
+    }
+  }
+  if (input.signals.length === 0 && Object.keys(input.contextSnapshot).length === 0) {
+    lines.push("- No recent events");
+  }
+  lines.push("");
+
+  // Current State
+  const st = input.stateSnapshot;
+  lines.push("## Current State");
+  lines.push(`Active agents: ${st.activeAgents} (${st.workingAgents} working, ${st.blockedAgents} blocked, ${st.idleAgents} idle)`);
+  lines.push(`In-progress beads: ${st.inProgressBeads}`);
+  lines.push(`Ready beads: ${st.readyBeads}`);
+  lines.push("");
+
+  // Pending Schedule
+  if (input.pendingSchedule.checks.length > 0 || input.pendingSchedule.watches.length > 0) {
+    lines.push("## Your Pending Schedule");
+    for (const check of input.pendingSchedule.checks) {
+      const remainMs = check.firesAt - Date.now();
+      const remainMin = Math.max(1, Math.round(remainMs / 60_000));
+      lines.push(`- In ${remainMin}m: "${check.reason}"`);
+    }
+    for (const watch of input.pendingSchedule.watches) {
+      const reason = watch.reason ?? watch.event;
+      lines.push(`- Watching: ${reason}`);
+    }
+    lines.push("");
+  }
+
+  // Recent Decisions
+  if (input.recentDecisions.length > 0) {
+    lines.push("## Recent Decisions");
+    for (const decision of input.recentDecisions) {
+      const ago = formatAgo(decision.createdAt);
+      const target = decision.target ? ` -> ${decision.target}` : "";
+      lines.push(`- ${ago}: ${decision.action}${target}`);
+    }
+    lines.push("");
+  }
+
+  // Available Actions
+  lines.push("## Available Actions");
+  lines.push("- spawn_worker({ prompt, beadId? })");
+  lines.push("- assign_bead({ beadId, agentId, reason })");
+  lines.push("- nudge_agent({ agentId, message })");
+  lines.push("- decommission_agent({ agentId, reason })");
+  lines.push("- rebalance_work({ agentId })");
+  lines.push("- schedule_check({ delay, reason })");
+  lines.push("- watch_for({ event, filter?, timeout?, reason })");
+  lines.push("");
+  lines.push("Assess the situation. Take action if warranted. Schedule follow-ups. Explain your reasoning.");
+
+  // Collapse to single line for tmux injection
+  return lines.join("\n").replace(/\n+/g, " ").trim();
+}
+
+// ============================================================================
+// Bootstrap prompt builder
+// ============================================================================
+
+/**
+ * Build the bootstrap prompt (fires once on startup).
+ * Returns a single-line string for tmux injection.
+ */
+export function buildBootstrapPrompt(): string {
+  const lines: string[] = [];
+
+  lines.push("BOOTSTRAP -- Adjutant system starting up.");
+  lines.push("");
+  lines.push("Gather the current state (list_agents, list_beads) and assess:");
+  lines.push("- Are any agents active? What are they working on?");
+  lines.push("- Are there ready beads that need assignment?");
+  lines.push("- Any anomalies?");
+  lines.push("");
+  lines.push("Take any immediate actions needed, then schedule your first check-ins using schedule_check.");
+  lines.push("You will only be woken again by critical events or your own scheduled checks.");
+
+  return lines.join("\n").replace(/\n+/g, " ").trim();
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+function summarizeSignalData(signal: Signal): string {
+  const data = signal.data as Record<string, unknown> | null;
+  if (!data) return "no data";
+
+  const parts: string[] = [];
+  if (data["agentId"]) parts.push(`agent "${data["agentId"]}"`);
+  if (data["agent"]) parts.push(`agent "${data["agent"]}"`);
+  if (data["id"]) parts.push(`${data["id"]}`);
+  if (data["title"]) parts.push(`"${data["title"]}"`);
+  if (data["exitCode"] !== undefined) parts.push(`exit ${data["exitCode"]}`);
+  if (data["branch"]) parts.push(`branch ${data["branch"]}`);
+  if (data["status"]) parts.push(`status: ${data["status"]}`);
+
+  return parts.length > 0 ? parts.join(", ") : JSON.stringify(data);
+}
+
+function formatAgo(isoString: string): string {
+  const ms = Date.now() - new Date(isoString).getTime();
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  return `${hours}h ago`;
 }
