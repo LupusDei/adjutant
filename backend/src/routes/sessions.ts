@@ -24,6 +24,7 @@ import {
 import { getProject } from "../services/projects-service.js";
 import { getPersonaService } from "../services/persona-service.js";
 import { generatePersonaPrompt } from "../services/prompt-generator.js";
+import { writeAgentFile } from "../services/agent-file-writer.js";
 import {
   success,
   notFound,
@@ -107,7 +108,7 @@ sessionsRouter.get("/:id", (req, res) => {
 /**
  * POST /api/sessions
  * Create a new session.
- * Optional personaId injects persona prompt via initialPrompt (paste-buffer) and sets ADJUTANT_PERSONA_ID.
+ * Optional personaId writes .claude/agents/<name>.md and passes --agent flag, sets ADJUTANT_PERSONA_ID.
  */
 sessionsRouter.post("/", async (req, res) => {
   const parsed = CreateSessionSchema.safeParse(req.body);
@@ -169,8 +170,13 @@ sessionsRouter.post("/", async (req, res) => {
   const callsign = pickRandomCallsign(sessions);
   const name = data.name || callsign?.name || persona?.name || `${basename(projectPath)}-agent`;
 
-  // Build claudeArgs (without persona prompt — see below)
+  // Build claudeArgs — add --agent flag if persona prompt was generated
   const claudeArgs = [...(data.claudeArgs ?? [])];
+
+  if (personaPrompt && persona) {
+    const agentName = await writeAgentFile(projectPath, persona.name, personaPrompt);
+    claudeArgs.push("--agent", agentName);
+  }
 
   // Build env vars with persona ID
   const envVars: Record<string, string> = {};
@@ -178,9 +184,8 @@ sessionsRouter.post("/", async (req, res) => {
     envVars["ADJUTANT_PERSONA_ID"] = data.personaId;
   }
 
-  // Persona prompt is injected via initialPrompt (atomic paste-buffer) instead of
-  // --prompt CLI arg. The multi-line prompt text contains newlines and # characters
-  // that break when passed through tmux send-keys as a shell command string.
+  // Write persona prompt as .claude/agents/<name>.md and pass --agent flag
+  // instead of injecting via paste-buffer (FR-001, FR-002, FR-005).
   const result = await bridge.createSession({
     name,
     projectPath,
@@ -188,7 +193,6 @@ sessionsRouter.post("/", async (req, res) => {
     workspaceType: data.workspaceType ?? "primary",
     claudeArgs: claudeArgs.length > 0 ? claudeArgs : undefined,
     envVars: Object.keys(envVars).length > 0 ? envVars : undefined,
-    initialPrompt: personaPrompt,
   });
 
   if (!result.success) {
