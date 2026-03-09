@@ -20,6 +20,8 @@ export interface DecisionEntry {
   target: string | null;
   reason: string | null;
   createdAt: string;
+  outcome: string | null;
+  outcomeAt: string | null;
 }
 
 export interface SpawnRecord {
@@ -37,7 +39,7 @@ export interface AdjutantState {
   getAllAgentProfiles(): AgentProfile[];
   /** Atomically increment the assignment count for the given agent. */
   incrementAssignmentCount(agentId: string): void;
-  logDecision(entry: Omit<DecisionEntry, "id" | "createdAt">): void;
+  logDecision(entry: Omit<DecisionEntry, "id" | "createdAt" | "outcome" | "outcomeAt">): void;
   getRecentDecisions(limit: number): DecisionEntry[];
   getMeta(key: string): string | null;
   setMeta(key: string, value: string): void;
@@ -57,6 +59,12 @@ export interface AdjutantState {
   countActiveSpawns(): number;
   /** Mark all profiles with disconnectedAt IS NULL as disconnected (for server restart cleanup). Returns count updated. */
   markAllDisconnected(): number;
+  /** Record the outcome of a decision. */
+  recordOutcome(decisionId: number, outcome: string): void;
+  /** Get recent decisions that have outcomes (for feedback in prompts). */
+  getRecentDecisionsWithOutcomes(limit: number): DecisionEntry[];
+  /** Find decisions targeting a specific bead/agent (for linking outcomes). */
+  getDecisionsForTarget(target: string, limit?: number): DecisionEntry[];
 }
 
 interface AgentProfileRow {
@@ -79,6 +87,8 @@ interface DecisionRow {
   target: string | null;
   reason: string | null;
   created_at: string;
+  outcome: string | null;
+  outcome_at: string | null;
 }
 
 interface MetaRow {
@@ -119,6 +129,8 @@ function rowToDecision(row: DecisionRow): DecisionEntry {
     target: row.target,
     reason: row.reason,
     createdAt: row.created_at,
+    outcome: row.outcome ?? null,
+    outcomeAt: row.outcome_at ?? null,
   };
 }
 
@@ -208,6 +220,18 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
     WHERE disconnected_at IS NULL AND connected_at IS NOT NULL
   `);
 
+  const recordOutcomeStmt = db.prepare(`
+    UPDATE adjutant_decisions SET outcome = ?, outcome_at = datetime('now') WHERE id = ?
+  `);
+
+  const getRecentDecisionsWithOutcomesStmt = db.prepare(`
+    SELECT * FROM adjutant_decisions WHERE outcome IS NOT NULL ORDER BY outcome_at DESC LIMIT ?
+  `);
+
+  const getDecisionsForTargetStmt = db.prepare(`
+    SELECT * FROM adjutant_decisions WHERE target = ? ORDER BY id DESC LIMIT ?
+  `);
+
   return {
     getAgentProfile(agentId: string): AgentProfile | null {
       const row = getProfileStmt.get(agentId) as AgentProfileRow | undefined;
@@ -265,7 +289,7 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
       incrementAssignmentCountStmt.run(agentId);
     },
 
-    logDecision(entry: Omit<DecisionEntry, "id" | "createdAt">): void {
+    logDecision(entry: Omit<DecisionEntry, "id" | "createdAt" | "outcome" | "outcomeAt">): void {
       logDecisionStmt.run(entry.behavior, entry.action, entry.target ?? null, entry.reason ?? null);
     },
 
@@ -325,6 +349,22 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
     markAllDisconnected(): number {
       const result = markAllDisconnectedStmt.run();
       return result.changes;
+    },
+
+    recordOutcome(decisionId: number, outcome: string): void {
+      recordOutcomeStmt.run(outcome, decisionId);
+    },
+
+    getRecentDecisionsWithOutcomes(limit: number): DecisionEntry[] {
+      const safeLimit = Math.max(0, Math.min(limit, 1000));
+      const rows = getRecentDecisionsWithOutcomesStmt.all(safeLimit) as DecisionRow[];
+      return rows.map(rowToDecision);
+    },
+
+    getDecisionsForTarget(target: string, limit?: number): DecisionEntry[] {
+      const safeLimit = limit !== undefined ? Math.max(0, Math.min(limit, 100)) : 10;
+      const rows = getDecisionsForTargetStmt.all(target, safeLimit) as DecisionRow[];
+      return rows.map(rowToDecision);
     },
   };
 }

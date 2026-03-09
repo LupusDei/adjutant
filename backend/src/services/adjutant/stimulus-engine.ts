@@ -424,13 +424,16 @@ export function buildSituationPrompt(input: SituationPromptInput): string {
     lines.push("");
   }
 
-  // Recent Decisions
+  // Recent Decisions (with outcomes if available)
   if (input.recentDecisions.length > 0) {
     lines.push("## Recent Decisions");
     for (const decision of input.recentDecisions) {
       const ago = formatAgo(decision.createdAt);
       const target = decision.target ? ` -> ${decision.target}` : "";
-      lines.push(`- ${ago}: ${decision.action}${target}`);
+      const outcome = decision.outcome
+        ? ` [outcome: ${decision.outcome}]`
+        : " [outcome: pending]";
+      lines.push(`- ${ago}: ${decision.action}${target}${outcome}`);
     }
     lines.push("");
   }

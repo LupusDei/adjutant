@@ -747,4 +747,63 @@ describe("AdjutantState", () => {
       expect(count).toBe(0);
     });
   });
+
+  describe("decision outcome tracking", () => {
+    it("should record outcome on a decision", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.logDecision({ behavior: "adjutant", action: "spawn_worker", target: "worker-1", reason: "P1 bead ready" });
+      const decisions = store.getRecentDecisions(1);
+      expect(decisions[0].outcome).toBeNull();
+      expect(decisions[0].outcomeAt).toBeNull();
+
+      store.recordOutcome(decisions[0].id!, "Agent completed bead in 12 minutes");
+      const updated = store.getRecentDecisions(1);
+      expect(updated[0].outcome).toBe("Agent completed bead in 12 minutes");
+      expect(updated[0].outcomeAt).not.toBeNull();
+    });
+
+    it("should return decisions with outcomes", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.logDecision({ behavior: "adjutant", action: "spawn_worker", target: "worker-1", reason: "test" });
+      store.logDecision({ behavior: "adjutant", action: "assign_bead", target: "adj-042", reason: "test" });
+
+      const all = store.getRecentDecisions(10);
+      // Record outcome on only the first
+      store.recordOutcome(all[1].id!, "Bead completed successfully");
+
+      const withOutcomes = store.getRecentDecisionsWithOutcomes(10);
+      expect(withOutcomes).toHaveLength(1);
+      expect(withOutcomes[0].action).toBe("spawn_worker");
+      expect(withOutcomes[0].outcome).toBe("Bead completed successfully");
+    });
+
+    it("should find decisions for a specific target", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.logDecision({ behavior: "adjutant", action: "assign_bead", target: "adj-042.1.2", reason: "idle agent" });
+      store.logDecision({ behavior: "adjutant", action: "spawn_worker", target: "worker-1", reason: "no idle agents" });
+      store.logDecision({ behavior: "adjutant", action: "nudge_agent", target: "adj-042.1.2", reason: "check progress" });
+
+      const decisions = store.getDecisionsForTarget("adj-042.1.2");
+      expect(decisions).toHaveLength(2);
+      // Newest first
+      expect(decisions[0].action).toBe("nudge_agent");
+      expect(decisions[1].action).toBe("assign_bead");
+    });
+
+    it("should default outcome fields to null on new decisions", async () => {
+      const { createAdjutantState } = await import("../../../src/services/adjutant/state-store.js");
+      const store = createAdjutantState(db);
+
+      store.logDecision({ behavior: "adjutant", action: "spawn_worker", target: "worker-1", reason: "test" });
+      const decisions = store.getRecentDecisions(1);
+      expect(decisions[0].outcome).toBeNull();
+      expect(decisions[0].outcomeAt).toBeNull();
+    });
+  });
 });
