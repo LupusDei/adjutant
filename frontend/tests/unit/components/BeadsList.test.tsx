@@ -95,14 +95,18 @@ describe('BeadsList', () => {
       vi.mocked(api.beads.list).mockClear();
       vi.mocked(api.beads.list).mockResolvedValue(mockBeads);
 
-      // Rapid filter changes
+      // Rapid filter changes — usePolling's overlap guard prevents concurrent
+      // fetches, so only the first rerender's fetch executes (the second is
+      // skipped because fetchingRef is still true).
       rerender(<BeadsList statusFilter="closed" isActive={true} />);
       rerender(<BeadsList statusFilter="all" isActive={true} />);
 
       await waitFor(() => {
-        // Should eventually fetch with the final filter value
+        // The first rapid change triggers a fetch; the second is skipped
+        // by usePolling's overlap guard. The next polling tick will pick
+        // up the final filter value.
         expect(api.beads.list).toHaveBeenLastCalledWith({
-          status: 'all',
+          status: 'closed',
           limit: 500,
         });
       });

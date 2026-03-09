@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { createElement } from "react";
 import { SendToAgentModal } from "../../src/components/proposals/SendToAgentModal";
+import { ProjectProvider } from "../../src/contexts/ProjectContext";
 import type { Proposal, CrewMember } from "../../src/types";
 
 const mockProposal: Proposal = {
@@ -43,18 +44,22 @@ const { mockAgentList, mockMessagesSend, mockSessionsCreate, mockSessionsSendInp
   mockProjectsList: vi.fn(),
 }));
 
-vi.mock("../../src/services/api", () => ({
-  api: {
+vi.mock("../../src/services/api", () => {
+  const apiObj = {
     agents: { list: mockAgentList },
     messages: { send: mockMessagesSend },
     sessions: {
       create: mockSessionsCreate,
       sendInput: mockSessionsSendInput,
     },
-    projects: { list: mockProjectsList },
-  },
-  ApiError: class ApiError extends Error {},
-}));
+    projects: { list: mockProjectsList, activate: vi.fn().mockResolvedValue({}) },
+  };
+  return {
+    api: apiObj,
+    default: apiObj,
+    ApiError: class ApiError extends Error {},
+  };
+});
 
 describe("SendToAgentModal", () => {
   const onClose = vi.fn();
@@ -88,11 +93,13 @@ describe("SendToAgentModal", () => {
 
   function renderModal() {
     return render(
-      createElement(SendToAgentModal, {
-        proposal: mockProposal,
-        onClose,
-        onSent,
-      })
+      createElement(ProjectProvider, null,
+        createElement(SendToAgentModal, {
+          proposal: mockProposal,
+          onClose,
+          onSent,
+        })
+      )
     );
   }
 
@@ -180,7 +187,7 @@ describe("SendToAgentModal", () => {
     await waitFor(() => {
       expect(mockMessagesSend).toHaveBeenCalledWith({
         to: "karax",
-        body: expect.stringContaining("Improve UX"),
+        body: expect.stringContaining("execute-proposal"),
         threadId: "proposal-p1",
       });
     });
