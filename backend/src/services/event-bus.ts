@@ -124,6 +124,12 @@ export interface CoordinatorActionEvent {
   reason: string | null;
 }
 
+export interface SpawnFailedEvent {
+  agentId: string;
+  reason: "no_mcp_connect" | "spawn_timeout";
+  tmuxSession?: string;
+}
+
 /**
  * Map of event names to their payload types.
  */
@@ -149,6 +155,7 @@ export interface EventMap {
   "merge:completed": MergeCompletedEvent;
   "merge:conflict": MergeConflictEvent;
   "coordinator:action": CoordinatorActionEvent;
+  "agent:spawn_failed": SpawnFailedEvent;
 }
 
 export type EventName = keyof EventMap;
@@ -224,6 +231,7 @@ class EventBus {
       "agent:status_changed", "stream:status",
       "correction:detected", "learning:created",
       "build:failed", "build:passed", "merge:completed", "merge:conflict", "coordinator:action",
+      "agent:spawn_failed",
     ];
     for (const e of events) {
       const count = this.emitter.listenerCount(e);
