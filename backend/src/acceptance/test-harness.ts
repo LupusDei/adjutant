@@ -24,6 +24,8 @@ import type { MessageStore, Message } from "../services/message-store.js";
 import type { ProposalStore } from "../services/proposal-store.js";
 import type { EventStore } from "../services/event-store.js";
 import type { Proposal, ProposalType } from "../types/proposals.js";
+import type { PersonaService } from "../services/persona-service.js";
+import type { Persona } from "../types/personas.js";
 
 // ============================================================================
 // Helpers
@@ -54,6 +56,7 @@ export class TestHarness {
   private _messageStore: MessageStore | null = null;
   private _proposalStore: ProposalStore | null = null;
   private _eventStore: EventStore | null = null;
+  private _personaService: PersonaService | null = null;
 
   /** Stores the last API response for step definition assertions */
   public lastResponse: { status: number; body: unknown } | null = null;
@@ -87,9 +90,12 @@ export class TestHarness {
     const { createProposalStore } = await import("../services/proposal-store.js");
     const { createEventStore } = await import("../services/event-store.js");
 
+    const { createPersonaService } = await import("../services/persona-service.js");
+
     this._messageStore = createMessageStore(this.db);
     this._proposalStore = createProposalStore(this.db);
     this._eventStore = createEventStore(this.db);
+    this._personaService = createPersonaService(this.db);
 
     // 4. Create Express app with standard middleware (no auth for tests)
     this.app = express();
@@ -101,12 +107,14 @@ export class TestHarness {
     const { createEventsRouter } = await import("../routes/events.js");
     const { createOverviewRouter } = await import("../routes/overview.js");
     const { createProjectsRouter } = await import("../routes/projects.js");
+    const { createPersonasRouter } = await import("../routes/personas.js");
 
     this.app.use("/api/messages", createMessagesRouter(this._messageStore));
     this.app.use("/api/proposals", createProposalsRouter(this._proposalStore));
     this.app.use("/api/events", createEventsRouter(this._eventStore));
     this.app.use("/api/overview", createOverviewRouter(this._messageStore));
     this.app.use("/api/projects", createProjectsRouter(this._messageStore));
+    this.app.use("/api/personas", createPersonasRouter(this._personaService));
 
     // Health check for smoke tests
     this.app.get("/health", (_req, res) => {
@@ -149,6 +157,7 @@ export class TestHarness {
     this._messageStore = null;
     this._proposalStore = null;
     this._eventStore = null;
+    this._personaService = null;
     this.destroyed = true;
   }
 
@@ -308,6 +317,32 @@ export class TestHarness {
       description: opts.description,
       type: opts.type as ProposalType,
       project: opts.project,
+    });
+  }
+
+  /**
+   * Create a persona via the real persona service.
+   */
+  async seedPersona(opts: {
+    name: string;
+    description?: string;
+  }): Promise<Persona> {
+    if (!this._personaService) {
+      throw new Error("TestHarness.seedPersona() called before setup()");
+    }
+    const { PersonaTrait } = await import("../types/personas.js");
+    // Minimal valid trait values (all zeros, sums to 0 which is <= 100)
+    const traits = Object.values(PersonaTrait).reduce(
+      (acc, key) => {
+        acc[key as keyof typeof PersonaTrait] = 0;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+    return this._personaService.createPersona({
+      name: opts.name,
+      description: opts.description ?? "Seeded for testing",
+      traits: traits as unknown as import("../types/personas.js").TraitValues,
     });
   }
 }

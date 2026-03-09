@@ -458,6 +458,12 @@ function generatePreconditionCode(
     case "agent":
       lines.push('      await harness.seedAgent({ agentId: "test-agent" });');
       break;
+    case "persona":
+      lines.push("      const seeded = await harness.seedPersona({");
+      lines.push('        name: "Test Persona",');
+      lines.push('        description: "Seeded for testing",');
+      lines.push("      });");
+      break;
     case "none":
       lines.push("      // (no precondition needed)");
       break;

@@ -1,6 +1,6 @@
 /**
  * Acceptance Tests: Agent Proposals System
- * Generated from: ../specs/017-agent-proposals/spec.md
+ * Generated from: /Users/Reason/code/ai/adjutant/.claude/worktrees/agent-ad5a6715/specs/017-agent-proposals/spec.md
  *
  * DO NOT EDIT GENERATED STRUCTURE — add step implementations only.
  */
@@ -21,7 +21,8 @@ describe("Acceptance: Agent Proposals System", () => {
   });
 
   describe("US1 - Data Model & Backend API (P1)", () => {
-    it("should be persisted with status \"pending\" and a generated uuid", async () => {
+    it("should be persisted with status \"pending\" and a generated UUID", async () => {
+      // AUTO-GENERATED
       // Given the database is initialized
       // (harness provides this automatically)
 
@@ -39,7 +40,8 @@ describe("Acceptance: Agent Proposals System", () => {
       expect(res.body.data.id).toBeTruthy();
     });
 
-    it("should only pending proposals are returned sorted by newest first", async () => {
+    it("should return only pending proposals sorted by newest first", async () => {
+      // AUTO-GENERATED
       // Given proposals exist
       const seeded = await harness.seedProposal({
         author: "test-agent",
@@ -56,7 +58,8 @@ describe("Acceptance: Agent Proposals System", () => {
       expect(res.body.data).toBeTruthy();
     });
 
-    it("should proposal status updates to \"accepted\" and updated_at is refreshed", async () => {
+    it("should update the proposal status to \"accepted\" and refresh updated_at", async () => {
+      // AUTO-GENERATED
       // Given a pending proposal
       const seeded = await harness.seedProposal({
         author: "test-agent",
@@ -75,6 +78,7 @@ describe("Acceptance: Agent Proposals System", () => {
     });
 
     it("should proposal status updates to \"dismissed\"", async () => {
+      // AUTO-GENERATED
       // Given a pending proposal
       const seeded = await harness.seedProposal({
         author: "test-agent",
@@ -94,14 +98,16 @@ describe("Acceptance: Agent Proposals System", () => {
   });
 
   describe("US2 - MCP Tools for Agents (P1)", () => {
-    it.skip("should proposal is created with the agent's resolved identity as author", () => {
+    it.skip("should create the proposal with the agent's resolved identity as author", () => {
+      // AUTO-GENERATED
       // Requires agent simulation — not API-testable
       // Given an agent connected via MCP
       // When it calls `create_proposal` with title, description, and type
       // Then the proposal is created with the agent's resolved identity as author
     });
 
-    it.skip("should receives all proposals (for uniqueness review)", () => {
+    it.skip("should receive all proposals (for uniqueness review)", () => {
+      // AUTO-GENERATED
       // Requires agent simulation — not API-testable
       // Given existing proposals
       // When an agent calls `list_proposals`
@@ -112,6 +118,7 @@ describe("Acceptance: Agent Proposals System", () => {
 
   describe("US3 - Frontend Proposals Tab (P1)", () => {
     it.skip("should see proposal cards with title, author, type badge, description...", () => {
+      // AUTO-GENERATED
       // Requires browser — not API-testable
       // Given the user navigates to the Proposals tab
       // When there are pending proposals
@@ -119,6 +126,7 @@ describe("Acceptance: Agent Proposals System", () => {
     });
 
     it.skip("should proposal status changes to \"accepted\" and a \"send to agent\" button...", () => {
+      // AUTO-GENERATED
       // Requires browser — not API-testable
       // Given a pending proposal
       // When the user clicks Accept
@@ -126,6 +134,7 @@ describe("Acceptance: Agent Proposals System", () => {
     });
 
     it.skip("should proposal disappears from the main view and is accessible via a \"show...", () => {
+      // AUTO-GENERATED
       // Requires browser — not API-testable
       // Given a pending proposal
       // When the user clicks Dismiss
@@ -133,6 +142,7 @@ describe("Acceptance: Agent Proposals System", () => {
     });
 
     it.skip("should appear in a dimmed/secondary style", () => {
+      // AUTO-GENERATED
       // Requires browser — not API-testable
       // Given the user toggles "Show Dismissed"
       // When there are dismissed proposals
@@ -140,6 +150,7 @@ describe("Acceptance: Agent Proposals System", () => {
     });
 
     it.skip("should only matching proposals are shown", () => {
+      // AUTO-GENERATED
       // Requires browser — not API-testable
       // Given proposals of mixed types
       // When the user filters by "product" or "engineering"
@@ -150,6 +161,7 @@ describe("Acceptance: Agent Proposals System", () => {
 
   describe("US4 - iOS Proposals Tab (P2)", () => {
     it.skip("should see a list of pending proposals", () => {
+      // AUTO-GENERATED
       // Requires browser — not API-testable
       // Given the iOS app loads
       // When the user taps the Proposals tab
@@ -157,13 +169,15 @@ describe("Acceptance: Agent Proposals System", () => {
     });
 
     it.skip("should proposal updates to accepted", () => {
+      // AUTO-GENERATED
       // Requires browser — not API-testable
       // Given a pending proposal on iOS
       // When the user swipe-actions or taps Accept
       // Then the proposal updates to accepted
     });
 
-    it.skip("should initiates epic planning for that proposal", () => {
+    it.skip("should initiate epic planning for that proposal", () => {
+      // AUTO-GENERATED
       // Requires browser — not API-testable
       // Given an accepted proposal on iOS
       // When the user taps "Send to Agent"
@@ -173,7 +187,8 @@ describe("Acceptance: Agent Proposals System", () => {
   });
 
   describe("US5 - Agent Proposal Generation Behavior (P2)", () => {
-    it.skip("should spawns a product/ux teammate and a staff engineer teammate", () => {
+    it.skip("should spawn a product/ux teammate and a staff engineer teammate", () => {
+      // AUTO-GENERATED
       // Requires agent simulation — not API-testable
       // Given an agent has no remaining tasks (`bd ready` returns empty)
       // When the agent enters proposal mode
@@ -181,6 +196,7 @@ describe("Acceptance: Agent Proposals System", () => {
     });
 
     it.skip("should first calls `list_proposals` to check uniqueness, then calls... (scenario 2)", () => {
+      // AUTO-GENERATED
       // Requires agent simulation — not API-testable
       // Given a Product/UX teammate
       // When it generates a proposal
@@ -188,13 +204,15 @@ describe("Acceptance: Agent Proposals System", () => {
     });
 
     it.skip("should first calls `list_proposals` to check uniqueness, then calls... (scenario 3)", () => {
+      // AUTO-GENERATED
       // Requires agent simulation — not API-testable
       // Given a Staff Engineer teammate
       // When it generates a proposal
       // Then it first calls `list_proposals` to check uniqueness, then calls `create_proposal` with type "engineering"
     });
 
-    it.skip("should generates a different, novel proposal instead", () => {
+    it.skip("should generate a different, novel proposal instead", () => {
+      // AUTO-GENERATED
       // Requires agent simulation — not API-testable
       // Given existing proposals cover a topic
       // When a teammate discovers its idea is already proposed

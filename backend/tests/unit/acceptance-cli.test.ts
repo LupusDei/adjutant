@@ -6,6 +6,8 @@ import { tmpdir } from "os";
 import { parseArgs, discoverSpecs } from "../../src/acceptance/cli.js";
 import { generateTestContent, generateTestFiles } from "../../src/acceptance/test-generator.js";
 import { formatReport, countResults } from "../../src/acceptance/reporter.js";
+import { detectPrecondition } from "../../src/acceptance/pattern-detector.js";
+import { TestHarness } from "../../src/acceptance/test-harness.js";
 import type { ParseResult } from "../../src/acceptance/types.js";
 import type { AcceptanceReport } from "../../src/acceptance/reporter.js";
 
@@ -357,6 +359,107 @@ describe("AcceptanceCLI", () => {
       expect(output).toContain("0 passed");
       expect(output).toContain("0 failed");
       expect(output).toContain("0 pending");
+    });
+  });
+
+  // ============================================================================
+  // Tests — Persona Precondition Detection (adj-058.6)
+  // ============================================================================
+
+  describe("persona precondition detection", () => {
+    it("should detect 'a persona exists' as persona type", () => {
+      const result = detectPrecondition("a persona exists");
+      expect(result.type).toBe("persona");
+    });
+
+    it("should detect 'a persona named Sentinel exists' as persona type", () => {
+      const result = detectPrecondition("a persona named Sentinel exists");
+      expect(result.type).toBe("persona");
+    });
+
+    it("should detect 'no personas exist' as persona type", () => {
+      const result = detectPrecondition("no personas exist");
+      expect(result.type).toBe("persona");
+    });
+
+    it("should detect 'a persona \"Sentinel\"' as persona type", () => {
+      const result = detectPrecondition('a persona "Sentinel"');
+      expect(result.type).toBe("persona");
+    });
+  });
+
+  // ============================================================================
+  // Tests — Persona Code Generation (adj-058.6)
+  // ============================================================================
+
+  describe("persona code generation", () => {
+    it("should generate seedPersona call for persona precondition", () => {
+      const parsed: ParseResult = {
+        specPath: "specs/029-agent-personas/spec.md",
+        featureName: "Agent Personas",
+        userStories: [
+          {
+            title: "Persona CRUD",
+            storyNumber: 1,
+            priority: "P1",
+            scenarios: [
+              {
+                index: 1,
+                given: "a persona exists",
+                when: "I GET /api/personas/:id",
+                then: "all trait values are returned",
+                raw: "**Given** a persona exists, **When** I GET /api/personas/:id, **Then** all trait values are returned",
+              },
+            ],
+            requirementIds: [],
+          },
+        ],
+        requirements: [],
+        edgeCases: [],
+        warnings: [],
+      };
+
+      const content = generateTestContent(parsed);
+      expect(content).toContain("seedPersona");
+      expect(content).toContain("seeded.id");
+      // Should NOT contain seedAgent for persona scenarios
+      expect(content).not.toContain("seedAgent");
+    });
+  });
+
+  // ============================================================================
+  // Tests — TestHarness seedPersona (adj-058.6)
+  // ============================================================================
+
+  describe("TestHarness seedPersona", () => {
+    let harness: TestHarness;
+
+    beforeEach(async () => {
+      harness = new TestHarness();
+      await harness.setup();
+    });
+
+    afterEach(async () => {
+      await harness.destroy();
+    });
+
+    it("should create a persona with name and id", async () => {
+      const persona = await harness.seedPersona({
+        name: "Test Sentinel",
+        description: "A test persona",
+      });
+
+      expect(persona.id).toBeTruthy();
+      expect(persona.name).toBe("Test Sentinel");
+    });
+
+    it("should create a persona accessible via GET /api/personas/:id", async () => {
+      const persona = await harness.seedPersona({
+        name: "API Test Persona",
+      });
+
+      const res = await harness.get(`/api/personas/${persona.id}`);
+      expect(res.status).toBe(200);
     });
   });
 });
