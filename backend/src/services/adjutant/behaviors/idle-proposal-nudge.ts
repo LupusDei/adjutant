@@ -14,6 +14,9 @@ const DEBOUNCE_META_PREFIX = "idle_nudge_check_";
 /** Maximum number of pending proposals before new creation is blocked */
 const PENDING_CAP = 12;
 
+/** Coordinator agent IDs — these agents delegate proposal work, never generate proposals themselves */
+const COORDINATOR_IDS = new Set(["adjutant-coordinator", "adjutant", "adjutant-core"]);
+
 /**
  * Build the reason string for scheduleCheck.
  * Contains idle agent ID and proposal context for the coordinator.
@@ -50,7 +53,7 @@ function buildScheduleReason(agentId: string, proposalStore: ProposalStore): str
     }
   }
 
-  parts.push("Consider nudging them to work on proposals.");
+  parts.push(`ACTION: Use send_message to nudge agent "${agentId}" to work on proposals.`);
   return parts.join("\n");
 }
 
@@ -84,6 +87,9 @@ export function createIdleProposalNudge(
         state.setMeta(`${DEBOUNCE_META_PREFIX}${agentId}`, "");
         return;
       }
+
+      // Skip coordinator agents — they delegate proposal work, never generate proposals
+      if (COORDINATOR_IDS.has(agentId)) return;
 
       // Skip disconnected agents
       const profile = state.getAgentProfile(agentId);
