@@ -11,17 +11,47 @@ const IDLE_CHECK_DELAY_MS = 300_000;
 /** Metadata key prefix for per-agent debounce (stores check ID) */
 const DEBOUNCE_META_PREFIX = "idle_nudge_check_";
 
+/** Maximum number of pending proposals before new creation is blocked */
+const PENDING_CAP = 12;
+
 /**
  * Build the reason string for scheduleCheck.
  * Contains idle agent ID and proposal context for the coordinator.
- *
- * Phase 1 (adj-057.1.2): basic reason with agent ID.
- * Phase 2 (adj-057.1.4): adds proposal summaries.
- * Phase 3 (adj-057.1.6): adds pending cap status.
+ * The coordinator reads this as its situation prompt and decides how to nudge.
  */
-function buildScheduleReason(agentId: string, _proposalStore: ProposalStore): string {
-  // Minimal implementation — proposal context added in adj-057.1.4
-  return `Agent "${agentId}" has been idle for 5 minutes. Consider nudging them to work on proposals.`;
+function buildScheduleReason(agentId: string, proposalStore: ProposalStore): string {
+  const pending = proposalStore.getProposals({ status: "pending" });
+  const dismissed = proposalStore.getProposals({ status: "dismissed" });
+
+  const parts: string[] = [];
+  parts.push(`Agent "${agentId}" has been idle for 5 minutes.`);
+
+  if (pending.length === 0 && dismissed.length === 0) {
+    parts.push("No existing proposals — agent can create new proposals freely.");
+  } else {
+    if (pending.length > 0) {
+      parts.push(`Pending proposals (${pending.length}):`);
+      for (const p of pending) {
+        parts.push(`  - [${p.id}] ${p.title}`);
+      }
+    }
+    if (dismissed.length > 0) {
+      parts.push(`Dismissed proposals (${dismissed.length}):`);
+      for (const p of dismissed) {
+        parts.push(`  - [${p.id}] ${p.title}`);
+      }
+    }
+
+    // Pending cap check
+    if (pending.length >= PENDING_CAP) {
+      parts.push(
+        `PENDING CAP REACHED (${pending.length}/${PENDING_CAP}) — agent must improve an existing proposal, not create new ones.`,
+      );
+    }
+  }
+
+  parts.push("Consider nudging them to work on proposals.");
+  return parts.join("\n");
 }
 
 /**
