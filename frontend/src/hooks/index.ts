@@ -41,3 +41,6 @@ export type { UseProposalsResult } from "./useProposals";
 
 export { useCostDashboard } from "./useCostDashboard";
 export type { UseCostDashboardOptions, UseCostDashboardResult } from "./useCostDashboard";
+
+export { useBeadCost } from "./useBeadCost";
+export type { UseBeadCostOptions, UseBeadCostResult } from "./useBeadCost";

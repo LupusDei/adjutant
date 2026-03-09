@@ -1,8 +1,9 @@
-import { useCallback, type CSSProperties } from 'react';
+import { useCallback, useMemo, type CSSProperties } from 'react';
 
 import type { EpicWithProgress } from '../../types/epics';
 import { AgentAssignDropdown } from '../shared/AgentAssignDropdown';
 import { api } from '../../services/api';
+import { useBeadCost } from '../../hooks/useBeadCost';
 
 interface EpicCardProps {
   epic: EpicWithProgress;
@@ -44,10 +45,21 @@ function getStatusInfo(status: string, isComplete: boolean): { label: string; co
 /**
  * Display a single epic with its progress.
  */
+/** Get cost color based on amount — dimmer for low, brighter for high. */
+function getCostColor(cost: number): string {
+  if (cost >= 10) return 'var(--crt-phosphor-bright, var(--crt-phosphor))';
+  if (cost >= 1) return 'var(--crt-phosphor)';
+  return 'var(--crt-phosphor-dim)';
+}
+
 export function EpicCard({ epic, onClick, onAssign }: EpicCardProps) {
   const progressPercent = Math.round(epic.progress * 100);
   const progressColor = getProgressColor(epic.progress, epic.isComplete);
   const statusInfo = getStatusInfo(epic.epic.status, epic.isComplete);
+
+  // Fetch cost for this epic (without children -- detail view does full aggregation)
+  const childIds = useMemo(() => undefined, []);
+  const { cost: beadCost } = useBeadCost(epic.epic.id, { children: childIds });
 
   const handleAssign = useCallback((agentName: string) => {
     void api.beads.update(epic.epic.id, { assignee: agentName });
@@ -113,6 +125,16 @@ export function EpicCard({ epic, onClick, onAssign }: EpicCardProps) {
           {epic.progressText} ({progressPercent}%)
         </span>
       </div>
+
+      {/* Cost badge */}
+      {beadCost && beadCost.totalCost > 0 && (
+        <div style={styles.costRow}>
+          <span style={styles.costLabel}>COST</span>
+          <span style={{ ...styles.costValue, color: getCostColor(beadCost.totalCost) }}>
+            ${beadCost.totalCost.toFixed(2)}
+          </span>
+        </div>
+      )}
 
       {onClick && <span style={styles.chevron}>&gt;</span>}
     </div>
@@ -197,6 +219,22 @@ const styles = {
     whiteSpace: 'nowrap',
     minWidth: '70px',
     textAlign: 'right',
+  },
+  costRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    marginTop: '6px',
+  },
+  costLabel: {
+    fontSize: '9px',
+    color: 'var(--crt-phosphor-dim)',
+    letterSpacing: '0.1em',
+  },
+  costValue: {
+    fontSize: '11px',
+    fontWeight: 'bold',
+    letterSpacing: '0.03em',
   },
   chevron: {
     position: 'absolute',
