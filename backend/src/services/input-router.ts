@@ -1,8 +1,14 @@
 /**
- * InputRouter — routes WebSocket input to tmux sessions via send-keys.
+ * InputRouter — routes WebSocket input to tmux sessions via paste-buffer.
  *
  * Handles text input, permission responses, and interrupt (Ctrl-C) signals.
  * Queues input when sessions are busy and delivers in FIFO order when idle.
+ *
+ * Text delivery uses tmux set-buffer + paste-buffer for atomic delivery.
+ * The text is loaded into a named buffer with a trailing newline, then
+ * pasted into the target pane in a single operation. This eliminates the
+ * race condition where a separate "Enter" key arrives before the text
+ * paste completes (adj-53kf, adj-twhj).
  */
 
 import { execFile } from "child_process";
@@ -21,13 +27,6 @@ export interface QueuedInput {
 // ============================================================================
 // Constants
 // ============================================================================
-
-/**
- * Delay (ms) between sending literal text and Enter via tmux send-keys.
- * Without this, the Enter key can arrive before tmux finishes processing the
- * text paste, causing the submission to be lost and prompts to stack up.
- */
-const SEND_ENTER_DELAY_MS = 50;
 
 /**
  * Window (ms) within which duplicate text sent to the same pane is suppressed.
@@ -50,6 +49,24 @@ function execTmuxCommand(args: string[]): Promise<string> {
       resolve(stdout);
     });
   });
+}
+
+/** Monotonically increasing counter for unique tmux buffer names. */
+let bufferCounter = 0;
+
+/**
+ * Atomically send text + Enter to a tmux pane using set-buffer + paste-buffer.
+ *
+ * This avoids the race condition in the old approach (send-keys -l text, then
+ * send-keys Enter as separate commands). The buffer includes a trailing newline
+ * which acts as Enter when pasted. tmux pastes the entire buffer in one operation.
+ */
+async function tmuxPasteText(pane: string, text: string): Promise<void> {
+  const bufferName = `adj-input-${++bufferCounter}`;
+  // Append newline so the paste includes Enter (submit)
+  await execTmuxCommand(["set-buffer", "-b", bufferName, text + "\n"]);
+  // Paste the buffer into the target pane; -d deletes the buffer after pasting
+  await execTmuxCommand(["paste-buffer", "-t", pane, "-b", bufferName, "-d"]);
 }
 
 // ============================================================================
@@ -179,7 +196,7 @@ export class InputRouter {
 
   private async deliverInput(tmuxPane: string, text: string): Promise<boolean> {
     try {
-      // Strip trailing newlines — we send Enter separately
+      // Strip trailing newlines — we append exactly one when pasting
       const clean = text.replace(/\n+$/, "");
 
       // Deduplication: skip if the same text was sent to this pane recently
@@ -190,15 +207,10 @@ export class InputRouter {
         return true; // Report success — the message was already delivered
       }
 
-      // Use -l for literal text (prevents interpreting spaces/special chars as key names)
-      await execTmuxCommand(["send-keys", "-t", tmuxPane, "-l", clean]);
-
-      // Brief delay to let tmux finish processing the literal text before sending Enter.
-      // Without this, Enter can arrive before the paste is complete, causing it to be
-      // lost and prompts to stack in the input buffer (adj-53kf).
-      await new Promise((r) => setTimeout(r, SEND_ENTER_DELAY_MS));
-
-      await execTmuxCommand(["send-keys", "-t", tmuxPane, "Enter"]);
+      // Atomic delivery: set-buffer loads text+newline, paste-buffer sends it all at once.
+      // The trailing newline acts as Enter, eliminating the race condition where a
+      // separate Enter key arrives before the text paste completes (adj-53kf, adj-twhj).
+      await tmuxPasteText(tmuxPane, clean);
 
       // Track for deduplication
       this.recentInputs.set(tmuxPane, { text: clean, sentAt: Date.now() });

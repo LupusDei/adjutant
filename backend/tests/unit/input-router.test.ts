@@ -43,7 +43,7 @@ describe("InputRouter", () => {
   // ==========================================================================
 
   describe("sendInput", () => {
-    it("should send text to an idle session via tmux send-keys", async () => {
+    it("should send text to a session via tmux set-buffer + paste-buffer", async () => {
       const session = registry.create({
         name: "test",
         tmuxSession: "adj-test",
@@ -54,15 +54,17 @@ describe("InputRouter", () => {
       const sent = await router.sendInput(session.id, "Hello world");
       expect(sent).toBe(true);
 
+      // Should use set-buffer to load text with trailing newline
       expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
-        ["send-keys", "-t", session.tmuxPane, "-l", "Hello world"],
+        expect.arrayContaining(["set-buffer", "-b", expect.any(String), "Hello world\n"]),
         expect.anything(),
         expect.any(Function)
       );
+      // Should use paste-buffer to atomically deliver
       expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
-        ["send-keys", "-t", session.tmuxPane, "Enter"],
+        expect.arrayContaining(["paste-buffer", "-t", session.tmuxPane]),
         expect.anything(),
         expect.any(Function)
       );
@@ -79,10 +81,10 @@ describe("InputRouter", () => {
       const sent = await router.sendInput(session.id, "immediate message");
       expect(sent).toBe(true);
 
-      // Should have called tmux directly, not queued
+      // Should have called tmux directly (set-buffer), not queued
       expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
-        ["send-keys", "-t", session.tmuxPane, "-l", "immediate message"],
+        expect.arrayContaining(["set-buffer", "-b", expect.any(String), "immediate message\n"]),
         expect.anything(),
         expect.any(Function)
       );
@@ -105,7 +107,7 @@ describe("InputRouter", () => {
       expect(sent).toBe(false);
     });
 
-    it("should return false if tmux send-keys fails on idle session", async () => {
+    it("should return false if tmux command fails", async () => {
       const session = registry.create({
         name: "test",
         tmuxSession: "adj-test",
@@ -134,7 +136,7 @@ describe("InputRouter", () => {
   // ==========================================================================
 
   describe("sendPermissionResponse", () => {
-    it("should send 'y' for approved permission", async () => {
+    it("should send 'y' for approved permission via paste-buffer", async () => {
       const session = registry.create({
         name: "test",
         tmuxSession: "adj-test",
@@ -146,19 +148,19 @@ describe("InputRouter", () => {
 
       expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
-        ["send-keys", "-t", session.tmuxPane, "-l", "y"],
+        expect.arrayContaining(["set-buffer", "-b", expect.any(String), "y\n"]),
         expect.anything(),
         expect.any(Function)
       );
       expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
-        ["send-keys", "-t", session.tmuxPane, "Enter"],
+        expect.arrayContaining(["paste-buffer", "-t", session.tmuxPane]),
         expect.anything(),
         expect.any(Function)
       );
     });
 
-    it("should send 'n' for denied permission", async () => {
+    it("should send 'n' for denied permission via paste-buffer", async () => {
       const session = registry.create({
         name: "test",
         tmuxSession: "adj-test",
@@ -170,13 +172,7 @@ describe("InputRouter", () => {
 
       expect(mockExecFile).toHaveBeenCalledWith(
         "tmux",
-        ["send-keys", "-t", session.tmuxPane, "-l", "n"],
-        expect.anything(),
-        expect.any(Function)
-      );
-      expect(mockExecFile).toHaveBeenCalledWith(
-        "tmux",
-        ["send-keys", "-t", session.tmuxPane, "Enter"],
+        expect.arrayContaining(["set-buffer", "-b", expect.any(String), "n\n"]),
         expect.anything(),
         expect.any(Function)
       );
@@ -218,7 +214,6 @@ describe("InputRouter", () => {
         projectPath: "/tmp",
       });
 
-      // Interrupt should clear queue (queue is empty but should not error)
       await router.sendInterrupt(session.id);
       expect(router.getQueueLength(session.id)).toBe(0);
     });
@@ -277,11 +272,11 @@ describe("InputRouter", () => {
   });
 
   // ==========================================================================
-  // Delay between text and Enter (adj-53kf)
+  // Atomic paste-buffer delivery (adj-twhj)
   // ==========================================================================
 
-  describe("send-keys delay", () => {
-    it("should send Enter after the literal text, not simultaneously", async () => {
+  describe("atomic paste-buffer delivery", () => {
+    it("should use set-buffer then paste-buffer, not send-keys -l + Enter", async () => {
       const session = registry.create({
         name: "test",
         tmuxSession: "adj-test",
@@ -297,22 +292,71 @@ describe("InputRouter", () => {
           _opts: unknown,
           cb: (err: Error | null, stdout: string, stderr: string) => void
         ) => {
-          if (args[0] === "send-keys") {
-            // Track whether this is the literal text or Enter call
-            if (args.includes("-l")) {
-              callOrder.push("literal");
-            } else if (args.includes("Enter")) {
-              callOrder.push("enter");
-            }
-          }
+          callOrder.push(args[0]!);
           cb(null, "", "");
         }
       );
 
       await router.sendInput(session.id, "test message");
 
-      // Literal text must come before Enter
-      expect(callOrder).toEqual(["literal", "enter"]);
+      // Must use set-buffer then paste-buffer (atomic), NOT send-keys -l + Enter
+      expect(callOrder).toEqual(["set-buffer", "paste-buffer"]);
+    });
+
+    it("should append newline to buffer content for Enter submission", async () => {
+      const session = registry.create({
+        name: "test",
+        tmuxSession: "adj-test",
+        projectPath: "/tmp",
+      });
+      registry.updateStatus(session.id, "idle");
+
+      await router.sendInput(session.id, "my prompt");
+
+      // The set-buffer call should include trailing newline
+      const setBufferCall = mockExecFile.mock.calls.find(
+        (call: unknown[]) => (call[1] as string[])[0] === "set-buffer"
+      );
+      expect(setBufferCall).toBeDefined();
+      // set-buffer -b <name> <data>  →  args[3] is the data
+      const bufferData = (setBufferCall![1] as string[])[3];
+      expect(bufferData).toBe("my prompt\n");
+    });
+
+    it("should delete buffer after pasting with -d flag", async () => {
+      const session = registry.create({
+        name: "test",
+        tmuxSession: "adj-test",
+        projectPath: "/tmp",
+      });
+      registry.updateStatus(session.id, "idle");
+
+      await router.sendInput(session.id, "test");
+
+      const pasteCall = mockExecFile.mock.calls.find(
+        (call: unknown[]) => (call[1] as string[])[0] === "paste-buffer"
+      );
+      expect(pasteCall).toBeDefined();
+      const args = pasteCall![1] as string[];
+      expect(args).toContain("-d");
+    });
+
+    it("should strip trailing newlines from input before appending one", async () => {
+      const session = registry.create({
+        name: "test",
+        tmuxSession: "adj-test",
+        projectPath: "/tmp",
+      });
+      registry.updateStatus(session.id, "idle");
+
+      await router.sendInput(session.id, "text with newlines\n\n\n");
+
+      const setBufferCall = mockExecFile.mock.calls.find(
+        (call: unknown[]) => (call[1] as string[])[0] === "set-buffer"
+      );
+      const bufferData = (setBufferCall![1] as string[])[3];
+      // Should have exactly one trailing newline, not four
+      expect(bufferData).toBe("text with newlines\n");
     });
   });
 
@@ -368,8 +412,7 @@ describe("InputRouter", () => {
       registry.updateStatus(session.id, "idle");
 
       // Mock Date.now to control time without affecting setTimeout
-      const realDateNow = Date.now;
-      let fakeNow = realDateNow.call(Date);
+      let fakeNow = Date.now();
       vi.spyOn(Date, "now").mockImplementation(() => fakeNow);
 
       await router.sendInput(session.id, "repeated prompt");

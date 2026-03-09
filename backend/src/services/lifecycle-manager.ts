@@ -196,26 +196,26 @@ export class LifecycleManager {
       await this.waitForPane(tmuxPane);
 
       // If an initial prompt was provided, inject it after Claude is ready.
-      // Use -l (literal) flag to prevent tmux from interpreting special characters.
+      // Use set-buffer + paste-buffer for atomic delivery (text + Enter in one
+      // operation). This eliminates the race condition where a separate Enter
+      // key arrives before the text paste completes (adj-53kf, adj-twhj).
       if (req.initialPrompt) {
         // Brief delay to let Claude Code finish initialization
         await new Promise((resolve) => setTimeout(resolve, 3_000));
+        const bufferName = `adj-spawn-${Date.now()}`;
         await execTmuxCommand([
-          "send-keys",
-          "-t",
-          tmuxSessionName,
-          "-l",
-          req.initialPrompt,
+          "set-buffer",
+          "-b",
+          bufferName,
+          req.initialPrompt + "\n",
         ]);
-        // Brief delay to let tmux finish processing the literal text before
-        // sending Enter. Without this, Enter can arrive before the paste is
-        // complete, causing the submission to be lost (adj-53kf).
-        await new Promise((resolve) => setTimeout(resolve, 50));
         await execTmuxCommand([
-          "send-keys",
+          "paste-buffer",
           "-t",
           tmuxSessionName,
-          "Enter",
+          "-b",
+          bufferName,
+          "-d",
         ]);
       }
 
