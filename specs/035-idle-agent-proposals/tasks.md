@@ -12,25 +12,25 @@
 
 ## Phase 1: Core Behavior (adj-057.1)
 
-**Purpose**: Implement the idle-proposal-nudge behavior using scheduleCheck (no cron)
+**Purpose**: Implement the idle-proposal-nudge behavior — coordinator-mediated via scheduleCheck (no cron, no direct agent messaging)
 
-- [ ] T001 [US1] Write failing tests for idle detection: agent status changes to idle triggers scheduleCheck(5min), callback checks if still idle, debounce prevents duplicates in `backend/tests/unit/adjutant/behaviors/idle-proposal-nudge.test.ts`
-- [ ] T002 [US1] Implement `createIdleProposalNudge()` behavior factory triggered by `agent:status_changed`. On idle: call `stimulusEngine.scheduleCheck(300000, ...)`. On callback: re-check status, send nudge via `comm.messageAgent()` in `backend/src/services/adjutant/behaviors/idle-proposal-nudge.ts`
-- [ ] T003 [US2] Add tests for proposal context inclusion in nudge message (pending + dismissed summaries with titles, IDs, types) in `backend/tests/unit/adjutant/behaviors/idle-proposal-nudge.test.ts`
-- [ ] T004 [US2] Implement `buildNudgeMessage()` that fetches existing proposals via ProposalStore and constructs context-rich message with dedup instructions in `backend/src/services/adjutant/behaviors/idle-proposal-nudge.ts`
-- [ ] T005 [US3] Add tests for 12-proposal pending cap enforcement (>= 12 = improve-only, < 12 = create or improve) in `backend/tests/unit/adjutant/behaviors/idle-proposal-nudge.test.ts`
-- [ ] T006 [US3] Implement pending cap logic — count pending proposals, switch message to "improve only" instructions when >= 12 in `backend/src/services/adjutant/behaviors/idle-proposal-nudge.ts`
+- [ ] T001 [US1] Write failing tests: agent status changes to idle triggers `scheduleCheck(300000, ...)`, working/disconnected agents skipped, debounce prevents duplicate checks in `backend/tests/unit/adjutant/behaviors/idle-proposal-nudge.test.ts`
+- [ ] T002 [US1] Implement `createIdleProposalNudge()` behavior factory triggered by `agent:status_changed`. On idle: build context, call `stimulusEngine.scheduleCheck(300000, reason)`. No direct agent messaging. in `backend/src/services/adjutant/behaviors/idle-proposal-nudge.ts`
+- [ ] T003 [US2] Add tests: scheduleCheck reason string includes pending + dismissed proposal summaries (titles, IDs, types, counts) in `backend/tests/unit/adjutant/behaviors/idle-proposal-nudge.test.ts`
+- [ ] T004 [US2] Implement `buildScheduleReason()` that queries ProposalStore for pending/dismissed proposals and formats them into the reason string for the coordinator's situation prompt in `backend/src/services/adjutant/behaviors/idle-proposal-nudge.ts`
+- [ ] T005 [US3] Add tests: reason string includes cap-reached instruction when >= 12 pending proposals, allows creation when < 12 in `backend/tests/unit/adjutant/behaviors/idle-proposal-nudge.test.ts`
+- [ ] T006 [US3] Implement pending cap logic in `buildScheduleReason()` — when >= 12 pending, reason includes "PENDING CAP REACHED — agent must improve existing proposal" in `backend/src/services/adjutant/behaviors/idle-proposal-nudge.ts`
 
-**Checkpoint**: Core behavior complete with all three user stories covered
+**Checkpoint**: Core behavior complete — schedules coordinator wakes with full proposal context
 
 ---
 
 ## Phase 2: Registration & Integration (adj-057.2)
 
-**Purpose**: Wire behavior into the system (no new cron registrations)
+**Purpose**: Wire behavior into the system (no new cron registrations, no CommunicationManager dependency)
 
-- [ ] T007 [P] Register `createIdleProposalNudge()` in behavior registry, pass stimulusEngine + proposalStore dependencies in `backend/src/index.ts`
-- [ ] T008 [P] Add edge case tests: disconnected agent skip, debounce reset after non-idle transition, agent leaves idle before 5min timer fires in `backend/tests/unit/adjutant/behaviors/idle-proposal-nudge.test.ts`
+- [ ] T007 [P] Register `createIdleProposalNudge(stimulusEngine, proposalStore)` in behavior registry in `backend/src/index.ts`
+- [ ] T008 [P] Add edge case tests: disconnected agent skip, debounce reset after non-idle transition, verify behavior never calls comm.messageAgent() in `backend/tests/unit/adjutant/behaviors/idle-proposal-nudge.test.ts`
 
 **Checkpoint**: Feature fully integrated, all tests green, build passes
 
@@ -40,7 +40,7 @@
 
 - Phase 1 tasks are sequential (TDD: test → implement for each user story)
 - T003/T004 depend on T001/T002 (build on base behavior)
-- T005/T006 depend on T003/T004 (extend message construction)
+- T005/T006 depend on T003/T004 (extend reason string construction)
 - Phase 2 depends on Phase 1 complete
 - T007 and T008 can run in parallel [P]
 
