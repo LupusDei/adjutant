@@ -2,6 +2,9 @@ import type { MessageStore } from "../message-store.js";
 import { wsBroadcast } from "../ws-server.js";
 import { isAPNsConfigured, sendNotificationToAll } from "../apns-service.js";
 
+/** The system agent identity used for adjutant-originated messages. */
+export const ADJUTANT_AGENT_ID = "adjutant-core";
+
 export interface CommunicationManager {
   /** Queue a routine message (batched, flushed by periodic-summary) */
   queueRoutine(message: string): void;
@@ -19,7 +22,6 @@ export interface CommunicationManager {
 
 export function createCommunicationManager(store: MessageStore): CommunicationManager {
   const routineQueue: string[] = [];
-  const ADJUTANT_AGENT_ID = "adjutant-core";
 
   return {
     queueRoutine(message: string): void {
