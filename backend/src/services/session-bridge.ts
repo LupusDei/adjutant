@@ -9,6 +9,7 @@
 import { basename } from "path";
 import { logInfo, logWarn } from "../utils/index.js";
 import { getEventBus } from "./event-bus.js";
+import { recordCostUpdate } from "./cost-tracker.js";
 import {
   SessionRegistry,
   getSessionRegistry,
@@ -148,6 +149,13 @@ export class SessionBridge {
           if (event.type === "status") {
             const mapped = event.state === "thinking" ? "working" : event.state;
             this.updateSessionStatus(sessionId, mapped as SessionStatus);
+          } else if (event.type === "cost_update") {
+            const session = this.registry.get(sessionId);
+            const projectPath = session?.projectPath ?? "";
+            recordCostUpdate(sessionId, projectPath, {
+              ...(event.tokens ? { tokens: event.tokens } : {}),
+              ...(event.cost !== undefined ? { cost: event.cost } : {}),
+            });
           }
         }
       }

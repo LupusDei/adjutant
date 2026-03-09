@@ -29,6 +29,7 @@ import { initBeadAssignNotification } from "./services/bead-assign-notification.
 import { discoverLocalProjects } from "./services/projects-service.js";
 import { spawnAdjutant } from "./services/adjutant-spawner.js";
 import { wireSpawnHealthChecks } from "./services/agent-spawner-service.js";
+import { initCostTracker } from "./services/cost-tracker.js";
 import { initAdjutantCore } from "./services/adjutant/adjutant-core.js";
 import { BehaviorRegistry } from "./services/adjutant/behavior-registry.js";
 import { createAdjutantState } from "./services/adjutant/state-store.js";
@@ -102,6 +103,9 @@ initPersonaService(personaService);
 const callsignToggleService = createCallsignToggleService(messageDb);
 app.use("/api/personas", createPersonasRouter(personaService));
 app.use("/api/callsigns", createCallsignsRouter(callsignToggleService));
+
+// Initialize cost tracker (loads persisted cost data from ~/.adjutant/costs.json)
+initCostTracker();
 
 // Prune events older than 7 days on startup, then every 6 hours
 const PRUNE_DAYS = 7;
