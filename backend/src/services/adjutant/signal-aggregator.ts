@@ -9,6 +9,7 @@
 import { randomUUID } from "crypto";
 
 import type { EventName } from "../event-bus.js";
+import { KNOWN_COORDINATOR_IDS } from "./state-store.js";
 
 // ============================================================================
 // Types
@@ -39,8 +40,6 @@ export type SignalSnapshot = Record<string, Signal[]>;
 // Classification
 // ============================================================================
 
-/** Agent IDs that belong to the adjutant itself — messages TO these are not context signals. */
-const ADJUTANT_IDS = new Set(["adjutant-coordinator", "adjutant", "adjutant-core"]);
 
 /**
  * Classify an event into critical or context urgency.
@@ -93,7 +92,7 @@ function classify(event: EventName, data: unknown): SignalUrgency {
       const payload = data as Record<string, unknown> | null | undefined;
       const from = payload?.["from"] as string | undefined;
       const to = payload?.["to"] as string | undefined;
-      if (from === "user" && to && !ADJUTANT_IDS.has(to)) {
+      if (from === "user" && to && !KNOWN_COORDINATOR_IDS.has(to)) {
         return "context";
       }
       return "context";
