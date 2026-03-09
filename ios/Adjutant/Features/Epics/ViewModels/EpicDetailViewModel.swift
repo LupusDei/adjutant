@@ -20,6 +20,9 @@ final class EpicDetailViewModel: BaseViewModel {
     /// Closed subtasks
     @Published private(set) var closedSubtasks: [BeadInfo] = []
 
+    /// Epic cost data (loaded asynchronously)
+    @Published private(set) var epicCost: BeadCost?
+
     /// Non-fatal error when children fail to load but epic is available
     @Published var childrenErrorMessage: String?
 
@@ -118,6 +121,22 @@ final class EpicDetailViewModel: BaseViewModel {
             if childrenResult == nil, let error = firstError, self.epic != nil {
                 self.childrenErrorMessage = error.localizedDescription
             }
+
+            // Fetch epic cost (non-blocking, uses children for aggregation)
+            await self.loadEpicCost()
+        }
+    }
+
+    /// Loads cost data for the epic, aggregated with children if available.
+    private func loadEpicCost() async {
+        let childIds = subtasks.map { $0.id }
+        do {
+            epicCost = try await apiClient.getBeadCost(
+                beadId: epicId,
+                children: childIds.isEmpty ? nil : childIds
+            )
+        } catch {
+            // Cost loading failure is non-fatal
         }
     }
 
@@ -155,6 +174,18 @@ final class EpicDetailViewModel: BaseViewModel {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+
+    /// Formatted epic cost (e.g., "$47.32")
+    var formattedCost: String? {
+        guard let cost = epicCost?.totalCost, cost > 0 else { return nil }
+        if cost < 0.01 { return "<$0.01" }
+        return String(format: "$%.2f", cost)
+    }
+
+    /// Number of sessions contributing to the epic's cost
+    var costSessionCount: Int {
+        epicCost?.sessionCount ?? 0
     }
 }
 

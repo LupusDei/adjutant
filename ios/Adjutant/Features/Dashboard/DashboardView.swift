@@ -39,6 +39,10 @@ struct DashboardView: View {
                 )
                 .padding(.horizontal, CRTTheme.Spacing.md)
 
+                // Cost summary (loads independently)
+                CostOverviewWidget()
+                    .padding(.horizontal, CRTTheme.Spacing.md)
+
                 // Epics: In Progress + Recently Completed
                 EpicsOverviewWidget(
                     inProgressEpics: viewModel.inProgressEpics,

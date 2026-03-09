@@ -49,6 +49,11 @@ struct EpicRowView: View {
                         BadgeView(project.uppercased(), style: .label)
                     }
 
+                    // Cost display (if available)
+                    if let costText = epic.formattedCost {
+                        CRTText(costText, style: .caption, glowIntensity: .subtle, color: theme.dim)
+                    }
+
                     Spacer()
 
                     // Status indicator

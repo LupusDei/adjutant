@@ -34,6 +34,11 @@ struct EpicDetailView: View {
                     // Progress section
                     progressSection
 
+                    // Cost section (if available)
+                    if let costText = viewModel.formattedCost {
+                        costSection(costText)
+                    }
+
                     // Subtasks sections
                     if !viewModel.openSubtasks.isEmpty {
                         subtaskSection("OPEN TASKS", subtasks: viewModel.openSubtasks)
@@ -193,6 +198,42 @@ struct EpicDetailView: View {
         .background(
             RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
                 .fill(theme.background.elevated)
+        )
+    }
+
+    private func costSection(_ costText: String) -> some View {
+        VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
+            HStack {
+                Image(systemName: "dollarsign.circle")
+                    .foregroundColor(theme.dim)
+                CRTText("EPIC COST", style: .caption, glowIntensity: .subtle, color: theme.dim)
+                Spacer()
+            }
+
+            HStack(alignment: .firstTextBaseline) {
+                CRTText(costText, style: .subheader, glowIntensity: .medium)
+                    .crtGlow(color: theme.primary, radius: 6, intensity: 0.4)
+
+                Spacer()
+
+                if viewModel.costSessionCount > 0 {
+                    CRTText(
+                        "\(viewModel.costSessionCount) SESSIONS",
+                        style: .caption,
+                        glowIntensity: .none,
+                        color: theme.dim
+                    )
+                }
+            }
+        }
+        .padding(CRTTheme.Spacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
+                .fill(theme.background.elevated)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
+                .stroke(theme.dim.opacity(0.2), lineWidth: 1)
         )
     }
 

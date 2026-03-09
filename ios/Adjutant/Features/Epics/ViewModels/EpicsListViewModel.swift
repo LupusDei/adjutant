@@ -7,6 +7,8 @@ struct EpicWithProgress: Identifiable, Equatable {
     let epic: BeadInfo
     let completedCount: Int
     let totalCount: Int
+    /// Cost for this epic (loaded asynchronously, may be nil)
+    var cost: Double?
 
     var id: String { epic.id }
 
@@ -21,6 +23,13 @@ struct EpicWithProgress: Identifiable, Equatable {
 
     var progressText: String {
         "\(completedCount)/\(totalCount)"
+    }
+
+    /// Formatted cost string (e.g., "$12.50")
+    var formattedCost: String? {
+        guard let cost else { return nil }
+        if cost < 0.01 && cost > 0 { return "<$0.01" }
+        return String(format: "$%.2f", cost)
     }
 }
 
@@ -88,6 +97,32 @@ final class EpicsListViewModel: BaseViewModel {
             // Update cache with epic BeadInfo for other views
             let epicInfos = response.map { $0.epic }
             ResponseCache.shared.updateEpics(epicInfos)
+
+            // Fetch costs for each epic asynchronously (non-blocking)
+            await self.loadEpicCosts(from: response)
+        }
+    }
+
+    /// Fetches cost data for each epic and updates the corresponding EpicWithProgress entries.
+    /// Failures are silently ignored — cost display is optional.
+    private func loadEpicCosts(from response: [EpicWithProgressResponse]) async {
+        for item in response {
+            let epicId = item.epic.id
+            let childIds = item.children.map { $0.id }
+            do {
+                let beadCost = try await apiClient.getBeadCost(
+                    beadId: epicId,
+                    children: childIds.isEmpty ? nil : childIds
+                )
+                // Update the cost in the correct array
+                if let idx = openEpics.firstIndex(where: { $0.id == epicId }) {
+                    openEpics[idx].cost = beadCost.totalCost
+                } else if let idx = completeEpics.firstIndex(where: { $0.id == epicId }) {
+                    completeEpics[idx].cost = beadCost.totalCost
+                }
+            } catch {
+                // Cost loading failure is non-fatal — just skip
+            }
         }
     }
 
