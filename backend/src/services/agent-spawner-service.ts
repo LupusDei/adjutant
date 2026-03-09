@@ -161,6 +161,10 @@ export async function spawnAgent(
         sessionId: result.sessionId,
       });
 
+      // Cancel any existing health check for this agent (prevents orphan timers
+      // if spawnAgent is called twice for the same name before the first expires)
+      cancelSpawnHealthCheck(req.name);
+
       // Schedule health check — verify agent connects via MCP within timeout
       const timer = setTimeout(() => {
         pendingHealthChecks.delete(req.name);

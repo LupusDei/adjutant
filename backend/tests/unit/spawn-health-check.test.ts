@@ -125,6 +125,51 @@ describe("spawn-health-check", () => {
   });
 
   // ==========================================================================
+  // Duplicate spawn race condition
+  // ==========================================================================
+
+  describe("duplicate spawn for same agent", () => {
+    it("should cancel first timer when spawning same agent twice", async () => {
+      mockListTmuxSessions.mockResolvedValue(new Set());
+      mockBridgeCreateSession.mockResolvedValue({
+        success: true,
+        sessionId: "s1",
+      });
+
+      // First spawn
+      await spawnAgent({
+        name: "dup-agent",
+        projectPath: "/tmp/project",
+      });
+      expect(pendingHealthCheckCount()).toBe(1);
+
+      // Second spawn for same agent (simulates retry)
+      // Need to reset tmux mock so it doesn't see existing session
+      mockListTmuxSessions.mockResolvedValue(new Set());
+      mockBridgeCreateSession.mockResolvedValue({
+        success: true,
+        sessionId: "s2",
+      });
+
+      await spawnAgent({
+        name: "dup-agent",
+        projectPath: "/tmp/project",
+      });
+
+      // Should still only have 1 pending check (not 2)
+      expect(pendingHealthCheckCount()).toBe(1);
+
+      // Advance past timeout — should only get ONE spawn_failed event
+      vi.advanceTimersByTime(SPAWN_HEALTH_CHECK_DELAY_MS + 1);
+
+      const spawnFailedCalls = mockEmit.mock.calls.filter(
+        (call: unknown[]) => call[0] === "agent:spawn_failed",
+      );
+      expect(spawnFailedCalls).toHaveLength(1);
+    });
+  });
+
+  // ==========================================================================
   // spawn_failed event on timer expiry
   // ==========================================================================
 
