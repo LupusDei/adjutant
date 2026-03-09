@@ -169,11 +169,8 @@ sessionsRouter.post("/", async (req, res) => {
   const callsign = pickRandomCallsign(sessions);
   const name = data.name || callsign?.name || persona?.name || `${basename(projectPath)}-agent`;
 
-  // Build claudeArgs with persona prompt injection
+  // Build claudeArgs (without persona prompt — see below)
   const claudeArgs = [...(data.claudeArgs ?? [])];
-  if (personaPrompt) {
-    claudeArgs.push("--prompt", personaPrompt);
-  }
 
   // Build env vars with persona ID
   const envVars: Record<string, string> = {};
@@ -181,13 +178,17 @@ sessionsRouter.post("/", async (req, res) => {
     envVars["ADJUTANT_PERSONA_ID"] = data.personaId;
   }
 
+  // Persona prompt is injected via initialPrompt (atomic paste-buffer) instead of
+  // --prompt CLI arg. The multi-line prompt text contains newlines and # characters
+  // that break when passed through tmux send-keys as a shell command string.
   const result = await bridge.createSession({
     name,
     projectPath,
     mode: data.mode ?? "swarm",
     workspaceType: data.workspaceType ?? "primary",
-    claudeArgs,
+    claudeArgs: claudeArgs.length > 0 ? claudeArgs : undefined,
     envVars: Object.keys(envVars).length > 0 ? envVars : undefined,
+    initialPrompt: personaPrompt,
   });
 
   if (!result.success) {

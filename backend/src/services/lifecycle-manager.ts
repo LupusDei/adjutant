@@ -196,18 +196,21 @@ export class LifecycleManager {
       await this.waitForPane(tmuxPane);
 
       // If an initial prompt was provided, inject it after Claude is ready.
-      // Use set-buffer + paste-buffer for atomic delivery (text + Enter in one
-      // operation). This eliminates the race condition where a separate Enter
-      // key arrives before the text paste completes (adj-53kf, adj-twhj).
+      // Two-phase delivery (adj-53kf, adj-twhj):
+      //   1. set-buffer + paste-buffer delivers the text atomically into the pane.
+      //   2. After a short delay, send-keys Enter submits the input.
+      // This avoids both the send-keys char-by-char race (adj-53kf) and the
+      // bracketed paste \n-as-literal-text issue (adj-twhj).
       if (req.initialPrompt) {
         // Brief delay to let Claude Code finish initialization
         await new Promise((resolve) => setTimeout(resolve, 3_000));
         const bufferName = `adj-spawn-${Date.now()}`;
+        // Phase 1: Paste text (no trailing \n)
         await execTmuxCommand([
           "set-buffer",
           "-b",
           bufferName,
-          req.initialPrompt + "\n",
+          req.initialPrompt,
         ]);
         await execTmuxCommand([
           "paste-buffer",
@@ -216,6 +219,14 @@ export class LifecycleManager {
           "-b",
           bufferName,
           "-d",
+        ]);
+        // Phase 2: Wait for TUI to process paste, then send Enter
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        await execTmuxCommand([
+          "send-keys",
+          "-t",
+          tmuxSessionName,
+          "Enter",
         ]);
       }
 

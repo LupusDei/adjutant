@@ -180,7 +180,7 @@ describe("POST /api/agents/spawn — persona integration", () => {
     expect(mockGeneratePersonaPrompt).not.toHaveBeenCalled();
   });
 
-  it("should spawn with personaId and inject --prompt flag", async () => {
+  it("should spawn with personaId and inject persona via initialPrompt", async () => {
     mockPersonaService.getPersona.mockReturnValue(MOCK_PERSONA);
     mockGeneratePersonaPrompt.mockReturnValue(MOCK_PROMPT);
     mockBridge.createSession.mockResolvedValue({
@@ -209,10 +209,10 @@ describe("POST /api/agents/spawn — persona integration", () => {
     // Should have generated prompt
     expect(mockGeneratePersonaPrompt).toHaveBeenCalledWith(MOCK_PERSONA);
 
-    // Should have passed --prompt in claudeArgs and ADJUTANT_PERSONA_ID in envVars
+    // Persona prompt should be passed via initialPrompt (paste-buffer), NOT --prompt CLI arg
     const createCall = mockBridge.createSession.mock.calls[0][0];
-    expect(createCall.claudeArgs).toContain("--prompt");
-    expect(createCall.claudeArgs).toContain(MOCK_PROMPT);
+    expect(createCall.initialPrompt).toBe(MOCK_PROMPT);
+    expect(createCall.claudeArgs).toBeUndefined();
     expect(createCall.envVars).toEqual(
       expect.objectContaining({ ADJUTANT_PERSONA_ID: "persona-uuid-123" }),
     );
@@ -387,7 +387,7 @@ describe("POST /api/sessions — persona integration", () => {
     expect(mockPersonaService.getPersona).not.toHaveBeenCalled();
   });
 
-  it("should create session with personaId and inject --prompt", async () => {
+  it("should create session with personaId and inject persona via initialPrompt", async () => {
     mockPersonaService.getPersona.mockReturnValue(MOCK_PERSONA);
     mockGeneratePersonaPrompt.mockReturnValue(MOCK_PROMPT);
     mockBridge.createSession.mockResolvedValue({
@@ -411,9 +411,10 @@ describe("POST /api/sessions — persona integration", () => {
     expect(mockPersonaService.getPersona).toHaveBeenCalledWith("persona-uuid-123");
     expect(mockGeneratePersonaPrompt).toHaveBeenCalledWith(MOCK_PERSONA);
 
+    // Persona prompt should be passed via initialPrompt (paste-buffer), NOT --prompt CLI arg
     const createCall = mockBridge.createSession.mock.calls[0][0];
-    expect(createCall.claudeArgs).toContain("--prompt");
-    expect(createCall.claudeArgs).toContain(MOCK_PROMPT);
+    expect(createCall.initialPrompt).toBe(MOCK_PROMPT);
+    expect(createCall.claudeArgs).toBeUndefined();
     expect(createCall.envVars).toEqual(
       expect.objectContaining({ ADJUTANT_PERSONA_ID: "persona-uuid-123" }),
     );
@@ -459,7 +460,7 @@ describe("POST /api/sessions — persona integration", () => {
     expect(createCall.name).toBe("Architect");
   });
 
-  it("should preserve existing claudeArgs when adding persona prompt", async () => {
+  it("should preserve existing claudeArgs separately from persona prompt", async () => {
     mockPersonaService.getPersona.mockReturnValue(MOCK_PERSONA);
     mockGeneratePersonaPrompt.mockReturnValue(MOCK_PROMPT);
     mockBridge.createSession.mockResolvedValue({
@@ -482,9 +483,11 @@ describe("POST /api/sessions — persona integration", () => {
 
     expect(response.status).toBe(201);
     const createCall = mockBridge.createSession.mock.calls[0][0];
+    // claudeArgs should only have user-provided args, NOT --prompt
     expect(createCall.claudeArgs).toContain("--verbose");
-    expect(createCall.claudeArgs).toContain("--prompt");
-    expect(createCall.claudeArgs).toContain(MOCK_PROMPT);
+    expect(createCall.claudeArgs).not.toContain("--prompt");
+    // Persona prompt goes via initialPrompt instead
+    expect(createCall.initialPrompt).toBe(MOCK_PROMPT);
   });
 });
 
