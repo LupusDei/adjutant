@@ -144,6 +144,10 @@ export interface CrewMember {
   swarmId?: string;
   /** Whether this agent is the merge coordinator (swarm mode) */
   isCoordinator?: boolean;
+  /** Session cost in dollars (from CostTracker) */
+  cost?: number;
+  /** Estimated context window usage percentage (0-100) */
+  contextPercent?: number;
 }
 
 // ============================================================================
@@ -286,6 +290,8 @@ export const CrewMemberSchema = z.object({
     .optional(),
   swarmId: z.string().optional(),
   isCoordinator: z.boolean().optional(),
+  cost: z.number().optional(),
+  contextPercent: z.number().optional(),
 });
 
 export const ProjectContextSchema = z.object({
