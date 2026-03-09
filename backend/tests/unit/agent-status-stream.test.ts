@@ -70,16 +70,9 @@ describe("agent status stream", () => {
     const app = express();
     server = createServer(app);
 
-    // Wire up upgrade handler — same as index.ts does for noServer WSSes
-    const agentWss = initAgentStatusStream(server);
-    server.on("upgrade", (req, socket, head) => {
-      const pathname = req.url?.split("?")[0];
-      if (pathname === "/api/agents/stream") {
-        agentWss.handleUpgrade(req, socket, head, (ws) => agentWss.emit("connection", ws, req));
-      } else {
-        socket.destroy();
-      }
-    });
+    // initAgentStatusStream registers its own upgrade handler on the server,
+    // so we do NOT add a second one here.
+    initAgentStatusStream(server);
 
     await new Promise<void>((resolve) => {
       server.listen(0, () => {
@@ -92,9 +85,12 @@ describe("agent status stream", () => {
 
   afterEach(async () => {
     closeAgentStatusStream();
+    server.removeAllListeners("upgrade");
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
     });
+    // Allow pending async work to settle
+    await new Promise((r) => setTimeout(r, 50));
   });
 
   it("should accept WebSocket connections on /api/agents/stream", async () => {
@@ -159,8 +155,6 @@ describe("agent status stream", () => {
   });
 
   it("should handle multiple clients independently", async () => {
-    initAgentStatusStream(server);
-
     const ws1 = new WebSocket(`ws://localhost:${port}/api/agents/stream`);
     const ws2 = new WebSocket(`ws://localhost:${port}/api/agents/stream`);
 
