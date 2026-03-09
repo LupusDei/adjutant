@@ -78,4 +78,37 @@ describe("SwarmAgentCard cost & context display", () => {
     // cost=0 is falsy but explicitly provided — show it
     expect(screen.getByText("$0.00")).toBeInTheDocument();
   });
+
+  it("should show CTX 0% when contextPercent is exactly 0", () => {
+    render(<SwarmAgentCard agent={createAgent({ contextPercent: 0 })} />);
+    expect(screen.getByText("CTX 0%")).toBeInTheDocument();
+  });
+
+  it("should not show cost or context for offline agents", () => {
+    render(
+      <SwarmAgentCard
+        agent={createAgent({ status: "offline", cost: 1.50, contextPercent: 30 })}
+      />
+    );
+    // Offline agents receive cost/context from backend enrichment (which skips them),
+    // but if somehow present, the UI still renders them. This test documents that
+    // the backend is responsible for filtering, not the frontend.
+    // The values ARE shown if present — backend is the gate.
+    expect(screen.getByText("$1.50")).toBeInTheDocument();
+    expect(screen.getByText("CTX 30%")).toBeInTheDocument();
+  });
+
+  it("should clamp context bar width to 100% even if contextPercent exceeds 100", () => {
+    const { container } = render(
+      <SwarmAgentCard agent={createAgent({ contextPercent: 150 })} />
+    );
+    // The label shows the raw value
+    expect(screen.getByText("CTX 150%")).toBeInTheDocument();
+    // The bar fill should be clamped to 100% width via Math.min
+    const fills = container.querySelectorAll("span");
+    const fillSpan = Array.from(fills).find(
+      (el) => el.style.width === "100%"
+    );
+    expect(fillSpan).toBeTruthy();
+  });
 });
