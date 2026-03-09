@@ -178,7 +178,6 @@ function getToolHandler(
   state?: AdjutantState,
   messageStore?: MessageStore,
   stimulusEngine?: StimulusEngine,
-  projectRoot?: string,
 ): (...args: unknown[]) => Promise<unknown> {
   const server = createMockServer();
   registerCoordinationTools(
@@ -186,7 +185,6 @@ function getToolHandler(
     state ?? createMockState(),
     messageStore ?? createMockMessageStore(),
     stimulusEngine ?? createMockStimulusEngine(),
-    projectRoot,
   );
 
   const call = mockTool.mock.calls.find(
@@ -298,7 +296,7 @@ describe("MCP Coordination Tools", () => {
       expect(typeof data.agentName).toBe("string");
     });
 
-    it("should pass projectRoot to spawnAgent instead of process.cwd()", async () => {
+    it("should pass caller-supplied projectPath to spawnAgent", async () => {
       mockGetAgentBySession.mockReturnValue("adjutant");
       mockSpawnAgent.mockResolvedValue({
         success: true,
@@ -306,16 +304,37 @@ describe("MCP Coordination Tools", () => {
         tmuxSession: "adj-swarm-worker-1",
       });
 
-      const projectRoot = "/Users/test/code/ai/adjutant";
-      const handler = getToolHandler("spawn_worker", undefined, undefined, undefined, projectRoot);
+      const handler = getToolHandler("spawn_worker");
       await handler(
-        { prompt: "Build the feature", agentName: "worker-1" },
+        { prompt: "Build the feature", agentName: "worker-1", projectPath: "/Users/test/code/ai/adjutant" },
         { sessionId: "adj-session" },
       );
 
       expect(mockSpawnAgent).toHaveBeenCalledWith(
         expect.objectContaining({
-          projectPath: projectRoot,
+          projectPath: "/Users/test/code/ai/adjutant",
+        }),
+      );
+    });
+
+    it("should fall back to env/cwd when projectPath is not provided", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+      mockSpawnAgent.mockResolvedValue({
+        success: true,
+        sessionId: "session-42",
+        tmuxSession: "adj-swarm-worker-1",
+      });
+
+      const handler = getToolHandler("spawn_worker");
+      await handler(
+        { prompt: "Build the feature", agentName: "worker-1" },
+        { sessionId: "adj-session" },
+      );
+
+      // When no projectPath is passed, it should still call spawnAgent with some projectPath
+      expect(mockSpawnAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectPath: expect.any(String),
         }),
       );
     });

@@ -125,9 +125,7 @@ export function registerCoordinationTools(
   state: AdjutantState,
   messageStore: MessageStore,
   stimulusEngine?: StimulusEngine,
-  projectRoot?: string,
 ): void {
-  const resolvedProjectRoot = projectRoot ?? process.env["ADJUTANT_PROJECT_ROOT"] ?? process.cwd();
   // --------------------------------------------------------------------------
   // spawn_worker
   // --------------------------------------------------------------------------
@@ -138,8 +136,9 @@ export function registerCoordinationTools(
       prompt: z.string().describe("The task prompt for the new agent"),
       beadId: z.string().optional().describe("Optional bead to associate with the spawn"),
       agentName: z.string().optional().describe("Optional name (auto-generated if omitted)"),
+      projectPath: z.string().optional().describe("Project directory for the agent to work in (e.g., /Users/user/code/project). Defaults to server CWD if omitted."),
     },
-    async ({ prompt, beadId, agentName }, extra) => {
+    async ({ prompt, beadId, agentName, projectPath }, extra) => {
       const callerAgentId = checkAccess(extra.sessionId);
       if (!callerAgentId) {
         const resolved = resolveCallerOrError(extra.sessionId);
@@ -148,10 +147,11 @@ export function registerCoordinationTools(
       }
 
       const name = agentName ?? generateAgentName();
+      const resolvedProjectPath = projectPath ?? process.env["ADJUTANT_PROJECT_ROOT"] ?? process.cwd();
 
       const result = await spawnAgent({
         name,
-        projectPath: resolvedProjectRoot,
+        projectPath: resolvedProjectPath,
         initialPrompt: prompt,
       });
 
