@@ -2,14 +2,14 @@
  * Spawn + Persona Integration Tests
  *
  * Tests that all spawn paths (agents route, sessions route)
- * correctly handle personaId: look up persona, generate prompt, inject via
- * --prompt CLI flag, and set ADJUTANT_PERSONA_ID env var.
+ * correctly handle personaId: look up persona, generate prompt, write
+ * .claude/agents/<name>.md file, pass --agent flag, and set ADJUTANT_PERSONA_ID env var.
  *
  * Covers QA findings:
  * - adj-033.0.3: ADJUTANT_PERSONA_ID env var in tmux session
  * - adj-033.0.5: All callsigns disabled edge case
  * - adj-033.0.7: Dual spawn paths (agents.ts + sessions.ts)
- * - adj-033.0.8: Injection via --prompt flag
+ * - adj-oo3o: Persona deployment via .claude/agents/ files + --agent flag
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -43,6 +43,14 @@ const mockGeneratePersonaPrompt = vi.fn();
 vi.mock("../../src/services/prompt-generator.js", () => ({
   generatePersonaPrompt: (...args: unknown[]) => mockGeneratePersonaPrompt(...args),
   generatePrompt: (...args: unknown[]) => mockGeneratePersonaPrompt(...args),
+}));
+
+// Mock agent file writer — returns sanitized persona name
+const mockWriteAgentFile = vi.fn();
+
+vi.mock("../../src/services/agent-file-writer.js", () => ({
+  writeAgentFile: (...args: unknown[]) => mockWriteAgentFile(...args),
+  sanitizePersonaName: vi.fn((name: string) => name.toLowerCase().replace(/\s+/g, "-")),
 }));
 
 // Mock session bridge for route tests
@@ -180,9 +188,10 @@ describe("POST /api/agents/spawn — persona integration", () => {
     expect(mockGeneratePersonaPrompt).not.toHaveBeenCalled();
   });
 
-  it("should spawn with personaId and inject persona via initialPrompt", async () => {
+  it("should spawn with personaId and deploy persona via --agent flag", async () => {
     mockPersonaService.getPersona.mockReturnValue(MOCK_PERSONA);
     mockGeneratePersonaPrompt.mockReturnValue(MOCK_PROMPT);
+    mockWriteAgentFile.mockResolvedValue("architect");
     mockBridge.createSession.mockResolvedValue({
       success: true,
       sessionId: "sess-2",
@@ -209,10 +218,14 @@ describe("POST /api/agents/spawn — persona integration", () => {
     // Should have generated prompt
     expect(mockGeneratePersonaPrompt).toHaveBeenCalledWith(MOCK_PERSONA);
 
-    // Persona prompt should be passed via initialPrompt (paste-buffer), NOT --prompt CLI arg
+    // Should have written agent file with correct args
+    expect(mockWriteAgentFile).toHaveBeenCalledWith("/test/project", "Architect", MOCK_PROMPT);
+
+    // Persona should be deployed via --agent flag, NOT initialPrompt
     const createCall = mockBridge.createSession.mock.calls[0][0];
-    expect(createCall.initialPrompt).toBe(MOCK_PROMPT);
-    expect(createCall.claudeArgs).toBeUndefined();
+    expect(createCall.initialPrompt).toBeUndefined();
+    expect(createCall.claudeArgs).toContain("--agent");
+    expect(createCall.claudeArgs).toContain("architect");
     expect(createCall.envVars).toEqual(
       expect.objectContaining({ ADJUTANT_PERSONA_ID: "persona-uuid-123" }),
     );
@@ -236,6 +249,7 @@ describe("POST /api/agents/spawn — persona integration", () => {
   it("should use persona name as agent name when callsign not available", async () => {
     mockPersonaService.getPersona.mockReturnValue(MOCK_PERSONA);
     mockGeneratePersonaPrompt.mockReturnValue(MOCK_PROMPT);
+    mockWriteAgentFile.mockResolvedValue("architect");
     mockBridge.createSession.mockResolvedValue({
       success: true,
       sessionId: "sess-3",
@@ -265,6 +279,7 @@ describe("POST /api/agents/spawn — persona integration", () => {
   it("should prefer explicit callsign over persona name", async () => {
     mockPersonaService.getPersona.mockReturnValue(MOCK_PERSONA);
     mockGeneratePersonaPrompt.mockReturnValue(MOCK_PROMPT);
+    mockWriteAgentFile.mockResolvedValue("architect");
     mockBridge.createSession.mockResolvedValue({
       success: true,
       sessionId: "sess-4",
@@ -291,6 +306,7 @@ describe("POST /api/agents/spawn — persona integration", () => {
   it("should include personaId and personaName in spawn response", async () => {
     mockPersonaService.getPersona.mockReturnValue(MOCK_PERSONA);
     mockGeneratePersonaPrompt.mockReturnValue(MOCK_PROMPT);
+    mockWriteAgentFile.mockResolvedValue("architect");
     mockBridge.createSession.mockResolvedValue({
       success: true,
       sessionId: "sess-5",
@@ -387,9 +403,10 @@ describe("POST /api/sessions — persona integration", () => {
     expect(mockPersonaService.getPersona).not.toHaveBeenCalled();
   });
 
-  it("should create session with personaId and inject persona via initialPrompt", async () => {
+  it("should create session with personaId and deploy persona via --agent flag", async () => {
     mockPersonaService.getPersona.mockReturnValue(MOCK_PERSONA);
     mockGeneratePersonaPrompt.mockReturnValue(MOCK_PROMPT);
+    mockWriteAgentFile.mockResolvedValue("architect");
     mockBridge.createSession.mockResolvedValue({
       success: true,
       sessionId: "sess-2",
@@ -411,10 +428,14 @@ describe("POST /api/sessions — persona integration", () => {
     expect(mockPersonaService.getPersona).toHaveBeenCalledWith("persona-uuid-123");
     expect(mockGeneratePersonaPrompt).toHaveBeenCalledWith(MOCK_PERSONA);
 
-    // Persona prompt should be passed via initialPrompt (paste-buffer), NOT --prompt CLI arg
+    // Should have written agent file with correct args
+    expect(mockWriteAgentFile).toHaveBeenCalledWith("/test/project", "Architect", MOCK_PROMPT);
+
+    // Persona should be deployed via --agent flag, NOT initialPrompt
     const createCall = mockBridge.createSession.mock.calls[0][0];
-    expect(createCall.initialPrompt).toBe(MOCK_PROMPT);
-    expect(createCall.claudeArgs).toBeUndefined();
+    expect(createCall.initialPrompt).toBeUndefined();
+    expect(createCall.claudeArgs).toContain("--agent");
+    expect(createCall.claudeArgs).toContain("architect");
     expect(createCall.envVars).toEqual(
       expect.objectContaining({ ADJUTANT_PERSONA_ID: "persona-uuid-123" }),
     );
@@ -437,6 +458,7 @@ describe("POST /api/sessions — persona integration", () => {
   it("should use persona name as fallback when no name and no callsign available", async () => {
     mockPersonaService.getPersona.mockReturnValue(MOCK_PERSONA);
     mockGeneratePersonaPrompt.mockReturnValue(MOCK_PROMPT);
+    mockWriteAgentFile.mockResolvedValue("architect");
     vi.mocked(pickRandomCallsign).mockReturnValue(undefined);
     mockBridge.createSession.mockResolvedValue({
       success: true,
@@ -460,9 +482,10 @@ describe("POST /api/sessions — persona integration", () => {
     expect(createCall.name).toBe("Architect");
   });
 
-  it("should preserve existing claudeArgs separately from persona prompt", async () => {
+  it("should preserve existing claudeArgs and append --agent flag", async () => {
     mockPersonaService.getPersona.mockReturnValue(MOCK_PERSONA);
     mockGeneratePersonaPrompt.mockReturnValue(MOCK_PROMPT);
+    mockWriteAgentFile.mockResolvedValue("architect");
     mockBridge.createSession.mockResolvedValue({
       success: true,
       sessionId: "sess-4",
@@ -483,11 +506,13 @@ describe("POST /api/sessions — persona integration", () => {
 
     expect(response.status).toBe(201);
     const createCall = mockBridge.createSession.mock.calls[0][0];
-    // claudeArgs should only have user-provided args, NOT --prompt
+    // claudeArgs should have both user-provided args AND --agent flag
     expect(createCall.claudeArgs).toContain("--verbose");
+    expect(createCall.claudeArgs).toContain("--agent");
+    expect(createCall.claudeArgs).toContain("architect");
     expect(createCall.claudeArgs).not.toContain("--prompt");
-    // Persona prompt goes via initialPrompt instead
-    expect(createCall.initialPrompt).toBe(MOCK_PROMPT);
+    // No initialPrompt — persona goes via agent file
+    expect(createCall.initialPrompt).toBeUndefined();
   });
 });
 
@@ -652,6 +677,7 @@ describe("All callsigns disabled edge case (adj-033.0.5)", () => {
   it("should use persona name when callsigns disabled but personaId provided", async () => {
     mockPersonaService.getPersona.mockReturnValue(MOCK_PERSONA);
     mockGeneratePersonaPrompt.mockReturnValue(MOCK_PROMPT);
+    mockWriteAgentFile.mockResolvedValue("architect");
     mockBridge.createSession.mockResolvedValue({
       success: true,
       sessionId: "sess-persona-fallback",
