@@ -201,16 +201,8 @@ const server = app.listen(PORT, () => {
   // Initialize Adjutant Core — event-driven behavior dispatch
   const adjutantState = createAdjutantState(messageDb);
 
-  // Set tool registrar now that adjutantState is available
-  setToolRegistrar((server) => {
-    registerMessagingTools(server, messageStore, eventStore);
-    registerStatusTools(server, messageStore, eventStore);
-    registerBeadTools(server, eventStore);
-    registerQueryTools(server, messageStore);
-    registerProposalTools(server, proposalStore);
-    registerMemoryTools(server, memoryStore);
-    registerCoordinationTools(server, adjutantState, messageStore);
-  });
+  // Tool registrar is set after stimulusEngine creation (below)
+  // so coordination tools have access to both adjutantState and stimulusEngine.
 
   // On server restart, no agents are connected — mark all as disconnected
   // so work-assigner doesn't assign beads to dead agents.
@@ -244,6 +236,17 @@ const server = app.listen(PORT, () => {
   // Signal Aggregator + Stimulus Engine — replaces periodic-summary
   const signalAggregator = new SignalAggregator();
   const stimulusEngine = new StimulusEngine();
+
+  // Set tool registrar now that adjutantState and stimulusEngine are available
+  setToolRegistrar((server) => {
+    registerMessagingTools(server, messageStore, eventStore);
+    registerStatusTools(server, messageStore, eventStore);
+    registerBeadTools(server, eventStore);
+    registerQueryTools(server, messageStore);
+    registerProposalTools(server, proposalStore);
+    registerMemoryTools(server, memoryStore);
+    registerCoordinationTools(server, adjutantState, messageStore, stimulusEngine);
+  });
 
   // Wire critical signals from aggregator to stimulus engine
   signalAggregator.onCritical((signal) => {

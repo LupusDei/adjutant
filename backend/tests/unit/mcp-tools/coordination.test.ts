@@ -112,6 +112,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerCoordinationTools } from "../../../src/services/mcp-tools/coordination.js";
 import type { AdjutantState } from "../../../src/services/adjutant/state-store.js";
 import type { MessageStore } from "../../../src/services/message-store.js";
+import type { StimulusEngine } from "../../../src/services/adjutant/stimulus-engine.js";
 
 // ============================================================================
 // Helpers
@@ -151,6 +152,20 @@ function createMockMessageStore(): MessageStore {
   } as unknown as MessageStore;
 }
 
+function createMockStimulusEngine(): StimulusEngine {
+  return {
+    scheduleCheck: vi.fn().mockReturnValue("check-uuid-1"),
+    registerWatch: vi.fn().mockReturnValue("watch-uuid-1"),
+    cancelCheck: vi.fn(),
+    cancelWatch: vi.fn(),
+    getPendingSchedule: vi.fn().mockReturnValue({ checks: [], watches: [] }),
+    handleCriticalSignal: vi.fn(),
+    onWake: vi.fn(),
+    triggerWatch: vi.fn(),
+    destroy: vi.fn(),
+  } as unknown as StimulusEngine;
+}
+
 /**
  * Register tools and extract the handler for a specific tool by name.
  * Tools are registered as (name, description, schema, handler) — handler is arg index 3.
@@ -159,12 +174,14 @@ function getToolHandler(
   toolName: string,
   state?: AdjutantState,
   messageStore?: MessageStore,
+  stimulusEngine?: StimulusEngine,
 ): (...args: unknown[]) => Promise<unknown> {
   const server = createMockServer();
   registerCoordinationTools(
     server,
     state ?? createMockState(),
     messageStore ?? createMockMessageStore(),
+    stimulusEngine ?? createMockStimulusEngine(),
   );
 
   const call = mockTool.mock.calls.find(
@@ -200,7 +217,7 @@ describe("MCP Coordination Tools", () => {
   describe("registerCoordinationTools", () => {
     it("should register all coordination tools", () => {
       const server = createMockServer();
-      registerCoordinationTools(server, createMockState(), createMockMessageStore());
+      registerCoordinationTools(server, createMockState(), createMockMessageStore(), createMockStimulusEngine());
 
       const toolNames = mockTool.mock.calls.map((c: unknown[]) => c[0]);
       expect(toolNames).toContain("spawn_worker");
@@ -208,6 +225,8 @@ describe("MCP Coordination Tools", () => {
       expect(toolNames).toContain("nudge_agent");
       expect(toolNames).toContain("decommission_agent");
       expect(toolNames).toContain("rebalance_work");
+      expect(toolNames).toContain("schedule_check");
+      expect(toolNames).toContain("watch_for");
     });
   });
 
@@ -668,6 +687,166 @@ describe("MCP Coordination Tools", () => {
   });
 
   // ==========================================================================
+  // schedule_check
+  // ==========================================================================
+
+  describe("schedule_check", () => {
+    it("should schedule a check via stimulus engine", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const engine = createMockStimulusEngine();
+      const state = createMockState();
+      const handler = getToolHandler("schedule_check", state, undefined, engine);
+      const result = await handler(
+        { delay: "15m", reason: "Check worker-5 progress" },
+        { sessionId: "adj-session" },
+      );
+
+      const data = parseResult(result);
+      expect(data.success).toBe(true);
+      expect(data.checkId).toBe("check-uuid-1");
+      expect(data.firesAt).toBeDefined();
+
+      // 15m = 900_000 ms
+      expect(engine.scheduleCheck).toHaveBeenCalledWith(900_000, "Check worker-5 progress");
+    });
+
+    it("should parse various delay formats", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const engine = createMockStimulusEngine();
+      const handler = getToolHandler("schedule_check", undefined, undefined, engine);
+
+      // Test "30s"
+      await handler({ delay: "30s", reason: "Quick" }, { sessionId: "adj-session" });
+      expect(engine.scheduleCheck).toHaveBeenCalledWith(30_000, "Quick");
+
+      vi.clearAllMocks();
+
+      // Test "1h"
+      (engine.scheduleCheck as ReturnType<typeof vi.fn>).mockReturnValue("check-uuid-2");
+      await handler({ delay: "1h", reason: "Hour check" }, { sessionId: "adj-session" });
+      expect(engine.scheduleCheck).toHaveBeenCalledWith(3_600_000, "Hour check");
+    });
+
+    it("should return error for invalid delay format", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const handler = getToolHandler("schedule_check");
+      const result = await handler(
+        { delay: "invalid", reason: "Bad" },
+        { sessionId: "adj-session" },
+      );
+
+      const data = parseResult(result);
+      expect(data.success).toBe(false);
+      expect(data.error).toContain("Invalid delay");
+    });
+
+    it("should log decision to state store", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const state = createMockState();
+      const handler = getToolHandler("schedule_check", state);
+      await handler(
+        { delay: "5m", reason: "Follow up" },
+        { sessionId: "adj-session" },
+      );
+
+      expect(state.logDecision).toHaveBeenCalledWith(
+        expect.objectContaining({
+          behavior: "adjutant",
+          action: "schedule_check",
+        }),
+      );
+    });
+  });
+
+  // ==========================================================================
+  // watch_for
+  // ==========================================================================
+
+  describe("watch_for", () => {
+    it("should register a watch via stimulus engine", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const engine = createMockStimulusEngine();
+      const handler = getToolHandler("watch_for", undefined, undefined, engine);
+      const result = await handler(
+        { event: "bead:closed", reason: "Wait for task completion" },
+        { sessionId: "adj-session" },
+      );
+
+      const data = parseResult(result);
+      expect(data.success).toBe(true);
+      expect(data.watchId).toBe("watch-uuid-1");
+      expect(data.watching).toBe("bead:closed");
+
+      expect(engine.registerWatch).toHaveBeenCalledWith(
+        "bead:closed",
+        undefined,
+        undefined,
+        "Wait for task completion",
+      );
+    });
+
+    it("should pass filter and timeout to engine", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const engine = createMockStimulusEngine();
+      const handler = getToolHandler("watch_for", undefined, undefined, engine);
+      await handler(
+        {
+          event: "bead:closed",
+          filter: { id: "adj-042.1.2" },
+          timeout: "30m",
+          reason: "Track bead outcome",
+        },
+        { sessionId: "adj-session" },
+      );
+
+      expect(engine.registerWatch).toHaveBeenCalledWith(
+        "bead:closed",
+        { id: "adj-042.1.2" },
+        1_800_000, // 30m
+        "Track bead outcome",
+      );
+    });
+
+    it("should return error for invalid timeout format", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const handler = getToolHandler("watch_for");
+      const result = await handler(
+        { event: "bead:closed", timeout: "bad", reason: "test" },
+        { sessionId: "adj-session" },
+      );
+
+      const data = parseResult(result);
+      expect(data.success).toBe(false);
+      expect(data.error).toContain("Invalid timeout");
+    });
+
+    it("should log decision to state store", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const state = createMockState();
+      const handler = getToolHandler("watch_for", state);
+      await handler(
+        { event: "bead:closed", reason: "Track" },
+        { sessionId: "adj-session" },
+      );
+
+      expect(state.logDecision).toHaveBeenCalledWith(
+        expect.objectContaining({
+          behavior: "adjutant",
+          action: "watch_for",
+        }),
+      );
+    });
+  });
+
+  // ==========================================================================
   // Access Guard (adj-054.3.6)
   // ==========================================================================
 
@@ -703,7 +882,7 @@ describe("MCP Coordination Tools", () => {
     it("should reject non-adjutant agents from all tools", async () => {
       mockGetAgentBySession.mockReturnValue("worker-5");
 
-      const toolNames = ["spawn_worker", "assign_bead", "nudge_agent", "decommission_agent", "rebalance_work"];
+      const toolNames = ["spawn_worker", "assign_bead", "nudge_agent", "decommission_agent", "rebalance_work", "schedule_check", "watch_for"];
 
       for (const toolName of toolNames) {
         const handler = getToolHandler(toolName);
@@ -725,6 +904,12 @@ describe("MCP Coordination Tools", () => {
             break;
           case "rebalance_work":
             args = { agentId: "x" };
+            break;
+          case "schedule_check":
+            args = { delay: "5m", reason: "r" };
+            break;
+          case "watch_for":
+            args = { event: "bead:closed", reason: "r" };
             break;
           default:
             args = {};

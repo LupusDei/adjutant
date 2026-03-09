@@ -2,8 +2,8 @@
  * MCP Coordination Tools for Adjutant.
  *
  * LLM-controlled action tools: spawn_worker, assign_bead, nudge_agent,
- * decommission_agent, rebalance_work. These are restricted to the
- * adjutant agent only (adj-054.3.6 access guard).
+ * decommission_agent, rebalance_work, schedule_check, watch_for.
+ * These are restricted to the adjutant agent only (adj-054.3.6 access guard).
  */
 
 import { z } from "zod";
@@ -13,10 +13,12 @@ import { spawnAgent } from "../agent-spawner-service.js";
 import { updateBead } from "../beads/beads-mutations.js";
 import { getSessionBridge } from "../session-bridge.js";
 import { getEventBus } from "../event-bus.js";
+import type { EventName } from "../event-bus.js";
 import { execBd } from "../bd-client.js";
 import { logInfo, logWarn } from "../../utils/index.js";
 import type { AdjutantState } from "../adjutant/state-store.js";
 import type { MessageStore } from "../message-store.js";
+import type { StimulusEngine } from "../adjutant/stimulus-engine.js";
 
 // ============================================================================
 // Constants
@@ -82,6 +84,23 @@ function jsonResult(data: Record<string, unknown>) {
   };
 }
 
+/**
+ * Parse a delay string like "15m", "1h", "30s" into milliseconds.
+ * Returns null if the format is invalid.
+ */
+function parseDelay(delay: string): number | null {
+  const match = delay.match(/^(\d+)(s|m|h)$/);
+  if (!match) return null;
+  const value = parseInt(match[1]!, 10);
+  const unit = match[2]!;
+  switch (unit) {
+    case "s": return value * 1_000;
+    case "m": return value * 60_000;
+    case "h": return value * 3_600_000;
+    default: return null;
+  }
+}
+
 function generateAgentName(): string {
   autoNameCounter++;
   return `agent-${autoNameCounter}`;
@@ -103,6 +122,7 @@ export function registerCoordinationTools(
   server: McpServer,
   state: AdjutantState,
   messageStore: MessageStore,
+  stimulusEngine?: StimulusEngine,
 ): void {
   // --------------------------------------------------------------------------
   // spawn_worker
@@ -380,6 +400,114 @@ export function registerCoordinationTools(
       return jsonResult({
         success: true,
         rebalancedBeads: rebalancedIds,
+      });
+    },
+  );
+
+  // --------------------------------------------------------------------------
+  // schedule_check
+  // --------------------------------------------------------------------------
+  server.tool(
+    "schedule_check",
+    "Schedule a future wake-up for the adjutant",
+    {
+      delay: z.string().describe('Delay before firing, e.g. "15m", "1h", "30s"'),
+      reason: z.string().describe("Why this check is needed"),
+    },
+    async ({ delay, reason }, extra) => {
+      const callerAgentId = checkAccess(extra.sessionId);
+      if (!callerAgentId) {
+        const resolved = resolveCallerOrError(extra.sessionId);
+        return resolved.error!;
+      }
+
+      const delayMs = parseDelay(delay);
+      if (delayMs === null) {
+        return jsonResult({
+          success: false,
+          error: `Invalid delay format: "${delay}". Use e.g. "30s", "15m", "1h".`,
+        });
+      }
+
+      if (!stimulusEngine) {
+        return jsonResult({
+          success: false,
+          error: "Stimulus engine not available",
+        });
+      }
+
+      const checkId = stimulusEngine.scheduleCheck(delayMs, reason);
+      const firesAt = new Date(Date.now() + delayMs).toISOString();
+
+      state.logDecision({
+        behavior: "adjutant",
+        action: "schedule_check",
+        target: checkId,
+        reason: `Scheduled in ${delay}: ${reason}`,
+      });
+
+      logInfo("schedule_check: check scheduled", { checkId, delay, reason });
+
+      return jsonResult({ success: true, checkId, firesAt });
+    },
+  );
+
+  // --------------------------------------------------------------------------
+  // watch_for
+  // --------------------------------------------------------------------------
+  server.tool(
+    "watch_for",
+    "Register a conditional wake-up — fire when event occurs or timeout expires",
+    {
+      event: z.string().describe("EventBus event name to watch"),
+      filter: z.record(z.string(), z.string()).optional().describe("Optional field matching on event data"),
+      timeout: z.string().optional().describe('Optional timeout, e.g. "30m" — fire even if event doesn\'t occur'),
+      reason: z.string().describe("Why watching"),
+    },
+    async ({ event, filter, timeout, reason }, extra) => {
+      const callerAgentId = checkAccess(extra.sessionId);
+      if (!callerAgentId) {
+        const resolved = resolveCallerOrError(extra.sessionId);
+        return resolved.error!;
+      }
+
+      let timeoutMs: number | undefined;
+      if (timeout) {
+        const parsed = parseDelay(timeout);
+        if (parsed === null) {
+          return jsonResult({
+            success: false,
+            error: `Invalid timeout format: "${timeout}". Use e.g. "30s", "15m", "1h".`,
+          });
+        }
+        timeoutMs = parsed;
+      }
+
+      if (!stimulusEngine) {
+        return jsonResult({
+          success: false,
+          error: "Stimulus engine not available",
+        });
+      }
+
+      // Cast event string to EventName — the adjutant knows valid event names
+      const eventName = event as EventName;
+      const watchId = stimulusEngine.registerWatch(eventName, filter, timeoutMs, reason);
+
+      state.logDecision({
+        behavior: "adjutant",
+        action: "watch_for",
+        target: watchId,
+        reason: `Watching ${event}: ${reason}`,
+      });
+
+      logInfo("watch_for: watch registered", { watchId, event, reason });
+
+      return jsonResult({
+        success: true,
+        watchId,
+        watching: event,
+        timeout: timeout ?? null,
       });
     },
   );
