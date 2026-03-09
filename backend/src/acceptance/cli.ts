@@ -18,12 +18,12 @@
  */
 
 import { execSync } from "child_process";
-import { existsSync, readFileSync } from "fs";
-import { resolve, join } from "path";
+import { existsSync, readdirSync, readFileSync, statSync } from "fs";
+import { resolve, join, basename } from "path";
 
 import { parseSpec, parseSpecContent } from "./spec-parser.js";
 import { generateTestFiles, generateFileName } from "./test-generator.js";
-import type { AcceptanceOptions } from "./types.js";
+import type { AcceptanceOptions, DiscoveredSpec } from "./types.js";
 
 // ============================================================================
 // Constants
@@ -40,6 +40,7 @@ Usage:
 
 Options:
   --generate    Generate test files from spec.md
+  --all         Process all specs in the specs/ directory
   --run         Run acceptance tests (default)
   --overwrite   Overwrite existing test files during --generate
   --verbose     Show detailed output
@@ -48,8 +49,67 @@ Options:
 Examples:
   npx tsx src/acceptance/cli.ts specs/017-agent-proposals --generate
   npx tsx src/acceptance/cli.ts specs/017-agent-proposals --run
+  npx tsx src/acceptance/cli.ts --all --generate   (generate for all specs)
   npx tsx src/acceptance/cli.ts   (runs all acceptance tests)
 `.trim();
+
+const SPECS_DIR = resolve(import.meta.dirname ?? ".", "../../specs");
+
+// ============================================================================
+// Spec Discovery
+// ============================================================================
+
+/**
+ * Discover all spec directories that contain spec.md with parseable GWT scenarios.
+ * Exported for testing.
+ *
+ * @param specsDir - Root directory to scan for spec subdirectories
+ * @returns Array of discovered specs with parsed results
+ */
+export function discoverSpecs(specsDir: string): DiscoveredSpec[] {
+  if (!existsSync(specsDir)) {
+    return [];
+  }
+
+  const entries = readdirSync(specsDir);
+  const results: DiscoveredSpec[] = [];
+
+  for (const entry of entries) {
+    const dirPath = join(specsDir, entry);
+
+    // Skip non-directories
+    if (!statSync(dirPath).isDirectory()) {
+      continue;
+    }
+
+    const specPath = join(dirPath, "spec.md");
+    if (!existsSync(specPath)) {
+      continue;
+    }
+
+    const content = readFileSync(specPath, "utf-8");
+    const parsed = parseSpecContent(content, specPath);
+
+    // Skip specs with no user stories that have scenarios
+    if (parsed.userStories.length === 0) {
+      continue;
+    }
+
+    // Check that at least one story has scenarios
+    const hasScenarios = parsed.userStories.some(s => s.scenarios.length > 0);
+    if (!hasScenarios) {
+      continue;
+    }
+
+    results.push({
+      dirName: basename(dirPath),
+      dirPath,
+      parsed,
+    });
+  }
+
+  return results;
+}
 
 // ============================================================================
 // Arg Parsing
@@ -68,6 +128,7 @@ export function parseArgs(argv: string[]): AcceptanceOptions {
   let run = false;
   let verbose = false;
   let overwrite = false;
+  let all = false;
 
   for (const arg of args) {
     if (arg === "--generate") {
@@ -78,6 +139,8 @@ export function parseArgs(argv: string[]): AcceptanceOptions {
       overwrite = true;
     } else if (arg === "--verbose") {
       verbose = true;
+    } else if (arg === "--all") {
+      all = true;
     } else if (arg === "--help") {
       // eslint-disable-next-line no-console
       console.log(USAGE);
@@ -92,7 +155,7 @@ export function parseArgs(argv: string[]): AcceptanceOptions {
     run = true;
   }
 
-  return { specDir, generate, run, verbose, overwrite };
+  return { specDir, generate, run, verbose, overwrite, all };
 }
 
 // ============================================================================
@@ -145,6 +208,69 @@ async function handleGenerate(
     // eslint-disable-next-line no-console
     console.log(`  ${f}`);
   }
+}
+
+// ============================================================================
+// Generate All Mode
+// ============================================================================
+
+/**
+ * Generate acceptance test files for all specs in the specs/ directory.
+ */
+async function handleGenerateAll(
+  options: AcceptanceOptions
+): Promise<void> {
+  const specsDir = SPECS_DIR;
+
+  if (options.verbose) {
+    // eslint-disable-next-line no-console
+    console.log(`Scanning specs directory: ${specsDir}`);
+  }
+
+  const discovered = discoverSpecs(specsDir);
+  const outputDir = DEFAULT_OUTPUT_DIR;
+  let totalFiles = 0;
+  let totalSpecs = 0;
+  let skippedSpecs = 0;
+
+  // Count total spec dirs (including those without GWT)
+  if (existsSync(specsDir)) {
+    const allEntries = readdirSync(specsDir);
+    for (const entry of allEntries) {
+      const dirPath = join(specsDir, entry);
+      if (statSync(dirPath).isDirectory() && existsSync(join(dirPath, "spec.md"))) {
+        totalSpecs++;
+      }
+    }
+  }
+
+  skippedSpecs = totalSpecs - discovered.length;
+
+  for (const spec of discovered) {
+    if (options.verbose) {
+      // eslint-disable-next-line no-console
+      console.log(`Processing: ${spec.dirName}`);
+    }
+
+    const files = await generateTestFiles(spec.parsed, {
+      outputDir,
+      overwrite: options.overwrite ?? false,
+    });
+    totalFiles += files.length;
+
+    for (const f of files) {
+      if (options.verbose) {
+        // eslint-disable-next-line no-console
+        console.log(`  ${f}`);
+      }
+    }
+  }
+
+  // eslint-disable-next-line no-console
+  console.log(
+    `Generated ${totalFiles} test files from ${discovered.length} specs` +
+    (skippedSpecs > 0 ? ` (${skippedSpecs} specs had no GWT scenarios)` : "")
+  );
 }
 
 // ============================================================================
@@ -218,7 +344,11 @@ async function main(): Promise<void> {
   const options = parseArgs(process.argv);
 
   if (options.generate) {
-    await handleGenerate(options);
+    if (options.all) {
+      await handleGenerateAll(options);
+    } else {
+      await handleGenerate(options);
+    }
   }
 
   if (options.run) {
