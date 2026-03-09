@@ -47,6 +47,8 @@ import { createSelfImprover } from "./services/adjutant/behaviors/self-improver.
 // import { createAgentSpawnerBehavior } from "./services/adjutant/behaviors/agent-spawner.js";
 // import { createAgentDecommissioner } from "./services/adjutant/behaviors/agent-decommissioner.js";
 import { createMemoryStore } from "./services/adjutant/memory-store.js";
+import { SignalAggregator } from "./services/adjutant/signal-aggregator.js";
+import { getEventBus } from "./services/event-bus.js";
 import { registerMemoryTools } from "./services/mcp-tools/memory.js";
 import { registerCoordinationTools } from "./services/mcp-tools/coordination.js";
 import { createMemoryRouter } from "./routes/memory.js";
@@ -234,6 +236,16 @@ const server = app.listen(PORT, () => {
 
   initAdjutantCore({ registry: behaviorRegistry, state: adjutantState, comm: adjutantComm });
   logInfo("Adjutant Core initialized with event-driven behaviors");
+
+  // Signal Aggregator — classifies EventBus events for stimulus engine
+  const signalAggregator = new SignalAggregator();
+  signalAggregator.onCritical((signal) => {
+    logInfo("SignalAggregator: critical signal", { event: signal.event, id: signal.id });
+  });
+  getEventBus().onAny((event, data) => {
+    signalAggregator.ingest(event, data);
+  });
+  logInfo("SignalAggregator: connected to EventBus");
 
   // Prune old decisions on startup, then every 6 hours (reuse PRUNE_INTERVAL_MS)
   const DECISION_PRUNE_DAYS = 30;
