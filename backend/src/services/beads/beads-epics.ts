@@ -60,7 +60,7 @@ export async function getEpicChildren(
     }
 
     const result = await execBd<BeadsIssue[]>(
-      ["children", epicId, "--json"],
+      ["children", epicId, "--all", "--json"],
       { cwd: db.workDir, beadsDir: db.beadsDir }
     );
 
