@@ -1,9 +1,34 @@
-import React, { useMemo } from 'react';
+import React, { Suspense, useMemo } from 'react';
 
 import { useOverview } from '../../hooks/useProjectOverview';
 import { priorityLabel } from '../../hooks/useDashboardBeads';
 import type { AgentOverview, EpicProgress, OverviewBeadSummary, OverviewUnreadSummary } from '../../types/overview';
 import './DashboardView.css';
+
+/** Lazy-loaded CostPanel — loads independently from other overview widgets. */
+const LazyCostPanel = React.lazy(() => import('./CostPanel'));
+
+/** Loading skeleton for CostPanel while it loads. */
+function CostPanelSkeleton() {
+  return (
+    <div style={{ padding: '24px', textAlign: 'center' }}>
+      <div
+        style={{
+          width: '32px',
+          height: '32px',
+          border: '2px solid var(--crt-phosphor-dim)',
+          borderTopColor: 'var(--crt-phosphor)',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite',
+          margin: '0 auto 12px',
+        }}
+      />
+      <span style={{ color: 'var(--crt-phosphor-dim)', fontSize: '0.75rem', letterSpacing: '0.1em' }}>
+        LOADING COST DATA...
+      </span>
+    </div>
+  );
+}
 
 // Simple widget wrapper for dashboard sections
 interface DashboardWidgetProps {
@@ -331,6 +356,16 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
               )}
             </>
           )}
+        </DashboardWidget>
+
+        {/* Cost Widget (full width, lazy-loaded) */}
+        <DashboardWidget
+          title="COSTS"
+          className="dashboard-widget-full-width"
+        >
+          <Suspense fallback={<CostPanelSkeleton />}>
+            <LazyCostPanel />
+          </Suspense>
         </DashboardWidget>
 
       </div>
