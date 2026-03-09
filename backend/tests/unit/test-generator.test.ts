@@ -843,6 +843,133 @@ describe("SyncTestFile", () => {
 // Tests — AUTO-GENERATED marker in generated content (adj-058.7)
 // ============================================================================
 
+// ============================================================================
+// Tests — Bug fixes (adj-058.9, .11, .12)
+// ============================================================================
+
+describe("BugFixes", () => {
+  beforeEach(() => {
+    clearSteps();
+  });
+
+  // adj-058.9: resolvePath should replace ALL :paramName occurrences, not just first :id
+  it("should resolve multiple path params in generated code", () => {
+    const parsed: ParseResult = {
+      specPath: "test-spec",
+      featureName: "Multi Param Test",
+      userStories: [{
+        title: "Multi Path Params",
+        storyNumber: 1,
+        priority: "P1",
+        scenarios: [{
+          index: 1,
+          given: "a pending proposal",
+          when: "PATCH /api/proposals/:id/comments/:commentId with { body: \"updated\" }",
+          then: "the comment is updated",
+          raw: "",
+        }],
+        requirements: [],
+      }],
+      requirements: [],
+      edgeCases: [],
+      warnings: [],
+    };
+    const content = generateTestContent(parsed);
+    // The harness call should not contain literal :commentId (comments will though)
+    const harnessCall = content.match(/harness\.patch\(.+\)/)?.[0] ?? "";
+    expect(harnessCall).not.toContain(":commentId");
+    // Should have template expressions for both params
+    expect(harnessCall).toContain("${seeded.id}");
+    expect(harnessCall).toContain("${commentId}");
+  });
+
+  // adj-058.12: escapeDoubleQuotes should also escape backslashes
+  it("should escape backslashes in generated string literals", () => {
+    const parsed: ParseResult = {
+      specPath: "test-spec",
+      featureName: "Backslash Test",
+      userStories: [{
+        title: "Escape Test",
+        storyNumber: 1,
+        priority: "P1",
+        scenarios: [{
+          index: 1,
+          given: "the database is initialized",
+          when: 'GET /api/test is called',
+          then: 'it returns a path like C:\\Users\\test',
+          raw: "",
+        }],
+        requirements: [],
+      }],
+      requirements: [],
+      edgeCases: [],
+      warnings: [],
+    };
+    const content = generateTestContent(parsed);
+    // The it() description string should have escaped backslashes
+    // (descriptionFromThen lowercases, so check lowercase)
+    const itLine = content.match(/it\("should .+?",/)?.[0] ?? "";
+    expect(itLine).toContain('c:\\\\users\\\\test');
+    // Should not have raw unescaped backslash producing \U in the string literal
+    expect(itLine).not.toMatch(/c:\\u(?!sers)/i);
+  });
+
+  // adj-058.11: PUT/DELETE should use typed harness wrappers
+  it("should generate typed harness wrappers for PUT requests", () => {
+    const parsed: ParseResult = {
+      specPath: "test-spec",
+      featureName: "PUT Test",
+      userStories: [{
+        title: "PUT Test",
+        storyNumber: 1,
+        priority: "P1",
+        scenarios: [{
+          index: 1,
+          given: "a pending proposal",
+          when: 'PUT /api/proposals/:id with { status: "archived" }',
+          then: "the proposal is archived",
+          raw: "",
+        }],
+        requirements: [],
+      }],
+      requirements: [],
+      edgeCases: [],
+      warnings: [],
+    };
+    const content = generateTestContent(parsed);
+    // Should use harness.put(), not harness.request.put()
+    expect(content).toContain("harness.put(");
+    expect(content).not.toContain("harness.request.put");
+  });
+
+  it("should generate typed harness wrappers for DELETE requests", () => {
+    const parsed: ParseResult = {
+      specPath: "test-spec",
+      featureName: "DELETE Test",
+      userStories: [{
+        title: "DELETE Test",
+        storyNumber: 1,
+        priority: "P1",
+        scenarios: [{
+          index: 1,
+          given: "a pending proposal",
+          when: "DELETE /api/proposals/:id",
+          then: "the proposal is removed",
+          raw: "",
+        }],
+        requirements: [],
+      }],
+      requirements: [],
+      edgeCases: [],
+      warnings: [],
+    };
+    const content = generateTestContent(parsed);
+    // Should use harness.delete(), not harness.request.delete()
+    expect(content).toContain("harness.delete(");
+    expect(content).not.toContain("harness.request.delete");
+  });
+});
+
 describe("GeneratedContentMarker", () => {
   beforeEach(() => {
     clearSteps();

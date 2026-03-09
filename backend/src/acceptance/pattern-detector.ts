@@ -214,6 +214,26 @@ const PRECONDITION_PATTERNS: PreconditionPattern[] = [
     regex: /agent\s+(?:is\s+)?connected/i,
     extract: () => ({ type: "agent" }),
   },
+  // "a persona exists" / "a persona named X exists"
+  {
+    regex: /persona\s+(?:named\s+\w+\s+)?exist/i,
+    extract: () => ({ type: "agent", params: { entity: "persona" } }),
+  },
+  // "a bead exists" / "beads exist"
+  {
+    regex: /beads?\s+exist/i,
+    extract: () => ({ type: "agent", params: { entity: "bead" } }),
+  },
+  // "events exist"
+  {
+    regex: /events?\s+exist/i,
+    extract: () => ({ type: "agent", params: { entity: "event" } }),
+  },
+  // "a session exists" / "an active session exists"
+  {
+    regex: /session\s+exist/i,
+    extract: () => ({ type: "agent", params: { entity: "session" } }),
+  },
   // UI navigation: "the user navigates to ..." / "the user is on ..."
   {
     regex: /user\s+(?:navigates|is\s+on|opens|views)/i,

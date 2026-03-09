@@ -208,6 +208,23 @@ export class TestHarness {
     return { status: res.status, body: res.body as T };
   }
 
+  /** PUT JSON to a path and return the parsed response. */
+  async put<T = Record<string, unknown>>(
+    path: string,
+    body: Record<string, unknown>,
+  ): Promise<{ status: number; body: T }> {
+    const res = await this.request.put(path).send(body);
+    return { status: res.status, body: res.body as T };
+  }
+
+  /** DELETE a path and return the parsed response. */
+  async delete<T = Record<string, unknown>>(
+    path: string,
+  ): Promise<{ status: number; body: T }> {
+    const res = await this.request.delete(path);
+    return { status: res.status, body: res.body as T };
+  }
+
   // ── Precondition Seed Helpers (adj-035.3.3) ────────────────────────
 
   /**
