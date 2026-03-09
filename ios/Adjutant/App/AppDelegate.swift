@@ -163,6 +163,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         case "chat_message":
             return await handleChatMessageNotification(userInfo: userInfo)
 
+        case "announcement":
+            return await handleAnnouncementNotification(userInfo: userInfo)
+
         case "system":
             return await handleSystemNotification(userInfo: userInfo)
 
@@ -245,6 +248,33 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             _ = try await apiClient.getMessages(agentId: agentId, limit: 1)
         } catch {
             print("[AppDelegate] Failed to pre-fetch chat message: \(error.localizedDescription)")
+        }
+
+        return .newData
+    }
+
+    /// Handles announcement notifications (completion, blocker, question) from agents.
+    /// Schedules a local notification when the app is in background, similar to chat messages.
+    @MainActor
+    private func handleAnnouncementNotification(userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
+        guard let agentId = userInfo["agentId"] as? String,
+              let body = userInfo["body"] as? String else {
+            print("[AppDelegate] Announcement notification missing required fields")
+            return .noData
+        }
+
+        let messageId = userInfo["messageId"] as? String ?? UUID().uuidString
+        let announcementType = userInfo["announcementType"] as? String ?? "info"
+
+        let appState = UIApplication.shared.applicationState
+        if appState != .active {
+            await NotificationService.shared.scheduleChatMessageNotification(
+                agentId: agentId,
+                body: "[\(announcementType.uppercased())] \(body)",
+                messageId: messageId
+            )
+        } else {
+            print("[AppDelegate] Skipping local notification — app is active, willPresent handles banner")
         }
 
         return .newData

@@ -8,7 +8,7 @@
 import * as apn from "@parse/node-apn";
 import { existsSync } from "fs";
 import { logInfo, logError, logWarn, logDebug } from "../utils/index.js";
-import { getAllDeviceTokens } from "./device-token-service.js";
+import { getAllDeviceTokens, unregisterDeviceToken } from "./device-token-service.js";
 import type {
   APNsNotification,
   APNsConfig,
@@ -109,7 +109,7 @@ function getProvider(): apn.Provider | null {
         keyId: config.keyId,
         teamId: config.teamId,
       },
-      production: true, // TODO: restore config.environment === "production" once .env is updated
+      production: config.environment === "production",
     });
 
     logInfo("APNs provider initialized", {
@@ -225,6 +225,17 @@ export async function sendNotification(
         tokenPrefix: deviceToken.substring(0, 8),
         reason,
       });
+
+      // Reactively remove invalid tokens so they don't accumulate
+      if (reason === "BadDeviceToken" || reason === "Unregistered") {
+        logInfo("Removing invalid device token", {
+          tokenPrefix: deviceToken.substring(0, 8),
+          reason,
+        });
+        unregisterDeviceToken(deviceToken).catch((err) => {
+          logWarn("Failed to unregister invalid token", { error: String(err) });
+        });
+      }
 
       return {
         success: false,
