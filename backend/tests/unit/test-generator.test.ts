@@ -665,3 +665,214 @@ describe("CommonSteps", () => {
     expect(thenResult!.args).toEqual(["pending"]);
   });
 });
+
+// ============================================================================
+// Tests — Sync Mode (adj-058.7)
+// ============================================================================
+
+describe("SyncTestFile", () => {
+  let syncTestFile: (existingContent: string, newContent: string) => string;
+
+  beforeEach(async () => {
+    clearSteps();
+    const mod = await import("../../src/acceptance/test-generator.js");
+    syncTestFile = mod.syncTestFile;
+  });
+
+  it("should replace auto-generated it() bodies with new content", () => {
+    const existing = [
+      'describe("test", () => {',
+      '  it("should do A", async () => {',
+      '    // AUTO-GENERATED',
+      '    const res = await harness.get("/old");',
+      '  });',
+      '});',
+    ].join("\n");
+
+    const newGen = [
+      'describe("test", () => {',
+      '  it("should do A", async () => {',
+      '    // AUTO-GENERATED',
+      '    const res = await harness.get("/new");',
+      '  });',
+      '});',
+    ].join("\n");
+
+    const result = syncTestFile(existing, newGen);
+    expect(result).toContain('harness.get("/new")');
+    expect(result).not.toContain('harness.get("/old")');
+  });
+
+  it("should preserve manually edited it() bodies (no AUTO-GENERATED marker)", () => {
+    const existing = [
+      'describe("test", () => {',
+      '  it("should do A", async () => {',
+      '    // Custom hand-written test',
+      '    const custom = doSomethingSpecial();',
+      '    expect(custom).toBe(true);',
+      '  });',
+      '});',
+    ].join("\n");
+
+    const newGen = [
+      'describe("test", () => {',
+      '  it("should do A", async () => {',
+      '    // AUTO-GENERATED',
+      '    const res = await harness.get("/new");',
+      '  });',
+      '});',
+    ].join("\n");
+
+    const result = syncTestFile(existing, newGen);
+    expect(result).toContain("doSomethingSpecial");
+    expect(result).not.toContain('harness.get("/new")');
+  });
+
+  it("should add new scenarios that don't exist in old file", () => {
+    const existing = [
+      'describe("test", () => {',
+      '  it("should do A", async () => {',
+      '    // Custom test',
+      '  });',
+      '});',
+    ].join("\n");
+
+    const newGen = [
+      'describe("test", () => {',
+      '  it("should do A", async () => {',
+      '    // AUTO-GENERATED',
+      '    const res = await harness.get("/a");',
+      '  });',
+      '',
+      '  it("should do B", async () => {',
+      '    // AUTO-GENERATED',
+      '    const res = await harness.get("/b");',
+      '  });',
+      '});',
+    ].join("\n");
+
+    const result = syncTestFile(existing, newGen);
+    expect(result).toContain("should do A");
+    expect(result).toContain("should do B");
+    expect(result).toContain('harness.get("/b")');
+  });
+
+  it("should remove scenarios deleted from spec", () => {
+    const existing = [
+      'describe("test", () => {',
+      '  it("should do A", async () => {',
+      '    // AUTO-GENERATED',
+      '    const res = await harness.get("/a");',
+      '  });',
+      '',
+      '  it("should do B", async () => {',
+      '    // AUTO-GENERATED',
+      '    const res = await harness.get("/b");',
+      '  });',
+      '});',
+    ].join("\n");
+
+    const newGen = [
+      'describe("test", () => {',
+      '  it("should do A", async () => {',
+      '    // AUTO-GENERATED',
+      '    const res = await harness.get("/a");',
+      '  });',
+      '});',
+    ].join("\n");
+
+    const result = syncTestFile(existing, newGen);
+    expect(result).toContain("should do A");
+    expect(result).not.toContain("should do B");
+  });
+
+  it("should handle mixed: preserve manual, replace auto, add new, drop deleted", () => {
+    const existing = [
+      'describe("test", () => {',
+      '  it("should do A", async () => {',
+      '    // Manual test for A',
+      '    expect(true).toBe(true);',
+      '  });',
+      '',
+      '  it("should do B", async () => {',
+      '    // AUTO-GENERATED',
+      '    const old = "b-old";',
+      '  });',
+      '',
+      '  it("should do C", async () => {',
+      '    // AUTO-GENERATED',
+      '    const old = "c-old";',
+      '  });',
+      '});',
+    ].join("\n");
+
+    const newGen = [
+      'describe("test", () => {',
+      '  it("should do A", async () => {',
+      '    // AUTO-GENERATED',
+      '    const newA = "a-new";',
+      '  });',
+      '',
+      '  it("should do B", async () => {',
+      '    // AUTO-GENERATED',
+      '    const newB = "b-new";',
+      '  });',
+      '',
+      '  it("should do D", async () => {',
+      '    // AUTO-GENERATED',
+      '    const newD = "d-new";',
+      '  });',
+      '});',
+    ].join("\n");
+
+    const result = syncTestFile(existing, newGen);
+    // A: preserved (manual) — should keep manual body, not replace
+    expect(result).toContain("Manual test for A");
+    expect(result).not.toContain('"a-new"');
+    // B: replaced (auto-generated)
+    expect(result).toContain('"b-new"');
+    expect(result).not.toContain('"b-old"');
+    // C: removed (not in new)
+    expect(result).not.toContain('"c-old"');
+    // D: added (new scenario)
+    expect(result).toContain('"d-new"');
+  });
+});
+
+// ============================================================================
+// Tests — AUTO-GENERATED marker in generated content (adj-058.7)
+// ============================================================================
+
+describe("GeneratedContentMarker", () => {
+  beforeEach(() => {
+    clearSteps();
+  });
+
+  it("should include AUTO-GENERATED marker in api-testable scenario bodies", () => {
+    const content = generateTestContent(SIMPLE_PARSE_RESULT);
+    // Each generated it() body should start with // AUTO-GENERATED
+    expect(content).toContain("// AUTO-GENERATED");
+  });
+
+  it("should include AUTO-GENERATED marker in step-matched scenario bodies", () => {
+    defineGiven("the database is initialized", async () => { /* no-op */ });
+    defineWhen(
+      /^(?:a )?proposal is created via POST \/api\/proposals$/,
+      async () => { /* no-op */ },
+    );
+    defineThen(
+      /^it is persisted with status "(\w+)"/,
+      async () => { /* no-op */ },
+    );
+
+    const content = generateTestContent(SIMPLE_PARSE_RESULT);
+    expect(content).toContain("// AUTO-GENERATED");
+  });
+
+  it("should include AUTO-GENERATED marker in TODO stub bodies", () => {
+    const content = generateTestContent(AGENT_BEHAVIOR_PARSE_RESULT);
+    // Agent-behavior scenarios get it.skip, check for marker
+    // Skip blocks also need marker for sync to work
+    expect(content).toContain("// AUTO-GENERATED");
+  });
+});

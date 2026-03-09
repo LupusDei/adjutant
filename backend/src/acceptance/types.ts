@@ -165,6 +165,8 @@ export interface AcceptanceOptions {
   verbose?: boolean;
   /** Process all specs in the specs/ directory */
   all?: boolean;
+  /** Sync mode: regenerate while preserving manual edits */
+  sync?: boolean;
 }
 
 /**

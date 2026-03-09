@@ -45,6 +45,7 @@ Options:
   --run         Run acceptance tests (default)
   --report      Show spec coverage report (which specs have tests)
   --overwrite   Overwrite existing test files during --generate
+  --sync        Regenerate preserving manual edits (use with --generate)
   --verbose     Show detailed output
   --help        Show this help message
 
@@ -133,6 +134,7 @@ export function parseArgs(argv: string[]): AcceptanceOptions {
   let verbose = false;
   let overwrite = false;
   let all = false;
+  let sync = false;
 
   for (const arg of args) {
     if (arg === "--generate") {
@@ -143,6 +145,8 @@ export function parseArgs(argv: string[]): AcceptanceOptions {
       report = true;
     } else if (arg === "--overwrite") {
       overwrite = true;
+    } else if (arg === "--sync") {
+      sync = true;
     } else if (arg === "--verbose") {
       verbose = true;
     } else if (arg === "--all") {
@@ -161,7 +165,7 @@ export function parseArgs(argv: string[]): AcceptanceOptions {
     run = true;
   }
 
-  return { specDir, generate, run, report, verbose, overwrite, all };
+  return { specDir, generate, run, report, verbose, overwrite, all, sync };
 }
 
 // ============================================================================
@@ -206,7 +210,11 @@ async function handleGenerate(
   }
 
   const outputDir = DEFAULT_OUTPUT_DIR;
-  const files = await generateTestFiles(parsed, { outputDir, overwrite: options.overwrite ?? false });
+  const files = await generateTestFiles(parsed, {
+    outputDir,
+    overwrite: options.overwrite ?? false,
+    sync: options.sync ?? false,
+  });
 
   // eslint-disable-next-line no-console
   console.log(`Generated ${files.length} test file(s):`);
@@ -261,6 +269,7 @@ async function handleGenerateAll(
     const files = await generateTestFiles(spec.parsed, {
       outputDir,
       overwrite: options.overwrite ?? false,
+      sync: options.sync ?? false,
     });
     totalFiles += files.length;
 
