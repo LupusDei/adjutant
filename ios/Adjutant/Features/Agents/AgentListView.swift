@@ -72,7 +72,9 @@ struct AgentListView: View {
             }
         }
         .sheet(item: $selectedPersona) { persona in
-            PersonaDetailView(persona: persona)
+            PersonaDetailView(persona: persona, onDeleted: {
+                Task { await viewModel.fetchPersonas() }
+            })
         }
     }
 

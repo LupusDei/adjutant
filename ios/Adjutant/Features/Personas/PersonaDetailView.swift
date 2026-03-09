@@ -9,11 +9,14 @@ struct PersonaDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     let persona: Persona
+    var onDeleted: (() -> Void)?
 
     @State private var promptText: String?
     @State private var isLoadingPrompt = false
     @State private var showingEditor = false
     @State private var showingDeploySheet = false
+    @State private var showDeleteConfirmation = false
+    @State private var isDeleting = false
 
     private let apiClient = AppState.shared.apiClient
 
@@ -205,17 +208,75 @@ struct PersonaDetailView: View {
     // MARK: - Action Buttons
 
     private var actionButtons: some View {
-        HStack(spacing: CRTTheme.Spacing.sm) {
-            CRTButton("EDIT", variant: .secondary, size: .medium) {
-                showingEditor = true
-            }
-            .frame(maxWidth: .infinity)
+        VStack(spacing: CRTTheme.Spacing.sm) {
+            HStack(spacing: CRTTheme.Spacing.sm) {
+                CRTButton("EDIT", variant: .secondary, size: .medium) {
+                    showingEditor = true
+                }
+                .frame(maxWidth: .infinity)
 
-            CRTButton("DEPLOY", variant: .primary, size: .medium) {
-                showingDeploySheet = true
+                CRTButton("DEPLOY", variant: .primary, size: .medium) {
+                    showingDeploySheet = true
+                }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
+
+            Button {
+                showDeleteConfirmation = true
+            } label: {
+                HStack(spacing: CRTTheme.Spacing.xs) {
+                    if isDeleting {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: CRTTheme.State.error))
+                            .scaleEffect(0.7)
+                    } else {
+                        Image(systemName: "trash")
+                            .font(.system(size: 12))
+                    }
+                    Text("DELETE PERSONA")
+                        .font(CRTTheme.Typography.font(size: 12, weight: .bold))
+                        .tracking(CRTTheme.Typography.letterSpacing)
+                }
+                .foregroundColor(CRTTheme.State.error)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, CRTTheme.Spacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                        .fill(CRTTheme.State.error.opacity(0.1))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                        .stroke(CRTTheme.State.error.opacity(0.4), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isDeleting)
+            .alert(
+                "DELETE \(persona.name.uppercased())?",
+                isPresented: $showDeleteConfirmation
+            ) {
+                Button("Cancel", role: .cancel) {}
+                Button("DELETE", role: .destructive) {
+                    Task<Void, Never> { await deletePersona() }
+                }
+            } message: {
+                Text("This persona will be permanently removed. This action cannot be undone.")
+            }
         }
+    }
+
+    // MARK: - Delete
+
+    private func deletePersona() async {
+        isDeleting = true
+        do {
+            try await apiClient.deletePersona(id: persona.id)
+            onDeleted?()
+            dismiss()
+        } catch {
+            print("[PersonaDetailView] Delete failed: \(error.localizedDescription)")
+        }
+        isDeleting = false
     }
 
     // MARK: - Data Loading
