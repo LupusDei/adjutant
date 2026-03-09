@@ -210,4 +210,15 @@ public enum AnyCodableValue: Codable, Hashable, Sendable {
         case .null: try container.encodeNil()
         }
     }
+
+    /// Returns a human-readable string representation of the value.
+    public var stringValue: String? {
+        switch self {
+        case .string(let val): return val
+        case .int(let val): return String(val)
+        case .double(let val): return String(val)
+        case .bool(let val): return val ? "true" : "false"
+        case .null: return nil
+        }
+    }
 }
