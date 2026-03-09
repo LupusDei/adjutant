@@ -298,6 +298,7 @@ struct TimelineView: View {
         case "message_sent": return "envelope.fill"
         case "bead_updated": return "circle.grid.3x3"
         case "bead_closed": return "checkmark.circle.fill"
+        case "coordinator_action": return "terminal.fill"
         default: return "circle.fill"
         }
     }

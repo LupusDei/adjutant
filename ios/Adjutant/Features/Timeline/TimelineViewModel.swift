@@ -85,6 +85,7 @@ final class TimelineViewModel: BaseViewModel {
         ("message_sent", "MESSAGE"),
         ("bead_updated", "BEAD"),
         ("bead_closed", "CLOSED"),
+        ("coordinator_action", "COORD"),
     ]
 
     // MARK: - Dependencies

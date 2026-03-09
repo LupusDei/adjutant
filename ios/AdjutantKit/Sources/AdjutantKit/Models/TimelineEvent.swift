@@ -5,7 +5,7 @@ import Foundation
 public struct TimelineEvent: Codable, Identifiable, Equatable {
     /// Unique event ID
     public let id: String
-    /// Event type (status_change, progress_report, announcement, message_sent, bead_updated, bead_closed)
+    /// Event type (status_change, progress_report, announcement, message_sent, bead_updated, bead_closed, coordinator_action)
     public let eventType: String
     /// Agent that triggered the event
     public let agentId: String
