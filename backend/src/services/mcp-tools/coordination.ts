@@ -19,6 +19,7 @@ import { logInfo, logWarn } from "../../utils/index.js";
 import type { AdjutantState } from "../adjutant/state-store.js";
 import type { MessageStore } from "../message-store.js";
 import type { StimulusEngine } from "../adjutant/stimulus-engine.js";
+import type { EventStore } from "../event-store.js";
 
 // ============================================================================
 // Constants
@@ -113,6 +114,35 @@ export function _resetAutoNameCounter(): void {
   autoNameCounter = 0;
 }
 
+/**
+ * Bridge a logDecision call to eventStore + EventBus for timeline integration.
+ * No-ops when eventStore is not provided.
+ */
+function emitCoordinatorAction(
+  eventStore: EventStore | undefined,
+  callerAgent: string | undefined,
+  decision: { behavior: string; action: string; target?: string; reason?: string },
+): void {
+  if (!eventStore) return;
+  const target = decision.target ?? null;
+  const input: Parameters<EventStore["insertEvent"]>[0] = {
+    eventType: "coordinator_action",
+    agentId: callerAgent ?? "adjutant-coordinator",
+    action: `${decision.action}: ${target ?? "system"}`,
+    detail: { behavior: decision.behavior, action: decision.action, target, reason: decision.reason ?? null },
+  };
+  if (target && target.startsWith("adj-")) {
+    input.beadId = target;
+  }
+  eventStore.insertEvent(input);
+  getEventBus().emit("coordinator:action", {
+    behavior: decision.behavior,
+    action: decision.action,
+    target,
+    reason: decision.reason ?? null,
+  });
+}
+
 // ============================================================================
 // Tool Registration
 // ============================================================================
@@ -125,6 +155,7 @@ export function registerCoordinationTools(
   state: AdjutantState,
   messageStore: MessageStore,
   stimulusEngine?: StimulusEngine,
+  eventStore?: EventStore,
 ): void {
   // --------------------------------------------------------------------------
   // spawn_worker
@@ -160,12 +191,14 @@ export function registerCoordinationTools(
         return jsonResult({ success: false, error: result.error ?? "Spawn failed" });
       }
 
-      state.logDecision({
+      const spawnDecision = {
         behavior: "adjutant",
         action: "spawn_worker",
         target: name,
         reason: `Spawned with prompt: ${prompt.slice(0, 100)}`,
-      });
+      };
+      state.logDecision(spawnDecision);
+      emitCoordinatorAction(eventStore, callerAgentId, spawnDecision);
 
       state.logSpawn(name, `Spawned via spawn_worker tool`, beadId);
 
@@ -223,12 +256,14 @@ export function registerCoordinationTools(
         assignedBy: callerAgentId,
       });
 
-      state.logDecision({
+      const assignDecision = {
         behavior: "adjutant",
         action: "assign_bead",
         target: beadId,
         reason,
-      });
+      };
+      state.logDecision(assignDecision);
+      emitCoordinatorAction(eventStore, callerAgentId, assignDecision);
 
       logInfo("assign_bead: bead assigned", { beadId, agentId });
 
@@ -277,12 +312,14 @@ export function registerCoordinationTools(
         });
       }
 
-      state.logDecision({
+      const nudgeDecision = {
         behavior: "adjutant",
         action: "nudge_agent",
         target: agentId,
         reason: `Nudge: ${singleLine.slice(0, 100)}`,
-      });
+      };
+      state.logDecision(nudgeDecision);
+      emitCoordinatorAction(eventStore, callerAgentId, nudgeDecision);
 
       logInfo("nudge_agent: message sent", { agentId });
 
@@ -355,12 +392,14 @@ export function registerCoordinationTools(
         state.markDecommissioned(lastSpawn.id);
       }
 
-      state.logDecision({
+      const decommDecision = {
         behavior: "adjutant",
         action: "decommission_agent",
         target: agentId,
         reason,
-      });
+      };
+      state.logDecision(decommDecision);
+      emitCoordinatorAction(eventStore, callerAgentId, decommDecision);
 
       logInfo("decommission_agent: shutdown requested", { agentId, reason });
 
@@ -411,12 +450,14 @@ export function registerCoordinationTools(
         if (result.success) {
           rebalancedIds.push(bead.id);
 
-          state.logDecision({
+          const rebalanceDecision = {
             behavior: "adjutant",
             action: "rebalance_work",
             target: bead.id,
             reason: reason ?? `Rebalanced from ${agentId}`,
-          });
+          };
+          state.logDecision(rebalanceDecision);
+          emitCoordinatorAction(eventStore, callerAgentId, rebalanceDecision);
         } else {
           logWarn("rebalance_work: failed to unassign bead", {
             beadId: bead.id,
@@ -469,12 +510,14 @@ export function registerCoordinationTools(
       const checkId = stimulusEngine.scheduleCheck(delayMs, reason);
       const firesAt = new Date(Date.now() + delayMs).toISOString();
 
-      state.logDecision({
+      const scheduleDecision = {
         behavior: "adjutant",
         action: "schedule_check",
         target: checkId,
         reason: `Scheduled in ${delay}: ${reason}`,
-      });
+      };
+      state.logDecision(scheduleDecision);
+      emitCoordinatorAction(eventStore, callerAgentId, scheduleDecision);
 
       logInfo("schedule_check: check scheduled", { checkId, delay, reason });
 
@@ -524,12 +567,14 @@ export function registerCoordinationTools(
       const eventName = event as EventName;
       const watchId = stimulusEngine.registerWatch(eventName, filter, timeoutMs, reason);
 
-      state.logDecision({
+      const watchDecision = {
         behavior: "adjutant",
         action: "watch_for",
         target: watchId,
         reason: `Watching ${event}: ${reason}`,
-      });
+      };
+      state.logDecision(watchDecision);
+      emitCoordinatorAction(eventStore, callerAgentId, watchDecision);
 
       logInfo("watch_for: watch registered", { watchId, event, reason });
 

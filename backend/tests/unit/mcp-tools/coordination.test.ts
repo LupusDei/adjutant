@@ -113,6 +113,7 @@ import { registerCoordinationTools, _resetAutoNameCounter } from "../../../src/s
 import type { AdjutantState } from "../../../src/services/adjutant/state-store.js";
 import type { MessageStore } from "../../../src/services/message-store.js";
 import type { StimulusEngine } from "../../../src/services/adjutant/stimulus-engine.js";
+import type { EventStore } from "../../../src/services/event-store.js";
 
 // ============================================================================
 // Helpers
@@ -169,6 +170,23 @@ function createMockStimulusEngine(): StimulusEngine {
   } as unknown as StimulusEngine;
 }
 
+function createMockEventStore(): EventStore {
+  return {
+    insertEvent: vi.fn().mockReturnValue({
+      id: "evt-mock-1",
+      eventType: "coordinator_action",
+      agentId: "adjutant",
+      action: "test",
+      detail: null,
+      beadId: null,
+      messageId: null,
+      createdAt: "2026-03-09T00:00:00Z",
+    }),
+    getEvents: vi.fn().mockReturnValue([]),
+    pruneOldEvents: vi.fn().mockReturnValue(0),
+  } as unknown as EventStore;
+}
+
 /**
  * Register tools and extract the handler for a specific tool by name.
  * Tools are registered as (name, description, schema, handler) — handler is arg index 3.
@@ -178,6 +196,7 @@ function getToolHandler(
   state?: AdjutantState,
   messageStore?: MessageStore,
   stimulusEngine?: StimulusEngine,
+  eventStore?: EventStore,
 ): (...args: unknown[]) => Promise<unknown> {
   const server = createMockServer();
   registerCoordinationTools(
@@ -185,6 +204,7 @@ function getToolHandler(
     state ?? createMockState(),
     messageStore ?? createMockMessageStore(),
     stimulusEngine ?? createMockStimulusEngine(),
+    eventStore,
   );
 
   const call = mockTool.mock.calls.find(
@@ -1314,6 +1334,149 @@ describe("MCP Coordination Tools", () => {
       );
 
       expect(state.markDecommissioned).not.toHaveBeenCalled();
+    });
+  });
+
+  // ==========================================================================
+  // Timeline event bridge (adj-059.2 / adj-059.4)
+  // ==========================================================================
+
+  describe("coordinator_action timeline events", () => {
+    it("should insert coordinator_action event when spawn_worker succeeds", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+      mockSpawnAgent.mockResolvedValue({ success: true, sessionId: "s1" });
+
+      const state = createMockState();
+      const evStore = createMockEventStore();
+      const handler = getToolHandler("spawn_worker", state, undefined, undefined, evStore);
+      await handler(
+        { prompt: "Build feature X", agentName: "eng-1" },
+        { sessionId: "adj-session" },
+      );
+
+      expect(evStore.insertEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "coordinator_action",
+          action: expect.stringContaining("spawn_worker"),
+          detail: expect.objectContaining({
+            behavior: "adjutant",
+            action: "spawn_worker",
+            target: "eng-1",
+          }),
+        }),
+      );
+    });
+
+    it("should insert coordinator_action event when assign_bead succeeds", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+      mockUpdateBead.mockResolvedValue({ success: true, data: { id: "adj-042" } });
+
+      const state = createMockState();
+      const evStore = createMockEventStore();
+      const handler = getToolHandler("assign_bead", state, undefined, undefined, evStore);
+      await handler(
+        { beadId: "adj-042", agentId: "worker-1", reason: "Best fit" },
+        { sessionId: "adj-session" },
+      );
+
+      expect(evStore.insertEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "coordinator_action",
+          action: expect.stringContaining("assign_bead"),
+          detail: expect.objectContaining({
+            behavior: "adjutant",
+            action: "assign_bead",
+            target: "adj-042",
+          }),
+          beadId: "adj-042",
+        }),
+      );
+    });
+
+    it("should insert coordinator_action event when decommission_agent succeeds", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+
+      const state = createMockState();
+      const evStore = createMockEventStore();
+      const handler = getToolHandler("decommission_agent", state, undefined, undefined, evStore);
+      await handler(
+        { agentId: "worker-1", reason: "Idle cleanup" },
+        { sessionId: "adj-session" },
+      );
+
+      expect(evStore.insertEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "coordinator_action",
+          action: expect.stringContaining("decommission_agent"),
+          detail: expect.objectContaining({
+            behavior: "adjutant",
+            action: "decommission_agent",
+            target: "worker-1",
+          }),
+        }),
+      );
+    });
+
+    it("should emit coordinator:action on EventBus after inserting event", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+      mockSpawnAgent.mockResolvedValue({ success: true, sessionId: "s1" });
+
+      const evStore = createMockEventStore();
+      const handler = getToolHandler("spawn_worker", undefined, undefined, undefined, evStore);
+      await handler(
+        { prompt: "Do work", agentName: "eng-2" },
+        { sessionId: "adj-session" },
+      );
+
+      expect(mockEmit).toHaveBeenCalledWith("coordinator:action", {
+        behavior: "adjutant",
+        action: "spawn_worker",
+        target: "eng-2",
+        reason: expect.stringContaining("Spawned with prompt"),
+      });
+    });
+
+    it("should work without errors when eventStore is not provided", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+      mockSpawnAgent.mockResolvedValue({ success: true, sessionId: "s1" });
+
+      // getToolHandler without eventStore (undefined by default)
+      const handler = getToolHandler("spawn_worker");
+      const result = await handler(
+        { prompt: "Build it" },
+        { sessionId: "adj-session" },
+      );
+
+      const data = parseResult(result);
+      expect(data.success).toBe(true);
+    });
+
+    it("should not insert event when spawn_worker fails", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+      mockSpawnAgent.mockResolvedValue({ success: false, error: "tmux unavailable" });
+
+      const evStore = createMockEventStore();
+      const handler = getToolHandler("spawn_worker", undefined, undefined, undefined, evStore);
+      await handler(
+        { prompt: "Build it" },
+        { sessionId: "adj-session" },
+      );
+
+      expect(evStore.insertEvent).not.toHaveBeenCalled();
+    });
+
+    it("should not insert event when assign_bead fails", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant");
+      mockUpdateBead.mockResolvedValue({ success: false, error: { code: "NOT_FOUND", message: "Not found" } });
+
+      const evStore = createMockEventStore();
+      const handler = getToolHandler("assign_bead", undefined, undefined, undefined, evStore);
+      await handler(
+        { beadId: "adj-999", agentId: "worker-1", reason: "Test" },
+        { sessionId: "adj-session" },
+      );
+
+      expect(evStore.insertEvent).not.toHaveBeenCalled();
     });
   });
 });

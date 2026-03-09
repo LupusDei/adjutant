@@ -230,7 +230,7 @@ const server = app.listen(PORT, () => {
     registerQueryTools(server, messageStore);
     registerProposalTools(server, proposalStore);
     registerMemoryTools(server, memoryStore, { getAgentBySession });
-    registerCoordinationTools(server, adjutantState, messageStore, stimulusEngine);
+    registerCoordinationTools(server, adjutantState, messageStore, stimulusEngine, eventStore);
   });
 
   // Wire critical signals from aggregator to stimulus engine
