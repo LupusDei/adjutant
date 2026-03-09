@@ -70,9 +70,9 @@ export function createIdleProposalNudge(
     triggers: ["agent:status_changed"],
 
     shouldAct(event: BehaviorEvent, _state: AdjutantState): boolean {
-      if (event.name !== "agent:status_changed") return false;
-      const data = event.data as AgentStatusEvent;
-      return data.status === "idle";
+      // Must return true for ALL agent:status_changed events (not just idle)
+      // because act() needs to clear debounce keys on non-idle transitions.
+      return event.name === "agent:status_changed";
     },
 
     async act(event: BehaviorEvent, state: AdjutantState, _comm: CommunicationManager): Promise<void> {

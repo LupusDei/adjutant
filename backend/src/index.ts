@@ -38,6 +38,7 @@ import { createMemoryCollector } from "./services/adjutant/behaviors/memory-coll
 import { createSessionRetrospective } from "./services/adjutant/behaviors/session-retrospective.js";
 import { createMemoryReviewer } from "./services/adjutant/behaviors/memory-reviewer.js";
 import { createSelfImprover } from "./services/adjutant/behaviors/self-improver.js";
+import { createIdleProposalNudge } from "./services/adjutant/behaviors/idle-proposal-nudge.js";
 import { createMemoryStore } from "./services/adjutant/memory-store.js";
 import { SignalAggregator } from "./services/adjutant/signal-aggregator.js";
 import { StimulusEngine, buildSituationPrompt, buildBootstrapPrompt, type StateSnapshot } from "./services/adjutant/stimulus-engine.js";
@@ -217,6 +218,9 @@ const server = app.listen(PORT, () => {
   // Signal Aggregator + Stimulus Engine — replaces periodic-summary
   const signalAggregator = new SignalAggregator();
   const stimulusEngine = new StimulusEngine();
+
+  // Register stimulus-dependent behaviors (must come after stimulusEngine creation)
+  behaviorRegistry.register(createIdleProposalNudge(stimulusEngine, proposalStore));
 
   // Set tool registrar now that adjutantState and stimulusEngine are available
   setToolRegistrar((server) => {

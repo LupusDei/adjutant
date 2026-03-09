@@ -132,10 +132,10 @@ describe("createIdleProposalNudge", () => {
       expect(behavior.shouldAct(event, state)).toBe(true);
     });
 
-    it("returns false when agent status changes to working", () => {
+    it("returns true when agent status changes to working (needed for debounce reset)", () => {
       const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
       const event = makeWorkingEvent("agent-1");
-      expect(behavior.shouldAct(event, state)).toBe(false);
+      expect(behavior.shouldAct(event, state)).toBe(true);
     });
 
     it("returns false when event is not agent:status_changed", () => {
@@ -210,14 +210,20 @@ describe("createIdleProposalNudge", () => {
   });
 
   describe("act — skips non-idle agents", () => {
-    it("does not call scheduleCheck for working agents", async () => {
+    it("does not call scheduleCheck for working agents but clears debounce", async () => {
       const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
       const event = makeWorkingEvent("agent-1");
 
-      // shouldAct already returns false, but if act were called directly:
+      // shouldAct returns true for all agent:status_changed events
+      expect(behavior.shouldAct(event, state)).toBe(true);
       await behavior.act(event, state, comm);
 
       expect(stimulusEngine.scheduleCheck).not.toHaveBeenCalled();
+      // Debounce key should be cleared
+      expect(state.setMeta).toHaveBeenCalledWith(
+        expect.stringContaining("agent-1"),
+        "",
+      );
     });
   });
 
