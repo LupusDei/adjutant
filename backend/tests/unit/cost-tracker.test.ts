@@ -567,14 +567,14 @@ describe("cost-tracker", () => {
       // Trigger an alert for sess-1
       setCostAlertThreshold(0.10);
       recordCostUpdate("sess-1", "/project", { cost: 0.15 });
-      mockEmit.mockClear();
 
       // Clear session cost
       clearSessionCost("sess-1");
 
       // Use a different session ID for re-record since clearSessionCost marks
       // the session as finalized (adj-066.3.6 race protection). In production,
-      // killed sessions don't get reused. A new session gets a new UUID.
+      // killed sessions don't get reused — each gets a new UUID.
+      mockEmit.mockClear();
       recordCostUpdate("sess-1b", "/project", { cost: 0.15 });
       const alertCalls = mockEmit.mock.calls.filter(
         (c) => c[0] === "session:cost_alert" && c[1]?.threshold !== undefined
