@@ -40,10 +40,14 @@ struct KanbanCardView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(onTap != nil ? "Double tap to view details" : "")
-        .task {
+        .task(id: bead.status) {
             // Only fetch cost for active beads (in_progress, hooked)
+            // Uses task(id:) so the task re-fires when status changes (adj-fkcm)
             let status = bead.status.lowercased()
-            guard status == "in_progress" || status == "hooked" else { return }
+            guard status == "in_progress" || status == "hooked" else {
+                beadCost = nil
+                return
+            }
             do {
                 let cost = try await AppState.shared.apiClient.getBeadCost(beadId: bead.id)
                 if cost.totalCost > 0 {
