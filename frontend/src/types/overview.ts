@@ -45,6 +45,8 @@ export interface AgentOverview {
   currentBead: string | null;
   unreadCount: number;
   sessionId: string | null;
+  cost: number | null;
+  contextPercent: number | null;
 }
 
 /** Unread message summary from the overview endpoint. */

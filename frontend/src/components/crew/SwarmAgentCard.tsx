@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties } from 'react';
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { api, ApiError } from '../../services/api';
 import { useTerminalStream } from '../../hooks/useTerminalStream';
@@ -57,26 +57,6 @@ function getContextColor(pct: number): string {
   return colors.primary;
 }
 
-/** Tiny inline context usage bar with percentage label. */
-function ContextBar({ percent }: { percent: number }): ReactNode {
-  const barColor = getContextColor(percent);
-  const glowOnHigh = percent > 75 ? `0 0 4px ${barColor}` : 'none';
-  return (
-    <span style={styles.contextContainer} title={`Context window: ${percent}%`}>
-      <span style={styles.contextLabel}>CTX {percent}%</span>
-      <span style={styles.contextTrack}>
-        <span
-          style={{
-            ...styles.contextFill,
-            width: `${Math.min(percent, 100)}%`,
-            backgroundColor: barColor,
-            boxShadow: glowOnHigh,
-          }}
-        />
-      </span>
-    </span>
-  );
-}
 
 interface SwarmAgentCardProps {
   agent: CrewMember;
@@ -243,14 +223,16 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
         {agent.unreadMail > 0 && (
           <span style={styles.mailBadge}>📬{agent.unreadMail}</span>
         )}
-        {/* Cost & context indicators */}
+        {/* Cost & context indicators — stacked vertically */}
         {(agent.cost != null || agent.contextPercent != null) && (
           <span style={styles.costContextGroup}>
+            {agent.contextPercent != null && (
+              <span style={{ ...styles.contextTextOnly, color: getContextColor(agent.contextPercent) }}>
+                CTX {agent.contextPercent}%
+              </span>
+            )}
             {agent.cost != null && (
               <span style={styles.costLabel}>${agent.cost.toFixed(2)}</span>
-            )}
-            {agent.contextPercent != null && (
-              <ContextBar percent={agent.contextPercent} />
             )}
           </span>
         )}
@@ -479,47 +461,29 @@ const styles = {
     marginLeft: '4px',
   },
 
-  // Cost & context display
+  // Cost & context display — stacked vertically
   costContextGroup: {
     display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: '1px',
     flexShrink: 0,
     marginLeft: 'auto',
   },
   costLabel: {
-    fontSize: '0.65rem',
+    fontSize: '0.6rem',
     color: colors.primaryDim,
     letterSpacing: '0.05em',
     fontFamily: '"Share Tech Mono", monospace',
     flexShrink: 0,
+    lineHeight: 1.2,
   },
-  contextContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    flexShrink: 0,
-  },
-  contextLabel: {
+  contextTextOnly: {
     fontSize: '0.55rem',
-    color: colors.primaryDim,
     letterSpacing: '0.05em',
+    fontFamily: '"Share Tech Mono", monospace',
     whiteSpace: 'nowrap',
-  },
-  contextTrack: {
-    width: '40px',
-    height: '4px',
-    backgroundColor: '#1a1a1a',
-    border: `1px solid ${colors.offlineBorder}`,
-    position: 'relative',
-    flexShrink: 0,
-  },
-  contextFill: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    height: '100%',
-    transition: 'width 0.3s ease, background-color 0.3s ease',
+    lineHeight: 1.2,
   },
   taskRow: {
     display: 'flex',

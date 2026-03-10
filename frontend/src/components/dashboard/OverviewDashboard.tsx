@@ -206,6 +206,18 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
                       {agent.currentBead && (
                         <span className="dashboard-agent-task">{truncateBody(agent.currentBead, 60)}</span>
                       )}
+                      {(agent.contextPercent != null || agent.cost != null) && (
+                        <span className="dashboard-agent-cost-context">
+                          {agent.contextPercent != null && (
+                            <span className={`dashboard-agent-context ${agent.contextPercent > 90 ? 'ctx-critical' : agent.contextPercent > 75 ? 'ctx-warning' : ''}`}>
+                              CTX {agent.contextPercent}%
+                            </span>
+                          )}
+                          {agent.cost != null && (
+                            <span className="dashboard-agent-cost">${agent.cost.toFixed(2)}</span>
+                          )}
+                        </span>
+                      )}
                       {agent.unreadCount > 0 && (
                         <span className="dashboard-unread-count">{agent.unreadCount}</span>
                       )}

@@ -117,6 +117,8 @@ export function createOverviewRouter(store: MessageStore): Router {
             currentBead: a.currentTask ?? null,
             unreadCount: unreadMap.get(a.id) ?? unreadMap.get(a.name) ?? 0,
             sessionId: a.sessionId ?? null,
+            cost: a.cost ?? null,
+            contextPercent: a.contextPercent ?? null,
           }))
         : [];
 

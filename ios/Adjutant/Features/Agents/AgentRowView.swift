@@ -137,34 +137,17 @@ struct AgentRowView: View {
 
     @ViewBuilder
     private var costContextView: some View {
-        HStack(spacing: 4) {
+        VStack(alignment: .trailing, spacing: 1) {
+            if let ctx = member.contextPercent {
+                Text(String(format: "CTX %.0f%%", ctx))
+                    .font(CRTTheme.Typography.font(size: 9, weight: .bold))
+                    .foregroundColor(contextColor(for: ctx))
+            }
+
             if let cost = member.cost {
                 Text(String(format: "$%.2f", cost))
                     .font(CRTTheme.Typography.font(size: 9, weight: .regular))
                     .foregroundColor(theme.dim)
-            }
-
-            if let ctx = member.contextPercent {
-                HStack(spacing: 2) {
-                    Text("CTX")
-                        .font(CRTTheme.Typography.font(size: 8, weight: .bold))
-                        .foregroundColor(contextColor(for: ctx).opacity(0.7))
-
-                    // Compact progress bar
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(theme.dim.opacity(0.2))
-                            .frame(width: 20, height: 3)
-
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(contextColor(for: ctx))
-                            .frame(width: max(1, 20 * CGFloat(min(ctx, 100)) / 100), height: 3)
-                    }
-
-                    Text(String(format: "%.0f%%", ctx))
-                        .font(CRTTheme.Typography.font(size: 8, weight: .bold))
-                        .foregroundColor(contextColor(for: ctx))
-                }
             }
         }
     }

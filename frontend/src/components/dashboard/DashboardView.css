@@ -804,6 +804,37 @@
   min-width: 0;
 }
 
+.dashboard-agent-cost-context {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.dashboard-agent-context {
+  font-size: 0.6rem;
+  color: var(--crt-phosphor);
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+}
+
+.dashboard-agent-context.ctx-warning {
+  color: #FFB000;
+}
+
+.dashboard-agent-context.ctx-critical {
+  color: #FF4444;
+}
+
+.dashboard-agent-cost {
+  font-size: 0.6rem;
+  color: var(--crt-phosphor-dim);
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+}
+
 /* No project state */
 .dashboard-no-project {
   display: flex;
