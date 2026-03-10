@@ -12,6 +12,8 @@
  * - DELETE /api/costs/budget/:id   - Delete a budget
  * - GET    /api/costs/burn-rate    - Get current burn rate
  * - GET    /api/costs/by-bead/:id  - Get cost for a specific bead
+ * - GET    /api/costs/reconcile    - Reconcile all active sessions
+ * - GET    /api/costs/reconcile/:sessionId - Reconcile a specific session
  */
 
 import { Router } from "express";
@@ -28,6 +30,7 @@ import {
   getBeadCost,
   getEpicCost,
 } from "../services/cost-tracker.js";
+import { reconcileSession, reconcileAllSessions } from "../services/cost-reconciler.js";
 import { success, notFound, validationError } from "../utils/index.js";
 
 export const costsRouter = Router();
@@ -180,4 +183,45 @@ costsRouter.get("/by-bead/:id", (req, res) => {
     return res.status(404).json(notFound("Bead cost", beadId));
   }
   return res.json(success(result));
+});
+
+/**
+ * GET /api/costs/reconcile
+ * Reconcile all active sessions against JSONL data.
+ */
+costsRouter.get("/reconcile", async (_req, res) => {
+  try {
+    const results = await reconcileAllSessions();
+    return res.json(success(results));
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      error: { code: "RECONCILE_ERROR", message: String(err) },
+    });
+  }
+});
+
+/**
+ * GET /api/costs/reconcile/:sessionId
+ * Reconcile a specific session against JSONL data.
+ */
+costsRouter.get("/reconcile/:sessionId", async (req, res) => {
+  const { sessionId } = req.params;
+  const sessionCost = getSessionCost(sessionId);
+  if (!sessionCost) {
+    return res.status(404).json(notFound("Session cost", sessionId));
+  }
+
+  try {
+    const result = await reconcileSession(sessionId, sessionCost.projectPath);
+    if (!result) {
+      return res.status(404).json(notFound("JSONL data for session", sessionId));
+    }
+    return res.json(success(result));
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      error: { code: "RECONCILE_ERROR", message: String(err) },
+    });
+  }
 });
