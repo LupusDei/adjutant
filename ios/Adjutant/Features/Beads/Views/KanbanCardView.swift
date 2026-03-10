@@ -10,6 +10,9 @@ struct KanbanCardView: View {
     let isDragging: Bool
     let onTap: (() -> Void)?
 
+    /// Cost loaded asynchronously for active beads.
+    @State private var beadCost: Double?
+
     init(bead: BeadInfo, isDragging: Bool = false, onTap: (() -> Void)? = nil) {
         self.bead = bead
         self.isDragging = isDragging
@@ -37,6 +40,19 @@ struct KanbanCardView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(onTap != nil ? "Double tap to view details" : "")
+        .task {
+            // Only fetch cost for active beads (in_progress, hooked)
+            let status = bead.status.lowercased()
+            guard status == "in_progress" || status == "hooked" else { return }
+            do {
+                let cost = try await AppState.shared.apiClient.getBeadCost(beadId: bead.id)
+                if cost.totalCost > 0 {
+                    beadCost = cost.totalCost
+                }
+            } catch {
+                // Cost loading is non-fatal
+            }
+        }
     }
 
     private var cardContent: some View {
@@ -95,6 +111,14 @@ struct KanbanCardView: View {
                 .foregroundColor(theme.dim)
                 .tracking(CRTTheme.Typography.letterSpacing)
 
+            // Cost badge (if loaded)
+            if let cost = beadCost {
+                Text(formatCost(cost))
+                    .font(CRTTheme.Typography.font(size: 9, weight: .bold))
+                    .foregroundColor(theme.primary)
+                    .tracking(CRTTheme.Typography.letterSpacing)
+            }
+
             Spacer()
 
             // Assignee
@@ -108,6 +132,11 @@ struct KanbanCardView: View {
                     .cornerRadius(CRTTheme.CornerRadius.sm)
             }
         }
+    }
+
+    private func formatCost(_ cost: Double) -> String {
+        if cost < 0.01 && cost > 0 { return "<$0.01" }
+        return String(format: "$%.2f", cost)
     }
 
     // MARK: - Helpers

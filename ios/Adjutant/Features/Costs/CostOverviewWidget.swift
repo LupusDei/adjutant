@@ -69,6 +69,12 @@ struct CostOverviewWidget: View {
         .task {
             await viewModel.loadData()
         }
+        .onAppear {
+            viewModel.startAutoRefresh()
+        }
+        .onDisappear {
+            viewModel.stopAutoRefresh()
+        }
     }
 
     // MARK: - Budget Mini Bar
@@ -141,9 +147,27 @@ final class CostOverviewWidgetViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let apiClient: APIClient
+    private var refreshTimer: Timer?
 
     init(apiClient: APIClient? = nil) {
         self.apiClient = apiClient ?? AppState.shared.apiClient
+    }
+
+    /// Starts a 15-second repeating timer to refresh cost data.
+    func startAutoRefresh() {
+        stopAutoRefresh()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            Task<Void, Never> { @MainActor [weak self] in
+                await self?.loadData()
+            }
+        }
+    }
+
+    /// Stops the auto-refresh timer.
+    func stopAutoRefresh() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
     }
 
     func loadData() async {

@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef, type CSSProperties, 
 import { usePolling } from '../../hooks/usePolling';
 import { fuzzyMatch } from '../../hooks/useFuzzySearch';
 import { api } from '../../services/api';
+import { costApi, type BeadCostResult } from '../../services/api-costs';
 import { AgentAssignDropdown } from '../shared/AgentAssignDropdown';
 import type { BeadInfo } from '../../types';
 
@@ -181,12 +182,19 @@ function groupBeadsBySource(beads: BeadInfo[]): BeadGroup[] {
   return groups;
 }
 
+/** Format a bead cost for display. */
+function formatBeadCost(cost: number): string {
+  if (cost < 0.01 && cost > 0) return '<$0.01';
+  return `$${cost.toFixed(2)}`;
+}
+
 export function BeadsList({ statusFilter, isActive = true, searchQuery = '', overseerView = false, onAssign }: BeadsListProps) {
   const [actionInProgress, setActionInProgress] = useState<{ id: string; type: ActionType } | null>(null);
   const [actionResult, setActionResult] = useState<{ id: string; type: ActionType; success: boolean } | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const [beadCosts, setBeadCosts] = useState<Record<string, number>>({});
 
   const {
     data: beads,
@@ -298,6 +306,39 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
 
   // Query for highlighting
   const highlightQuery = searchQuery.trim();
+
+  // Fetch costs for in-progress beads (non-closed, non-open to limit API calls)
+  useEffect(() => {
+    if (!searchedBeads || searchedBeads.length === 0) return;
+
+    const activeBeads = searchedBeads.filter(
+      (b) => b.status.toLowerCase() === 'in_progress' || b.status.toLowerCase() === 'hooked'
+    );
+    if (activeBeads.length === 0) return;
+
+    let cancelled = false;
+    const fetchCosts = async () => {
+      const results: Record<string, number> = {};
+      // Fetch in parallel, limiting to first 20 to avoid excessive requests
+      const fetches = activeBeads.slice(0, 20).map(async (bead) => {
+        try {
+          const result: BeadCostResult = await costApi.fetchBeadCost(bead.id);
+          if (!cancelled && result.totalCost > 0) {
+            results[bead.id] = result.totalCost;
+          }
+        } catch {
+          // Cost fetch failures are non-fatal
+        }
+      });
+      await Promise.all(fetches);
+      if (!cancelled) {
+        setBeadCosts((prev) => ({ ...prev, ...results }));
+      }
+    };
+
+    void fetchCosts();
+    return () => { cancelled = true; };
+  }, [searchedBeads]);
 
   // Refetch when status filter changes
   useEffect(() => {
@@ -421,6 +462,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
                     <th style={styles.th}>TITLE</th>
                     <th style={{ ...styles.th, width: '70px' }}>STATUS</th>
                     <th style={{ ...styles.th, width: '80px' }}>ASSIGNEE</th>
+                    <th style={{ ...styles.th, width: '60px' }}>COST</th>
                     <th style={{ ...styles.th, width: '70px' }}>UPDATED</th>
                     <th style={{ ...styles.th, width: '60px' }}>ACTION</th>
                   </tr>
@@ -480,6 +522,11 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
                           ) : (
                             highlightMatches(formatAssignee(bead.assignee), highlightQuery)
                           )}
+                        </td>
+                        <td style={styles.costCell}>
+                          {beadCosts[bead.id] != null
+                            ? formatBeadCost(beadCosts[bead.id])
+                            : ''}
                         </td>
                         <td style={styles.dateCell}>
                           {formatDate(bead.updatedAt ?? bead.createdAt)}
@@ -675,6 +722,13 @@ const styles = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  },
+  costCell: {
+    padding: '8px 6px',
+    color: 'var(--crt-phosphor)',
+    fontSize: '0.75rem',
+    whiteSpace: 'nowrap',
+    fontWeight: 'bold',
   },
   dateCell: {
     padding: '8px 6px',
