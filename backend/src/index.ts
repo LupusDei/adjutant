@@ -30,6 +30,7 @@ import { discoverLocalProjects } from "./services/projects-service.js";
 import { spawnAdjutant } from "./services/adjutant-spawner.js";
 import { wireSpawnHealthChecks } from "./services/agent-spawner-service.js";
 import { initCostTracker } from "./services/cost-tracker.js";
+import { initEventDrivenCostExtraction } from "./services/event-driven-cost.js";
 import { initAdjutantCore } from "./services/adjutant/adjutant-core.js";
 import { BehaviorRegistry } from "./services/adjutant/behavior-registry.js";
 import { createAdjutantState } from "./services/adjutant/state-store.js";
@@ -106,6 +107,9 @@ app.use("/api/callsigns", createCallsignsRouter(callsignToggleService));
 
 // Initialize cost tracker with SQLite database
 initCostTracker(messageDb);
+
+// Initialize event-driven cost extraction (subscribes to agent:status_changed)
+initEventDrivenCostExtraction();
 
 // Prune events older than 7 days on startup, then every 6 hours
 const PRUNE_DAYS = 7;
