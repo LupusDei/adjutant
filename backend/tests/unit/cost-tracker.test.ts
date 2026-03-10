@@ -27,6 +27,9 @@ import {
   getBurnRate,
   getBeadCost,
   getEpicCost,
+  clearSessionCost,
+  finalizeSessionCost,
+  finalizeOrphanedSessions,
 } from "../../src/services/cost-tracker.js";
 import type Database from "better-sqlite3";
 
@@ -427,6 +430,121 @@ describe("cost-tracker", () => {
       expect(epicResult).toBeDefined();
       expect(epicResult!.sessions).toHaveLength(1);
       expect(epicResult!.totalCost).toBe(15.0);
+    });
+  });
+
+  describe("session lifecycle", () => {
+    it("clearSessionCost removes from sessionCache", () => {
+      recordCostUpdate("sess-1", "/project", { cost: 0.50 });
+      expect(getSessionCost("sess-1")).toBeDefined();
+
+      clearSessionCost("sess-1");
+
+      expect(getSessionCost("sess-1")).toBeUndefined();
+    });
+
+    it("clearSessionCost clears alertedSessions for that session", () => {
+      // Trigger an alert for sess-1
+      setCostAlertThreshold(0.10);
+      recordCostUpdate("sess-1", "/project", { cost: 0.15 });
+      mockEmit.mockClear();
+
+      // Clear session cost
+      clearSessionCost("sess-1");
+
+      // Re-record — should trigger alert again since alertedSessions was cleared
+      recordCostUpdate("sess-1", "/project", { cost: 0.15 });
+      const alertCalls = mockEmit.mock.calls.filter(
+        (c) => c[0] === "session:cost_alert" && c[1]?.threshold !== undefined
+      );
+      expect(alertCalls).toHaveLength(1);
+    });
+
+    it("finalizeSessionCost sets finalized_at in SQLite", () => {
+      recordCostUpdate("sess-1", "/project", { cost: 0.50 });
+
+      finalizeSessionCost("sess-1");
+
+      const row = testDb.prepare(
+        "SELECT finalized_at FROM agent_costs WHERE session_id = 'sess-1'"
+      ).get() as Record<string, unknown>;
+      expect(row).toBeDefined();
+      expect(row.finalized_at).not.toBeNull();
+    });
+
+    it("getCostSummary excludes finalized entries", () => {
+      recordCostUpdate("sess-1", "/project", { cost: 0.50 });
+      recordCostUpdate("sess-2", "/project", { cost: 0.30 });
+
+      // Finalize sess-1 and clear it from cache
+      clearSessionCost("sess-1");
+
+      const summary = getCostSummary();
+      expect(summary.totalCost).toBeCloseTo(0.30, 10);
+      expect(Object.keys(summary.sessions)).toHaveLength(1);
+      expect(summary.sessions["sess-2"]).toBeDefined();
+    });
+
+    it("getBeadCost INCLUDES finalized entries (historical accuracy)", () => {
+      recordCostUpdate("sess-1", "/project", {
+        cost: 0.50,
+        tokens: { input: 5000, output: 2000 },
+        beadId: "adj-001",
+      });
+
+      // Finalize the session
+      clearSessionCost("sess-1");
+
+      // getBeadCost should still include the finalized data
+      const result = getBeadCost("adj-001");
+      expect(result).toBeDefined();
+      expect(result!.totalCost).toBeCloseTo(0.50, 10);
+      expect(result!.sessions).toHaveLength(1);
+    });
+
+    it("loadCacheFromDb only loads non-finalized sessions", () => {
+      recordCostUpdate("sess-1", "/project", { cost: 0.50 });
+      recordCostUpdate("sess-2", "/project", { cost: 0.30 });
+
+      // Finalize sess-1 in DB
+      finalizeSessionCost("sess-1");
+
+      // Reset and reinitialize — should only load sess-2
+      resetCostTracker();
+      initCostTracker(testDb);
+
+      expect(getSessionCost("sess-1")).toBeUndefined();
+      expect(getSessionCost("sess-2")).toBeDefined();
+      expect(getSessionCost("sess-2")!.cost).toBe(0.30);
+    });
+
+    it("orphaned sessions are finalized on startup simulation", () => {
+      recordCostUpdate("sess-alive", "/project", { cost: 0.50 });
+      recordCostUpdate("sess-dead", "/project", { cost: 0.30 });
+
+      // Reset tracker, then reinit — simulate startup
+      resetCostTracker();
+      initCostTracker(testDb);
+
+      // Now call finalizeOrphanedSessions with a set of alive session IDs
+      finalizeOrphanedSessions(new Set(["sess-alive"]));
+
+      // sess-dead should be finalized in DB
+      const deadRow = testDb.prepare(
+        "SELECT finalized_at FROM agent_costs WHERE session_id = 'sess-dead'"
+      ).get() as Record<string, unknown>;
+      expect(deadRow.finalized_at).not.toBeNull();
+
+      // sess-alive should NOT be finalized
+      const aliveRow = testDb.prepare(
+        "SELECT finalized_at FROM agent_costs WHERE session_id = 'sess-alive'"
+      ).get() as Record<string, unknown>;
+      expect(aliveRow.finalized_at).toBeNull();
+
+      // sess-dead should be removed from cache
+      expect(getSessionCost("sess-dead")).toBeUndefined();
+      // sess-alive should still be in cache
+      expect(getSessionCost("sess-alive")).toBeDefined();
     });
   });
 });

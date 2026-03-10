@@ -325,6 +325,48 @@ export function getCostAlertThreshold(): number {
 }
 
 /**
+ * Clear cost data for a specific session.
+ * Removes from in-memory cache, clears alert tracking, and finalizes in SQLite.
+ * Called when a session is killed so agent cards show fresh data after restart.
+ */
+export function clearSessionCost(sessionId: string): void {
+  sessionCache.delete(sessionId);
+  alertedSessions.delete(sessionId);
+  finalizeSessionCost(sessionId);
+}
+
+/**
+ * Mark a session's cost entries as finalized in SQLite.
+ * Sets finalized_at timestamp so they're excluded from active cost summaries
+ * but preserved for historical per-bead/epic cost queries.
+ */
+export function finalizeSessionCost(sessionId: string): void {
+  if (!db) return;
+  try {
+    db.prepare(
+      "UPDATE agent_costs SET finalized_at = datetime('now') WHERE session_id = ? AND finalized_at IS NULL"
+    ).run(sessionId);
+  } catch (err) {
+    logWarn("Failed to finalize session cost", { sessionId, error: String(err) });
+  }
+}
+
+/**
+ * Finalize orphaned sessions on startup.
+ * Cross-references cached session IDs with a set of known-alive session IDs.
+ * Any session in the cache that is NOT alive gets finalized and removed.
+ */
+export function finalizeOrphanedSessions(aliveSessionIds: Set<string>): void {
+  const cachedIds = Array.from(sessionCache.keys());
+  for (const sessionId of cachedIds) {
+    if (!aliveSessionIds.has(sessionId)) {
+      clearSessionCost(sessionId);
+      logInfo("Finalized orphaned session cost", { sessionId });
+    }
+  }
+}
+
+/**
  * Reset cost data (for testing).
  */
 export function resetCostTracker(): void {
@@ -665,10 +707,10 @@ function upsertSessionCost(
 function loadCacheFromDb(): void {
   if (!db) return;
   try {
-    // Get the latest row per session
+    // Get the latest non-finalized row per session
     const rows = db.prepare(
       `SELECT ac.* FROM agent_costs ac
-       INNER JOIN (SELECT session_id, MAX(id) as max_id FROM agent_costs GROUP BY session_id) latest
+       INNER JOIN (SELECT session_id, MAX(id) as max_id FROM agent_costs WHERE finalized_at IS NULL GROUP BY session_id) latest
        ON ac.id = latest.max_id`
     ).all() as AgentCostRow[];
 

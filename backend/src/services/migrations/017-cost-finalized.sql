@@ -1,0 +1,1 @@
+ALTER TABLE agent_costs ADD COLUMN finalized_at DATETIME DEFAULT NULL;

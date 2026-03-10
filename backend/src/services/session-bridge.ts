@@ -9,7 +9,7 @@
 import { basename } from "path";
 import { logInfo, logWarn } from "../utils/index.js";
 import { getEventBus } from "./event-bus.js";
-import { recordCostUpdate } from "./cost-tracker.js";
+import { recordCostUpdate, clearSessionCost, finalizeOrphanedSessions } from "./cost-tracker.js";
 import {
   SessionRegistry,
   getSessionRegistry,
@@ -101,6 +101,17 @@ export class SessionBridge {
     if (deadIds.length > 0) {
       logInfo("Pruned dead sessions", { count: deadIds.length, ids: deadIds });
     }
+
+    // Finalize cost entries for any sessions not alive in the registry.
+    // Handles crash recovery: sessions that died without clean shutdown
+    // still have non-finalized cost rows in SQLite.
+    const aliveIds = new Set(
+      this.registry.getAll()
+        .filter((s) => s.status !== "offline")
+        .map((s) => s.id)
+    );
+    finalizeOrphanedSessions(aliveIds);
+
     // Always save after verification — persists auto-healed pane references
     await this.registry.save();
 
@@ -295,6 +306,7 @@ export class SessionBridge {
     this.inputRouter.clearQueue(sessionId);
     const killed = await this.lifecycle.killSession(sessionId);
     if (killed) {
+      clearSessionCost(sessionId);
       await this.registry.save();
     }
     return killed;
