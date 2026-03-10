@@ -79,6 +79,141 @@ public struct Proposal: Codable, Identifiable, Equatable, Sendable {
     }
 }
 
+/// A comment on a proposal.
+public struct ProposalComment: Codable, Identifiable, Equatable, Sendable {
+    /// Unique identifier (UUID)
+    public let id: String
+    /// The proposal this comment belongs to
+    public let proposalId: String
+    /// Author of the comment
+    public let author: String
+    /// Comment body text
+    public let body: String
+    /// ISO 8601 creation timestamp
+    public let createdAt: String
+
+    public init(
+        id: String,
+        proposalId: String,
+        author: String,
+        body: String,
+        createdAt: String
+    ) {
+        self.id = id
+        self.proposalId = proposalId
+        self.author = author
+        self.body = body
+        self.createdAt = createdAt
+    }
+
+    // Shared date formatters (avoid per-call allocation — adj-6yp4.1)
+    private static let isoFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoFormatterBasic = ISO8601DateFormatter()
+    private static let relativeDateFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
+    /// Parse the createdAt timestamp into a Date
+    public var createdDate: Date? {
+        Self.isoFormatterFractional.date(from: createdAt)
+            ?? Self.isoFormatterBasic.date(from: createdAt)
+    }
+
+    /// Display-friendly relative date string
+    public var relativeDate: String {
+        guard let date = createdDate else { return createdAt }
+        return Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+/// A revision snapshot of a proposal.
+public struct ProposalRevision: Codable, Identifiable, Equatable, Sendable {
+    /// Unique identifier (UUID)
+    public let id: String
+    /// The proposal this revision belongs to
+    public let proposalId: String
+    /// Sequential revision number (1, 2, 3, ...)
+    public let revisionNumber: Int
+    /// Author who created the revision
+    public let author: String
+    /// Proposal title at time of revision
+    public let title: String
+    /// Proposal description at time of revision
+    public let description: String
+    /// Proposal type at time of revision
+    public let type: String
+    /// Changelog describing what changed
+    public let changelog: String
+    /// ISO 8601 creation timestamp
+    public let createdAt: String
+
+    public init(
+        id: String,
+        proposalId: String,
+        revisionNumber: Int,
+        author: String,
+        title: String,
+        description: String,
+        type: String,
+        changelog: String,
+        createdAt: String
+    ) {
+        self.id = id
+        self.proposalId = proposalId
+        self.revisionNumber = revisionNumber
+        self.author = author
+        self.title = title
+        self.description = description
+        self.type = type
+        self.changelog = changelog
+        self.createdAt = createdAt
+    }
+
+    // Shared date formatters (avoid per-call allocation — adj-6yp4.1)
+    private static let isoFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoFormatterBasic = ISO8601DateFormatter()
+    private static let relativeDateFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
+    /// Parse the createdAt timestamp into a Date
+    public var createdDate: Date? {
+        Self.isoFormatterFractional.date(from: createdAt)
+            ?? Self.isoFormatterBasic.date(from: createdAt)
+    }
+
+    /// Display-friendly relative date string
+    public var relativeDate: String {
+        guard let date = createdDate else { return createdAt }
+        return Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+/// Request body for posting a comment on a proposal.
+public struct CreateProposalCommentRequest: Encodable, Sendable {
+    /// Author of the comment
+    public let author: String
+    /// Comment body text
+    public let body: String
+
+    public init(author: String, body: String) {
+        self.author = author
+        self.body = body
+    }
+}
+
 /// Request body for updating a proposal's status.
 public struct UpdateProposalStatusRequest: Encodable, Sendable {
     /// The new status to set
