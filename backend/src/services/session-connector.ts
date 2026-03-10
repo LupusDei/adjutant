@@ -432,18 +432,25 @@ export class SessionConnector {
    * TUI chrome, so we scan raw lines separately.
    */
   private extractStatusBarCost(lines: string[]): OutputEvent | null {
-    // Pattern: "NN% ❯❯❯" in the status bar — this is context usage percentage
+    // Pattern: "NN% ❯❯❯" in the status bar — this is context remaining percentage
     const STATUS_BAR = /(\d+)%\s*❯❯/;
+    // Pattern: "$X.XX" — session cost from statusline script (cost.total_cost_usd)
+    const COST_DOLLAR = /\$(\d+\.\d{2})/;
     // Pattern: "Context left until auto-compact: N%" — remaining context
     const CONTEXT_LEFT = /Context left[^:]*:\s*(\d+)%/;
 
     for (const line of lines) {
       const statusMatch = line.match(STATUS_BAR);
       if (statusMatch) {
-        const contextUsedPercent = parseInt(statusMatch[1] ?? "0", 10);
-        // Claude Code shows total tokens used as percentage of context window.
+        const contextRemainingPercent = parseInt(statusMatch[1] ?? "0", 10);
+        // Status bar shows remaining %, convert to used %
+        const contextUsedPercent = 100 - contextRemainingPercent;
         // Convert to approximate token count: percent * 200k / 100
         const estimatedTokens = Math.round((contextUsedPercent / 100) * 200_000);
+
+        // Extract dollar cost from statusline (e.g., "$1.23")
+        const costMatch = line.match(COST_DOLLAR);
+        const dollarCost = costMatch ? parseFloat(costMatch[1] ?? "0") : undefined;
 
         // Check for remaining context on the same or nearby lines
         const leftMatch = line.match(CONTEXT_LEFT);
@@ -454,8 +461,7 @@ export class SessionConnector {
           tokens: {
             input: estimatedTokens,
           },
-          // We can't determine dollar cost from the status bar — only context %
-          // Store the raw context percent for direct use
+          ...(dollarCost !== undefined ? { cost: dollarCost } : {}),
           contextPercent: contextUsedPercent,
           contextLeftPercent,
         } as OutputEvent;
