@@ -307,24 +307,33 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
   // Query for highlighting
   const highlightQuery = searchQuery.trim();
 
+  // Derive a stable key from the set of active bead IDs so cost-fetch
+  // only re-fires when the actual set of active beads changes, not on
+  // every 30s poll cycle that produces a new array reference (adj-6ksw).
+  const activeBeadIds = useMemo(
+    () =>
+      (searchedBeads ?? [])
+        .filter((b) => b.status.toLowerCase() === 'in_progress' || b.status.toLowerCase() === 'hooked')
+        .map((b) => b.id)
+        .sort()
+        .join(','),
+    [searchedBeads]
+  );
+
   // Fetch costs for in-progress beads (non-closed, non-open to limit API calls)
   useEffect(() => {
-    if (!searchedBeads || searchedBeads.length === 0) return;
+    if (!activeBeadIds) return;
 
-    const activeBeads = searchedBeads.filter(
-      (b) => b.status.toLowerCase() === 'in_progress' || b.status.toLowerCase() === 'hooked'
-    );
-    if (activeBeads.length === 0) return;
-
+    const ids = activeBeadIds.split(',');
     let cancelled = false;
     const fetchCosts = async () => {
       const results: Record<string, number> = {};
       // Fetch in parallel, limiting to first 20 to avoid excessive requests
-      const fetches = activeBeads.slice(0, 20).map(async (bead) => {
+      const fetches = ids.slice(0, 20).map(async (id) => {
         try {
-          const result: BeadCostResult = await costApi.fetchBeadCost(bead.id);
+          const result: BeadCostResult = await costApi.fetchBeadCost(id);
           if (!cancelled && result.totalCost > 0) {
-            results[bead.id] = result.totalCost;
+            results[id] = result.totalCost;
           }
         } catch {
           // Cost fetch failures are non-fatal
@@ -332,13 +341,15 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
       });
       await Promise.all(fetches);
       if (!cancelled) {
-        setBeadCosts((prev) => ({ ...prev, ...results }));
+        // Replace state entirely instead of merging to avoid accumulating
+        // stale entries for beads no longer in the active set (adj-scrr).
+        setBeadCosts(results);
       }
     };
 
     void fetchCosts();
     return () => { cancelled = true; };
-  }, [searchedBeads]);
+  }, [activeBeadIds]);
 
   // Refetch when status filter changes
   useEffect(() => {
