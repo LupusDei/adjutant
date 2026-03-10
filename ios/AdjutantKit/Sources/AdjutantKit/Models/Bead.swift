@@ -175,6 +175,26 @@ public struct BeadDetail: Codable, Identifiable, Equatable {
         }
     }
 
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(title, forKey: .title)
+        try container.encode(status, forKey: .status)
+        try container.encode(priority, forKey: .priority)
+        try container.encode(type, forKey: .type)
+        try container.encodeIfPresent(assignee, forKey: .assignee)
+        try container.encodeIfPresent(project, forKey: .project)
+        try container.encode(source, forKey: .source)
+        try container.encode(labels, forKey: .labels)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
+        try container.encode(description, forKey: .description)
+        try container.encodeIfPresent(closedAt, forKey: .closedAt)
+        try container.encodeIfPresent(agentState, forKey: .agentState)
+        try container.encode(dependencies, forKey: .dependencies)
+        try container.encodeIfPresent(pinned, forKey: .pinned)
+    }
+
     // Shared date formatters (avoid per-call allocation — adj-6yp4.1)
     private static let isoFormatterFractional: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()

@@ -8,6 +8,8 @@ struct ProposalDetailView: View {
     @StateObject private var viewModel: ProposalDetailViewModel
     @State private var showingSendToAgent = false
     @State private var sendToAgentMode: SendToAgentMode = .execute
+    @State private var commentsExpanded = true
+    @State private var revisionsExpanded = false
 
     init(proposalId: String) {
         _viewModel = StateObject(wrappedValue: ProposalDetailViewModel(proposalId: proposalId))
@@ -24,6 +26,8 @@ struct ProposalDetailView: View {
                     badgesCard(proposal)
                     metadataCard(proposal)
                     descriptionCard(proposal)
+                    commentsSection
+                    revisionsSection
                     actionsCard(proposal)
                 } else if let error = viewModel.errorMessage {
                     errorView(error)
@@ -231,6 +235,164 @@ struct ProposalDetailView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Comments Section
+
+    @ViewBuilder
+    private var commentsSection: some View {
+        CRTCard {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+                // Header with toggle
+                Button {
+                    withAnimation(.easeInOut(duration: CRTTheme.Animation.fast)) {
+                        commentsExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: CRTTheme.Spacing.xs) {
+                        Image(systemName: commentsExpanded ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(theme.dim)
+                        CRTText("COMMENTS", style: .caption, glowIntensity: .subtle)
+                        if !viewModel.comments.isEmpty {
+                            Text("\(viewModel.comments.count)")
+                                .font(CRTTheme.Typography.font(size: 10, weight: .bold))
+                                .foregroundColor(theme.primary)
+                                .padding(.horizontal, CRTTheme.Spacing.xxs + 2)
+                                .padding(.vertical, 1)
+                                .background(theme.primary.opacity(0.15))
+                                .cornerRadius(CRTTheme.CornerRadius.sm)
+                        }
+                        Spacer()
+                    }
+                }
+                .buttonStyle(.plain)
+
+                if commentsExpanded {
+                    if viewModel.comments.isEmpty {
+                        CRTText("NO COMMENTS YET", style: .caption, glowIntensity: .none)
+                            .foregroundColor(theme.dim)
+                            .padding(.vertical, CRTTheme.Spacing.xs)
+                    } else {
+                        ForEach(viewModel.comments) { comment in
+                            commentRow(comment)
+                        }
+                    }
+
+                    // Comment input
+                    commentInputRow
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func commentRow(_ comment: ProposalComment) -> some View {
+        VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxs) {
+            HStack(spacing: CRTTheme.Spacing.xs) {
+                CRTText(comment.author.uppercased(), style: .caption, glowIntensity: .subtle)
+                    .foregroundColor(theme.primary)
+                Spacer()
+                CRTText(comment.relativeDate, style: .caption, glowIntensity: .none)
+                    .foregroundColor(theme.dim)
+            }
+            CRTText(comment.body, style: .body, glowIntensity: .none)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(CRTTheme.Spacing.xs)
+        .background(theme.background.elevated.opacity(0.5))
+        .overlay(
+            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                .stroke(theme.dim.opacity(0.2), lineWidth: 1)
+        )
+        .cornerRadius(CRTTheme.CornerRadius.sm)
+    }
+
+    @ViewBuilder
+    private var commentInputRow: some View {
+        HStack(spacing: CRTTheme.Spacing.xs) {
+            CRTTextField("Add a comment...", text: $viewModel.commentDraft, onSubmit: {
+                Task<Void, Never> { await viewModel.postComment() }
+            })
+
+            CRTButton(
+                "SEND",
+                variant: .primary,
+                size: .small,
+                isLoading: viewModel.isPostingComment
+            ) {
+                Task<Void, Never> { await viewModel.postComment() }
+            }
+            .disabled(viewModel.commentDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isPostingComment)
+        }
+    }
+
+    // MARK: - Revisions Section
+
+    @ViewBuilder
+    private var revisionsSection: some View {
+        if !viewModel.revisions.isEmpty {
+            CRTCard {
+                VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+                    // Header with toggle
+                    Button {
+                        withAnimation(.easeInOut(duration: CRTTheme.Animation.fast)) {
+                            revisionsExpanded.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: CRTTheme.Spacing.xs) {
+                            Image(systemName: revisionsExpanded ? "chevron.down" : "chevron.right")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(theme.dim)
+                            CRTText("REVISION HISTORY", style: .caption, glowIntensity: .subtle)
+                            Text("\(viewModel.revisions.count)")
+                                .font(CRTTheme.Typography.font(size: 10, weight: .bold))
+                                .foregroundColor(CRTTheme.State.info)
+                                .padding(.horizontal, CRTTheme.Spacing.xxs + 2)
+                                .padding(.vertical, 1)
+                                .background(CRTTheme.State.info.opacity(0.15))
+                                .cornerRadius(CRTTheme.CornerRadius.sm)
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    if revisionsExpanded {
+                        ForEach(viewModel.revisions) { revision in
+                            revisionRow(revision)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func revisionRow(_ revision: ProposalRevision) -> some View {
+        VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxs) {
+            HStack(spacing: CRTTheme.Spacing.xs) {
+                Text("R\(revision.revisionNumber)")
+                    .font(CRTTheme.Typography.font(size: 11, weight: .bold))
+                    .foregroundColor(CRTTheme.State.info)
+                CRTText(revision.author.uppercased(), style: .caption, glowIntensity: .subtle)
+                    .foregroundColor(theme.dim)
+                Spacer()
+                CRTText(revision.relativeDate, style: .caption, glowIntensity: .none)
+                    .foregroundColor(theme.dim)
+            }
+            if !revision.changelog.isEmpty {
+                CRTText(revision.changelog, style: .caption, glowIntensity: .none)
+                    .foregroundColor(theme.primary.opacity(0.7))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(CRTTheme.Spacing.xs)
+        .background(theme.background.elevated.opacity(0.3))
+        .overlay(
+            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                .stroke(CRTTheme.State.info.opacity(0.2), lineWidth: 1)
+        )
+        .cornerRadius(CRTTheme.CornerRadius.sm)
     }
 
     // MARK: - Error View
