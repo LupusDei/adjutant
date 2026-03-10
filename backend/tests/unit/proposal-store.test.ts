@@ -502,4 +502,67 @@ describe("proposal-store", () => {
       expect(revisions).toEqual([]);
     });
   });
+
+  // ===========================================================================
+  // UNIQUE constraint on (proposal_id, revision_number) (adj-068.1.1.1)
+  // ===========================================================================
+  describe("proposal_revisions UNIQUE constraint", () => {
+    it("should have unique index on (proposal_id, revision_number)", () => {
+      const indexes = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='proposal_revisions'")
+        .all() as Array<{ name: string }>;
+      const indexNames = indexes.map((i) => i.name);
+      expect(indexNames).toContain("idx_proposal_revisions_unique");
+    });
+
+    it("should reject duplicate (proposal_id, revision_number) pairs", () => {
+      // Insert a proposal directly
+      db.prepare(
+        "INSERT INTO proposals (id, author, title, description, type, project, status, created_at, updated_at) VALUES ('p1', 'a', 't', 'd', 'engineering', 'adj', 'pending', datetime('now'), datetime('now'))",
+      ).run();
+      // Insert first revision
+      db.prepare(
+        "INSERT INTO proposal_revisions (id, proposal_id, revision_number, author, title, description, type, changelog) VALUES ('r1', 'p1', 1, 'a', 't', 'd', 'engineering', 'c')",
+      ).run();
+      // Duplicate should fail
+      expect(() =>
+        db.prepare(
+          "INSERT INTO proposal_revisions (id, proposal_id, revision_number, author, title, description, type, changelog) VALUES ('r2', 'p1', 1, 'a', 't', 'd', 'engineering', 'c')",
+        ).run(),
+      ).toThrow();
+    });
+  });
+
+  // ===========================================================================
+  // Zod schema max-length validation (adj-068.1.2.1)
+  // ===========================================================================
+  describe("Zod schema max-length validation", () => {
+    it("should reject comment body exceeding 10,000 characters", async () => {
+      const { CreateCommentSchema } = await import("../../src/types/proposals.js");
+      const longBody = "x".repeat(10001);
+      const result = CreateCommentSchema.safeParse({ body: longBody, author: "test" });
+      expect(result.success).toBe(false);
+    });
+
+    it("should accept comment body at exactly 10,000 characters", async () => {
+      const { CreateCommentSchema } = await import("../../src/types/proposals.js");
+      const body = "x".repeat(10000);
+      const result = CreateCommentSchema.safeParse({ body, author: "test" });
+      expect(result.success).toBe(true);
+    });
+
+    it("should reject revision changelog exceeding 10,000 characters", async () => {
+      const { ReviseProposalSchema } = await import("../../src/types/proposals.js");
+      const longChangelog = "x".repeat(10001);
+      const result = ReviseProposalSchema.safeParse({ title: "t", changelog: longChangelog, author: "test" });
+      expect(result.success).toBe(false);
+    });
+
+    it("should reject revision description exceeding 10,000 characters", async () => {
+      const { ReviseProposalSchema } = await import("../../src/types/proposals.js");
+      const longDesc = "x".repeat(10001);
+      const result = ReviseProposalSchema.safeParse({ description: longDesc, changelog: "c", author: "test" });
+      expect(result.success).toBe(false);
+    });
+  });
 });

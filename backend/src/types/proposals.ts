@@ -25,15 +25,15 @@ export const ProposalFilterSchema = z.object({
 });
 
 export const CreateCommentSchema = z.object({
-  body: z.string().min(1, "Comment body is required"),
+  body: z.string().min(1, "Comment body is required").max(10000, "Comment body must be at most 10,000 characters"),
   author: z.string().min(1, "Author is required"),
 });
 
 export const ReviseProposalSchema = z.object({
   title: z.string().min(1).optional(),
-  description: z.string().min(1).optional(),
+  description: z.string().min(1).max(10000, "Description must be at most 10,000 characters").optional(),
   type: ProposalTypeSchema.optional(),
-  changelog: z.string().min(1, "Changelog is required"),
+  changelog: z.string().min(1, "Changelog is required").max(10000, "Changelog must be at most 10,000 characters"),
   author: z.string().min(1, "Author is required"),
 }).refine(
   (data) => data.title !== undefined || data.description !== undefined || data.type !== undefined,
