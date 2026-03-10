@@ -62,7 +62,13 @@ export interface BeadAssignedEvent {
 export interface AgentStatusEvent {
   agent: string;
   status: string;
-  activity?: string;
+  activity?: string | undefined;
+  /** Canonical agent identifier (same as `agent`; preferred in new code) */
+  agentId?: string | undefined;
+  /** Bead the agent is currently working on */
+  beadId?: string | undefined;
+  /** Current task description (same as `activity`; preferred in new code) */
+  task?: string | undefined;
 }
 
 export interface StreamStatusEvent {

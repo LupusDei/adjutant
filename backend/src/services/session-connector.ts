@@ -421,54 +421,115 @@ export class SessionConnector {
 
   /**
    * Extract context window usage from Claude Code's status bar.
-   *
-   * Claude Code's TUI status bar shows context usage in this format:
-   *   ~/code/ai/adjutant main 31% ❯❯❯
-   *
-   * And optionally on the right side:
-   *   Context left until auto-compact: 6%
-   *
-   * These lines are filtered out by extractConversation() since they're
-   * TUI chrome, so we scan raw lines separately.
+   * Delegates to the module-level parseStatusBarCost() function.
    */
   private extractStatusBarCost(lines: string[]): OutputEvent | null {
-    // Pattern: "NN% ❯❯❯" in the status bar — this is context remaining percentage
-    const STATUS_BAR = /(\d+)%\s*❯❯/;
-    // Pattern: "$X.XX" — session cost from statusline script (cost.total_cost_usd)
-    const COST_DOLLAR = /\$(\d+\.\d{2})/;
-    // Pattern: "Context left until auto-compact: N%" — remaining context
-    const CONTEXT_LEFT = /Context left[^:]*:\s*(\d+)%/;
-
-    for (const line of lines) {
-      const statusMatch = line.match(STATUS_BAR);
-      if (statusMatch) {
-        const contextRemainingPercent = parseInt(statusMatch[1] ?? "0", 10);
-        // Status bar shows remaining %, convert to used %
-        const contextUsedPercent = 100 - contextRemainingPercent;
-        // Convert to approximate token count: percent * 200k / 100
-        const estimatedTokens = Math.round((contextUsedPercent / 100) * 200_000);
-
-        // Extract dollar cost from statusline (e.g., "$1.23")
-        const costMatch = line.match(COST_DOLLAR);
-        const dollarCost = costMatch ? parseFloat(costMatch[1] ?? "0") : undefined;
-
-        // Check for remaining context on the same or nearby lines
-        const leftMatch = line.match(CONTEXT_LEFT);
-        const contextLeftPercent = leftMatch ? parseInt(leftMatch[1] ?? "0", 10) : undefined;
-
-        return {
-          type: "cost_update",
-          tokens: {
-            input: estimatedTokens,
-          },
-          ...(dollarCost !== undefined ? { cost: dollarCost } : {}),
-          contextPercent: contextUsedPercent,
-          contextLeftPercent,
-        } as OutputEvent;
-      }
-    }
-
-    return null;
+    return parseStatusBarCost(lines);
   }
 
+}
+
+// ============================================================================
+// Standalone cost extraction helpers
+// ============================================================================
+
+/**
+ * Parse cost and context data from tmux capture-pane lines.
+ *
+ * Claude Code's TUI status bar shows context usage in this format:
+ *   ~/code/ai/adjutant main 31% ❯❯❯
+ *
+ * And optionally on the right side:
+ *   Context left until auto-compact: 6%
+ *
+ * Exported so that one-shot callers (extractCostOnce) can reuse the
+ * same parsing logic without going through SessionConnector.
+ */
+export function parseStatusBarCost(lines: string[]): OutputEvent | null {
+  // Pattern: "NN% ❯❯❯" in the status bar — this is context remaining percentage
+  const STATUS_BAR = /(\d+)%\s*❯❯/;
+  // Pattern: "$X.XX" — session cost from statusline script (cost.total_cost_usd)
+  const COST_DOLLAR = /\$(\d+\.\d{2})/;
+  // Pattern: "Context left until auto-compact: N%" — remaining context
+  const CONTEXT_LEFT = /Context left[^:]*:\s*(\d+)%/;
+
+  for (const line of lines) {
+    const statusMatch = line.match(STATUS_BAR);
+    if (statusMatch) {
+      const contextRemainingPercent = parseInt(statusMatch[1] ?? "0", 10);
+      // Status bar shows remaining %, convert to used %
+      const contextUsedPercent = 100 - contextRemainingPercent;
+      // Convert to approximate token count: percent * 200k / 100
+      const estimatedTokens = Math.round((contextUsedPercent / 100) * 200_000);
+
+      // Extract dollar cost from statusline (e.g., "$1.23")
+      const costMatch = line.match(COST_DOLLAR);
+      const dollarCost = costMatch ? parseFloat(costMatch[1] ?? "0") : undefined;
+
+      // Check for remaining context on the same or nearby lines
+      const leftMatch = line.match(CONTEXT_LEFT);
+      const contextLeftPercent = leftMatch ? parseInt(leftMatch[1] ?? "0", 10) : undefined;
+
+      return {
+        type: "cost_update",
+        tokens: {
+          input: estimatedTokens,
+        },
+        ...(dollarCost !== undefined ? { cost: dollarCost } : {}),
+        contextPercent: contextUsedPercent,
+        contextLeftPercent,
+      } as OutputEvent;
+    }
+  }
+
+  return null;
+}
+
+/** Result shape for extractCostOnce — flattened for easy consumption. */
+export interface CostSnapshot {
+  cost?: number;
+  contextPercent?: number;
+  tokens?: { input: number; output: number; cacheRead: number; cacheWrite: number };
+}
+
+/**
+ * One-shot cost/context extraction from a tmux session pane.
+ *
+ * Runs `tmux capture-pane -p` on the given pane, parses the status bar
+ * for cost and context data, and returns a snapshot. Safe to call from
+ * anywhere — no side effects, no state mutation.
+ *
+ * @param tmuxSession - tmux session name (e.g., "adj-engineer-7")
+ * @param tmuxPane    - tmux pane target (e.g., "adj-engineer-7:0.0")
+ * @returns Cost snapshot or null if extraction failed or no data found
+ */
+export async function extractCostOnce(
+  _tmuxSession: string,
+  tmuxPane: string,
+): Promise<CostSnapshot | null> {
+  try {
+    const output = await execTmuxCommand(["capture-pane", "-p", "-t", tmuxPane]);
+    const lines = output.split("\n");
+    const event = parseStatusBarCost(lines);
+    if (!event || event.type !== "cost_update") return null;
+
+    // Flatten the OutputEvent into a CostSnapshot
+    const snapshot: CostSnapshot = {};
+    if ("cost" in event && event.cost !== undefined) snapshot.cost = event.cost;
+    if ("contextPercent" in event && event.contextPercent !== undefined) {
+      snapshot.contextPercent = event.contextPercent;
+    }
+    if ("tokens" in event && event.tokens) {
+      snapshot.tokens = {
+        input: event.tokens.input ?? 0,
+        output: event.tokens.output ?? 0,
+        cacheRead: event.tokens.cacheRead ?? 0,
+        cacheWrite: event.tokens.cacheWrite ?? 0,
+      };
+    }
+    return snapshot;
+  } catch {
+    // tmux command failed (session gone, no server, etc.)
+    return null;
+  }
 }

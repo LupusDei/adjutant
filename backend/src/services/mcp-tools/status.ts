@@ -15,6 +15,7 @@ import { isAPNsConfigured, sendNotificationToAll } from "../apns-service.js";
 import { logWarn } from "../../utils/index.js";
 import type { MessageStore } from "../message-store.js";
 import type { EventStore } from "../event-store.js";
+import { getEventBus } from "../event-bus.js";
 
 // ============================================================================
 // Types
@@ -165,6 +166,15 @@ export function registerStatusTools(server: McpServer, store: MessageStore, even
       };
       if (resolvedBeadId) statusEventInput.beadId = resolvedBeadId;
       eventStore?.insertEvent(statusEventInput);
+
+      // Emit real-time EventBus event for subscribers (e.g., cost extraction)
+      getEventBus().emit("agent:status_changed", {
+        agent: agentId,
+        agentId,
+        status,
+        beadId: resolvedBeadId,
+        task: resolvedTask,
+      });
 
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ acknowledged: true, status }) }],
