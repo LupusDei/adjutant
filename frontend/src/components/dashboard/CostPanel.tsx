@@ -7,7 +7,7 @@ import { useMemo, useState, useCallback, type CSSProperties } from 'react';
 
 import { useCostDashboard } from '../../hooks/useCostDashboard';
 import { costApi } from '../../services/api-costs';
-import type { CostSummary, BurnRate, BudgetRecord } from '../../services/api-costs';
+import type { CostSummary, BurnRate, BudgetRecord, ReconciliationStatus } from '../../services/api-costs';
 
 // ============================================================================
 // Formatters
@@ -62,22 +62,121 @@ function budgetStatusLabel(percentUsed: number, warningPercent: number, critical
 }
 
 /** Derive per-session cost entries sorted by cost descending. */
-function getSessionBreakdown(summary: CostSummary): Array<{ sessionId: string; cost: number; projectPath: string; agentId?: string }> {
+function getSessionBreakdown(summary: CostSummary): Array<{
+  sessionId: string;
+  cost: number;
+  projectPath: string;
+  agentId?: string;
+  reconciliationStatus?: ReconciliationStatus;
+  jsonlCost?: number;
+}> {
   return Object.values(summary.sessions)
-    .map((s) => ({ sessionId: s.sessionId, cost: s.cost, projectPath: s.projectPath, agentId: s.agentId }))
+    .map((s) => ({
+      sessionId: s.sessionId,
+      cost: s.cost,
+      projectPath: s.projectPath,
+      agentId: s.agentId,
+      reconciliationStatus: s.reconciliationStatus,
+      jsonlCost: s.jsonlCost,
+    }))
     .sort((a, b) => b.cost - a.cost);
+}
+
+/**
+ * Compute the aggregate reconciliation status across all sessions.
+ * If all sessions are 'verified', the aggregate is 'verified'.
+ * If any session has a 'discrepancy', the aggregate is 'discrepancy'.
+ * Otherwise (any 'estimated' or missing status), the aggregate is 'estimated'.
+ */
+export function aggregateReconciliationStatus(summary: CostSummary): ReconciliationStatus {
+  const sessions = Object.values(summary.sessions);
+  if (sessions.length === 0) return 'estimated';
+
+  let hasDiscrepancy = false;
+  let allVerified = true;
+
+  for (const s of sessions) {
+    const status = s.reconciliationStatus ?? 'estimated';
+    if (status === 'discrepancy') hasDiscrepancy = true;
+    if (status !== 'verified') allVerified = false;
+  }
+
+  if (hasDiscrepancy) return 'discrepancy';
+  if (allVerified) return 'verified';
+  return 'estimated';
+}
+
+/** Get the display character for a reconciliation status. */
+function reconciliationIndicator(status: ReconciliationStatus | undefined): string {
+  switch (status) {
+    case 'verified': return '\u2713';    // checkmark
+    case 'discrepancy': return '\u26A0'; // warning
+    case 'estimated':
+    default: return '~';
+  }
+}
+
+/** Get the color for a reconciliation status indicator. */
+function reconciliationColor(status: ReconciliationStatus | undefined): string {
+  switch (status) {
+    case 'verified': return 'var(--crt-phosphor)';
+    case 'discrepancy': return '#FFB000';
+    case 'estimated':
+    default: return 'var(--crt-phosphor-dim)';
+  }
+}
+
+/** Build a tooltip for a session's reconciliation status. */
+function reconciliationTooltip(
+  status: ReconciliationStatus | undefined,
+  cost: number,
+  jsonlCost: number | undefined
+): string {
+  switch (status) {
+    case 'verified':
+      return `Verified: cost confirmed via JSONL ($${cost.toFixed(2)})`;
+    case 'discrepancy':
+      return jsonlCost != null
+        ? `Discrepancy: statusline $${cost.toFixed(2)} vs JSONL $${jsonlCost.toFixed(2)}`
+        : `Discrepancy: cost data mismatch`;
+    case 'estimated':
+    default:
+      return 'Estimated: cost derived from statusline only (no JSONL verification)';
+  }
 }
 
 // ============================================================================
 // Sub-components
 // ============================================================================
 
-/** Big headline stat showing total spend. */
+/** Big headline stat showing total spend with confidence indicator. */
 function TotalSpend({ summary }: { summary: CostSummary }) {
   const sessionCount = Object.keys(summary.sessions).length;
+  const aggStatus = aggregateReconciliationStatus(summary);
+  const isVerified = aggStatus === 'verified';
+  const displayCost = isVerified
+    ? formatCost(summary.totalCost)
+    : `~${formatCost(summary.totalCost)}`;
+  const statusLabel = isVerified ? 'verified' : 'estimated';
+  const statusColor = reconciliationColor(isVerified ? 'verified' : 'estimated');
+  const tooltipText = isVerified
+    ? 'All session costs verified via JSONL data'
+    : aggStatus === 'discrepancy'
+      ? 'Some session costs show discrepancies between statusline and JSONL data'
+      : 'Costs estimated from statusline data — JSONL verification pending';
+
   return (
     <div style={styles.totalSpend}>
-      <div style={styles.totalAmount}>{formatCost(summary.totalCost)}</div>
+      <div style={styles.totalAmount}>
+        {displayCost}
+        <span
+          style={{ ...styles.confidenceLabel, color: statusColor }}
+          title={tooltipText}
+        >
+          {' '}({statusLabel}){' '}
+          <span style={styles.infoIcon} title={tooltipText}>&#9432;</span>
+        </span>
+      </div>
       <div style={styles.totalSubtext}>
         {sessionCount} session{sessionCount !== 1 ? 's' : ''} total
       </div>
@@ -117,16 +216,25 @@ function SessionBreakdown({ summary }: { summary: CostSummary }) {
           </tr>
         </thead>
         <tbody>
-          {sessions.slice(0, 10).map((session) => (
-            <tr key={session.sessionId} style={styles.tr}>
-              <td style={styles.td}>
-                <span style={styles.sessionId}>{session.agentId?.toUpperCase() || session.sessionId.slice(0, 12)}</span>
-              </td>
-              <td style={{ ...styles.td, textAlign: 'right' }}>
-                <span style={styles.costValue}>{formatCost(session.cost)}</span>
-              </td>
-            </tr>
-          ))}
+          {sessions.slice(0, 10).map((session) => {
+            const status = session.reconciliationStatus ?? 'estimated';
+            return (
+              <tr key={session.sessionId} style={styles.tr}>
+                <td style={styles.td}>
+                  <span style={styles.sessionId}>{session.agentId?.toUpperCase() || session.sessionId.slice(0, 12)}</span>
+                </td>
+                <td style={{ ...styles.td, textAlign: 'right' }}>
+                  <span style={styles.costValue}>{formatCost(session.cost)}</span>
+                  <span
+                    style={{ ...styles.reconciliationIndicator, color: reconciliationColor(status) }}
+                    title={reconciliationTooltip(status, session.cost, session.jsonlCost)}
+                  >
+                    {reconciliationIndicator(status)}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       {sessions.length > 10 && (
@@ -571,6 +679,25 @@ const styles = {
     textAlign: 'center',
     marginTop: '6px',
     opacity: 0.7,
+  },
+
+  // Confidence indicators
+  confidenceLabel: {
+    fontSize: '0.6rem',
+    fontWeight: 'normal',
+    letterSpacing: '0.05em',
+    verticalAlign: 'middle',
+  },
+  infoIcon: {
+    fontSize: '0.55rem',
+    cursor: 'help',
+    opacity: 0.7,
+  },
+  reconciliationIndicator: {
+    fontSize: '0.6rem',
+    marginLeft: '4px',
+    fontFamily: '"Share Tech Mono", monospace',
+    cursor: 'help',
   },
 
   // Last Updated

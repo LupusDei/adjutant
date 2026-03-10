@@ -42,16 +42,36 @@ public struct SessionCost: Codable, Equatable, Identifiable {
     public let lastUpdated: String
     /// Agent name associated with this session (enriched from session registry)
     public let agentId: String?
+    /// Reconciliation status: "estimated", "verified", or "discrepancy" (nil = estimated)
+    public let reconciliationStatus: String?
+    /// JSONL-derived cost (ground truth), present when reconciliation has run
+    public let jsonlCost: Double?
 
     public var id: String { sessionId }
 
-    public init(sessionId: String, projectPath: String, cost: Double, tokens: TokenBreakdown, lastUpdated: String, agentId: String? = nil) {
+    public init(
+        sessionId: String,
+        projectPath: String,
+        cost: Double,
+        tokens: TokenBreakdown,
+        lastUpdated: String,
+        agentId: String? = nil,
+        reconciliationStatus: String? = nil,
+        jsonlCost: Double? = nil
+    ) {
         self.sessionId = sessionId
         self.projectPath = projectPath
         self.cost = cost
         self.tokens = tokens
         self.lastUpdated = lastUpdated
         self.agentId = agentId
+        self.reconciliationStatus = reconciliationStatus
+        self.jsonlCost = jsonlCost
+    }
+
+    /// The effective reconciliation status, defaulting to "estimated" when nil.
+    public var effectiveReconciliationStatus: String {
+        reconciliationStatus ?? "estimated"
     }
 }
 
