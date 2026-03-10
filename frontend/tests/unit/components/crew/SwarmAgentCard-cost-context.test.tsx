@@ -98,17 +98,11 @@ describe("SwarmAgentCard cost & context display", () => {
     expect(screen.getByText("CTX 30%")).toBeInTheDocument();
   });
 
-  it("should clamp context bar width to 100% even if contextPercent exceeds 100", () => {
-    const { container } = render(
+  it("should display context text even if contextPercent exceeds 100", () => {
+    render(
       <SwarmAgentCard agent={createAgent({ contextPercent: 150 })} />
     );
-    // The label shows the raw value
+    // The label shows the raw value (no progress bar — text only display)
     expect(screen.getByText("CTX 150%")).toBeInTheDocument();
-    // The bar fill should be clamped to 100% width via Math.min
-    const fills = container.querySelectorAll("span");
-    const fillSpan = Array.from(fills).find(
-      (el) => el.style.width === "100%"
-    );
-    expect(fillSpan).toBeTruthy();
   });
 });
