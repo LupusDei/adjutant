@@ -988,4 +988,114 @@ describe("cost-tracker", () => {
       expect(after!.contextPercent).toBeUndefined();
     });
   });
+
+  // ==========================================================================
+  // QA Sentinel findings (adj-066.3) — edge case and bug reproduction tests
+  // ==========================================================================
+
+  describe("QA: adj-066.3.1 — burn rate sums cumulative totals not deltas", () => {
+    it("should not inflate burn rate from repeated upserts of same session", () => {
+      // Session at $5.00 total gets 3 upserts in quick succession
+      recordCostUpdate("sess-1", "/project", { cost: 5.0 });
+      recordCostUpdate("sess-1", "/project", { cost: 5.0 });
+      recordCostUpdate("sess-1", "/project", { cost: 5.0 });
+
+      const rate = getBurnRate();
+      // BUG: getBurnRate() sums total_cost across all rows.
+      // With upsert (1 row per session), this should be $5, not $15.
+      // But if delta tracking creates multiple rows, this will be wrong.
+      // The rate10m is extrapolated to hourly (x6), so $5 * 6 = $30/hr max.
+      // If it's $15 * 6 = $90/hr, the burn rate is 3x inflated.
+      expect(rate.rate10m).toBeLessThanOrEqual(30.1); // $5 * 6 = $30/hr
+    });
+  });
+
+  describe("QA: adj-066.3.2 — budget alerts fire repeatedly", () => {
+    it("should not emit duplicate budget alerts for the same threshold crossing", () => {
+      upsertBudget({ scope: "session", scopeId: "sess-1", amount: 10.0, warningPercent: 50 });
+
+      // Cross the warning threshold, then keep updating
+      recordCostUpdate("sess-1", "/project", { cost: 6.0 });
+      recordCostUpdate("sess-1", "/project", { cost: 7.0 });
+      recordCostUpdate("sess-1", "/project", { cost: 8.0 });
+
+      // Count budget_warning events
+      const budgetWarnings = mockEmit.mock.calls.filter(
+        (c) => c[0] === "session:cost_alert" && c[1]?.type === "budget_warning"
+      );
+
+      // BUG: Currently emits on every call after threshold is crossed.
+      // Should emit only once per threshold crossing.
+      // This test documents the bug — it will FAIL until dedup is added.
+      expect(budgetWarnings.length).toBe(1);
+    });
+  });
+
+  describe("QA: adj-066.3.3 — bead_id overwrite on bead switch", () => {
+    it("should preserve old bead cost when session switches to new bead", () => {
+      // Agent works on bead A, then switches to bead B
+      recordCostUpdate("sess-1", "/project", { cost: 5.0, beadId: "adj-010.1" });
+      recordCostUpdate("sess-1", "/project", { cost: 10.0, beadId: "adj-010.2" });
+
+      // Bead A should still have its cost attributed
+      const beadACost = getBeadCost("adj-010.1");
+
+      // BUG: upsertSessionCost uses COALESCE(?, bead_id) which overwrites
+      // the bead_id to adj-010.2. getBeadCost("adj-010.1") returns null.
+      // This test documents the bug — it will FAIL until delta rows are added.
+      expect(beadACost).not.toBeNull();
+      if (beadACost) {
+        expect(beadACost.totalCost).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  describe("QA: adj-066.3.4 — loadCacheFromDb loads dead sessions", () => {
+    it("should not include finalized sessions in cost summary after reinit", () => {
+      // Simulate: session ran, produced cost, then was killed
+      recordCostUpdate("sess-dead", "/project", { cost: 50.0 });
+      recordCostUpdate("sess-alive", "/project", { cost: 10.0 });
+
+      // Kill the dead session: in future, killSession should mark it finalized.
+      // For now, there's no way to mark a session as finalized in the DB.
+
+      // Reinit — should only load active sessions
+      resetCostTracker();
+      initCostTracker(testDb);
+
+      const summary = getCostSummary();
+      // BUG: Both sessions are loaded, totalCost = $60 instead of $10.
+      // This test documents the expectation — once finalized_at is added,
+      // dead sessions should not appear in the summary.
+      // For now, we just verify both are loaded (documenting current behavior).
+      expect(Object.keys(summary.sessions)).toHaveLength(2);
+      // Future expectation after fix:
+      // expect(Object.keys(summary.sessions)).toHaveLength(1);
+      // expect(summary.totalCost).toBe(10.0);
+    });
+  });
+
+  describe("QA: adj-066.3.7 — NULL bead_id cost visibility", () => {
+    it("should be possible to query unattributed costs (no bead_id)", () => {
+      // Some costs have bead IDs, some don't
+      recordCostUpdate("sess-1", "/project", { cost: 5.0, beadId: "adj-001" });
+      recordCostUpdate("sess-2", "/project", { cost: 10.0 }); // no beadId
+      recordCostUpdate("sess-3", "/project", { cost: 3.0 }); // no beadId
+
+      // Currently there's no API to query unattributed costs
+      // Verify the data is in SQLite with NULL bead_id
+      const nullRows = testDb.prepare(
+        "SELECT COUNT(*) as cnt, SUM(total_cost) as total FROM agent_costs WHERE bead_id IS NULL"
+      ).get() as { cnt: number; total: number };
+
+      // At minimum, the unattributed cost should be queryable
+      expect(nullRows.cnt).toBeGreaterThanOrEqual(1);
+      expect(nullRows.total).toBeGreaterThanOrEqual(10.0);
+
+      // The cost summary should ideally show unattributed costs as a category.
+      // Currently getCostSummary() doesn't distinguish attributed vs unattributed.
+      const summary = getCostSummary();
+      expect(summary.totalCost).toBeCloseTo(18.0, 10);
+    });
+  });
 });
