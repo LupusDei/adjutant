@@ -816,8 +816,8 @@ function upsertSessionCost(
       const result = db.prepare(
         `INSERT INTO agent_costs (session_id, agent_id, bead_id, project_path,
            input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
-           total_cost, recorded_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+           total_cost, context_percent, recorded_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
       ).run(
         sessionId,
         agentId ?? null,
@@ -827,7 +827,8 @@ function upsertSessionCost(
         newBeadTokenDeltas.output,
         newBeadTokenDeltas.cacheRead,
         newBeadTokenDeltas.cacheWrite,
-        newBeadInitialDelta
+        newBeadInitialDelta,
+        entry.contextPercent ?? null
       );
 
       // Update tracker for the new bead (costAtStart = switch boundary)
@@ -861,7 +862,8 @@ function upsertSessionCost(
           `UPDATE agent_costs SET
              input_tokens = ?, output_tokens = ?, cache_read_tokens = ?, cache_write_tokens = ?,
              total_cost = ?, project_path = ?, agent_id = COALESCE(?, agent_id),
-             bead_id = COALESCE(?, bead_id), recorded_at = datetime('now')
+             bead_id = COALESCE(?, bead_id), context_percent = COALESCE(?, context_percent),
+             recorded_at = datetime('now')
            WHERE id = ?`
         ).run(
           tokenDeltas.input,
@@ -872,6 +874,7 @@ function upsertSessionCost(
           entry.projectPath,
           agentId ?? null,
           effectiveBeadId,
+          entry.contextPercent ?? null,
           existing.id
         );
 
@@ -891,8 +894,8 @@ function upsertSessionCost(
         const result = db.prepare(
           `INSERT INTO agent_costs (session_id, agent_id, bead_id, project_path,
              input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
-             total_cost, recorded_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+             total_cost, context_percent, recorded_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
         ).run(
           sessionId,
           agentId ?? null,
@@ -902,7 +905,8 @@ function upsertSessionCost(
           entry.tokens.output,
           entry.tokens.cacheRead,
           entry.tokens.cacheWrite,
-          entry.cost // First row: delta = total cost so far
+          entry.cost, // First row: delta = total cost so far
+          entry.contextPercent ?? null
         );
 
         sessionBeadTracker.set(sessionId, {
@@ -932,6 +936,7 @@ function loadCacheFromDb(): void {
   try {
     // Sum all non-finalized deltas per session to get the true session total (adj-066.3.10)
     // Token columns are also deltas (adj-066.3.12), so SUM them too.
+    // MAX(context_percent) gives the most recent value across rows (adj-nygv).
     const summaryRows = db.prepare(
       `SELECT session_id,
               SUM(total_cost) as total_cost,
@@ -940,14 +945,15 @@ function loadCacheFromDb(): void {
               SUM(cache_read_tokens) as cache_read_tokens,
               SUM(cache_write_tokens) as cache_write_tokens,
               MAX(recorded_at) as recorded_at,
-              MAX(project_path) as project_path
+              MAX(project_path) as project_path,
+              MAX(context_percent) as context_percent
        FROM agent_costs
        WHERE finalized_at IS NULL
        GROUP BY session_id`
-    ).all() as AgentCostRow[];
+    ).all() as (AgentCostRow & { context_percent: number | null })[];
 
     for (const row of summaryRows) {
-      sessionCache.set(row.session_id, {
+      const entry: CostEntry = {
         sessionId: row.session_id,
         projectPath: row.project_path ?? "",
         tokens: {
@@ -958,7 +964,12 @@ function loadCacheFromDb(): void {
         },
         cost: row.total_cost,
         lastUpdated: row.recorded_at,
-      });
+      };
+      // Restore contextPercent from SQLite (adj-nygv)
+      if (row.context_percent != null) {
+        entry.contextPercent = row.context_percent;
+      }
+      sessionCache.set(row.session_id, entry);
     }
 
     // Restore sessionBeadTracker from the latest row per session (adj-066.3.11).

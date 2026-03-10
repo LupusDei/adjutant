@@ -924,4 +924,68 @@ describe("cost-tracker", () => {
       expect(entry!.agentId).toBeUndefined();
     });
   });
+
+  describe("contextPercent persistence (adj-nygv)", () => {
+    it("should restore contextPercent from SQLite on cache reload", () => {
+      recordCostUpdate("sess-1", "/project", {
+        cost: 1.50,
+        tokens: { input: 5000, output: 2000 },
+        contextPercent: 42,
+      });
+
+      // Verify it's in memory
+      const before = getSessionCost("sess-1");
+      expect(before).toBeDefined();
+      expect(before!.contextPercent).toBe(42);
+
+      // Reset in-memory cache and reload from DB
+      resetCostTracker();
+      initCostTracker(testDb);
+
+      const after = getSessionCost("sess-1");
+      expect(after).toBeDefined();
+      expect(after!.contextPercent).toBe(42);
+    });
+
+    it("should restore the MAX contextPercent across multiple rows for a session", () => {
+      // First cost update with bead-1
+      recordCostUpdate("sess-1", "/project", {
+        cost: 1.00,
+        tokens: { input: 2000, output: 1000 },
+        contextPercent: 30,
+        beadId: "bead-1",
+      });
+
+      // Switch to bead-2 with higher context percent
+      recordCostUpdate("sess-1", "/project", {
+        cost: 2.00,
+        tokens: { input: 4000, output: 2000 },
+        contextPercent: 65,
+        beadId: "bead-2",
+      });
+
+      // Reset and reload
+      resetCostTracker();
+      initCostTracker(testDb);
+
+      const after = getSessionCost("sess-1");
+      expect(after).toBeDefined();
+      expect(after!.contextPercent).toBe(65);
+    });
+
+    it("should not set contextPercent when not provided", () => {
+      recordCostUpdate("sess-1", "/project", {
+        cost: 0.50,
+        tokens: { input: 1000, output: 500 },
+      });
+
+      // Reset and reload
+      resetCostTracker();
+      initCostTracker(testDb);
+
+      const after = getSessionCost("sess-1");
+      expect(after).toBeDefined();
+      expect(after!.contextPercent).toBeUndefined();
+    });
+  });
 });
