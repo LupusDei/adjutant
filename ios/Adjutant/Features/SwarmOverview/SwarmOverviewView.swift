@@ -62,6 +62,9 @@ struct SwarmOverviewView: View {
 
                 // 4. Epics: In Progress + Recently Completed
                 epicsSection(overview.epics)
+
+                // 5. Spending overview (loads independently)
+                CostOverviewWidget()
             }
             .padding(.vertical, CRTTheme.Spacing.md)
             .padding(.horizontal, CRTTheme.Spacing.md)
@@ -168,6 +171,22 @@ struct SwarmOverviewView: View {
             }
 
             Spacer()
+
+            // Cost & context (stacked vertically)
+            if agent.contextPercent != nil || agent.cost != nil {
+                VStack(alignment: .trailing, spacing: 1) {
+                    if let ctx = agent.contextPercent {
+                        Text(String(format: "CTX %.0f%%", ctx))
+                            .font(CRTTheme.Typography.font(size: 9, weight: .bold))
+                            .foregroundColor(contextColor(for: ctx))
+                    }
+                    if let cost = agent.cost {
+                        Text(String(format: "$%.2f", cost))
+                            .font(CRTTheme.Typography.font(size: 9, weight: .regular))
+                            .foregroundColor(theme.dim)
+                    }
+                }
+            }
 
             // Status text
             CRTText(
@@ -589,7 +608,9 @@ struct SwarmOverviewView: View {
             status: CrewMemberStatus(rawValue: agent.status) ?? .idle,
             currentTask: agent.currentBead,
             unreadMail: agent.unreadCount,
-            sessionId: agent.sessionId
+            sessionId: agent.sessionId,
+            cost: agent.cost,
+            contextPercent: agent.contextPercent
         )
     }
 
@@ -599,6 +620,15 @@ struct SwarmOverviewView: View {
         case "idle": return CRTTheme.State.info
         case "blocked": return CRTTheme.State.error
         default: return CRTTheme.State.offline
+        }
+    }
+
+    private func contextColor(for percent: Double) -> Color {
+        switch percent {
+        case ..<50: return theme.primary
+        case 50..<75: return CRTTheme.State.warning
+        case 75..<90: return Color(red: 1.0, green: 0.5, blue: 0.0)
+        default: return CRTTheme.State.error
         }
     }
 

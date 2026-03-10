@@ -207,6 +207,10 @@ public struct AgentOverview: Codable, Identifiable, Equatable {
     public let currentBead: String?
     public let unreadCount: Int
     public let sessionId: String?
+    /// Current session cost in dollars (nil if no cost data)
+    public let cost: Double?
+    /// Context window usage percentage (nil if no context data)
+    public let contextPercent: Double?
 
     public init(
         id: String,
@@ -215,7 +219,9 @@ public struct AgentOverview: Codable, Identifiable, Equatable {
         project: String? = nil,
         currentBead: String? = nil,
         unreadCount: Int = 0,
-        sessionId: String? = nil
+        sessionId: String? = nil,
+        cost: Double? = nil,
+        contextPercent: Double? = nil
     ) {
         self.id = id
         self.name = name
@@ -224,5 +230,7 @@ public struct AgentOverview: Codable, Identifiable, Equatable {
         self.currentBead = currentBead
         self.unreadCount = unreadCount
         self.sessionId = sessionId
+        self.cost = cost
+        self.contextPercent = contextPercent
     }
 }
