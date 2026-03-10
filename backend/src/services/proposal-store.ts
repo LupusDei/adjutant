@@ -1,6 +1,15 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import type { Proposal, ProposalRow, ProposalStatus, ProposalType } from "../types/proposals.js";
+import type {
+  Proposal,
+  ProposalRow,
+  ProposalStatus,
+  ProposalType,
+  ProposalComment,
+  ProposalCommentRow,
+  ProposalRevision,
+  ProposalRevisionRow,
+} from "../types/proposals.js";
 
 function rowToProposal(row: ProposalRow): Proposal {
   return {
@@ -14,6 +23,44 @@ function rowToProposal(row: ProposalRow): Proposal {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function rowToComment(row: ProposalCommentRow): ProposalComment {
+  return {
+    id: row.id,
+    proposalId: row.proposal_id,
+    author: row.author,
+    body: row.body,
+    createdAt: row.created_at,
+  };
+}
+
+function rowToRevision(row: ProposalRevisionRow): ProposalRevision {
+  return {
+    id: row.id,
+    proposalId: row.proposal_id,
+    revisionNumber: row.revision_number,
+    author: row.author,
+    title: row.title,
+    description: row.description,
+    type: row.type as ProposalType,
+    changelog: row.changelog,
+    createdAt: row.created_at,
+  };
+}
+
+interface InsertCommentInput {
+  proposalId: string;
+  author: string;
+  body: string;
+}
+
+interface ReviseProposalInput {
+  author: string;
+  title?: string | undefined;
+  description?: string | undefined;
+  type?: ProposalType | undefined;
+  changelog: string;
 }
 
 interface InsertProposalInput {
@@ -35,6 +82,10 @@ export interface ProposalStore {
   getProposal(id: string): Proposal | null;
   getProposals(opts?: GetProposalsOptions): Proposal[];
   updateProposalStatus(id: string, status: ProposalStatus): Proposal | null;
+  insertComment(input: InsertCommentInput): ProposalComment;
+  getComments(proposalId: string): ProposalComment[];
+  reviseProposal(id: string, input: ReviseProposalInput): Proposal | null;
+  getRevisions(proposalId: string): ProposalRevision[];
 }
 
 export function createProposalStore(db: Database.Database): ProposalStore {
@@ -47,6 +98,36 @@ export function createProposalStore(db: Database.Database): ProposalStore {
 
   const updateStatusStmt = db.prepare(`
     UPDATE proposals SET status = ?, updated_at = datetime('now') WHERE id = ?
+  `);
+
+  // Comment statements
+  const insertCommentStmt = db.prepare(`
+    INSERT INTO proposal_comments (id, proposal_id, author, body, created_at)
+    VALUES (?, ?, ?, ?, datetime('now'))
+  `);
+
+  const getCommentByIdStmt = db.prepare("SELECT * FROM proposal_comments WHERE id = ?");
+
+  const getCommentsByProposalStmt = db.prepare(
+    "SELECT * FROM proposal_comments WHERE proposal_id = ? ORDER BY created_at ASC, rowid ASC",
+  );
+
+  // Revision statements
+  const insertRevisionStmt = db.prepare(`
+    INSERT INTO proposal_revisions (id, proposal_id, revision_number, author, title, description, type, changelog, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  `);
+
+  const maxRevisionNumberStmt = db.prepare(
+    "SELECT MAX(revision_number) AS max_rev FROM proposal_revisions WHERE proposal_id = ?",
+  );
+
+  const getRevisionsByProposalStmt = db.prepare(
+    "SELECT * FROM proposal_revisions WHERE proposal_id = ? ORDER BY revision_number ASC",
+  );
+
+  const updateProposalContentStmt = db.prepare(`
+    UPDATE proposals SET title = ?, description = ?, type = ?, updated_at = datetime('now') WHERE id = ?
   `);
 
   return {
@@ -92,6 +173,58 @@ export function createProposalStore(db: Database.Database): ProposalStore {
       if (result.changes === 0) return null;
       const row = getByIdStmt.get(id) as ProposalRow;
       return rowToProposal(row);
+    },
+
+    insertComment(input: InsertCommentInput): ProposalComment {
+      const id = randomUUID();
+      insertCommentStmt.run(id, input.proposalId, input.author, input.body);
+      const row = getCommentByIdStmt.get(id) as ProposalCommentRow;
+      return rowToComment(row);
+    },
+
+    getComments(proposalId: string): ProposalComment[] {
+      const rows = getCommentsByProposalStmt.all(proposalId) as ProposalCommentRow[];
+      return rows.map(rowToComment);
+    },
+
+    reviseProposal(id: string, input: ReviseProposalInput): Proposal | null {
+      // Read current proposal
+      const currentRow = getByIdStmt.get(id) as ProposalRow | undefined;
+      if (currentRow === undefined) return null;
+
+      const current = rowToProposal(currentRow);
+
+      // Determine next revision number
+      const maxRow = maxRevisionNumberStmt.get(id) as { max_rev: number | null };
+      const nextRevNumber = (maxRow.max_rev ?? 0) + 1;
+
+      // Snapshot the current state into revisions
+      const revId = randomUUID();
+      insertRevisionStmt.run(
+        revId,
+        id,
+        nextRevNumber,
+        input.author,
+        current.title,
+        current.description,
+        current.type,
+        input.changelog,
+      );
+
+      // Update the proposal with new values (only fields provided)
+      const newTitle = input.title ?? current.title;
+      const newDescription = input.description ?? current.description;
+      const newType = input.type ?? current.type;
+      updateProposalContentStmt.run(newTitle, newDescription, newType, id);
+
+      // Return the updated proposal
+      const updatedRow = getByIdStmt.get(id) as ProposalRow;
+      return rowToProposal(updatedRow);
+    },
+
+    getRevisions(proposalId: string): ProposalRevision[] {
+      const rows = getRevisionsByProposalStmt.all(proposalId) as ProposalRevisionRow[];
+      return rows.map(rowToRevision);
     },
   };
 }

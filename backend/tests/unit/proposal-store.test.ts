@@ -207,4 +207,299 @@ describe("proposal-store", () => {
       expect(store.updateProposalStatus("non-existent", "accepted")).toBeNull();
     });
   });
+
+  // ===========================================================================
+  // Migration: proposal_comments table (adj-068.1.1)
+  // ===========================================================================
+  describe("proposal_comments table (migration)", () => {
+    it("should create proposal_comments table", () => {
+      const tables = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='proposal_comments'")
+        .all() as Array<{ name: string }>;
+      expect(tables).toHaveLength(1);
+    });
+
+    it("should have correct columns on proposal_comments", () => {
+      const columns = db.prepare("PRAGMA table_info(proposal_comments)").all() as Array<{ name: string }>;
+      const colNames = columns.map((c) => c.name);
+      expect(colNames).toContain("id");
+      expect(colNames).toContain("proposal_id");
+      expect(colNames).toContain("author");
+      expect(colNames).toContain("body");
+      expect(colNames).toContain("created_at");
+    });
+
+    it("should have index on proposal_comments(proposal_id, created_at)", () => {
+      const indexes = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='proposal_comments'")
+        .all() as Array<{ name: string }>;
+      const indexNames = indexes.map((i) => i.name);
+      expect(indexNames).toContain("idx_proposal_comments_proposal");
+    });
+  });
+
+  // ===========================================================================
+  // Migration: proposal_revisions table (adj-068.1.1)
+  // ===========================================================================
+  describe("proposal_revisions table (migration)", () => {
+    it("should create proposal_revisions table", () => {
+      const tables = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='proposal_revisions'")
+        .all() as Array<{ name: string }>;
+      expect(tables).toHaveLength(1);
+    });
+
+    it("should have correct columns on proposal_revisions", () => {
+      const columns = db.prepare("PRAGMA table_info(proposal_revisions)").all() as Array<{ name: string }>;
+      const colNames = columns.map((c) => c.name);
+      expect(colNames).toContain("id");
+      expect(colNames).toContain("proposal_id");
+      expect(colNames).toContain("revision_number");
+      expect(colNames).toContain("author");
+      expect(colNames).toContain("title");
+      expect(colNames).toContain("description");
+      expect(colNames).toContain("type");
+      expect(colNames).toContain("changelog");
+      expect(colNames).toContain("created_at");
+    });
+
+    it("should have index on proposal_revisions(proposal_id, revision_number)", () => {
+      const indexes = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='proposal_revisions'")
+        .all() as Array<{ name: string }>;
+      const indexNames = indexes.map((i) => i.name);
+      expect(indexNames).toContain("idx_proposal_revisions_proposal");
+    });
+  });
+
+  // ===========================================================================
+  // Comment CRUD (adj-068.2.1)
+  // ===========================================================================
+  describe("insertComment", () => {
+    it("should insert a comment and return it", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+
+      const proposal = store.insertProposal({
+        author: "raynor",
+        title: "Test Proposal",
+        description: "A test proposal",
+        type: "engineering",
+        project: "adjutant",
+      });
+
+      const comment = store.insertComment({
+        proposalId: proposal.id,
+        author: "kerrigan",
+        body: "Looks good!",
+      });
+
+      expect(comment.id).toBeDefined();
+      expect(comment.proposalId).toBe(proposal.id);
+      expect(comment.author).toBe("kerrigan");
+      expect(comment.body).toBe("Looks good!");
+      expect(comment.createdAt).toBeDefined();
+    });
+
+    it("should throw when proposal_id references a non-existent proposal", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+
+      expect(() =>
+        store.insertComment({
+          proposalId: "non-existent-id",
+          author: "kerrigan",
+          body: "Comment on nothing",
+        }),
+      ).toThrow();
+    });
+  });
+
+  describe("getComments", () => {
+    it("should return comments for a proposal ordered by created_at ascending", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+
+      const proposal = store.insertProposal({
+        author: "raynor",
+        title: "Test",
+        description: "Desc",
+        type: "engineering",
+        project: "adjutant",
+      });
+
+      store.insertComment({ proposalId: proposal.id, author: "kerrigan", body: "First" });
+      store.insertComment({ proposalId: proposal.id, author: "raynor", body: "Second" });
+
+      const comments = store.getComments(proposal.id);
+      expect(comments).toHaveLength(2);
+      expect(comments[0]!.body).toBe("First");
+      expect(comments[1]!.body).toBe("Second");
+    });
+
+    it("should return empty array for proposal with no comments", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+
+      const proposal = store.insertProposal({
+        author: "raynor",
+        title: "Test",
+        description: "Desc",
+        type: "engineering",
+        project: "adjutant",
+      });
+
+      const comments = store.getComments(proposal.id);
+      expect(comments).toEqual([]);
+    });
+
+    it("should not return comments from other proposals", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+
+      const p1 = store.insertProposal({ author: "raynor", title: "P1", description: "D1", type: "engineering", project: "adjutant" });
+      const p2 = store.insertProposal({ author: "raynor", title: "P2", description: "D2", type: "engineering", project: "adjutant" });
+
+      store.insertComment({ proposalId: p1.id, author: "kerrigan", body: "On P1" });
+      store.insertComment({ proposalId: p2.id, author: "kerrigan", body: "On P2" });
+
+      const comments = store.getComments(p1.id);
+      expect(comments).toHaveLength(1);
+      expect(comments[0]!.body).toBe("On P1");
+    });
+  });
+
+  // ===========================================================================
+  // Revision CRUD (adj-068.2.2)
+  // ===========================================================================
+  describe("reviseProposal", () => {
+    it("should snapshot the old proposal and update with new content", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+
+      const proposal = store.insertProposal({
+        author: "raynor",
+        title: "Original Title",
+        description: "Original Desc",
+        type: "engineering",
+        project: "adjutant",
+      });
+
+      const revised = store.reviseProposal(proposal.id, {
+        author: "kerrigan",
+        title: "Revised Title",
+        changelog: "Changed the title",
+      });
+
+      expect(revised).not.toBeNull();
+      expect(revised!.title).toBe("Revised Title");
+      expect(revised!.description).toBe("Original Desc"); // unchanged field preserved
+
+      // Verify revision was stored
+      const revisions = store.getRevisions(proposal.id);
+      expect(revisions).toHaveLength(1);
+      expect(revisions[0]!.revisionNumber).toBe(1);
+      expect(revisions[0]!.title).toBe("Original Title"); // old title
+      expect(revisions[0]!.description).toBe("Original Desc"); // old desc
+      expect(revisions[0]!.author).toBe("kerrigan");
+      expect(revisions[0]!.changelog).toBe("Changed the title");
+    });
+
+    it("should increment revision_number for successive revisions", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+
+      const proposal = store.insertProposal({
+        author: "raynor",
+        title: "V1",
+        description: "D1",
+        type: "engineering",
+        project: "adjutant",
+      });
+
+      store.reviseProposal(proposal.id, { author: "kerrigan", description: "D2", changelog: "Rev 1" });
+      store.reviseProposal(proposal.id, { author: "kerrigan", title: "V3", changelog: "Rev 2" });
+
+      const revisions = store.getRevisions(proposal.id);
+      expect(revisions).toHaveLength(2);
+      expect(revisions[0]!.revisionNumber).toBe(1);
+      expect(revisions[1]!.revisionNumber).toBe(2);
+    });
+
+    it("should only update provided fields, keeping others unchanged", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+
+      const proposal = store.insertProposal({
+        author: "raynor",
+        title: "Title",
+        description: "Desc",
+        type: "engineering",
+        project: "adjutant",
+      });
+
+      const revised = store.reviseProposal(proposal.id, {
+        author: "kerrigan",
+        type: "product",
+        changelog: "Changed type only",
+      });
+
+      expect(revised!.title).toBe("Title"); // unchanged
+      expect(revised!.description).toBe("Desc"); // unchanged
+      expect(revised!.type).toBe("product"); // changed
+    });
+
+    it("should return null for non-existent proposal", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+
+      const result = store.reviseProposal("non-existent", {
+        author: "kerrigan",
+        title: "New",
+        changelog: "Nope",
+      });
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("getRevisions", () => {
+    it("should return revisions ordered by revision_number ascending", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+
+      const proposal = store.insertProposal({
+        author: "raynor",
+        title: "V1",
+        description: "D1",
+        type: "engineering",
+        project: "adjutant",
+      });
+
+      store.reviseProposal(proposal.id, { author: "kerrigan", title: "V2", changelog: "First rev" });
+      store.reviseProposal(proposal.id, { author: "raynor", title: "V3", changelog: "Second rev" });
+
+      const revisions = store.getRevisions(proposal.id);
+      expect(revisions).toHaveLength(2);
+      expect(revisions[0]!.revisionNumber).toBe(1);
+      expect(revisions[0]!.title).toBe("V1");
+      expect(revisions[1]!.revisionNumber).toBe(2);
+      expect(revisions[1]!.title).toBe("V2"); // snapshot of what was current before the third revision
+    });
+
+    it("should return empty array for proposal with no revisions", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+
+      const proposal = store.insertProposal({
+        author: "raynor",
+        title: "Test",
+        description: "Desc",
+        type: "engineering",
+        project: "adjutant",
+      });
+
+      const revisions = store.getRevisions(proposal.id);
+      expect(revisions).toEqual([]);
+    });
+  });
 });
