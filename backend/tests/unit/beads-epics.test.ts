@@ -61,7 +61,7 @@ describe("getEpicChildren", () => {
     vi.clearAllMocks();
   });
 
-  it("should call bd children with --json (no --all, unsupported by bd children)", async () => {
+  it("should use bd list --parent --all to include closed children", async () => {
     mockExecBd.mockResolvedValue({
       success: true,
       data: [
@@ -72,9 +72,9 @@ describe("getEpicChildren", () => {
 
     await getEpicChildren("adj-065");
 
-    // bd children does not support --all flag (causes usage error)
+    // bd children doesn't support --all, so use bd list --parent --all instead
     expect(mockExecBd).toHaveBeenCalledWith(
-      ["children", "adj-065", "--json"],
+      ["list", "--parent", "adj-065", "--all", "--json"],
       expect.objectContaining({ cwd: "/mock/workdir", beadsDir: "/mock/.beads" })
     );
   });
