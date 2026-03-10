@@ -299,9 +299,13 @@ struct CostDashboardView: View {
         )
     }
 
-    /// Extracts a display name from a session's project path
+    /// Extracts a display name from a session, preferring agent name over session UUID
     private func sessionDisplayName(_ session: SessionCost) -> String {
-        // Use the last path component of the project path, falling back to session ID
+        // Prefer agent name when available (adj-2jd0)
+        if let agentId = session.agentId, !agentId.isEmpty {
+            return agentId.uppercased()
+        }
+        // Fall back to project path / session ID
         let projectName = session.projectPath.components(separatedBy: "/").last ?? session.projectPath
         if projectName.isEmpty {
             return session.sessionId.prefix(12).uppercased()

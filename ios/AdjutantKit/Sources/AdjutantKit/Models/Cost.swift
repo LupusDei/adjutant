@@ -40,15 +40,18 @@ public struct SessionCost: Codable, Equatable, Identifiable {
     public let tokens: TokenBreakdown
     /// ISO 8601 timestamp of last cost update
     public let lastUpdated: String
+    /// Agent name associated with this session (enriched from session registry)
+    public let agentId: String?
 
     public var id: String { sessionId }
 
-    public init(sessionId: String, projectPath: String, cost: Double, tokens: TokenBreakdown, lastUpdated: String) {
+    public init(sessionId: String, projectPath: String, cost: Double, tokens: TokenBreakdown, lastUpdated: String, agentId: String? = nil) {
         self.sessionId = sessionId
         self.projectPath = projectPath
         self.cost = cost
         self.tokens = tokens
         self.lastUpdated = lastUpdated
+        self.agentId = agentId
     }
 }
 

@@ -62,9 +62,9 @@ function budgetStatusLabel(percentUsed: number, warningPercent: number, critical
 }
 
 /** Derive per-session cost entries sorted by cost descending. */
-function getSessionBreakdown(summary: CostSummary): Array<{ sessionId: string; cost: number; projectPath: string }> {
+function getSessionBreakdown(summary: CostSummary): Array<{ sessionId: string; cost: number; projectPath: string; agentId?: string }> {
   return Object.values(summary.sessions)
-    .map((s) => ({ sessionId: s.sessionId, cost: s.cost, projectPath: s.projectPath }))
+    .map((s) => ({ sessionId: s.sessionId, cost: s.cost, projectPath: s.projectPath, agentId: s.agentId }))
     .sort((a, b) => b.cost - a.cost);
 }
 
@@ -120,7 +120,7 @@ function SessionBreakdown({ summary }: { summary: CostSummary }) {
           {sessions.slice(0, 10).map((session) => (
             <tr key={session.sessionId} style={styles.tr}>
               <td style={styles.td}>
-                <span style={styles.sessionId}>{session.sessionId.slice(0, 12)}</span>
+                <span style={styles.sessionId}>{session.agentId?.toUpperCase() || session.sessionId.slice(0, 12)}</span>
               </td>
               <td style={{ ...styles.td, textAlign: 'right' }}>
                 <span style={styles.costValue}>{formatCost(session.cost)}</span>
