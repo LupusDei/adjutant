@@ -572,8 +572,10 @@ describe("cost-tracker", () => {
       // Clear session cost
       clearSessionCost("sess-1");
 
-      // Re-record — should trigger alert again since alertedSessions was cleared
-      recordCostUpdate("sess-1", "/project", { cost: 0.15 });
+      // Use a different session ID for re-record since clearSessionCost marks
+      // the session as finalized (adj-066.3.6 race protection). In production,
+      // killed sessions don't get reused. A new session gets a new UUID.
+      recordCostUpdate("sess-1b", "/project", { cost: 0.15 });
       const alertCalls = mockEmit.mock.calls.filter(
         (c) => c[0] === "session:cost_alert" && c[1]?.threshold !== undefined
       );
@@ -746,6 +748,24 @@ describe("cost-tracker", () => {
       // After engineer-2's fix: finalized sessions should be excluded
       expect(Object.keys(summary.sessions)).toHaveLength(1);
       expect(summary.totalCost).toBeCloseTo(10.0, 10);
+    });
+  });
+
+  describe("QA: adj-066.3.6 — race between killSession and cost_update", () => {
+    it("should not recreate cache entry after clearSessionCost", () => {
+      // Session is running and has cost
+      recordCostUpdate("sess-race", "/project", { cost: 5.0 });
+      expect(getSessionCost("sess-race")).toBeDefined();
+
+      // killSession calls clearSessionCost
+      clearSessionCost("sess-race");
+      expect(getSessionCost("sess-race")).toBeUndefined();
+
+      // A stale cost_update arrives (in-flight from before kill)
+      recordCostUpdate("sess-race", "/project", { cost: 5.5 });
+
+      // The cache entry should NOT be recreated
+      expect(getSessionCost("sess-race")).toBeUndefined();
     });
   });
 

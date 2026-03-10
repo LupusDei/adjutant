@@ -146,6 +146,8 @@ interface BeadSnapshot {
   beadId: string;
   /** Session total cost at the time this bead was assigned */
   costAtStart: number;
+  /** Token counts at the time this bead was assigned (for per-bead token deltas) */
+  tokensAtStart: { input: number; output: number; cacheRead: number; cacheWrite: number };
   /** SQLite row ID for the current bead's cost entry */
   rowId?: number;
 }
@@ -153,6 +155,20 @@ const sessionBeadTracker = new Map<string, BeadSnapshot>();
 
 let alertThreshold = 5.0; // $5 default
 const alertedSessions = new Set<string>();
+
+/**
+ * Tracks which budget alert levels have already fired per session.
+ * Prevents duplicate budget alerts from firing on every cost_update poll.
+ * Key: sessionId, Value: set of alert levels already emitted ("warning" | "critical" | "exceeded")
+ */
+const budgetAlertedSessions = new Map<string, Set<string>>();
+
+/**
+ * Tracks sessions that have been finalized (killed).
+ * Prevents race condition where a cost_update in flight recreates the cache entry
+ * after killSession() has already cleared it.
+ */
+const finalizedSessions = new Set<string>();
 
 // ============================================================================
 // Public API
@@ -187,6 +203,11 @@ export function recordCostUpdate(
     beadId?: string;
   }
 ): void {
+  // Skip finalized sessions to prevent race with killSession (adj-066.3.6).
+  // After clearSessionCost() marks a session as finalized, any in-flight cost_update
+  // that arrives should not recreate the cache entry.
+  if (finalizedSessions.has(sessionId)) return;
+
   // Get or create cache entry
   let entry = sessionCache.get(sessionId);
   if (!entry) {
@@ -199,6 +220,15 @@ export function recordCostUpdate(
     };
     sessionCache.set(sessionId, entry);
   }
+
+  // Capture snapshots before update (needed for bead-switch delta calculation)
+  const previousCost = entry.cost;
+  const previousTokens = {
+    input: entry.tokens.input,
+    output: entry.tokens.output,
+    cacheRead: entry.tokens.cacheRead,
+    cacheWrite: entry.tokens.cacheWrite,
+  };
 
   // Update tokens (these are running totals from Claude Code, so take the max)
   if (update.tokens) {
@@ -216,9 +246,6 @@ export function recordCostUpdate(
     }
   }
 
-  // Capture cost before update (needed for bead-switch delta calculation)
-  const previousCost = entry.cost;
-
   // Update cost
   if (update.cost !== undefined) {
     entry.cost = Math.max(entry.cost, update.cost);
@@ -232,7 +259,7 @@ export function recordCostUpdate(
   entry.lastUpdated = new Date().toISOString();
 
   // Persist to SQLite
-  upsertSessionCost(sessionId, entry, update.agentId, update.beadId, previousCost);
+  upsertSessionCost(sessionId, entry, update.agentId, update.beadId, previousCost, previousTokens);
 
   // Emit via EventBus
   getEventBus().emit("session:cost", {
@@ -349,6 +376,9 @@ export function getCostAlertThreshold(): number {
 export function clearSessionCost(sessionId: string): void {
   sessionCache.delete(sessionId);
   alertedSessions.delete(sessionId);
+  budgetAlertedSessions.delete(sessionId);
+  sessionBeadTracker.delete(sessionId);
+  finalizedSessions.add(sessionId);
   finalizeSessionCost(sessionId);
 }
 
@@ -392,6 +422,8 @@ export function resetCostTracker(): void {
   db = null;
   alertThreshold = 5.0;
   alertedSessions.clear();
+  budgetAlertedSessions.clear();
+  finalizedSessions.clear();
 }
 
 /**
@@ -715,7 +747,8 @@ function upsertSessionCost(
   entry: CostEntry,
   agentId?: string,
   beadId?: string,
-  previousCost?: number
+  previousCost?: number,
+  previousTokens?: { input: number; output: number; cacheRead: number; cacheWrite: number }
 ): void {
   if (!db) return;
   try {
@@ -727,20 +760,50 @@ function upsertSessionCost(
     const beadChanged = tracker && effectiveBeadId !== null && trackerBeadId !== effectiveBeadId;
 
     if (beadChanged) {
-      // Finalize the previous bead's row with the delta cost.
+      // Finalize the previous bead's row with the delta cost and token deltas.
       // Use previousCost (cost before this update) to calculate what the old bead earned,
       // since entry.cost already includes the new update's cost.
       const previousDelta = (previousCost ?? entry.cost) - tracker.costAtStart;
+      // Token deltas for the previous bead (adj-066.3.12).
+      // Use previousTokens (tokens before this update) since the current update's
+      // tokens may already include work for the new bead.
+      const prevTokensAtStart = tracker.tokensAtStart;
+      const tokensBeforeUpdate = previousTokens ?? entry.tokens;
+      const prevTokenDeltas = {
+        input: tokensBeforeUpdate.input - prevTokensAtStart.input,
+        output: tokensBeforeUpdate.output - prevTokensAtStart.output,
+        cacheRead: tokensBeforeUpdate.cacheRead - prevTokensAtStart.cacheRead,
+        cacheWrite: tokensBeforeUpdate.cacheWrite - prevTokensAtStart.cacheWrite,
+      };
       if (tracker.rowId) {
         db.prepare(
-          `UPDATE agent_costs SET total_cost = ?, recorded_at = datetime('now') WHERE id = ?`
-        ).run(previousDelta, tracker.rowId);
+          `UPDATE agent_costs SET total_cost = ?,
+             input_tokens = ?, output_tokens = ?, cache_read_tokens = ?, cache_write_tokens = ?,
+             recorded_at = datetime('now') WHERE id = ?`
+        ).run(previousDelta, prevTokenDeltas.input, prevTokenDeltas.output,
+              prevTokenDeltas.cacheRead, prevTokenDeltas.cacheWrite, tracker.rowId);
       }
 
       // The switch boundary is previousCost — cost before this update.
       // Any cost in this update (entry.cost - previousCost) belongs to the new bead.
       const switchPoint = previousCost ?? entry.cost;
       const newBeadInitialDelta = entry.cost - switchPoint;
+
+      // Token snapshot at switch point = tokens before this update (the new bead starts here)
+      const tokenSnapshot = previousTokens ?? {
+        input: entry.tokens.input,
+        output: entry.tokens.output,
+        cacheRead: entry.tokens.cacheRead,
+        cacheWrite: entry.tokens.cacheWrite,
+      };
+
+      // New bead token deltas = tokens gained in this update (entry.tokens - previousTokens)
+      const newBeadTokenDeltas = {
+        input: entry.tokens.input - tokenSnapshot.input,
+        output: entry.tokens.output - tokenSnapshot.output,
+        cacheRead: entry.tokens.cacheRead - tokenSnapshot.cacheRead,
+        cacheWrite: entry.tokens.cacheWrite - tokenSnapshot.cacheWrite,
+      };
 
       // Start a new row for the new bead
       const result = db.prepare(
@@ -753,10 +816,10 @@ function upsertSessionCost(
         agentId ?? null,
         effectiveBeadId,
         entry.projectPath,
-        entry.tokens.input,
-        entry.tokens.output,
-        entry.tokens.cacheRead,
-        entry.tokens.cacheWrite,
+        newBeadTokenDeltas.input,
+        newBeadTokenDeltas.output,
+        newBeadTokenDeltas.cacheRead,
+        newBeadTokenDeltas.cacheWrite,
         newBeadInitialDelta
       );
 
@@ -764,6 +827,7 @@ function upsertSessionCost(
       sessionBeadTracker.set(sessionId, {
         beadId: effectiveBeadId,
         costAtStart: switchPoint,
+        tokensAtStart: tokenSnapshot,
         rowId: Number(result.lastInsertRowid),
       });
     } else {
@@ -777,6 +841,15 @@ function upsertSessionCost(
         const costAtStart = tracker?.costAtStart ?? 0;
         const deltaCost = entry.cost - costAtStart;
 
+        // Calculate token deltas for the current bead (adj-066.3.12)
+        const tokensAtStart = tracker?.tokensAtStart ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+        const tokenDeltas = {
+          input: entry.tokens.input - tokensAtStart.input,
+          output: entry.tokens.output - tokensAtStart.output,
+          cacheRead: entry.tokens.cacheRead - tokensAtStart.cacheRead,
+          cacheWrite: entry.tokens.cacheWrite - tokensAtStart.cacheWrite,
+        };
+
         db.prepare(
           `UPDATE agent_costs SET
              input_tokens = ?, output_tokens = ?, cache_read_tokens = ?, cache_write_tokens = ?,
@@ -784,10 +857,10 @@ function upsertSessionCost(
              bead_id = COALESCE(?, bead_id), recorded_at = datetime('now')
            WHERE id = ?`
         ).run(
-          entry.tokens.input,
-          entry.tokens.output,
-          entry.tokens.cacheRead,
-          entry.tokens.cacheWrite,
+          tokenDeltas.input,
+          tokenDeltas.output,
+          tokenDeltas.cacheRead,
+          tokenDeltas.cacheWrite,
           deltaCost,
           entry.projectPath,
           agentId ?? null,
@@ -800,6 +873,7 @@ function upsertSessionCost(
           sessionBeadTracker.set(sessionId, {
             beadId: effectiveBeadId ?? "",
             costAtStart: 0,
+            tokensAtStart: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
             rowId: existing.id,
           });
         } else if (!tracker.rowId) {
@@ -827,6 +901,7 @@ function upsertSessionCost(
         sessionBeadTracker.set(sessionId, {
           beadId: effectiveBeadId ?? "",
           costAtStart: 0,
+          tokensAtStart: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
           rowId: Number(result.lastInsertRowid),
         });
       }
@@ -838,18 +913,33 @@ function upsertSessionCost(
 
 /**
  * Load session data from SQLite into the in-memory cache on startup.
+ *
+ * Since total_cost in each row is a DELTA (per-bead cost segment), we must
+ * SUM all deltas per session to reconstruct the true session total (adj-066.3.10).
+ *
+ * Also reconstructs sessionBeadTracker from the latest row per session so that
+ * bead-switch delta tracking works correctly after restart (adj-066.3.11).
  */
 function loadCacheFromDb(): void {
   if (!db) return;
   try {
-    // Get the latest non-finalized row per session
-    const rows = db.prepare(
-      `SELECT ac.* FROM agent_costs ac
-       INNER JOIN (SELECT session_id, MAX(id) as max_id FROM agent_costs WHERE finalized_at IS NULL GROUP BY session_id) latest
-       ON ac.id = latest.max_id`
+    // Sum all non-finalized deltas per session to get the true session total (adj-066.3.10)
+    // Token columns are also deltas (adj-066.3.12), so SUM them too.
+    const summaryRows = db.prepare(
+      `SELECT session_id,
+              SUM(total_cost) as total_cost,
+              SUM(input_tokens) as input_tokens,
+              SUM(output_tokens) as output_tokens,
+              SUM(cache_read_tokens) as cache_read_tokens,
+              SUM(cache_write_tokens) as cache_write_tokens,
+              MAX(recorded_at) as recorded_at,
+              MAX(project_path) as project_path
+       FROM agent_costs
+       WHERE finalized_at IS NULL
+       GROUP BY session_id`
     ).all() as AgentCostRow[];
 
-    for (const row of rows) {
+    for (const row of summaryRows) {
       sessionCache.set(row.session_id, {
         sessionId: row.session_id,
         projectPath: row.project_path ?? "",
@@ -861,6 +951,38 @@ function loadCacheFromDb(): void {
         },
         cost: row.total_cost,
         lastUpdated: row.recorded_at,
+      });
+    }
+
+    // Restore sessionBeadTracker from the latest row per session (adj-066.3.11).
+    // costAtStart = session total - latest row's delta, so future deltas are correct.
+    const latestRows = db.prepare(
+      `SELECT ac.* FROM agent_costs ac
+       INNER JOIN (SELECT session_id, MAX(id) as max_id FROM agent_costs WHERE finalized_at IS NULL GROUP BY session_id) latest
+       ON ac.id = latest.max_id`
+    ).all() as AgentCostRow[];
+
+    for (const row of latestRows) {
+      const sessionTotal = sessionCache.get(row.session_id)?.cost ?? 0;
+      // costAtStart = session total minus the current bead's delta
+      const costAtStart = sessionTotal - row.total_cost;
+
+      // For token snapshots on restore, we compute from the sum of all OTHER
+      // bead rows' tokens vs the session total tokens. Since we track tokens
+      // as running totals (MAX), the token snapshot at bead start is approximately
+      // the session's current tokens minus what the current bead used.
+      // After restart, token deltas for the current bead will be approximate.
+      const cachedEntry = sessionCache.get(row.session_id);
+      sessionBeadTracker.set(row.session_id, {
+        beadId: row.bead_id ?? "",
+        costAtStart,
+        tokensAtStart: {
+          input: (cachedEntry?.tokens.input ?? 0) - row.input_tokens,
+          output: (cachedEntry?.tokens.output ?? 0) - row.output_tokens,
+          cacheRead: (cachedEntry?.tokens.cacheRead ?? 0) - row.cache_read_tokens,
+          cacheWrite: (cachedEntry?.tokens.cacheWrite ?? 0) - row.cache_write_tokens,
+        },
+        rowId: row.id,
       });
     }
   } catch (err) {
@@ -883,26 +1005,32 @@ function mapBudgetRow(row: BudgetRow): BudgetRecord {
 
 /**
  * Check budget and emit alerts if thresholds are crossed.
+ * Deduplicates alerts per session per level (warning/critical/exceeded)
+ * so each level fires at most once per session (adj-066.3.2).
  */
 function checkAndEmitBudgetAlerts(sessionId: string, _entry: CostEntry): void {
   const budgetStatus = checkBudget(sessionId);
   if (!budgetStatus) return;
+  if (budgetStatus.status === "ok") return;
 
-  if (budgetStatus.status === "warning") {
-    getEventBus().emit("session:cost_alert", {
-      sessionId,
-      type: "budget_warning",
-      budget: budgetStatus.budget,
-      spent: budgetStatus.spent,
-      percentUsed: budgetStatus.percentUsed,
-    } as unknown as Record<string, unknown>);
-  } else if (budgetStatus.status === "critical" || budgetStatus.status === "exceeded") {
-    getEventBus().emit("session:cost_alert", {
-      sessionId,
-      type: "budget_exceeded",
-      budget: budgetStatus.budget,
-      spent: budgetStatus.spent,
-      percentUsed: budgetStatus.percentUsed,
-    } as unknown as Record<string, unknown>);
+  // Get or create the set of already-alerted levels for this session
+  let alerted = budgetAlertedSessions.get(sessionId);
+  if (!alerted) {
+    alerted = new Set<string>();
+    budgetAlertedSessions.set(sessionId, alerted);
   }
+
+  const alertLevel = budgetStatus.status; // "warning" | "critical" | "exceeded"
+  if (alerted.has(alertLevel)) return; // Already fired this level
+
+  alerted.add(alertLevel);
+
+  const alertType = alertLevel === "warning" ? "budget_warning" : "budget_exceeded";
+  getEventBus().emit("session:cost_alert", {
+    sessionId,
+    type: alertType,
+    budget: budgetStatus.budget,
+    spent: budgetStatus.spent,
+    percentUsed: budgetStatus.percentUsed,
+  } as unknown as Record<string, unknown>);
 }

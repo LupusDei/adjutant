@@ -310,10 +310,10 @@ export class SessionBridge {
     await this.connector.detach(sessionId);
     this.inputRouter.clearQueue(sessionId);
     const killed = await this.lifecycle.killSession(sessionId);
-    if (killed) {
-      clearSessionCost(sessionId);
-      await this.registry.save();
-    }
+    // Always clear session cost regardless of whether tmux kill succeeded (adj-066.3.9).
+    // The tmux session may already be dead, but we still need to finalize cost data.
+    clearSessionCost(sessionId);
+    await this.registry.save();
     return killed;
   }
 
