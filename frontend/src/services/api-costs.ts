@@ -23,7 +23,7 @@ export interface CostEntry {
   lastUpdated: string;
   /** Agent name associated with this session */
   agentId?: string;
-  /** Cost reconciliation status — added by cost reconciliation feature, optional for backward compat */
+  /** Cost reconciliation status — optional for backward compat */
   reconciliationStatus?: ReconciliationStatus;
   /** JSONL-derived cost (ground truth), present when reconciliation has run */
   jsonlCost?: number;
@@ -89,6 +89,16 @@ export interface BeadCostResult {
     cacheRead: number;
     cacheWrite: number;
   };
+}
+
+/** Reconciliation result from GET /api/costs/reconcile. */
+export interface ReconciliationResult {
+  sessionId: string;
+  statuslineCost: number;
+  jsonlCost: number;
+  difference: number;
+  percentDiff: number;
+  status: 'verified' | 'discrepancy';
 }
 
 // Re-export the getApiKey function for auth headers
@@ -171,5 +181,15 @@ export const costApi = {
     return costFetch<{ deleted: boolean }>(`/costs/budget/${id}`, {
       method: 'DELETE',
     });
+  },
+
+  /** Reconcile all active sessions against JSONL data. */
+  async fetchReconciliation(): Promise<ReconciliationResult[]> {
+    return costFetch<ReconciliationResult[]>('/costs/reconcile');
+  },
+
+  /** Reconcile a specific session against JSONL data. */
+  async fetchSessionReconciliation(sessionId: string): Promise<ReconciliationResult> {
+    return costFetch<ReconciliationResult>(`/costs/reconcile/${encodeURIComponent(sessionId)}`);
   },
 };

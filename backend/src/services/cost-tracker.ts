@@ -29,6 +29,10 @@ export interface CostEntry {
   contextPercent?: number;
   /** Agent name associated with this session (enriched from session registry) */
   agentId?: string;
+  /** Reconciliation status: estimated (default), verified (JSONL matches), discrepancy */
+  reconciliationStatus?: "estimated" | "verified" | "discrepancy";
+  /** JSONL-computed cost for comparison with statusline cost */
+  jsonlCost?: number;
 }
 
 export interface CostSummary {
