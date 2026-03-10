@@ -440,6 +440,56 @@ describe("beads-service", () => {
       });
     });
 
+    it("should map bd show dependency format (full issue objects with dependency_type)", async () => {
+      // bd show returns dependencies as full issue objects, NOT {issue_id, depends_on_id, type} tuples
+      const mockIssue: BeadsIssue = {
+        id: "adj-066",
+        title: "Epic with show-style deps",
+        description: "Test",
+        status: "in_progress",
+        priority: 1,
+        issue_type: "epic",
+        created_at: "2026-03-10T01:00:00Z",
+        dependencies: [
+          // bd show format: full issue objects with dependency_type field
+          {
+            id: "adj-066.1",
+            title: "Child task 1",
+            status: "closed",
+            dependency_type: "blocks",
+          } as any,
+          {
+            id: "adj-066.2",
+            title: "Child task 2",
+            status: "open",
+            dependency_type: "blocks",
+          } as any,
+        ],
+      };
+
+      vi.mocked(execBd).mockResolvedValue({
+        success: true,
+        data: [mockIssue],
+        exitCode: 0,
+      });
+
+      const result = await getBead("adj-066");
+
+      expect(result.success).toBe(true);
+      const detail = result.data!;
+      expect(detail.dependencies).toHaveLength(2);
+      expect(detail.dependencies[0]).toEqual({
+        issueId: "adj-066",
+        dependsOnId: "adj-066.1",
+        type: "blocks",
+      });
+      expect(detail.dependencies[1]).toEqual({
+        issueId: "adj-066",
+        dependsOnId: "adj-066.2",
+        type: "blocks",
+      });
+    });
+
     it("should handle missing optional fields gracefully", async () => {
       const minimalIssue: BeadsIssue = {
         id: "hq-min",

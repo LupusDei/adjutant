@@ -110,11 +110,25 @@ export async function getBead(
       updatedAt: issue.updated_at ?? null,
       closedAt: issue.closed_at ?? null,
       agentState: issue.agent_state ?? null,
-      dependencies: (issue.dependencies ?? []).map((d) => ({
-        issueId: d.issue_id,
-        dependsOnId: d.depends_on_id,
-        type: d.type,
-      })),
+      // bd show returns dependencies as full issue objects with {id, dependency_type, ...}
+      // NOT as {issue_id, depends_on_id, type} tuples (that's bd list format).
+      dependencies: (issue.dependencies ?? []).map((d) => {
+        const dep = d as Record<string, unknown>;
+        // bd show format: full issue objects with dependency_type
+        if (typeof dep["dependency_type"] === "string" && typeof dep["id"] === "string") {
+          return {
+            issueId: beadId,
+            dependsOnId: dep["id"] as string,
+            type: dep["dependency_type"] as string,
+          };
+        }
+        // bd list format: {issue_id, depends_on_id, type} tuples
+        return {
+          issueId: d.issue_id,
+          dependsOnId: d.depends_on_id,
+          type: d.type,
+        };
+      }),
       isWisp: issue.wisp ?? false,
       isPinned: issue.pinned ?? false,
     };

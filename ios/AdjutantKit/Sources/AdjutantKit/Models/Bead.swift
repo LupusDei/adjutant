@@ -102,6 +102,19 @@ public struct BeadDependency: Codable, Equatable, Hashable {
     }
 }
 
+/// Loose dependency for graceful decoding when the backend sends unexpected formats.
+/// All fields are optional so decoding never fails — invalid entries are filtered out.
+private struct LooseBeadDependency: Codable {
+    let issueId: String?
+    let dependsOnId: String?
+    let type: String?
+
+    func toBeadDependency() -> BeadDependency? {
+        guard let issueId, let dependsOnId, let type else { return nil }
+        return BeadDependency(issueId: issueId, dependsOnId: dependsOnId, type: type)
+    }
+}
+
 /// Detailed bead info returned by GET /api/beads/:id.
 /// Includes description, dependencies, and additional metadata.
 public struct BeadDetail: Codable, Identifiable, Equatable {
@@ -130,7 +143,36 @@ public struct BeadDetail: Codable, Identifiable, Equatable {
     enum CodingKeys: String, CodingKey {
         case id, title, status, priority, type, assignee, project, source, labels
         case createdAt, updatedAt, description, closedAt, agentState
-        case dependencies, pinned
+        case dependencies, pinned, isPinned
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        status = try container.decode(String.self, forKey: .status)
+        priority = try container.decode(Int.self, forKey: .priority)
+        type = try container.decode(String.self, forKey: .type)
+        assignee = try container.decodeIfPresent(String.self, forKey: .assignee)
+        project = try container.decodeIfPresent(String.self, forKey: .project)
+        source = try container.decode(String.self, forKey: .source)
+        labels = try container.decode([String].self, forKey: .labels)
+        createdAt = try container.decode(String.self, forKey: .createdAt)
+        updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+        description = try container.decode(String.self, forKey: .description)
+        closedAt = try container.decodeIfPresent(String.self, forKey: .closedAt)
+        agentState = try container.decodeIfPresent(String.self, forKey: .agentState)
+        // Backend sends isPinned; fall back to pinned for compatibility
+        pinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned)
+            ?? container.decodeIfPresent(Bool.self, forKey: .pinned)
+        // Gracefully skip malformed dependency objects instead of failing the entire decode
+        if let rawDeps = try? container.decode([BeadDependency].self, forKey: .dependencies) {
+            dependencies = rawDeps
+        } else if let looseDeps = try? container.decode([LooseBeadDependency].self, forKey: .dependencies) {
+            dependencies = looseDeps.compactMap { $0.toBeadDependency() }
+        } else {
+            dependencies = []
+        }
     }
 
     // Shared date formatters (avoid per-call allocation — adj-6yp4.1)
