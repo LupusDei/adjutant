@@ -114,6 +114,23 @@ final class CostDashboardViewModel: BaseViewModel {
         return formatDollars(cost)
     }
 
+    /// Total cost with tilde prefix when not fully verified.
+    var formattedTotalCostWithConfidence: String {
+        let base = formattedTotalCost
+        return isAllVerified ? base : "~\(base)"
+    }
+
+    /// Whether all sessions have verified reconciliation status.
+    var isAllVerified: Bool {
+        guard let sessions = costSummary?.sessions, !sessions.isEmpty else { return false }
+        return sessions.values.allSatisfy { $0.effectiveReconciliationStatus == "verified" }
+    }
+
+    /// Short confidence label for display.
+    var confidenceLabel: String {
+        isAllVerified ? "(VERIFIED)" : "(EST.)"
+    }
+
     /// Number of active sessions
     var sessionCount: Int {
         costSummary?.sessions.count ?? 0

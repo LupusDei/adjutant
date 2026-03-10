@@ -29,10 +29,19 @@ struct CostOverviewWidget: View {
                     .background(theme.dim.opacity(0.3))
 
                 if viewModel.hasLoadedOnce {
-                    // Total cost
+                    // Total cost with confidence label
                     HStack(alignment: .firstTextBaseline) {
-                        CRTText(viewModel.formattedTotalCost, style: .header, glowIntensity: .bright)
-                            .crtGlow(color: theme.primary, radius: 8, intensity: 0.5)
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            CRTText(viewModel.formattedTotalCostWithConfidence, style: .header, glowIntensity: .bright)
+                                .crtGlow(color: theme.primary, radius: 8, intensity: 0.5)
+
+                            CRTText(
+                                viewModel.confidenceLabel,
+                                style: .caption,
+                                glowIntensity: .none,
+                                color: viewModel.isAllVerified ? CRTTheme.State.success : theme.dim
+                            )
+                        }
 
                         Spacer()
 
@@ -208,6 +217,23 @@ final class CostOverviewWidgetViewModel: ObservableObject {
         guard let cost = costSummary?.totalCost else { return "$0.00" }
         if cost < 0.01 && cost > 0 { return "<$0.01" }
         return String(format: "$%.2f", cost)
+    }
+
+    /// Total cost with tilde prefix when not fully verified.
+    var formattedTotalCostWithConfidence: String {
+        let base = formattedTotalCost
+        return isAllVerified ? base : "~\(base)"
+    }
+
+    /// Whether all sessions have verified reconciliation status.
+    var isAllVerified: Bool {
+        guard let sessions = costSummary?.sessions, !sessions.isEmpty else { return false }
+        return sessions.values.allSatisfy { $0.effectiveReconciliationStatus == "verified" }
+    }
+
+    /// Short confidence label for display.
+    var confidenceLabel: String {
+        isAllVerified ? "(VERIFIED)" : "(EST.)"
     }
 
     var sessionCount: Int {

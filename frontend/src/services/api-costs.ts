@@ -6,6 +6,9 @@
 // Reuse the same base fetch infrastructure
 const API_BASE_URL = (import.meta.env['VITE_API_URL'] as string | undefined) ?? '/api';
 
+/** Reconciliation status indicating cost data confidence level. */
+export type ReconciliationStatus = 'estimated' | 'verified' | 'discrepancy';
+
 /** Session cost entry from the backend CostTracker. */
 export interface CostEntry {
   sessionId: string;
@@ -20,6 +23,10 @@ export interface CostEntry {
   lastUpdated: string;
   /** Agent name associated with this session */
   agentId?: string;
+  /** Cost reconciliation status — added by cost reconciliation feature, optional for backward compat */
+  reconciliationStatus?: ReconciliationStatus;
+  /** JSONL-derived cost (ground truth), present when reconciliation has run */
+  jsonlCost?: number;
 }
 
 /** Full cost summary from GET /api/costs. */

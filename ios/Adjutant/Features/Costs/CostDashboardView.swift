@@ -79,9 +79,18 @@ struct CostDashboardView: View {
     private var totalSpendCard: some View {
         CRTCard(style: .elevated) {
             VStack(spacing: CRTTheme.Spacing.sm) {
-                // Large dollar amount
-                CRTText(viewModel.formattedTotalCost, style: .header, glowIntensity: .bright)
-                    .crtGlow(color: theme.primary, radius: 12, intensity: 0.6)
+                // Large dollar amount with confidence indicator
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    CRTText(viewModel.formattedTotalCostWithConfidence, style: .header, glowIntensity: .bright)
+                        .crtGlow(color: theme.primary, radius: 12, intensity: 0.6)
+
+                    CRTText(
+                        viewModel.confidenceLabel,
+                        style: .caption,
+                        glowIntensity: .none,
+                        color: viewModel.isAllVerified ? CRTTheme.State.success : theme.dim
+                    )
+                }
 
                 // Subtitle
                 CRTText(
@@ -280,13 +289,21 @@ struct CostDashboardView: View {
 
             Spacer()
 
-            // Cost
-            CRTText(
-                viewModel.formatDollars(session.cost),
-                style: .mono,
-                glowIntensity: .subtle,
-                color: theme.bright
-            )
+            // Cost with reconciliation indicator
+            HStack(spacing: 4) {
+                CRTText(
+                    viewModel.formatDollars(session.cost),
+                    style: .mono,
+                    glowIntensity: .subtle,
+                    color: theme.bright
+                )
+                CRTText(
+                    reconciliationIndicator(for: session),
+                    style: .caption,
+                    glowIntensity: .none,
+                    color: reconciliationColor(for: session)
+                )
+            }
         }
         .padding(CRTTheme.Spacing.xs)
         .background(
@@ -297,6 +314,24 @@ struct CostDashboardView: View {
             RoundedRectangle(cornerRadius: 4)
                 .stroke(theme.dim.opacity(0.15), lineWidth: 1)
         )
+    }
+
+    /// Returns the indicator character for a session's reconciliation status.
+    private func reconciliationIndicator(for session: SessionCost) -> String {
+        switch session.effectiveReconciliationStatus {
+        case "verified": return "\u{2713}"    // checkmark
+        case "discrepancy": return "\u{26A0}" // warning
+        default: return "~"
+        }
+    }
+
+    /// Returns the color for a session's reconciliation status indicator.
+    private func reconciliationColor(for session: SessionCost) -> Color {
+        switch session.effectiveReconciliationStatus {
+        case "verified": return CRTTheme.State.success
+        case "discrepancy": return CRTTheme.State.warning
+        default: return theme.dim
+        }
     }
 
     /// Extracts a display name from a session, preferring agent name over session UUID
