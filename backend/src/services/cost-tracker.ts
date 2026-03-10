@@ -137,6 +137,20 @@ let db: Database.Database | null = null;
 /** In-memory cache keyed by sessionId for fast lookups */
 const sessionCache = new Map<string, CostEntry>();
 
+/**
+ * Tracks the last known bead and cost snapshot per session.
+ * When the beadId changes, we snapshot the cost at the switch point
+ * so we can compute deltas for per-bead cost attribution.
+ */
+interface BeadSnapshot {
+  beadId: string;
+  /** Session total cost at the time this bead was assigned */
+  costAtStart: number;
+  /** SQLite row ID for the current bead's cost entry */
+  rowId?: number;
+}
+const sessionBeadTracker = new Map<string, BeadSnapshot>();
+
 let alertThreshold = 5.0; // $5 default
 const alertedSessions = new Set<string>();
 
@@ -202,6 +216,9 @@ export function recordCostUpdate(
     }
   }
 
+  // Capture cost before update (needed for bead-switch delta calculation)
+  const previousCost = entry.cost;
+
   // Update cost
   if (update.cost !== undefined) {
     entry.cost = Math.max(entry.cost, update.cost);
@@ -215,7 +232,7 @@ export function recordCostUpdate(
   entry.lastUpdated = new Date().toISOString();
 
   // Persist to SQLite
-  upsertSessionCost(sessionId, entry, update.agentId, update.beadId);
+  upsertSessionCost(sessionId, entry, update.agentId, update.beadId, previousCost);
 
   // Emit via EventBus
   getEventBus().emit("session:cost", {
@@ -329,6 +346,7 @@ export function getCostAlertThreshold(): number {
  */
 export function resetCostTracker(): void {
   sessionCache.clear();
+  sessionBeadTracker.clear();
   db = null;
   alertThreshold = 5.0;
   alertedSessions.clear();
@@ -513,6 +531,11 @@ export function getBurnRate(): BurnRate {
 
 /**
  * Get aggregated cost for a specific bead ID.
+ *
+ * With delta-based tracking, each row's total_cost represents the cost
+ * accumulated while working on that specific bead. We SUM the deltas
+ * across all rows for the bead, plus handle active sessions (where the
+ * delta is still accumulating).
  */
 export function getBeadCost(beadId: string): BeadCostResult | null {
   if (!db) return null;
@@ -524,7 +547,8 @@ export function getBeadCost(beadId: string): BeadCostResult | null {
 
   if (rows.length === 0) return null;
 
-  // Aggregate by session (take latest/max per session)
+  // Sum deltas per session (a session may have multiple rows for the same bead
+  // if it was reassigned back to it, though this is rare)
   const sessionMap = new Map<string, {
     sessionId: string;
     cost: number;
@@ -533,7 +557,10 @@ export function getBeadCost(beadId: string): BeadCostResult | null {
 
   for (const row of rows) {
     const existing = sessionMap.get(row.session_id);
-    if (!existing || row.total_cost > existing.cost) {
+    if (existing) {
+      // Sum deltas for same session+bead
+      existing.cost += row.total_cost;
+    } else {
       sessionMap.set(row.session_id, {
         sessionId: row.session_id,
         cost: row.total_cost,
@@ -544,6 +571,22 @@ export function getBeadCost(beadId: string): BeadCostResult | null {
           cacheWrite: row.cache_write_tokens,
         },
       });
+    }
+  }
+
+  // Check for active sessions still working on this bead
+  // (the delta in the DB may be stale; use in-memory cache for live cost)
+  for (const [sessionId, tracker] of sessionBeadTracker) {
+    if (tracker.beadId === beadId) {
+      const cached = sessionCache.get(sessionId);
+      if (cached) {
+        const liveDelta = cached.cost - tracker.costAtStart;
+        const existing = sessionMap.get(sessionId);
+        if (existing) {
+          // Replace with live delta (more accurate than DB value)
+          existing.cost = liveDelta;
+        }
+      }
     }
   }
 
@@ -562,6 +605,11 @@ export function getBeadCost(beadId: string): BeadCostResult | null {
 /**
  * Get aggregated cost for an epic (recursively sums child bead costs).
  * Accepts a list of child bead IDs (caller resolves hierarchy).
+ *
+ * With delta-based tracking, each bead's cost is independent (stored as
+ * a delta, not a running total). So we SUM all per-bead costs across
+ * the epic without risk of double-counting — even when a single session
+ * spans multiple beads under the same epic.
  */
 export function getEpicCost(epicBeadId: string, childBeadIds: string[]): BeadCostResult | null {
   const allIds = [epicBeadId, ...childBeadIds];
@@ -576,12 +624,20 @@ export function getEpicCost(epicBeadId: string, childBeadIds: string[]): BeadCos
 
   if (allSessions.length === 0) return null;
 
-  // Deduplicate sessions (a session may contribute to multiple beads)
+  // Accumulate costs per session across all beads (SUM, not MAX).
+  // With delta tracking, each bead's cost is already the delta for that segment,
+  // so summing gives the total cost the session spent across the epic.
   const sessionMap = new Map<string, BeadCostResult["sessions"][0]>();
   for (const s of allSessions) {
     const existing = sessionMap.get(s.sessionId);
-    if (!existing || s.cost > existing.cost) {
-      sessionMap.set(s.sessionId, s);
+    if (existing) {
+      existing.cost += s.cost;
+      existing.tokens.input += s.tokens.input;
+      existing.tokens.output += s.tokens.output;
+      existing.tokens.cacheRead += s.tokens.cacheRead;
+      existing.tokens.cacheWrite += s.tokens.cacheWrite;
+    } else {
+      sessionMap.set(s.sessionId, { ...s, tokens: { ...s.tokens } });
     }
   }
 
@@ -603,41 +659,49 @@ export function getEpicCost(epicBeadId: string, childBeadIds: string[]): BeadCos
 
 /**
  * Upsert a session's cost entry into the agent_costs table.
- * Uses INSERT OR REPLACE keyed on session_id.
+ *
+ * Delta tracking: When the beadId changes for a session, we INSERT a new row
+ * with the cost delta (cost accumulated while working on the previous bead)
+ * and start a new row for the new bead. This enables accurate per-bead cost
+ * attribution even when a single session works on multiple beads sequentially.
+ *
+ * The `total_cost` column stores the DELTA (cost for this bead segment only),
+ * not the running session total.
  */
 function upsertSessionCost(
   sessionId: string,
   entry: CostEntry,
   agentId?: string,
-  beadId?: string
+  beadId?: string,
+  previousCost?: number
 ): void {
   if (!db) return;
   try {
-    // Check if row exists for this session
-    const existing = db.prepare(
-      "SELECT id FROM agent_costs WHERE session_id = ? ORDER BY id DESC LIMIT 1"
-    ).get(sessionId) as { id: number } | undefined;
+    const tracker = sessionBeadTracker.get(sessionId);
+    const effectiveBeadId = beadId ?? null;
+    const trackerBeadId = tracker?.beadId ?? null;
 
-    if (existing) {
-      db.prepare(
-        `UPDATE agent_costs SET
-           input_tokens = ?, output_tokens = ?, cache_read_tokens = ?, cache_write_tokens = ?,
-           total_cost = ?, project_path = ?, agent_id = COALESCE(?, agent_id),
-           bead_id = COALESCE(?, bead_id), recorded_at = datetime('now')
-         WHERE id = ?`
-      ).run(
-        entry.tokens.input,
-        entry.tokens.output,
-        entry.tokens.cacheRead,
-        entry.tokens.cacheWrite,
-        entry.cost,
-        entry.projectPath,
-        agentId ?? null,
-        beadId ?? null,
-        existing.id
-      );
-    } else {
-      db.prepare(
+    // Detect bead change: if we have a tracker and the bead is changing
+    const beadChanged = tracker && effectiveBeadId !== null && trackerBeadId !== effectiveBeadId;
+
+    if (beadChanged) {
+      // Finalize the previous bead's row with the delta cost.
+      // Use previousCost (cost before this update) to calculate what the old bead earned,
+      // since entry.cost already includes the new update's cost.
+      const previousDelta = (previousCost ?? entry.cost) - tracker.costAtStart;
+      if (tracker.rowId) {
+        db.prepare(
+          `UPDATE agent_costs SET total_cost = ?, recorded_at = datetime('now') WHERE id = ?`
+        ).run(previousDelta, tracker.rowId);
+      }
+
+      // The switch boundary is previousCost — cost before this update.
+      // Any cost in this update (entry.cost - previousCost) belongs to the new bead.
+      const switchPoint = previousCost ?? entry.cost;
+      const newBeadInitialDelta = entry.cost - switchPoint;
+
+      // Start a new row for the new bead
+      const result = db.prepare(
         `INSERT INTO agent_costs (session_id, agent_id, bead_id, project_path,
            input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
            total_cost, recorded_at)
@@ -645,14 +709,85 @@ function upsertSessionCost(
       ).run(
         sessionId,
         agentId ?? null,
-        beadId ?? null,
+        effectiveBeadId,
         entry.projectPath,
         entry.tokens.input,
         entry.tokens.output,
         entry.tokens.cacheRead,
         entry.tokens.cacheWrite,
-        entry.cost
+        newBeadInitialDelta
       );
+
+      // Update tracker for the new bead (costAtStart = switch boundary)
+      sessionBeadTracker.set(sessionId, {
+        beadId: effectiveBeadId,
+        costAtStart: switchPoint,
+        rowId: Number(result.lastInsertRowid),
+      });
+    } else {
+      // Same bead (or no bead) — upsert the existing row
+      const existing = tracker?.rowId
+        ? (db.prepare("SELECT id FROM agent_costs WHERE id = ?").get(tracker.rowId) as { id: number } | undefined)
+        : (db.prepare("SELECT id FROM agent_costs WHERE session_id = ? ORDER BY id DESC LIMIT 1").get(sessionId) as { id: number } | undefined);
+
+      if (existing) {
+        // Calculate delta cost for the current bead segment
+        const costAtStart = tracker?.costAtStart ?? 0;
+        const deltaCost = entry.cost - costAtStart;
+
+        db.prepare(
+          `UPDATE agent_costs SET
+             input_tokens = ?, output_tokens = ?, cache_read_tokens = ?, cache_write_tokens = ?,
+             total_cost = ?, project_path = ?, agent_id = COALESCE(?, agent_id),
+             bead_id = COALESCE(?, bead_id), recorded_at = datetime('now')
+           WHERE id = ?`
+        ).run(
+          entry.tokens.input,
+          entry.tokens.output,
+          entry.tokens.cacheRead,
+          entry.tokens.cacheWrite,
+          deltaCost,
+          entry.projectPath,
+          agentId ?? null,
+          effectiveBeadId,
+          existing.id
+        );
+
+        // Initialize tracker if not yet set
+        if (!tracker) {
+          sessionBeadTracker.set(sessionId, {
+            beadId: effectiveBeadId ?? "",
+            costAtStart: 0,
+            rowId: existing.id,
+          });
+        } else if (!tracker.rowId) {
+          tracker.rowId = existing.id;
+        }
+      } else {
+        // First row for this session
+        const result = db.prepare(
+          `INSERT INTO agent_costs (session_id, agent_id, bead_id, project_path,
+             input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+             total_cost, recorded_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+        ).run(
+          sessionId,
+          agentId ?? null,
+          effectiveBeadId,
+          entry.projectPath,
+          entry.tokens.input,
+          entry.tokens.output,
+          entry.tokens.cacheRead,
+          entry.tokens.cacheWrite,
+          entry.cost // First row: delta = total cost so far
+        );
+
+        sessionBeadTracker.set(sessionId, {
+          beadId: effectiveBeadId ?? "",
+          costAtStart: 0,
+          rowId: Number(result.lastInsertRowid),
+        });
+      }
     }
   } catch (err) {
     logWarn("Failed to persist cost data to SQLite", { error: String(err) });

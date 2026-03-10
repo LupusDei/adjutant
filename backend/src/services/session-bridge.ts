@@ -10,6 +10,7 @@ import { basename } from "path";
 import { logInfo, logWarn } from "../utils/index.js";
 import { getEventBus } from "./event-bus.js";
 import { recordCostUpdate } from "./cost-tracker.js";
+import { getAgentStatuses } from "./mcp-tools/status.js";
 import {
   SessionRegistry,
   getSessionRegistry,
@@ -152,10 +153,14 @@ export class SessionBridge {
           } else if (event.type === "cost_update") {
             const session = this.registry.get(sessionId);
             const projectPath = session?.projectPath ?? "";
+            const agentId = session?.name;
+            const beadId = agentId ? getAgentStatuses().get(agentId)?.beadId : undefined;
             recordCostUpdate(sessionId, projectPath, {
               ...(event.tokens ? { tokens: event.tokens } : {}),
               ...(event.cost !== undefined ? { cost: event.cost } : {}),
               ...(event.contextPercent !== undefined ? { contextPercent: event.contextPercent } : {}),
+              ...(agentId ? { agentId } : {}),
+              ...(beadId ? { beadId } : {}),
             });
           }
         }

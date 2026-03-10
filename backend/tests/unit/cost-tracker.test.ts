@@ -416,17 +416,137 @@ describe("cost-tracker", () => {
       expect(getBeadCost("adj-999")).toBeNull();
     });
 
-    it("should deduplicate sessions in epic cost when session spans multiple beads", () => {
-      // Same session works on two child beads
+    it("should sum deltas in epic cost when session spans multiple beads", () => {
+      // Same session works on two child beads sequentially
+      // Start on bead adj-001.1, cost goes from 0 to 10
+      recordCostUpdate("sess-1", "/project", { cost: 5.0, beadId: "adj-001.1" });
       recordCostUpdate("sess-1", "/project", { cost: 10.0, beadId: "adj-001.1" });
+
+      // Switch to bead adj-001.2, cost goes from 10 to 15
+      recordCostUpdate("sess-1", "/project", { cost: 12.0, beadId: "adj-001.2" });
       recordCostUpdate("sess-1", "/project", { cost: 15.0, beadId: "adj-001.2" });
 
-      // Cost entries for sess-1 will be updated to latest (15.0) since upsert uses max
       const epicResult = getEpicCost("adj-001", ["adj-001.1", "adj-001.2"]);
-      // Should not double-count the session
       expect(epicResult).toBeDefined();
+      // Session appears once in the epic (costs summed across both beads)
       expect(epicResult!.sessions).toHaveLength(1);
-      expect(epicResult!.totalCost).toBe(15.0);
+      // Total should be 10 (bead 1 delta) + 5 (bead 2 delta) = 15
+      expect(epicResult!.totalCost).toBeCloseTo(15.0, 10);
+    });
+  });
+
+  describe("delta tracking on bead change", () => {
+    it("should create a new cost row when bead changes", () => {
+      // Work on bead A, cost goes to $2
+      recordCostUpdate("sess-1", "/project", { cost: 1.0, beadId: "adj-010", agentId: "agent-a" });
+      recordCostUpdate("sess-1", "/project", { cost: 2.0, beadId: "adj-010", agentId: "agent-a" });
+
+      // Switch to bead B, cost goes to $3
+      recordCostUpdate("sess-1", "/project", { cost: 3.0, beadId: "adj-020", agentId: "agent-a" });
+
+      // Should have 2 rows: one for adj-010, one for adj-020
+      const rows = testDb.prepare(
+        "SELECT * FROM agent_costs WHERE session_id = 'sess-1' ORDER BY id"
+      ).all() as Array<Record<string, unknown>>;
+
+      expect(rows).toHaveLength(2);
+      expect(rows[0]!.bead_id).toBe("adj-010");
+      expect(rows[0]!.total_cost).toBeCloseTo(2.0, 10); // Delta for bead A
+      expect(rows[1]!.bead_id).toBe("adj-020");
+    });
+
+    it("should store cost delta not running total per bead", () => {
+      // Bead A: cost 0 -> 5
+      recordCostUpdate("sess-1", "/project", { cost: 5.0, beadId: "adj-010" });
+
+      // Switch to bead B: cost 5 -> 8
+      recordCostUpdate("sess-1", "/project", { cost: 6.0, beadId: "adj-020" });
+      recordCostUpdate("sess-1", "/project", { cost: 8.0, beadId: "adj-020" });
+
+      const beadA = getBeadCost("adj-010");
+      const beadB = getBeadCost("adj-020");
+
+      expect(beadA).toBeDefined();
+      expect(beadA!.totalCost).toBeCloseTo(5.0, 10); // Delta: 5 - 0
+
+      expect(beadB).toBeDefined();
+      expect(beadB!.totalCost).toBeCloseTo(3.0, 10); // Delta: 8 - 5
+    });
+
+    it("should handle multiple bead switches correctly", () => {
+      // Bead A: $0 -> $3
+      recordCostUpdate("sess-1", "/project", { cost: 3.0, beadId: "adj-010" });
+
+      // Bead B: $3 -> $7
+      recordCostUpdate("sess-1", "/project", { cost: 7.0, beadId: "adj-020" });
+
+      // Bead C: $7 -> $10
+      recordCostUpdate("sess-1", "/project", { cost: 10.0, beadId: "adj-030" });
+
+      expect(getBeadCost("adj-010")!.totalCost).toBeCloseTo(3.0, 10);
+      expect(getBeadCost("adj-020")!.totalCost).toBeCloseTo(4.0, 10);
+      expect(getBeadCost("adj-030")!.totalCost).toBeCloseTo(3.0, 10);
+    });
+
+    it("should populate agentId and beadId in SQLite correctly", () => {
+      recordCostUpdate("sess-1", "/project", {
+        cost: 1.50,
+        tokens: { input: 2000, output: 1000 },
+        agentId: "engineer-1",
+        beadId: "adj-066.1",
+      });
+
+      const row = testDb.prepare(
+        "SELECT * FROM agent_costs WHERE session_id = 'sess-1'"
+      ).get() as Record<string, unknown>;
+
+      expect(row).toBeDefined();
+      expect(row.agent_id).toBe("engineer-1");
+      expect(row.bead_id).toBe("adj-066.1");
+      expect(row.total_cost).toBeCloseTo(1.50, 10);
+      expect(row.input_tokens).toBe(2000);
+      expect(row.output_tokens).toBe(1000);
+    });
+
+    it("should return correct per-bead cost via getBeadCost", () => {
+      // Two different sessions work on the same bead
+      recordCostUpdate("sess-1", "/project", { cost: 2.0, beadId: "adj-050", agentId: "agent-a" });
+      recordCostUpdate("sess-2", "/project", { cost: 3.0, beadId: "adj-050", agentId: "agent-b" });
+
+      const result = getBeadCost("adj-050");
+      expect(result).toBeDefined();
+      expect(result!.totalCost).toBeCloseTo(5.0, 10);
+      expect(result!.sessions).toHaveLength(2);
+    });
+
+    it("should aggregate epic cost without double-counting across beads", () => {
+      // Session 1 works on child bead A: $0 -> $4
+      recordCostUpdate("sess-1", "/project", { cost: 4.0, beadId: "adj-100.1" });
+      // Session 1 switches to child bead B: $4 -> $7
+      recordCostUpdate("sess-1", "/project", { cost: 7.0, beadId: "adj-100.2" });
+
+      // Session 2 works on child bead B only: $0 -> $2
+      recordCostUpdate("sess-2", "/project", { cost: 2.0, beadId: "adj-100.2" });
+
+      const epic = getEpicCost("adj-100", ["adj-100.1", "adj-100.2"]);
+      expect(epic).toBeDefined();
+      // sess-1 contributed $4 (bead A) + $3 (bead B) = $7
+      // sess-2 contributed $2 (bead B)
+      // Total: $9
+      expect(epic!.totalCost).toBeCloseTo(9.0, 10);
+      expect(epic!.sessions).toHaveLength(2);
+    });
+
+    it("should handle active session with no bead switch yet", () => {
+      // Session is actively working on a bead, no switch has happened
+      recordCostUpdate("sess-1", "/project", { cost: 1.0, beadId: "adj-070" });
+      recordCostUpdate("sess-1", "/project", { cost: 3.5, beadId: "adj-070" });
+
+      const result = getBeadCost("adj-070");
+      expect(result).toBeDefined();
+      // Should return the current accumulated cost
+      expect(result!.totalCost).toBeCloseTo(3.5, 10);
+      expect(result!.sessions).toHaveLength(1);
     });
   });
 });
