@@ -7,6 +7,9 @@ struct BeadRowView: View {
     let bead: BeadInfo
     let onTap: () -> Void
 
+    /// Cost loaded asynchronously for active beads.
+    @State private var beadCost: Double?
+
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: CRTTheme.Spacing.sm) {
@@ -39,6 +42,19 @@ struct BeadRowView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint("Double tap to view details")
+        .task {
+            // Only fetch cost for active beads (in_progress, hooked)
+            let status = bead.status.lowercased()
+            guard status == "in_progress" || status == "hooked" else { return }
+            do {
+                let cost = try await AppState.shared.apiClient.getBeadCost(beadId: bead.id)
+                if cost.totalCost > 0 {
+                    beadCost = cost.totalCost
+                }
+            } catch {
+                // Cost loading is non-fatal
+            }
+        }
     }
 
     // MARK: - Subviews
@@ -99,7 +115,19 @@ struct BeadRowView: View {
             Text(displayStatus.uppercased().replacingOccurrences(of: "_", with: " "))
                 .font(CRTTheme.Typography.font(size: 9, weight: .medium))
                 .foregroundColor(statusType.color)
+
+            // Cost (if loaded)
+            if let cost = beadCost {
+                Text(formatCost(cost))
+                    .font(CRTTheme.Typography.font(size: 9, weight: .bold))
+                    .foregroundColor(theme.primary)
+            }
         }
+    }
+
+    private func formatCost(_ cost: Double) -> String {
+        if cost < 0.01 && cost > 0 { return "<$0.01" }
+        return String(format: "$%.2f", cost)
     }
 
     // MARK: - Helpers
