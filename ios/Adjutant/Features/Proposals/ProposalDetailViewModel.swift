@@ -11,6 +11,18 @@ final class ProposalDetailViewModel: BaseViewModel {
     /// The proposal data
     @Published private(set) var proposal: Proposal?
 
+    /// Comments on this proposal
+    @Published private(set) var comments: [ProposalComment] = []
+
+    /// Revision history for this proposal
+    @Published private(set) var revisions: [ProposalRevision] = []
+
+    /// Text for the new comment input field
+    @Published var commentDraft: String = ""
+
+    /// Whether a comment is currently being posted
+    @Published private(set) var isPostingComment: Bool = false
+
     /// Whether the send-to-agent action succeeded (drives alert)
     @Published var sendSuccess: Bool = false
 
@@ -31,6 +43,8 @@ final class ProposalDetailViewModel: BaseViewModel {
 
     override func refresh() async {
         await loadProposal()
+        await loadComments()
+        await loadRevisions()
     }
 
     // MARK: - Public Methods
@@ -41,6 +55,40 @@ final class ProposalDetailViewModel: BaseViewModel {
             try await self.apiClient.getProposal(id: self.proposalId)
         }
         if let result { proposal = result }
+    }
+
+    /// Loads comments for this proposal
+    func loadComments() async {
+        let result = await performAsync(showLoading: false) { [self] in
+            try await self.apiClient.fetchComments(proposalId: self.proposalId)
+        }
+        if let result { comments = result }
+    }
+
+    /// Loads revision history for this proposal
+    func loadRevisions() async {
+        let result = await performAsync(showLoading: false) { [self] in
+            try await self.apiClient.fetchRevisions(proposalId: self.proposalId)
+        }
+        if let result { revisions = result }
+    }
+
+    /// Posts a new comment on this proposal
+    func postComment() async {
+        let body = commentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else { return }
+
+        isPostingComment = true
+        await performAsyncAction(showLoading: false) { [self] in
+            let comment = try await self.apiClient.postComment(
+                proposalId: self.proposalId,
+                author: "user",
+                body: body
+            )
+            self.comments.append(comment)
+            self.commentDraft = ""
+        }
+        isPostingComment = false
     }
 
     /// Accepts the proposal
