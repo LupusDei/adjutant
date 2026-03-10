@@ -872,4 +872,56 @@ describe("cost-tracker", () => {
       expect(beadB!.tokenBreakdown.output).toBe(1000); // delta: 1500 - 500
     });
   });
+
+  describe("agentId enrichment (adj-mrdq)", () => {
+    it("should include agentId on CostEntry in getCostSummary", () => {
+      recordCostUpdate("sess-1", "/project", {
+        cost: 0.50,
+        tokens: { input: 1000, output: 500 },
+        agentId: "engineer-1",
+      });
+
+      const summary = getCostSummary();
+      const entry = summary.sessions["sess-1"];
+      expect(entry).toBeDefined();
+      expect(entry!.agentId).toBe("engineer-1");
+    });
+
+    it("should include agentId on getSessionCost", () => {
+      recordCostUpdate("sess-1", "/project", {
+        cost: 0.25,
+        agentId: "engineer-2",
+      });
+
+      const entry = getSessionCost("sess-1");
+      expect(entry).toBeDefined();
+      expect(entry!.agentId).toBe("engineer-2");
+    });
+
+    it("should restore agentId from SQLite on cache reload", () => {
+      recordCostUpdate("sess-1", "/project", {
+        cost: 1.00,
+        tokens: { input: 2000, output: 1000 },
+        agentId: "engineer-3",
+      });
+
+      // Reset in-memory cache and reload from DB
+      resetCostTracker();
+      initCostTracker(testDb);
+
+      const entry = getSessionCost("sess-1");
+      expect(entry).toBeDefined();
+      expect(entry!.agentId).toBe("engineer-3");
+    });
+
+    it("should not set agentId when not provided", () => {
+      recordCostUpdate("sess-1", "/project", {
+        cost: 0.10,
+      });
+
+      const entry = getSessionCost("sess-1");
+      expect(entry).toBeDefined();
+      expect(entry!.agentId).toBeUndefined();
+    });
+  });
 });

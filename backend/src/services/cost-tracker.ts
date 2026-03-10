@@ -27,6 +27,8 @@ export interface CostEntry {
   lastUpdated: string;
   /** Direct context window usage % from Claude Code status bar (0-100) */
   contextPercent?: number;
+  /** Agent name associated with this session (enriched from session registry) */
+  agentId?: string;
 }
 
 export interface CostSummary {
@@ -254,6 +256,11 @@ export function recordCostUpdate(
   // Update context percent (direct from Claude Code status bar)
   if (update.contextPercent !== undefined) {
     entry.contextPercent = update.contextPercent;
+  }
+
+  // Store agent name for display in cost summaries (adj-mrdq)
+  if (update.agentId) {
+    entry.agentId = update.agentId;
   }
 
   entry.lastUpdated = new Date().toISOString();
@@ -967,12 +974,17 @@ function loadCacheFromDb(): void {
       // costAtStart = session total minus the current bead's delta
       const costAtStart = sessionTotal - row.total_cost;
 
+      // Restore agentId from the latest row (adj-mrdq)
+      const cachedEntry = sessionCache.get(row.session_id);
+      if (cachedEntry && row.agent_id) {
+        cachedEntry.agentId = row.agent_id;
+      }
+
       // For token snapshots on restore, we compute from the sum of all OTHER
       // bead rows' tokens vs the session total tokens. Since we track tokens
       // as running totals (MAX), the token snapshot at bead start is approximately
       // the session's current tokens minus what the current bead used.
       // After restart, token deltas for the current bead will be approximate.
-      const cachedEntry = sessionCache.get(row.session_id);
       sessionBeadTracker.set(row.session_id, {
         beadId: row.bead_id ?? "",
         costAtStart,

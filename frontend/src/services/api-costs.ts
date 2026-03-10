@@ -18,6 +18,8 @@ export interface CostEntry {
   };
   cost: number;
   lastUpdated: string;
+  /** Agent name associated with this session */
+  agentId?: string;
 }
 
 /** Full cost summary from GET /api/costs. */
