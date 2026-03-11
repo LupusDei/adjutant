@@ -152,4 +152,47 @@ describe("useProposals", () => {
 
     expect(result.current.typeFilter).toBe("engineering");
   });
+
+  it("should pass project param to API when provided", async () => {
+    const { result } = renderHook(() => useProposals({ project: "adjutant" }));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(mockList).toHaveBeenCalledWith(
+      expect.objectContaining({ project: "adjutant" })
+    );
+  });
+
+  it("should not include project param when undefined", async () => {
+    const { result } = renderHook(() => useProposals());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Should be called with params that don't include project
+    const callArgs = mockList.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArgs.project).toBeUndefined();
+  });
+
+  it("should refetch when project changes", async () => {
+    let project: string | undefined = "adjutant";
+    const { result, rerender } = renderHook(() => useProposals({ project }));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    mockList.mockClear();
+    project = "other-project";
+    rerender();
+
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalledWith(
+        expect.objectContaining({ project: "other-project" })
+      );
+    });
+  });
 });
