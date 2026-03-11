@@ -346,13 +346,17 @@ async function handleSessionConnect(client: WsClient, msg: WsClientMessage): Pro
       // Set up output forwarding for this client
       const handler = (sid: string, line: string, events: unknown[]) => {
         if (sid === sessionId && client.authenticated) {
-          // Structured events for chat view
-          if (events.length > 0) {
-            logInfo("ws sending session_output", { sessionId: sid, eventCount: events.length, types: events.map((e) => (e as Record<string, unknown>)['type']) });
+          // Structured events for chat view — filter out internal-only event types
+          // (cost_update is consumed by cost-tracker, not user-facing output)
+          const clientEvents = events.filter(
+            (e) => (e as Record<string, unknown>)['type'] !== "cost_update"
+          );
+          if (clientEvents.length > 0) {
+            logInfo("ws sending session_output", { sessionId: sid, eventCount: clientEvents.length, types: clientEvents.map((e) => (e as Record<string, unknown>)['type']) });
             send(client, {
               type: "session_output",
               sessionId: sid,
-              events,
+              events: clientEvents,
             });
           }
           // Raw line for terminal view

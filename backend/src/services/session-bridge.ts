@@ -144,19 +144,8 @@ export class SessionBridge {
     // Single output path: capture-pane polling only (no raw pipe-pane reading)
     this.connector.onOutput((sessionId, _line, events) => {
       if (events.length > 0) {
-        getEventBus().emit("stream:status", {
-          streamId: sessionId,
-          agent: this.registry.get(sessionId)?.name ?? "unknown",
-          state: "token",
-        });
-        getEventBus().emit("stream:output", {
-          streamId: sessionId,
-          events,
-        });
-
-        // Update session status from parsed output events.
-        // This triggers flushQueue() when the agent goes idle,
-        // delivering any queued input from iOS/WebSocket.
+        // Process internal events (status, cost) before broadcasting.
+        // cost_update is internal-only — consumed by cost-tracker, not user-facing.
         for (const event of events) {
           if (event.type === "status") {
             const mapped = event.state === "thinking" ? "working" : event.state;
@@ -174,6 +163,20 @@ export class SessionBridge {
               ...(beadId ? { beadId } : {}),
             });
           }
+        }
+
+        // Broadcast only user-facing events (filter out cost_update)
+        const clientEvents = events.filter((e) => e.type !== "cost_update");
+        if (clientEvents.length > 0) {
+          getEventBus().emit("stream:status", {
+            streamId: sessionId,
+            agent: this.registry.get(sessionId)?.name ?? "unknown",
+            state: "token",
+          });
+          getEventBus().emit("stream:output", {
+            streamId: sessionId,
+            events: clientEvents,
+          });
         }
       }
     });
