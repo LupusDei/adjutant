@@ -23,8 +23,10 @@ import { logInfo } from "../utils/index.js";
 import type { EventStore } from "../services/event-store.js";
 import { TimelineQuerySchema } from "../types/events.js";
 
-/** Map internal event names to SSE event type names */
-const EVENT_TYPE_MAP: Record<EventName, string> = {
+/** Map internal event names to SSE event type names.
+ *  Not every EventName needs an SSE mapping — some events (e.g. stream:output)
+ *  are delivered only via dedicated WebSocket channels. */
+const EVENT_TYPE_MAP: Partial<Record<EventName, string>> = {
   "bead:created": "bead_update",
   "bead:updated": "bead_update",
   "bead:closed": "bead_update",
@@ -36,7 +38,6 @@ const EVENT_TYPE_MAP: Record<EventName, string> = {
   "session:cost": "session_cost",
   "session:cost_alert": "session_cost_alert",
   "session:permission": "session_permission",
-  "stream:output": "stream_output",
   "mcp:agent_connected": "mcp_agent_connected",
   "mcp:agent_disconnected": "mcp_agent_disconnected",
   "correction:detected": "correction_detected",
