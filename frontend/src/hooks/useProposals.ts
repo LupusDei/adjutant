@@ -2,6 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import type { Proposal, ProposalType, ProposalStatus } from "../types";
 import api from "../services/api";
 
+export interface UseProposalsOptions {
+  /** Filter proposals by project name */
+  project?: string;
+}
+
 export interface UseProposalsResult {
   proposals: Proposal[];
   loading: boolean;
@@ -16,7 +21,7 @@ export interface UseProposalsResult {
   refresh: () => Promise<void>;
 }
 
-export function useProposals(): UseProposalsResult {
+export function useProposals(options?: UseProposalsOptions): UseProposalsResult {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,9 +32,10 @@ export function useProposals(): UseProposalsResult {
     setLoading(true);
     setError(null);
     try {
-      const params: { status?: ProposalStatus; type?: ProposalType } = {};
+      const params: { status?: ProposalStatus; type?: ProposalType; project?: string } = {};
       if (statusFilter !== "all") params.status = statusFilter;
       if (typeFilter !== "all") params.type = typeFilter;
+      if (options?.project) params.project = options.project;
       const data = await api.proposals.list(params);
       setProposals(data);
     } catch (err) {
@@ -37,7 +43,7 @@ export function useProposals(): UseProposalsResult {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, typeFilter]);
+  }, [statusFilter, typeFilter, options?.project]);
 
   useEffect(() => {
     void fetchProposals();

@@ -1,5 +1,6 @@
 import { type CSSProperties, useState, useCallback } from "react";
 import { useProposals } from "../../hooks/useProposals";
+import { useProject } from "../../contexts/ProjectContext";
 import { ProposalCard } from "./ProposalCard";
 import { ProposalDetailView } from "./ProposalDetailView";
 import { SendToAgentModal, type SendToAgentMode } from "./SendToAgentModal";
@@ -24,6 +25,7 @@ const TYPE_OPTIONS: Array<{ value: ProposalType | "all"; label: string }> = [
 ];
 
 export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
+  const { selectedProject } = useProject();
   const {
     proposals,
     loading,
@@ -36,7 +38,7 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
     dismiss,
     complete,
     refresh,
-  } = useProposals();
+  } = useProposals({ project: selectedProject?.name });
 
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   const [sendToAgentProposal, setSendToAgentProposal] = useState<Proposal | null>(null);
