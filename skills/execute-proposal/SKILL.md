@@ -22,23 +22,33 @@ You have been asked to execute a proposal. Follow these steps:
    get_proposal({ id: "{proposalId}" })
    ```
 
-2. **Report status** via MCP:
+2. **Validate project match** — ensure this proposal belongs to your current project:
+   - Call `get_project_state()` to determine your current project.
+   - Compare `proposal.project` with the current project name.
+   - If they do **not** match, gracefully decline:
+     ```
+     send_message({ to: "user", body: "Cannot execute proposal '<title>' — it belongs to project '<proposal.project>' but I am currently scoped to project '<my-project>'. Please route this to an agent working on '<proposal.project>'." })
+     ```
+     Do **not** change the proposal's status (leave it as-is). Stop execution here — do not proceed to epic creation.
+   - If they match, continue to the next step.
+
+3. **Report status** via MCP:
    ```
    set_status({ status: "working", task: "Executing proposal: <title>" })
    ```
 
-3. **Acknowledge to user** via MCP:
+4. **Acknowledge to user** via MCP:
    ```
    send_message({ to: "user", body: "Starting work on proposal: <title>. Fetching details and creating epic hierarchy." })
    ```
 
-4. **Create the epic hierarchy** by invoking the epic-planner skill:
+5. **Create the epic hierarchy** by invoking the epic-planner skill:
    ```
    adjutant-agent:epic-planner <proposal title and description>
    ```
    Pass the full proposal title and description content to the epic planner so it can generate specs, plan, tasks, and beads.
 
-5. **Report completion** via MCP:
+6. **Report completion** via MCP:
    ```
    announce({ type: "completion", title: "Proposal executed: <title>", body: "Epic hierarchy created. See beads for task breakdown." })
    ```

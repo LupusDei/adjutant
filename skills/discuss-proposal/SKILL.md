@@ -22,18 +22,28 @@ You have been asked to discuss and review a proposal with the user. Follow these
    get_proposal({ id: "{proposalId}" })
    ```
 
-2. **Check existing comments and revisions** to understand prior discussion:
+2. **Validate project match** — ensure this proposal belongs to your current project:
+   - Call `get_project_state()` to determine your current project.
+   - Compare `proposal.project` with the current project name.
+   - If they do **not** match, gracefully decline:
+     ```
+     send_message({ to: "user", body: "Cannot discuss proposal '<title>' — it belongs to project '<proposal.project>' but I am currently scoped to project '<my-project>'. Please route this to an agent working on '<proposal.project>'.", threadId: "proposal-{proposalId}" })
+     ```
+     Do **not** change the proposal's status (leave it as-is). Stop execution here — do not proceed with the review.
+   - If they match, continue to the next step.
+
+3. **Check existing comments and revisions** to understand prior discussion:
    ```
    list_proposal_comments({ id: "{proposalId}" })
    list_revisions({ id: "{proposalId}" })
    ```
 
-3. **Report status** via MCP:
+4. **Report status** via MCP:
    ```
    set_status({ status: "working", task: "Reviewing proposal: <title>" })
    ```
 
-4. **Analyze the proposal** and send your analysis to the user via MCP:
+5. **Analyze the proposal** and send your analysis to the user via MCP:
    ```
    send_message({ to: "user", body: "<your analysis>", threadId: "proposal-{proposalId}" })
    ```
@@ -46,16 +56,16 @@ You have been asked to discuss and review a proposal with the user. Follow these
    - **Suggestions**: Specific improvements or alternatives
    - **Questions**: Anything unclear that needs user input
 
-5. **Record your review as a comment** on the proposal. This is mandatory — every review must be permanently attached to the proposal record:
+6. **Record your review as a comment** on the proposal. This is mandatory — every review must be permanently attached to the proposal record:
    ```
    comment_on_proposal({ id: "{proposalId}", body: "<review summary>" })
    ```
 
    The comment body should be a concise summary of your review findings. It does not need to duplicate the full chat message — focus on the key points: strengths, weaknesses, and any recommended changes.
 
-6. **Engage in discussion**: After sending your initial analysis, check for user responses periodically using `read_messages`. Respond to questions and refine your thinking based on feedback.
+7. **Engage in discussion**: After sending your initial analysis, check for user responses periodically using `read_messages`. Respond to questions and refine your thinking based on feedback.
 
-7. **If you identify concrete improvements**, create a revision. Follow these sub-steps in order:
+8. **If you identify concrete improvements**, create a revision. Follow these sub-steps in order:
 
    a. **Announce your intent to the user FIRST** — you must NOT silently revise. Send a message explaining exactly what you plan to change and why:
       ```
@@ -77,7 +87,7 @@ You have been asked to discuss and review a proposal with the user. Follow these
 
       Only include the fields you are actually changing (title, description, type). Omit fields that remain the same. The `changelog` field is always required and must be descriptive — never use generic text like "updated proposal".
 
-8. **When the discussion concludes**, suggest next steps:
+9. **When the discussion concludes**, suggest next steps:
    - Accept the proposal as-is
    - Accept with the revision already applied
    - Dismiss with reasoning
