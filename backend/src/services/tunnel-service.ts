@@ -19,14 +19,9 @@ export interface TunnelStatus {
   error?: string;
 }
 
-export interface TunnelServiceResult<T> {
-  success: boolean;
-  data?: T;
-  error?: {
-    code: string;
-    message: string;
-  };
-}
+/** @deprecated Use ServiceResult<T> from types/service-result.js */
+import type { ServiceResult } from "../types/service-result.js";
+export type TunnelServiceResult<T> = ServiceResult<T>;
 
 interface NgrokTunnel {
   public_url: string;

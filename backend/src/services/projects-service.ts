@@ -35,11 +35,9 @@ export interface ProjectsStore {
   projects: Project[];
 }
 
-export interface ProjectsServiceResult<T> {
-  success: boolean;
-  data?: T;
-  error?: { code: string; message: string };
-}
+/** @deprecated Use ServiceResult<T> from types/service-result.js */
+import type { ServiceResult } from "../types/service-result.js";
+export type ProjectsServiceResult<T> = ServiceResult<T>;
 
 export interface CreateProjectInput {
   path?: string | undefined;

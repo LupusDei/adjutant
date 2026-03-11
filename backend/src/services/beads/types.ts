@@ -95,14 +95,9 @@ export interface ListBeadsOptions {
   order?: "asc" | "desc";
 }
 
-export interface BeadsServiceResult<T> {
-  success: boolean;
-  data?: T;
-  error?: {
-    code: string;
-    message: string;
-  };
-}
+/** @deprecated Use ServiceResult<T> from types/service-result.js */
+import type { ServiceResult } from "../../types/service-result.js";
+export type BeadsServiceResult<T> = ServiceResult<T>;
 
 /**
  * Valid bead status values for Kanban workflow.

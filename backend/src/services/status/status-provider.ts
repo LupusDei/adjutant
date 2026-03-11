@@ -82,14 +82,9 @@ export interface SystemStatus {
 /**
  * Result type for status operations.
  */
-export interface StatusResult<T> {
-  success: boolean;
-  data?: T;
-  error?: {
-    code: string;
-    message: string;
-  };
-}
+/** @deprecated Use ServiceResult<T> from types/service-result.js */
+import type { ServiceResult } from "../../types/service-result.js";
+export type StatusResult<T> = ServiceResult<T>;
 
 /**
  * Result data for power state transitions.

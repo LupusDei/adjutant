@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+// Re-export the unified service result type
+export type { ServiceResult, ServiceError } from "./service-result.js";
+export { ok, fail } from "./service-result.js";
+
 // ============================================================================
 // Enums and Primitives
 // ============================================================================

@@ -23,14 +23,9 @@ import type {
 /**
  * Result type for APNs service operations.
  */
-export interface APNsServiceResult<T> {
-  success: boolean;
-  data?: T;
-  error?: {
-    code: string;
-    message: string;
-  };
-}
+/** @deprecated Use ServiceResult<T> from types/service-result.js */
+import type { ServiceResult } from "../types/service-result.js";
+export type APNsServiceResult<T> = ServiceResult<T>;
 
 // ============================================================================
 // Configuration

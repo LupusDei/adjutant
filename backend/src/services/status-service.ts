@@ -6,11 +6,11 @@
  */
 
 import { getAgents } from "./agents-service.js";
-import type { AgentsServiceResult } from "./agents-service.js";
+import type { ServiceResult } from "../types/service-result.js";
 import type { CrewMember } from "../types/index.js";
 
-// Re-export the result type with a more specific name
-export type StatusServiceResult<T> = AgentsServiceResult<T>;
+/** @deprecated Use ServiceResult<T> from types/service-result.js */
+export type StatusServiceResult<T> = ServiceResult<T>;
 
 /**
  * Gets all crew members.

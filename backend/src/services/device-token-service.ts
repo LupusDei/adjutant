@@ -22,14 +22,9 @@ import type {
 /**
  * Result type for device token service operations.
  */
-export interface DeviceTokenServiceResult<T> {
-  success: boolean;
-  data?: T;
-  error?: {
-    code: string;
-    message: string;
-  };
-}
+/** @deprecated Use ServiceResult<T> from types/service-result.js */
+import type { ServiceResult } from "../types/service-result.js";
+export type DeviceTokenServiceResult<T> = ServiceResult<T>;
 
 /** Raw row shape from SQLite before camelCase mapping */
 interface DeviceTokenRow {

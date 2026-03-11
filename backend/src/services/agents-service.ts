@@ -68,14 +68,9 @@ function resolveProjectName(projectPath: string, pathMap: Map<string, string>): 
 /**
  * Result type for agents service operations.
  */
-export interface AgentsServiceResult<T> {
-  success: boolean;
-  data?: T;
-  error?: {
-    code: string;
-    message: string;
-  };
-}
+/** @deprecated Use ServiceResult<T> from types/service-result.js */
+import type { ServiceResult } from "../types/service-result.js";
+export type AgentsServiceResult<T> = ServiceResult<T>;
 
 /**
  * Enriches CrewMembers with session data from the SessionBridge.
