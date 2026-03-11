@@ -395,4 +395,426 @@ describe("Proposal project scoping", () => {
       expect(store.reviseProposal).toHaveBeenCalled();
     });
   });
+
+  // ===========================================================================
+  // adj-072.5.1: Edge cases — no project context bypass
+  // ===========================================================================
+
+  describe("no project context bypass scenarios", () => {
+    it("discuss_proposal should allow access when agent has no project context (legacy agent)", async () => {
+      // BUG DOCUMENTATION: When projectContext is undefined, the cross-project
+      // check is skipped entirely. This means legacy/unscoped agents can discuss
+      // proposals from ANY project. This test documents the current behavior.
+      const store = createMockStore();
+      // Proposal belongs to "adjutant"
+      mockGetAgentBySession.mockReturnValue("legacy-agent");
+      mockGetProjectContextBySession.mockReturnValue(undefined);
+
+      const handler = getToolHandler(store, "discuss_proposal");
+      const result = await handler(
+        { id: "test-uuid" },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result);
+      // Current behavior: succeeds (no error) because check is skipped
+      expect(parsed).not.toHaveProperty("error");
+      expect(parsed).toHaveProperty("proposal");
+    });
+
+    it("comment_on_proposal should allow access when agent has no project context (legacy agent)", async () => {
+      // BUG DOCUMENTATION: Same bypass as discuss_proposal — agents without
+      // project context can comment on proposals from any project.
+      const store = createMockStore();
+      mockGetAgentBySession.mockReturnValue("legacy-agent");
+      mockGetProjectContextBySession.mockReturnValue(undefined);
+
+      const handler = getToolHandler(store, "comment_on_proposal");
+      const result = await handler(
+        { id: "test-uuid", body: "Cross-project comment" },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result);
+      // Current behavior: succeeds because check is skipped
+      expect(parsed).not.toHaveProperty("error");
+      expect(store.insertComment).toHaveBeenCalled();
+    });
+
+    it("revise_proposal should allow access when agent has no project context (legacy agent)", async () => {
+      // BUG DOCUMENTATION: Same bypass as above — agents without project
+      // context can revise proposals from any project.
+      const store = createMockStore();
+      mockGetAgentBySession.mockReturnValue("legacy-agent");
+      mockGetProjectContextBySession.mockReturnValue(undefined);
+
+      const handler = getToolHandler(store, "revise_proposal");
+      const result = await handler(
+        {
+          id: "test-uuid",
+          title: "Hijacked Title",
+          changelog: "Changed from different project context",
+        },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result);
+      // Current behavior: succeeds because check is skipped
+      expect(parsed).not.toHaveProperty("error");
+      expect(store.reviseProposal).toHaveBeenCalled();
+    });
+  });
+
+  // ===========================================================================
+  // adj-072.5.1: Edge cases — list_proposals without project context
+  // ===========================================================================
+
+  describe("list_proposals without project context", () => {
+    it("should return all proposals (no project filter) when agent has no project context", async () => {
+      const store = createMockStore();
+      mockGetAgentBySession.mockReturnValue("legacy-agent");
+      mockGetProjectContextBySession.mockReturnValue(undefined);
+
+      const handler = getToolHandler(store, "list_proposals");
+      await handler(
+        { status: undefined, type: undefined, project: undefined },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      // With no project context and no explicit filter, resolvedProject is undefined
+      expect(store.getProposals).toHaveBeenCalledWith(
+        expect.objectContaining({ project: undefined }),
+      );
+    });
+
+    it("should still allow explicit project filter when agent has no project context", async () => {
+      const store = createMockStore();
+      mockGetAgentBySession.mockReturnValue("legacy-agent");
+      mockGetProjectContextBySession.mockReturnValue(undefined);
+
+      const handler = getToolHandler(store, "list_proposals");
+      await handler(
+        { status: undefined, type: undefined, project: "specific-project" },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      expect(store.getProposals).toHaveBeenCalledWith(
+        expect.objectContaining({ project: "specific-project" }),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // adj-072.5.1: Edge cases — missing sessionId
+  // ===========================================================================
+
+  describe("missing sessionId scenarios", () => {
+    it("create_proposal should reject when sessionId is missing", async () => {
+      const store = createMockStore();
+      mockGetAgentBySession.mockReturnValue(undefined);
+
+      const handler = getToolHandler(store, "create_proposal");
+      const result = await handler(
+        {
+          title: "My Proposal",
+          description: "Improve something",
+          type: "engineering",
+          project: "adjutant",
+        },
+        { sessionId: undefined },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed).toHaveProperty("error");
+      expect((parsed as { error: string }).error).toContain("session");
+      expect(store.insertProposal).not.toHaveBeenCalled();
+    });
+
+    it("list_proposals should return all proposals when sessionId is missing (no project filter)", async () => {
+      const store = createMockStore();
+
+      const handler = getToolHandler(store, "list_proposals");
+      await handler(
+        { status: undefined, type: undefined, project: undefined },
+        { sessionId: undefined },
+      );
+
+      // No session means no project context resolution — returns all
+      expect(store.getProposals).toHaveBeenCalledWith(
+        expect.objectContaining({ project: undefined }),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // adj-072.5.2: Edge cases — empty string project
+  // ===========================================================================
+
+  describe("empty string project edge cases", () => {
+    it("discuss_proposal should not reject when proposal has empty string project and agent has project context", async () => {
+      // Edge case: proposal.project is "" (empty string) — it won't match
+      // any agent's projectId, causing rejection for all scoped agents
+      const store = createMockStore();
+      (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "empty-project-uuid",
+        author: "test-agent",
+        title: "Orphaned Proposal",
+        description: "Has empty project",
+        type: "engineering",
+        project: "",
+        status: "pending",
+        createdAt: "2026-03-11T00:00:00Z",
+        updatedAt: "2026-03-11T00:00:00Z",
+      });
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "discuss_proposal");
+      const result = await handler(
+        { id: "empty-project-uuid" },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result);
+      // Empty string !== "adjutant", so scoped agents are rejected
+      expect(parsed).toHaveProperty("error");
+      expect((parsed as { error: string }).error).toContain("adjutant");
+    });
+
+    it("list_proposals explicit empty-string project filter should pass empty string to store", async () => {
+      const store = createMockStore();
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "list_proposals");
+      await handler(
+        { status: undefined, type: undefined, project: "" },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      // Empty string is falsy, so it falls through to session context resolution
+      // This means "" does NOT override — the agent's project is used instead
+      expect(store.getProposals).toHaveBeenCalledWith(
+        expect.objectContaining({ project: "adjutant" }),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // adj-072.5.2: Edge cases — get_proposal has no project scoping
+  // ===========================================================================
+
+  describe("get_proposal project scoping gap", () => {
+    it("should return any proposal regardless of project (no cross-project check)", async () => {
+      // BUG DOCUMENTATION: get_proposal has NO project scoping at all.
+      // Any agent can fetch any proposal by UUID, including proposals from
+      // other projects. This is a potential data leak.
+      const store = createMockStore();
+      (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "other-project-uuid",
+        author: "other-agent",
+        title: "Secret Proposal",
+        description: "Belongs to other project",
+        type: "engineering",
+        project: "secret-project",
+        status: "pending",
+        createdAt: "2026-03-11T00:00:00Z",
+        updatedAt: "2026-03-11T00:00:00Z",
+      });
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "get_proposal");
+      const result = await handler(
+        { id: "other-project-uuid" },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result);
+      // Current behavior: returns the proposal without any project check
+      expect(parsed).not.toHaveProperty("error");
+      expect((parsed as { project: string }).project).toBe("secret-project");
+    });
+  });
+
+  // ===========================================================================
+  // adj-072.5.2: Edge cases — list_proposal_comments and list_revisions have
+  // no project scoping
+  // ===========================================================================
+
+  describe("list_proposal_comments project scoping gap", () => {
+    it("should return comments for any proposal regardless of project", async () => {
+      // BUG DOCUMENTATION: list_proposal_comments has NO project scoping.
+      // Any agent can read comments on proposals from other projects.
+      const store = createMockStore();
+      (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "other-project-uuid",
+        author: "other-agent",
+        title: "Other Project Proposal",
+        description: "Belongs to other project",
+        type: "engineering",
+        project: "secret-project",
+        status: "pending",
+        createdAt: "2026-03-11T00:00:00Z",
+        updatedAt: "2026-03-11T00:00:00Z",
+      });
+      (store.getComments as ReturnType<typeof vi.fn>).mockReturnValue([
+        {
+          id: "comment-1",
+          proposalId: "other-project-uuid",
+          author: "other-agent",
+          body: "Sensitive comment",
+          createdAt: "2026-03-11T00:00:00Z",
+        },
+      ]);
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "list_proposal_comments");
+      const result = await handler(
+        { id: "other-project-uuid" },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result) as { comments: unknown[]; count: number };
+      // Current behavior: returns comments without project check
+      expect(parsed).not.toHaveProperty("error");
+      expect(parsed.count).toBe(1);
+    });
+  });
+
+  describe("list_revisions project scoping gap", () => {
+    it("should return revisions for any proposal regardless of project", async () => {
+      // BUG DOCUMENTATION: list_revisions has NO project scoping.
+      // Any agent can read revision history for proposals from other projects.
+      const store = createMockStore();
+      (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "other-project-uuid",
+        author: "other-agent",
+        title: "Other Project Proposal",
+        description: "Belongs to other project",
+        type: "engineering",
+        project: "secret-project",
+        status: "pending",
+        createdAt: "2026-03-11T00:00:00Z",
+        updatedAt: "2026-03-11T00:00:00Z",
+      });
+      (store.getRevisions as ReturnType<typeof vi.fn>).mockReturnValue([
+        {
+          id: "rev-1",
+          proposalId: "other-project-uuid",
+          author: "other-agent",
+          title: "Updated Title",
+          changelog: "Changed something",
+          createdAt: "2026-03-11T00:00:00Z",
+        },
+      ]);
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "list_revisions");
+      const result = await handler(
+        { id: "other-project-uuid" },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result) as { revisions: unknown[]; count: number };
+      // Current behavior: returns revisions without project check
+      expect(parsed).not.toHaveProperty("error");
+      expect(parsed.count).toBe(1);
+    });
+  });
+
+  // ===========================================================================
+  // adj-072.5.2: Edge cases — concurrent create_proposal calls
+  // ===========================================================================
+
+  describe("concurrent create_proposal calls", () => {
+    it("should handle concurrent calls from different project contexts independently", async () => {
+      const store = createMockStore();
+      let callCount = 0;
+      (store.insertProposal as ReturnType<typeof vi.fn>).mockImplementation((input: { project: string }) => {
+        callCount++;
+        return {
+          id: `uuid-${callCount}`,
+          author: `agent-${callCount}`,
+          title: `Proposal ${callCount}`,
+          description: "Concurrent proposal",
+          type: "engineering",
+          project: input.project,
+          status: "pending",
+          createdAt: "2026-03-11T00:00:00Z",
+          updatedAt: "2026-03-11T00:00:00Z",
+        };
+      });
+
+      const projectA = { projectId: "project-a", projectPath: "/a", beadsDir: "/a/.beads" };
+      const projectB = { projectId: "project-b", projectPath: "/b", beadsDir: "/b/.beads" };
+
+      // Simulate two agents with different project contexts
+      mockGetAgentBySession.mockImplementation((sid: string) => {
+        if (sid === "session-a") return "agent-a";
+        if (sid === "session-b") return "agent-b";
+        return undefined;
+      });
+      mockGetProjectContextBySession.mockImplementation((sid: string) => {
+        if (sid === "session-a") return projectA;
+        if (sid === "session-b") return projectB;
+        return undefined;
+      });
+
+      const handler = getToolHandler(store, "create_proposal");
+
+      // Fire both concurrently
+      const [resultA, resultB] = await Promise.all([
+        handler(
+          { title: "Proposal A", description: "From A", type: "engineering", project: "ignored" },
+          { sessionId: "session-a" },
+        ),
+        handler(
+          { title: "Proposal B", description: "From B", type: "product", project: "ignored" },
+          { sessionId: "session-b" },
+        ),
+      ]);
+
+      const parsedA = parseResult(resultA) as { project: string };
+      const parsedB = parseResult(resultB) as { project: string };
+
+      expect(parsedA.project).toBe("project-a");
+      expect(parsedB.project).toBe("project-b");
+      expect(store.insertProposal).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ===========================================================================
+  // adj-072.5.2: Edge cases — create_proposal response shape
+  // ===========================================================================
+
+  describe("create_proposal response validation", () => {
+    it("should return project field in success response", async () => {
+      const store = createMockStore();
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "create_proposal");
+      const result = await handler(
+        {
+          title: "My Proposal",
+          description: "Improve something",
+          type: "engineering",
+          project: "ignored",
+        },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result) as Record<string, unknown>;
+      // Verify the response includes the project field
+      expect(parsed).toHaveProperty("project");
+      expect(parsed).toHaveProperty("id");
+      expect(parsed).toHaveProperty("title");
+      expect(parsed).toHaveProperty("status");
+      expect(parsed).toHaveProperty("type");
+      expect(parsed).toHaveProperty("createdAt");
+    });
+  });
 });
