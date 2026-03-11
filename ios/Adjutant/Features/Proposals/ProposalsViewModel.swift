@@ -4,6 +4,7 @@ import AdjutantKit
 
 /// ViewModel for the Proposals tab, handling fetching, filtering,
 /// and status updates (accept/dismiss) for agent proposals.
+/// Automatically scopes proposals to the active project on launch.
 @MainActor
 final class ProposalsViewModel: BaseViewModel {
     // MARK: - Published Properties
@@ -21,6 +22,9 @@ final class ProposalsViewModel: BaseViewModel {
         didSet { Task { await load() } }
     }
 
+    /// Active project name used to scope proposals. Loaded automatically on appear.
+    @Published private(set) var activeProjectName: String?
+
     // MARK: - Dependencies
 
     private let apiClient: APIClient
@@ -35,6 +39,7 @@ final class ProposalsViewModel: BaseViewModel {
     // MARK: - Lifecycle
 
     override func onAppear() {
+        loadActiveProjectScope()
         super.onAppear()
     }
 
@@ -44,16 +49,37 @@ final class ProposalsViewModel: BaseViewModel {
         await load()
     }
 
-    /// Fetches proposals from the API using the current filters.
+    /// Fetches proposals from the API using the current filters,
+    /// scoped to the active project when available.
     func load() async {
         let result = await performAsync(showLoading: proposals.isEmpty) { [self] in
             try await self.apiClient.fetchProposals(
                 status: self.statusFilter,
-                type: self.typeFilter
+                type: self.typeFilter,
+                project: self.activeProjectName
             )
         }
         if let result {
             proposals = result
+        }
+    }
+
+    /// Loads the active project from the API and sets it as the project scope.
+    /// When the active project changes, proposals are reloaded with the new filter.
+    private func loadActiveProjectScope() {
+        Task<Void, Never> { [weak self] in
+            guard let self else { return }
+            do {
+                let projects = try await self.apiClient.getProjects()
+                if let activeProject = projects.first(where: { $0.active }) {
+                    if self.activeProjectName != activeProject.name {
+                        self.activeProjectName = activeProject.name
+                        await self.load()
+                    }
+                }
+            } catch {
+                // Non-critical — proposals will show unfiltered
+            }
         }
     }
 
