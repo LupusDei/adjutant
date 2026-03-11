@@ -1,0 +1,21 @@
+{
+  "success": true,
+  "data": {
+    "beadId": "adj-064",
+    "totalCost": 1.25,
+    "sessions": [
+      {
+        "sessionId": "sess-abc123",
+        "cost": 0.75,
+        "tokens": { "input": 15000, "output": 3200, "cacheRead": 8000, "cacheWrite": 1200 }
+      },
+      {
+        "sessionId": "sess-def456",
+        "cost": 0.50,
+        "tokens": { "input": 8000, "output": 1500, "cacheRead": 4000, "cacheWrite": 600 }
+      }
+    ],
+    "tokenBreakdown": { "input": 23000, "output": 4700, "cacheRead": 12000, "cacheWrite": 1800 }
+  },
+  "timestamp": "2026-03-11T10:00:00.000Z"
+}

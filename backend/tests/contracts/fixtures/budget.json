@@ -1,0 +1,16 @@
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "scope": "project",
+      "scopeId": "adjutant",
+      "budgetAmount": 50.00,
+      "warningPercent": 80,
+      "criticalPercent": 100,
+      "createdAt": "2026-03-10T00:00:00.000Z",
+      "updatedAt": "2026-03-10T00:00:00.000Z"
+    }
+  ],
+  "timestamp": "2026-03-11T10:00:00.000Z"
+}

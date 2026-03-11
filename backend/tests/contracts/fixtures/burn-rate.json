@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "data": {
+    "rate10m": 2.50,
+    "rate1h": 1.80,
+    "trend": "stable"
+  },
+  "timestamp": "2026-03-11T10:00:00.000Z"
+}

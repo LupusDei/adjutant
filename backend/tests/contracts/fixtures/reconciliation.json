@@ -1,0 +1,14 @@
+{
+  "success": true,
+  "data": [
+    {
+      "sessionId": "sess-abc123",
+      "statuslineCost": 0.42,
+      "jsonlCost": 0.44,
+      "difference": 0.02,
+      "percentDiff": 4.76,
+      "status": "verified"
+    }
+  ],
+  "timestamp": "2026-03-11T10:00:00.000Z"
+}

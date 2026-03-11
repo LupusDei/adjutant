@@ -1,0 +1,44 @@
+{
+  "success": true,
+  "data": {
+    "totalCost": 0.42,
+    "totalTokens": {
+      "input": 15000,
+      "output": 3200,
+      "cacheRead": 8000,
+      "cacheWrite": 1200
+    },
+    "sessions": {
+      "sess-abc123": {
+        "sessionId": "sess-abc123",
+        "projectPath": "/Users/dev/project",
+        "tokens": {
+          "input": 15000,
+          "output": 3200,
+          "cacheRead": 8000,
+          "cacheWrite": 1200
+        },
+        "cost": 0.42,
+        "lastUpdated": "2026-03-11T10:00:00.000Z",
+        "contextPercent": 35,
+        "agentId": "kerrigan",
+        "reconciliationStatus": "estimated",
+        "jsonlCost": 0.44
+      }
+    },
+    "projects": {
+      "/Users/dev/project": {
+        "projectPath": "/Users/dev/project",
+        "totalCost": 0.42,
+        "totalTokens": {
+          "input": 15000,
+          "output": 3200,
+          "cacheRead": 8000,
+          "cacheWrite": 1200
+        },
+        "sessionCount": 1
+      }
+    }
+  },
+  "timestamp": "2026-03-11T10:00:00.000Z"
+}
