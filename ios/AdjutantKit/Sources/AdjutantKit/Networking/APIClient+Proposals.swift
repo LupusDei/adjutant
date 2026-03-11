@@ -3,9 +3,9 @@ import Foundation
 // MARK: - Proposals Endpoints
 
 extension APIClient {
-    /// Fetches proposals with optional status and type filters.
+    /// Fetches proposals with optional status, type, and project filters.
     ///
-    /// Maps to `GET /api/proposals?status=&type=`
+    /// Maps to `GET /api/proposals?status=&type=&project=`
     ///
     /// ## Example
     /// ```swift
@@ -15,6 +15,9 @@ extension APIClient {
     /// // Fetch all engineering proposals
     /// let engineering = try await client.fetchProposals(type: .engineering)
     ///
+    /// // Fetch proposals for a specific project
+    /// let scoped = try await client.fetchProposals(project: "adjutant")
+    ///
     /// // Fetch all proposals (no filter)
     /// let all = try await client.fetchProposals()
     /// ```
@@ -22,11 +25,13 @@ extension APIClient {
     /// - Parameters:
     ///   - status: Optional status filter (pending, accepted, dismissed).
     ///   - type: Optional type filter (product, engineering).
+    ///   - project: Optional project name filter. When provided, only proposals belonging to this project are returned.
     /// - Returns: An array of ``Proposal`` items.
     /// - Throws: ``APIClientError`` if the request fails.
     public func fetchProposals(
         status: ProposalStatus? = nil,
-        type: ProposalType? = nil
+        type: ProposalType? = nil,
+        project: String? = nil
     ) async throws -> [Proposal] {
         var queryItems: [URLQueryItem] = []
         if let status {
@@ -34,6 +39,9 @@ extension APIClient {
         }
         if let type {
             queryItems.append(URLQueryItem(name: "type", value: type.rawValue))
+        }
+        if let project {
+            queryItems.append(URLQueryItem(name: "project", value: project))
         }
         return try await requestWithEnvelope(
             .get,
