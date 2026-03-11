@@ -53,8 +53,29 @@ You have been asked to execute a proposal. Follow these steps:
    announce({ type: "completion", title: "Proposal executed: <title>", body: "Epic hierarchy created. See beads for task breakdown." })
    ```
 
+## Question Routing (MANDATORY)
+
+**All questions about the proposal MUST be sent to the user via Adjutant MCP messages.** This is non-negotiable.
+
+```
+send_message({ to: "user", body: "Question about proposal '<title>': <your question>" })
+```
+
+**Rules:**
+- Do NOT use `AskUserQuestion` — it blocks execution and the user may not be at the terminal
+- Do NOT print questions to stdout — the user monitors agents via the Adjutant dashboard, not terminal output
+- Do NOT block waiting for answers — send the question via MCP, note your assumption, and continue
+- If you make assumptions, state them clearly in the MCP message so the user can correct you later
+- If the proposal is ambiguous on multiple points, send ONE message with all questions numbered, then proceed with reasonable defaults
+
+**Example:**
+```
+send_message({ to: "user", body: "Questions about proposal 'Consolidate Zod schemas':\n1. Should MCP-only tools (coordination.ts) be consolidated too, or just tools with REST counterparts?\n2. Should we update the existing unused SendMessageRequestSchema or create a new canonical one?\n\nProceeding with assumptions: (1) MCP-only tools left alone, (2) update existing schema." })
+```
+
+When spawning team agents to work on the epic, include this same instruction in their spawn prompts — they must also route questions through MCP, not stdout.
+
 ## Notes
 
 - If the proposal cannot be found, report the error to the user via `send_message` and stop.
-- If you have questions about the proposal, send them to the user via `send_message({ to: "user", body: "..." })`. Do NOT block waiting for answers -- continue with reasonable assumptions and note them.
 - The proposal contains: title, description, type (product/engineering), project, author, and status.
