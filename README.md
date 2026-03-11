@@ -1,8 +1,37 @@
 # Adjutant
 
-A retro terminal themed web dashboard for multi-agent orchestration, backed by [Beads](https://github.com/steveyegge/beads) issue tracking and MCP agent communication.
+**`/ˈajət(ə)nt/`** — *noun, Military.* An officer who assists a commanding officer with administrative duties, relays orders to the field, tracks unit readiness, and ensures every element of the force is accounted for and moving in concert.
 
-https://github.com/user-attachments/assets/1aaebcdf-aa24-4e88-9628-27ef91ad34d5
+---
+
+In the 18th century, no army moved without its adjutant. While generals drew battle plans and captains led charges, the **adjutant** was the nerve center — the officer who knew where every regiment was, who was wounded, who was idle, and what orders hadn't reached the front yet. They kept the war diary. They dispatched riders. They turned chaos into coordination.
+
+**Adjutant** does the same thing for your AI agents.
+
+It is a **real-time command post** for multi-agent orchestration: a retro terminal-themed dashboard where you can watch your agents work, read their reports, assign them missions, and track every task from inception to completion. Agents connect via [MCP](https://modelcontextprotocol.io), report status like field officers checking in at HQ, and communicate through persistent messaging channels — all backed by [Beads](https://github.com/steveyegge/beads) issue tracking and a SQLite message store.
+
+### What it looks like in practice
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  ADJUTANT v2.x            ◉ 4 agents online   13:42:07 │
+├──────────┬──────────────────────────────────────────────┤
+│ AGENTS   │  kerrigan ● working  "API contract tests"   │
+│          │  amon     ● working  "C4-002 storyboard"    │
+│          │  mengsk   ◐ idle     "awaiting orders"      │
+│          │  raynor   ○ offline                         │
+├──────────┼──────────────────────────────────────────────┤
+│ BEADS    │  adj-074  ██████░░░░  60%  API contracts    │
+│          │  C4-002   █████████░  90%  Storyboard pipe  │
+│          │  C4-003   ██░░░░░░░░  20%  Prompt enhance   │
+├──────────┼──────────────────────────────────────────────┤
+│ COMMS    │  [kerrigan] Phase 1 complete. 25 tests pass │
+│          │  [amon] QA found 9 bugs, bugfix dispatched  │
+│          │  [you] Roger. Prioritize the P1 fixes.      │
+└──────────┴──────────────────────────────────────────────┘
+```
+
+**Your agents are the army. You are the general. Adjutant keeps the war room running.**
 
 ## Table of Contents
 
