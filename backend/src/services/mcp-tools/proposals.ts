@@ -11,6 +11,28 @@ import { getAgentBySession, getProjectContextBySession } from "../mcp-server.js"
 import type { ProposalStore } from "../proposal-store.js";
 import { logInfo } from "../../utils/index.js";
 
+/**
+ * Cross-project validation helper. Returns an error response if the proposal
+ * belongs to a different project than the agent's session context.
+ * Requires project context — agents without it are rejected.
+ */
+function validateProjectAccess(
+  proposal: { project: string },
+  extra: { sessionId?: string },
+): { error: string } | null {
+  if (!extra.sessionId) {
+    return { error: "Unknown session — not connected via MCP" };
+  }
+  const projectContext = getProjectContextBySession(extra.sessionId);
+  if (!projectContext) {
+    return { error: "No project context — cannot access proposals across projects" };
+  }
+  if (proposal.project !== projectContext.projectId) {
+    return { error: `Proposal belongs to project ${proposal.project}, but you are scoped to project ${projectContext.projectId}` };
+  }
+  return null;
+}
+
 export function registerProposalTools(server: McpServer, store: ProposalStore): void {
   // ---------------------------------------------------------------------------
   // create_proposal
@@ -73,13 +95,22 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
     {
       id: z.string().describe("Proposal UUID to fetch"),
     },
-    async ({ id }) => {
+    async ({ id }, extra) => {
       const proposal = store.getProposal(id);
       if (!proposal) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: "Proposal not found" }) }],
         };
       }
+
+      // Cross-project validation (adj-072.5.3)
+      const accessError = validateProjectAccess(proposal, extra);
+      if (accessError) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(accessError) }],
+        };
+      }
+
       return {
         content: [{ type: "text" as const, text: JSON.stringify(proposal) }],
       };
@@ -102,16 +133,12 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
         };
       }
 
-      // Cross-project validation
-      if (extra.sessionId) {
-        const projectContext = getProjectContextBySession(extra.sessionId);
-        if (projectContext && proposal.project !== projectContext.projectId) {
-          return {
-            content: [{ type: "text" as const, text: JSON.stringify({
-              error: `Proposal belongs to project ${proposal.project}, but you are scoped to project ${projectContext.projectId}`,
-            }) }],
-          };
-        }
+      // Cross-project validation (adj-072.5.4: require project context)
+      const accessError = validateProjectAccess(proposal, extra);
+      if (accessError) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(accessError) }],
+        };
       }
 
       return {
@@ -150,16 +177,12 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
         };
       }
 
-      // Cross-project validation
-      if (extra.sessionId) {
-        const projectContext = getProjectContextBySession(extra.sessionId);
-        if (projectContext && proposal.project !== projectContext.projectId) {
-          return {
-            content: [{ type: "text" as const, text: JSON.stringify({
-              error: `Proposal belongs to project ${proposal.project}, but you are scoped to project ${projectContext.projectId}`,
-            }) }],
-          };
-        }
+      // Cross-project validation (adj-072.5.4: require project context)
+      const commentAccessError = validateProjectAccess(proposal, extra);
+      if (commentAccessError) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(commentAccessError) }],
+        };
       }
 
       const comment = store.insertComment({
@@ -187,11 +210,19 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
     {
       id: z.string().describe("Proposal UUID to list comments for"),
     },
-    async ({ id }) => {
+    async ({ id }, extra) => {
       const proposal = store.getProposal(id);
       if (!proposal) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: "Proposal not found" }) }],
+        };
+      }
+
+      // Cross-project validation (adj-072.5.3)
+      const commentsAccessError = validateProjectAccess(proposal, extra);
+      if (commentsAccessError) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(commentsAccessError) }],
         };
       }
 
@@ -231,22 +262,18 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
         };
       }
 
-      // Cross-project validation
+      // Cross-project validation (adj-072.5.4: require project context)
       const proposal = store.getProposal(id);
       if (!proposal) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: "Proposal not found" }) }],
         };
       }
-      if (extra.sessionId) {
-        const projectContext = getProjectContextBySession(extra.sessionId);
-        if (projectContext && proposal.project !== projectContext.projectId) {
-          return {
-            content: [{ type: "text" as const, text: JSON.stringify({
-              error: `Proposal belongs to project ${proposal.project}, but you are scoped to project ${projectContext.projectId}`,
-            }) }],
-          };
-        }
+      const reviseAccessError = validateProjectAccess(proposal, extra);
+      if (reviseAccessError) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(reviseAccessError) }],
+        };
       }
 
       const revised = store.reviseProposal(id, {
@@ -282,11 +309,19 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
     {
       id: z.string().describe("Proposal UUID to list revisions for"),
     },
-    async ({ id }) => {
+    async ({ id }, extra) => {
       const proposal = store.getProposal(id);
       if (!proposal) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: "Proposal not found" }) }],
+        };
+      }
+
+      // Cross-project validation (adj-072.5.3)
+      const revisionsAccessError = validateProjectAccess(proposal, extra);
+      if (revisionsAccessError) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(revisionsAccessError) }],
         };
       }
 
@@ -311,9 +346,11 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       project: z.string().optional().describe("Filter by project"),
     },
     async ({ status, type, project }, extra) => {
-      // Default to agent's project when no explicit filter is specified
+      // Default to agent's project when no explicit filter is specified.
+      // Treat undefined as "use session default" but preserve explicit values
+      // including empty string (adj-072.5.5).
       let resolvedProject = project;
-      if (!resolvedProject && extra.sessionId) {
+      if (resolvedProject === undefined && extra.sessionId) {
         const projectContext = getProjectContextBySession(extra.sessionId);
         if (projectContext) {
           resolvedProject = projectContext.projectId;

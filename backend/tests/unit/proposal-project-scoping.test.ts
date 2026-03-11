@@ -400,13 +400,9 @@ describe("Proposal project scoping", () => {
   // adj-072.5.1: Edge cases — no project context bypass
   // ===========================================================================
 
-  describe("no project context bypass scenarios", () => {
-    it("discuss_proposal should allow access when agent has no project context (legacy agent)", async () => {
-      // BUG DOCUMENTATION: When projectContext is undefined, the cross-project
-      // check is skipped entirely. This means legacy/unscoped agents can discuss
-      // proposals from ANY project. This test documents the current behavior.
+  describe("no project context rejection (adj-072.5.4)", () => {
+    it("discuss_proposal should reject when agent has no project context", async () => {
       const store = createMockStore();
-      // Proposal belongs to "adjutant"
       mockGetAgentBySession.mockReturnValue("legacy-agent");
       mockGetProjectContextBySession.mockReturnValue(undefined);
 
@@ -417,14 +413,11 @@ describe("Proposal project scoping", () => {
       );
 
       const parsed = parseResult(result);
-      // Current behavior: succeeds (no error) because check is skipped
-      expect(parsed).not.toHaveProperty("error");
-      expect(parsed).toHaveProperty("proposal");
+      expect(parsed).toHaveProperty("error");
+      expect((parsed as { error: string }).error).toContain("project context");
     });
 
-    it("comment_on_proposal should allow access when agent has no project context (legacy agent)", async () => {
-      // BUG DOCUMENTATION: Same bypass as discuss_proposal — agents without
-      // project context can comment on proposals from any project.
+    it("comment_on_proposal should reject when agent has no project context", async () => {
       const store = createMockStore();
       mockGetAgentBySession.mockReturnValue("legacy-agent");
       mockGetProjectContextBySession.mockReturnValue(undefined);
@@ -436,14 +429,12 @@ describe("Proposal project scoping", () => {
       );
 
       const parsed = parseResult(result);
-      // Current behavior: succeeds because check is skipped
-      expect(parsed).not.toHaveProperty("error");
-      expect(store.insertComment).toHaveBeenCalled();
+      expect(parsed).toHaveProperty("error");
+      expect((parsed as { error: string }).error).toContain("project context");
+      expect(store.insertComment).not.toHaveBeenCalled();
     });
 
-    it("revise_proposal should allow access when agent has no project context (legacy agent)", async () => {
-      // BUG DOCUMENTATION: Same bypass as above — agents without project
-      // context can revise proposals from any project.
+    it("revise_proposal should reject when agent has no project context", async () => {
       const store = createMockStore();
       mockGetAgentBySession.mockReturnValue("legacy-agent");
       mockGetProjectContextBySession.mockReturnValue(undefined);
@@ -459,9 +450,59 @@ describe("Proposal project scoping", () => {
       );
 
       const parsed = parseResult(result);
-      // Current behavior: succeeds because check is skipped
-      expect(parsed).not.toHaveProperty("error");
-      expect(store.reviseProposal).toHaveBeenCalled();
+      expect(parsed).toHaveProperty("error");
+      expect((parsed as { error: string }).error).toContain("project context");
+      expect(store.reviseProposal).not.toHaveBeenCalled();
+    });
+
+    it("get_proposal should reject when agent has no project context", async () => {
+      const store = createMockStore();
+      mockGetAgentBySession.mockReturnValue("legacy-agent");
+      mockGetProjectContextBySession.mockReturnValue(undefined);
+
+      const handler = getToolHandler(store, "get_proposal");
+      const result = await handler(
+        { id: "test-uuid" },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed).toHaveProperty("error");
+      expect((parsed as { error: string }).error).toContain("project context");
+    });
+
+    it("list_proposal_comments should reject when agent has no project context", async () => {
+      const store = createMockStore();
+      mockGetAgentBySession.mockReturnValue("legacy-agent");
+      mockGetProjectContextBySession.mockReturnValue(undefined);
+
+      const handler = getToolHandler(store, "list_proposal_comments");
+      const result = await handler(
+        { id: "test-uuid" },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed).toHaveProperty("error");
+      expect((parsed as { error: string }).error).toContain("project context");
+      expect(store.getComments).not.toHaveBeenCalled();
+    });
+
+    it("list_revisions should reject when agent has no project context", async () => {
+      const store = createMockStore();
+      mockGetAgentBySession.mockReturnValue("legacy-agent");
+      mockGetProjectContextBySession.mockReturnValue(undefined);
+
+      const handler = getToolHandler(store, "list_revisions");
+      const result = await handler(
+        { id: "test-uuid" },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed).toHaveProperty("error");
+      expect((parsed as { error: string }).error).toContain("project context");
+      expect(store.getRevisions).not.toHaveBeenCalled();
     });
   });
 
@@ -581,7 +622,7 @@ describe("Proposal project scoping", () => {
       expect((parsed as { error: string }).error).toContain("adjutant");
     });
 
-    it("list_proposals explicit empty-string project filter should pass empty string to store", async () => {
+    it("list_proposals explicit empty-string project filter should pass empty string to store (adj-072.5.5)", async () => {
       const store = createMockStore();
       mockGetAgentBySession.mockReturnValue("test-agent");
       mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
@@ -592,10 +633,9 @@ describe("Proposal project scoping", () => {
         { sessionId: TEST_SESSION_ID },
       );
 
-      // Empty string is falsy, so it falls through to session context resolution
-      // This means "" does NOT override — the agent's project is used instead
+      // Empty string is an explicit value — should NOT fall through to session default
       expect(store.getProposals).toHaveBeenCalledWith(
-        expect.objectContaining({ project: "adjutant" }),
+        expect.objectContaining({ project: "" }),
       );
     });
   });
@@ -604,11 +644,8 @@ describe("Proposal project scoping", () => {
   // adj-072.5.2: Edge cases — get_proposal has no project scoping
   // ===========================================================================
 
-  describe("get_proposal project scoping gap", () => {
-    it("should return any proposal regardless of project (no cross-project check)", async () => {
-      // BUG DOCUMENTATION: get_proposal has NO project scoping at all.
-      // Any agent can fetch any proposal by UUID, including proposals from
-      // other projects. This is a potential data leak.
+  describe("get_proposal project scoping (adj-072.5.3)", () => {
+    it("should reject when proposal belongs to a different project", async () => {
       const store = createMockStore();
       (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue({
         id: "other-project-uuid",
@@ -631,9 +668,25 @@ describe("Proposal project scoping", () => {
       );
 
       const parsed = parseResult(result);
-      // Current behavior: returns the proposal without any project check
+      expect(parsed).toHaveProperty("error");
+      expect((parsed as { error: string }).error).toContain("secret-project");
+      expect((parsed as { error: string }).error).toContain("adjutant");
+    });
+
+    it("should allow when proposal belongs to agent's project", async () => {
+      const store = createMockStore();
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "get_proposal");
+      const result = await handler(
+        { id: "test-uuid" },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result);
       expect(parsed).not.toHaveProperty("error");
-      expect((parsed as { project: string }).project).toBe("secret-project");
+      expect((parsed as { project: string }).project).toBe("adjutant");
     });
   });
 
@@ -642,10 +695,8 @@ describe("Proposal project scoping", () => {
   // no project scoping
   // ===========================================================================
 
-  describe("list_proposal_comments project scoping gap", () => {
-    it("should return comments for any proposal regardless of project", async () => {
-      // BUG DOCUMENTATION: list_proposal_comments has NO project scoping.
-      // Any agent can read comments on proposals from other projects.
+  describe("list_proposal_comments project scoping (adj-072.5.3)", () => {
+    it("should reject when proposal belongs to a different project", async () => {
       const store = createMockStore();
       (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue({
         id: "other-project-uuid",
@@ -658,15 +709,6 @@ describe("Proposal project scoping", () => {
         createdAt: "2026-03-11T00:00:00Z",
         updatedAt: "2026-03-11T00:00:00Z",
       });
-      (store.getComments as ReturnType<typeof vi.fn>).mockReturnValue([
-        {
-          id: "comment-1",
-          proposalId: "other-project-uuid",
-          author: "other-agent",
-          body: "Sensitive comment",
-          createdAt: "2026-03-11T00:00:00Z",
-        },
-      ]);
       mockGetAgentBySession.mockReturnValue("test-agent");
       mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
 
@@ -676,17 +718,34 @@ describe("Proposal project scoping", () => {
         { sessionId: TEST_SESSION_ID },
       );
 
+      const parsed = parseResult(result);
+      expect(parsed).toHaveProperty("error");
+      expect((parsed as { error: string }).error).toContain("secret-project");
+      expect(store.getComments).not.toHaveBeenCalled();
+    });
+
+    it("should allow when proposal belongs to agent's project", async () => {
+      const store = createMockStore();
+      (store.getComments as ReturnType<typeof vi.fn>).mockReturnValue([
+        { id: "c1", proposalId: "test-uuid", author: "agent", body: "comment", createdAt: "2026-03-11T00:00:00Z" },
+      ]);
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "list_proposal_comments");
+      const result = await handler(
+        { id: "test-uuid" },
+        { sessionId: TEST_SESSION_ID },
+      );
+
       const parsed = parseResult(result) as { comments: unknown[]; count: number };
-      // Current behavior: returns comments without project check
       expect(parsed).not.toHaveProperty("error");
       expect(parsed.count).toBe(1);
     });
   });
 
-  describe("list_revisions project scoping gap", () => {
-    it("should return revisions for any proposal regardless of project", async () => {
-      // BUG DOCUMENTATION: list_revisions has NO project scoping.
-      // Any agent can read revision history for proposals from other projects.
+  describe("list_revisions project scoping (adj-072.5.3)", () => {
+    it("should reject when proposal belongs to a different project", async () => {
       const store = createMockStore();
       (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue({
         id: "other-project-uuid",
@@ -699,16 +758,6 @@ describe("Proposal project scoping", () => {
         createdAt: "2026-03-11T00:00:00Z",
         updatedAt: "2026-03-11T00:00:00Z",
       });
-      (store.getRevisions as ReturnType<typeof vi.fn>).mockReturnValue([
-        {
-          id: "rev-1",
-          proposalId: "other-project-uuid",
-          author: "other-agent",
-          title: "Updated Title",
-          changelog: "Changed something",
-          createdAt: "2026-03-11T00:00:00Z",
-        },
-      ]);
       mockGetAgentBySession.mockReturnValue("test-agent");
       mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
 
@@ -718,8 +767,27 @@ describe("Proposal project scoping", () => {
         { sessionId: TEST_SESSION_ID },
       );
 
+      const parsed = parseResult(result);
+      expect(parsed).toHaveProperty("error");
+      expect((parsed as { error: string }).error).toContain("secret-project");
+      expect(store.getRevisions).not.toHaveBeenCalled();
+    });
+
+    it("should allow when proposal belongs to agent's project", async () => {
+      const store = createMockStore();
+      (store.getRevisions as ReturnType<typeof vi.fn>).mockReturnValue([
+        { id: "r1", proposalId: "test-uuid", author: "agent", title: "Rev", changelog: "change", createdAt: "2026-03-11T00:00:00Z" },
+      ]);
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "list_revisions");
+      const result = await handler(
+        { id: "test-uuid" },
+        { sessionId: TEST_SESSION_ID },
+      );
+
       const parsed = parseResult(result) as { revisions: unknown[]; count: number };
-      // Current behavior: returns revisions without project check
       expect(parsed).not.toHaveProperty("error");
       expect(parsed.count).toBe(1);
     });
