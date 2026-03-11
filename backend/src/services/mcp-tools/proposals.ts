@@ -7,7 +7,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getAgentBySession } from "../mcp-server.js";
+import { getAgentBySession, getProjectContextBySession } from "../mcp-server.js";
 import type { ProposalStore } from "../proposal-store.js";
 import { logInfo } from "../../utils/index.js";
 
@@ -23,11 +23,19 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       type: z.enum(["product", "engineering"]).describe("Proposal type: 'product' for UX/product improvements, 'engineering' for refactoring/architecture"),
       project: z.string().describe("Project this proposal is for (e.g., 'adjutant')"),
     },
-    async ({ title, description, type, project }, extra) => {
+    async ({ title, description, type, project: _clientProject }, extra) => {
       const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
       if (!agentId) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: "Unknown session — not connected via MCP" }) }],
+        };
+      }
+
+      // Server-side project resolution — ignore client-supplied project
+      const projectContext = extra.sessionId ? getProjectContextBySession(extra.sessionId) : undefined;
+      if (!projectContext) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "No project context — cannot create proposal" }) }],
         };
       }
 
@@ -36,7 +44,7 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
         title,
         description,
         type,
-        project,
+        project: projectContext.projectId,
       });
 
       logInfo("create_proposal", { agentId, proposalId: proposal.id, type, title });
@@ -86,13 +94,26 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
     {
       id: z.string().describe("Proposal UUID to discuss"),
     },
-    async ({ id }) => {
+    async ({ id }, extra) => {
       const proposal = store.getProposal(id);
       if (!proposal) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: "Proposal not found" }) }],
         };
       }
+
+      // Cross-project validation
+      if (extra.sessionId) {
+        const projectContext = getProjectContextBySession(extra.sessionId);
+        if (projectContext && proposal.project !== projectContext.projectId) {
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify({
+              error: `Proposal belongs to project ${proposal.project}, but you are scoped to project ${projectContext.projectId}`,
+            }) }],
+          };
+        }
+      }
+
       return {
         content: [{
           type: "text" as const,
@@ -127,6 +148,18 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: "Proposal not found" }) }],
         };
+      }
+
+      // Cross-project validation
+      if (extra.sessionId) {
+        const projectContext = getProjectContextBySession(extra.sessionId);
+        if (projectContext && proposal.project !== projectContext.projectId) {
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify({
+              error: `Proposal belongs to project ${proposal.project}, but you are scoped to project ${projectContext.projectId}`,
+            }) }],
+          };
+        }
       }
 
       const comment = store.insertComment({
@@ -198,6 +231,24 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
         };
       }
 
+      // Cross-project validation
+      const proposal = store.getProposal(id);
+      if (!proposal) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Proposal not found" }) }],
+        };
+      }
+      if (extra.sessionId) {
+        const projectContext = getProjectContextBySession(extra.sessionId);
+        if (projectContext && proposal.project !== projectContext.projectId) {
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify({
+              error: `Proposal belongs to project ${proposal.project}, but you are scoped to project ${projectContext.projectId}`,
+            }) }],
+          };
+        }
+      }
+
       const revised = store.reviseProposal(id, {
         author: agentId,
         title,
@@ -259,8 +310,16 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       type: z.enum(["product", "engineering"]).optional().describe("Filter by type"),
       project: z.string().optional().describe("Filter by project"),
     },
-    async ({ status, type, project }) => {
-      const proposals = store.getProposals({ status, type, project });
+    async ({ status, type, project }, extra) => {
+      // Default to agent's project when no explicit filter is specified
+      let resolvedProject = project;
+      if (!resolvedProject && extra.sessionId) {
+        const projectContext = getProjectContextBySession(extra.sessionId);
+        if (projectContext) {
+          resolvedProject = projectContext.projectId;
+        }
+      }
+      const proposals = store.getProposals({ status, type, project: resolvedProject });
 
       return {
         content: [{
