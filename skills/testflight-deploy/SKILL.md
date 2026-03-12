@@ -136,6 +136,59 @@ Read each template from `references/`, replace all `{{PLACEHOLDER}}` values with
 - Generate from `references/setup-guide-template.md`.
 - Replace: `{{APP_NAME}}`, `{{BUNDLE_ID}}`, `{{MATCH_GIT_URL}}`.
 
+## Phase 3: Verification & Summary
+
+After all files are generated, verify and summarize the results.
+
+### Step 1: List Generated Files
+
+List all files that were created or modified, with their full paths relative to the repository root. Example:
+
+```
+Created:
+  - Gemfile
+  - fastlane/Appfile
+  - fastlane/Matchfile
+  - fastlane/Fastfile
+  - .github/workflows/testflight.yml
+  - docs/testflight-setup.md
+
+Modified:
+  - Gemfile (added gem "fastlane")
+```
+
+### Step 2: Configuration Summary
+
+Display the final configuration values used:
+
+- Bundle ID
+- Scheme
+- macOS runner and Xcode version
+- Dependency manager
+- Project path (if subdirectory)
+
+### Step 3: Manual Setup Reminder
+
+Print the key manual steps the user must complete before the pipeline will work. These come from `docs/testflight-setup.md`:
+
+1. **Register Bundle ID** in the Apple Developer Portal
+2. **Create the app** in App Store Connect
+3. **Create an App Store Connect API key** and download the `.p8` file
+4. **Set up the match certificate repository** and run `fastlane match appstore` locally to generate initial certificates
+5. **Configure GitHub repository secrets**:
+   - `MATCH_PASSWORD` — passphrase for match encryption
+   - `ASC_KEY_ID` — App Store Connect API key ID
+   - `ASC_ISSUER_ID` — App Store Connect API issuer ID
+   - `ASC_KEY_CONTENT` — Base64-encoded `.p8` key file contents
+   - `MATCH_GIT_BASIC_AUTHORIZATION` — Base64-encoded `username:token` for the match cert repo
+6. **Switch to manual code signing** in Xcode project settings (disable "Automatically manage signing")
+
+### Step 4: Next Steps
+
+Suggest to the user:
+
+> Follow `docs/testflight-setup.md` for detailed instructions on each step. Once complete, push to `main` to trigger your first TestFlight build.
+
 ## Placeholders Reference
 
 All templates use `{{PLACEHOLDER}}` syntax. Replace every placeholder before writing files.
