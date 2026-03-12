@@ -136,6 +136,20 @@ Read each template from `references/`, replace all `{{PLACEHOLDER}}` values with
 - Generate from `references/setup-guide-template.md`.
 - Replace: `{{APP_NAME}}`, `{{BUNDLE_ID}}`, `{{MATCH_GIT_URL}}`.
 
+### Handling Existing Files
+
+Before writing each file, check whether it already exists and handle accordingly:
+
+- **Existing Gemfile**: Read the file first. If `gem "fastlane"` is already present, skip it entirely. If the gem is missing, use Edit to append `gem "fastlane"` after the last `gem` line. Do not overwrite or remove other gems.
+
+- **Existing fastlane/Fastfile**: Read the file first. If a `beta` lane already exists, warn the user and ask whether to overwrite the existing lane or skip generation. If no `beta` lane exists, append the new `beta` lane block to the end of the existing file (inside the `platform :ios do` block if present). Do not replace existing lanes.
+
+- **Existing .github/workflows/testflight.yml**: Warn the user that the workflow file already exists. Ask whether to overwrite it or skip. Do not silently overwrite.
+
+- **Existing fastlane/Appfile or fastlane/Matchfile**: Warn the user that the file exists and ask whether to overwrite. These files are simple key-value configurations where merging is not practical — it is safer to replace entirely or skip.
+
+- **No fastlane/ directory**: This is the default happy path. Create the directory and all files fresh without prompting.
+
 ## Phase 3: Verification & Summary
 
 After all files are generated, verify and summarize the results.
