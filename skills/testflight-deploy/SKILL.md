@@ -93,6 +93,49 @@ Before proceeding to file generation, display a summary table of all detected an
 
 Ask the user to confirm or correct any values before proceeding.
 
+## Phase 2: File Generation
+
+Read each template from `references/`, replace all `{{PLACEHOLDER}}` values with the discovered/provided values, and write the result to the target path. Generate files in the order listed below.
+
+### 1. Gemfile (project root)
+
+- **If Gemfile exists**: Read it. If `gem "fastlane"` is NOT present, use Edit to append `gem "fastlane"` after the last `gem` line. If already present, skip.
+- **If Gemfile does not exist**: Create it from the template in `references/fastlane-templates.md`, section "Gemfile".
+
+### 2. fastlane/Appfile
+
+- Create the `fastlane/` directory if it does not exist (`mkdir -p fastlane`).
+- Generate from `references/fastlane-templates.md`, section "Appfile".
+- Replace: `{{BUNDLE_ID}}`, `{{APPLE_ID}}`, `{{ITC_TEAM_ID}}`, `{{TEAM_ID}}`.
+
+### 3. fastlane/Matchfile
+
+- Generate from `references/fastlane-templates.md`, section "Matchfile".
+- Replace: `{{MATCH_GIT_URL}}`, `{{BUNDLE_ID}}`.
+
+### 4. fastlane/Fastfile
+
+- Generate from `references/fastlane-templates.md`, section "Fastfile".
+- Replace: `{{SCHEME}}`, `{{WORKSPACE_OR_PROJECT}}`.
+- For `{{WORKSPACE_OR_PROJECT}}`:
+  - If CocoaPods: use `,\n      workspace: "<name>.xcworkspace"`
+  - If standalone project: use `,\n      project: "<name>.xcodeproj"`
+  - If the project is in a subdirectory, prepend the relative path (e.g., `ios/MyApp.xcworkspace`).
+
+### 5. .github/workflows/testflight.yml
+
+- Create the `.github/workflows/` directory if it does not exist (`mkdir -p .github/workflows`).
+- Generate from `references/workflow-template.md`.
+- Replace: `{{MACOS_RUNNER}}`, `{{XCODE_VERSION}}`, `{{DEP_MANAGER_STEPS}}`, `{{WORKING_DIRECTORY}}`.
+- For `{{DEP_MANAGER_STEPS}}`: select the appropriate conditional block from the template based on the detected dependency manager (CocoaPods, SPM, or Carthage).
+- **IMPORTANT**: Do NOT replace `${{ secrets.* }}` or `${{ hashFiles(...) }}` — those are GitHub Actions runtime expressions, not template placeholders.
+
+### 6. docs/testflight-setup.md
+
+- Create the `docs/` directory if it does not exist (`mkdir -p docs`).
+- Generate from `references/setup-guide-template.md`.
+- Replace: `{{APP_NAME}}`, `{{BUNDLE_ID}}`, `{{MATCH_GIT_URL}}`.
+
 ## Placeholders Reference
 
 All templates use `{{PLACEHOLDER}}` syntax. Replace every placeholder before writing files.
