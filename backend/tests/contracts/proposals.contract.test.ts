@@ -13,19 +13,15 @@ import request from "supertest";
 // ============================================================================
 
 const mockProposalStore = {
-  createProposal: vi.fn(),
+  insertProposal: vi.fn(),
   getProposal: vi.fn(),
   getProposals: vi.fn(),
   updateProposalStatus: vi.fn(),
-  addComment: vi.fn(),
+  insertComment: vi.fn(),
   getComments: vi.fn(),
-  addRevision: vi.fn(),
+  reviseProposal: vi.fn(),
   getRevisions: vi.fn(),
 };
-
-vi.mock("../../src/services/proposal-store.js", () => ({
-  createProposalStore: vi.fn().mockReturnValue(mockProposalStore),
-}));
 
 import { createProposalsRouter } from "../../src/routes/proposals.js";
 import {
@@ -67,7 +63,7 @@ const MOCK_COMMENT = {
 function createTestApp() {
   const app = express();
   app.use(express.json());
-  app.use("/api/proposals", createProposalsRouter(null as any));
+  app.use("/api/proposals", createProposalsRouter(mockProposalStore as any));
   return app;
 }
 
@@ -117,7 +113,7 @@ describe("Proposals API contracts", () => {
 
   describe("POST /api/proposals", () => {
     it("response matches SingleProposalResponseSchema", async () => {
-      mockProposalStore.createProposal.mockReturnValue(MOCK_PROPOSAL);
+      mockProposalStore.insertProposal.mockReturnValue(MOCK_PROPOSAL);
 
       const res = await request(app)
         .post("/api/proposals")
@@ -125,6 +121,7 @@ describe("Proposals API contracts", () => {
           title: "New proposal",
           description: "Description here",
           type: "engineering",
+          project: "adjutant",
           author: "raynor",
         });
 
@@ -151,7 +148,7 @@ describe("Proposals API contracts", () => {
   describe("POST /api/proposals/:id/comments", () => {
     it("response matches SingleProposalCommentResponseSchema", async () => {
       mockProposalStore.getProposal.mockReturnValue(MOCK_PROPOSAL);
-      mockProposalStore.addComment.mockReturnValue(MOCK_COMMENT);
+      mockProposalStore.insertComment.mockReturnValue(MOCK_COMMENT);
 
       const res = await request(app)
         .post(`/api/proposals/${MOCK_PROPOSAL.id}/comments`)
