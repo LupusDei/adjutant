@@ -190,11 +190,11 @@ Print the key manual steps the user must complete before the pipeline will work.
 3. **Create an App Store Connect API key** and download the `.p8` file
 4. **Set up the match certificate repository** and run `fastlane match appstore` locally to generate initial certificates
 5. **Configure GitHub repository secrets**:
-   - `MATCH_PASSWORD` — passphrase for match encryption
    - `ASC_KEY_ID` — App Store Connect API key ID
    - `ASC_ISSUER_ID` — App Store Connect API issuer ID
-   - `ASC_KEY_CONTENT` — Base64-encoded `.p8` key file contents
-   - `MATCH_GIT_BASIC_AUTHORIZATION` — Base64-encoded `username:token` for the match cert repo
+   - `ASC_KEY_CONTENT` — Full contents of the `.p8` key file (including header/footer lines)
+   - `MATCH_PASSWORD` — passphrase for match encryption
+   - `MATCH_GIT_PRIVATE_KEY` — SSH private key for the match certificate repository
 6. **Switch to manual code signing** in Xcode project settings (disable "Automatically manage signing")
 
 ### Step 4: Next Steps
@@ -220,6 +220,10 @@ All templates use `{{PLACEHOLDER}}` syntax. Replace every placeholder before wri
 | `{{WORKSPACE_OR_PROJECT}}` | Derived from dep manager | workspace or project arg |
 | `{{DEP_MANAGER_STEPS}}` | Derived from dep manager | CocoaPods/SPM/Carthage steps |
 | `{{WORKING_DIRECTORY}}` | Derived from project path | `ios/` or empty |
+| `{{WORKING_DIRECTORY_DEFAULT}}` | Derived from project path | `defaults:` block or empty |
+| `{{PROJECT_PATH}}` | Derived from project path | `ios/` or empty |
+| `{{PROJECT_NAME}}` | Auto-detected from `.xcodeproj` | `MyApp` |
+| `{{WORKSPACE_NAME}}` | Auto-detected from `.xcworkspace` | `MyApp` |
 | `{{APP_NAME}}` | Derived from scheme name | `MyApp` |
 
 ## Key Rules
