@@ -12,7 +12,8 @@
       "./skills/direct-message",
       "./skills/discuss-proposal",
       "./skills/execute-proposal",
-      "./skills/testflight-deploy"
+      "./skills/testflight-deploy",
+      "./skills/squad-execute"
     ]
   }]
 }
