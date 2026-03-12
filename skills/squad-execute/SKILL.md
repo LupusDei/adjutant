@@ -1,6 +1,6 @@
 ---
 name: squad-execute
-description: Spawn a full squad of worktree-isolated Claude Code agents to execute a spec or epic. Includes staff engineers, QA sentinel, optional Product/UIUX reviewer, and optional code reviewer. The invoking agent stays in coordinator mode. Use when the user says "spin up a team", "squad execute", "execute this epic with a team", "spawn engineers for this", or wants parallel multi-agent execution of planned work.
+description: Spawn a full squad of worktree-isolated Claude Code agents to execute a spec or epic. Includes staff engineers, QA sentinel, optional Product/UIUX reviewer, and optional code reviewer. The invoking agent stays in coordinator mode. Use when the user says "spin up a team", "squad execute", "execute this epic with a team", "spawn engineers for this", "staff up", "build a team for this", "run this with agents", "deploy a squad", "get engineers on this", "execute with a crew", or wants parallel multi-agent execution of planned work. Also matches "launch team", "start squad", "kick off execution", and any request involving multiple agents working on an epic or spec simultaneously.
 ---
 
 # Squad Execute
@@ -101,9 +101,21 @@ QA sentinel, product reviewer, and code reviewer don't get pre-assigned beads â€
 
 ### Step 5: Spawn Engineers
 
-Spawn each engineer using **Claude Code's native Agent tool** with `isolation: "worktree"`.
+Spawn each engineer using **Claude Code's native Agent tool** with `isolation: "worktree"` and `run_in_background: true`.
 
 **CRITICAL**: Use the Agent tool (Claude Code native teammates), NOT `spawn_worker` (Adjutant MCP). Adjutant's `spawn_worker` creates tmux-managed sessions that count against the MAX_SESSIONS cap and inherit Adjutant project context. Claude Code native agents are lightweight, isolated, and don't consume session slots.
+
+**Parallel execution**: All engineers that can work in parallel MUST be spawned with `run_in_background: true` so they run concurrently as independent background agents. Do NOT spawn them as foreground sub-agents (which would serialize). You will be notified when each background agent completes â€” do not poll or sleep waiting for them.
+
+**Spawning pattern**:
+```
+Agent tool call 1: { name: "engineer-1", isolation: "worktree", run_in_background: true, prompt: "..." }
+Agent tool call 2: { name: "engineer-2", isolation: "worktree", run_in_background: true, prompt: "..." }
+Agent tool call 3: { name: "engineer-3", isolation: "worktree", run_in_background: true, prompt: "..." }
+// Send ALL parallel agents in a SINGLE message with multiple Agent tool calls
+```
+
+Launch all parallel-track engineers in the same message so they start simultaneously.
 
 **Every engineer spawn prompt MUST include this block verbatim:**
 
@@ -145,7 +157,7 @@ Additionally include:
 
 ### Step 6: Spawn QA Sentinel
 
-Spawn after the first engineer starts merging work. Use Claude Code's native Agent tool with `isolation: "worktree"`.
+Spawn after the first engineer starts merging work. Use Claude Code's native Agent tool with `isolation: "worktree"` and `run_in_background: true`.
 
 **QA Sentinel spawn prompt template:**
 
@@ -169,6 +181,8 @@ Epic: <epic-id>
 ```
 
 ### Step 7: Spawn Optional Reviewers
+
+Spawn all reviewers using Claude Code's native Agent tool with `isolation: "worktree"` and `run_in_background: true`. Launch QA + reviewers in the same message if spawning together.
 
 #### Product/UIUX Reviewer
 
