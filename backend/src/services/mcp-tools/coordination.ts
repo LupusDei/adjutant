@@ -383,7 +383,7 @@ export function registerCoordinationTools(
         agentId: callerAgentId,
         recipient: agentId,
         role: "agent",
-        body: `Shutdown requested: ${reason}. Please bd sync and shut down gracefully.`,
+        body: `Shutdown requested: ${reason}. Please finish your work and shut down gracefully.`,
       });
 
       // Mark spawn as decommissioned if applicable

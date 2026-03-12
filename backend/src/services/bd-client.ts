@@ -170,7 +170,7 @@ export async function execBd<T = unknown>(
 ): Promise<BdResult<T>> {
   const { cwd = process.cwd(), timeout = DEFAULT_TIMEOUT, parseJson = true, env } = options;
   const beadsDir = options.beadsDir ?? resolveBeadsDir(cwd);
-  const fullArgs = ["--allow-stale", ...args];
+  const fullArgs = [...args];
   const startedAt = Date.now();
   logInfo("bd exec start", { args: fullArgs });
 

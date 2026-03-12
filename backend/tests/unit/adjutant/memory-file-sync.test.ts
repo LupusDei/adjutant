@@ -72,7 +72,7 @@ describe("Memory File Sync (adj-053.5.2)", () => {
       const { syncMemoryFiles } = await import("../../../src/services/adjutant/memory-file-sync.js");
 
       insertHighConfidenceLearning("bead-workflow", "Always assign yourself to a bead before starting", 0.8, 3);
-      insertHighConfidenceLearning("bead-workflow", "Run bd sync before shutting down", 0.75, 4);
+      insertHighConfidenceLearning("bead-workflow", "Run bd vc commit before shutting down", 0.75, 4);
 
       const result = await syncMemoryFiles(store, memoryDir, memoryMdPath);
 
@@ -84,7 +84,7 @@ describe("Memory File Sync (adj-053.5.2)", () => {
 
       const content = readFileSync(topicFile, "utf-8");
       expect(content).toContain("Always assign yourself");
-      expect(content).toContain("Run bd sync before shutting down");
+      expect(content).toContain("Run bd vc commit before shutting down");
     });
 
     it("should NOT export learnings below confidence threshold", async () => {

@@ -127,7 +127,7 @@ describe("bd-client", () => {
       expect(result.exitCode).toBe(0);
       expect(mockSpawn).toHaveBeenCalledWith(
         "bd",
-        ["--allow-stale", "list", "--json"],
+        ["list", "--json"],
         expect.objectContaining({ cwd: expect.any(String) })
       );
     });

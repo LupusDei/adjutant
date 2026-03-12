@@ -83,12 +83,12 @@ describe("Acceptance: Agent MCP Bridge", () => {
   });
 
   describe("US3 - Agent Bead Operations via MCP (P2)", () => {
-    it.skip("should create a bead in `.beads/issues.jsonl` and the dashboard kanban updates.", () => {
+    it.skip("should create a bead in Dolt database and the dashboard kanban updates.", () => {
       // AUTO-GENERATED
       // Requires agent simulation — not API-testable
       // Given an agent connected to MCP
       // When it calls `create_bead(title: "...", type: "task")`
-      // Then a bead is created in `.beads/issues.jsonl` and the dashboard Kanban updates.
+      // Then a bead is created in the Dolt database and the dashboard Kanban updates.
     });
 
     it.skip("should bead status changes and the dashboard reflects it in real-time.", () => {

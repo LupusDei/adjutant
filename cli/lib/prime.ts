@@ -65,7 +65,7 @@ Use beads (\`bd\` CLI) for ALL task tracking. Do NOT use TaskCreate, TaskUpdate,
 \`\`\`bash
 bd update <id> --status=in_progress   # Before starting work
 bd close <id>                          # After completing work
-bd sync                                # Before shutting down
+bd vc commit -m "session end"          # Before shutting down (if using Dolt backend)
 \`\`\`
 
 ## Available MCP Tools
