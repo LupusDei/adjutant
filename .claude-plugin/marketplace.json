@@ -11,7 +11,8 @@
       "./skills/broadcast-prompt",
       "./skills/direct-message",
       "./skills/discuss-proposal",
-      "./skills/execute-proposal"
+      "./skills/execute-proposal",
+      "./skills/testflight-deploy"
     ]
   }]
 }
