@@ -105,7 +105,6 @@ struct ChatView: View {
         .background(theme.background.screen)
         .onAppear {
             viewModel.onAppear()
-            scrollToBottom()
             coordinator.activeViewingAgentId = viewModel.selectedRecipient
             NotificationService.shared.isViewingChat = true
             NotificationService.shared.activeViewingAgentId = viewModel.selectedRecipient
@@ -380,7 +379,7 @@ struct ChatView: View {
             }
             .onAppear {
                 scrollProxy = proxy
-                scrollToBottom()
+                scrollToBottom(animated: false)
             }
         }
     }
@@ -462,9 +461,17 @@ struct ChatView: View {
 
     // MARK: - Private Methods
 
-    private func scrollToBottom() {
-        withAnimation(.easeOut(duration: 0.2)) {
-            scrollProxy?.scrollTo("bottom", anchor: .bottom)
+    private func scrollToBottom(animated: Bool = true) {
+        // Defer scroll to next run-loop tick so SwiftUI finishes laying out
+        // any newly-inserted LazyVStack children before we measure "bottom".
+        DispatchQueue.main.async {
+            if animated {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    scrollProxy?.scrollTo("bottom", anchor: .bottom)
+                }
+            } else {
+                scrollProxy?.scrollTo("bottom", anchor: .bottom)
+            }
         }
     }
 }
