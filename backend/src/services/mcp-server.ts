@@ -136,6 +136,7 @@ export function resolveProjectContext(
   query: Record<string, unknown>,
   headers: Record<string, unknown>,
 ): ProjectContext | undefined {
+  // Priority 1: Explicit project ID (query param or header)
   const projectId =
     (typeof query["projectId"] === "string" && query["projectId"].length > 0
       ? query["projectId"]
@@ -144,27 +145,47 @@ export function resolveProjectContext(
       ? headers["x-project-id"] as string
       : undefined);
 
-  if (!projectId) {
-    return undefined;
+  if (projectId) {
+    const result = getProject(projectId);
+    if (!result.success || !result.data) {
+      logWarn("MCP project context: project not found", { projectId });
+      return undefined;
+    }
+
+    const project = result.data;
+    try {
+      const beadsDir = resolveBeadsDir(project.path);
+      return { projectId: project.id, projectName: project.name, projectPath: project.path, beadsDir };
+    } catch {
+      logWarn("MCP project context: failed to resolve beadsDir", {
+        projectId,
+        projectPath: project.path,
+      });
+      return undefined;
+    }
   }
 
-  const result = getProject(projectId);
-  if (!result.success || !result.data) {
-    logWarn("MCP project context: project not found", { projectId });
-    return undefined;
+  // Priority 2: Derive from project root path (X-Project-Root header)
+  // ADJUTANT_PROJECT_ROOT is the canonical env var — the server derives
+  // the project ID by matching the path against the project registry.
+  const projectRoot =
+    (typeof headers["x-project-root"] === "string" && (headers["x-project-root"] as string).length > 0
+      ? headers["x-project-root"] as string
+      : undefined);
+
+  if (projectRoot) {
+    const context = resolveProjectContextFromPath(projectRoot);
+    if (context) {
+      logInfo("MCP project context: resolved from project root", {
+        projectRoot,
+        projectId: context.projectId,
+      });
+      return context;
+    }
+    logWarn("MCP project context: project root not in registry", { projectRoot });
   }
 
-  const project = result.data;
-  try {
-    const beadsDir = resolveBeadsDir(project.path);
-    return { projectId: project.id, projectPath: project.path, beadsDir };
-  } catch {
-    logWarn("MCP project context: failed to resolve beadsDir", {
-      projectId,
-      projectPath: project.path,
-    });
-    return undefined;
-  }
+  return undefined;
 }
 
 /**
@@ -184,7 +205,7 @@ export function resolveProjectContextFromPath(
 
   try {
     const beadsDir = resolveBeadsDir(match.path);
-    return { projectId: match.id, projectPath: match.path, beadsDir };
+    return { projectId: match.id, projectName: match.name, projectPath: match.path, beadsDir };
   } catch {
     return undefined;
   }

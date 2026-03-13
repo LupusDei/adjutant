@@ -59,7 +59,7 @@ function createMockStore(): ProposalStore {
       title: "Test Proposal",
       description: "A test proposal",
       type: "engineering",
-      project: "adjutant",
+      project: "f1e8f895",
       status: "pending",
       createdAt: "2026-03-11T00:00:00Z",
       updatedAt: "2026-03-11T00:00:00Z",
@@ -70,7 +70,7 @@ function createMockStore(): ProposalStore {
       title: "Test Proposal",
       description: "A test proposal",
       type: "engineering",
-      project: "adjutant",
+      project: "f1e8f895",
       status: "pending",
       createdAt: "2026-03-11T00:00:00Z",
       updatedAt: "2026-03-11T00:00:00Z",
@@ -91,7 +91,7 @@ function createMockStore(): ProposalStore {
       title: "Revised Proposal",
       description: "A revised proposal",
       type: "engineering",
-      project: "adjutant",
+      project: "f1e8f895",
       status: "pending",
       createdAt: "2026-03-11T00:00:00Z",
       updatedAt: "2026-03-11T00:00:00Z",
@@ -130,7 +130,8 @@ function parseResult(result: unknown): unknown {
 
 const TEST_SESSION_ID = "session-123";
 const TEST_PROJECT_CONTEXT = {
-  projectId: "adjutant",
+  projectId: "f1e8f895",
+  projectName: "adjutant",
   projectPath: "/path/to/adjutant",
   beadsDir: "/path/to/adjutant/.beads",
 };
@@ -165,9 +166,9 @@ describe("Proposal project scoping", () => {
         { sessionId: TEST_SESSION_ID },
       );
 
-      // The store should receive the server-resolved project, not the client-supplied one
+      // The store should receive the server-resolved project ID, not the client-supplied one
       expect(store.insertProposal).toHaveBeenCalledWith(
-        expect.objectContaining({ project: "adjutant" }),
+        expect.objectContaining({ project: "f1e8f895" }),
       );
       // Should NOT have used the client-supplied "other-project"
       expect(store.insertProposal).not.toHaveBeenCalledWith(
@@ -215,7 +216,7 @@ describe("Proposal project scoping", () => {
       );
 
       expect(store.getProposals).toHaveBeenCalledWith(
-        expect.objectContaining({ project: "adjutant" }),
+        expect.objectContaining({ project: "f1e8f895" }),
       );
     });
 
@@ -267,12 +268,12 @@ describe("Proposal project scoping", () => {
       const parsed = parseResult(result);
       expect(parsed).toHaveProperty("error");
       expect((parsed as { error: string }).error).toContain("other-project");
-      expect((parsed as { error: string }).error).toContain("adjutant");
+      expect((parsed as { error: string }).error).toContain("f1e8f895");
     });
 
     it("should allow when proposal belongs to agent's project", async () => {
       const store = createMockStore();
-      // Proposal belongs to "adjutant" — same as agent's project
+      // Proposal belongs to "f1e8f895" — same as agent's project ID
       mockGetAgentBySession.mockReturnValue("test-agent");
       mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
 
@@ -617,9 +618,9 @@ describe("Proposal project scoping", () => {
       );
 
       const parsed = parseResult(result);
-      // Empty string !== "adjutant", so scoped agents are rejected
+      // Empty string !== "f1e8f895" (projectId) and !== "adjutant" (projectName), so scoped agents are rejected
       expect(parsed).toHaveProperty("error");
-      expect((parsed as { error: string }).error).toContain("adjutant");
+      expect((parsed as { error: string }).error).toContain("f1e8f895");
     });
 
     it("list_proposals explicit empty-string project filter should pass empty string to store (adj-072.5.5)", async () => {
@@ -670,7 +671,7 @@ describe("Proposal project scoping", () => {
       const parsed = parseResult(result);
       expect(parsed).toHaveProperty("error");
       expect((parsed as { error: string }).error).toContain("secret-project");
-      expect((parsed as { error: string }).error).toContain("adjutant");
+      expect((parsed as { error: string }).error).toContain("f1e8f895");
     });
 
     it("should allow when proposal belongs to agent's project", async () => {
@@ -686,7 +687,7 @@ describe("Proposal project scoping", () => {
 
       const parsed = parseResult(result);
       expect(parsed).not.toHaveProperty("error");
-      expect((parsed as { project: string }).project).toBe("adjutant");
+      expect((parsed as { project: string }).project).toBe("f1e8f895");
     });
   });
 
@@ -816,8 +817,8 @@ describe("Proposal project scoping", () => {
         };
       });
 
-      const projectA = { projectId: "project-a", projectPath: "/a", beadsDir: "/a/.beads" };
-      const projectB = { projectId: "project-b", projectPath: "/b", beadsDir: "/b/.beads" };
+      const projectA = { projectId: "project-a", projectName: "proj-a", projectPath: "/a", beadsDir: "/a/.beads" };
+      const projectB = { projectId: "project-b", projectName: "proj-b", projectPath: "/b", beadsDir: "/b/.beads" };
 
       // Simulate two agents with different project contexts
       mockGetAgentBySession.mockImplementation((sid: string) => {
@@ -883,6 +884,95 @@ describe("Proposal project scoping", () => {
       expect(parsed).toHaveProperty("status");
       expect(parsed).toHaveProperty("type");
       expect(parsed).toHaveProperty("createdAt");
+    });
+  });
+
+  // ===========================================================================
+  // adj-090: Legacy proposals stored with project name instead of UUID
+  // ===========================================================================
+
+  describe("legacy proposal with project name instead of UUID (adj-090)", () => {
+    it("get_proposal should allow access when proposal.project matches projectName", async () => {
+      const store = createMockStore();
+      // Legacy proposal stored with the human-readable name, not UUID
+      (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "legacy-uuid",
+        author: "test-agent",
+        title: "Legacy Proposal",
+        description: "Created before adj-088",
+        type: "engineering",
+        project: "adjutant", // name string, NOT UUID
+        status: "pending",
+        createdAt: "2026-03-01T00:00:00Z",
+        updatedAt: "2026-03-01T00:00:00Z",
+      });
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      // Agent's context has UUID as projectId and "adjutant" as projectName
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "get_proposal");
+      const result = await handler(
+        { id: "legacy-uuid" },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed).not.toHaveProperty("error");
+      expect((parsed as { project: string }).project).toBe("adjutant");
+    });
+
+    it("discuss_proposal should allow access when proposal.project matches projectName", async () => {
+      const store = createMockStore();
+      (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "legacy-uuid",
+        author: "test-agent",
+        title: "Legacy Proposal",
+        description: "Created before adj-088",
+        type: "engineering",
+        project: "adjutant",
+        status: "pending",
+        createdAt: "2026-03-01T00:00:00Z",
+        updatedAt: "2026-03-01T00:00:00Z",
+      });
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "discuss_proposal");
+      const result = await handler(
+        { id: "legacy-uuid" },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed).not.toHaveProperty("error");
+      expect(parsed).toHaveProperty("proposal");
+    });
+
+    it("comment_on_proposal should allow access when proposal.project matches projectName", async () => {
+      const store = createMockStore();
+      (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "legacy-uuid",
+        author: "test-agent",
+        title: "Legacy Proposal",
+        description: "Created before adj-088",
+        type: "engineering",
+        project: "adjutant",
+        status: "pending",
+        createdAt: "2026-03-01T00:00:00Z",
+        updatedAt: "2026-03-01T00:00:00Z",
+      });
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "comment_on_proposal");
+      const result = await handler(
+        { id: "legacy-uuid", body: "A comment on legacy proposal" },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed).not.toHaveProperty("error");
+      expect(store.insertComment).toHaveBeenCalled();
     });
   });
 });

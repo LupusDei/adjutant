@@ -12,6 +12,7 @@
     "dist/cli",
     ".adjutant",
     ".claude-plugin",
+    ".claude/commands",
     "skills",
     "backend",
     "frontend",

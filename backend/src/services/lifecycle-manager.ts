@@ -153,12 +153,22 @@ export class LifecycleManager {
         workspaceType: req.workspaceType ?? "primary",
       });
 
-      // Set agent identity env var so the MCP server can identify this agent
+      // Set agent identity and project env vars so the MCP server can
+      // identify this agent and resolve its project context.
+      // ADJUTANT_PROJECT_ROOT is the canonical project identifier — the
+      // MCP server derives the project ID by matching against the registry.
       await execTmuxCommand([
         "send-keys",
         "-t",
         tmuxSessionName,
         `export ADJUTANT_AGENT_ID=${shellEscape(req.name)}`,
+        "Enter",
+      ]);
+      await execTmuxCommand([
+        "send-keys",
+        "-t",
+        tmuxSessionName,
+        `export ADJUTANT_PROJECT_ROOT=${shellEscape(req.projectPath)}`,
         "Enter",
       ]);
 
@@ -246,7 +256,8 @@ export class LifecycleManager {
   }
 
   /**
-   * Kill a tmux session and clean up.
+   * Kill a tmux session and clean up (including worktree removal for
+   * worktree-isolated sessions — adj-085).
    */
   async killSession(sessionId: string): Promise<boolean> {
     const session = this.registry.get(sessionId);
@@ -259,6 +270,26 @@ export class LifecycleManager {
       await execTmuxCommand(["kill-session", "-t", session.tmuxSession]);
     } catch {
       // Session might already be gone
+    }
+
+    // Clean up git worktree if this was a worktree-isolated session (adj-085)
+    if (session.workspaceType === "worktree") {
+      try {
+        const projectRoot = process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd();
+        await new Promise<void>((resolve, reject) => {
+          execFile("git", ["worktree", "remove", session.projectPath, "--force"],
+            { cwd: projectRoot },
+            (err) => err ? reject(err) : resolve()
+          );
+        });
+        logInfo("Removed worktree on session kill", { sessionId, path: session.projectPath });
+      } catch (err) {
+        logWarn("Worktree cleanup failed (may already be removed)", {
+          sessionId,
+          path: session.projectPath,
+          error: String(err),
+        });
+      }
     }
 
     this.registry.updateStatus(sessionId, "offline");

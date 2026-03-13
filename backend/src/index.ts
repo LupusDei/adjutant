@@ -343,4 +343,51 @@ const server = app.listen(PORT, () => {
       logInfo("Decision pruning", { deletedCount });
     }
   }, PRUNE_INTERVAL_MS);
+
+  // ──────────────────────────────────────────────────────────────
+  // Clean shutdown handler (adj-084 Bug 4)
+  //
+  // SIGTERM = real shutdown → kill agent tmux sessions + cleanup
+  // SIGINT  = tsx watch reload → just close the HTTP server,
+  //           agent sessions must survive backend restarts
+  // ──────────────────────────────────────────────────────────────
+  let shuttingDown = false;
+
+  const gracefulShutdown = async (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logInfo(`Received ${signal}, shutting down gracefully...`);
+
+    try {
+      const bridge = getSessionBridge();
+
+      // Only kill agent sessions on SIGTERM (real shutdown).
+      // SIGINT is sent by tsx watch on file change — agents must survive.
+      if (signal === "SIGTERM") {
+        const sessions = bridge.listSessions();
+        for (const s of sessions) {
+          try {
+            await bridge.killSession(s.id);
+            logInfo("Killed session on shutdown", { name: s.name, id: s.id });
+          } catch {
+            // Best-effort — session may already be dead
+          }
+        }
+      }
+
+      // Shut down the bridge (detach pipes, persist clean state)
+      await bridge.shutdown();
+
+      // Close the HTTP server
+      server.close();
+      logInfo("Shutdown complete", { signal });
+    } catch (err) {
+      logInfo("Error during shutdown", { error: String(err) });
+    }
+
+    process.exit(0);
+  };
+
+  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 });

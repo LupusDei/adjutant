@@ -99,6 +99,21 @@ You have been asked to discuss and review a proposal with the user. Follow these
 - **Revise only when you have concrete improvements**: If your review identifies specific, actionable changes to the proposal's title, description, or type, create a revision. Vague feedback ("could be better") is not grounds for a revision — that belongs in the comment only.
 - **Comment AND revise**: When you do revise, still create the comment first. The comment captures your reasoning; the revision captures the changes.
 
+## Question Routing (MANDATORY)
+
+**All questions about the proposal MUST be sent to the user via Adjutant MCP messages.** This is non-negotiable.
+
+```
+send_message({ to: "user", body: "Question about proposal '<title>': <your question>" })
+```
+
+**Rules:**
+- Do NOT use `AskUserQuestion` — it blocks execution and the user may not be at the terminal
+- Do NOT print questions to stdout — the user monitors agents via the Adjutant dashboard, not terminal output
+- Do NOT block waiting for answers — send the question via MCP, note your assumption, and continue
+- If you make assumptions, state them clearly in the MCP message so the user can correct you later
+- If ambiguous on multiple points, send ONE message with all questions numbered, then proceed with reasonable defaults
+
 ## Notes
 
 - Keep the discussion threaded under `threadId: "proposal-{proposalId}"` so it stays organized.

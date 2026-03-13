@@ -130,7 +130,7 @@ describe("MCP Routes", () => {
       const handler = findRouteHandler(mcpRouter, "post", "/");
       await handler!(req, res, vi.fn());
 
-      expect(mockRecoverSession).toHaveBeenCalledWith("stale-session", "recovered-agent");
+      expect(mockRecoverSession).toHaveBeenCalledWith("stale-session", "recovered-agent", undefined);
       expect(mockTransport.handleRequest).toHaveBeenCalledWith(req, res, req.body);
       expect(res.status).not.toHaveBeenCalledWith(404);
     });
@@ -244,7 +244,7 @@ describe("MCP Routes", () => {
       const handler = findRouteHandler(mcpRouter, "get", "/");
       await handler!(req, res, vi.fn());
 
-      expect(mockRecoverSession).toHaveBeenCalledWith("stale-session", "recovered-agent");
+      expect(mockRecoverSession).toHaveBeenCalledWith("stale-session", "recovered-agent", undefined);
       expect(mockTransport.handleRequest).toHaveBeenCalledWith(req, res);
     });
 

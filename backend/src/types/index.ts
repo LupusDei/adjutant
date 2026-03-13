@@ -164,8 +164,10 @@ export interface CrewMember {
  * Null/undefined means legacy agent — fall back to workspace singleton.
  */
 export interface ProjectContext {
-  /** Registered project ID */
+  /** Registered project ID (UUID) */
   projectId: string;
+  /** Human-readable project name (e.g. "adjutant") */
+  projectName: string;
   /** Absolute path to project root */
   projectPath: string;
   /** Resolved .beads/ directory for this project */
@@ -300,6 +302,7 @@ export const CrewMemberSchema = z.object({
 
 export const ProjectContextSchema = z.object({
   projectId: z.string(),
+  projectName: z.string(),
   projectPath: z.string(),
   beadsDir: z.string(),
 });

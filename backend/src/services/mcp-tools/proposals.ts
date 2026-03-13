@@ -27,7 +27,10 @@ function validateProjectAccess(
   if (!projectContext) {
     return { error: "No project context — cannot access proposals across projects" };
   }
-  if (proposal.project !== projectContext.projectId) {
+  // Match against both projectId (UUID) and projectName (human-readable).
+  // Proposals created before server-side project resolution (adj-088) stored
+  // the project name string; newer ones store the UUID. (adj-090)
+  if (proposal.project !== projectContext.projectId && proposal.project !== projectContext.projectName) {
     return { error: `Proposal belongs to project ${proposal.project}, but you are scoped to project ${projectContext.projectId}` };
   }
   return null;

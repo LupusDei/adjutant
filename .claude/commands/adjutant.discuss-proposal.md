@@ -57,6 +57,20 @@ The `$ARGUMENTS` above is the proposal ID. Follow these steps:
    - Dismiss with reasoning
    - Create a revised proposal via `create_proposal`
 
+## Question Routing (MANDATORY)
+
+**All questions about the proposal MUST be sent to the user via Adjutant MCP messages.** This is non-negotiable.
+
+```
+send_message({ to: "user", body: "Question about proposal '<title>': <your question>", threadId: "proposal-{proposalId}" })
+```
+
+**Rules:**
+- Do NOT use `AskUserQuestion` — it blocks execution and the user may not be at the terminal
+- Do NOT print questions to stdout — the user monitors agents via the Adjutant dashboard, not terminal output
+- Do NOT block waiting for answers — send the question via MCP, note your assumption, and continue
+- If you make assumptions, state them clearly in the MCP message so the user can correct you later
+
 ## Notes
 
 - Keep the discussion threaded under `threadId: "proposal-{proposalId}"` so it stays organized.

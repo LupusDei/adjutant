@@ -226,6 +226,21 @@ All templates use `{{PLACEHOLDER}}` syntax. Replace every placeholder before wri
 | `{{WORKSPACE_NAME}}` | Auto-detected from `.xcworkspace` | `MyApp` |
 | `{{APP_NAME}}` | Derived from scheme name | `MyApp` |
 
+## Question Routing (MANDATORY)
+
+**All questions MUST be sent to the user via Adjutant MCP messages.** This is non-negotiable.
+
+```
+send_message({ to: "user", body: "Question about TestFlight setup: <your question>" })
+```
+
+**Rules:**
+- Do NOT use `AskUserQuestion` — it blocks execution and the user may not be at the terminal
+- Do NOT print questions to stdout — the user monitors agents via the Adjutant dashboard, not terminal output
+- Do NOT block waiting for answers — send the question via MCP, note your assumption, and continue
+- If you make assumptions, state them clearly in the MCP message so the user can correct you later
+- If ambiguous on multiple points, send ONE message with all questions numbered, then proceed with reasonable defaults
+
 ## Key Rules
 
 - Templates use `{{PLACEHOLDER}}` syntax — replace ALL placeholders before writing files

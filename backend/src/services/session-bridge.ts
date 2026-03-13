@@ -6,8 +6,7 @@
  * session management operations.
  */
 
-import { basename } from "path";
-import { logInfo, logWarn } from "../utils/index.js";
+import { logInfo } from "../utils/index.js";
 import { getEventBus } from "./event-bus.js";
 import { recordCostUpdate, clearSessionCost, finalizeOrphanedSessions } from "./cost-tracker.js";
 import { getAgentStatuses } from "./mcp-tools/status.js";
@@ -116,29 +115,11 @@ export class SessionBridge {
     // Always save after verification — persists auto-healed pane references
     await this.registry.save();
 
-    // Auto-create a session if none are alive for the project root
-    const projectRoot = process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd();
-    const aliveSessions = this.registry.getAll().filter((s) => s.status !== "offline");
-    const hasProjectSession = aliveSessions.some(
-      (s) => s.projectPath === projectRoot
-    );
-
-    if (!hasProjectSession) {
-      const sessionName = basename(projectRoot);
-      logInfo("Auto-creating session for project root", { projectRoot, sessionName });
-      const result = await this.lifecycle.createSession({
-        name: sessionName,
-        projectPath: projectRoot,
-        mode: "swarm",
-        workspaceType: "primary",
-      });
-      if (result.success) {
-        await this.registry.save();
-        logInfo("Auto-session created", { sessionId: result.sessionId });
-      } else {
-        logWarn("Auto-session creation failed", { error: result.error });
-      }
-    }
+    // NOTE: Auto-session creation removed (adj-084 Bug 2+3).
+    // The coordinator is spawned by spawnAdjutant() in index.ts, which
+    // already creates the session with proper name, prompt, and env vars.
+    // Auto-create was producing a duplicate "adjutant" session with no
+    // initial prompt, wasting API credits and causing identity confusion.
 
     // Set up output handler to broadcast via event bus
     // Single output path: capture-pane polling only (no raw pipe-pane reading)

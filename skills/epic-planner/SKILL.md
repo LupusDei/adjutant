@@ -118,6 +118,23 @@ Create them as children of the affected task. Example: while implementing `bd-01
 
 Do NOT pre-plan improvements in the spec artifacts — they emerge organically.
 
+## Question Routing (MANDATORY)
+
+**All questions about the epic MUST be sent to the user via Adjutant MCP messages.** This is non-negotiable.
+
+```
+send_message({ to: "user", body: "Question about epic '<title>': <your question>" })
+```
+
+**Rules:**
+- Do NOT use `AskUserQuestion` — it blocks execution and the user may not be at the terminal
+- Do NOT print questions to stdout — the user monitors agents via the Adjutant dashboard, not terminal output
+- Do NOT block waiting for answers — send the question via MCP, note your assumption, and continue
+- If you make assumptions, state them clearly in the MCP message so the user can correct you later
+- If ambiguous on multiple points, send ONE message with all questions numbered, then proceed with reasonable defaults
+
+When spawning team agents to work on the epic, include this same instruction in their spawn prompts — they must also route questions through MCP, not stdout.
+
 ## Key Rules
 
 - **One root epic per feature** — never create multiple roots

@@ -41,14 +41,18 @@ mcpRouter.post("/", async (req, res) => {
         req.query as Record<string, unknown>,
         req.headers as Record<string, unknown>,
       );
-      transport = await recoverSession(sessionId, agentId);
+      const projectContext = resolveProjectContext(
+        req.query as Record<string, unknown>,
+        req.headers as Record<string, unknown>,
+      );
+      transport = await recoverSession(sessionId, agentId, projectContext);
 
       if (!transport) {
         res.status(404).json({ error: "Session not found" });
         return;
       }
 
-      logInfo("MCP session transparently recovered", { sessionId, agentId });
+      logInfo("MCP session transparently recovered", { sessionId, agentId, projectId: projectContext?.projectId });
     }
 
     try {
@@ -126,14 +130,18 @@ mcpRouter.get("/", async (req, res) => {
       req.query as Record<string, unknown>,
       req.headers as Record<string, unknown>,
     );
-    transport = await recoverSession(sessionId, agentId);
+    const projectContext = resolveProjectContext(
+      req.query as Record<string, unknown>,
+      req.headers as Record<string, unknown>,
+    );
+    transport = await recoverSession(sessionId, agentId, projectContext);
 
     if (!transport) {
       res.status(404).json({ error: "Session not found" });
       return;
     }
 
-    logInfo("MCP SSE session transparently recovered", { sessionId, agentId });
+    logInfo("MCP SSE session transparently recovered", { sessionId, agentId, projectId: projectContext?.projectId });
   }
 
   try {

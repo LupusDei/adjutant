@@ -25,6 +25,9 @@ GREEN='\033[1;32m'
 BLUE='\033[1;34m'
 NC='\033[0m'
 
+# Consistent UTC timestamps across frontend + backend logs (adj-084 Bug 5)
+export TZ=UTC
+
 # Project root is always CWD
 export ADJUTANT_PROJECT_ROOT="$PWD"
 echo -e "${GREEN}Project root: $ADJUTANT_PROJECT_ROOT${NC}"
