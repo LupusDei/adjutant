@@ -47,3 +47,7 @@ backend/.audio-cache/
 .logs/
 logs/
 AuthKey_*.p8
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db
