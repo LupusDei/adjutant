@@ -503,15 +503,20 @@ public final class DataSyncService: ObservableObject {
             // Sort by updated date descending by default so recently-active beads appear first
             let effectiveSort = sort ?? "updated"
             let effectiveOrder = order ?? "desc"
-            // Fetch active beads (open + in_progress + blocked) for the project.
-            // Using .default instead of .all avoids hitting the 500-bead API limit —
-            // with 1800+ total beads (most closed), .all returns only the 500 most
-            // recently updated, silently dropping older open tasks and bugs.
-            let response = try await apiClient.getBeads(status: .default, sort: effectiveSort, order: effectiveOrder, project: project)
+            // Two-phase fetch to avoid the 500-bead API limit:
+            // 1. All active beads (open + in_progress + blocked) — typically ~100-200
+            // 2. Last 300 closed beads for the Kanban CLOSED column
+            // This replaces the old status=all approach which silently dropped older
+            // open tasks/bugs when total beads exceeded the 500 limit.
+            async let activeResponse = apiClient.getBeads(status: .default, sort: effectiveSort, order: effectiveOrder, project: project)
+            async let closedResponse = apiClient.getBeads(status: .closed, sort: "updated", order: "desc", limit: 300, project: project)
+
+            let (active, closed) = try await (activeResponse, closedResponse)
+            let combined = active + closed
 
             // Sort off the main actor to avoid blocking UI during large bead lists
             let sorted = await Task.detached(priority: .userInitiated) {
-                response.sorted {
+                combined.sorted {
                     if $0.priority != $1.priority {
                         return $0.priority < $1.priority
                     }
