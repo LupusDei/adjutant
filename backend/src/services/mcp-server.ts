@@ -59,13 +59,17 @@ let toolRegistrar: ToolRegistrar | null = null;
  * Create a new McpServer instance with tools registered.
  */
 export function createMcpServer(): McpServer {
+  if (!toolRegistrar) {
+    throw new Error(
+      "MCP tool registrar not set — cannot create server. " +
+      "Ensure setToolRegistrar() is called before any agent can connect.",
+    );
+  }
   const server = new McpServer(
     { name: "adjutant", version: "0.2.2" },
     {},
   );
-  if (toolRegistrar) {
-    toolRegistrar(server);
-  }
+  toolRegistrar(server);
   return server;
 }
 

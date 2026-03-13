@@ -41,6 +41,13 @@ export async function spawnAdjutant(projectPath: string): Promise<void> {
     projectPath,
     agentFile: "adjutant",
     mode: "swarm",
+    // Set ADJUTANT_AGENT_ID explicitly so that `.mcp.json`'s
+    // `${ADJUTANT_AGENT_ID:-unknown}` header resolves correctly.
+    // The lifecycle manager exports this env var in the tmux session
+    // BEFORE starting Claude Code. (adj-083 Bug 3)
+    envVars: {
+      ADJUTANT_AGENT_ID: ADJUTANT_SESSION_NAME,
+    },
   });
 }
 

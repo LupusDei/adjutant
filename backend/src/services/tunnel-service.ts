@@ -36,6 +36,12 @@ interface NgrokApiResponse {
 // Default port to tunnel (frontend dev server)
 const NGROK_PORT = process.env["NGROK_PORT"] ?? "4200";
 
+// Optional: permanent ngrok domain (e.g., "cc.jmm.ngrok.io")
+const NGROK_DOMAIN = process.env["NGROK_DOMAIN"] ?? "";
+
+// Optional: ngrok auth token (for authenticated tunnels)
+const NGROK_AUTH = process.env["NGROK_AUTH"] ?? "";
+
 // ============================================================================
 // State
 // ============================================================================
@@ -189,10 +195,23 @@ export async function startTunnel(): Promise<TunnelServiceResult<TunnelStatus>> 
     currentState = "starting";
     lastError = null;
 
+    // Build ngrok args — use --url for permanent domain if configured
+    const ngrokArgs = ["http", NGROK_PORT];
+    if (NGROK_DOMAIN) {
+      ngrokArgs.push("--url", NGROK_DOMAIN);
+    }
+
+    // Set auth token via environment if configured (ngrok reads NGROK_AUTHTOKEN)
+    const ngrokEnv = { ...process.env };
+    if (NGROK_AUTH) {
+      ngrokEnv["NGROK_AUTHTOKEN"] = NGROK_AUTH;
+    }
+
     // Spawn ngrok process
-    ngrokProcess = spawn("ngrok", ["http", NGROK_PORT], {
+    ngrokProcess = spawn("ngrok", ngrokArgs, {
       detached: false,
       stdio: ["ignore", "pipe", "pipe"],
+      env: ngrokEnv,
     });
 
     // Handle process exit

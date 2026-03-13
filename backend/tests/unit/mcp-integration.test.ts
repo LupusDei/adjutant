@@ -109,6 +109,7 @@ vi.mock("@modelcontextprotocol/sdk/server/streamableHttp.js", () => ({
 
 import {
   resetMcpServer,
+  setToolRegistrar,
   getConnectedAgents,
   getAgentBySession,
 } from "../../src/services/mcp-server.js";
@@ -117,6 +118,8 @@ import { mcpRouter } from "../../src/routes/mcp.js";
 describe("MCP Streamable HTTP Integration", () => {
   beforeEach(() => {
     resetMcpServer();
+    // Set a no-op tool registrar so createMcpServer() doesn't throw (adj-083 Bug 1)
+    setToolRegistrar(vi.fn());
     sessionIdState.counter = 0;
     createdTransports.length = 0;
     vi.clearAllMocks();

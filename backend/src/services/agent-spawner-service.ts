@@ -76,6 +76,8 @@ export interface SpawnAgentRequest {
   claudeArgs?: string[];
   /** Optional initial prompt to send after spawn */
   initialPrompt?: string;
+  /** Additional environment variables to set in the tmux session before starting Claude */
+  envVars?: Record<string, string>;
 }
 
 export interface SpawnAgentResult {
@@ -153,6 +155,7 @@ export async function spawnAgent(
       mode,
       ...(claudeArgs.length > 0 ? { claudeArgs } : {}),
       ...(req.initialPrompt ? { initialPrompt: req.initialPrompt } : {}),
+      ...(req.envVars ? { envVars: req.envVars } : {}),
     });
 
     if (result.success) {

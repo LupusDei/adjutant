@@ -174,39 +174,12 @@ const server = app.listen(PORT, () => {
   // Initialize streaming bridge (watches .beads/streams/ for agent output)
   initStreamingBridge();
 
-  // Initialize MCP server subsystem with tool registrar.
-  // Each Streamable HTTP session gets its own McpServer; the registrar
-  // is called on each new instance to wire up tools.
-  initMcpServer();
-  // Tool registrar is set later (after adjutantState is created)
-  // so coordination tools have access to the state store.
-  // See setToolRegistrar call below.
-
-  // Wire spawn health checks — cancel pending timers when agents connect via MCP
-  wireSpawnHealthChecks();
-
-  // Initialize message delivery (flushes pending messages when agents connect)
-  initMessageDelivery(messageStore);
-
-  // Initialize bead assignment notification (auto-messages agents on assignment)
-  initBeadAssignNotification(messageStore);
-
-  // Initialize Session Bridge v2 (tmux session management)
-  // init() loads persisted sessions, verifies tmux state, and auto-creates
-  // a Claude Code session if none are alive for the project root.
-  const projectRoot = process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd();
-  getSessionBridge()
-    .init()
-    .then(() => spawnAdjutant(projectRoot))
-    .catch((err) => {
-      logInfo("session bridge init failed (non-fatal)", { error: String(err) });
-    });
-
   // Initialize Adjutant Core — event-driven behavior dispatch
+  // NOTE: adjutantState and stimulusEngine must be created BEFORE
+  // spawnAdjutant() so the tool registrar is ready when agents connect.
+  // (adj-083 Bug 1: MCP tool registration race condition)
+  const projectRoot = process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd();
   const adjutantState = createAdjutantState(messageDb);
-
-  // Tool registrar is set after stimulusEngine creation (below)
-  // so coordination tools have access to both adjutantState and stimulusEngine.
 
   // On server restart, no agents are connected — mark all as disconnected.
   const staleMarked = adjutantState.markAllDisconnected();
@@ -234,7 +207,9 @@ const server = app.listen(PORT, () => {
   // Register stimulus-dependent behaviors (must come after stimulusEngine creation)
   behaviorRegistry.register(createIdleProposalNudge(stimulusEngine, proposalStore));
 
-  // Set tool registrar now that adjutantState and stimulusEngine are available
+  // Set tool registrar BEFORE MCP init and agent spawn so that any
+  // connecting agent gets a fully-tooled MCP server.
+  // (adj-083 Bug 1: fixes race where agent gets zero tools)
   setToolRegistrar((server) => {
     registerMessagingTools(server, messageStore, eventStore);
     registerStatusTools(server, messageStore, eventStore);
@@ -244,6 +219,31 @@ const server = app.listen(PORT, () => {
     registerMemoryTools(server, memoryStore, { getAgentBySession });
     registerCoordinationTools(server, adjutantState, messageStore, stimulusEngine, eventStore);
   });
+
+  // Initialize MCP server subsystem with tool registrar.
+  // Each Streamable HTTP session gets its own McpServer; the registrar
+  // is called on each new instance to wire up tools.
+  initMcpServer();
+
+  // Wire spawn health checks — cancel pending timers when agents connect via MCP
+  wireSpawnHealthChecks();
+
+  // Initialize message delivery (flushes pending messages when agents connect)
+  initMessageDelivery(messageStore);
+
+  // Initialize bead assignment notification (auto-messages agents on assignment)
+  initBeadAssignNotification(messageStore);
+
+  // Initialize Session Bridge v2 (tmux session management)
+  // init() loads persisted sessions, verifies tmux state, and auto-creates
+  // a Claude Code session if none are alive for the project root.
+  // spawnAdjutant is called AFTER setToolRegistrar to prevent race condition.
+  getSessionBridge()
+    .init()
+    .then(() => spawnAdjutant(projectRoot))
+    .catch((err) => {
+      logInfo("session bridge init failed (non-fatal)", { error: String(err) });
+    });
 
   // Wire critical signals from aggregator to stimulus engine
   signalAggregator.onCritical((signal) => {

@@ -101,19 +101,31 @@ const MockedMcpServer = vi.mocked(McpServer);
 describe("MCP Server", () => {
   beforeEach(() => {
     resetMcpServer();
+    // Set a default no-op tool registrar so createMcpServer() doesn't throw.
+    // Tests that specifically test the "no registrar" behavior reset this.
+    setToolRegistrar(vi.fn());
     sessionIdState.counter = 0;
     createdTransports.length = 0;
     vi.clearAllMocks();
   });
 
   describe("createMcpServer", () => {
-    it("should create an MCP server instance", () => {
+    it("should throw when toolRegistrar is not set", () => {
+      // adj-083 Bug 1: createMcpServer must refuse to create a server
+      // without tools, preventing agents from connecting with zero tools.
+      resetMcpServer(); // Clear the registrar set in beforeEach
+      expect(() => createMcpServer()).toThrow(/tool registrar/i);
+    });
+
+    it("should create an MCP server instance when registrar is set", () => {
+      setToolRegistrar(vi.fn());
       const server = createMcpServer();
       expect(server).toBeDefined();
       expect(server.connect).toBeDefined();
     });
 
     it("should configure server with name 'adjutant'", () => {
+      setToolRegistrar(vi.fn());
       createMcpServer();
       expect(MockedMcpServer).toHaveBeenCalledWith(
         expect.objectContaining({ name: "adjutant" }),
