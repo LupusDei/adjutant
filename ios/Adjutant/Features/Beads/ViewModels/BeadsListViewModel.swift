@@ -240,7 +240,8 @@ final class BeadsListViewModel: BaseViewModel {
     // MARK: - Private Helpers
 
     /// Types excluded from the beads list (matches frontend EXCLUDED_TYPES)
-    private static let excludedTypes: Set<String> = ["message", "epic", "agent", "wisp"]
+    /// Note: "bug" and "task" are intentionally NOT excluded — they are actionable work items
+    private static let excludedTypes: Set<String> = ["message", "agent", "wisp"]
 
     /// Applies the current filter and search to beads
     /// Note: Project filtering is now done server-side via the API project parameter

@@ -34,7 +34,8 @@ const SORT_OPTIONS: { value: BeadSort; label: string }[] = [
 ];
 
 /** Excluded types (always filtered) */
-const EXCLUDED_TYPES = ['message', 'epic', 'agent'];
+// Note: "bug", "task", and "epic" are NOT excluded — they are actionable work items
+const EXCLUDED_TYPES = ['message', 'agent'];
 
 /** Additional type exclusions for overseer view */
 const OVERSEER_EXCLUDED_TYPES = ['role', 'witness', 'wisp', 'infrastructure', 'coordination', 'sync'];
