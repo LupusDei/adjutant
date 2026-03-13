@@ -2,9 +2,16 @@ import SwiftUI
 import AdjutantKit
 
 /// Mode for the send-to-agent sheet.
-enum SendToAgentMode {
+enum SendToAgentMode: Identifiable {
     case execute
     case discuss
+
+    var id: String {
+        switch self {
+        case .execute: return "execute"
+        case .discuss: return "discuss"
+        }
+    }
 
     var skillName: String {
         switch self {

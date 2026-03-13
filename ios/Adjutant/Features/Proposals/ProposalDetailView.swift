@@ -6,8 +6,7 @@ struct ProposalDetailView: View {
     @Environment(\.crtTheme) private var theme
     @EnvironmentObject private var coordinator: AppCoordinator
     @StateObject private var viewModel: ProposalDetailViewModel
-    @State private var showingSendToAgent = false
-    @State private var sendToAgentMode: SendToAgentMode = .execute
+    @State private var sendToAgentMode: SendToAgentMode?
     @State private var commentsExpanded = true
     @State private var revisionsExpanded = false
 
@@ -62,11 +61,11 @@ struct ProposalDetailView: View {
         } message: {
             Text("Proposal has been sent to the agent for epic planning.")
         }
-        .sheet(isPresented: $showingSendToAgent) {
+        .sheet(item: $sendToAgentMode) { mode in
             if let proposal = viewModel.proposal {
-                SendToAgentSheet(proposal: proposal, mode: sendToAgentMode) { _ in
+                SendToAgentSheet(proposal: proposal, mode: mode) { _ in
                     // For discuss mode, skip the alert — we navigate straight to chat
-                    if sendToAgentMode == .execute {
+                    if mode == .execute {
                         viewModel.markSentToAgent()
                     }
                 }
@@ -185,7 +184,6 @@ struct ProposalDetailView: View {
                     }
                     CRTButton("DISCUSS", variant: .secondary, size: .medium) {
                         sendToAgentMode = .discuss
-                        showingSendToAgent = true
                     }
                     CRTButton("DISMISS", variant: .danger, size: .medium) {
                         Task<Void, Never> { await viewModel.dismiss() }
@@ -210,7 +208,6 @@ struct ProposalDetailView: View {
 
                         CRTButton("SEND TO AGENT", variant: .primary, size: .large) {
                             sendToAgentMode = .execute
-                            showingSendToAgent = true
                         }
                         .crtGlow(color: theme.primary, radius: 8, intensity: 0.4)
                     }
