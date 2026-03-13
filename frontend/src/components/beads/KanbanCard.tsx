@@ -108,7 +108,7 @@ export function KanbanCard({ bead, onDragStart, onDragEnd, onClick, onAssign, is
 
 const styles = {
   card: {
-    backgroundColor: '#111',
+    backgroundColor: 'var(--theme-bg-elevated)',
     border: '1px solid var(--crt-phosphor-dim)',
     borderRadius: '2px',
     padding: '8px',
