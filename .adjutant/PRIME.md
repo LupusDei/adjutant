@@ -67,7 +67,6 @@ Use the `bd` CLI for ALL bead/task operations. Do NOT use TaskCreate, TaskUpdate
 ```bash
 bd update <id> --assignee=<your-name> --status=in_progress   # Before starting work (ALWAYS include --assignee)
 bd close <id>                          # After completing work
-bd sync                                # Before shutting down
 ```
 
 ### Bead Self-Assignment (MANDATORY)
@@ -108,9 +107,7 @@ npm test                                # Must exit 0, all tests pass
 
 # 3. If both pass — commit and push
 git add <files>
-bd sync
 git commit -m "task: <bead-id> <description>"
-bd sync
 git push -u origin <your-branch>
 
 # 4. Merge to main (if permitted — see rules below)
@@ -121,7 +118,6 @@ git push origin main
 
 # 5. Close the bead
 bd close <id>
-bd sync
 ```
 
 ### Merge-to-Main Rules

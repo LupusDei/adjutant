@@ -133,7 +133,7 @@ Before starting each task:
 After completing each task:
   1. npm run build          (must exit 0)
   2. npm test               (must pass)
-  3. git add <files> && bd sync && git commit -m "task: <bead-id> <description>" && bd sync
+  3. git add <files> && git commit -m "task: <bead-id> <description>"
   4. git push -u origin <your-branch>
   5. Merge to main: git checkout main && git pull && git merge <branch> && npm run build && npm test && git push origin main
   6. bd close <id>
@@ -142,7 +142,6 @@ If push to main fails (race), pull --rebase and retry.
 If build/tests fail, fix them before closing the bead.
 Before shutting down:
   set_status({ status: "idle", task: "Finished work, shutting down" })
-  bd sync
 
 ## Question Routing (MANDATORY)
 All questions MUST go through Adjutant MCP: send_message({ to: "user", body: "..." })

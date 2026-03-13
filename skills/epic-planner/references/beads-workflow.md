@@ -155,6 +155,6 @@ open -> in_progress -> closed
 - Create beads in bulk — run multiple `bd create` commands in sequence
 - Wire all parent-child deps in one batch after creating a level
 - Use `bd close id1 id2 id3` to close multiple at once
-- Run `bd sync` after major changes to push to git
+- Commit `.beads/` changes with git after major updates
 
 Keep hierarchy clean, shallow, and sequentially-rooted.
