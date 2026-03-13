@@ -120,7 +120,7 @@ export interface MessageStore {
   insertMessage(input: InsertMessageInput): Message;
   getMessage(id: string): Message | null;
   getMessages(opts: GetMessagesOptions): Message[];
-  getPendingForRecipient(recipient: string): Message[];
+  getPendingForRecipient(recipient: string, since?: Date): Message[];
   markDelivered(id: string): void;
   markRead(id: string): void;
   markAllRead(agentId: string): void;
@@ -140,6 +140,12 @@ export function createMessageStore(db: Database.Database): MessageStore {
 
   const pendingForRecipientStmt = db.prepare(`
     SELECT * FROM messages WHERE recipient = ? AND delivery_status = 'pending'
+    ORDER BY created_at ASC
+  `);
+
+  const pendingForRecipientSinceStmt = db.prepare(`
+    SELECT * FROM messages WHERE recipient = ? AND delivery_status = 'pending'
+    AND created_at >= ?
     ORDER BY created_at ASC
   `);
 
@@ -253,7 +259,11 @@ export function createMessageStore(db: Database.Database): MessageStore {
       return rows.map(rowToMessage);
     },
 
-    getPendingForRecipient(recipient: string): Message[] {
+    getPendingForRecipient(recipient: string, since?: Date): Message[] {
+      if (since) {
+        const rows = pendingForRecipientSinceStmt.all(recipient, since.toISOString()) as MessageRow[];
+        return rows.map(rowToMessage);
+      }
       const rows = pendingForRecipientStmt.all(recipient) as MessageRow[];
       return rows.map(rowToMessage);
     },

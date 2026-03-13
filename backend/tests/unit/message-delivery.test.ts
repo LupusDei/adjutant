@@ -68,13 +68,15 @@ describe("message-delivery", () => {
     const { initMessageDelivery } = await import("../../src/services/message-delivery.js");
     initMessageDelivery(store);
 
+    const sessionCreatedAt = new Date("2026-03-13T10:00:00Z");
+
     store.getPendingForRecipient.mockReturnValue([
       { id: "msg-1", body: "Hello agent", deliveryStatus: "pending" },
       { id: "msg-2", body: "Second message", deliveryStatus: "pending" },
     ]);
 
     mockBridge.registry.findByName.mockReturnValue([
-      { id: "session-1", status: "idle" },
+      { id: "session-1", status: "idle", createdAt: sessionCreatedAt },
     ]);
     mockBridge.sendInput.mockResolvedValue(true);
 
@@ -84,7 +86,7 @@ describe("message-delivery", () => {
     // Wait for async delivery
     await new Promise((r) => setTimeout(r, 50));
 
-    expect(store.getPendingForRecipient).toHaveBeenCalledWith("test-agent");
+    expect(store.getPendingForRecipient).toHaveBeenCalledWith("test-agent", sessionCreatedAt);
     expect(mockBridge.sendInput).toHaveBeenCalledTimes(2);
     expect(mockBridge.sendInput).toHaveBeenCalledWith("session-1", "Hello agent");
     expect(mockBridge.sendInput).toHaveBeenCalledWith("session-1", "Second message");
@@ -101,7 +103,7 @@ describe("message-delivery", () => {
     ]);
 
     mockBridge.registry.findByName.mockReturnValue([
-      { id: "session-1", status: "idle" },
+      { id: "session-1", status: "idle", createdAt: new Date("2026-03-13T10:00:00Z") },
     ]);
     mockBridge.sendInput.mockResolvedValue(false);
 
@@ -118,10 +120,6 @@ describe("message-delivery", () => {
     const { initMessageDelivery } = await import("../../src/services/message-delivery.js");
     initMessageDelivery(store);
 
-    store.getPendingForRecipient.mockReturnValue([
-      { id: "msg-1", body: "Hello", deliveryStatus: "pending" },
-    ]);
-
     mockBridge.registry.findByName.mockReturnValue([]);
 
     const handler = handlers.get("mcp:agent_connected")!;
@@ -129,6 +127,7 @@ describe("message-delivery", () => {
 
     await new Promise((r) => setTimeout(r, 50));
 
+    expect(store.getPendingForRecipient).not.toHaveBeenCalled();
     expect(mockBridge.sendInput).not.toHaveBeenCalled();
     expect(store.markDelivered).not.toHaveBeenCalled();
   });
@@ -137,13 +136,15 @@ describe("message-delivery", () => {
     const { initMessageDelivery } = await import("../../src/services/message-delivery.js");
     initMessageDelivery(store);
 
+    const sessionCreatedAt = new Date("2026-03-13T10:00:00Z");
+
     store.getPendingForRecipient.mockReturnValue([
       { id: "msg-1", body: "Hello", deliveryStatus: "pending" },
     ]);
 
     mockBridge.registry.findByName.mockReturnValue([
-      { id: "session-1", status: "offline" },
-      { id: "session-2", status: "idle" },
+      { id: "session-1", status: "offline", createdAt: sessionCreatedAt },
+      { id: "session-2", status: "idle", createdAt: new Date("2026-03-13T10:05:00Z") },
     ]);
     mockBridge.sendInput
       .mockResolvedValueOnce(false)   // session-1 fails (offline)
@@ -154,6 +155,8 @@ describe("message-delivery", () => {
 
     await new Promise((r) => setTimeout(r, 50));
 
+    // Should use earliest session createdAt for filtering
+    expect(store.getPendingForRecipient).toHaveBeenCalledWith("test-agent", sessionCreatedAt);
     expect(mockBridge.sendInput).toHaveBeenCalledTimes(2);
     expect(mockBridge.sendInput).toHaveBeenCalledWith("session-1", "Hello");
     expect(mockBridge.sendInput).toHaveBeenCalledWith("session-2", "Hello");
@@ -166,11 +169,39 @@ describe("message-delivery", () => {
 
     store.getPendingForRecipient.mockReturnValue([]);
 
+    mockBridge.registry.findByName.mockReturnValue([
+      { id: "session-1", status: "idle", createdAt: new Date("2026-03-13T10:00:00Z") },
+    ]);
+
     const handler = handlers.get("mcp:agent_connected")!;
     await handler({ agentId: "test-agent", sessionId: "mcp-session-1" });
 
     await new Promise((r) => setTimeout(r, 50));
 
     expect(mockBridge.sendInput).not.toHaveBeenCalled();
+  });
+
+  it("should filter out stale messages from before session creation (adj-091)", async () => {
+    const { initMessageDelivery } = await import("../../src/services/message-delivery.js");
+    initMessageDelivery(store);
+
+    const sessionCreatedAt = new Date("2026-03-13T12:00:00Z");
+
+    // The store mock should receive the `since` parameter so it can filter.
+    // Verify the since parameter is passed correctly.
+    store.getPendingForRecipient.mockReturnValue([]);
+
+    mockBridge.registry.findByName.mockReturnValue([
+      { id: "session-1", status: "idle", createdAt: sessionCreatedAt },
+    ]);
+
+    const handler = handlers.get("mcp:agent_connected")!;
+    await handler({ agentId: "kerrigan", sessionId: "mcp-session-1" });
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Key assertion: getPendingForRecipient is called with the session's createdAt
+    // so stale messages from before the session are excluded
+    expect(store.getPendingForRecipient).toHaveBeenCalledWith("kerrigan", sessionCreatedAt);
   });
 });

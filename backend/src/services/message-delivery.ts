@@ -28,11 +28,6 @@ export function initMessageDelivery(store: MessageStore): void {
 }
 
 async function deliverPendingMessages(store: MessageStore, agentId: string): Promise<void> {
-  const pending = store.getPendingForRecipient(agentId);
-  if (pending.length === 0) return;
-
-  logInfo("Delivering pending messages to agent", { agentId, count: pending.length });
-
   let bridge;
   try {
     bridge = getSessionBridge();
@@ -42,6 +37,18 @@ async function deliverPendingMessages(store: MessageStore, agentId: string): Pro
 
   const sessions = bridge.registry.findByName(agentId);
   if (sessions.length === 0) return;
+
+  // Only deliver messages sent after the session was created to prevent
+  // stale messages from previous agent lifecycles being replayed (adj-091).
+  const earliestSession = sessions.reduce((oldest, s) =>
+    s.createdAt < oldest.createdAt ? s : oldest
+  );
+  const since = earliestSession.createdAt;
+
+  const pending = store.getPendingForRecipient(agentId, since);
+  if (pending.length === 0) return;
+
+  logInfo("Delivering pending messages to agent", { agentId, count: pending.length, since: since.toISOString() });
 
   for (const msg of pending) {
     // Try each session until one succeeds — sendInput handles status-based
