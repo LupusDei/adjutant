@@ -41,7 +41,7 @@ function toEpicWithProgress(item: EpicWithProgressResponse): EpicWithProgress {
  * Polls every 30 seconds (matching iOS).
  */
 export function useEpics(options: UseEpicsOptions = {}): UseEpicsResult {
-  const { project: _project, enabled = true } = options;
+  const { project, enabled = true } = options;
 
   const fetchFn = useCallback(
     () => api.epics.listWithProgress({ status: 'all' }),
@@ -58,7 +58,14 @@ export function useEpics(options: UseEpicsOptions = {}): UseEpicsResult {
       return { openEpics: [], completedEpics: [] };
     }
 
-    const epicsWithProgress = data.map(toEpicWithProgress);
+    let epicsWithProgress = data.map(toEpicWithProgress);
+
+    // Filter by project source if specified
+    if (project) {
+      epicsWithProgress = epicsWithProgress.filter(
+        (ewp) => ewp.epic.source === project
+      );
+    }
 
     // Split into open and completed
     const open: EpicWithProgress[] = [];
@@ -73,7 +80,7 @@ export function useEpics(options: UseEpicsOptions = {}): UseEpicsResult {
     }
 
     return { openEpics: open, completedEpics: completed };
-  }, [data]);
+  }, [data, project]);
 
   return {
     openEpics,

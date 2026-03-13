@@ -1,53 +1,22 @@
-import { useState, useCallback, useEffect, useRef, type CSSProperties } from 'react';
+import { useState, useCallback, useRef, type CSSProperties } from 'react';
 import { OverseerToggle } from '../shared/OverseerToggle';
 import { EpicsList, type EpicSortOption } from './EpicsList';
 import { EpicDetailView } from './EpicDetailView';
-import { api } from '../../services/api';
-import { useActiveProject } from '../../hooks/useActiveProject';
+import { useProject } from '../../contexts/ProjectContext';
 
 export interface EpicsViewProps {
   /** Whether this tab is currently active */
   isActive?: boolean;
 }
 
-/** Project options for filtering */
-type ProjectFilter = string;
-
 export function EpicsView({ isActive = true }: EpicsViewProps) {
   const [sortBy, setSortBy] = useState<EpicSortOption>('ACTIVITY');
   const [selectedEpicId, setSelectedEpicId] = useState<string | null>(null);
   const [overseerView, setOverseerView] = useState(false);
-  const [projectFilter, setProjectFilter] = useState<ProjectFilter>(() => {
-    return localStorage.getItem('epics-project-filter') ?? 'ALL';
-  });
-  const [projectOptions, setProjectOptions] = useState<string[]>([]);
 
-  // Auto-scope to active project if no explicit user override in localStorage
-  const { activeProject } = useActiveProject();
-
-  useEffect(() => {
-    const saved = localStorage.getItem('epics-project-filter');
-    if (!saved && activeProject) {
-      setProjectFilter(activeProject);
-    }
-  }, [activeProject]);
-
-  // Fetch bead sources on mount for filter options
-  useEffect(() => {
-    void api.beads.sources().then((result) => {
-      if (result.sources.length > 0) {
-        const names = result.sources.map((s) => s.name).sort();
-        setProjectOptions(names);
-      }
-    }).catch(() => {
-      // Silently ignore - dropdown will just show ALL
-    });
-  }, []);
-
-  // Persist project filter to localStorage
-  useEffect(() => {
-    localStorage.setItem('epics-project-filter', projectFilter);
-  }, [projectFilter]);
+  // Use global project context for scoping
+  const { selectedProject } = useProject();
+  const apiProject = selectedProject ? selectedProject.name : undefined;
 
   const handleEpicClick = useCallback((epicId: string) => {
     setSelectedEpicId(epicId);
@@ -70,9 +39,6 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
     setRefreshTrigger(refreshTriggerRef.current);
   }, []);
 
-  // Convert UI project filter to API parameter
-  const apiProject = projectFilter === 'ALL' ? undefined : projectFilter;
-
   return (
     <div style={styles.container}>
       <header style={styles.header}>
@@ -87,21 +53,6 @@ export function EpicsView({ isActive = true }: EpicsViewProps) {
             storageKey="epics-overseer-view"
             onChange={handleOverseerToggle}
           />
-
-          {/* Source Filter */}
-          <span style={styles.filterLabel}>PROJECT:</span>
-          <select
-            value={projectFilter}
-            onChange={(e) => { setProjectFilter(e.target.value); }}
-            style={styles.select}
-          >
-            <option value="ALL">ALL PROJECTS</option>
-            {projectOptions.map((proj) => (
-              <option key={proj} value={proj}>
-                {proj.toUpperCase().replace(/_/g, ' ')}
-              </option>
-            ))}
-          </select>
 
           {/* Sort Control */}
           <span style={styles.filterLabel}>SORT:</span>
