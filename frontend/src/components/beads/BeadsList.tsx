@@ -220,7 +220,7 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
 
     // Base excluded types (always filtered out)
     // Note: "bug" and "task" are intentionally NOT excluded — they are actionable work items
-    const EXCLUDED_TYPES = ['message', 'agent'];
+    const EXCLUDED_TYPES = ['message', 'epic', 'agent'];
 
     // Additional type exclusions for overseer view (operational beads)
     const OVERSEER_EXCLUDED_TYPES = [
