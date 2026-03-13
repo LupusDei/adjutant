@@ -51,6 +51,11 @@ const THEMES: ThemeOption[] = [
     description: 'Playful & colorful',
     previewBg: '#F8F7F6', previewText: '#5856D6', crtEffects: false,
   },
+  {
+    id: 'glass', label: 'GLASS', color: '#007AFF',
+    description: 'Frosted & translucent',
+    previewBg: '#F2F2F7', previewText: '#1C1C1E', crtEffects: false,
+  },
 ];
 
 interface PriorityOption {
@@ -548,12 +553,14 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                         {t.id === 'document' && 'Adjutant'}
                         {t.id === 'starcraft' && '// NEXUS ONLINE'}
                         {t.id === 'friendly' && 'Hello!'}
+                        {t.id === 'glass' && 'Adjutant'}
                       </div>
                       <div style={{ opacity: 0.5, marginTop: '2px' }}>
                         {t.id === 'pipboy' && 'ADJUTANT v52.5'}
                         {t.id === 'document' && 'Clean interface'}
                         {t.id === 'starcraft' && 'TEAL PROTOCOL'}
                         {t.id === 'friendly' && 'Colorful & fun'}
+                        {t.id === 'glass' && 'Crystal clear'}
                       </div>
                     </div>
                   </div>

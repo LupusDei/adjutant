@@ -545,21 +545,81 @@
 }
 
 /* ============================================
+   Glass Theme — Apple-inspired glassmorphism
+   Frosted translucent panels, light scheme,
+   subtle blur, clean sans-serif typography.
+   ============================================ */
+[data-theme='glass'] {
+  --theme-primary-rgb: 0, 122, 255;
+  --theme-primary: #007AFF;
+  --theme-bright: #0A84FF;
+  --theme-dim: #8E8E93;
+  --theme-glow: transparent;
+  --theme-bloom: transparent;
+
+  --crt-bg: #F2F2F7;
+  --crt-bg-active: #FFFFFF;
+  --crt-bezel: #E5E5EA;
+  --crt-bezel-highlight: #F2F2F7;
+  --crt-bezel-shadow: #D1D1D6;
+
+  --theme-bg-screen: #F2F2F7;
+  --theme-bg-panel: rgba(255, 255, 255, 0.72);
+  --theme-bg-elevated: rgba(255, 255, 255, 0.85);
+  --theme-font: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+  --theme-font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+  --theme-text-transform: none;
+  --theme-letter-spacing: -0.01em;
+  --theme-label-spacing: 0.02em;
+  --theme-color-scheme: light;
+  --theme-border-color: rgba(0, 0, 0, 0.08);
+  --theme-text-primary: #1C1C1E;
+  --theme-text-secondary: #636366;
+  --theme-accent: #007AFF;
+
+  /* Glass-specific typography */
+  --theme-line-height: 1.5;
+  --theme-heading-weight: 600;
+  --theme-body-size: 0.9375rem;
+
+  /* Glass-specific spacing */
+  --theme-content-padding: 16px;
+  --theme-section-gap: 16px;
+  --theme-panel-padding: 16px;
+
+  /* Glass-specific borders */
+  --theme-border-radius: 16px;
+  --theme-border-width: 1px;
+
+  /* Glass-specific focus ring */
+  --theme-focus-ring: 0 0 0 3px rgba(0, 122, 255, 0.25);
+
+  /* Glass-specific effects */
+  --glass-blur: blur(20px);
+  --glass-saturate: saturate(1.8);
+  --glass-border-highlight: rgba(255, 255, 255, 0.5);
+  --glass-shadow: 0 2px 16px rgba(0, 0, 0, 0.06);
+  --glass-shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+/* ============================================
    Non-CRT Theme Overrides
-   Strips CRT effects for Document & Friendly
+   Strips CRT effects for Document, Friendly & Glass
    ============================================ */
 
 /* When CRT effects are off, flatten the monitor structure */
 .crt-no-effects .crt-monitor,
 [data-theme='document'] .crt-monitor,
-[data-theme='friendly'] .crt-monitor {
+[data-theme='friendly'] .crt-monitor,
+[data-theme='glass'] .crt-monitor {
   background: var(--theme-bg-screen);
   padding: 0;
 }
 
 .crt-no-effects .crt-bezel,
 [data-theme='document'] .crt-bezel,
-[data-theme='friendly'] .crt-bezel {
+[data-theme='friendly'] .crt-bezel,
+[data-theme='glass'] .crt-bezel {
   background: var(--theme-bg-screen);
   box-shadow: none;
   border-radius: 0;
@@ -571,13 +631,16 @@
 [data-theme='document'] .crt-bezel::before,
 [data-theme='document'] .crt-bezel::after,
 [data-theme='friendly'] .crt-bezel::before,
-[data-theme='friendly'] .crt-bezel::after {
+[data-theme='friendly'] .crt-bezel::after,
+[data-theme='glass'] .crt-bezel::before,
+[data-theme='glass'] .crt-bezel::after {
   display: none;
 }
 
 .crt-no-effects .crt-glass,
 [data-theme='document'] .crt-glass,
-[data-theme='friendly'] .crt-glass {
+[data-theme='friendly'] .crt-glass,
+[data-theme='glass'] .crt-glass {
   background: var(--theme-bg-screen);
   box-shadow: none;
   border: none;
@@ -586,19 +649,22 @@
 
 .crt-no-effects .crt-glass::after,
 [data-theme='document'] .crt-glass::after,
-[data-theme='friendly'] .crt-glass::after {
+[data-theme='friendly'] .crt-glass::after,
+[data-theme='glass'] .crt-glass::after {
   display: none;
 }
 
 .crt-no-effects .crt-phosphor,
 [data-theme='document'] .crt-phosphor,
-[data-theme='friendly'] .crt-phosphor {
+[data-theme='friendly'] .crt-phosphor,
+[data-theme='glass'] .crt-phosphor {
   filter: none;
 }
 
 .crt-no-effects .crt-content,
 [data-theme='document'] .crt-content,
-[data-theme='friendly'] .crt-content {
+[data-theme='friendly'] .crt-content,
+[data-theme='glass'] .crt-content {
   font-family: var(--theme-font);
   color: var(--theme-text-primary);
 }
@@ -624,38 +690,48 @@
 [data-theme='friendly'] .crt-scan-bar,
 [data-theme='friendly'] .crt-noise,
 [data-theme='friendly'] .crt-vignette,
-[data-theme='friendly'] .crt-glare {
+[data-theme='friendly'] .crt-glare,
+[data-theme='glass'] .crt-scanlines,
+[data-theme='glass'] .crt-scan-bar,
+[data-theme='glass'] .crt-noise,
+[data-theme='glass'] .crt-vignette,
+[data-theme='glass'] .crt-glare {
   display: none !important;
 }
 
 /* Disable flicker animation for non-CRT themes */
 [data-theme='document'] .crt-flicker-active,
-[data-theme='friendly'] .crt-flicker-active {
+[data-theme='friendly'] .crt-flicker-active,
+[data-theme='glass'] .crt-flicker-active {
   animation: none;
 }
 
 /* Disable chromatic aberration glow for non-CRT themes */
 [data-theme='document'] .crt-glow,
-[data-theme='friendly'] .crt-glow {
+[data-theme='friendly'] .crt-glow,
+[data-theme='glass'] .crt-glow {
   animation: none;
   text-shadow: none;
 }
 
 /* Boot sequence adapts to theme */
 [data-theme='document'] .boot-sequence,
-[data-theme='friendly'] .boot-sequence {
+[data-theme='friendly'] .boot-sequence,
+[data-theme='glass'] .boot-sequence {
   color: var(--theme-text-primary);
 }
 
 [data-theme='document'] .boot-line,
-[data-theme='friendly'] .boot-line {
+[data-theme='friendly'] .boot-line,
+[data-theme='glass'] .boot-line {
   text-shadow: none;
   text-transform: var(--theme-text-transform);
   letter-spacing: var(--theme-letter-spacing);
 }
 
 [data-theme='document'] .boot-ready,
-[data-theme='friendly'] .boot-ready {
+[data-theme='friendly'] .boot-ready,
+[data-theme='glass'] .boot-ready {
   color: var(--theme-accent);
   text-shadow: none;
 }
@@ -682,6 +758,43 @@
 [data-theme='friendly'] .crt-monitor {
   background: linear-gradient(135deg, #F0ECFF 0%, #FFF0F3 50%, #E8F8F0 100%);
   padding: 6px;
+}
+
+/* ============================================
+   Glass-Specific Visual Overrides
+   Frosted translucent panels with blur
+   ============================================ */
+
+/* Glass monitor: clean light background */
+[data-theme='glass'] .crt-monitor {
+  background: #F2F2F7;
+  padding: 0;
+}
+
+/* Glass bezel: subtle frosted panel */
+[data-theme='glass'] .crt-bezel {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: var(--glass-blur) var(--glass-saturate);
+  -webkit-backdrop-filter: var(--glass-blur) var(--glass-saturate);
+  border-radius: var(--theme-border-radius);
+  padding: 6px;
+  border: 1px solid var(--glass-border-highlight);
+}
+
+/* Glass screen: translucent white with blur */
+[data-theme='glass'] .crt-glass {
+  background: var(--theme-bg-panel);
+  backdrop-filter: var(--glass-blur) var(--glass-saturate);
+  -webkit-backdrop-filter: var(--glass-blur) var(--glass-saturate);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: var(--glass-shadow);
+}
+
+/* Glass content: readable line-height */
+[data-theme='glass'] .crt-content {
+  padding: var(--theme-content-padding, 16px);
+  line-height: var(--theme-line-height, 1.5);
 }
 
 /* ============================================

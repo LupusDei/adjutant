@@ -14,6 +14,7 @@ public enum CRTTheme {
         case document = "document"    // Clean white/black
         case starcraft = "starcraft"  // Dark purple + teal
         case friendly = "friendly"    // Playful multi-color palette
+        case glass = "glass"          // Apple-inspired frosted glass
 
         public var id: String { rawValue }
 
@@ -24,6 +25,7 @@ public enum CRTTheme {
             case .document: return "DOCUMENT"
             case .starcraft: return "STARCRAFT"
             case .friendly: return "FRIENDLY"
+            case .glass: return "GLASS"
             }
         }
 
@@ -34,6 +36,7 @@ public enum CRTTheme {
             case .document: return Color(red: 0.067, green: 0.067, blue: 0.067)   // #111111
             case .starcraft: return Color(red: 0.0, green: 1.0, blue: 0.835)      // #00FFD5
             case .friendly: return Color(red: 0.345, green: 0.337, blue: 0.839)      // #5856D6 (joyful indigo)
+            case .glass: return Color(red: 0.0, green: 0.478, blue: 1.0)              // #007AFF (iOS system blue)
             }
         }
 
@@ -44,6 +47,7 @@ public enum CRTTheme {
             case .document: return Color.black                                      // #000000
             case .starcraft: return Color(red: 0.502, green: 1.0, blue: 0.941)     // #80FFF0
             case .friendly: return Color(red: 0.231, green: 0.471, blue: 0.906)    // #3B78E7 (vivid blue)
+            case .glass: return Color(red: 0.039, green: 0.518, blue: 1.0)            // #0A84FF (iOS system blue bright)
             }
         }
 
@@ -54,6 +58,7 @@ public enum CRTTheme {
             case .document: return Color(red: 0.420, green: 0.420, blue: 0.420)   // #6B6B6B (exceeds WCAG AA on white)
             case .starcraft: return Color(red: 0.0, green: 0.733, blue: 0.6)       // #00BB99
             case .friendly: return Color(red: 0.522, green: 0.463, blue: 0.686)    // #8576AF (soft purple, WCAG AA compliant)
+            case .glass: return Color(red: 0.557, green: 0.557, blue: 0.576)          // #8E8E93 (iOS system gray)
             }
         }
 
@@ -84,6 +89,12 @@ public enum CRTTheme {
                     panel: Color(red: 1.0, green: 0.984, blue: 0.976),         // #FFFBF9 (warm blush white)
                     elevated: Color(red: 0.941, green: 0.957, blue: 1.0)       // #F0F4FF (light sky)
                 )
+            case .glass:
+                return BackgroundSet(
+                    screen: Color(red: 0.949, green: 0.949, blue: 0.969),      // #F2F2F7 (iOS system gray 6)
+                    panel: Color.white.opacity(0.72),                           // Translucent white
+                    elevated: Color.white.opacity(0.85)                         // More opaque white
+                )
             }
         }
 
@@ -91,7 +102,7 @@ public enum CRTTheme {
         public var crtEffectsEnabled: Bool {
             switch self {
             case .pipboy, .starcraft: return true
-            case .document, .friendly: return false
+            case .document, .friendly, .glass: return false
             }
         }
 
@@ -99,7 +110,7 @@ public enum CRTTheme {
         public var useMonospaceFont: Bool {
             switch self {
             case .pipboy, .starcraft: return true
-            case .document, .friendly: return false
+            case .document, .friendly, .glass: return false
             }
         }
 
@@ -107,7 +118,7 @@ public enum CRTTheme {
         public var fontDesign: Font.Design {
             switch self {
             case .pipboy, .starcraft: return .monospaced
-            case .document: return .default
+            case .document, .glass: return .default
             case .friendly: return .rounded
             }
         }
@@ -138,6 +149,7 @@ public enum CRTTheme {
             case .document: return Color(red: 0.067, green: 0.067, blue: 0.067)   // #111111
             case .starcraft: return primary
             case .friendly: return Color(red: 0.176, green: 0.141, blue: 0.322)   // #2D2452 (dark indigo)
+            case .glass: return Color(red: 0.110, green: 0.110, blue: 0.118)          // #1C1C1E (near black)
             }
         }
 
@@ -148,6 +160,7 @@ public enum CRTTheme {
             case .document: return Color(red: 0.420, green: 0.420, blue: 0.420)   // #6B6B6B (exceeds WCAG AA)
             case .starcraft: return dim
             case .friendly: return Color(red: 0.420, green: 0.373, blue: 0.561)    // #6B5F8F (muted purple, WCAG AA compliant)
+            case .glass: return Color(red: 0.388, green: 0.388, blue: 0.400)          // #636366 (iOS system gray)
             }
         }
 
@@ -158,6 +171,7 @@ public enum CRTTheme {
             case .document: return Color(red: 0.145, green: 0.388, blue: 0.922)   // #2563EB
             case .starcraft: return primary
             case .friendly: return Color(red: 0.345, green: 0.337, blue: 0.839)   // #5856D6 (joyful indigo)
+            case .glass: return Color(red: 0.0, green: 0.478, blue: 1.0)              // #007AFF (iOS system blue)
             }
         }
 
@@ -165,7 +179,7 @@ public enum CRTTheme {
         public var preferredColorScheme: ColorScheme {
             switch self {
             case .pipboy, .starcraft: return .dark
-            case .document, .friendly: return .light
+            case .document, .friendly, .glass: return .light
             }
         }
     }

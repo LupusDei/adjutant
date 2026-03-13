@@ -17,7 +17,7 @@ import { PersonasView } from "./components/personas/PersonasView";
 import { TimelineView } from "./components/timeline/TimelineView";
 import { useUnreadCounts } from "./hooks/useUnreadCounts";
 
-export type ThemeId = 'pipboy' | 'document' | 'starcraft' | 'friendly';
+export type ThemeId = 'pipboy' | 'document' | 'starcraft' | 'friendly' | 'glass';
 
 /** Theme configuration — matches iOS CRTTheme.ColorTheme */
 export interface ThemeConfig {
@@ -31,6 +31,7 @@ export const THEME_CONFIGS: Record<ThemeId, ThemeConfig> = {
   document:  { id: 'document',  label: 'DOCUMENT',   crtEffects: false },
   starcraft: { id: 'starcraft', label: 'STARCRAFT',  crtEffects: true },
   friendly:  { id: 'friendly',  label: 'FRIENDLY',   crtEffects: false },
+  glass:     { id: 'glass',     label: 'GLASS',      crtEffects: false },
 };
 
 /** Migrate legacy theme values from old color-based system */

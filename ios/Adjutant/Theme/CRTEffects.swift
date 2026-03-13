@@ -396,6 +396,55 @@ extension View {
     }
 }
 
+// MARK: - Glass Panel Effect
+
+/// Frosted glass panel effect for the Glass theme.
+/// Uses native SwiftUI materials for authentic Apple glass look.
+public struct GlassPanelModifier: ViewModifier {
+    @Environment(\.crtTheme) private var theme
+
+    let cornerRadius: CGFloat
+    let shadow: Bool
+
+    public init(cornerRadius: CGFloat = 16, shadow: Bool = true) {
+        self.cornerRadius = cornerRadius
+        self.shadow = shadow
+    }
+
+    public func body(content: Content) -> some View {
+        if theme == .glass {
+            content
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .strokeBorder(Color.white.opacity(0.3), lineWidth: 0.5)
+                )
+                .if(shadow) { view in
+                    view.shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
+                }
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    /// Apply frosted glass panel effect (Glass theme only)
+    public func glassPanel(cornerRadius: CGFloat = 16, shadow: Bool = true) -> some View {
+        modifier(GlassPanelModifier(cornerRadius: cornerRadius, shadow: shadow))
+    }
+
+    /// Conditional modifier helper
+    @ViewBuilder
+    fileprivate func `if`<Transform: View>(_ condition: Bool, transform: (Self) -> Transform) -> some View {
+        if condition {
+            transform(self)
+        } else {
+            self
+        }
+    }
+}
+
 // MARK: - StarCraft Lightning Strike Effect
 
 /// Occasional subtle electrical discharge across the screen — StarCraft only.
