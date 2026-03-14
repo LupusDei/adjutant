@@ -551,10 +551,11 @@
    translucent dark panels, strict legibility.
    ============================================ */
 [data-theme='glass'] {
-  --theme-primary-rgb: 0, 85, 255;
-  --theme-primary: #0055FF;
-  --theme-bright: #4D8AFF;
-  --theme-dim: #636366;
+  /* Primary = readable white (cascades into --crt-phosphor for all text) */
+  --theme-primary-rgb: 232, 232, 236;
+  --theme-primary: rgba(255, 255, 255, 0.95);
+  --theme-bright: #FFFFFF;
+  --theme-dim: rgba(255, 255, 255, 0.4);
   --theme-glow: rgba(0, 85, 255, 0.15);
   --theme-bloom: rgba(0, 85, 255, 0.06);
 
@@ -576,6 +577,7 @@
   --theme-border-color: rgba(255, 255, 255, 0.08);
   --theme-text-primary: rgba(255, 255, 255, 0.95);
   --theme-text-secondary: rgba(255, 255, 255, 0.55);
+  /* Accent = sapphire blue (buttons, links, active states only) */
   --theme-accent: #0055FF;
 
   /* Glass-specific typography — bolder for dark glass legibility */

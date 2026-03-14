@@ -532,7 +532,7 @@
     -webkit-backdrop-filter: blur(16px) saturate(1.4);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 12px;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.45);
     font-family: var(--theme-font);
     font-weight: 600;
     font-size: 0.8125rem;

@@ -36,7 +36,7 @@ public enum CRTTheme {
             case .document: return Color(red: 0.067, green: 0.067, blue: 0.067)   // #111111
             case .starcraft: return Color(red: 0.0, green: 1.0, blue: 0.835)      // #00FFD5
             case .friendly: return Color(red: 0.345, green: 0.337, blue: 0.839)      // #5856D6 (joyful indigo)
-            case .glass: return Color(red: 0.0, green: 0.333, blue: 1.0)              // #0055FF (deep sapphire)
+            case .glass: return Color.white.opacity(0.95)                              // Readable white (primary text color)
             }
         }
 
@@ -47,7 +47,7 @@ public enum CRTTheme {
             case .document: return Color.black                                      // #000000
             case .starcraft: return Color(red: 0.502, green: 1.0, blue: 0.941)     // #80FFF0
             case .friendly: return Color(red: 0.231, green: 0.471, blue: 0.906)    // #3B78E7 (vivid blue)
-            case .glass: return Color(red: 0.302, green: 0.541, blue: 1.0)            // #4D8AFF (sapphire bright)
+            case .glass: return Color.white                                            // Pure white (bright variant)
             }
         }
 
@@ -58,7 +58,7 @@ public enum CRTTheme {
             case .document: return Color(red: 0.420, green: 0.420, blue: 0.420)   // #6B6B6B (exceeds WCAG AA on white)
             case .starcraft: return Color(red: 0.0, green: 0.733, blue: 0.6)       // #00BB99
             case .friendly: return Color(red: 0.522, green: 0.463, blue: 0.686)    // #8576AF (soft purple, WCAG AA compliant)
-            case .glass: return Color(red: 0.388, green: 0.388, blue: 0.400)          // #636366 (soft gray on dark)
+            case .glass: return Color.white.opacity(0.4)                               // Soft white for dim elements
             }
         }
 
@@ -171,7 +171,7 @@ public enum CRTTheme {
             case .document: return Color(red: 0.145, green: 0.388, blue: 0.922)   // #2563EB
             case .starcraft: return primary
             case .friendly: return Color(red: 0.345, green: 0.337, blue: 0.839)   // #5856D6 (joyful indigo)
-            case .glass: return Color(red: 0.0, green: 0.333, blue: 1.0)              // #0055FF (deep sapphire)
+            case .glass: return Color(red: 0.0, green: 0.333, blue: 1.0)              // #0055FF (deep sapphire — accent only)
             }
         }
 
