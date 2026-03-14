@@ -168,6 +168,18 @@ final class EpicsListViewModel: BaseViewModel {
         }
     }
 
+    // MARK: - Actions
+
+    /// Closes an epic by updating its status
+    func closeEpic(_ id: String) async {
+        do {
+            _ = try await apiClient.updateBeadStatus(id: id, status: "closed")
+            await refresh()
+        } catch {
+            errorMessage = "Failed to close epic: \(error.localizedDescription)"
+        }
+    }
+
     // MARK: - Computed Properties
 
     /// Whether the view is empty (no epics)

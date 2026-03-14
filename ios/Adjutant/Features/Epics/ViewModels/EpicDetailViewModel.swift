@@ -26,6 +26,9 @@ final class EpicDetailViewModel: BaseViewModel {
     /// Non-fatal error when children fail to load but epic is available
     @Published var childrenErrorMessage: String?
 
+    /// Controls the agent picker sheet
+    @Published var showingAgentPicker = false
+
     // MARK: - Dependencies
 
     private let apiClient: APIClient
@@ -137,6 +140,34 @@ final class EpicDetailViewModel: BaseViewModel {
             )
         } catch {
             // Cost loading failure is non-fatal
+        }
+    }
+
+    // MARK: - Actions
+
+    /// Updates the epic's status
+    func updateStatus(_ newStatus: String) async {
+        await performAsyncAction(showLoading: false) {
+            _ = try await self.apiClient.updateBeadStatus(id: self.epicId, status: newStatus)
+            await self.loadEpicDetails()
+        }
+    }
+
+    /// Assigns the epic to an agent and sets status to in_progress
+    func assignEpic(to agent: CrewMember) async {
+        await performAsyncAction(showLoading: false) {
+            _ = try await self.apiClient.assignBead(id: self.epicId, assignee: agent.id)
+            _ = try await self.apiClient.updateBeadStatus(id: self.epicId, status: "in_progress")
+            await self.loadEpicDetails()
+        }
+    }
+
+    /// Unassigns the epic (clears assignee and sets status back to open)
+    func unassignEpic() async {
+        await performAsyncAction(showLoading: false) {
+            _ = try await self.apiClient.assignBead(id: self.epicId, assignee: "")
+            _ = try await self.apiClient.updateBeadStatus(id: self.epicId, status: "open")
+            await self.loadEpicDetails()
         }
     }
 
