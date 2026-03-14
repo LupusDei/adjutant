@@ -168,7 +168,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(theme.displayName, "GLASS")
         XCTAssertFalse(theme.crtEffectsEnabled, "Glass should have CRT effects disabled")
         XCTAssertFalse(theme.useMonospaceFont, "Glass should use system font")
-        XCTAssertEqual(theme.preferredColorScheme, .light, "Glass should use light mode")
+        XCTAssertEqual(theme.preferredColorScheme, .dark, "Glass should use dark mode")
         XCTAssertEqual(theme.fontDesign, .default, "Glass should use default font design")
     }
 

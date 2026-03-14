@@ -618,28 +618,30 @@ private struct SchemePreviewCard: View {
 
     // MARK: - Glass Content
 
-    /// Apple-inspired frosted glass aesthetic: clean typography, translucent panels, blue accent
+    /// Dark liquid glass aesthetic: polished obsidian, specular edge highlights, deep sapphire accent
     private var glassContent: some View {
         VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
-            // Clean header with SF-style typography
+            // Bold header on dark glass
             HStack {
                 Text(scheme.displayName)
-                    .font(.system(size: CRTTypography.sizeLG, weight: .semibold, design: .default))
-                    .foregroundColor(colorTheme.textPrimary)
-                    .tracking(-0.2)
+                    .font(.system(size: CRTTypography.sizeLG, weight: .bold, design: .default))
+                    .foregroundColor(.white.opacity(0.95))
+                    .tracking(0.5)
 
                 Spacer()
 
                 selectionIndicator
             }
 
-            // Subtle frosted divider
+            // Specular edge divider — soft sapphire gleam
             Rectangle()
                 .fill(
                     LinearGradient(
                         colors: [
                             colorTheme.accent.opacity(0.0),
-                            colorTheme.accent.opacity(0.3),
+                            colorTheme.accent.opacity(0.4),
+                            colorTheme.bright.opacity(0.6),
+                            colorTheme.accent.opacity(0.4),
                             colorTheme.accent.opacity(0.0)
                         ],
                         startPoint: .leading,
@@ -648,26 +650,25 @@ private struct SchemePreviewCard: View {
                 )
                 .frame(height: 1)
 
-            // Frosted pill indicators (mimicking iOS control center style)
+            // Dark frosted pill indicators
             HStack(spacing: 8) {
                 ForEach(0..<3, id: \.self) { index in
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.white.opacity(0.7))
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.white.opacity(0.08))
                         .frame(width: index == 0 ? 48 : 36, height: 24)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
                         )
-                        .shadow(color: .black.opacity(0.04), radius: 2, y: 1)
                 }
 
                 Spacer()
             }
 
             // Tagline
-            Text("Crystal clear interface")
-                .font(.system(size: CRTTypography.sizeSM, weight: .regular, design: .default))
-                .foregroundColor(colorTheme.textSecondary)
+            Text("Dark liquid glass")
+                .font(.system(size: CRTTypography.sizeSM, weight: .medium, design: .default))
+                .foregroundColor(.white.opacity(0.5))
         }
     }
 
@@ -709,11 +710,11 @@ private struct SchemePreviewCard: View {
         case .glass:
             ZStack {
                 colorTheme.background.screen
-                // Frosted glass gradient overlay
+                // Dark frosted gradient with subtle specular edge
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.4),
-                        Color.white.opacity(0.2)
+                        Color.white.opacity(0.06),
+                        Color.white.opacity(0.02)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing

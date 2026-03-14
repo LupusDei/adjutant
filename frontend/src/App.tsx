@@ -24,14 +24,15 @@ export interface ThemeConfig {
   id: ThemeId;
   label: string;
   crtEffects: boolean;
+  darkMode: boolean;
 }
 
 export const THEME_CONFIGS: Record<ThemeId, ThemeConfig> = {
-  pipboy:    { id: 'pipboy',    label: 'PIP-BOY',    crtEffects: true },
-  document:  { id: 'document',  label: 'DOCUMENT',   crtEffects: false },
-  starcraft: { id: 'starcraft', label: 'STARCRAFT',  crtEffects: true },
-  friendly:  { id: 'friendly',  label: 'FRIENDLY',   crtEffects: false },
-  glass:     { id: 'glass',     label: 'GLASS',      crtEffects: false },
+  pipboy:    { id: 'pipboy',    label: 'PIP-BOY',    crtEffects: true,  darkMode: true },
+  document:  { id: 'document',  label: 'DOCUMENT',   crtEffects: false, darkMode: false },
+  starcraft: { id: 'starcraft', label: 'STARCRAFT',  crtEffects: true,  darkMode: true },
+  friendly:  { id: 'friendly',  label: 'FRIENDLY',   crtEffects: false, darkMode: false },
+  glass:     { id: 'glass',     label: 'GLASS',      crtEffects: false, darkMode: true },
 };
 
 /** Migrate legacy theme values from old color-based system */

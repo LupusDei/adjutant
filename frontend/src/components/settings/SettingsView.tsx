@@ -52,9 +52,9 @@ const THEMES: ThemeOption[] = [
     previewBg: '#F8F7F6', previewText: '#5856D6', crtEffects: false,
   },
   {
-    id: 'glass', label: 'GLASS', color: '#007AFF',
-    description: 'Frosted & translucent',
-    previewBg: '#F2F2F7', previewText: '#1C1C1E', crtEffects: false,
+    id: 'glass', label: 'GLASS', color: '#0055FF',
+    description: 'Dark liquid glass',
+    previewBg: '#0C0C0E', previewText: '#E8E8EC', crtEffects: false,
   },
 ];
 
@@ -359,8 +359,8 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                       <QRCodeSVG
                         value={ngrokUrl}
                         size={256}
-                        bgColor={THEME_CONFIGS[theme].crtEffects ? '#0A0A0A' : '#FFFFFF'}
-                        fgColor={THEME_CONFIGS[theme].crtEffects ? '#20C20E' : '#1C1C1E'}
+                        bgColor={THEME_CONFIGS[theme].darkMode ? '#0A0A0A' : '#FFFFFF'}
+                        fgColor={THEME_CONFIGS[theme].darkMode ? '#20C20E' : '#1C1C1E'}
                         level="M"
                       />
                     </div>
@@ -534,7 +534,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                   <div style={{
                     ...styles.themePreviewWindow,
                     backgroundColor: t.previewBg,
-                    borderColor: t.crtEffects ? `${t.color}44` : '#D4D4D4',
+                    borderColor: t.crtEffects ? `${t.color}44` : t.id === 'glass' ? 'rgba(255,255,255,0.12)' : '#D4D4D4',
                   }}>
                     {/* Scanline overlay for CRT themes */}
                     {t.crtEffects && (
@@ -560,7 +560,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                         {t.id === 'document' && 'Clean interface'}
                         {t.id === 'starcraft' && 'TEAL PROTOCOL'}
                         {t.id === 'friendly' && 'Colorful & fun'}
-                        {t.id === 'glass' && 'Crystal clear'}
+                        {t.id === 'glass' && 'Liquid glass'}
                       </div>
                     </div>
                   </div>
@@ -617,8 +617,8 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
               <QRCodeSVG
                 value="https://buymeacoffee.com/wsaults"
                 size={280}
-                bgColor={THEME_CONFIGS[theme].crtEffects ? '#0A0A0A' : '#FFFFFF'}
-                fgColor={THEME_CONFIGS[theme].crtEffects ? '#20C20E' : '#1C1C1E'}
+                bgColor={THEME_CONFIGS[theme].darkMode ? '#0A0A0A' : '#FFFFFF'}
+                fgColor={THEME_CONFIGS[theme].darkMode ? '#20C20E' : '#1C1C1E'}
                 level="M"
               />
             </div>

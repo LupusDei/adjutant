@@ -36,7 +36,7 @@ public enum CRTTheme {
             case .document: return Color(red: 0.067, green: 0.067, blue: 0.067)   // #111111
             case .starcraft: return Color(red: 0.0, green: 1.0, blue: 0.835)      // #00FFD5
             case .friendly: return Color(red: 0.345, green: 0.337, blue: 0.839)      // #5856D6 (joyful indigo)
-            case .glass: return Color(red: 0.0, green: 0.478, blue: 1.0)              // #007AFF (iOS system blue)
+            case .glass: return Color(red: 0.0, green: 0.333, blue: 1.0)              // #0055FF (deep sapphire)
             }
         }
 
@@ -47,7 +47,7 @@ public enum CRTTheme {
             case .document: return Color.black                                      // #000000
             case .starcraft: return Color(red: 0.502, green: 1.0, blue: 0.941)     // #80FFF0
             case .friendly: return Color(red: 0.231, green: 0.471, blue: 0.906)    // #3B78E7 (vivid blue)
-            case .glass: return Color(red: 0.039, green: 0.518, blue: 1.0)            // #0A84FF (iOS system blue bright)
+            case .glass: return Color(red: 0.302, green: 0.541, blue: 1.0)            // #4D8AFF (sapphire bright)
             }
         }
 
@@ -58,7 +58,7 @@ public enum CRTTheme {
             case .document: return Color(red: 0.420, green: 0.420, blue: 0.420)   // #6B6B6B (exceeds WCAG AA on white)
             case .starcraft: return Color(red: 0.0, green: 0.733, blue: 0.6)       // #00BB99
             case .friendly: return Color(red: 0.522, green: 0.463, blue: 0.686)    // #8576AF (soft purple, WCAG AA compliant)
-            case .glass: return Color(red: 0.557, green: 0.557, blue: 0.576)          // #8E8E93 (iOS system gray)
+            case .glass: return Color(red: 0.388, green: 0.388, blue: 0.400)          // #636366 (soft gray on dark)
             }
         }
 
@@ -91,9 +91,9 @@ public enum CRTTheme {
                 )
             case .glass:
                 return BackgroundSet(
-                    screen: Color(red: 0.949, green: 0.949, blue: 0.969),      // #F2F2F7 (iOS system gray 6)
-                    panel: Color.white.opacity(0.72),                           // Translucent white
-                    elevated: Color.white.opacity(0.85)                         // More opaque white
+                    screen: Color(red: 0.047, green: 0.047, blue: 0.055),      // #0C0C0E (deep charcoal)
+                    panel: Color(red: 0.102, green: 0.102, blue: 0.118).opacity(0.72),  // Translucent dark
+                    elevated: Color(red: 0.133, green: 0.133, blue: 0.149).opacity(0.85) // Dark elevated
                 )
             }
         }
@@ -149,7 +149,7 @@ public enum CRTTheme {
             case .document: return Color(red: 0.067, green: 0.067, blue: 0.067)   // #111111
             case .starcraft: return primary
             case .friendly: return Color(red: 0.176, green: 0.141, blue: 0.322)   // #2D2452 (dark indigo)
-            case .glass: return Color(red: 0.110, green: 0.110, blue: 0.118)          // #1C1C1E (near black)
+            case .glass: return Color.white.opacity(0.95)                             // High-opacity white for dark glass legibility
             }
         }
 
@@ -160,7 +160,7 @@ public enum CRTTheme {
             case .document: return Color(red: 0.420, green: 0.420, blue: 0.420)   // #6B6B6B (exceeds WCAG AA)
             case .starcraft: return dim
             case .friendly: return Color(red: 0.420, green: 0.373, blue: 0.561)    // #6B5F8F (muted purple, WCAG AA compliant)
-            case .glass: return Color(red: 0.388, green: 0.388, blue: 0.400)          // #636366 (iOS system gray)
+            case .glass: return Color.white.opacity(0.55)                             // Soft white for dark glass
             }
         }
 
@@ -171,15 +171,15 @@ public enum CRTTheme {
             case .document: return Color(red: 0.145, green: 0.388, blue: 0.922)   // #2563EB
             case .starcraft: return primary
             case .friendly: return Color(red: 0.345, green: 0.337, blue: 0.839)   // #5856D6 (joyful indigo)
-            case .glass: return Color(red: 0.0, green: 0.478, blue: 1.0)              // #007AFF (iOS system blue)
+            case .glass: return Color(red: 0.0, green: 0.333, blue: 1.0)              // #0055FF (deep sapphire)
             }
         }
 
         /// Preferred color scheme for system UI elements
         public var preferredColorScheme: ColorScheme {
             switch self {
-            case .pipboy, .starcraft: return .dark
-            case .document, .friendly, .glass: return .light
+            case .pipboy, .starcraft, .glass: return .dark
+            case .document, .friendly: return .light
             }
         }
     }

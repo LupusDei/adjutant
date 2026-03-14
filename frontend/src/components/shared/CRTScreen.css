@@ -545,61 +545,66 @@
 }
 
 /* ============================================
-   Glass Theme — Apple-inspired glassmorphism
-   Frosted translucent panels, light scheme,
-   subtle blur, clean sans-serif typography.
+   Glass Theme — Dark Liquid Glass
+   Apple-inspired dark glassmorphism: polished
+   obsidian with controlled inner glow, frosted
+   translucent dark panels, strict legibility.
    ============================================ */
 [data-theme='glass'] {
-  --theme-primary-rgb: 0, 122, 255;
-  --theme-primary: #007AFF;
-  --theme-bright: #0A84FF;
-  --theme-dim: #8E8E93;
-  --theme-glow: transparent;
-  --theme-bloom: transparent;
+  --theme-primary-rgb: 0, 85, 255;
+  --theme-primary: #0055FF;
+  --theme-bright: #4D8AFF;
+  --theme-dim: #636366;
+  --theme-glow: rgba(0, 85, 255, 0.15);
+  --theme-bloom: rgba(0, 85, 255, 0.06);
 
-  --crt-bg: #F2F2F7;
-  --crt-bg-active: #FFFFFF;
-  --crt-bezel: #E5E5EA;
-  --crt-bezel-highlight: #F2F2F7;
-  --crt-bezel-shadow: #D1D1D6;
+  --crt-bg: #0C0C0E;
+  --crt-bg-active: #141416;
+  --crt-bezel: #1A1A1E;
+  --crt-bezel-highlight: #222226;
+  --crt-bezel-shadow: #08080A;
 
-  --theme-bg-screen: #F2F2F7;
-  --theme-bg-panel: rgba(255, 255, 255, 0.72);
-  --theme-bg-elevated: rgba(255, 255, 255, 0.85);
+  --theme-bg-screen: #0C0C0E;
+  --theme-bg-panel: rgba(26, 26, 30, 0.72);
+  --theme-bg-elevated: rgba(34, 34, 38, 0.85);
   --theme-font: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
   --theme-font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
   --theme-text-transform: none;
   --theme-letter-spacing: -0.01em;
   --theme-label-spacing: 0.02em;
-  --theme-color-scheme: light;
-  --theme-border-color: rgba(0, 0, 0, 0.08);
-  --theme-text-primary: #1C1C1E;
-  --theme-text-secondary: #636366;
-  --theme-accent: #007AFF;
+  --theme-color-scheme: dark;
+  --theme-border-color: rgba(255, 255, 255, 0.08);
+  --theme-text-primary: rgba(255, 255, 255, 0.95);
+  --theme-text-secondary: rgba(255, 255, 255, 0.55);
+  --theme-accent: #0055FF;
 
-  /* Glass-specific typography */
-  --theme-line-height: 1.5;
-  --theme-heading-weight: 600;
+  /* Glass-specific typography — bolder for dark glass legibility */
+  --theme-line-height: 1.6;
+  --theme-heading-weight: 700;
   --theme-body-size: 0.9375rem;
 
-  /* Glass-specific spacing */
-  --theme-content-padding: 16px;
-  --theme-section-gap: 16px;
-  --theme-panel-padding: 16px;
+  /* Glass-specific spacing — generous for glass clarity */
+  --theme-content-padding: 20px;
+  --theme-section-gap: 20px;
+  --theme-panel-padding: 20px;
 
-  /* Glass-specific borders */
-  --theme-border-radius: 16px;
+  /* Glass-specific borders — large radii for liquid feel */
+  --theme-border-radius: 20px;
   --theme-border-width: 1px;
 
   /* Glass-specific focus ring */
-  --theme-focus-ring: 0 0 0 3px rgba(0, 122, 255, 0.25);
+  --theme-focus-ring: 0 0 0 3px rgba(0, 85, 255, 0.3);
 
-  /* Glass-specific effects */
-  --glass-blur: blur(20px);
-  --glass-saturate: saturate(1.8);
-  --glass-border-highlight: rgba(255, 255, 255, 0.5);
-  --glass-shadow: 0 2px 16px rgba(0, 0, 0, 0.06);
-  --glass-shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.08);
+  /* Glass-specific effects — dark frosted glass */
+  --glass-blur: blur(24px);
+  --glass-saturate: saturate(1.6);
+  --glass-border-highlight: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --glass-shadow-elevated: 0 12px 48px rgba(0, 0, 0, 0.5);
+
+  /* Specular edge highlights — soft silver, never on text areas */
+  --glass-specular: rgba(255, 255, 255, 0.08);
+  --glass-specular-edge: rgba(255, 255, 255, 0.15);
 }
 
 /* ============================================
@@ -762,39 +767,40 @@
 
 /* ============================================
    Glass-Specific Visual Overrides
-   Frosted translucent panels with blur
+   Dark frosted panels with specular edges
    ============================================ */
 
-/* Glass monitor: clean light background */
+/* Glass monitor: deep dark background with cool undertone */
 [data-theme='glass'] .crt-monitor {
-  background: #F2F2F7;
+  background: linear-gradient(180deg, #0F0F11 0%, #0C0C0E 50%, #0A0A0C 100%);
   padding: 0;
 }
 
-/* Glass bezel: subtle frosted panel */
+/* Glass bezel: dark frosted panel with subtle edge gleam */
 [data-theme='glass'] .crt-bezel {
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(26, 26, 30, 0.6);
   backdrop-filter: var(--glass-blur) var(--glass-saturate);
   -webkit-backdrop-filter: var(--glass-blur) var(--glass-saturate);
   border-radius: var(--theme-border-radius);
   padding: 6px;
-  border: 1px solid var(--glass-border-highlight);
+  border: 1px solid var(--glass-specular-edge);
 }
 
-/* Glass screen: translucent white with blur */
+/* Glass screen: dark translucent with frosted blur */
 [data-theme='glass'] .crt-glass {
   background: var(--theme-bg-panel);
   backdrop-filter: var(--glass-blur) var(--glass-saturate);
   -webkit-backdrop-filter: var(--glass-blur) var(--glass-saturate);
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 16px;
+  border: 1px solid var(--glass-specular);
   box-shadow: var(--glass-shadow);
 }
 
-/* Glass content: readable line-height */
+/* Glass content: generous spacing, legibility-first */
 [data-theme='glass'] .crt-content {
-  padding: var(--theme-content-padding, 16px);
-  line-height: var(--theme-line-height, 1.5);
+  padding: var(--theme-content-padding, 20px);
+  line-height: var(--theme-line-height, 1.6);
+  font-weight: 500;
 }
 
 /* ============================================
@@ -820,57 +826,66 @@
 
 /* ============================================
    Glass-Specific Component Overrides
-   Frosted panels, rounded corners, softer borders
+   Dark frosted panels with specular edges
    ============================================ */
 
-/* Glass sections/panels: frosted with rounded corners */
+/* Glass sections/panels: dark frosted with specular edge highlight */
 [data-theme='glass'] .crt-content section {
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(12px) saturate(1.5);
-  -webkit-backdrop-filter: blur(12px) saturate(1.5);
-  border: 1px solid rgba(255, 255, 255, 0.5) !important;
-  border-radius: 16px !important;
-  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.04);
+  background: rgba(26, 26, 30, 0.65);
+  backdrop-filter: blur(16px) saturate(1.5);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  border: 1px solid var(--glass-specular-edge) !important;
+  border-radius: 20px !important;
+  box-shadow: var(--glass-shadow),
+    inset 0 1px 0 var(--glass-specular);
 }
 
-/* Glass buttons: softer, rounded */
+/* Glass buttons: rounded with liquid feel */
 [data-theme='glass'] .crt-content button {
-  border-radius: 8px !important;
+  border-radius: 10px !important;
   transition: all 0.2s ease;
+  font-weight: 600;
 }
 
 [data-theme='glass'] .crt-content button:hover {
-  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.15);
+  box-shadow: 0 4px 16px rgba(0, 85, 255, 0.2);
+  background-color: rgba(0, 85, 255, 0.12);
 }
 
-/* Glass inputs: rounded with subtle focus ring */
+/* Glass inputs: dark frosted with subtle focus ring */
 [data-theme='glass'] .crt-content input,
 [data-theme='glass'] .crt-content textarea,
 [data-theme='glass'] .crt-content select {
-  border-radius: 8px !important;
-  border-color: rgba(0, 0, 0, 0.1) !important;
-  background: rgba(255, 255, 255, 0.8) !important;
+  border-radius: 10px !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(0, 0, 0, 0.3) !important;
+  color: rgba(255, 255, 255, 0.95) !important;
 }
 
 [data-theme='glass'] .crt-content input:focus,
 [data-theme='glass'] .crt-content textarea:focus,
 [data-theme='glass'] .crt-content select:focus {
-  border-color: rgba(0, 122, 255, 0.4) !important;
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15) !important;
+  border-color: rgba(0, 85, 255, 0.5) !important;
+  box-shadow: 0 0 0 3px rgba(0, 85, 255, 0.2) !important;
 }
 
-/* Glass scrollbar */
+[data-theme='glass'] .crt-content input::placeholder,
+[data-theme='glass'] .crt-content textarea::placeholder {
+  color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Glass scrollbar — dark, subtle */
 [data-theme='glass'] ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 [data-theme='glass'] ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 4px;
 }
 
 [data-theme='glass'] ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* ============================================
