@@ -200,7 +200,11 @@ export function resolveProjectContextFromPath(
   const result = listProjects();
   if (!result.success || !result.data) return undefined;
 
-  const match = result.data.find((p) => projectPath.startsWith(p.path));
+  // Prefer the longest (most specific) matching path to avoid parent directories
+  // matching before their children (e.g., /code/ai matching before /code/ai/adjutant).
+  const match = result.data
+    .filter((p) => projectPath.startsWith(p.path))
+    .sort((a, b) => b.path.length - a.path.length)[0];
   if (!match) return undefined;
 
   try {

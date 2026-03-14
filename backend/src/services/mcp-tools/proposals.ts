@@ -352,11 +352,14 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       // Default to agent's project when no explicit filter is specified.
       // Treat undefined as "use session default" but preserve explicit values
       // including empty string (adj-072.5.5).
-      let resolvedProject = project;
+      // Resolve project filter. Pass both UUID and name so we match proposals
+      // created before server-side project resolution (stored name) and after
+      // (stored UUID). See adj-096.
+      let resolvedProject: string | string[] | undefined = project;
       if (resolvedProject === undefined && extra.sessionId) {
         const projectContext = getProjectContextBySession(extra.sessionId);
         if (projectContext) {
-          resolvedProject = projectContext.projectId;
+          resolvedProject = [projectContext.projectId, projectContext.projectName];
         }
       }
       const proposals = store.getProposals({ status, type, project: resolvedProject });

@@ -20,7 +20,21 @@ import {
   ReviseProposalSchema,
 } from "../types/proposals.js";
 import type { ProposalStore } from "../services/proposal-store.js";
+import { listProjects } from "../services/projects-service.js";
 import { success, badRequest, notFound, validationError } from "../utils/responses.js";
+
+/**
+ * Resolve a project filter string (name or UUID) into both identifiers so
+ * getProposals matches proposals stored with either format (adj-096).
+ */
+function resolveProjectFilter(project: string | undefined): string | string[] | undefined {
+  if (!project) return undefined;
+  const result = listProjects();
+  if (!result.success || !result.data) return project;
+  const match = result.data.find((p) => p.id === project || p.name === project);
+  if (!match) return project;
+  return match.id === match.name ? match.id : [match.id, match.name];
+}
 
 export function createProposalsRouter(store: ProposalStore): Router {
   const router = Router();
@@ -33,7 +47,8 @@ export function createProposalsRouter(store: ProposalStore): Router {
       return;
     }
 
-    const proposals = store.getProposals(filterResult.data);
+    const { project, ...rest } = filterResult.data;
+    const proposals = store.getProposals({ ...rest, project: resolveProjectFilter(project) });
     res.json(success(proposals));
   });
 

@@ -74,7 +74,8 @@ interface InsertProposalInput {
 interface GetProposalsOptions {
   status?: ProposalStatus | undefined;
   type?: ProposalType | undefined;
-  project?: string | undefined;
+  /** Single project identifier or array of identifiers to match (UUID and/or name). */
+  project?: string | string[] | undefined;
 }
 
 export interface ProposalStore {
@@ -158,8 +159,10 @@ export function createProposalStore(db: Database.Database): ProposalStore {
       }
 
       if (opts?.project !== undefined) {
-        conditions.push("project = ?");
-        params.push(opts.project);
+        const projects = Array.isArray(opts.project) ? opts.project : [opts.project];
+        const placeholders = projects.map(() => "?").join(", ");
+        conditions.push(`project IN (${placeholders})`);
+        params.push(...projects);
       }
 
       const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";

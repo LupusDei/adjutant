@@ -216,7 +216,7 @@ describe("Proposal project scoping", () => {
       );
 
       expect(store.getProposals).toHaveBeenCalledWith(
-        expect.objectContaining({ project: "f1e8f895" }),
+        expect.objectContaining({ project: ["f1e8f895", "adjutant"] }),
       );
     });
 

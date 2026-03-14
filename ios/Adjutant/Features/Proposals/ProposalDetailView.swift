@@ -9,6 +9,7 @@ struct ProposalDetailView: View {
     @State private var sendToAgentMode: SendToAgentMode?
     @State private var commentsExpanded = true
     @State private var revisionsExpanded = false
+    @State private var showCopiedFeedback = false
 
     init(proposalId: String) {
         _viewModel = StateObject(wrappedValue: ProposalDetailViewModel(proposalId: proposalId))
@@ -166,8 +167,34 @@ struct ProposalDetailView: View {
     @ViewBuilder
     private func descriptionCard(_ proposal: Proposal) -> some View {
         CRTCard(header: "DESCRIPTION") {
-            CRTText(proposal.description, style: .body, glowIntensity: .subtle)
-                .fixedSize(horizontal: false, vertical: true)
+            ZStack(alignment: .topTrailing) {
+                MarkdownTextView(proposal.description)
+                    .contentShape(Rectangle())
+                    .onLongPressGesture {
+                        UIPasteboard.general.string = proposal.description
+                        let impact = UIImpactFeedbackGenerator(style: .medium)
+                        impact.impactOccurred()
+                        withAnimation(.easeInOut(duration: CRTTheme.Animation.fast)) {
+                            showCopiedFeedback = true
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            withAnimation(.easeInOut(duration: CRTTheme.Animation.fast)) {
+                                showCopiedFeedback = false
+                            }
+                        }
+                    }
+
+                if showCopiedFeedback {
+                    Text("COPIED")
+                        .font(CRTTheme.Typography.font(size: 11, weight: .bold))
+                        .foregroundColor(theme.background.screen)
+                        .padding(.horizontal, CRTTheme.Spacing.xs)
+                        .padding(.vertical, CRTTheme.Spacing.xxs)
+                        .background(theme.primary)
+                        .cornerRadius(CRTTheme.CornerRadius.sm)
+                        .transition(.opacity)
+                }
+            }
         }
     }
 
