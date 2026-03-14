@@ -31,6 +31,9 @@ struct EpicDetailView: View {
                     // Epic header
                     epicHeader(epic)
 
+                    // Status-dependent actions
+                    actionsSection(epic)
+
                     // Progress section
                     progressSection
 
@@ -108,6 +111,55 @@ struct EpicDetailView: View {
         }
         .fullScreenCover(isPresented: $showGraph) {
             EpicGraphView(epicId: epicId, epicTitle: viewModel.epic?.title ?? "")
+        }
+    }
+
+    // MARK: - Actions Section
+
+    @ViewBuilder
+    private func actionsSection(_ epic: BeadInfo) -> some View {
+        CRTCard(header: "ACTIONS") {
+            HStack(spacing: CRTTheme.Spacing.sm) {
+                switch epic.status {
+                case "open":
+                    CRTButton("ASSIGN", variant: .primary, size: .small) {
+                        viewModel.showingAgentPicker = true
+                    }
+                    CRTButton("CLOSE", variant: .danger, size: .small) {
+                        Task<Void, Never> {
+                            await viewModel.updateStatus("closed")
+                        }
+                    }
+                case "in_progress", "hooked":
+                    CRTButton("UNASSIGN", variant: .secondary, size: .small) {
+                        Task<Void, Never> {
+                            await viewModel.unassignEpic()
+                        }
+                    }
+                    CRTButton("CLOSE", variant: .danger, size: .small) {
+                        Task<Void, Never> {
+                            await viewModel.updateStatus("closed")
+                        }
+                    }
+                case "closed":
+                    CRTButton("REOPEN", variant: .primary, size: .small) {
+                        Task<Void, Never> {
+                            await viewModel.updateStatus("open")
+                        }
+                    }
+                default:
+                    EmptyView()
+                }
+
+                Spacer()
+            }
+        }
+        .sheet(isPresented: $viewModel.showingAgentPicker) {
+            AgentPickerView { agent in
+                Task {
+                    await viewModel.assignEpic(to: agent)
+                }
+            }
         }
     }
 

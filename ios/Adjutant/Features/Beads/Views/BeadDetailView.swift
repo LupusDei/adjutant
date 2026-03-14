@@ -33,6 +33,9 @@ struct BeadDetailView: View {
                     // Status section
                     statusCard(bead)
 
+                    // Status-dependent actions
+                    actionsCard(bead)
+
                     // Agent state (if assigned and active)
                     if let agentState = viewModel.agentState {
                         agentStateCard(agentState)
@@ -271,6 +274,48 @@ struct BeadDetailView: View {
                 // Status text
                 CRTText(viewModel.statusText, style: .subheader, glowIntensity: .medium)
                     .foregroundColor(statusColor(for: bead.status))
+
+                Spacer()
+            }
+        }
+    }
+
+    // MARK: - Actions Card
+
+    @ViewBuilder
+    private func actionsCard(_ bead: BeadInfo) -> some View {
+        CRTCard(header: "ACTIONS") {
+            HStack(spacing: CRTTheme.Spacing.sm) {
+                switch bead.status {
+                case "open":
+                    CRTButton("ASSIGN", variant: .primary, size: .small) {
+                        viewModel.showingAgentPicker = true
+                    }
+                    CRTButton("CLOSE", variant: .danger, size: .small) {
+                        Task<Void, Never> {
+                            await viewModel.updateStatus("closed")
+                        }
+                    }
+                case "in_progress", "hooked":
+                    CRTButton("UNASSIGN", variant: .secondary, size: .small) {
+                        Task<Void, Never> {
+                            await viewModel.unassignBead()
+                        }
+                    }
+                    CRTButton("CLOSE", variant: .danger, size: .small) {
+                        Task<Void, Never> {
+                            await viewModel.updateStatus("closed")
+                        }
+                    }
+                case "closed":
+                    CRTButton("REOPEN", variant: .primary, size: .small) {
+                        Task<Void, Never> {
+                            await viewModel.updateStatus("open")
+                        }
+                    }
+                default:
+                    EmptyView()
+                }
 
                 Spacer()
             }

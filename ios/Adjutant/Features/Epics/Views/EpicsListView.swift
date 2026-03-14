@@ -23,6 +23,16 @@ struct EpicsListView: View {
                             EpicRowView(epic: epic) {
                                 coordinator.navigateReplacingPath(to: .epicDetail(id: epic.id))
                             }
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                Button {
+                                    Task {
+                                        await viewModel.closeEpic(epic.id)
+                                    }
+                                } label: {
+                                    Label("Close", systemImage: "checkmark.circle.fill")
+                                }
+                                .tint(CRTTheme.State.success)
+                            }
                         }
                     }
 

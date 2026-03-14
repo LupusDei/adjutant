@@ -55,10 +55,20 @@ final class BeadDetailViewModel: BaseViewModel {
         }
     }
 
-    /// Assigns the bead to an agent
+    /// Assigns the bead to an agent and sets status to in_progress
     func assignBead(to agent: CrewMember) async {
         await performAsyncAction(showLoading: false) {
             _ = try await self.apiClient.assignBead(id: self.beadId, assignee: agent.id)
+            _ = try await self.apiClient.updateBeadStatus(id: self.beadId, status: "in_progress")
+            await self.loadBead()
+        }
+    }
+
+    /// Unassigns the bead (clears assignee and sets status back to open)
+    func unassignBead() async {
+        await performAsyncAction(showLoading: false) {
+            _ = try await self.apiClient.assignBead(id: self.beadId, assignee: "")
+            _ = try await self.apiClient.updateBeadStatus(id: self.beadId, status: "open")
             await self.loadBead()
         }
     }
