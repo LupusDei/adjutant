@@ -55,6 +55,9 @@ final class SettingsViewModelTests: XCTestCase {
 
         viewModel.setTheme(.friendly)
         XCTAssertEqual(viewModel.selectedTheme, .friendly)
+
+        viewModel.setTheme(.glass)
+        XCTAssertEqual(viewModel.selectedTheme, .glass)
     }
 
     func testSetThemeUpdatesAppState() {
@@ -63,13 +66,14 @@ final class SettingsViewModelTests: XCTestCase {
     }
 
     func testAllThemesAvailable() {
-        // Verify all 4 themes are available
+        // Verify all 5 themes are available
         let allThemes = ThemeIdentifier.allCases
-        XCTAssertEqual(allThemes.count, 4)
+        XCTAssertEqual(allThemes.count, 5)
         XCTAssertTrue(allThemes.contains(.pipboy))
         XCTAssertTrue(allThemes.contains(.document))
         XCTAssertTrue(allThemes.contains(.starcraft))
         XCTAssertTrue(allThemes.contains(.friendly))
+        XCTAssertTrue(allThemes.contains(.glass))
     }
 
     // MARK: - Notification Tests
@@ -132,6 +136,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(ThemeIdentifier.document.displayName, "DOCUMENT")
         XCTAssertEqual(ThemeIdentifier.starcraft.displayName, "STARCRAFT")
         XCTAssertEqual(ThemeIdentifier.friendly.displayName, "FRIENDLY")
+        XCTAssertEqual(ThemeIdentifier.glass.displayName, "GLASS")
     }
 
     func testThemeIdentifierRawValues() {
@@ -139,6 +144,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(ThemeIdentifier.document.rawValue, "document")
         XCTAssertEqual(ThemeIdentifier.starcraft.rawValue, "starcraft")
         XCTAssertEqual(ThemeIdentifier.friendly.rawValue, "friendly")
+        XCTAssertEqual(ThemeIdentifier.glass.rawValue, "glass")
     }
 
     func testThemeIdentifierColorThemeConversion() {
@@ -146,6 +152,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(ThemeIdentifier.document.colorTheme, .document)
         XCTAssertEqual(ThemeIdentifier.starcraft.colorTheme, .starcraft)
         XCTAssertEqual(ThemeIdentifier.friendly.colorTheme, .friendly)
+        XCTAssertEqual(ThemeIdentifier.glass.colorTheme, .glass)
     }
 
     func testFriendlyThemeProperties() {
@@ -154,6 +161,21 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(theme.crtEffectsEnabled, "Friendly should have CRT effects disabled")
         XCTAssertFalse(theme.useMonospaceFont, "Friendly should use system font")
         XCTAssertEqual(theme.preferredColorScheme, .light, "Friendly should use light mode")
+    }
+
+    func testGlassThemeProperties() {
+        let theme = CRTTheme.ColorTheme.glass
+        XCTAssertEqual(theme.displayName, "GLASS")
+        XCTAssertFalse(theme.crtEffectsEnabled, "Glass should have CRT effects disabled")
+        XCTAssertFalse(theme.useMonospaceFont, "Glass should use system font")
+        XCTAssertEqual(theme.preferredColorScheme, .light, "Glass should use light mode")
+        XCTAssertEqual(theme.fontDesign, .default, "Glass should use default font design")
+    }
+
+    func testGlassThemeSetViaAppState() {
+        viewModel.setTheme(.glass)
+        XCTAssertEqual(AppState.shared.currentTheme, .glass)
+        XCTAssertEqual(AppState.shared.currentTheme.colorTheme.displayName, "GLASS")
     }
 
     func testFriendlyThemeSetViaAppState() {

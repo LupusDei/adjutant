@@ -509,7 +509,7 @@ public final class DataSyncService: ObservableObject {
             // This replaces the old status=all approach which silently dropped older
             // open tasks/bugs when total beads exceeded the 500 limit.
             async let activeResponse = apiClient.getBeads(status: .default, sort: effectiveSort, order: effectiveOrder, project: project)
-            async let closedResponse = apiClient.getBeads(status: .closed, sort: "updated", order: "desc", limit: 300, project: project)
+            async let closedResponse = apiClient.getBeads(status: .closed, limit: 300, sort: "updated", order: "desc", project: project)
 
             let (active, closed) = try await (activeResponse, closedResponse)
             let combined = active + closed

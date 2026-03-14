@@ -404,6 +404,8 @@ private struct SchemePreviewCard: View {
             starcraftContent
         case .friendly:
             friendlyContent
+        case .glass:
+            glassContent
         }
     }
 
@@ -614,6 +616,61 @@ private struct SchemePreviewCard: View {
         colorTheme.colorPalette?.allColors ?? [colorTheme.primary, colorTheme.accent]
     }
 
+    // MARK: - Glass Content
+
+    /// Apple-inspired frosted glass aesthetic: clean typography, translucent panels, blue accent
+    private var glassContent: some View {
+        VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+            // Clean header with SF-style typography
+            HStack {
+                Text(scheme.displayName)
+                    .font(.system(size: CRTTypography.sizeLG, weight: .semibold, design: .default))
+                    .foregroundColor(colorTheme.textPrimary)
+                    .tracking(-0.2)
+
+                Spacer()
+
+                selectionIndicator
+            }
+
+            // Subtle frosted divider
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            colorTheme.accent.opacity(0.0),
+                            colorTheme.accent.opacity(0.3),
+                            colorTheme.accent.opacity(0.0)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(height: 1)
+
+            // Frosted pill indicators (mimicking iOS control center style)
+            HStack(spacing: 8) {
+                ForEach(0..<3, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.white.opacity(0.7))
+                        .frame(width: index == 0 ? 48 : 36, height: 24)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                        )
+                        .shadow(color: .black.opacity(0.04), radius: 2, y: 1)
+                }
+
+                Spacer()
+            }
+
+            // Tagline
+            Text("Crystal clear interface")
+                .font(.system(size: CRTTypography.sizeSM, weight: .regular, design: .default))
+                .foregroundColor(colorTheme.textSecondary)
+        }
+    }
+
     // MARK: - Shared Selection Indicator
 
     @ViewBuilder
@@ -644,6 +701,19 @@ private struct SchemePreviewCard: View {
                     colors: [
                         colorTheme.background.panel.opacity(0.3),
                         colorTheme.background.screen
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+        case .glass:
+            ZStack {
+                colorTheme.background.screen
+                // Frosted glass gradient overlay
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.4),
+                        Color.white.opacity(0.2)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -995,4 +1065,10 @@ private struct AboutRow: View {
     SettingsView()
         .environmentObject(AppCoordinator())
         .crtTheme(.document)
+}
+
+#Preview("Settings View - Glass Theme") {
+    SettingsView()
+        .environmentObject(AppCoordinator())
+        .crtTheme(.glass)
 }
