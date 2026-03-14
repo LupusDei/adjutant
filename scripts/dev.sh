@@ -78,7 +78,7 @@ if command -v ngrok &> /dev/null; then
     echo -e "${GREEN}Starting Adjutant + ngrok tunnel${NC}"
     echo ""
     npx concurrently -n backend,frontend,ngrok -c blue,green,magenta \
-        "cd backend && npm run dev" \
+        "./scripts/dev-backend.sh" \
         "cd frontend && npm run dev" \
         "./scripts/tunnel.sh --no-wait"
 else
@@ -88,6 +88,6 @@ else
     echo -e "${GREEN}Starting Adjutant${NC}"
     echo ""
     npx concurrently -n backend,frontend -c blue,green \
-        "cd backend && npm run dev" \
+        "./scripts/dev-backend.sh" \
         "cd frontend && npm run dev"
 fi

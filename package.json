@@ -29,7 +29,7 @@
     "build:cli": "npx tsc -p tsconfig.cli.json",
     "build:backend": "cd backend && npm run build",
     "build:frontend": "cd frontend && npm run build",
-    "start": "npx concurrently -k -n backend,frontend -c blue,green \"npm run start:backend\" \"npm run start:frontend\"",
+    "start": "npx concurrently -n backend,frontend -c blue,green \"npm run start:backend\" \"npm run start:frontend\"",
     "start:backend": "cd backend && npm start",
     "start:frontend": "cd frontend && npm run preview",
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
