@@ -63,6 +63,24 @@ export function sortByUpdatedAtDesc(items: { epic: BeadInfo }[]): typeof items {
 }
 
 // ============================================================================
+// Updated-at Sort (flat bead arrays)
+// ============================================================================
+
+/**
+ * Sorts beads by updatedAt descending (most recently updated first).
+ * Falls back to createdAt when updatedAt is null.
+ *
+ * Does NOT mutate the input array; returns a new sorted array.
+ */
+export function sortByUpdatedAtDescFlat(beads: BeadInfo[]): BeadInfo[] {
+  return [...beads].sort((a, b) => {
+    const aTime = a.updatedAt ?? a.createdAt;
+    const bTime = b.updatedAt ?? b.createdAt;
+    return bTime.localeCompare(aTime);
+  });
+}
+
+// ============================================================================
 // Limit
 // ============================================================================
 

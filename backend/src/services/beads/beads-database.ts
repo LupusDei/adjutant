@@ -144,13 +144,19 @@ export async function fetchBeadsFromDatabase(
     args.push("--type", options.type);
   }
 
-  // Pass sort field to bd if specified and valid
-  if (options.sort && (VALID_SORT_FIELDS as readonly string[]).includes(options.sort)) {
-    args.push("--sort", options.sort);
+  // Pass sort field to bd if specified and valid.
+  // When querying closed beads without an explicit sort, default to "updated"
+  // so bd returns recently-updated beads rather than highest-priority ones.
+  // Without this, bd's default priority sort + limit truncates P2+ beads.
+  const effectiveSort = options.sort
+    ?? (statusesToInclude?.length === 1 && statusesToInclude[0] === "closed" ? "updated" : undefined);
+  if (effectiveSort && (VALID_SORT_FIELDS as readonly string[]).includes(effectiveSort)) {
+    args.push("--sort", effectiveSort);
   }
 
-  // --reverse for descending order
-  if (options.order === "desc") {
+  // bd sorts descending by default (newest first).
+  // --reverse flips to ascending (oldest first).
+  if (options.order === "asc") {
     args.push("--reverse");
   }
 

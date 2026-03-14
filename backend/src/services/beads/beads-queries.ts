@@ -37,6 +37,7 @@ import {
 import {
   sortByPriorityThenDate,
   sortByClosedAtDesc,
+  sortByUpdatedAtDescFlat,
   applyLimit,
 } from "./beads-sorter.js";
 import {
@@ -183,9 +184,15 @@ export async function listBeads(
       beads = filterByAssignee(beads, options.assignee);
     }
 
-    // Skip re-sort when bd already sorted by a specific field
+    // Skip re-sort when bd already sorted by a specific field.
+    // For closed-only queries, sort by most recently updated (not priority)
+    // to avoid P2+ beads being truncated past the limit.
     if (!options.sort) {
-      beads = sortByPriorityThenDate(beads);
+      if (options.status === "closed") {
+        beads = sortByUpdatedAtDescFlat(beads);
+      } else {
+        beads = sortByPriorityThenDate(beads);
+      }
     }
     beads = applyLimit(beads, options.limit);
 
@@ -258,9 +265,15 @@ export async function listAllBeads(
       allBeads = filterByAssignee(allBeads, options.assignee);
     }
 
-    // Skip re-sort when bd already sorted by a specific field
+    // Skip re-sort when bd already sorted by a specific field.
+    // For closed-only queries, sort by most recently updated (not priority)
+    // to avoid P2+ beads being truncated past the limit.
     if (!options.sort) {
-      allBeads = sortByPriorityThenDate(allBeads);
+      if (options.status === "closed") {
+        allBeads = sortByUpdatedAtDescFlat(allBeads);
+      } else {
+        allBeads = sortByPriorityThenDate(allBeads);
+      }
     }
     allBeads = applyLimit(allBeads, options.limit);
 

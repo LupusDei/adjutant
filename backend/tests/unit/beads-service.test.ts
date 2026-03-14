@@ -155,7 +155,7 @@ describe("beads-service", () => {
       expect(args).toContain("500");
     });
 
-    it("should pass sort and reverse flags to bd command", async () => {
+    it("should not pass --reverse when order is desc (bd default is desc)", async () => {
       vi.mocked(execBd).mockResolvedValue({
         success: true,
         data: [],
@@ -167,10 +167,10 @@ describe("beads-service", () => {
       const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
       expect(args).toContain("--sort");
       expect(args).toContain("updated");
-      expect(args).toContain("--reverse");
+      expect(args).not.toContain("--reverse");
     });
 
-    it("should not pass --reverse when order is asc", async () => {
+    it("should pass --reverse when order is asc", async () => {
       vi.mocked(execBd).mockResolvedValue({
         success: true,
         data: [],
@@ -182,7 +182,7 @@ describe("beads-service", () => {
       const args = vi.mocked(execBd).mock.calls[0]?.[0] ?? [];
       expect(args).toContain("--sort");
       expect(args).toContain("created");
-      expect(args).not.toContain("--reverse");
+      expect(args).toContain("--reverse");
     });
 
     it("should skip client-side sort when bd sort is specified", async () => {
