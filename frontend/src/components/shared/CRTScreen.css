@@ -555,29 +555,29 @@
   --theme-primary-rgb: 232, 232, 236;
   --theme-primary: rgba(255, 255, 255, 0.95);
   --theme-bright: #FFFFFF;
-  --theme-dim: rgba(255, 255, 255, 0.4);
+  --theme-dim: rgba(77, 138, 255, 0.45);
   --theme-glow: rgba(0, 85, 255, 0.15);
   --theme-bloom: rgba(0, 85, 255, 0.06);
 
-  --crt-bg: #0C0C0E;
-  --crt-bg-active: #141416;
-  --crt-bezel: #1A1A1E;
-  --crt-bezel-highlight: #222226;
-  --crt-bezel-shadow: #08080A;
+  --crt-bg: #0A0B12;
+  --crt-bg-active: #10111A;
+  --crt-bezel: #141520;
+  --crt-bezel-highlight: #1C1D2A;
+  --crt-bezel-shadow: #06070C;
 
-  --theme-bg-screen: #0C0C0E;
-  --theme-bg-panel: rgba(26, 26, 30, 0.72);
-  --theme-bg-elevated: rgba(34, 34, 38, 0.85);
+  --theme-bg-screen: #0A0B12;
+  --theme-bg-panel: rgba(16, 18, 30, 0.75);
+  --theme-bg-elevated: rgba(24, 26, 42, 0.82);
   --theme-font: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
   --theme-font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
   --theme-text-transform: none;
   --theme-letter-spacing: -0.01em;
   --theme-label-spacing: 0.02em;
   --theme-color-scheme: dark;
-  --theme-border-color: rgba(255, 255, 255, 0.08);
+  --theme-border-color: rgba(0, 85, 255, 0.15);
   --theme-text-primary: rgba(255, 255, 255, 0.95);
-  --theme-text-secondary: rgba(255, 255, 255, 0.55);
-  /* Accent = sapphire blue (buttons, links, active states only) */
+  --theme-text-secondary: rgba(160, 190, 255, 0.6);
+  /* Accent = sapphire blue (borders, nav icons, buttons, active states) */
   --theme-accent: #0055FF;
 
   /* Glass-specific typography — bolder for dark glass legibility */
@@ -604,9 +604,9 @@
   --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
   --glass-shadow-elevated: 0 12px 48px rgba(0, 0, 0, 0.5);
 
-  /* Specular edge highlights — soft silver, never on text areas */
-  --glass-specular: rgba(255, 255, 255, 0.08);
-  --glass-specular-edge: rgba(255, 255, 255, 0.15);
+  /* Specular edge highlights — sapphire-tinted for glass identity */
+  --glass-specular: rgba(0, 85, 255, 0.1);
+  --glass-specular-edge: rgba(0, 85, 255, 0.18);
 }
 
 /* ============================================
@@ -772,15 +772,15 @@
    Dark frosted panels with specular edges
    ============================================ */
 
-/* Glass monitor: deep dark background with cool undertone */
+/* Glass monitor: deep dark background with sapphire undertone */
 [data-theme='glass'] .crt-monitor {
-  background: linear-gradient(180deg, #0F0F11 0%, #0C0C0E 50%, #0A0A0C 100%);
+  background: linear-gradient(180deg, #0D0E16 0%, #0A0B12 50%, #080914 100%);
   padding: 0;
 }
 
-/* Glass bezel: dark frosted panel with subtle edge gleam */
+/* Glass bezel: dark frosted panel with sapphire edge gleam */
 [data-theme='glass'] .crt-bezel {
-  background: rgba(26, 26, 30, 0.6);
+  background: rgba(16, 18, 30, 0.6);
   backdrop-filter: var(--glass-blur) var(--glass-saturate);
   -webkit-backdrop-filter: var(--glass-blur) var(--glass-saturate);
   border-radius: var(--theme-border-radius);
@@ -831,15 +831,15 @@
    Dark frosted panels with specular edges
    ============================================ */
 
-/* Glass sections/panels: dark frosted with specular edge highlight */
+/* Glass sections/panels: dark frosted with sapphire-tinted edge highlight */
 [data-theme='glass'] .crt-content section {
-  background: rgba(26, 26, 30, 0.65);
+  background: rgba(14, 16, 28, 0.65);
   backdrop-filter: blur(16px) saturate(1.5);
   -webkit-backdrop-filter: blur(16px) saturate(1.5);
-  border: 1px solid var(--glass-specular-edge) !important;
+  border: 1px solid rgba(0, 85, 255, 0.12) !important;
   border-radius: 20px !important;
   box-shadow: var(--glass-shadow),
-    inset 0 1px 0 var(--glass-specular);
+    inset 0 1px 0 rgba(0, 85, 255, 0.08);
 }
 
 /* Glass buttons: rounded with liquid feel */
@@ -854,12 +854,12 @@
   background-color: rgba(0, 85, 255, 0.12);
 }
 
-/* Glass inputs: dark frosted with subtle focus ring */
+/* Glass inputs: dark frosted with sapphire border hint */
 [data-theme='glass'] .crt-content input,
 [data-theme='glass'] .crt-content textarea,
 [data-theme='glass'] .crt-content select {
   border-radius: 10px !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(0, 85, 255, 0.12) !important;
   background: rgba(0, 0, 0, 0.3) !important;
   color: rgba(255, 255, 255, 0.95) !important;
 }

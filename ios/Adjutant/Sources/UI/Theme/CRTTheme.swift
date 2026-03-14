@@ -58,7 +58,7 @@ public enum CRTTheme {
             case .document: return Color(red: 0.420, green: 0.420, blue: 0.420)   // #6B6B6B (exceeds WCAG AA on white)
             case .starcraft: return Color(red: 0.0, green: 0.733, blue: 0.6)       // #00BB99
             case .friendly: return Color(red: 0.522, green: 0.463, blue: 0.686)    // #8576AF (soft purple, WCAG AA compliant)
-            case .glass: return Color.white.opacity(0.4)                               // Soft white for dim elements
+            case .glass: return Color(red: 0.302, green: 0.541, blue: 1.0).opacity(0.45)  // Sapphire-tinted dim
             }
         }
 
@@ -91,9 +91,9 @@ public enum CRTTheme {
                 )
             case .glass:
                 return BackgroundSet(
-                    screen: Color(red: 0.047, green: 0.047, blue: 0.055),      // #0C0C0E (deep charcoal)
-                    panel: Color(red: 0.102, green: 0.102, blue: 0.118).opacity(0.72),  // Translucent dark
-                    elevated: Color(red: 0.133, green: 0.133, blue: 0.149).opacity(0.85) // Dark elevated
+                    screen: Color(red: 0.039, green: 0.043, blue: 0.071),      // #0A0B12 (deep sapphire-charcoal)
+                    panel: Color(red: 0.063, green: 0.071, blue: 0.118).opacity(0.75),  // Translucent dark sapphire
+                    elevated: Color(red: 0.094, green: 0.102, blue: 0.165).opacity(0.82) // Dark sapphire elevated
                 )
             }
         }
@@ -160,7 +160,7 @@ public enum CRTTheme {
             case .document: return Color(red: 0.420, green: 0.420, blue: 0.420)   // #6B6B6B (exceeds WCAG AA)
             case .starcraft: return dim
             case .friendly: return Color(red: 0.420, green: 0.373, blue: 0.561)    // #6B5F8F (muted purple, WCAG AA compliant)
-            case .glass: return Color.white.opacity(0.55)                             // Soft white for dark glass
+            case .glass: return Color(red: 0.627, green: 0.745, blue: 1.0).opacity(0.6)  // Sapphire-tinted secondary text
             }
         }
 
