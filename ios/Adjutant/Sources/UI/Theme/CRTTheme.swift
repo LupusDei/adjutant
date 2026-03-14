@@ -25,7 +25,7 @@ public enum CRTTheme {
             case .document: return "DOCUMENT"
             case .starcraft: return "STARCRAFT"
             case .friendly: return "FRIENDLY"
-            case .glass: return "GLASS"
+            case .glass: return "DARK MODE"
             }
         }
 

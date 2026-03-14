@@ -32,7 +32,7 @@ export const THEME_CONFIGS: Record<ThemeId, ThemeConfig> = {
   document:  { id: 'document',  label: 'DOCUMENT',   crtEffects: false, darkMode: false },
   starcraft: { id: 'starcraft', label: 'STARCRAFT',  crtEffects: true,  darkMode: true },
   friendly:  { id: 'friendly',  label: 'FRIENDLY',   crtEffects: false, darkMode: false },
-  glass:     { id: 'glass',     label: 'GLASS',      crtEffects: false, darkMode: true },
+  glass:     { id: 'glass',     label: 'DARK MODE',   crtEffects: false, darkMode: true },
 };
 
 /** Migrate legacy theme values from old color-based system */

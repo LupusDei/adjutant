@@ -52,7 +52,7 @@ const THEMES: ThemeOption[] = [
     previewBg: '#F8F7F6', previewText: '#5856D6', crtEffects: false,
   },
   {
-    id: 'glass', label: 'GLASS', color: '#E8E8EC',
+    id: 'glass', label: 'DARK MODE', color: '#E8E8EC',
     description: 'Dark liquid glass',
     previewBg: '#0C0C0E', previewText: '#E8E8EC', crtEffects: false,
   },

@@ -136,7 +136,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(ThemeIdentifier.document.displayName, "DOCUMENT")
         XCTAssertEqual(ThemeIdentifier.starcraft.displayName, "STARCRAFT")
         XCTAssertEqual(ThemeIdentifier.friendly.displayName, "FRIENDLY")
-        XCTAssertEqual(ThemeIdentifier.glass.displayName, "GLASS")
+        XCTAssertEqual(ThemeIdentifier.glass.displayName, "DARK MODE")
     }
 
     func testThemeIdentifierRawValues() {
@@ -165,7 +165,7 @@ final class SettingsViewModelTests: XCTestCase {
 
     func testGlassThemeProperties() {
         let theme = CRTTheme.ColorTheme.glass
-        XCTAssertEqual(theme.displayName, "GLASS")
+        XCTAssertEqual(theme.displayName, "DARK MODE")
         XCTAssertFalse(theme.crtEffectsEnabled, "Glass should have CRT effects disabled")
         XCTAssertFalse(theme.useMonospaceFont, "Glass should use system font")
         XCTAssertEqual(theme.preferredColorScheme, .dark, "Glass should use dark mode")
@@ -175,7 +175,7 @@ final class SettingsViewModelTests: XCTestCase {
     func testGlassThemeSetViaAppState() {
         viewModel.setTheme(.glass)
         XCTAssertEqual(AppState.shared.currentTheme, .glass)
-        XCTAssertEqual(AppState.shared.currentTheme.colorTheme.displayName, "GLASS")
+        XCTAssertEqual(AppState.shared.currentTheme.colorTheme.displayName, "DARK MODE")
     }
 
     func testFriendlyThemeSetViaAppState() {
