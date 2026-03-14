@@ -4,8 +4,10 @@
  */
 
 import { type CSSProperties, useCallback, useEffect, useState } from 'react';
+
 import { api } from '../../services/api';
 import type { BeadDetail, BeadDependency } from '../../types';
+import { AgentAssignDropdown } from '../shared/AgentAssignDropdown';
 
 export interface BeadDetailViewProps {
   beadId: string | null;
@@ -158,6 +160,7 @@ export function BeadDetailView({ beadId, onClose, onBeadNavigate }: BeadDetailVi
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [updating, setUpdating] = useState(false);
 
   // Fetch bead details when ID changes
   useEffect(() => {
@@ -196,6 +199,26 @@ export function BeadDetailView({ beadId, onClose, onBeadNavigate }: BeadDetailVi
       onBeadNavigate(id);
     }
   }, [onBeadNavigate]);
+
+  /** Update bead status/assignee, then re-fetch details. */
+  const handleStatusUpdate = useCallback(async (fields: { status?: string; assignee?: string }) => {
+    if (!bead || updating) return;
+    setUpdating(true);
+    try {
+      await api.beads.update(bead.id, fields);
+      const refreshed = await api.beads.get(bead.id);
+      setBead(refreshed);
+    } catch {
+      // Silently fail — bead state remains unchanged
+    } finally {
+      setUpdating(false);
+    }
+  }, [bead, updating]);
+
+  /** Handle agent assignment from the dropdown. */
+  const handleAssign = useCallback((agentName: string) => {
+    void handleStatusUpdate({ status: 'in_progress', assignee: agentName });
+  }, [handleStatusUpdate]);
 
   // Close on escape key
   useEffect(() => {
@@ -276,6 +299,53 @@ export function BeadDetailView({ beadId, onClose, onBeadNavigate }: BeadDetailVi
                 <span style={styles.typeBadge}>
                   {bead.type.toUpperCase()}
                 </span>
+              </div>
+
+              {/* Status Action Bar */}
+              <div style={styles.actionBar}>
+                {bead.status === 'open' && (
+                  <>
+                    <AgentAssignDropdown
+                      beadId={bead.id}
+                      currentAssignee={bead.assignee}
+                      onAssign={handleAssign}
+                    />
+                    <button
+                      style={{ ...styles.actionButton, borderColor: '#FF4444', color: '#FF4444' }}
+                      onClick={() => { void handleStatusUpdate({ status: 'closed' }); }}
+                      disabled={updating}
+                    >
+                      CLOSE
+                    </button>
+                  </>
+                )}
+                {(bead.status === 'in_progress' || bead.status === 'hooked') && (
+                  <>
+                    <button
+                      style={{ ...styles.actionButton, borderColor: '#FFB000', color: '#FFB000' }}
+                      onClick={() => { void handleStatusUpdate({ status: 'open', assignee: '' }); }}
+                      disabled={updating}
+                    >
+                      UNASSIGN
+                    </button>
+                    <button
+                      style={{ ...styles.actionButton, borderColor: '#FF4444', color: '#FF4444' }}
+                      onClick={() => { void handleStatusUpdate({ status: 'closed' }); }}
+                      disabled={updating}
+                    >
+                      CLOSE
+                    </button>
+                  </>
+                )}
+                {bead.status === 'closed' && (
+                  <button
+                    style={{ ...styles.actionButton, borderColor: '#00FF00', color: '#00FF00' }}
+                    onClick={() => { void handleStatusUpdate({ status: 'open' }); }}
+                    disabled={updating}
+                  >
+                    REOPEN
+                  </button>
+                )}
               </div>
 
               {/* Labels */}
@@ -546,6 +616,23 @@ const styles = {
     flexWrap: 'wrap',
     gap: '8px',
     marginBottom: '16px',
+  },
+  actionBar: {
+    display: 'flex',
+    gap: '8px',
+    marginBottom: '16px',
+    paddingBottom: '16px',
+    borderBottom: '1px solid rgba(0, 255, 0, 0.1)',
+    alignItems: 'center',
+  },
+  actionButton: {
+    padding: '8px 16px',
+    fontSize: '0.75rem',
+    letterSpacing: '0.1em',
+    cursor: 'pointer',
+    fontFamily: '"Share Tech Mono", monospace',
+    border: '1px solid',
+    background: 'none',
   },
   badge: {
     fontSize: '0.7rem',

@@ -304,6 +304,7 @@ export function EpicDetailView(props: EpicDetailViewProps) {
 
   const [copied, setCopied] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
+  const [updating, setUpdating] = useState(false);
 
   const handleOpenGraph = useCallback(() => {
     setShowGraph(true);
@@ -335,6 +336,26 @@ export function EpicDetailView(props: EpicDetailViewProps) {
   const handleRefresh = useCallback(() => {
     void refresh();
   }, [refresh]);
+
+  /** Update epic status/assignee, then refresh epic + subtasks. */
+  const handleEpicStatusUpdate = useCallback(async (fields: { status?: string; assignee?: string }) => {
+    if (!epic || updating) return;
+    setUpdating(true);
+    try {
+      await api.beads.update(epic.id, fields);
+      await refresh();
+      props.onAssign?.();
+    } catch {
+      // Silently fail — epic state remains unchanged
+    } finally {
+      setUpdating(false);
+    }
+  }, [epic, updating, refresh, props]);
+
+  /** Handle agent assignment from the dropdown. */
+  const handleEpicAssign = useCallback((agentName: string) => {
+    void handleEpicStatusUpdate({ status: 'in_progress', assignee: agentName });
+  }, [handleEpicStatusUpdate]);
 
   // Close on escape key -- skip when graph overlay is open (it has its own Escape handler)
   useEffect(() => {
@@ -457,6 +478,53 @@ export function EpicDetailView(props: EpicDetailViewProps) {
                     </span>
                   </div>
                 )}
+
+                {/* Status Action Bar */}
+                <div style={styles.epicActionBar}>
+                  {epic.status === 'open' && (
+                    <>
+                      <AgentAssignDropdown
+                        beadId={epic.id}
+                        currentAssignee={epic.assignee}
+                        onAssign={handleEpicAssign}
+                      />
+                      <button
+                        style={{ ...styles.epicActionButton, borderColor: '#FF4444', color: '#FF4444' }}
+                        onClick={() => { void handleEpicStatusUpdate({ status: 'closed' }); }}
+                        disabled={updating}
+                      >
+                        CLOSE
+                      </button>
+                    </>
+                  )}
+                  {(epic.status === 'in_progress' || epic.status === 'hooked') && (
+                    <>
+                      <button
+                        style={{ ...styles.epicActionButton, borderColor: '#FFB000', color: '#FFB000' }}
+                        onClick={() => { void handleEpicStatusUpdate({ status: 'open', assignee: '' }); }}
+                        disabled={updating}
+                      >
+                        UNASSIGN
+                      </button>
+                      <button
+                        style={{ ...styles.epicActionButton, borderColor: '#FF4444', color: '#FF4444' }}
+                        onClick={() => { void handleEpicStatusUpdate({ status: 'closed' }); }}
+                        disabled={updating}
+                      >
+                        CLOSE
+                      </button>
+                    </>
+                  )}
+                  {epic.status === 'closed' && (
+                    <button
+                      style={{ ...styles.epicActionButton, borderColor: '#00FF00', color: '#00FF00' }}
+                      onClick={() => { void handleEpicStatusUpdate({ status: 'open' }); }}
+                      disabled={updating}
+                    >
+                      REOPEN
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Progress Section */}
@@ -696,6 +764,23 @@ const styles = {
     border: '1px solid',
     fontWeight: 'bold',
     letterSpacing: '0.05em',
+  },
+  epicActionBar: {
+    display: 'flex',
+    gap: '8px',
+    marginTop: '12px',
+    paddingTop: '12px',
+    borderTop: '1px solid rgba(0, 255, 0, 0.1)',
+    alignItems: 'center',
+  },
+  epicActionButton: {
+    padding: '8px 16px',
+    fontSize: '0.75rem',
+    letterSpacing: '0.1em',
+    cursor: 'pointer',
+    fontFamily: '"Share Tech Mono", monospace',
+    border: '1px solid',
+    background: 'none',
   },
   timestampRow: {
     display: 'flex',
