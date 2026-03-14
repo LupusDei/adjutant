@@ -12,9 +12,11 @@ handoffs:
 $ARGUMENTS
 ```
 
-# Execute Proposal
+# Execute Proposal (Layer 2/3 Skill)
 
 Execute an accepted proposal by fetching it from the backend and orchestrating epic creation.
+
+**Layer context**: This skill is invoked by the Coordinator (Layer 2) or a Squad Leader (Layer 3). When the resulting epic is assigned to a Squad Leader, the Coordinator MUST inject the Layer 3 Squad Leader preamble into the spawn prompt. See the Chain of Command section in `.adjutant/PRIME.md` for the preamble template.
 
 ## Usage
 
