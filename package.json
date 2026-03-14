@@ -1,6 +1,6 @@
 {
   "name": "adjutant",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Retro terminal dashboard for multi-agent orchestration with iOS companion app",
   "type": "module",
   "bin": {
@@ -37,6 +37,7 @@
     "tunnel:auto": "./scripts/tunnel.sh --no-wait",
     "setup": "npm run build:cli && node dist/cli/index.js init",
     "doctor": "npm run build:cli && node dist/cli/index.js doctor",
+    "upgrade": "npm run build:cli && node dist/cli/index.js upgrade",
     "prepublishOnly": "npm run build",
     "acceptance": "npm run --prefix backend acceptance",
     "acceptance:generate": "npm run --prefix backend acceptance -- --generate",

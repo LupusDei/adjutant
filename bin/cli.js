@@ -97,6 +97,25 @@ program
     }
   });
 
+// Upgrade command: repair and upgrade local files
+program
+  .command('upgrade')
+  .description('Repair and upgrade local Adjutant files (PRIME.md, .mcp.json, plugin)')
+  .action(async () => {
+    try {
+      const { runUpgrade } = await import('../dist/cli/commands/upgrade.js');
+      const exitCode = await runUpgrade();
+      process.exit(exitCode);
+    } catch (error) {
+      if (error.code === 'ERR_MODULE_NOT_FOUND') {
+        console.error('CLI not built. Run: npx tsc -p tsconfig.cli.json');
+        process.exit(1);
+      }
+      console.error('Error:', error.message);
+      process.exit(1);
+    }
+  });
+
 // Unhook command: remove Adjutant plugin hooks from Claude Code
 program
   .command('unhook')
