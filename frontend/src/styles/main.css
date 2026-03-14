@@ -59,7 +59,8 @@
 
   /* Non-CRT themes: use standard font smoothing */
   html[data-theme='document'],
-  html[data-theme='friendly'] {
+  html[data-theme='friendly'],
+  html[data-theme='glass'] {
     -webkit-font-smoothing: antialiased;
     font-size: 16px;
   }
@@ -482,6 +483,88 @@
     font-weight: 700;
     background-color: var(--friendly-red);
     color: #FFFFFF;
+  }
+
+  /* ============================================
+     Glass Theme — Apple-inspired frosted glass
+     ============================================ */
+
+  /* Glass header: frosted panel with subtle blur */
+  [data-theme='glass'] .app-header {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(20px) saturate(1.8);
+    -webkit-backdrop-filter: blur(20px) saturate(1.8);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    padding: 0.875rem 1.25rem;
+  }
+
+  [data-theme='glass'] .app-header::after {
+    display: none;
+  }
+
+  [data-theme='glass'] .app-header h1 {
+    text-shadow: none;
+    animation: none;
+    font-weight: 700;
+    color: var(--theme-text-primary);
+    font-size: 1rem;
+    letter-spacing: -0.01em;
+  }
+
+  /* Glass nav: rounded frosted tabs */
+  [data-theme='glass'] .app-nav {
+    gap: 6px;
+    padding: 12px 0;
+    background-color: var(--theme-bg-screen);
+  }
+
+  [data-theme='glass'] .nav-tab {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(12px) saturate(1.5);
+    -webkit-backdrop-filter: blur(12px) saturate(1.5);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 10px;
+    color: var(--theme-text-secondary);
+    font-family: var(--theme-font);
+    font-weight: 500;
+    font-size: 0.875rem;
+    letter-spacing: -0.01em;
+    text-transform: none;
+    padding: 0.625rem 1.75rem;
+    transition: all 0.2s ease;
+  }
+
+  [data-theme='glass'] .nav-tab::before {
+    display: none;
+  }
+
+  [data-theme='glass'] .nav-tab:hover {
+    background: rgba(255, 255, 255, 0.85);
+    border-color: rgba(0, 122, 255, 0.2);
+    color: var(--theme-text-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    transform: translateY(-1px);
+  }
+
+  [data-theme='glass'] .nav-tab.active {
+    background: rgba(0, 122, 255, 0.12);
+    border-color: rgba(0, 122, 255, 0.3);
+    color: var(--theme-accent);
+    box-shadow: 0 2px 12px rgba(0, 122, 255, 0.15);
+    text-shadow: none;
+    font-weight: 600;
+  }
+
+  [data-theme='glass'] .nav-tab-badge {
+    border-radius: 10px;
+    font-weight: 600;
+    background-color: var(--theme-accent);
+    color: #FFFFFF;
+  }
+
+  [data-theme='glass'] .nav-tab:focus-visible {
+    box-shadow: var(--theme-focus-ring);
+    outline: none;
   }
 
   /* Document theme: refined nav with generous spacing */

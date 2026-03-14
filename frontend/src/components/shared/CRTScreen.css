@@ -798,6 +798,82 @@
 }
 
 /* ============================================
+   Non-CRT Font Override
+   Forces theme font on all descendants,
+   overriding inline fontFamily in components.
+   ============================================ */
+[data-theme='document'] .crt-content *,
+[data-theme='friendly'] .crt-content *,
+[data-theme='glass'] .crt-content * {
+  font-family: var(--theme-font) !important;
+}
+
+/* Preserve monospace for code blocks and pre elements */
+[data-theme='document'] .crt-content code,
+[data-theme='document'] .crt-content pre,
+[data-theme='friendly'] .crt-content code,
+[data-theme='friendly'] .crt-content pre,
+[data-theme='glass'] .crt-content code,
+[data-theme='glass'] .crt-content pre {
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace !important;
+}
+
+/* ============================================
+   Glass-Specific Component Overrides
+   Frosted panels, rounded corners, softer borders
+   ============================================ */
+
+/* Glass sections/panels: frosted with rounded corners */
+[data-theme='glass'] .crt-content section {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px) saturate(1.5);
+  -webkit-backdrop-filter: blur(12px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.04);
+}
+
+/* Glass buttons: softer, rounded */
+[data-theme='glass'] .crt-content button {
+  border-radius: 8px !important;
+  transition: all 0.2s ease;
+}
+
+[data-theme='glass'] .crt-content button:hover {
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.15);
+}
+
+/* Glass inputs: rounded with subtle focus ring */
+[data-theme='glass'] .crt-content input,
+[data-theme='glass'] .crt-content textarea,
+[data-theme='glass'] .crt-content select {
+  border-radius: 8px !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+}
+
+[data-theme='glass'] .crt-content input:focus,
+[data-theme='glass'] .crt-content textarea:focus,
+[data-theme='glass'] .crt-content select:focus {
+  border-color: rgba(0, 122, 255, 0.4) !important;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15) !important;
+}
+
+/* Glass scrollbar */
+[data-theme='glass'] ::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+[data-theme='glass'] ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+
+[data-theme='glass'] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* ============================================
    Responsive Adjustments
    ============================================ */
 

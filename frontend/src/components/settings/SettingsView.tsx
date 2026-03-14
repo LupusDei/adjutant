@@ -359,8 +359,8 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                       <QRCodeSVG
                         value={ngrokUrl}
                         size={256}
-                        bgColor="#0A0A0A"
-                        fgColor={colors.primary}
+                        bgColor={THEME_CONFIGS[theme].crtEffects ? '#0A0A0A' : '#FFFFFF'}
+                        fgColor={THEME_CONFIGS[theme].crtEffects ? '#20C20E' : '#1C1C1E'}
                         level="M"
                       />
                     </div>
@@ -617,8 +617,8 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
               <QRCodeSVG
                 value="https://buymeacoffee.com/wsaults"
                 size={280}
-                bgColor="#0A0A0A"
-                fgColor={colors.primary}
+                bgColor={THEME_CONFIGS[theme].crtEffects ? '#0A0A0A' : '#FFFFFF'}
+                fgColor={THEME_CONFIGS[theme].crtEffects ? '#20C20E' : '#1C1C1E'}
                 level="M"
               />
             </div>

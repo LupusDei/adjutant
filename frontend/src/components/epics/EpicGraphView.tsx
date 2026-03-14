@@ -338,11 +338,11 @@ const styles = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: 'var(--theme-bg-screen, #0a0a0a)',
     zIndex: 2000,
     display: 'flex',
     flexDirection: 'column',
-    fontFamily: '"Share Tech Mono", "Courier New", monospace',
+    fontFamily: 'var(--theme-font, "Share Tech Mono", "Courier New", monospace)',
     animation: 'epicGraphFadeIn 0.2s ease-out',
   } satisfies CSSProperties,
 
