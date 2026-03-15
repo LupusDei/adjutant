@@ -332,12 +332,15 @@ beadsRouter.get("/:id/children", async (req, res) => {
  */
 beadsRouter.get("/:id", async (req, res) => {
   const beadId = req.params["id"];
+  const projectParam = req.query["project"] as string | undefined;
 
   if (!beadId) {
     return res.status(400).json(badRequest("Bead ID is required"));
   }
 
-  const result = await getBead(beadId);
+  const result = await getBead(beadId, {
+    ...(projectParam && { project: projectParam }),
+  });
 
   if (!result.success) {
     const statusCode = result.error?.code === "BEAD_NOT_FOUND" ? 404 : 500;

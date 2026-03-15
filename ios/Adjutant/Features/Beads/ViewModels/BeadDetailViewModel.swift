@@ -20,12 +20,16 @@ final class BeadDetailViewModel: BaseViewModel {
     // MARK: - Private Properties
 
     private let beadId: String
+    /// Project name for routing the query to the correct database.
+    /// When nil, the backend resolves via prefix map (may fail for non-town beads).
+    private let project: String?
     private let apiClient: APIClient
 
     // MARK: - Initialization
 
-    init(beadId: String, apiClient: APIClient? = nil) {
+    init(beadId: String, project: String? = nil, apiClient: APIClient? = nil) {
         self.beadId = beadId
+        self.project = project
         self.apiClient = apiClient ?? AppState.shared.apiClient
         super.init()
     }
@@ -41,7 +45,7 @@ final class BeadDetailViewModel: BaseViewModel {
     /// Loads full bead detail via GET /api/beads/:id
     func loadBead() async {
         await performAsyncAction {
-            let detail = try await self.apiClient.getBeadDetail(id: self.beadId)
+            let detail = try await self.apiClient.getBeadDetail(id: self.beadId, project: self.project)
             self.beadDetail = detail
             self.bead = detail.asBeadInfo
         }

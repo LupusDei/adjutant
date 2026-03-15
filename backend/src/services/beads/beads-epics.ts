@@ -4,15 +4,14 @@
  * Handles epic type checking, children fetching, and epic listing with progress.
  */
 
-import { execBd, resolveBeadsDir, type BeadsIssue } from "../bd-client.js";
-import { listAllBeadsDirs, resolveWorkspaceRoot } from "../workspace/index.js";
+import { execBd, type BeadsIssue } from "../bd-client.js";
 import type {
   BeadInfo,
   BeadsServiceResult,
   EpicWithChildren,
 } from "./types.js";
-import { resolveBeadDatabase } from "./beads-database.js";
-import { ensurePrefixMap, loadPrefixMap, prefixToSource } from "./beads-prefix-map.js";
+import { buildDatabaseList, resolveBeadDatabase } from "./beads-database.js";
+import { ensurePrefixMap, prefixToSource } from "./beads-prefix-map.js";
 import { transformBead } from "./beads-transform.js";
 import { processEpicChildren, buildEpicWithChildren } from "./beads-dependency.js";
 
@@ -99,88 +98,51 @@ export async function getEpicChildren(
 
 /**
  * Gets all epics with their progress computed server-side.
- * Uses `bd show` per epic to get dependency data (children with status).
+ * Uses `buildDatabaseList` to query only the correct project directory,
+ * matching the pattern used by listAllBeads/listBeads.
+ *
+ * @param options.project - "all" for all databases, specific project name for that project only,
+ *                          undefined/empty defaults to "all" for backwards compatibility
  */
 export async function listEpicsWithProgress(
   options: { project?: string; status?: string } = {}
 ): Promise<BeadsServiceResult<EpicWithChildren[]>> {
   try {
     await ensurePrefixMap();
-    const townRoot = resolveWorkspaceRoot();
-    const townBeadsDir = resolveBeadsDir(townRoot);
 
-    // Fetch epics from town database
+    // Use buildDatabaseList to resolve the correct database directories,
+    // same pattern as listAllBeads. Default to "all" when no project specified.
+    const effectiveProject = options.project?.trim() || "all";
+    const databasesToQuery = await buildDatabaseList(effectiveProject);
+
     const listArgs = ["list", "--json", "--type", "epic", "--all", "--limit", "200"];
-    const epicResult = await execBd<BeadsIssue[]>(listArgs, {
-      cwd: townRoot,
-      beadsDir: townBeadsDir,
-    });
 
-    if (!epicResult.success || !epicResult.data) {
-      return { success: true, data: [] };
-    }
+    // Fetch epics from each database, tracking which db they came from
+    const allEpicIssues: Array<{ issue: BeadsIssue; db: { workDir: string; beadsDir: string; source: string } }> = [];
 
-    // Also fetch from project databases
-    const beadsDirs = await listAllBeadsDirs();
-    const projectDirs = beadsDirs.filter((d) => d.project !== null);
-
-    const allEpicIssues = [...epicResult.data];
-    for (const projDir of projectDirs) {
-      const projResult = await execBd<BeadsIssue[]>(listArgs, {
-        cwd: projDir.workDir,
-        beadsDir: projDir.path,
+    for (const db of databasesToQuery) {
+      const result = await execBd<BeadsIssue[]>(listArgs, {
+        cwd: db.workDir,
+        beadsDir: db.beadsDir,
       });
-      if (projResult.success && projResult.data) {
-        allEpicIssues.push(...projResult.data);
-      }
-    }
-
-    // Filter by status if requested
-    const statusFilter = options.status;
-    let filteredEpics = allEpicIssues.filter((e) => !e.wisp);
-    if (statusFilter && statusFilter !== "all") {
-      filteredEpics = filteredEpics.filter((e) => e.status === statusFilter);
-    }
-
-    // Filter by project if requested
-    if (options.project) {
-      const projectFilter = options.project;
-      filteredEpics = filteredEpics.filter((e) => {
-        const source = prefixToSource(e.id);
-        return source === projectFilter;
-      });
-    }
-
-    // Build a map of epicId -> {workDir, beadsDir} for bd show lookups
-    const epicDbMap = new Map<string, { workDir: string; beadsDir: string }>();
-    for (const epic of filteredEpics) {
-      const prefix = epic.id.split("-")[0];
-      if (!prefix) continue;
-      const map = loadPrefixMap();
-      const source = map.get(prefix) ?? "town";
-      if (source === "town" || source === "unknown") {
-        epicDbMap.set(epic.id, { workDir: townRoot, beadsDir: townBeadsDir });
-      } else {
-        const projDir = projectDirs.find((d) => d.project === source);
-        if (projDir) {
-          epicDbMap.set(epic.id, { workDir: projDir.workDir, beadsDir: projDir.path });
-        } else {
-          epicDbMap.set(epic.id, { workDir: townRoot, beadsDir: townBeadsDir });
+      if (result.success && result.data) {
+        for (const issue of result.data) {
+          allEpicIssues.push({ issue, db });
         }
       }
     }
 
-    // For each epic, compute progress
-    const results: EpicWithChildren[] = [];
-    for (const epic of filteredEpics) {
-      const source = prefixToSource(epic.id);
-      const epicInfo = transformBead(epic, source);
-      const db = epicDbMap.get(epic.id);
+    // Filter wisps and by status
+    let filtered = allEpicIssues.filter((e) => !e.issue.wisp);
+    const statusFilter = options.status;
+    if (statusFilter && statusFilter !== "all") {
+      filtered = filtered.filter((e) => e.issue.status === statusFilter);
+    }
 
-      if (!db) {
-        results.push({ epic: epicInfo, children: [], totalCount: 0, closedCount: 0, progress: 0 });
-        continue;
-      }
+    // For each epic, compute progress using its own database
+    const results: EpicWithChildren[] = [];
+    for (const { issue: epic, db } of filtered) {
+      const epicInfo = transformBead(epic, db.source);
 
       // Closed epics: skip the expensive `bd show` call
       if (epic.status === "closed") {
@@ -210,7 +172,7 @@ export async function listEpicsWithProgress(
       results.push(buildEpicWithChildren(epicInfo, detail));
     }
 
-    // Sort by updatedAt descending (in-place to preserve EpicWithChildren type)
+    // Sort by updatedAt descending
     results.sort((a, b) => {
       const aTime = a.epic.updatedAt ?? a.epic.createdAt;
       const bTime = b.epic.updatedAt ?? b.epic.createdAt;

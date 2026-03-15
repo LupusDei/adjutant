@@ -267,9 +267,14 @@ extension APIClient {
     }
 
     /// Get detailed information about a single bead.
-    public func getBeadDetail(id: String) async throws -> BeadDetail {
+    /// Pass `project` to route the query to the correct project database.
+    public func getBeadDetail(id: String, project: String? = nil) async throws -> BeadDetail {
         let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        return try await requestWithEnvelope(.get, path: "/beads/\(encodedId)")
+        var queryItems: [URLQueryItem] = []
+        if let project {
+            queryItems.append(URLQueryItem(name: "project", value: project))
+        }
+        return try await requestWithEnvelope(.get, path: "/beads/\(encodedId)", queryItems: queryItems)
     }
 
     /// List available bead sources (projects with beads databases)

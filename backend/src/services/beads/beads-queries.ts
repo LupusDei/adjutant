@@ -55,7 +55,8 @@ import {
  * @param beadId Full bead ID (e.g., "hq-vts8" or "adj-67tta")
  */
 export async function getBead(
-  beadId: string
+  beadId: string,
+  options?: { project?: string }
 ): Promise<BeadsServiceResult<BeadDetail>> {
   try {
     await ensurePrefixMap();
@@ -68,15 +69,49 @@ export async function getBead(
       };
     }
 
-    const db = await resolveBeadDatabase(beadId);
+    // When project is provided, resolve directly to that project's database
+    // instead of relying on the prefix map (which may be stale or wrong).
+    let db: { workDir: string; beadsDir: string } | { error: { code: string; message: string } };
+    if (options?.project) {
+      const databases = await buildDatabaseList(options.project);
+      if (databases.length > 0) {
+        const first = databases[0]!;
+        db = { workDir: first.workDir, beadsDir: first.beadsDir };
+      } else {
+        db = await resolveBeadDatabase(beadId);
+      }
+    } else {
+      db = await resolveBeadDatabase(beadId);
+    }
     if ("error" in db) {
       return { success: false, error: db.error };
     }
 
-    const result = await execBd<BeadsIssue[]>(["show", beadId, "--json"], {
+    let result = await execBd<BeadsIssue[]>(["show", beadId, "--json"], {
       cwd: db.workDir,
       beadsDir: db.beadsDir,
     });
+
+    // Fallback: if bead not found in the prefix-resolved database, search all
+    // databases. The prefix map may be stale or the bead may live in a project
+    // database that wasn't mapped. This prevents BEAD_NOT_FOUND errors when
+    // navigating to beads from a different active project.
+    if ((!result.success || !result.data || result.data.length === 0) && !options?.project) {
+      const allDatabases = await buildDatabaseList("all");
+      for (const fallbackDb of allDatabases) {
+        // Skip the database we already tried
+        if (fallbackDb.workDir === db.workDir && fallbackDb.beadsDir === db.beadsDir) continue;
+
+        const fallbackResult = await execBd<BeadsIssue[]>(["show", beadId, "--json"], {
+          cwd: fallbackDb.workDir,
+          beadsDir: fallbackDb.beadsDir,
+        });
+        if (fallbackResult.success && fallbackResult.data && fallbackResult.data.length > 0) {
+          result = fallbackResult;
+          break;
+        }
+      }
+    }
 
     if (!result.success || !result.data || result.data.length === 0) {
       return {

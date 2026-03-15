@@ -379,7 +379,7 @@ describe("beads routes", () => {
       expect(response.body.data.id).toBe("hq-vts8");
       expect(response.body.data.title).toBe("Test Bead Details");
       expect(response.body.data.description).toBe("Full description of the bead");
-      expect(getBead).toHaveBeenCalledWith("hq-vts8");
+      expect(getBead).toHaveBeenCalledWith("hq-vts8", {});
     });
 
     it("should return full BeadDetail fields", async () => {
@@ -485,7 +485,7 @@ describe("beads routes", () => {
       expect(response.status).toBe(200);
       expect(response.body.data.id).toBe("adj-67tta");
       expect(response.body.data.source).toBe("adjutant");
-      expect(getBead).toHaveBeenCalledWith("adj-67tta");
+      expect(getBead).toHaveBeenCalledWith("adj-67tta", {});
     });
   });
 
