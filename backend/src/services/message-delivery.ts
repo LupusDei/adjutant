@@ -9,17 +9,23 @@
 import { getEventBus } from "./event-bus.js";
 import { getSessionBridge } from "./session-bridge.js";
 import type { MessageStore } from "./message-store.js";
+import type { AdjutantState } from "./adjutant/state-store.js";
 import { logInfo, logWarn } from "../utils/index.js";
 
 /**
  * Initialize the message delivery service.
  * Subscribes to agent connection events and flushes pending messages.
+ *
+ * @param state - AdjutantState for looking up agent disconnectedAt timestamps.
+ *                When provided, messages sent after the agent's last disconnect
+ *                are delivered (catching messages sent during downtime). Without
+ *                it, falls back to session createdAt (adj-091 behavior).
  */
-export function initMessageDelivery(store: MessageStore): void {
+export function initMessageDelivery(store: MessageStore, state?: AdjutantState): void {
   const bus = getEventBus();
 
   bus.on("mcp:agent_connected", ({ agentId }) => {
-    deliverPendingMessages(store, agentId).catch((err) => {
+    deliverPendingMessages(store, agentId, state).catch((err) => {
       logWarn("Failed to deliver pending messages", { agentId, error: String(err) });
     });
   });
@@ -27,7 +33,11 @@ export function initMessageDelivery(store: MessageStore): void {
   logInfo("Message delivery service initialized");
 }
 
-async function deliverPendingMessages(store: MessageStore, agentId: string): Promise<void> {
+async function deliverPendingMessages(
+  store: MessageStore,
+  agentId: string,
+  state?: AdjutantState
+): Promise<void> {
   let bridge;
   try {
     bridge = getSessionBridge();
@@ -38,12 +48,21 @@ async function deliverPendingMessages(store: MessageStore, agentId: string): Pro
   const sessions = bridge.registry.findByName(agentId);
   if (sessions.length === 0) return;
 
-  // Only deliver messages sent after the session was created to prevent
-  // stale messages from previous agent lifecycles being replayed (adj-091).
-  const earliestSession = sessions.reduce((oldest, s) =>
-    s.createdAt < oldest.createdAt ? s : oldest
-  );
-  const since = earliestSession.createdAt;
+  // Determine the cutoff time for message delivery:
+  // 1. Use the agent's disconnectedAt from the profile (catches messages sent
+  //    while the agent was offline — between disconnect and reconnect)
+  // 2. Fall back to the earliest session's createdAt (adj-091 behavior: prevents
+  //    stale messages from previous lifecycles being replayed)
+  let since: Date;
+  const profile = state?.getAgentProfile(agentId);
+  if (profile?.disconnectedAt) {
+    since = new Date(profile.disconnectedAt);
+  } else {
+    const earliestSession = sessions.reduce((oldest, s) =>
+      s.createdAt < oldest.createdAt ? s : oldest
+    );
+    since = earliestSession.createdAt;
+  }
 
   const pending = store.getPendingForRecipient(agentId, since);
   if (pending.length === 0) return;

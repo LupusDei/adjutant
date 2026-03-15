@@ -229,7 +229,7 @@ const server = app.listen(PORT, () => {
   wireSpawnHealthChecks();
 
   // Initialize message delivery (flushes pending messages when agents connect)
-  initMessageDelivery(messageStore);
+  initMessageDelivery(messageStore, adjutantState);
 
   // Initialize bead assignment notification (auto-messages agents on assignment)
   initBeadAssignNotification(messageStore);
