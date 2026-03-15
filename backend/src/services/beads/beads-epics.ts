@@ -142,6 +142,15 @@ export async function listEpicsWithProgress(
       filteredEpics = filteredEpics.filter((e) => e.status === statusFilter);
     }
 
+    // Filter by project if requested
+    if (options.project) {
+      const projectFilter = options.project;
+      filteredEpics = filteredEpics.filter((e) => {
+        const source = prefixToSource(e.id);
+        return source === projectFilter;
+      });
+    }
+
     // Build a map of epicId -> {workDir, beadsDir} for bd show lookups
     const epicDbMap = new Map<string, { workDir: string; beadsDir: string }>();
     for (const epic of filteredEpics) {

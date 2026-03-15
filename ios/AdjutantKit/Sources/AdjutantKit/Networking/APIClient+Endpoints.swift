@@ -319,8 +319,11 @@ extension APIClient {
     }
 
     /// List epics with server-computed progress using the dependency graph.
-    public func getEpicsWithProgress(status: String = "all") async throws -> [EpicWithProgressResponse] {
-        let queryItems = [URLQueryItem(name: "status", value: status)]
+    public func getEpicsWithProgress(status: String = "all", project: String? = nil) async throws -> [EpicWithProgressResponse] {
+        var queryItems = [URLQueryItem(name: "status", value: status)]
+        if let project {
+            queryItems.append(URLQueryItem(name: "project", value: project))
+        }
         return try await requestWithEnvelope(
             .get,
             path: "/beads/epics-with-progress",

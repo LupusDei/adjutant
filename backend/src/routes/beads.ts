@@ -275,9 +275,11 @@ beadsRouter.get("/graph", async (req, res) => {
  */
 beadsRouter.get("/epics-with-progress", async (req, res) => {
   const statusParam = req.query["status"] as string | undefined;
+  const projectParam = req.query["project"] as string | undefined;
 
   const result = await listEpicsWithProgress({
     status: statusParam ?? "all",
+    ...(projectParam && { project: projectParam }),
   });
 
   if (!result.success) {

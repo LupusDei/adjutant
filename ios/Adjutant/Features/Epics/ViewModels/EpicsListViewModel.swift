@@ -54,6 +54,8 @@ final class EpicsListViewModel: BaseViewModel {
 
     private var pollingTask: Task<Void, Never>?
     private let pollingInterval: TimeInterval = 30.0
+    /// Active project name for scoping epics (nil = show all)
+    private var activeProject: String?
 
     // MARK: - Initialization
 
@@ -70,6 +72,7 @@ final class EpicsListViewModel: BaseViewModel {
 
     override func onAppear() {
         super.onAppear()
+        loadActiveProjectScope()
         startPolling()
     }
 
@@ -77,6 +80,25 @@ final class EpicsListViewModel: BaseViewModel {
         super.onDisappear()
         pollingTask?.cancel()
         pollingTask = nil
+    }
+
+    // MARK: - Project Scoping
+
+    /// Loads the active project and scopes epics to it (same pattern as BeadsListViewModel).
+    private func loadActiveProjectScope() {
+        Task<Void, Never> {
+            do {
+                let projects = try await apiClient.getProjects()
+                if let active = projects.first(where: { $0.active }) {
+                    if self.activeProject == nil {
+                        self.activeProject = active.name
+                        await self.loadEpics()
+                    }
+                }
+            } catch {
+                // Non-critical — epics will show unfiltered
+            }
+        }
     }
 
     // MARK: - Data Loading
@@ -90,7 +112,10 @@ final class EpicsListViewModel: BaseViewModel {
         await performAsyncAction { [weak self] in
             guard let self = self else { return }
 
-            let response = try await self.apiClient.getEpicsWithProgress(status: "all")
+            let response = try await self.apiClient.getEpicsWithProgress(
+                status: "all",
+                project: self.activeProject
+            )
 
             self.processEpics(response)
 
