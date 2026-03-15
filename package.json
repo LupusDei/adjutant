@@ -24,7 +24,7 @@
     "dev:remote": "./scripts/dev.sh",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev",
-    "kill": "lsof -ti:4200,4201 | xargs kill -9 2>/dev/null || true",
+    "kill": "./scripts/safe-kill.sh",
     "build": "npm run build:cli && npm run build:backend && npm run build:frontend",
     "build:cli": "npx tsc -p tsconfig.cli.json",
     "build:backend": "cd backend && npm run build",
