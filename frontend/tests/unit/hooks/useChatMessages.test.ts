@@ -764,6 +764,7 @@ describe('useChatMessages', () => {
       expect(result.current.messages[0]!.optimisticStatus).toBe('delivered');
 
       // Now if the same message arrives via WS, it should NOT create a duplicate
+      // (from: 'user' messages are dropped entirely by the subscriber)
       act(() => {
         subscriberCallback!({
           id: 'server-id-ws-1',
@@ -774,7 +775,52 @@ describe('useChatMessages', () => {
         });
       });
 
-      // Still only one message — deduplicated by ID
+      // Still only one message — user's own WS echo is dropped
+      expect(result.current.messages).toHaveLength(1);
+    });
+
+    it('should not duplicate user-sent messages from WS broadcast (adj-106)', async () => {
+      vi.mocked(api.messages.list).mockResolvedValue(
+        mockListResponse([])
+      );
+      vi.mocked(api.messages.send).mockResolvedValue({
+        messageId: 'server-msg-1',
+        timestamp: '2026-02-21T11:00:00Z',
+      });
+
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
+        subscriberCallback = cb;
+        return vi.fn();
+      });
+
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // User sends a message (optimistic + HTTP)
+      await act(async () => {
+        await result.current.sendMessage('Hello agent');
+      });
+
+      expect(result.current.messages).toHaveLength(1);
+      expect(result.current.messages[0]!.body).toBe('Hello agent');
+
+      // Backend broadcasts the same message via WebSocket (from: 'user')
+      // This should be ignored — the optimistic message already covers it
+      act(() => {
+        subscriberCallback!({
+          id: 'server-msg-1',
+          from: 'user',
+          to: 'agent-1',
+          body: 'Hello agent',
+          timestamp: '2026-02-21T11:00:00Z',
+        });
+      });
+
+      // Still only one message — no duplicate
       expect(result.current.messages).toHaveLength(1);
     });
   });

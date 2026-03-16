@@ -95,7 +95,12 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
       // Filter by agent scope: only accept messages to/from the selected agent
       if (agentId && incoming.from !== agentId && incoming.to !== agentId) return;
 
-      // Convert to ChatMessage shape and append, deduplicating by ID
+      // Skip user's own messages — they are already in state as optimistic entries.
+      // The backend broadcasts all messages via WebSocket (including ones the user
+      // just sent via HTTP POST), which would cause duplicates without this guard.
+      if (incoming.from === 'user') return;
+
+      // Convert to ChatMessage shape and append, deduplicating by server ID
       setMessages((prev) => {
         if (prev.some((m) => m.id === incoming.id)) return prev;
 
