@@ -59,7 +59,7 @@ const TABS: Tab[] = [
   { id: "dashboard", label: "OVERVIEW", icon: "📊" },
   { id: "chat", label: "CHAT", icon: "💬" },
   { id: "epics", label: "EPICS", icon: "📋" },
-  { id: "crew", label: "CREW", icon: "👥" },
+  { id: "crew", label: "AGENTS", icon: "👥" },
   { id: "beads", label: "BEADS", icon: "📿" },
   { id: "personas", label: "PERSONAS", icon: "🎭" },
   { id: "timeline", label: "TIMELINE", icon: "⏱" },
