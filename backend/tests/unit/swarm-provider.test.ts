@@ -1,23 +1,34 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { SwarmProvider } from "../../src/services/workspace/swarm-provider.js";
 
+// Mock homedir to prevent loadRegisteredProjects() from reading the real
+// ~/.adjutant/projects.json, which would pollute test results with real data.
+vi.mock("os", async () => {
+  const actual = await vi.importActual<typeof import("os")>("os");
+  return { ...actual, homedir: () => TEST_HOMEDIR };
+});
+
 const TEST_DIR = join(tmpdir(), `swarm-provider-test-${Date.now()}`);
+const TEST_HOMEDIR = join(tmpdir(), `swarm-provider-home-${Date.now()}`);
 
 describe("SwarmProvider", () => {
   beforeEach(() => {
     mkdirSync(TEST_DIR, { recursive: true });
+    mkdirSync(TEST_HOMEDIR, { recursive: true });
   });
 
   afterEach(() => {
-    try {
-      if (existsSync(TEST_DIR)) {
-        rmSync(TEST_DIR, { recursive: true, force: true });
+    for (const dir of [TEST_DIR, TEST_HOMEDIR]) {
+      try {
+        if (existsSync(dir)) {
+          rmSync(dir, { recursive: true, force: true });
+        }
+      } catch {
+        // Ignore cleanup errors
       }
-    } catch {
-      // Ignore cleanup errors
     }
   });
 
@@ -107,6 +118,88 @@ describe("SwarmProvider", () => {
       expect(dirs[0].project).toBeNull();
     });
 
+    it("discovers Dolt-backed sub-projects (.beads/dolt/)", async () => {
+      mkdirSync(join(TEST_DIR, ".beads"), { recursive: true });
+
+      // Sub-project with Dolt backend (no beads.db)
+      mkdirSync(join(TEST_DIR, "doltproj", ".beads", "dolt"), { recursive: true });
+
+      const provider = new SwarmProvider(TEST_DIR);
+      const dirs = await provider.listBeadsDirs();
+
+      expect(dirs).toHaveLength(2);
+      const doltProj = dirs.find((d) => d.project === "doltproj");
+      expect(doltProj).toBeDefined();
+      expect(doltProj!.workDir).toBe(join(TEST_DIR, "doltproj"));
+    });
+
+    it("discovers sub-projects with only config.yaml", async () => {
+      mkdirSync(join(TEST_DIR, ".beads"), { recursive: true });
+
+      mkdirSync(join(TEST_DIR, "configonly", ".beads"), { recursive: true });
+      writeFileSync(join(TEST_DIR, "configonly", ".beads", "config.yaml"), "prefix: co");
+
+      const provider = new SwarmProvider(TEST_DIR);
+      const dirs = await provider.listBeadsDirs();
+
+      expect(dirs).toHaveLength(2);
+      const configProj = dirs.find((d) => d.project === "configonly");
+      expect(configProj).toBeDefined();
+    });
+
+    it("includes externally registered projects from projects.json", async () => {
+      mkdirSync(join(TEST_DIR, ".beads"), { recursive: true });
+
+      // Create an external project directory outside TEST_DIR
+      const externalDir = join(tmpdir(), `swarm-external-${Date.now()}`);
+      mkdirSync(join(externalDir, ".beads"), { recursive: true });
+      writeFileSync(join(externalDir, ".beads", "beads.db"), "");
+
+      // Write projects.json in the mocked homedir
+      const adjutantDir = join(TEST_HOMEDIR, ".adjutant");
+      mkdirSync(adjutantDir, { recursive: true });
+      writeFileSync(join(adjutantDir, "projects.json"), JSON.stringify({
+        projects: [
+          { name: "external-proj", path: externalDir, hasBeads: true, active: false },
+        ],
+      }));
+
+      const provider = new SwarmProvider(TEST_DIR);
+      const dirs = await provider.listBeadsDirs();
+
+      expect(dirs).toHaveLength(2);
+      const ext = dirs.find((d) => d.project === "external-proj");
+      expect(ext).toBeDefined();
+      expect(ext!.workDir).toBe(externalDir);
+
+      // Cleanup
+      rmSync(externalDir, { recursive: true, force: true });
+    });
+
+    it("deduplicates projects found by both filesystem scan and projects.json", async () => {
+      mkdirSync(join(TEST_DIR, ".beads"), { recursive: true });
+
+      // Sub-project found by child scan
+      mkdirSync(join(TEST_DIR, "shared", ".beads"), { recursive: true });
+      writeFileSync(join(TEST_DIR, "shared", ".beads", "beads.db"), "");
+
+      // Same project also registered in projects.json
+      const adjutantDir = join(TEST_HOMEDIR, ".adjutant");
+      mkdirSync(adjutantDir, { recursive: true });
+      writeFileSync(join(adjutantDir, "projects.json"), JSON.stringify({
+        projects: [
+          { name: "shared", path: join(TEST_DIR, "shared"), hasBeads: true },
+        ],
+      }));
+
+      const provider = new SwarmProvider(TEST_DIR);
+      const dirs = await provider.listBeadsDirs();
+
+      // Should be 2 (root + shared), not 3 (no duplicate)
+      expect(dirs).toHaveLength(2);
+      expect(dirs.filter((d) => d.project === "shared")).toHaveLength(1);
+    });
+
     it("follows .beads/redirect for sub-projects", async () => {
       mkdirSync(join(TEST_DIR, ".beads"), { recursive: true });
 
@@ -170,6 +263,28 @@ describe("SwarmProvider", () => {
 
       expect(names).toEqual([]);
     });
+
+    it("includes externally registered projects from projects.json", async () => {
+      // Create external project
+      const externalDir = join(tmpdir(), `swarm-external-names-${Date.now()}`);
+      mkdirSync(join(externalDir, ".beads"), { recursive: true });
+      writeFileSync(join(externalDir, ".beads", "beads.db"), "");
+
+      const adjutantDir = join(TEST_HOMEDIR, ".adjutant");
+      mkdirSync(adjutantDir, { recursive: true });
+      writeFileSync(join(adjutantDir, "projects.json"), JSON.stringify({
+        projects: [
+          { name: "ext-proj", path: externalDir, hasBeads: true },
+        ],
+      }));
+
+      const provider = new SwarmProvider(TEST_DIR);
+      const names = await provider.listProjectNames();
+
+      expect(names).toContain("ext-proj");
+
+      rmSync(externalDir, { recursive: true, force: true });
+    });
   });
 
   // ===========================================================================
@@ -200,6 +315,27 @@ describe("SwarmProvider", () => {
       const result = provider.resolveProjectPath("nonexistent");
 
       expect(result).toBeNull();
+    });
+
+    it("resolves externally registered project path", () => {
+      const externalDir = join(tmpdir(), `swarm-external-resolve-${Date.now()}`);
+      mkdirSync(join(externalDir, ".beads"), { recursive: true });
+      writeFileSync(join(externalDir, ".beads", "beads.db"), "");
+
+      const adjutantDir = join(TEST_HOMEDIR, ".adjutant");
+      mkdirSync(adjutantDir, { recursive: true });
+      writeFileSync(join(adjutantDir, "projects.json"), JSON.stringify({
+        projects: [
+          { name: "ext-resolve", path: externalDir, hasBeads: true },
+        ],
+      }));
+
+      const provider = new SwarmProvider(TEST_DIR);
+      const result = provider.resolveProjectPath("ext-resolve");
+
+      expect(result).toBe(externalDir);
+
+      rmSync(externalDir, { recursive: true, force: true });
     });
   });
 });

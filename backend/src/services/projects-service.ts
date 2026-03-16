@@ -157,10 +157,16 @@ function nameFromCloneUrl(url: string): string {
 // ============================================================================
 
 /**
- * Check if a directory contains a beads database (.beads/beads.db).
+ * Check if a directory contains a beads database.
+ * Accepts: beads.db (SQLite), dolt/ (Dolt backend), or config.yaml (minimal signal).
  */
 function hasBeadsDb(dirPath: string): boolean {
-  return existsSync(join(dirPath, ".beads", "beads.db"));
+  const beadsDir = join(dirPath, ".beads");
+  return (
+    existsSync(join(beadsDir, "beads.db")) ||
+    existsSync(join(beadsDir, "dolt")) ||
+    existsSync(join(beadsDir, "config.yaml"))
+  );
 }
 
 /**

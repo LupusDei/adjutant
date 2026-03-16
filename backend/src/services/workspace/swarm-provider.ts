@@ -11,6 +11,7 @@
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { readFile } from "fs/promises";
 import { join, resolve, basename } from "path";
+import { homedir } from "os";
 import type {
   WorkspaceProvider,
   WorkspaceConfig,
@@ -38,6 +39,48 @@ function resolveBeadsDir(workDir: string): string {
 function extractBeadPrefix(beadId: string): string | null {
   const match = beadId.match(/^([a-z0-9]{2,5})-/i);
   return match?.[1]?.toLowerCase() ?? null;
+}
+
+/** Minimal project shape from ~/.adjutant/projects.json */
+interface RegisteredProject {
+  name: string;
+  path: string;
+  hasBeads?: boolean;
+  active?: boolean;
+}
+
+/**
+ * Check if a directory has a beads database.
+ * Accepts: beads.db (SQLite), dolt/ (Dolt backend), or config.yaml (minimal signal).
+ */
+function hasBeadsDatabase(dirPath: string): boolean {
+  const beadsDir = join(dirPath, ".beads");
+  return (
+    existsSync(join(beadsDir, "beads.db")) ||
+    existsSync(join(beadsDir, "dolt")) ||
+    existsSync(join(beadsDir, "config.yaml"))
+  );
+}
+
+/**
+ * Load registered projects from ~/.adjutant/projects.json.
+ * Returns only projects where hasBeads is true and the path exists.
+ */
+function loadRegisteredProjects(): RegisteredProject[] {
+  const projectsFile = join(homedir(), ".adjutant", "projects.json");
+  if (!existsSync(projectsFile)) return [];
+
+  try {
+    const raw = readFileSync(projectsFile, "utf8");
+    const store = JSON.parse(raw) as { projects?: RegisteredProject[] };
+    if (!Array.isArray(store.projects)) return [];
+
+    return store.projects.filter(
+      (p) => p.path && existsSync(p.path) && hasBeadsDatabase(p.path)
+    );
+  } catch {
+    return [];
+  }
 }
 
 // ============================================================================
@@ -99,6 +142,7 @@ export class SwarmProvider implements WorkspaceProvider {
 
   async listBeadsDirs(): Promise<BeadsDirInfo[]> {
     const results: BeadsDirInfo[] = [];
+    const seenPaths = new Set<string>();
 
     // Include the project root's .beads/ directory if it exists
     const beadsPath = resolveBeadsDir(this.projectRoot);
@@ -108,9 +152,10 @@ export class SwarmProvider implements WorkspaceProvider {
         project: null,
         workDir: this.projectRoot,
       });
+      seenPaths.add(resolve(this.projectRoot));
     }
 
-    // Scan immediate children for sub-projects with .beads/beads.db
+    // Scan immediate children for sub-projects with beads databases
     const skipDirs = new Set(["node_modules", ".git"]);
     try {
       const entries = readdirSync(this.projectRoot, { withFileTypes: true });
@@ -119,18 +164,34 @@ export class SwarmProvider implements WorkspaceProvider {
         if (skipDirs.has(entry.name) || entry.name.startsWith(".")) continue;
 
         const childDir = join(this.projectRoot, entry.name);
-        const childBeadsDb = join(childDir, ".beads", "beads.db");
-        if (existsSync(childBeadsDb)) {
+        if (hasBeadsDatabase(childDir)) {
           const childBeadsPath = resolveBeadsDir(childDir);
           results.push({
             path: childBeadsPath,
             project: entry.name,
             workDir: childDir,
           });
+          seenPaths.add(resolve(childDir));
         }
       }
     } catch {
       // If readdir fails (permissions, etc.), just return what we have
+    }
+
+    // Include externally registered projects from ~/.adjutant/projects.json.
+    // These may be sibling directories outside projectRoot (not found by child scan)
+    // or Dolt-backed projects that don't have beads.db.
+    for (const project of loadRegisteredProjects()) {
+      const absPath = resolve(project.path);
+      if (seenPaths.has(absPath)) continue;
+
+      const projectBeadsPath = resolveBeadsDir(absPath);
+      results.push({
+        path: projectBeadsPath,
+        project: project.name,
+        workDir: absPath,
+      });
+      seenPaths.add(absPath);
     }
 
     return results;
@@ -166,29 +227,46 @@ export class SwarmProvider implements WorkspaceProvider {
 
   async listProjectNames(): Promise<string[]> {
     const skipDirs = new Set(["node_modules", ".git"]);
-    const names: string[] = [];
+    const names = new Set<string>();
     try {
       const entries = readdirSync(this.projectRoot, { withFileTypes: true });
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
         if (skipDirs.has(entry.name) || entry.name.startsWith(".")) continue;
 
-        const childBeadsDb = join(this.projectRoot, entry.name, ".beads", "beads.db");
-        if (existsSync(childBeadsDb)) {
-          names.push(entry.name);
+        const childDir = join(this.projectRoot, entry.name);
+        if (hasBeadsDatabase(childDir)) {
+          names.add(entry.name);
         }
       }
     } catch {
-      // If readdir fails, return empty
+      // If readdir fails, continue with registered projects
     }
-    return names;
+
+    // Include externally registered projects
+    for (const project of loadRegisteredProjects()) {
+      if (!names.has(project.name)) {
+        names.add(project.name);
+      }
+    }
+
+    return [...names];
   }
 
   resolveProjectPath(projectName: string): string | null {
+    // Check child directory first
     const projectPath = join(this.projectRoot, projectName);
     if (existsSync(join(projectPath, ".beads"))) {
       return projectPath;
     }
+
+    // Check registered projects (may be outside projectRoot)
+    for (const project of loadRegisteredProjects()) {
+      if (project.name === projectName) {
+        return project.path;
+      }
+    }
+
     return null;
   }
 }
