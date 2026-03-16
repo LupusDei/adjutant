@@ -14,9 +14,11 @@ $ARGUMENTS
 
 You **MUST** consider the user input before proceeding (if not empty).
 
-# Epic Planner
+# Epic Planner (Layer 2/3 Skill)
 
 Plan and scaffold a complete epic hierarchy: from idea to beads-tracked, dependency-wired tasks ready for multi-agent execution.
+
+**Layer context**: This skill is used by the **Coordinator (Layer 2)** or **Squad Leaders (Layer 3)** to plan new epics. When spawning agents to execute tasks from the resulting epic, inject the appropriate Layer Identity Preamble (Layer 3 for `spawn_worker` agents, Layer 4 for native Claude Code teammates). See the Agent Protocol for preamble templates.
 
 ## Spec -> Bead Mapping
 
@@ -38,7 +40,7 @@ Every spec artifact maps to a bead hierarchy level. Use the project's beads pref
 
 ### Phase 0: Discover & Clarify
 
-Before generating anything, ask 3-5 targeted questions using `AskUserQuestion`. Good areas to probe:
+Before generating anything, send 3-5 targeted questions to the user via MCP `send_message` (see Question Routing below). Good areas to probe:
 
 1. **Scope** - What's in, what's explicitly out?
 2. **Tracks** - Are there natural parallel streams (backend/frontend, infra/feature, data/UI)?
