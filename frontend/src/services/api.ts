@@ -725,7 +725,19 @@ export async function getTimelineEvents(params?: {
   if (params?.limit) searchParams.set('limit', params.limit.toString());
 
   const query = searchParams.toString();
-  return apiFetch(`/events/timeline${query ? `?${query}` : ''}`);
+  const url = `${API_BASE_URL}/events/timeline${query ? `?${query}` : ''}`;
+
+  // Timeline endpoint returns { events, hasMore } directly (no ApiResponse envelope),
+  // so we fetch directly instead of using apiFetch which expects { success, data }.
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const apiKey = getApiKey();
+  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    throw new ApiError('TIMELINE_ERROR', `Timeline request failed (${response.status})`, undefined, response.status);
+  }
+  return response.json() as Promise<TimelineResponse>;
 }
 
 export default api;
