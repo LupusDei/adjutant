@@ -76,7 +76,6 @@ interface ProjectRow {
   path: string;
   git_remote: string | null;
   mode: string;
-  sessions: string;
   created_at: string;
   active: number;
 }
@@ -91,21 +90,31 @@ const MAX_SCAN_DEPTH = 3;
 const SKIP_DIRS = new Set(["node_modules", ".git", ".beads", "dist", "build", ".next", "__pycache__"]);
 
 // ============================================================================
+// hasBeads Cache (adj-110.2.6)
+// ============================================================================
+
+/** TTL cache for hasBeadsDb() to avoid O(3N) blocking existsSync per listProjects call. */
+const hasBeadsCache = new Map<string, { value: boolean; expires: number }>();
+const HAS_BEADS_TTL_MS = 10_000; // 10 seconds
+
+function hasBeadsCached(dirPath: string): boolean {
+  const now = Date.now();
+  const cached = hasBeadsCache.get(dirPath);
+  if (cached && cached.expires > now) return cached.value;
+
+  const value = hasBeadsDb(dirPath);
+  hasBeadsCache.set(dirPath, { value, expires: now + HAS_BEADS_TTL_MS });
+  return value;
+}
+
+// ============================================================================
 // Row Mapping
 // ============================================================================
 
-/** Safely parse a JSON string as string[]. Returns [] on failure. */
-function safeParseJsonArray(raw: string): string[] {
-  try {
-    return JSON.parse(raw) as string[];
-  } catch {
-    return [];
-  }
-}
-
 /**
  * Map a SQLite row to the Project interface.
- * hasBeads is computed on read, not stored.
+ * hasBeads is computed on read (with TTL cache), not stored.
+ * sessions is always [] — the column was removed in migration 023.
  */
 function rowToProject(row: ProjectRow): Project {
   return {
@@ -114,10 +123,10 @@ function rowToProject(row: ProjectRow): Project {
     path: row.path,
     gitRemote: row.git_remote ?? undefined,
     mode: "swarm",
-    sessions: safeParseJsonArray(row.sessions),
+    sessions: [],
     createdAt: row.created_at,
     active: row.active === 1,
-    hasBeads: hasBeadsDb(row.path),
+    hasBeads: hasBeadsCached(row.path),
   };
 }
 
@@ -261,8 +270,8 @@ export function discoverLocalProjects(options?: DiscoverOptions): ProjectsServic
     const discovered: Project[] = [];
 
     const insertProject = db.prepare(`
-      INSERT OR IGNORE INTO projects (id, name, path, git_remote, mode, sessions, created_at, active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR IGNORE INTO projects (id, name, path, git_remote, mode, created_at, active)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
     // Register the project root itself if not already registered
@@ -272,7 +281,7 @@ export function discoverLocalProjects(options?: DiscoverOptions): ProjectsServic
       const gitRemote = detectGitRemote(projectRoot);
       const createdAt = new Date().toISOString();
 
-      insertProject.run(id, name, projectRoot, gitRemote ?? null, "swarm", "[]", createdAt, 1);
+      insertProject.run(id, name, projectRoot, gitRemote ?? null, "swarm", createdAt, 1);
       existingPaths.add(projectRoot);
 
       const rootProject: Project = {
@@ -307,7 +316,7 @@ export function discoverLocalProjects(options?: DiscoverOptions): ProjectsServic
           const gitRemote = detectGitRemote(childPath);
           const createdAt = new Date().toISOString();
 
-          insertProject.run(id, name, childPath, gitRemote ?? null, "swarm", "[]", createdAt, 0);
+          insertProject.run(id, name, childPath, gitRemote ?? null, "swarm", createdAt, 0);
           existingPaths.add(childPath);
 
           const project: Project = {
@@ -430,9 +439,9 @@ function createFromPath(dirPath: string, name?: string): ProjectsServiceResult<P
   };
 
   db.prepare(`
-    INSERT INTO projects (id, name, path, git_remote, mode, sessions, created_at, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(project.id, project.name, project.path, project.gitRemote ?? null, "swarm", "[]", project.createdAt, 0);
+    INSERT INTO projects (id, name, path, git_remote, mode, created_at, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(project.id, project.name, project.path, project.gitRemote ?? null, "swarm", project.createdAt, 0);
 
   logInfo("project created from path", { id: project.id, name: project.name, path: project.path });
   return { success: true, data: project };
@@ -476,9 +485,9 @@ function createFromClone(cloneUrl: string, name?: string, inputTargetDir?: strin
   };
 
   db.prepare(`
-    INSERT INTO projects (id, name, path, git_remote, mode, sessions, created_at, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(project.id, project.name, project.path, project.gitRemote ?? null, "swarm", "[]", project.createdAt, 0);
+    INSERT INTO projects (id, name, path, git_remote, mode, created_at, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(project.id, project.name, project.path, project.gitRemote ?? null, "swarm", project.createdAt, 0);
 
   logInfo("project created from clone", { id: project.id, name: project.name, cloneUrl });
   return { success: true, data: project };
@@ -516,9 +525,9 @@ function createEmpty(name: string): ProjectsServiceResult<Project> {
   };
 
   db.prepare(`
-    INSERT INTO projects (id, name, path, git_remote, mode, sessions, created_at, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(project.id, project.name, project.path, null, "swarm", "[]", project.createdAt, 0);
+    INSERT INTO projects (id, name, path, git_remote, mode, created_at, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(project.id, project.name, project.path, null, "swarm", project.createdAt, 0);
 
   logInfo("empty project created", { id: project.id, name: project.name, path: targetDir });
   return { success: true, data: project };

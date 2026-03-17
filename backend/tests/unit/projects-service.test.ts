@@ -60,7 +60,6 @@ function createTestDb(): Database.Database {
       path TEXT NOT NULL UNIQUE,
       git_remote TEXT,
       mode TEXT NOT NULL DEFAULT 'swarm',
-      sessions TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
       active INTEGER NOT NULL DEFAULT 0
     )
@@ -70,15 +69,14 @@ function createTestDb(): Database.Database {
 
 function insertProject(db: Database.Database, project: Partial<Project> & { id: string; name: string; path: string }): void {
   db.prepare(`
-    INSERT INTO projects (id, name, path, git_remote, mode, sessions, created_at, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO projects (id, name, path, git_remote, mode, created_at, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(
     project.id,
     project.name,
     project.path,
     project.gitRemote ?? null,
     project.mode ?? "swarm",
-    JSON.stringify(project.sessions ?? []),
     project.createdAt ?? "2026-01-01T00:00:00.000Z",
     project.active ? 1 : 0,
   );
@@ -176,16 +174,11 @@ describe("projects-service", () => {
       expect(result.error!.code).toBe("NOT_FOUND");
     });
 
-    it("should default sessions to empty array when DB has malformed JSON", () => {
-      // Insert a row with invalid JSON in the sessions column
-      testDb.prepare(`
-        INSERT INTO projects (id, name, path, git_remote, mode, sessions, created_at, active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run("bad-json", "bad-project", "/path/bad", null, "swarm", "NOT_VALID_JSON", "2026-01-01T00:00:00.000Z", 0);
-
+    it("should return sessions as empty array (column removed in migration 023)", () => {
+      insertProject(testDb, createMockProject({ id: "sess-check", name: "sess-proj", path: "/path/sess" }));
       vi.mocked(existsSync).mockReturnValue(false);
 
-      const result = getProject("bad-json");
+      const result = getProject("sess-check");
       expect(result.success).toBe(true);
       expect(result.data!.sessions).toEqual([]);
     });

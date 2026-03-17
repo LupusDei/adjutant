@@ -16,7 +16,6 @@ function createTestDb(): Database.Database {
       path TEXT NOT NULL UNIQUE,
       git_remote TEXT,
       mode TEXT NOT NULL DEFAULT 'swarm',
-      sessions TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
       active INTEGER NOT NULL DEFAULT 0
     )
@@ -177,9 +176,9 @@ describe("SwarmProvider", () => {
 
       // Insert external project into SQLite (replaces writing projects.json)
       testDb.prepare(`
-        INSERT INTO projects (id, name, path, mode, sessions, created_at, active)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run("ext-1", "external-proj", externalDir, "swarm", "[]", "2026-01-01T00:00:00.000Z", 0);
+        INSERT INTO projects (id, name, path, mode, created_at, active)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run("ext-1", "external-proj", externalDir, "swarm", "2026-01-01T00:00:00.000Z", 0);
 
       const provider = new SwarmProvider(TEST_DIR);
       const dirs = await provider.listBeadsDirs();
@@ -265,9 +264,9 @@ describe("SwarmProvider", () => {
 
       // Insert external project into SQLite (replaces writing projects.json)
       testDb.prepare(`
-        INSERT INTO projects (id, name, path, mode, sessions, created_at, active)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run("ext-2", "ext-proj", externalDir, "swarm", "[]", "2026-01-01T00:00:00.000Z", 0);
+        INSERT INTO projects (id, name, path, mode, created_at, active)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run("ext-2", "ext-proj", externalDir, "swarm", "2026-01-01T00:00:00.000Z", 0);
 
       const provider = new SwarmProvider(TEST_DIR);
       const names = await provider.listProjectNames();
@@ -316,9 +315,9 @@ describe("SwarmProvider", () => {
 
       // Insert external project into SQLite (replaces writing projects.json)
       testDb.prepare(`
-        INSERT INTO projects (id, name, path, mode, sessions, created_at, active)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run("ext-3", "ext-resolve", externalDir, "swarm", "[]", "2026-01-01T00:00:00.000Z", 0);
+        INSERT INTO projects (id, name, path, mode, created_at, active)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run("ext-3", "ext-resolve", externalDir, "swarm", "2026-01-01T00:00:00.000Z", 0);
 
       const provider = new SwarmProvider(TEST_DIR);
       const result = provider.resolveProjectPath("ext-resolve");

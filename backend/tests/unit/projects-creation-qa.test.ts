@@ -65,7 +65,6 @@ function createTestDb(): Database.Database {
       path TEXT NOT NULL UNIQUE,
       git_remote TEXT,
       mode TEXT NOT NULL DEFAULT 'swarm',
-      sessions TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
       active INTEGER NOT NULL DEFAULT 0
     )
@@ -75,15 +74,14 @@ function createTestDb(): Database.Database {
 
 function insertProject(db: Database.Database, project: Partial<Project> & { id: string; name: string; path: string }): void {
   db.prepare(`
-    INSERT INTO projects (id, name, path, git_remote, mode, sessions, created_at, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO projects (id, name, path, git_remote, mode, created_at, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(
     project.id,
     project.name,
     project.path,
     project.gitRemote ?? null,
     project.mode ?? "swarm",
-    JSON.stringify(project.sessions ?? []),
     project.createdAt ?? "2026-01-01T00:00:00.000Z",
     project.active ? 1 : 0,
   );

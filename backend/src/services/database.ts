@@ -98,8 +98,8 @@ export function importJsonIfNeeded(db: Database.Database): void {
           const projects = store.projects;
           if (Array.isArray(projects) && projects.length > 0) {
             const insert = db.prepare(`
-              INSERT OR IGNORE INTO projects (id, name, path, git_remote, mode, sessions, created_at, active)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              INSERT OR IGNORE INTO projects (id, name, path, git_remote, mode, created_at, active)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
             `);
 
             const importBatch = db.transaction(() => {
@@ -107,8 +107,6 @@ export function importJsonIfNeeded(db: Database.Database): void {
                 // Normalize legacy "standalone" mode to "swarm"
                 const rawMode = p["mode"] as string;
                 const mode = rawMode === "standalone" ? "swarm" : rawMode || "swarm";
-                const rawSessions = p["sessions"];
-                const sessions = Array.isArray(rawSessions) ? JSON.stringify(rawSessions) : "[]";
                 const active = p["active"] ? 1 : 0;
                 insert.run(
                   p["id"] as string,
@@ -116,7 +114,6 @@ export function importJsonIfNeeded(db: Database.Database): void {
                   p["path"] as string,
                   (p["gitRemote"] as string) || null,
                   mode,
-                  sessions,
                   (p["createdAt"] as string) || new Date().toISOString(),
                   active,
                 );
