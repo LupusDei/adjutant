@@ -2,11 +2,13 @@ import type { CSSProperties } from 'react';
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useSwarmAgents } from '../../hooks/useSwarmAgents';
-import { api, ApiError } from '../../services/api';
+import { api } from '../../services/api';
 import type { CrewMember, Persona } from '../../types';
 import { SwarmAgentCard } from './SwarmAgentCard';
 import { PersonaRosterCard } from '../personas/PersonaRosterCard';
 import { CallsignRoster } from '../personas/CallsignRoster';
+import { SpawnAgentModal } from './SpawnAgentModal';
+import { DeployPersonaModal } from './DeployPersonaModal';
 
 // =============================================================================
 // Status Grouping
@@ -94,15 +96,13 @@ export function CrewStats({ className = '', isActive }: CrewStatsProps) {
     });
   }, [isActive]);
 
-  const handleDeployPersona = useCallback(async (persona: Persona) => {
-    try {
-      await api.agents.spawn({ personaId: persona.id });
-      swarm.refresh();
-    } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to deploy persona';
-      alert(`Deploy failed: ${message}`);
-    }
-  }, [swarm]);
+  // Modal state
+  const [showSpawnModal, setShowSpawnModal] = useState(false);
+  const [deployPersona, setDeployPersona] = useState<Persona | null>(null);
+
+  const handleDeployPersona = useCallback((persona: Persona) => {
+    setDeployPersona(persona);
+  }, []);
 
   const handleEditPersona = useCallback((_persona: Persona) => {
     // Navigate to personas tab — handled by App-level navigation
@@ -137,9 +137,10 @@ export function CrewStats({ className = '', isActive }: CrewStatsProps) {
           </div>
         )}
 
-        {agents && agents.length > 0 && (
-          <SwarmSummaryPanel agents={agents} />
-        )}
+        <SwarmSummaryPanel
+          agents={agents ?? []}
+          onSpawn={() => { setShowSpawnModal(true); }}
+        />
 
         {/* Persona Roster Section */}
         {personas.length > 0 && (
@@ -200,6 +201,21 @@ export function CrewStats({ className = '', isActive }: CrewStatsProps) {
           </span>
         </div>
       </footer>
+
+      {showSpawnModal && (
+        <SpawnAgentModal
+          onClose={() => { setShowSpawnModal(false); }}
+          onSpawned={() => { setShowSpawnModal(false); swarm.refresh(); }}
+        />
+      )}
+
+      {deployPersona && (
+        <DeployPersonaModal
+          persona={deployPersona}
+          onClose={() => { setDeployPersona(null); }}
+          onDeployed={() => { setDeployPersona(null); swarm.refresh(); }}
+        />
+      )}
     </section>
   );
 }
@@ -210,12 +226,10 @@ export function CrewStats({ className = '', isActive }: CrewStatsProps) {
 
 interface SwarmSummaryPanelProps {
   agents: CrewMember[];
+  onSpawn: () => void;
 }
 
-/** Spawn button state for swarm summary panel */
-type SwarmSpawnState = 'idle' | 'loading' | 'success' | 'error';
-
-function SwarmSummaryPanel({ agents }: SwarmSummaryPanelProps) {
+function SwarmSummaryPanel({ agents, onSpawn }: SwarmSummaryPanelProps) {
   const counts = useMemo(() => {
     let active = 0, idle = 0, blocked = 0, offline = 0;
     for (const agent of agents) {
@@ -231,39 +245,9 @@ function SwarmSummaryPanel({ agents }: SwarmSummaryPanelProps) {
     return { active, idle, blocked, offline };
   }, [agents]);
 
-  const [spawnState, setSpawnState] = useState<SwarmSpawnState>('idle');
-  const [spawnError, setSpawnError] = useState<string | null>(null);
-
-  const handleSpawnAgent = useCallback(async () => {
-    if (spawnState === 'loading') return;
-    setSpawnState('loading');
-    setSpawnError(null);
-    try {
-      await api.agents.spawn({});
-      setSpawnState('success');
-      setTimeout(() => { setSpawnState('idle'); }, 2000);
-    } catch (err) {
-      setSpawnState('error');
-      setSpawnError(err instanceof ApiError ? err.message : 'Failed to spawn agent');
-      setTimeout(() => { setSpawnState('idle'); setSpawnError(null); }, 3000);
-    }
-  }, [spawnState]);
-
   const hasIssues = counts.blocked > 0;
-  const overallStatus = hasIssues ? 'AGENTS BLOCKED' : 'OPERATIONAL';
-  const overallColor = hasIssues ? colors.blocked : colors.working;
-
-  const spawnLabel = spawnState === 'loading' ? 'SPAWNING...'
-    : spawnState === 'success' ? 'SPAWNED'
-    : spawnState === 'error' ? 'FAILED'
-    : 'SPAWN AGENT';
-
-  const spawnBtnStyle: CSSProperties = {
-    ...styles.swarmSpawnButton,
-    ...(spawnState === 'loading' ? { cursor: 'wait', opacity: 0.7 } : {}),
-    ...(spawnState === 'success' ? { borderColor: colors.working, color: colors.working } : {}),
-    ...(spawnState === 'error' ? { borderColor: colors.stuck, color: colors.stuck } : {}),
-  };
+  const overallStatus = hasIssues ? 'AGENTS BLOCKED' : agents.length === 0 ? 'NO AGENTS' : 'OPERATIONAL';
+  const overallColor = hasIssues ? colors.blocked : agents.length === 0 ? colors.offline : colors.working;
 
   return (
     <div style={styles.summaryPanel}>
@@ -290,19 +274,13 @@ function SwarmSummaryPanel({ agents }: SwarmSummaryPanelProps) {
         </div>
         <div style={styles.swarmSpawnContainer}>
           <button
-            style={spawnBtnStyle}
-            onClick={() => { void handleSpawnAgent(); }}
-            disabled={spawnState === 'loading'}
-            title={spawnError ?? 'Spawn a new agent'}
+            style={styles.swarmSpawnButton}
+            onClick={onSpawn}
+            title="Spawn a new agent"
             aria-label="Spawn new agent"
           >
-            {spawnLabel}
+            SPAWN AGENT
           </button>
-          {spawnState === 'error' && spawnError && (
-            <span style={styles.swarmSpawnError} title={spawnError}>
-              {spawnError.length > 25 ? `${spawnError.slice(0, 25)}...` : spawnError}
-            </span>
-          )}
         </div>
       </div>
     </div>
@@ -598,16 +576,6 @@ const styles = {
     textTransform: 'uppercase',
     cursor: 'pointer',
     transition: 'all 0.2s ease',
-  },
-
-  swarmSpawnError: {
-    fontSize: '0.6rem',
-    color: colors.stuck,
-    letterSpacing: '0.05em',
-    maxWidth: '150px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
   },
 
   // Status group styles
