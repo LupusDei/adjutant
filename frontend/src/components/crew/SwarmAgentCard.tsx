@@ -60,6 +60,7 @@ function getContextColor(pct: number): string {
 
 interface SwarmAgentCardProps {
   agent: CrewMember;
+  onNavigateToChat?: (agentName: string) => void;
 }
 
 /** Kill button state for agent card. */
@@ -74,7 +75,7 @@ type AssignState = 'idle' | 'loading';
  * Includes kill (D2) and assign (D3) controls.
  * Supports expandable inline terminal view with WebSocket streaming + polling fallback.
  */
-export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
+export function SwarmAgentCard({ agent, onNavigateToChat }: SwarmAgentCardProps) {
   const isOnline = agent.status !== 'offline';
   const isActive = agent.currentTask && agent.status === 'idle';
   const displayStatus = isActive ? 'active' : agent.status;
@@ -312,16 +313,27 @@ export function SwarmAgentCard({ agent }: SwarmAgentCardProps) {
         </div>
       )}
 
-      {/* D3: Assign bead action for idle agents */}
-      {canAssign && !showAssign && (
-        <button
-          style={styles.assignButton}
-          onClick={() => { setShowAssign(true); }}
-          aria-label={`Assign bead to ${agent.name}`}
-        >
-          ASSIGN BEAD
-        </button>
-      )}
+      {/* Action buttons row */}
+      <div style={styles.actionRow}>
+        {onNavigateToChat && (
+          <button
+            style={styles.chatButton}
+            onClick={() => { onNavigateToChat(agent.name); }}
+            aria-label={`Chat with ${agent.name}`}
+          >
+            CHAT
+          </button>
+        )}
+        {canAssign && !showAssign && (
+          <button
+            style={styles.assignButton}
+            onClick={() => { setShowAssign(true); }}
+            aria-label={`Assign bead to ${agent.name}`}
+          >
+            ASSIGN BEAD
+          </button>
+        )}
+      </div>
 
       {/* D3: Assign bead inline form */}
       {showAssign && (
@@ -613,6 +625,27 @@ const styles = {
     padding: '2px 0',
   },
 
+  // Action row
+  actionRow: {
+    display: 'flex',
+    gap: '6px',
+    marginTop: '2px',
+  },
+
+  chatButton: {
+    padding: '3px 10px',
+    border: `1px solid ${colors.primary}`,
+    backgroundColor: 'transparent',
+    color: colors.primary,
+    fontSize: '0.6rem',
+    fontWeight: 'bold',
+    fontFamily: '"Share Tech Mono", "Courier New", monospace',
+    letterSpacing: '0.1em',
+    textTransform: 'uppercase',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+  },
+
   // D3: Assign bead
   assignButton: {
     padding: '3px 10px',
@@ -626,8 +659,6 @@ const styles = {
     textTransform: 'uppercase',
     cursor: 'pointer',
     transition: 'all 0.2s ease',
-    alignSelf: 'flex-start',
-    marginTop: '2px',
   },
 
   assignForm: {

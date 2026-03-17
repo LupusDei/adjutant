@@ -156,7 +156,7 @@ function AppContent() {
             hidden={activeTab !== "crew"}
             aria-hidden={activeTab !== "crew"}
           >
-            <CrewStats isActive={activeTab === "crew"} />
+            <CrewStats isActive={activeTab === "crew"} onNavigateToChat={(agentName: string) => { setChatRecipient(agentName); setActiveTab('chat'); }} />
           </section>
           <section
             className="tab-view"

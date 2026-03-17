@@ -64,13 +64,15 @@ export interface CrewStatsProps {
   className?: string;
   /** Whether this tab is currently active */
   isActive?: boolean;
+  /** Navigate to chat with a specific agent */
+  onNavigateToChat?: (agentName: string) => void;
 }
 
 /**
  * Pip-Boy styled crew stats dashboard.
  * Displays agents grouped by status.
  */
-export function CrewStats({ className = '', isActive }: CrewStatsProps) {
+export function CrewStats({ className = '', isActive, onNavigateToChat }: CrewStatsProps) {
   const swarm = useSwarmAgents();
   const agents = swarm.agents;
   const loading = swarm.loading;
@@ -168,7 +170,7 @@ export function CrewStats({ className = '', isActive }: CrewStatsProps) {
 
         {/* Running agents grouped by status */}
         {agents && agents.length > 0 && (
-          <SwarmSection agents={agents} gridStyle={agentGridStyle} />
+          <SwarmSection agents={agents} gridStyle={agentGridStyle} onNavigateToChat={onNavigateToChat} />
         )}
 
         {agents && agents.length === 0 && !personas.length && (
@@ -294,9 +296,10 @@ function SwarmSummaryPanel({ agents, onSpawn }: SwarmSummaryPanelProps) {
 interface SwarmSectionProps {
   agents: CrewMember[];
   gridStyle: CSSProperties;
+  onNavigateToChat?: (agentName: string) => void;
 }
 
-function SwarmSection({ agents, gridStyle }: SwarmSectionProps) {
+function SwarmSection({ agents, gridStyle, onNavigateToChat }: SwarmSectionProps) {
   const [showOffline, setShowOffline] = useState(false);
 
   const groups = useMemo(() => {
@@ -339,7 +342,7 @@ function SwarmSection({ agents, gridStyle }: SwarmSectionProps) {
               {showOffline && (
                 <div style={gridStyle}>
                   {groupAgents.map((agent) => (
-                    <SwarmAgentCard key={agent.id} agent={agent} />
+                    <SwarmAgentCard key={agent.id} agent={agent} onNavigateToChat={onNavigateToChat} />
                   ))}
                 </div>
               )}
@@ -616,7 +619,7 @@ const styles = {
   // Grid layout
   agentGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
     gap: '10px',
   },
 
