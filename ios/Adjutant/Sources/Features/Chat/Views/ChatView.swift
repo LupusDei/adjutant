@@ -108,6 +108,10 @@ struct ChatView: View {
             coordinator.activeViewingAgentId = viewModel.selectedRecipient
             NotificationService.shared.isViewingChat = true
             NotificationService.shared.activeViewingAgentId = viewModel.selectedRecipient
+            // Always scroll to bottom when (re)opening the chat view.
+            // The inner ScrollViewReader.onAppear may not re-fire on tab switches
+            // or navigation back, but this outer onAppear reliably does.
+            scrollToBottom(animated: false)
             // Handle deep link from push notification
             if let agentId = coordinator.pendingChatAgentId {
                 coordinator.pendingChatAgentId = nil
@@ -151,6 +155,7 @@ struct ChatView: View {
         .onChange(of: viewModel.selectedRecipient) { _, newRecipient in
             coordinator.activeViewingAgentId = newRecipient
             NotificationService.shared.activeViewingAgentId = newRecipient
+            scrollToBottom(animated: false)
         }
         .onChange(of: viewModel.streamingText) { _, _ in
             scrollToBottom()
@@ -464,7 +469,10 @@ struct ChatView: View {
     private func scrollToBottom(animated: Bool = true) {
         // Defer scroll to next run-loop tick so SwiftUI finishes laying out
         // any newly-inserted LazyVStack children before we measure "bottom".
-        DispatchQueue.main.async {
+        // Use asyncAfter with a small delay to ensure LazyVStack has materialized
+        // the bottom anchor — DispatchQueue.main.async alone isn't always enough
+        // when messages are pre-loaded from cache before the ScrollViewReader appears.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             if animated {
                 withAnimation(.easeOut(duration: 0.2)) {
                     scrollProxy?.scrollTo("bottom", anchor: .bottom)
