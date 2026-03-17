@@ -1,8 +1,8 @@
 /**
- * Global overview route for the Adjutant API.
+ * Overview route for the Adjutant API.
  *
  * Endpoints:
- * - GET /api/overview - Aggregated overview across all registered projects
+ * - GET /api/overview - Overview scoped to the active project
  */
 
 import { Router } from "express";
@@ -26,7 +26,10 @@ export function createOverviewRouter(store: MessageStore): Router {
 
   /**
    * GET /api/overview
-   * Get aggregated overview across all projects: beads, epics, agents, unread messages.
+   * Overview scoped to the active project: beads, epics, agents, unread messages.
+   *
+   * Only queries beads from the active project (not all registered projects).
+   * This prevents serial bd timeouts when many projects are registered (adj-109).
    */
   router.get("/", async (_req, res) => {
     try {
@@ -40,59 +43,37 @@ export function createOverviewRouter(store: MessageStore): Router {
 
       const allProjects = projectsResult.data;
 
-      // Only query beads for projects that have a .beads directory
-      const beadsProjects = allProjects.filter((p) => p.hasBeads);
+      // Scope beads queries to the active project only (adj-109).
+      // Querying all registered projects causes serial bd timeouts.
+      const activeProject = allProjects.find((p) => p.active && p.hasBeads);
 
-      // Fetch per-project beads data in parallel using Promise.allSettled
-      const perProjectResults = await Promise.allSettled(
-        beadsProjects.map(async (project) => {
-          const [beadsResult, epicResult, recentEpicsResult] = await Promise.all([
-            getProjectOverview(project.path),
-            computeEpicProgress(project.path),
-            getRecentlyCompletedEpics(project.path, 5),
-          ]);
-          return { beadsResult, epicResult, recentEpicsResult };
-        })
-      );
+      let openBeads: BeadInfo[] = [];
+      let inProgressBeads: BeadInfo[] = [];
+      let recentlyClosedBeads: BeadInfo[] = [];
+      let inProgressEpics: EpicProgress[] = [];
+      let recentlyCompletedEpics: EpicProgress[] = [];
 
-      // Aggregate beads and epics from all projects
-      const allOpen: BeadInfo[] = [];
-      const allInProgress: BeadInfo[] = [];
-      const allRecentlyClosed: BeadInfo[] = [];
-      const allInProgressEpics: EpicProgress[] = [];
-      const allRecentlyCompletedEpics: EpicProgress[] = [];
-
-      for (const result of perProjectResults) {
-        if (result.status !== "fulfilled") continue;
-        const { beadsResult, epicResult, recentEpicsResult } = result.value;
+      if (activeProject) {
+        const [beadsResult, epicResult, recentEpicsResult] = await Promise.all([
+          getProjectOverview(activeProject.path),
+          computeEpicProgress(activeProject.path),
+          getRecentlyCompletedEpics(activeProject.path, 5),
+        ]);
 
         if (beadsResult.success && beadsResult.data) {
-          allOpen.push(...beadsResult.data.open);
-          allInProgress.push(...beadsResult.data.inProgress);
-          allRecentlyClosed.push(...beadsResult.data.recentlyClosed);
+          openBeads = beadsResult.data.open;
+          inProgressBeads = beadsResult.data.inProgress;
+          recentlyClosedBeads = beadsResult.data.recentlyClosed;
         }
 
         if (epicResult.success && epicResult.data) {
-          allInProgressEpics.push(...epicResult.data);
+          inProgressEpics = epicResult.data;
         }
 
         if (recentEpicsResult.success && recentEpicsResult.data) {
-          allRecentlyCompletedEpics.push(...recentEpicsResult.data);
+          recentlyCompletedEpics = recentEpicsResult.data;
         }
       }
-
-      // Sort aggregated results by recency and apply limits
-      allRecentlyClosed.sort((a, b) => {
-        const aDate = a.updatedAt ?? a.createdAt;
-        const bDate = b.updatedAt ?? b.createdAt;
-        return bDate.localeCompare(aDate);
-      });
-      allInProgressEpics.sort((a, b) => b.completionPercent - a.completionPercent);
-      allRecentlyCompletedEpics.sort((a, b) => {
-        const aDate = a.closedAt ?? "";
-        const bDate = b.closedAt ?? "";
-        return bDate.localeCompare(aDate);
-      });
 
       // Fetch agents and unread data (global, not per-project)
       const [agentsResult, unreadCounts, unreadSummaries] = await Promise.all([
@@ -130,13 +111,13 @@ export function createOverviewRouter(store: MessageStore): Router {
           active: p.active,
         })),
         beads: {
-          open: allOpen.slice(0, 50),
-          inProgress: allInProgress.slice(0, 20),
-          recentlyClosed: allRecentlyClosed.slice(0, 10),
+          open: openBeads.slice(0, 50),
+          inProgress: inProgressBeads.slice(0, 20),
+          recentlyClosed: recentlyClosedBeads.slice(0, 10),
         },
         epics: {
-          inProgress: allInProgressEpics.slice(0, 20),
-          recentlyCompleted: allRecentlyCompletedEpics.slice(0, 10),
+          inProgress: inProgressEpics.slice(0, 20),
+          recentlyCompleted: recentlyCompletedEpics.slice(0, 10),
         },
         agents,
         unreadMessages: unreadSummaries,

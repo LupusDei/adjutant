@@ -67,10 +67,10 @@ describe("overview routes", () => {
   // ===========================================================================
 
   describe("GET /api/overview", () => {
-    it("should return aggregated overview across all projects with beads", async () => {
+    it("should return overview for the active project with beads", async () => {
       const projects = [
-        createMockProject({ id: "p1", name: "proj-a", hasBeads: true }),
-        createMockProject({ id: "p2", name: "proj-b", hasBeads: true }),
+        createMockProject({ id: "p1", name: "proj-a", active: true, hasBeads: true }),
+        createMockProject({ id: "p2", name: "proj-b", active: false, hasBeads: true }),
       ];
       vi.mocked(listProjects).mockReturnValue({ success: true, data: projects });
 
@@ -110,12 +110,15 @@ describe("overview routes", () => {
       expect(response.body.data.epics).toBeDefined();
       expect(response.body.data.agents).toBeDefined();
       expect(response.body.data.unreadMessages).toBeDefined();
+      // Only the active project should be queried (adj-109)
+      expect(getProjectOverview).toHaveBeenCalledTimes(1);
     });
 
-    it("should skip projects without beads", async () => {
+    it("should only query the active project, not inactive ones (adj-109)", async () => {
       const projects = [
-        createMockProject({ id: "p1", name: "has-beads", hasBeads: true }),
-        createMockProject({ id: "p2", name: "no-beads", hasBeads: false }),
+        createMockProject({ id: "p1", name: "active-proj", active: true, hasBeads: true }),
+        createMockProject({ id: "p2", name: "inactive-proj", active: false, hasBeads: true }),
+        createMockProject({ id: "p3", name: "no-beads", active: false, hasBeads: false }),
       ];
       vi.mocked(listProjects).mockReturnValue({ success: true, data: projects });
 
@@ -130,78 +133,26 @@ describe("overview routes", () => {
       const response = await request(app).get("/api/overview");
 
       expect(response.status).toBe(200);
-      // Only the project with beads should trigger calls
+      // Only the active project with beads should trigger calls
       expect(getProjectOverview).toHaveBeenCalledTimes(1);
       expect(getProjectOverview).toHaveBeenCalledWith("/Users/test/code/test-project");
+      // Inactive projects are NOT queried
+      expect(getProjectOverview).not.toHaveBeenCalledWith("/b");
     });
 
-    it("should handle project overview failure gracefully via allSettled", async () => {
+    it("should return empty beads when no project is active", async () => {
       const projects = [
-        createMockProject({ id: "p1", name: "good", hasBeads: true }),
-        createMockProject({ id: "p2", name: "bad", path: "/bad/path", hasBeads: true }),
+        createMockProject({ id: "p1", name: "proj-a", active: false, hasBeads: true }),
       ];
       vi.mocked(listProjects).mockReturnValue({ success: true, data: projects });
-
-      // First project succeeds, second project throws
-      vi.mocked(getProjectOverview)
-        .mockResolvedValueOnce({
-          success: true,
-          data: { open: [{ id: "t1", title: "Task 1", description: "", status: "open", priority: 1, type: "task", assignee: null, project: null, source: "good", labels: [], createdAt: "2026-01-01", updatedAt: null }], inProgress: [], recentlyClosed: [] },
-        })
-        .mockRejectedValueOnce(new Error("beads dir not found"));
-
-      vi.mocked(computeEpicProgress)
-        .mockResolvedValueOnce({ success: true, data: [] })
-        .mockRejectedValueOnce(new Error("beads dir not found"));
-
-      vi.mocked(getRecentlyCompletedEpics)
-        .mockResolvedValueOnce({ success: true, data: [] })
-        .mockRejectedValueOnce(new Error("beads dir not found"));
-
       vi.mocked(getAgents).mockResolvedValue({ success: true, data: [] });
 
       const response = await request(app).get("/api/overview");
 
       expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      // The good project's bead should still appear
-      expect(response.body.data.beads.open).toHaveLength(1);
-    });
-
-    it("should aggregate beads from multiple projects", async () => {
-      const projects = [
-        createMockProject({ id: "p1", name: "proj-a", path: "/a", hasBeads: true }),
-        createMockProject({ id: "p2", name: "proj-b", path: "/b", hasBeads: true }),
-      ];
-      vi.mocked(listProjects).mockReturnValue({ success: true, data: projects });
-
-      vi.mocked(getProjectOverview)
-        .mockResolvedValueOnce({
-          success: true,
-          data: {
-            open: [{ id: "a1", title: "A Task", description: "", status: "open", priority: 1, type: "task", assignee: null, project: null, source: "proj-a", labels: [], createdAt: "2026-01-01", updatedAt: null }],
-            inProgress: [],
-            recentlyClosed: [],
-          },
-        })
-        .mockResolvedValueOnce({
-          success: true,
-          data: {
-            open: [{ id: "b1", title: "B Task", description: "", status: "open", priority: 1, type: "task", assignee: null, project: null, source: "proj-b", labels: [], createdAt: "2026-01-02", updatedAt: null }],
-            inProgress: [{ id: "b2", title: "B Active", description: "", status: "in_progress", priority: 0, type: "task", assignee: "dev", project: null, source: "proj-b", labels: [], createdAt: "2026-01-01", updatedAt: "2026-01-02" }],
-            recentlyClosed: [],
-          },
-        });
-
-      vi.mocked(computeEpicProgress).mockResolvedValue({ success: true, data: [] });
-      vi.mocked(getRecentlyCompletedEpics).mockResolvedValue({ success: true, data: [] });
-      vi.mocked(getAgents).mockResolvedValue({ success: true, data: [] });
-
-      const response = await request(app).get("/api/overview");
-
-      expect(response.status).toBe(200);
-      expect(response.body.data.beads.open).toHaveLength(2);
-      expect(response.body.data.beads.inProgress).toHaveLength(1);
+      expect(response.body.data.beads).toEqual({ open: [], inProgress: [], recentlyClosed: [] });
+      // No beads service calls when no active project
+      expect(getProjectOverview).not.toHaveBeenCalled();
     });
 
     it("should return empty data when no projects exist", async () => {
