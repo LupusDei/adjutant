@@ -11,12 +11,12 @@
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { readFile } from "fs/promises";
 import { join, resolve, basename } from "path";
-import { homedir } from "os";
 import type {
   WorkspaceProvider,
   WorkspaceConfig,
   BeadsDirInfo,
 } from "./workspace-provider.js";
+import { getDatabase } from "../database.js";
 
 // ============================================================================
 // Internal Helpers
@@ -63,21 +63,16 @@ function hasBeadsDatabase(dirPath: string): boolean {
 }
 
 /**
- * Load registered projects from ~/.adjutant/projects.json.
+ * Load registered projects from SQLite (projects table).
  * Returns only projects where hasBeads is true and the path exists.
  */
 function loadRegisteredProjects(): RegisteredProject[] {
-  const projectsFile = join(homedir(), ".adjutant", "projects.json");
-  if (!existsSync(projectsFile)) return [];
-
   try {
-    const raw = readFileSync(projectsFile, "utf8");
-    const store = JSON.parse(raw) as { projects?: RegisteredProject[] };
-    if (!Array.isArray(store.projects)) return [];
-
-    return store.projects.filter(
-      (p) => p.path && existsSync(p.path) && hasBeadsDatabase(p.path)
-    );
+    const db = getDatabase();
+    const rows = db.prepare("SELECT name, path FROM projects").all() as Array<{ name: string; path: string }>;
+    return rows
+      .filter((r) => r.path && existsSync(r.path) && hasBeadsDatabase(r.path))
+      .map((r) => ({ name: r.name, path: r.path }));
   } catch {
     return [];
   }

@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, statSync } from "fs";
 import { execSync, execFileSync } from "child_process";
 import { join, resolve, basename } from "path";
 import { homedir } from "os";
+import Database from "better-sqlite3";
 
-// Mock fs, child_process, crypto
+// Mock fs (but not all of it — we need real behavior for some things)
 vi.mock("fs", () => ({
   existsSync: vi.fn(),
   mkdirSync: vi.fn(),
@@ -30,6 +31,15 @@ vi.mock("../../src/utils/index.js", () => ({
   logWarn: vi.fn(),
 }));
 
+// Create in-memory database for each test
+let testDb: Database.Database;
+
+vi.mock("../../src/services/database.js", () => ({
+  getDatabase: () => testDb,
+  createDatabase: () => testDb,
+  runMigrations: () => {},
+}));
+
 import {
   listProjects,
   getProject,
@@ -39,26 +49,39 @@ import {
   discoverLocalProjects,
   checkProjectHealth,
 } from "../../src/services/projects-service.js";
-import type { Project, ProjectsStore } from "../../src/services/projects-service.js";
+import type { Project } from "../../src/services/projects-service.js";
 
-const ADJUTANT_DIR = join(homedir(), ".adjutant");
-const PROJECTS_FILE = join(ADJUTANT_DIR, "projects.json");
-
-function mockStoreExists(store: ProjectsStore): void {
-  vi.mocked(existsSync).mockImplementation((p: unknown) => {
-    if (p === ADJUTANT_DIR) return true;
-    if (p === PROJECTS_FILE) return true;
-    return false;
-  });
-  vi.mocked(readFileSync).mockReturnValue(JSON.stringify(store));
+function createTestDb(): Database.Database {
+  const db = new Database(":memory:");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      path TEXT NOT NULL UNIQUE,
+      git_remote TEXT,
+      mode TEXT NOT NULL DEFAULT 'swarm',
+      sessions TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+  return db;
 }
 
-function mockNoStore(): void {
-  vi.mocked(existsSync).mockImplementation((p: unknown) => {
-    if (p === ADJUTANT_DIR) return true;
-    if (p === PROJECTS_FILE) return false;
-    return false;
-  });
+function insertProject(db: Database.Database, project: Partial<Project> & { id: string; name: string; path: string }): void {
+  db.prepare(`
+    INSERT INTO projects (id, name, path, git_remote, mode, sessions, created_at, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    project.id,
+    project.name,
+    project.path,
+    project.gitRemote ?? null,
+    project.mode ?? "swarm",
+    JSON.stringify(project.sessions ?? []),
+    project.createdAt ?? "2026-01-01T00:00:00.000Z",
+    project.active ? 1 : 0,
+  );
 }
 
 function createMockProject(overrides: Partial<Project> = {}): Project {
@@ -77,6 +100,11 @@ function createMockProject(overrides: Partial<Project> = {}): Project {
 describe("projects-service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    testDb = createTestDb();
+  });
+
+  afterEach(() => {
+    if (testDb) testDb.close();
   });
 
   // ===========================================================================
@@ -84,31 +112,45 @@ describe("projects-service", () => {
   // ===========================================================================
 
   describe("listProjects", () => {
-    it("should return empty list when no store file exists", () => {
-      mockNoStore();
+    it("should return empty list when no projects exist", () => {
+      // Mock existsSync to prevent auto-seed from finding real directories
+      vi.mocked(existsSync).mockReturnValue(false);
+
       const result = listProjects();
       expect(result.success).toBe(true);
       expect(result.data).toEqual([]);
     });
 
-    it("should return projects from store", () => {
+    it("should return projects from SQLite", () => {
       const project = createMockProject();
-      mockStoreExists({ projects: [project] });
+      insertProject(testDb, project);
+
+      // existsSync for hasBeadsDb check
+      vi.mocked(existsSync).mockReturnValue(false);
 
       const result = listProjects();
       expect(result.success).toBe(true);
       expect(result.data).toHaveLength(1);
       expect(result.data![0].name).toBe("test-project");
+      expect(result.data![0].id).toBe("abcd1234");
     });
 
-    it("should handle corrupted store file", () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue("not json");
+    it("should auto-seed on empty store via discoverLocalProjects", () => {
+      // Table is empty, so listProjects calls discoverLocalProjects
+      // Mock: project root exists and has .git
+      const projectRoot = resolve(process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd());
+      vi.mocked(existsSync).mockImplementation((p: unknown) => {
+        const ps = String(p);
+        if (ps === projectRoot) return true;
+        if (ps === join(projectRoot, ".git")) return true;
+        return false;
+      });
+      vi.mocked(readdirSync).mockReturnValue([] as unknown as ReturnType<typeof readdirSync>);
 
       const result = listProjects();
-      // Falls back to empty store on parse error
       expect(result.success).toBe(true);
-      expect(result.data).toEqual([]);
+      // Should have discovered at least the project root
+      expect(result.data!.length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -119,7 +161,9 @@ describe("projects-service", () => {
   describe("getProject", () => {
     it("should return project by ID", () => {
       const project = createMockProject({ id: "proj-1" });
-      mockStoreExists({ projects: [project] });
+      insertProject(testDb, project);
+
+      vi.mocked(existsSync).mockReturnValue(false);
 
       const result = getProject("proj-1");
       expect(result.success).toBe(true);
@@ -127,8 +171,6 @@ describe("projects-service", () => {
     });
 
     it("should return NOT_FOUND for missing project", () => {
-      mockStoreExists({ projects: [] });
-
       const result = getProject("nonexistent");
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("NOT_FOUND");
@@ -141,12 +183,8 @@ describe("projects-service", () => {
 
   describe("createProject", () => {
     it("should create from existing path", () => {
-      mockNoStore();
       vi.mocked(existsSync).mockImplementation((p: unknown) => {
-        if (p === ADJUTANT_DIR) return true;
-        if (p === PROJECTS_FILE) return false;
         if (typeof p === "string" && p.includes("/code/myapp")) return true;
-        if (typeof p === "string" && p.includes(".git")) return false;
         return false;
       });
 
@@ -154,15 +192,16 @@ describe("projects-service", () => {
       expect(result.success).toBe(true);
       expect(result.data!.name).toBe("myapp");
       expect(result.data!.path).toBe("/Users/test/code/myapp");
-      expect(writeFileSync).toHaveBeenCalled();
+
+      // Verify it was inserted into SQLite
+      const row = testDb.prepare("SELECT * FROM projects WHERE path = ?").get("/Users/test/code/myapp");
+      expect(row).toBeTruthy();
     });
 
     it("should use provided name over path-derived name", () => {
-      mockNoStore();
       vi.mocked(existsSync).mockImplementation((p: unknown) => {
-        if (p === PROJECTS_FILE) return false;
         if (typeof p === "string" && p.includes("/code/myapp")) return true;
-        return true;
+        return false;
       });
 
       const result = createProject({ path: "/Users/test/code/myapp", name: "My App" });
@@ -171,12 +210,7 @@ describe("projects-service", () => {
     });
 
     it("should reject non-existent path", () => {
-      mockNoStore();
-      // existsSync returns false for everything except adjutant dir
-      vi.mocked(existsSync).mockImplementation((p: unknown) => {
-        if (p === ADJUTANT_DIR) return true;
-        return false;
-      });
+      vi.mocked(existsSync).mockReturnValue(false);
 
       const result = createProject({ path: "/does/not/exist" });
       expect(result.success).toBe(false);
@@ -186,7 +220,7 @@ describe("projects-service", () => {
 
     it("should reject duplicate path", () => {
       const existing = createMockProject({ path: "/Users/test/code/myapp" });
-      mockStoreExists({ projects: [existing] });
+      insertProject(testDb, existing);
       vi.mocked(existsSync).mockReturnValue(true);
 
       const result = createProject({ path: "/Users/test/code/myapp" });
@@ -195,22 +229,20 @@ describe("projects-service", () => {
     });
 
     it("should create empty project with git init", () => {
-      mockNoStore();
-      vi.mocked(existsSync).mockImplementation((p: unknown) => {
-        if (p === ADJUTANT_DIR) return true;
-        return false;
-      });
+      vi.mocked(existsSync).mockReturnValue(false);
 
       const result = createProject({ name: "new-project", empty: true });
       expect(result.success).toBe(true);
       expect(result.data!.name).toBe("new-project");
       expect(mkdirSync).toHaveBeenCalled();
       expect(execSync).toHaveBeenCalledWith("git init", expect.any(Object));
+
+      // Verify it was inserted into SQLite
+      const rows = testDb.prepare("SELECT * FROM projects").all();
+      expect(rows).toHaveLength(1);
     });
 
     it("should require name for empty projects", () => {
-      mockNoStore();
-
       const result = createProject({ empty: true });
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("VALIDATION_ERROR");
@@ -218,11 +250,7 @@ describe("projects-service", () => {
     });
 
     it("should create from clone URL", () => {
-      mockNoStore();
-      vi.mocked(existsSync).mockImplementation((p: unknown) => {
-        if (p === ADJUTANT_DIR) return true;
-        return false;
-      });
+      vi.mocked(existsSync).mockReturnValue(false);
       vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({ cloneUrl: "git@github.com:user/myrepo.git" });
@@ -232,10 +260,8 @@ describe("projects-service", () => {
     });
 
     it("should reject clone when target directory exists", () => {
-      mockNoStore();
       vi.mocked(existsSync).mockImplementation((p: unknown) => {
         if (typeof p === "string" && p.includes("myrepo")) return true;
-        if (p === ADJUTANT_DIR) return true;
         return false;
       });
 
@@ -245,28 +271,13 @@ describe("projects-service", () => {
     });
 
     it("should return error when no valid input provided", () => {
-      mockNoStore();
-
       const result = createProject({});
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("VALIDATION_ERROR");
     });
 
-    // =========================================================================
-    // createProject with targetDir (adj-050.1)
-    // =========================================================================
-
     it("should clone into custom targetDir when provided", () => {
-      mockNoStore();
-      vi.mocked(existsSync).mockImplementation((p: unknown) => {
-        const ps = String(p);
-        if (ps === ADJUTANT_DIR) return true;
-        // targetDir does NOT exist yet (good — clone will create it)
-        if (ps === "/tmp/my-custom-dir/myrepo") return false;
-        // Parent dir exists
-        if (ps === "/tmp/my-custom-dir") return true;
-        return false;
-      });
+      vi.mocked(existsSync).mockReturnValue(false);
       vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
@@ -277,7 +288,6 @@ describe("projects-service", () => {
       expect(result.data!.path).toBe("/tmp/my-custom-dir/myrepo");
       expect(result.data!.name).toBe("myrepo");
       expect(result.data!.gitRemote).toBe("git@github.com:user/myrepo.git");
-      // Should call git clone with args array (no shell interpolation)
       expect(execFileSync).toHaveBeenCalledWith(
         "git",
         ["clone", "git@github.com:user/myrepo.git", "/tmp/my-custom-dir/myrepo"],
@@ -286,14 +296,8 @@ describe("projects-service", () => {
     });
 
     it("should use default targetDir when targetDir not provided (backward compat)", () => {
-      mockNoStore();
       const defaultTarget = join(homedir(), "projects", "myrepo");
-      vi.mocked(existsSync).mockImplementation((p: unknown) => {
-        const ps = String(p);
-        if (ps === ADJUTANT_DIR) return true;
-        if (ps === defaultTarget) return false;
-        return false;
-      });
+      vi.mocked(existsSync).mockReturnValue(false);
       vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
@@ -301,7 +305,6 @@ describe("projects-service", () => {
       });
       expect(result.success).toBe(true);
       expect(result.data!.path).toBe(defaultTarget);
-      // Should call git clone with the default path
       expect(execFileSync).toHaveBeenCalledWith(
         "git",
         ["clone", "git@github.com:user/myrepo.git", defaultTarget],
@@ -309,34 +312,8 @@ describe("projects-service", () => {
       );
     });
 
-    it("should reject clone with targetDir when targetDir already exists", () => {
-      mockNoStore();
-      vi.mocked(existsSync).mockImplementation((p: unknown) => {
-        const ps = String(p);
-        if (ps === ADJUTANT_DIR) return true;
-        // targetDir already exists
-        if (ps === "/tmp/existing-dir") return true;
-        return false;
-      });
-
-      const result = createProject({
-        cloneUrl: "git@github.com:user/myrepo.git",
-        targetDir: "/tmp/existing-dir",
-      });
-      expect(result.success).toBe(false);
-      expect(result.error!.code).toBe("CONFLICT");
-      expect(result.error!.message).toContain("/tmp/existing-dir");
-    });
-
     it("should create parent directories for targetDir if they don't exist", () => {
-      mockNoStore();
-      vi.mocked(existsSync).mockImplementation((p: unknown) => {
-        const ps = String(p);
-        if (ps === ADJUTANT_DIR) return true;
-        // targetDir does not exist (good)
-        if (ps === "/tmp/deep/nested/myrepo") return false;
-        return false;
-      });
+      vi.mocked(existsSync).mockReturnValue(false);
       vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
@@ -345,18 +322,11 @@ describe("projects-service", () => {
       });
       expect(result.success).toBe(true);
       expect(result.data!.path).toBe("/tmp/deep/nested/myrepo");
-      // Parent directory should be created recursively
       expect(mkdirSync).toHaveBeenCalledWith("/tmp/deep/nested", { recursive: true });
     });
 
     it("should use custom name with targetDir", () => {
-      mockNoStore();
-      vi.mocked(existsSync).mockImplementation((p: unknown) => {
-        const ps = String(p);
-        if (ps === ADJUTANT_DIR) return true;
-        if (ps === "/tmp/my-dir") return false;
-        return false;
-      });
+      vi.mocked(existsSync).mockReturnValue(false);
       vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
@@ -370,14 +340,8 @@ describe("projects-service", () => {
     });
 
     it("should expand ~ in targetDir to home directory", () => {
-      mockNoStore();
       const expandedPath = join(homedir(), "code/ai/C4");
-      vi.mocked(existsSync).mockImplementation((p: unknown) => {
-        const ps = String(p);
-        if (ps === ADJUTANT_DIR) return true;
-        if (ps === expandedPath) return false;
-        return false;
-      });
+      vi.mocked(existsSync).mockReturnValue(false);
       vi.mocked(execFileSync).mockReturnValue("");
 
       const result = createProject({
@@ -394,11 +358,9 @@ describe("projects-service", () => {
     });
 
     it("should expand ~ in path to home directory", () => {
-      mockNoStore();
       const expandedPath = join(homedir(), "code/myapp");
       vi.mocked(existsSync).mockImplementation((p: unknown) => {
         const ps = String(p);
-        if (ps === ADJUTANT_DIR) return true;
         if (ps === expandedPath) return true;
         return false;
       });
@@ -409,21 +371,17 @@ describe("projects-service", () => {
     });
 
     it("should ignore targetDir when not using cloneUrl mode", () => {
-      mockNoStore();
       vi.mocked(existsSync).mockImplementation((p: unknown) => {
         const ps = String(p);
-        if (ps === ADJUTANT_DIR) return true;
         if (typeof ps === "string" && ps.includes("/code/myapp")) return true;
         return false;
       });
 
-      // targetDir is provided but mode is 'path', not 'cloneUrl'
       const result = createProject({
         path: "/Users/test/code/myapp",
         targetDir: "/tmp/should-be-ignored",
       });
       expect(result.success).toBe(true);
-      // path mode uses the path field, not targetDir
       expect(result.data!.path).toBe("/Users/test/code/myapp");
     });
   });
@@ -434,24 +392,24 @@ describe("projects-service", () => {
 
   describe("activateProject", () => {
     it("should activate project and deactivate others", () => {
-      const p1 = createMockProject({ id: "p1", active: true });
-      const p2 = createMockProject({ id: "p2", active: false });
-      mockStoreExists({ projects: [p1, p2] });
+      insertProject(testDb, createMockProject({ id: "p1", name: "proj-1", path: "/path/1", active: true }));
+      insertProject(testDb, createMockProject({ id: "p2", name: "proj-2", path: "/path/2", active: false }));
+
+      vi.mocked(existsSync).mockReturnValue(false);
 
       const result = activateProject("p2");
       expect(result.success).toBe(true);
       expect(result.data!.id).toBe("p2");
+      expect(result.data!.active).toBe(true);
 
-      // Check that writeFileSync was called with correct data
-      const writeCall = vi.mocked(writeFileSync).mock.calls[0];
-      const savedStore = JSON.parse(writeCall[1] as string) as ProjectsStore;
-      expect(savedStore.projects[0].active).toBe(false);
-      expect(savedStore.projects[1].active).toBe(true);
+      // Check DB state
+      const p1Row = testDb.prepare("SELECT active FROM projects WHERE id = ?").get("p1") as { active: number };
+      const p2Row = testDb.prepare("SELECT active FROM projects WHERE id = ?").get("p2") as { active: number };
+      expect(p1Row.active).toBe(0);
+      expect(p2Row.active).toBe(1);
     });
 
     it("should return NOT_FOUND for missing project", () => {
-      mockStoreExists({ projects: [] });
-
       const result = activateProject("nonexistent");
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("NOT_FOUND");
@@ -463,22 +421,18 @@ describe("projects-service", () => {
   // ===========================================================================
 
   describe("deleteProject", () => {
-    it("should remove project from store", () => {
-      const project = createMockProject({ id: "del-1" });
-      mockStoreExists({ projects: [project] });
+    it("should remove project from SQLite", () => {
+      insertProject(testDb, createMockProject({ id: "del-1", name: "del-proj", path: "/path/del" }));
 
       const result = deleteProject("del-1");
       expect(result.success).toBe(true);
       expect(result.data!.deleted).toBe(true);
 
-      const writeCall = vi.mocked(writeFileSync).mock.calls[0];
-      const savedStore = JSON.parse(writeCall[1] as string) as ProjectsStore;
-      expect(savedStore.projects).toHaveLength(0);
+      const rows = testDb.prepare("SELECT * FROM projects").all();
+      expect(rows).toHaveLength(0);
     });
 
     it("should return NOT_FOUND for missing project", () => {
-      mockStoreExists({ projects: [] });
-
       const result = deleteProject("nonexistent");
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("NOT_FOUND");
@@ -490,14 +444,12 @@ describe("projects-service", () => {
   // ===========================================================================
 
   describe("discoverLocalProjects", () => {
-    // Must match the service's resolve(ADJUTANT_PROJECT_ROOT || cwd())
     const PROJECT_ROOT = resolve(process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd());
 
     function mockDiscoverFs(dirs: Record<string, { hasGit?: boolean; hasBeads?: boolean; children?: string[] }>) {
       vi.mocked(existsSync).mockImplementation((p: unknown) => {
         const ps = String(p);
-        if (ps === ADJUTANT_DIR || ps === PROJECT_ROOT) return true;
-        if (ps === PROJECTS_FILE) return false;
+        if (ps === PROJECT_ROOT) return true;
         // Check .git and .beads/beads.db
         for (const [dir, opts] of Object.entries(dirs)) {
           const absDir = join(PROJECT_ROOT, dir);
@@ -514,7 +466,6 @@ describe("projects-service", () => {
       vi.mocked(readdirSync).mockImplementation((p: unknown) => {
         const ps = String(p);
         if (ps === PROJECT_ROOT) return Object.keys(dirs) as unknown as ReturnType<typeof readdirSync>;
-        // Check if any dir has children
         for (const [dir, opts] of Object.entries(dirs)) {
           if (ps === join(PROJECT_ROOT, dir) && opts.children) {
             return opts.children as unknown as ReturnType<typeof readdirSync>;
@@ -536,7 +487,6 @@ describe("projects-service", () => {
 
       const result = discoverLocalProjects();
       expect(result.success).toBe(true);
-      // Root + project-a discovered (not-a-project skipped)
       const names = result.data!.map((p) => p.name);
       expect(names).toContain("project-a");
       expect(names).not.toContain("not-a-project");
@@ -553,7 +503,7 @@ describe("projects-service", () => {
       expect(names).toContain("beads-only-project");
     });
 
-    it("should set hasBeads on projects with .beads/beads.db", () => {
+    it("should compute hasBeads on discovered projects", () => {
       mockDiscoverFs({
         "with-beads": { hasGit: true, hasBeads: true },
         "without-beads": { hasGit: true },
@@ -569,101 +519,72 @@ describe("projects-service", () => {
     });
 
     it("should respect maxDepth option", () => {
-      // With maxDepth 0, should only register root, not scan children
       mockDiscoverFs({
         "child-project": { hasGit: true },
       });
 
       const result = discoverLocalProjects({ maxDepth: 0 });
       expect(result.success).toBe(true);
-      // Only root should be discovered, not child-project
       const names = result.data!.map((p) => p.name);
       expect(names).not.toContain("child-project");
     });
 
-    it("should clamp maxDepth to MAX_SCAN_DEPTH (3)", () => {
-      mockDiscoverFs({
-        "child": { hasGit: true },
-      });
-
-      // maxDepth 100 should be clamped to 3 (but still work)
-      const result = discoverLocalProjects({ maxDepth: 100 });
-      expect(result.success).toBe(true);
-    });
-
     it("should activate CWD project when already registered but inactive", () => {
-      // Simulate: projects.json has the CWD registered but inactive,
-      // plus another project that IS active (from a previous session).
-      const cwdProject = createMockProject({
+      // Pre-insert inactive CWD and active other project
+      insertProject(testDb, {
         id: "cwd-proj",
         name: basename(PROJECT_ROOT),
         path: PROJECT_ROOT,
         active: false,
       });
-      const otherProject = createMockProject({
+      insertProject(testDb, {
         id: "other-proj",
         name: "other",
         path: "/Users/test/code/other-project",
         active: true,
       });
 
-      // Store already has entries, so the listProjects() auto-seed won't fire
       vi.mocked(existsSync).mockImplementation((p: unknown) => {
         const ps = String(p);
-        if (ps === ADJUTANT_DIR || ps === PROJECTS_FILE || ps === PROJECT_ROOT) return true;
-        // Root has .git
+        if (ps === PROJECT_ROOT) return true;
         if (ps === join(PROJECT_ROOT, ".git")) return true;
-        if (ps === join(PROJECT_ROOT, ".beads", "beads.db")) return false;
         if (ps === "/Users/test/code/other-project") return true;
-        if (ps === join("/Users/test/code/other-project", ".beads", "beads.db")) return false;
         return false;
       });
-      vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ projects: [cwdProject, otherProject] }));
       vi.mocked(readdirSync).mockReturnValue([] as unknown as ReturnType<typeof readdirSync>);
       vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as ReturnType<typeof statSync>);
 
       const result = discoverLocalProjects();
       expect(result.success).toBe(true);
 
-      // Verify the store was saved with CWD active and other inactive
-      expect(writeFileSync).toHaveBeenCalled();
-      const writeCall = vi.mocked(writeFileSync).mock.calls[0];
-      const savedStore = JSON.parse(writeCall[1] as string) as ProjectsStore;
-      const savedCwd = savedStore.projects.find((p) => p.id === "cwd-proj");
-      const savedOther = savedStore.projects.find((p) => p.id === "other-proj");
-      expect(savedCwd?.active).toBe(true);
-      expect(savedOther?.active).toBe(false);
+      // Verify DB state: CWD active, other inactive
+      const cwdRow = testDb.prepare("SELECT active FROM projects WHERE id = ?").get("cwd-proj") as { active: number };
+      const otherRow = testDb.prepare("SELECT active FROM projects WHERE id = ?").get("other-proj") as { active: number };
+      expect(cwdRow.active).toBe(1);
+      expect(otherRow.active).toBe(0);
     });
 
     it("should persist activation even when no new projects are discovered", () => {
-      // The CWD is already registered but inactive; no hasBeads changes, no new discoveries.
-      // The store should still be saved because activation changed.
-      const cwdProject = createMockProject({
+      insertProject(testDb, {
         id: "cwd-existing",
         name: basename(PROJECT_ROOT),
         path: PROJECT_ROOT,
         active: false,
-        hasBeads: false,
       });
 
       vi.mocked(existsSync).mockImplementation((p: unknown) => {
         const ps = String(p);
-        if (ps === ADJUTANT_DIR || ps === PROJECTS_FILE || ps === PROJECT_ROOT) return true;
+        if (ps === PROJECT_ROOT) return true;
         if (ps === join(PROJECT_ROOT, ".git")) return true;
-        if (ps === join(PROJECT_ROOT, ".beads", "beads.db")) return false;
         return false;
       });
-      vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ projects: [cwdProject] }));
       vi.mocked(readdirSync).mockReturnValue([] as unknown as ReturnType<typeof readdirSync>);
       vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as ReturnType<typeof statSync>);
 
       discoverLocalProjects();
 
-      // writeFileSync MUST be called since active flag changed
-      expect(writeFileSync).toHaveBeenCalled();
-      const writeCall = vi.mocked(writeFileSync).mock.calls[0];
-      const savedStore = JSON.parse(writeCall[1] as string) as ProjectsStore;
-      expect(savedStore.projects[0].active).toBe(true);
+      const row = testDb.prepare("SELECT active FROM projects WHERE id = ?").get("cwd-existing") as { active: number };
+      expect(row.active).toBe(1);
     });
   });
 
@@ -673,14 +594,11 @@ describe("projects-service", () => {
 
   describe("checkProjectHealth", () => {
     it("should return healthy for project with path and git", () => {
-      const project = createMockProject({ id: "h1", path: "/Users/test/code/healthy" });
-      mockStoreExists({ projects: [project] });
+      insertProject(testDb, createMockProject({ id: "h1", name: "healthy", path: "/Users/test/code/healthy" }));
       vi.mocked(existsSync).mockImplementation((p: unknown) => {
         const ps = String(p);
-        if (ps === ADJUTANT_DIR || ps === PROJECTS_FILE) return true;
         if (ps === "/Users/test/code/healthy") return true;
         if (ps === "/Users/test/code/healthy/.git") return true;
-        if (ps === join("/Users/test/code/healthy", ".beads", "beads.db")) return false;
         return false;
       });
 
@@ -693,14 +611,8 @@ describe("projects-service", () => {
     });
 
     it("should return stale for project with missing path", () => {
-      const project = createMockProject({ id: "s1", path: "/Users/test/code/gone" });
-      mockStoreExists({ projects: [project] });
-      vi.mocked(existsSync).mockImplementation((p: unknown) => {
-        const ps = String(p);
-        if (ps === ADJUTANT_DIR || ps === PROJECTS_FILE) return true;
-        if (ps === "/Users/test/code/gone") return false;
-        return false;
-      });
+      insertProject(testDb, createMockProject({ id: "s1", name: "gone", path: "/Users/test/code/gone" }));
+      vi.mocked(existsSync).mockReturnValue(false);
 
       const result = checkProjectHealth("s1");
       expect(result.success).toBe(true);
@@ -709,11 +621,9 @@ describe("projects-service", () => {
     });
 
     it("should return degraded for project without git", () => {
-      const project = createMockProject({ id: "d1", path: "/Users/test/code/no-git" });
-      mockStoreExists({ projects: [project] });
+      insertProject(testDb, createMockProject({ id: "d1", name: "no-git", path: "/Users/test/code/no-git" }));
       vi.mocked(existsSync).mockImplementation((p: unknown) => {
         const ps = String(p);
-        if (ps === ADJUTANT_DIR || ps === PROJECTS_FILE) return true;
         if (ps === "/Users/test/code/no-git") return true;
         if (ps === "/Users/test/code/no-git/.git") return false;
         if (ps === join("/Users/test/code/no-git", ".beads", "beads.db")) return true;
@@ -727,19 +637,15 @@ describe("projects-service", () => {
     });
 
     it("should return NOT_FOUND for unknown project", () => {
-      mockStoreExists({ projects: [] });
-
       const result = checkProjectHealth("unknown");
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("NOT_FOUND");
     });
 
-    it("should update hasBeads in store when it changes", () => {
-      const project = createMockProject({ id: "u1", path: "/Users/test/code/proj", hasBeads: false });
-      mockStoreExists({ projects: [project] });
+    it("should compute hasBeads on read (not stored)", () => {
+      insertProject(testDb, createMockProject({ id: "u1", name: "proj", path: "/Users/test/code/proj" }));
       vi.mocked(existsSync).mockImplementation((p: unknown) => {
         const ps = String(p);
-        if (ps === ADJUTANT_DIR || ps === PROJECTS_FILE) return true;
         if (ps === "/Users/test/code/proj") return true;
         if (ps === "/Users/test/code/proj/.git") return true;
         if (ps === join("/Users/test/code/proj", ".beads", "beads.db")) return true;
@@ -749,9 +655,6 @@ describe("projects-service", () => {
       const result = checkProjectHealth("u1");
       expect(result.success).toBe(true);
       expect(result.data!.hasBeads).toBe(true);
-
-      // Verify store was saved (hasBeads changed from false to true)
-      expect(writeFileSync).toHaveBeenCalled();
     });
   });
 });

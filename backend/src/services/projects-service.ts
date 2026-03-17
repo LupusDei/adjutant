@@ -1,18 +1,19 @@
 /**
  * Projects service for managing project registrations.
  *
- * Persists projects to ~/.adjutant/projects.json.
+ * Persists projects to SQLite (projects table).
  * Supports create (from path, clone URL, or empty), list, activate, and delete.
  *
  * @module services/projects-service
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, statSync } from "fs";
 import { execSync, execFileSync } from "child_process";
 import { join, resolve, basename } from "path";
 import { randomUUID } from "crypto";
 import { homedir } from "os";
 import { logInfo, logError, logDebug } from "../utils/index.js";
+import { getDatabase } from "./database.js";
 
 // ============================================================================
 // Types
@@ -65,50 +66,50 @@ export interface ProjectHealth {
 }
 
 // ============================================================================
+// SQL Row Type
+// ============================================================================
+
+/** Shape of a row from the projects table. */
+interface ProjectRow {
+  id: string;
+  name: string;
+  path: string;
+  git_remote: string | null;
+  mode: string;
+  sessions: string;
+  created_at: string;
+  active: number;
+}
+
+// ============================================================================
 // Constants
 // ============================================================================
 
-const ADJUTANT_DIR = join(homedir(), ".adjutant");
-const PROJECTS_FILE = join(ADJUTANT_DIR, "projects.json");
 const DEFAULT_PROJECTS_BASE = join(homedir(), "projects");
 const DEFAULT_SCAN_DEPTH = 1;
 const MAX_SCAN_DEPTH = 3;
 const SKIP_DIRS = new Set(["node_modules", ".git", ".beads", "dist", "build", ".next", "__pycache__"]);
 
 // ============================================================================
-// Persistence
+// Row Mapping
 // ============================================================================
 
-function ensureAdjutantDir(): void {
-  if (!existsSync(ADJUTANT_DIR)) {
-    mkdirSync(ADJUTANT_DIR, { recursive: true });
-  }
-}
-
-function loadStore(): ProjectsStore {
-  ensureAdjutantDir();
-  if (!existsSync(PROJECTS_FILE)) {
-    return { projects: [] };
-  }
-  try {
-    const raw = readFileSync(PROJECTS_FILE, "utf8");
-    const store = JSON.parse(raw) as ProjectsStore;
-    // Normalize legacy "standalone" mode to "swarm" at the API boundary.
-    // The gt CLI and older projects.json files may still contain "standalone".
-    for (const project of store.projects) {
-      if ((project.mode as string) === "standalone") {
-        project.mode = "swarm";
-      }
-    }
-    return store;
-  } catch {
-    return { projects: [] };
-  }
-}
-
-function saveStore(store: ProjectsStore): void {
-  ensureAdjutantDir();
-  writeFileSync(PROJECTS_FILE, JSON.stringify(store, null, 2), "utf8");
+/**
+ * Map a SQLite row to the Project interface.
+ * hasBeads is computed on read, not stored.
+ */
+function rowToProject(row: ProjectRow): Project {
+  return {
+    id: row.id,
+    name: row.name,
+    path: row.path,
+    gitRemote: row.git_remote ?? undefined,
+    mode: "swarm",
+    sessions: JSON.parse(row.sessions) as string[],
+    createdAt: row.created_at,
+    active: row.active === 1,
+    hasBeads: hasBeadsDb(row.path),
+  };
 }
 
 // ============================================================================
@@ -232,7 +233,7 @@ function scanForProjects(
  * 2. Child directories that contain a `.git/` directory or `.beads/beads.db`
  *
  * Detection criteria: A directory is a project if it has `.git/` OR `.beads/beads.db`.
- * The `hasBeads` field is set on all discovered projects.
+ * The `hasBeads` field is computed on read via `hasBeadsDb(path)`.
  *
  * Skips: node_modules, .git, .beads, dist, build, hidden dirs (`.` prefix), non-directories.
  * De-duplicates against already-registered paths.
@@ -241,51 +242,44 @@ function scanForProjects(
  */
 export function discoverLocalProjects(options?: DiscoverOptions): ProjectsServiceResult<Project[]> {
   try {
+    const db = getDatabase();
     const projectRoot = resolve(process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd());
     const requestedDepth = options?.maxDepth ?? DEFAULT_SCAN_DEPTH;
     const maxDepth = Math.min(Math.max(0, requestedDepth), MAX_SCAN_DEPTH);
 
-    const store = loadStore();
-    const existingPaths = new Set(store.projects.map((p) => p.path));
+    const existingRows = db.prepare("SELECT path FROM projects").all() as Array<{ path: string }>;
+    const existingPaths = new Set(existingRows.map((r) => r.path));
     const discovered: Project[] = [];
 
-    // Update hasBeads on existing projects (may have changed since last scan)
-    let existingUpdated = false;
-    for (const project of store.projects) {
-      if (existsSync(project.path)) {
-        const beads = hasBeadsDb(project.path);
-        if (project.hasBeads !== beads) {
-          project.hasBeads = beads;
-          existingUpdated = true;
-        }
-      }
-    }
+    const insertProject = db.prepare(`
+      INSERT OR IGNORE INTO projects (id, name, path, git_remote, mode, sessions, created_at, active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
 
     // Register the project root itself if not already registered
     if (!existingPaths.has(projectRoot) && existsSync(projectRoot)) {
-      const rootProject: Project = {
-        id: generateId(),
-        name: nameFromPath(projectRoot),
-        path: projectRoot,
-        gitRemote: detectGitRemote(projectRoot),
-        mode: "swarm",
-        sessions: [],
-        createdAt: new Date().toISOString(),
-        active: true,
-        hasBeads: hasBeadsDb(projectRoot),
-      };
-      store.projects.push(rootProject);
+      const id = generateId();
+      const name = nameFromPath(projectRoot);
+      const gitRemote = detectGitRemote(projectRoot);
+      const createdAt = new Date().toISOString();
+
+      insertProject.run(id, name, projectRoot, gitRemote ?? null, "swarm", "[]", createdAt, 1);
       existingPaths.add(projectRoot);
+
+      const rootProject: Project = {
+        id, name, path: projectRoot, gitRemote, mode: "swarm",
+        sessions: [], createdAt, active: true, hasBeads: hasBeadsDb(projectRoot),
+      };
       discovered.push(rootProject);
-      logInfo("discovered project root", { id: rootProject.id, name: rootProject.name, path: projectRoot, hasBeads: rootProject.hasBeads });
+      logInfo("discovered project root", { id, name, path: projectRoot, hasBeads: rootProject.hasBeads });
     } else {
       // Mark the existing root project as active (and deactivate others)
-      const existing = store.projects.find((p) => p.path === projectRoot);
-      if (existing && !existing.active) {
-        for (const p of store.projects) {
-          p.active = p.path === projectRoot;
-        }
-        existingUpdated = true;
+      const existing = db.prepare("SELECT id, active FROM projects WHERE path = ?").get(projectRoot) as { id: string; active: number } | undefined;
+      if (existing && existing.active === 0) {
+        db.transaction(() => {
+          db.prepare("UPDATE projects SET active = 0").run();
+          db.prepare("UPDATE projects SET active = 1 WHERE path = ?").run(projectRoot);
+        })();
       }
     }
 
@@ -295,30 +289,27 @@ export function discoverLocalProjects(options?: DiscoverOptions): ProjectsServic
       const projectPaths = scanForProjects(projectRoot, maxDepth - 1);
       logDebug("project scan complete", { root: projectRoot, maxDepth, found: projectPaths.length });
 
-      for (const childPath of projectPaths) {
-        if (existingPaths.has(childPath)) continue;
+      const insertBatch = db.transaction(() => {
+        for (const childPath of projectPaths) {
+          if (existingPaths.has(childPath)) continue;
 
-        const project: Project = {
-          id: generateId(),
-          name: nameFromPath(childPath),
-          path: childPath,
-          gitRemote: detectGitRemote(childPath),
-          mode: "swarm",
-          sessions: [],
-          createdAt: new Date().toISOString(),
-          active: false,
-          hasBeads: hasBeadsDb(childPath),
-        };
+          const id = generateId();
+          const name = nameFromPath(childPath);
+          const gitRemote = detectGitRemote(childPath);
+          const createdAt = new Date().toISOString();
 
-        store.projects.push(project);
-        existingPaths.add(childPath);
-        discovered.push(project);
-        logInfo("discovered child project", { id: project.id, name: project.name, path: childPath, hasBeads: project.hasBeads });
-      }
-    }
+          insertProject.run(id, name, childPath, gitRemote ?? null, "swarm", "[]", createdAt, 0);
+          existingPaths.add(childPath);
 
-    if (discovered.length > 0 || existingUpdated) {
-      saveStore(store);
+          const project: Project = {
+            id, name, path: childPath, gitRemote, mode: "swarm",
+            sessions: [], createdAt, active: false, hasBeads: hasBeadsDb(childPath),
+          };
+          discovered.push(project);
+          logInfo("discovered child project", { id, name, path: childPath, hasBeads: project.hasBeads });
+        }
+      });
+      insertBatch();
     }
 
     return { success: true, data: discovered };
@@ -335,15 +326,16 @@ export function discoverLocalProjects(options?: DiscoverOptions): ProjectsServic
  */
 export function listProjects(): ProjectsServiceResult<Project[]> {
   try {
-    let store = loadStore();
+    const db = getDatabase();
+    let rows = db.prepare("SELECT * FROM projects").all() as ProjectRow[];
 
     // Auto-seed on first access if no projects registered
-    if (store.projects.length === 0) {
+    if (rows.length === 0) {
       discoverLocalProjects();
-      store = loadStore();
+      rows = db.prepare("SELECT * FROM projects").all() as ProjectRow[];
     }
 
-    return { success: true, data: store.projects };
+    return { success: true, data: rows.map(rowToProject) };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to list projects";
     logError("listProjects failed", { error: message });
@@ -356,12 +348,12 @@ export function listProjects(): ProjectsServiceResult<Project[]> {
  */
 export function getProject(id: string): ProjectsServiceResult<Project> {
   try {
-    const store = loadStore();
-    const project = store.projects.find((p) => p.id === id);
-    if (!project) {
+    const db = getDatabase();
+    const row = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow | undefined;
+    if (!row) {
       return { success: false, error: { code: "NOT_FOUND", message: `Project '${id}' not found` } };
     }
-    return { success: true, data: project };
+    return { success: true, data: rowToProject(row) };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to get project";
     logError("getProject failed", { error: message });
@@ -377,21 +369,19 @@ export function getProject(id: string): ProjectsServiceResult<Project> {
  */
 export function createProject(input: CreateProjectInput): ProjectsServiceResult<Project> {
   try {
-    const store = loadStore();
-
     if (input.cloneUrl) {
-      return createFromClone(store, input.cloneUrl, input.name, input.targetDir);
+      return createFromClone(input.cloneUrl, input.name, input.targetDir);
     }
 
     if (input.empty) {
       if (!input.name) {
         return { success: false, error: { code: "VALIDATION_ERROR", message: "Name is required for empty projects" } };
       }
-      return createEmpty(store, input.name);
+      return createEmpty(input.name);
     }
 
     if (input.path) {
-      return createFromPath(store, input.path, input.name);
+      return createFromPath(input.path, input.name);
     }
 
     return {
@@ -405,7 +395,8 @@ export function createProject(input: CreateProjectInput): ProjectsServiceResult<
   }
 }
 
-function createFromPath(store: ProjectsStore, dirPath: string, name?: string): ProjectsServiceResult<Project> {
+function createFromPath(dirPath: string, name?: string): ProjectsServiceResult<Project> {
+  const db = getDatabase();
   const absPath = resolve(expandTilde(dirPath));
 
   if (!existsSync(absPath)) {
@@ -413,7 +404,7 @@ function createFromPath(store: ProjectsStore, dirPath: string, name?: string): P
   }
 
   // Check for duplicate path
-  const existing = store.projects.find((p) => p.path === absPath);
+  const existing = db.prepare("SELECT id FROM projects WHERE path = ?").get(absPath);
   if (existing) {
     return { success: false, error: { code: "CONFLICT", message: `Project already registered at path: ${absPath}` } };
   }
@@ -429,14 +420,17 @@ function createFromPath(store: ProjectsStore, dirPath: string, name?: string): P
     active: false,
   };
 
-  store.projects.push(project);
-  saveStore(store);
+  db.prepare(`
+    INSERT INTO projects (id, name, path, git_remote, mode, sessions, created_at, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(project.id, project.name, project.path, project.gitRemote ?? null, "swarm", "[]", project.createdAt, 0);
 
   logInfo("project created from path", { id: project.id, name: project.name, path: project.path });
   return { success: true, data: project };
 }
 
-function createFromClone(store: ProjectsStore, cloneUrl: string, name?: string, inputTargetDir?: string): ProjectsServiceResult<Project> {
+function createFromClone(cloneUrl: string, name?: string, inputTargetDir?: string): ProjectsServiceResult<Project> {
+  const db = getDatabase();
   const projectName = name ?? nameFromCloneUrl(cloneUrl);
   const targetDir = inputTargetDir
     ? resolve(expandTilde(inputTargetDir))
@@ -472,14 +466,17 @@ function createFromClone(store: ProjectsStore, cloneUrl: string, name?: string, 
     active: false,
   };
 
-  store.projects.push(project);
-  saveStore(store);
+  db.prepare(`
+    INSERT INTO projects (id, name, path, git_remote, mode, sessions, created_at, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(project.id, project.name, project.path, project.gitRemote ?? null, "swarm", "[]", project.createdAt, 0);
 
   logInfo("project created from clone", { id: project.id, name: project.name, cloneUrl });
   return { success: true, data: project };
 }
 
-function createEmpty(store: ProjectsStore, name: string): ProjectsServiceResult<Project> {
+function createEmpty(name: string): ProjectsServiceResult<Project> {
+  const db = getDatabase();
   const targetDir = join(DEFAULT_PROJECTS_BASE, name);
 
   if (existsSync(targetDir)) {
@@ -509,8 +506,10 @@ function createEmpty(store: ProjectsStore, name: string): ProjectsServiceResult<
     active: false,
   };
 
-  store.projects.push(project);
-  saveStore(store);
+  db.prepare(`
+    INSERT INTO projects (id, name, path, git_remote, mode, sessions, created_at, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(project.id, project.name, project.path, null, "swarm", "[]", project.createdAt, 0);
 
   logInfo("empty project created", { id: project.id, name: project.name, path: targetDir });
   return { success: true, data: project };
@@ -522,22 +521,21 @@ function createEmpty(store: ProjectsStore, name: string): ProjectsServiceResult<
  */
 export function activateProject(id: string): ProjectsServiceResult<Project> {
   try {
-    const store = loadStore();
-    const project = store.projects.find((p) => p.id === id);
+    const db = getDatabase();
+    const row = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow | undefined;
 
-    if (!project) {
+    if (!row) {
       return { success: false, error: { code: "NOT_FOUND", message: `Project '${id}' not found` } };
     }
 
-    // Deactivate all, activate target
-    for (const p of store.projects) {
-      p.active = p.id === id;
-    }
+    // Deactivate all, activate target (transaction)
+    db.transaction(() => {
+      db.prepare("UPDATE projects SET active = 0").run();
+      db.prepare("UPDATE projects SET active = 1 WHERE id = ?").run(id);
+    })();
 
-    saveStore(store);
-
-    logInfo("project activated", { id: project.id, name: project.name });
-    return { success: true, data: project };
+    logInfo("project activated", { id: row.id, name: row.name });
+    return { success: true, data: rowToProject({ ...row, active: 1 }) };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to activate project";
     logError("activateProject failed", { error: message });
@@ -550,15 +548,12 @@ export function activateProject(id: string): ProjectsServiceResult<Project> {
  */
 export function deleteProject(id: string): ProjectsServiceResult<{ id: string; deleted: boolean }> {
   try {
-    const store = loadStore();
-    const index = store.projects.findIndex((p) => p.id === id);
+    const db = getDatabase();
+    const result = db.prepare("DELETE FROM projects WHERE id = ?").run(id);
 
-    if (index === -1) {
+    if (result.changes === 0) {
       return { success: false, error: { code: "NOT_FOUND", message: `Project '${id}' not found` } };
     }
-
-    store.projects.splice(index, 1);
-    saveStore(store);
 
     logInfo("project deleted", { id });
     return { success: true, data: { id, deleted: true } };
@@ -574,26 +569,18 @@ export function deleteProject(id: string): ProjectsServiceResult<{ id: string; d
  *
  * Verifies: path exists, .git/ valid, .beads/ present.
  * Returns a health status: "healthy", "degraded", or "stale".
- *
- * Also updates the stored project's hasBeads field if it changed.
  */
 export function checkProjectHealth(id: string): ProjectsServiceResult<ProjectHealth> {
   try {
-    const store = loadStore();
-    const project = store.projects.find((p) => p.id === id);
-    if (!project) {
+    const db = getDatabase();
+    const row = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow | undefined;
+    if (!row) {
       return { success: false, error: { code: "NOT_FOUND", message: `Project '${id}' not found` } };
     }
 
-    const pathExists = existsSync(project.path);
-    const hasGit = pathExists && existsSync(join(project.path, ".git"));
-    const beads = pathExists && hasBeadsDb(project.path);
-
-    // Update hasBeads in store if changed
-    if (project.hasBeads !== beads) {
-      project.hasBeads = beads;
-      saveStore(store);
-    }
+    const pathExists = existsSync(row.path);
+    const hasGit = pathExists && existsSync(join(row.path, ".git"));
+    const beads = pathExists && hasBeadsDb(row.path);
 
     let status: ProjectHealth["status"];
     if (!pathExists) {
@@ -604,7 +591,7 @@ export function checkProjectHealth(id: string): ProjectsServiceResult<ProjectHea
       status = "healthy";
     }
 
-    const gitRemote = hasGit ? detectGitRemote(project.path) : undefined;
+    const gitRemote = hasGit ? detectGitRemote(row.path) : undefined;
 
     return {
       success: true,

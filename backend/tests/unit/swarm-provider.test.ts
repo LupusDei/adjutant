@@ -2,34 +2,54 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+import Database from "better-sqlite3";
+
+// Create in-memory database for each test
+let testDb: Database.Database;
+
+function createTestDb(): Database.Database {
+  const db = new Database(":memory:");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      path TEXT NOT NULL UNIQUE,
+      git_remote TEXT,
+      mode TEXT NOT NULL DEFAULT 'swarm',
+      sessions TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+  return db;
+}
+
+// Mock database.js to return our test DB
+vi.mock("../../src/services/database.js", () => ({
+  getDatabase: () => testDb,
+  createDatabase: () => testDb,
+  runMigrations: () => {},
+}));
+
 import { SwarmProvider } from "../../src/services/workspace/swarm-provider.js";
 
-// Mock homedir to prevent loadRegisteredProjects() from reading the real
-// ~/.adjutant/projects.json, which would pollute test results with real data.
-vi.mock("os", async () => {
-  const actual = await vi.importActual<typeof import("os")>("os");
-  return { ...actual, homedir: () => TEST_HOMEDIR };
-});
-
 const TEST_DIR = join(tmpdir(), `swarm-provider-test-${Date.now()}`);
-const TEST_HOMEDIR = join(tmpdir(), `swarm-provider-home-${Date.now()}`);
 
 describe("SwarmProvider", () => {
   beforeEach(() => {
     mkdirSync(TEST_DIR, { recursive: true });
-    mkdirSync(TEST_HOMEDIR, { recursive: true });
+    testDb = createTestDb();
   });
 
   afterEach(() => {
-    for (const dir of [TEST_DIR, TEST_HOMEDIR]) {
-      try {
-        if (existsSync(dir)) {
-          rmSync(dir, { recursive: true, force: true });
-        }
-      } catch {
-        // Ignore cleanup errors
+    try {
+      if (existsSync(TEST_DIR)) {
+        rmSync(TEST_DIR, { recursive: true, force: true });
       }
+    } catch {
+      // Ignore cleanup errors
     }
+    if (testDb) testDb.close();
   });
 
   // ===========================================================================
@@ -155,14 +175,11 @@ describe("SwarmProvider", () => {
       mkdirSync(join(externalDir, ".beads"), { recursive: true });
       writeFileSync(join(externalDir, ".beads", "beads.db"), "");
 
-      // Write projects.json in the mocked homedir
-      const adjutantDir = join(TEST_HOMEDIR, ".adjutant");
-      mkdirSync(adjutantDir, { recursive: true });
-      writeFileSync(join(adjutantDir, "projects.json"), JSON.stringify({
-        projects: [
-          { name: "external-proj", path: externalDir, hasBeads: true, active: false },
-        ],
-      }));
+      // Insert external project into SQLite (replaces writing projects.json)
+      testDb.prepare(`
+        INSERT INTO projects (id, name, path, mode, sessions, created_at, active)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run("ext-1", "external-proj", externalDir, "swarm", "[]", "2026-01-01T00:00:00.000Z", 0);
 
       const provider = new SwarmProvider(TEST_DIR);
       const dirs = await provider.listBeadsDirs();
@@ -246,13 +263,11 @@ describe("SwarmProvider", () => {
       mkdirSync(join(externalDir, ".beads"), { recursive: true });
       writeFileSync(join(externalDir, ".beads", "beads.db"), "");
 
-      const adjutantDir = join(TEST_HOMEDIR, ".adjutant");
-      mkdirSync(adjutantDir, { recursive: true });
-      writeFileSync(join(adjutantDir, "projects.json"), JSON.stringify({
-        projects: [
-          { name: "ext-proj", path: externalDir, hasBeads: true },
-        ],
-      }));
+      // Insert external project into SQLite (replaces writing projects.json)
+      testDb.prepare(`
+        INSERT INTO projects (id, name, path, mode, sessions, created_at, active)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run("ext-2", "ext-proj", externalDir, "swarm", "[]", "2026-01-01T00:00:00.000Z", 0);
 
       const provider = new SwarmProvider(TEST_DIR);
       const names = await provider.listProjectNames();
@@ -294,18 +309,16 @@ describe("SwarmProvider", () => {
       expect(result).toBeNull();
     });
 
-    it("resolves externally registered project path", () => {
+    it("resolves externally registered project path from SQLite", () => {
       const externalDir = join(tmpdir(), `swarm-external-resolve-${Date.now()}`);
       mkdirSync(join(externalDir, ".beads"), { recursive: true });
       writeFileSync(join(externalDir, ".beads", "beads.db"), "");
 
-      const adjutantDir = join(TEST_HOMEDIR, ".adjutant");
-      mkdirSync(adjutantDir, { recursive: true });
-      writeFileSync(join(adjutantDir, "projects.json"), JSON.stringify({
-        projects: [
-          { name: "ext-resolve", path: externalDir, hasBeads: true },
-        ],
-      }));
+      // Insert external project into SQLite (replaces writing projects.json)
+      testDb.prepare(`
+        INSERT INTO projects (id, name, path, mode, sessions, created_at, active)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run("ext-3", "ext-resolve", externalDir, "swarm", "[]", "2026-01-01T00:00:00.000Z", 0);
 
       const provider = new SwarmProvider(TEST_DIR);
       const result = provider.resolveProjectPath("ext-resolve");
