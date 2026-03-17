@@ -12,9 +12,34 @@
  * - adj-oo3o: Persona deployment via .claude/agents/ files + --agent flag
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import Database from "better-sqlite3";
 import express from "express";
 import request from "supertest";
+
+// ============================================================================
+// Test DB helper
+// ============================================================================
+
+function createTestDb(): Database.Database {
+  const db = new Database(":memory:");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS managed_sessions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      tmux_session TEXT NOT NULL,
+      tmux_pane TEXT NOT NULL,
+      project_path TEXT NOT NULL,
+      mode TEXT NOT NULL DEFAULT 'swarm',
+      status TEXT NOT NULL DEFAULT 'idle',
+      workspace_type TEXT NOT NULL DEFAULT 'primary',
+      pipe_active INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      last_activity TEXT NOT NULL
+    )
+  `);
+  return db;
+}
 
 // ============================================================================
 // Mocks
@@ -554,7 +579,7 @@ describe("LifecycleManager — envVars support", () => {
     const { LifecycleManager } = await import("../../src/services/lifecycle-manager.js");
     const { SessionRegistry } = await import("../../src/services/session-registry.js");
 
-    const registry = new SessionRegistry("/tmp/test-lm-envvars.json");
+    const registry = new SessionRegistry(createTestDb());
     const lifecycle = new LifecycleManager(registry, 5);
 
     await lifecycle.createSession({
@@ -586,7 +611,7 @@ describe("LifecycleManager — envVars support", () => {
     const { LifecycleManager } = await import("../../src/services/lifecycle-manager.js");
     const { SessionRegistry } = await import("../../src/services/session-registry.js");
 
-    const registry = new SessionRegistry("/tmp/test-lm-no-envvars.json");
+    const registry = new SessionRegistry(createTestDb());
     const lifecycle = new LifecycleManager(registry, 5);
 
     await lifecycle.createSession({
@@ -614,7 +639,7 @@ describe("LifecycleManager — envVars support", () => {
     const { LifecycleManager } = await import("../../src/services/lifecycle-manager.js");
     const { SessionRegistry } = await import("../../src/services/session-registry.js");
 
-    const registry = new SessionRegistry("/tmp/test-lm-multi-envvars.json");
+    const registry = new SessionRegistry(createTestDb());
     const lifecycle = new LifecycleManager(registry, 5);
 
     await lifecycle.createSession({

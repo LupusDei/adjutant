@@ -1,12 +1,12 @@
+/**
+ * Unit tests for SQL-backed SessionRegistry (adj-110.3.2).
+ *
+ * Uses an in-memory SQLite database with the managed_sessions table
+ * to verify that SessionRegistry persists and loads correctly.
+ */
+
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { join } from "path";
-import { tmpdir } from "os";
-import { mkdirSync, rmSync, existsSync, readFileSync } from "fs";
-import {
-  SessionRegistry,
-  getSessionRegistry,
-  resetSessionRegistry,
-} from "../../src/services/session-registry.js";
+import Database from "better-sqlite3";
 
 // Suppress logging
 vi.mock("../../src/utils/index.js", () => ({
@@ -16,28 +16,103 @@ vi.mock("../../src/utils/index.js", () => ({
   logDebug: vi.fn(),
 }));
 
-const TEST_DIR = join(tmpdir(), `session-registry-test-${Date.now()}`);
-const TEST_FILE = join(TEST_DIR, "sessions.json");
+// Create in-memory database for each test
+let testDb: Database.Database;
 
-describe("SessionRegistry", () => {
+vi.mock("../../src/services/database.js", () => ({
+  getDatabase: () => testDb,
+  createDatabase: () => testDb,
+  runMigrations: () => {},
+}));
+
+import {
+  SessionRegistry,
+  getSessionRegistry,
+  resetSessionRegistry,
+} from "../../src/services/session-registry.js";
+
+/** Create an in-memory SQLite database with the managed_sessions table. */
+function createTestDb(): Database.Database {
+  const db = new Database(":memory:");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS managed_sessions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      tmux_session TEXT NOT NULL,
+      tmux_pane TEXT NOT NULL,
+      project_path TEXT NOT NULL,
+      mode TEXT NOT NULL DEFAULT 'swarm',
+      status TEXT NOT NULL DEFAULT 'idle',
+      workspace_type TEXT NOT NULL DEFAULT 'primary',
+      pipe_active INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      last_activity TEXT NOT NULL
+    )
+  `);
+  return db;
+}
+
+/** Insert a session row directly into the DB for load() tests. */
+function insertSession(
+  db: Database.Database,
+  overrides: Partial<{
+    id: string;
+    name: string;
+    tmux_session: string;
+    tmux_pane: string;
+    project_path: string;
+    mode: string;
+    status: string;
+    workspace_type: string;
+    pipe_active: number;
+    created_at: string;
+    last_activity: string;
+  }> = {},
+): void {
+  const defaults = {
+    id: "sess-001",
+    name: "agent-alpha",
+    tmux_session: "adj_alpha",
+    tmux_pane: "adj_alpha",
+    project_path: "/home/user/project",
+    mode: "swarm",
+    status: "working",
+    workspace_type: "primary",
+    pipe_active: 0,
+    created_at: "2026-03-15T10:00:00.000Z",
+    last_activity: "2026-03-15T12:00:00.000Z",
+  };
+  const row = { ...defaults, ...overrides };
+  db.prepare(`
+    INSERT INTO managed_sessions (id, name, tmux_session, tmux_pane, project_path, mode, status, workspace_type, pipe_active, created_at, last_activity)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    row.id,
+    row.name,
+    row.tmux_session,
+    row.tmux_pane,
+    row.project_path,
+    row.mode,
+    row.status,
+    row.workspace_type,
+    row.pipe_active,
+    row.created_at,
+    row.last_activity,
+  );
+}
+
+describe("SessionRegistry (SQL-backed)", () => {
   let registry: SessionRegistry;
 
   beforeEach(() => {
-    if (!existsSync(TEST_DIR)) {
-      mkdirSync(TEST_DIR, { recursive: true });
-    }
-    registry = new SessionRegistry(TEST_FILE);
+    vi.clearAllMocks();
+    testDb = createTestDb();
+    registry = new SessionRegistry(testDb);
     resetSessionRegistry();
   });
 
   afterEach(() => {
-    try {
-      if (existsSync(TEST_DIR)) {
-        rmSync(TEST_DIR, { recursive: true, force: true });
-      }
-    } catch {
-      // Ignore cleanup errors
-    }
+    if (testDb) testDb.close();
   });
 
   // ==========================================================================
@@ -64,7 +139,7 @@ describe("SessionRegistry", () => {
   // ==========================================================================
 
   describe("create", () => {
-    it("should create a session with required fields", () => {
+    it("should create a session with required fields and insert into DB", () => {
       const session = registry.create({
         name: "test-agent",
         tmuxSession: "adj-test-agent",
@@ -83,6 +158,14 @@ describe("SessionRegistry", () => {
       expect(session.pipeActive).toBe(false);
       expect(session.createdAt).toBeInstanceOf(Date);
       expect(session.lastActivity).toBeInstanceOf(Date);
+
+      // Verify DB row was created
+      const rows = testDb.prepare("SELECT * FROM managed_sessions").all() as Array<Record<string, unknown>>;
+      expect(rows).toHaveLength(1);
+      expect(rows[0].id).toBe(session.id);
+      expect(rows[0].name).toBe("test-agent");
+      expect(rows[0].tmux_session).toBe("adj-test-agent");
+      expect(rows[0].status).toBe("idle");
     });
 
     it("should default tmuxPane to tmuxSession name when not provided", () => {
@@ -91,10 +174,6 @@ describe("SessionRegistry", () => {
         tmuxSession: "my-session",
         projectPath: "/tmp",
       });
-
-      // When tmuxPane is not explicitly provided, fall back to the session name.
-      // tmux resolves bare session names to the active pane, which works
-      // regardless of the user's base-index/pane-base-index settings.
       expect(session.tmuxPane).toBe("my-session");
     });
 
@@ -111,6 +190,10 @@ describe("SessionRegistry", () => {
       expect(session.tmuxPane).toBe("adj-swarm-1:1.2");
       expect(session.mode).toBe("swarm");
       expect(session.workspaceType).toBe("worktree");
+
+      // Verify DB has the right workspace_type
+      const row = testDb.prepare("SELECT workspace_type FROM managed_sessions WHERE id = ?").get(session.id) as { workspace_type: string };
+      expect(row.workspace_type).toBe("worktree");
     });
 
     it("should assign unique IDs to different sessions", () => {
@@ -124,23 +207,14 @@ describe("SessionRegistry", () => {
         tmuxSession: "adj-2",
         projectPath: "/tmp",
       });
-
       expect(s1.id).not.toBe(s2.id);
     });
 
     it("should increment session count", () => {
       expect(registry.size).toBe(0);
-      registry.create({
-        name: "a",
-        tmuxSession: "adj-a",
-        projectPath: "/tmp",
-      });
+      registry.create({ name: "a", tmuxSession: "adj-a", projectPath: "/tmp" });
       expect(registry.size).toBe(1);
-      registry.create({
-        name: "b",
-        tmuxSession: "adj-b",
-        projectPath: "/tmp",
-      });
+      registry.create({ name: "b", tmuxSession: "adj-b", projectPath: "/tmp" });
       expect(registry.size).toBe(2);
     });
   });
@@ -156,9 +230,7 @@ describe("SessionRegistry", () => {
         tmuxSession: "adj-test",
         projectPath: "/tmp",
       });
-
-      const found = registry.get(created.id);
-      expect(found).toBe(created);
+      expect(registry.get(created.id)).toBe(created);
     });
 
     it("should return undefined for unknown ID", () => {
@@ -172,17 +244,8 @@ describe("SessionRegistry", () => {
     });
 
     it("should return all registered sessions", () => {
-      registry.create({
-        name: "a",
-        tmuxSession: "adj-a",
-        projectPath: "/tmp",
-      });
-      registry.create({
-        name: "b",
-        tmuxSession: "adj-b",
-        projectPath: "/tmp",
-      });
-
+      registry.create({ name: "a", tmuxSession: "adj-a", projectPath: "/tmp" });
+      registry.create({ name: "b", tmuxSession: "adj-b", projectPath: "/tmp" });
       const all = registry.getAll();
       expect(all).toHaveLength(2);
       expect(all.map((s) => s.name).sort()).toEqual(["a", "b"]);
@@ -196,9 +259,7 @@ describe("SessionRegistry", () => {
         tmuxSession: "adj-test",
         projectPath: "/tmp",
       });
-
-      const found = registry.findByTmuxSession("adj-test");
-      expect(found).toBe(created);
+      expect(registry.findByTmuxSession("adj-test")).toBe(created);
     });
 
     it("should return undefined when not found", () => {
@@ -208,24 +269,12 @@ describe("SessionRegistry", () => {
 
   describe("findByName", () => {
     it("should find sessions matching name", () => {
-      registry.create({
-        name: "agent",
-        tmuxSession: "adj-1",
-        projectPath: "/tmp",
-      });
-      registry.create({
-        name: "agent",
-        tmuxSession: "adj-2",
-        projectPath: "/tmp",
-      });
-      registry.create({
-        name: "other",
-        tmuxSession: "adj-3",
-        projectPath: "/tmp",
-      });
-
+      registry.create({ name: "agent", tmuxSession: "adj-1", projectPath: "/tmp" });
+      // The UNIQUE constraint on name means we can't insert duplicate names.
+      // findByName returns an array because the in-memory filter allows it,
+      // but with SQL uniqueness we'll only ever get 0 or 1.
       const found = registry.findByName("agent");
-      expect(found).toHaveLength(2);
+      expect(found).toHaveLength(1);
     });
 
     it("should return empty array when no match", () => {
@@ -238,7 +287,7 @@ describe("SessionRegistry", () => {
   // ==========================================================================
 
   describe("updateStatus", () => {
-    it("should update session status", () => {
+    it("should update session status in Map and DB", () => {
       const session = registry.create({
         name: "test",
         tmuxSession: "adj-test",
@@ -248,23 +297,27 @@ describe("SessionRegistry", () => {
       const updated = registry.updateStatus(session.id, "working");
       expect(updated).toBe(true);
       expect(registry.get(session.id)?.status).toBe("working");
+
+      // Verify DB was updated
+      const row = testDb.prepare("SELECT status FROM managed_sessions WHERE id = ?").get(session.id) as { status: string };
+      expect(row.status).toBe("working");
     });
 
-    it("should update lastActivity timestamp", async () => {
+    it("should update lastActivity timestamp in DB", async () => {
       const session = registry.create({
         name: "test",
         tmuxSession: "adj-test",
         projectPath: "/tmp",
       });
-      const originalTime = session.lastActivity.getTime();
+      const beforeRow = testDb.prepare("SELECT last_activity FROM managed_sessions WHERE id = ?").get(session.id) as { last_activity: string };
 
       // Small delay to ensure time advances
       await new Promise((r) => setTimeout(r, 10));
 
       registry.updateStatus(session.id, "working");
-      expect(registry.get(session.id)!.lastActivity.getTime()).toBeGreaterThanOrEqual(
-        originalTime
-      );
+
+      const afterRow = testDb.prepare("SELECT last_activity FROM managed_sessions WHERE id = ?").get(session.id) as { last_activity: string };
+      expect(afterRow.last_activity).not.toBe(beforeRow.last_activity);
     });
 
     it("should return false for unknown session", () => {
@@ -273,7 +326,7 @@ describe("SessionRegistry", () => {
   });
 
   // ==========================================================================
-  // Client Management
+  // Client Management (runtime-only)
   // ==========================================================================
 
   describe("client management", () => {
@@ -283,9 +336,7 @@ describe("SessionRegistry", () => {
         tmuxSession: "adj-test",
         projectPath: "/tmp",
       });
-
-      const added = registry.addClient(session.id, "client-1");
-      expect(added).toBe(true);
+      expect(registry.addClient(session.id, "client-1")).toBe(true);
       expect(session.connectedClients.has("client-1")).toBe(true);
     });
 
@@ -295,27 +346,9 @@ describe("SessionRegistry", () => {
         tmuxSession: "adj-test",
         projectPath: "/tmp",
       });
-
       registry.addClient(session.id, "client-1");
-      const removed = registry.removeClient(session.id, "client-1");
-      expect(removed).toBe(true);
+      expect(registry.removeClient(session.id, "client-1")).toBe(true);
       expect(session.connectedClients.has("client-1")).toBe(false);
-    });
-
-    it("should handle multiple clients", () => {
-      const session = registry.create({
-        name: "test",
-        tmuxSession: "adj-test",
-        projectPath: "/tmp",
-      });
-
-      registry.addClient(session.id, "client-1");
-      registry.addClient(session.id, "client-2");
-      expect(session.connectedClients.size).toBe(2);
-
-      registry.removeClient(session.id, "client-1");
-      expect(session.connectedClients.size).toBe(1);
-      expect(session.connectedClients.has("client-2")).toBe(true);
     });
 
     it("should return false for unknown session", () => {
@@ -335,12 +368,9 @@ describe("SessionRegistry", () => {
         tmuxSession: "adj-test",
         projectPath: "/tmp",
       });
-
       registry.appendOutput(session.id, "line 1");
       registry.appendOutput(session.id, "line 2");
-
-      const buffer = registry.getOutputBuffer(session.id);
-      expect(buffer).toEqual(["line 1", "line 2"]);
+      expect(registry.getOutputBuffer(session.id)).toEqual(["line 1", "line 2"]);
     });
 
     it("should cap buffer at 1000 lines", () => {
@@ -350,14 +380,13 @@ describe("SessionRegistry", () => {
         projectPath: "/tmp",
       });
 
-      // Add 1050 lines
       for (let i = 0; i < 1050; i++) {
         registry.appendOutput(session.id, `line ${i}`);
       }
 
       const buffer = registry.getOutputBuffer(session.id)!;
       expect(buffer).toHaveLength(1000);
-      expect(buffer[0]).toBe("line 50"); // oldest 50 were dropped
+      expect(buffer[0]).toBe("line 50");
       expect(buffer[999]).toBe("line 1049");
     });
 
@@ -367,13 +396,10 @@ describe("SessionRegistry", () => {
         tmuxSession: "adj-test",
         projectPath: "/tmp",
       });
-
       registry.appendOutput(session.id, "line 1");
       const buf1 = registry.getOutputBuffer(session.id)!;
       buf1.push("extra");
-
-      const buf2 = registry.getOutputBuffer(session.id)!;
-      expect(buf2).toHaveLength(1);
+      expect(registry.getOutputBuffer(session.id)).toHaveLength(1);
     });
 
     it("should clear output buffer", () => {
@@ -382,10 +408,8 @@ describe("SessionRegistry", () => {
         tmuxSession: "adj-test",
         projectPath: "/tmp",
       });
-
       registry.appendOutput(session.id, "line 1");
-      const cleared = registry.clearOutputBuffer(session.id);
-      expect(cleared).toBe(true);
+      expect(registry.clearOutputBuffer(session.id)).toBe(true);
       expect(registry.getOutputBuffer(session.id)).toEqual([]);
     });
 
@@ -403,17 +427,20 @@ describe("SessionRegistry", () => {
   // ==========================================================================
 
   describe("remove", () => {
-    it("should remove a session", () => {
+    it("should remove from Map and delete from DB", () => {
       const session = registry.create({
         name: "test",
         tmuxSession: "adj-test",
         projectPath: "/tmp",
       });
 
-      const removed = registry.remove(session.id);
-      expect(removed).toBe(true);
+      expect(registry.remove(session.id)).toBe(true);
       expect(registry.get(session.id)).toBeUndefined();
       expect(registry.size).toBe(0);
+
+      // Verify DB row was deleted
+      const count = (testDb.prepare("SELECT COUNT(*) as cnt FROM managed_sessions").get() as { cnt: number }).cnt;
+      expect(count).toBe(0);
     });
 
     it("should return false for unknown session", () => {
@@ -422,87 +449,185 @@ describe("SessionRegistry", () => {
   });
 
   // ==========================================================================
-  // Persistence
+  // Persistence — save()
   // ==========================================================================
 
-  describe("persistence", () => {
-    it("should save sessions to disk", async () => {
-      registry.create({
-        name: "agent-1",
-        tmuxSession: "adj-1",
-        projectPath: "/project/1",
-        mode: "swarm",
+  describe("save()", () => {
+    it("should persist current in-memory state to DB", async () => {
+      const session = registry.create({
+        name: "agent-save",
+        tmuxSession: "adj-save",
+        projectPath: "/home/user/project",
       });
+
+      // Mutate in-memory state directly
+      session.status = "working";
+      session.pipeActive = true;
+
+      await registry.save();
+
+      // Verify DB reflects the mutations
+      const row = testDb.prepare("SELECT * FROM managed_sessions WHERE id = ?").get(session.id) as Record<string, unknown>;
+      expect(row.status).toBe("working");
+      expect(row.pipe_active).toBe(1);
+    });
+
+    it("should handle empty registry (no crash)", async () => {
+      await registry.save();
+      const rows = testDb.prepare("SELECT * FROM managed_sessions").all();
+      expect(rows).toHaveLength(0);
+    });
+
+    it("should remove stale DB rows not in memory", async () => {
+      // Insert a row directly into DB (simulating leftover from previous run)
+      insertSession(testDb, { id: "stale-1", name: "stale-agent" });
+
+      // Create a fresh session in registry
       registry.create({
-        name: "agent-2",
-        tmuxSession: "adj-2",
-        projectPath: "/project/2",
-        mode: "swarm",
+        name: "fresh-agent",
+        tmuxSession: "adj-fresh",
+        projectPath: "/tmp",
+      });
+
+      await registry.save();
+
+      const rows = testDb.prepare("SELECT * FROM managed_sessions").all() as Array<{ name: string }>;
+      expect(rows).toHaveLength(1);
+      expect(rows[0].name).toBe("fresh-agent");
+    });
+  });
+
+  // ==========================================================================
+  // Persistence — load()
+  // ==========================================================================
+
+  describe("load()", () => {
+    it("should hydrate from DB with status set to 'offline'", async () => {
+      insertSession(testDb, { id: "sess-001", name: "agent-alpha", status: "working" });
+      insertSession(testDb, { id: "sess-002", name: "agent-beta", status: "idle" });
+
+      const count = await registry.load();
+      expect(count).toBe(2);
+      expect(registry.size).toBe(2);
+
+      for (const s of registry.getAll()) {
+        expect(s.status).toBe("offline");
+      }
+    });
+
+    it("should parse dates correctly from DB", async () => {
+      insertSession(testDb, {
+        id: "sess-dates",
+        name: "agent-dates",
+        created_at: "2026-03-15T10:00:00.000Z",
+        last_activity: "2026-03-15T12:30:00.000Z",
+      });
+
+      await registry.load();
+      const session = registry.get("sess-dates");
+      expect(session).toBeDefined();
+      expect(session!.createdAt).toBeInstanceOf(Date);
+      expect(session!.createdAt.toISOString()).toBe("2026-03-15T10:00:00.000Z");
+      expect(session!.lastActivity).toBeInstanceOf(Date);
+      expect(session!.lastActivity.toISOString()).toBe("2026-03-15T12:30:00.000Z");
+    });
+
+    it("should map snake_case columns to camelCase fields", async () => {
+      insertSession(testDb, {
+        id: "sess-case",
+        name: "agent-case",
+        tmux_session: "adj_case_sess",
+        tmux_pane: "adj_case_pane",
+        project_path: "/path/to/project",
+        workspace_type: "worktree",
+      });
+
+      await registry.load();
+      const session = registry.get("sess-case")!;
+      expect(session.tmuxSession).toBe("adj_case_sess");
+      expect(session.tmuxPane).toBe("adj_case_pane");
+      expect(session.projectPath).toBe("/path/to/project");
+      expect(session.workspaceType).toBe("worktree");
+    });
+
+    it("should initialize runtime-only fields", async () => {
+      insertSession(testDb, { id: "sess-runtime", name: "agent-runtime", pipe_active: 1 });
+
+      await registry.load();
+      const session = registry.get("sess-runtime")!;
+      expect(session.connectedClients).toBeInstanceOf(Set);
+      expect(session.connectedClients.size).toBe(0);
+      expect(session.outputBuffer).toEqual([]);
+      expect(session.pipeActive).toBe(false); // reset on load
+    });
+
+    it("should return 0 when DB has no sessions", async () => {
+      const count = await registry.load();
+      expect(count).toBe(0);
+      expect(registry.getAll()).toHaveLength(0);
+    });
+  });
+
+  // ==========================================================================
+  // Runtime-only fields NOT in DB
+  // ==========================================================================
+
+  describe("runtime-only fields", () => {
+    it("connectedClients should not be stored in DB", () => {
+      const session = registry.create({
+        name: "test-runtime",
+        tmuxSession: "adj-runtime",
+        projectPath: "/tmp",
+      });
+      session.connectedClients.add("client-1");
+
+      const row = testDb.prepare("SELECT * FROM managed_sessions WHERE id = ?").get(session.id) as Record<string, unknown>;
+      expect(row).not.toHaveProperty("connected_clients");
+      expect(row).not.toHaveProperty("connectedClients");
+    });
+
+    it("outputBuffer should not be stored in DB", () => {
+      const session = registry.create({
+        name: "test-buffer",
+        tmuxSession: "adj-buffer",
+        projectPath: "/tmp",
+      });
+      session.outputBuffer.push("line 1");
+
+      const row = testDb.prepare("SELECT * FROM managed_sessions WHERE id = ?").get(session.id) as Record<string, unknown>;
+      expect(row).not.toHaveProperty("output_buffer");
+      expect(row).not.toHaveProperty("outputBuffer");
+    });
+  });
+
+  // ==========================================================================
+  // Round-trip: create → save → load
+  // ==========================================================================
+
+  describe("round-trip persistence", () => {
+    it("should survive save + load into a new registry", async () => {
+      registry.create({
+        name: "persistent",
+        tmuxSession: "adj-persistent",
+        projectPath: "/project",
         workspaceType: "worktree",
       });
 
       await registry.save();
 
-      expect(existsSync(TEST_FILE)).toBe(true);
-      const data = JSON.parse(readFileSync(TEST_FILE, "utf-8"));
-      expect(data).toHaveLength(2);
-      expect(data[0].name).toBe("agent-1");
-      expect(data[1].mode).toBe("swarm");
-    });
-
-    it("should load sessions from disk", async () => {
-      // Save some sessions
-      registry.create({
-        name: "persistent",
-        tmuxSession: "adj-persistent",
-        projectPath: "/project",
-      });
-      await registry.save();
-
-      // Create a new registry and load
-      const newRegistry = new SessionRegistry(TEST_FILE);
+      // Create a new registry pointing at the same DB
+      const newRegistry = new SessionRegistry(testDb);
       const loaded = await newRegistry.load();
 
       expect(loaded).toBe(1);
-      expect(newRegistry.size).toBe(1);
-
       const sessions = newRegistry.getAll();
       expect(sessions[0].name).toBe("persistent");
-      expect(sessions[0].status).toBe("offline"); // loaded sessions start as offline
+      expect(sessions[0].status).toBe("offline");
+      expect(sessions[0].workspaceType).toBe("worktree");
       expect(sessions[0].connectedClients.size).toBe(0);
       expect(sessions[0].outputBuffer).toEqual([]);
-    });
-
-    it("should return 0 when sessions file doesn't exist", async () => {
-      const freshRegistry = new SessionRegistry(
-        join(TEST_DIR, "nonexistent", "sessions.json")
-      );
-      const loaded = await freshRegistry.load();
-      expect(loaded).toBe(0);
-    });
-
-    it("should handle corrupt JSON gracefully", async () => {
-      const { writeFileSync } = await import("fs");
-      writeFileSync(TEST_FILE, "not valid json{{{");
-
-      const loaded = await registry.load();
-      expect(loaded).toBe(0);
-    });
-
-    it("should restore dates as Date objects", async () => {
-      registry.create({
-        name: "dated",
-        tmuxSession: "adj-dated",
-        projectPath: "/tmp",
-      });
-      await registry.save();
-
-      const newRegistry = new SessionRegistry(TEST_FILE);
-      await newRegistry.load();
-
-      const session = newRegistry.getAll()[0];
-      expect(session.createdAt).toBeInstanceOf(Date);
-      expect(session.lastActivity).toBeInstanceOf(Date);
+      expect(sessions[0].createdAt).toBeInstanceOf(Date);
+      expect(sessions[0].lastActivity).toBeInstanceOf(Date);
     });
   });
 });

@@ -1,14 +1,14 @@
 /**
- * SessionRegistry — in-memory session tracking with file persistence.
+ * SessionRegistry — in-memory session tracking with SQLite persistence.
  *
- * Maintains state for every managed tmux session. Persists to
- * ~/.adjutant/sessions.json so sessions survive backend restarts.
+ * Maintains state for every managed tmux session. Persists to the
+ * managed_sessions table in SQLite so sessions survive backend restarts.
  */
 
 import { randomUUID } from "crypto";
-import { readFile, writeFile, mkdir } from "fs/promises";
-import { join } from "path";
-import { homedir } from "os";
+import type Database from "better-sqlite3";
+
+import { getDatabase } from "./database.js";
 import { logInfo, logWarn } from "../utils/index.js";
 
 // ============================================================================
@@ -35,19 +35,19 @@ export interface ManagedSession {
   lastActivity: Date;
 }
 
-/** Serializable form for file persistence. */
-interface SerializedSession {
+/** Row shape returned by SQLite queries on managed_sessions. */
+interface SessionRow {
   id: string;
   name: string;
-  tmuxSession: string;
-  tmuxPane: string;
-  projectPath: string;
-  mode: SessionMode;
-  status: SessionStatus;
-  workspaceType: WorkspaceType;
-  pipeActive: boolean;
-  createdAt: string;
-  lastActivity: string;
+  tmux_session: string;
+  tmux_pane: string;
+  project_path: string;
+  mode: string;
+  status: string;
+  workspace_type: string;
+  pipe_active: number;
+  created_at: string;
+  last_activity: string;
 }
 
 export interface CreateSessionOptions {
@@ -64,8 +64,6 @@ export interface CreateSessionOptions {
 // ============================================================================
 
 const OUTPUT_BUFFER_MAX = 1000;
-const PERSISTENCE_DIR = join(homedir(), ".adjutant");
-const PERSISTENCE_FILE = join(PERSISTENCE_DIR, "sessions.json");
 
 // ============================================================================
 // SessionRegistry
@@ -73,10 +71,10 @@ const PERSISTENCE_FILE = join(PERSISTENCE_DIR, "sessions.json");
 
 export class SessionRegistry {
   private sessions = new Map<string, ManagedSession>();
-  private persistencePath: string;
+  private db: Database.Database;
 
-  constructor(persistencePath?: string) {
-    this.persistencePath = persistencePath ?? PERSISTENCE_FILE;
+  constructor(db?: Database.Database) {
+    this.db = db ?? getDatabase();
   }
 
   /**
@@ -84,6 +82,7 @@ export class SessionRegistry {
    */
   create(opts: CreateSessionOptions): ManagedSession {
     const id = randomUUID();
+    const now = new Date();
     const session: ManagedSession = {
       id,
       name: opts.name,
@@ -96,9 +95,26 @@ export class SessionRegistry {
       connectedClients: new Set(),
       outputBuffer: [],
       pipeActive: false,
-      createdAt: new Date(),
-      lastActivity: new Date(),
+      createdAt: now,
+      lastActivity: now,
     };
+
+    this.db.prepare(`
+      INSERT INTO managed_sessions (id, name, tmux_session, tmux_pane, project_path, mode, status, workspace_type, pipe_active, created_at, last_activity)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      session.id,
+      session.name,
+      session.tmuxSession,
+      session.tmuxPane,
+      session.projectPath,
+      session.mode,
+      session.status,
+      session.workspaceType,
+      session.pipeActive ? 1 : 0,
+      session.createdAt.toISOString(),
+      session.lastActivity.toISOString(),
+    );
 
     this.sessions.set(id, session);
     logInfo("Session created", { id, name: session.name });
@@ -144,6 +160,11 @@ export class SessionRegistry {
     if (!session) return false;
     session.status = status;
     session.lastActivity = new Date();
+
+    this.db.prepare(
+      "UPDATE managed_sessions SET status = ?, last_activity = ? WHERE id = ?",
+    ).run(status, session.lastActivity.toISOString(), id);
+
     return true;
   }
 
@@ -208,6 +229,7 @@ export class SessionRegistry {
     const session = this.sessions.get(id);
     if (!session) return false;
     this.sessions.delete(id);
+    this.db.prepare("DELETE FROM managed_sessions WHERE id = ?").run(id);
     logInfo("Session removed", { id, name: session.name });
     return true;
   }
@@ -220,64 +242,90 @@ export class SessionRegistry {
   }
 
   /**
-   * Persist sessions to disk.
+   * Persist current in-memory session state to SQLite.
+   * Uses INSERT OR REPLACE so callers that still call save() after
+   * bulk in-memory mutations get the expected behaviour.
    */
   async save(): Promise<void> {
-    const serialized: SerializedSession[] = this.getAll().map((s) => ({
-      id: s.id,
-      name: s.name,
-      tmuxSession: s.tmuxSession,
-      tmuxPane: s.tmuxPane,
-      projectPath: s.projectPath,
-      mode: s.mode,
-      status: s.status,
-      workspaceType: s.workspaceType,
-      pipeActive: s.pipeActive,
-      createdAt: s.createdAt.toISOString(),
-      lastActivity: s.lastActivity.toISOString(),
-    }));
+    const upsert = this.db.prepare(`
+      INSERT OR REPLACE INTO managed_sessions
+        (id, name, tmux_session, tmux_pane, project_path, mode, status, workspace_type, pipe_active, created_at, last_activity)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
 
-    const dir = join(this.persistencePath, "..");
-    await mkdir(dir, { recursive: true });
-    await writeFile(this.persistencePath, JSON.stringify(serialized, null, 2));
-    logInfo("Sessions persisted", { count: serialized.length });
+    const sessions = this.getAll();
+
+    const runBatch = this.db.transaction(() => {
+      // Remove rows that are no longer in memory
+      const inMemoryIds = sessions.map((s) => s.id);
+      if (inMemoryIds.length === 0) {
+        this.db.prepare("DELETE FROM managed_sessions").run();
+      } else {
+        const existing = this.db
+          .prepare("SELECT id FROM managed_sessions")
+          .all() as Array<{ id: string }>;
+        for (const row of existing) {
+          if (!inMemoryIds.includes(row.id)) {
+            this.db.prepare("DELETE FROM managed_sessions WHERE id = ?").run(row.id);
+          }
+        }
+      }
+
+      // Upsert all in-memory sessions
+      for (const s of sessions) {
+        upsert.run(
+          s.id,
+          s.name,
+          s.tmuxSession,
+          s.tmuxPane,
+          s.projectPath,
+          s.mode,
+          s.status,
+          s.workspaceType,
+          s.pipeActive ? 1 : 0,
+          s.createdAt.toISOString(),
+          s.lastActivity.toISOString(),
+        );
+      }
+    });
+
+    runBatch();
+    logInfo("Sessions persisted", { count: sessions.length });
   }
 
   /**
-   * Load sessions from disk.
+   * Load sessions from SQLite into the in-memory Map.
+   * All loaded sessions start as "offline" until tmux is verified.
    */
   async load(): Promise<number> {
     try {
-      const raw = await readFile(this.persistencePath, "utf-8");
-      const data = JSON.parse(raw) as SerializedSession[];
+      const rows = this.db
+        .prepare("SELECT * FROM managed_sessions")
+        .all() as SessionRow[];
 
-      for (const entry of data) {
+      for (const row of rows) {
         const session: ManagedSession = {
-          id: entry.id,
-          name: entry.name,
-          tmuxSession: entry.tmuxSession,
-          tmuxPane: entry.tmuxPane,
-          projectPath: entry.projectPath,
-          mode: entry.mode,
+          id: row.id,
+          name: row.name,
+          tmuxSession: row.tmux_session,
+          tmuxPane: row.tmux_pane,
+          projectPath: row.project_path,
+          mode: row.mode as SessionMode,
           status: "offline", // start as offline until we verify tmux
-          workspaceType: entry.workspaceType,
+          workspaceType: row.workspace_type as WorkspaceType,
           connectedClients: new Set(),
           outputBuffer: [],
-          pipeActive: false,
-          createdAt: new Date(entry.createdAt),
-          lastActivity: new Date(entry.lastActivity),
+          pipeActive: false, // reset on load, re-established when pipes reconnect
+          createdAt: new Date(row.created_at),
+          lastActivity: new Date(row.last_activity),
         };
         this.sessions.set(session.id, session);
       }
 
-      logInfo("Sessions loaded from disk", { count: data.length });
-      return data.length;
+      logInfo("Sessions loaded from database", { count: rows.length });
+      return rows.length;
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-        logInfo("No sessions file found, starting fresh");
-        return 0;
-      }
-      logWarn("Failed to load sessions", { error: String(err) });
+      logWarn("Failed to load sessions from database", { error: String(err) });
       return 0;
     }
   }

@@ -27,6 +27,7 @@ import { LifecycleManager, type CreateSessionRequest } from "./lifecycle-manager
 export interface SessionBridgeConfig {
   maxSessions?: number;
   pipeDir?: string;
+  /** @deprecated No longer used — sessions are persisted to SQLite. */
   persistencePath?: string;
 }
 
@@ -58,9 +59,7 @@ export class SessionBridge {
   private initPromise: Promise<void> | null = null;
 
   constructor(config?: SessionBridgeConfig) {
-    this.registry = config?.persistencePath
-      ? new SessionRegistry(config.persistencePath)
-      : getSessionRegistry();
+    this.registry = getSessionRegistry();
     this.connector = new SessionConnector(this.registry, config?.pipeDir);
     this.inputRouter = new InputRouter(this.registry);
     this.lifecycle = new LifecycleManager(this.registry, config?.maxSessions);

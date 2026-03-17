@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import Database from "better-sqlite3";
 import { LifecycleManager } from "../../src/services/lifecycle-manager.js";
 import { SessionRegistry } from "../../src/services/session-registry.js";
 
@@ -16,13 +17,36 @@ vi.mock("child_process", () => ({
   execFile: (...args: unknown[]) => mockExecFile(...args),
 }));
 
+function createTestDb(): Database.Database {
+  const db = new Database(":memory:");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS managed_sessions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      tmux_session TEXT NOT NULL,
+      tmux_pane TEXT NOT NULL,
+      project_path TEXT NOT NULL,
+      mode TEXT NOT NULL DEFAULT 'swarm',
+      status TEXT NOT NULL DEFAULT 'idle',
+      workspace_type TEXT NOT NULL DEFAULT 'primary',
+      pipe_active INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      last_activity TEXT NOT NULL
+    )
+  `);
+  return db;
+}
+
+let testDb: Database.Database;
+
 describe("LifecycleManager", () => {
   let registry: SessionRegistry;
   let lifecycle: LifecycleManager;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    registry = new SessionRegistry("/tmp/test-sessions.json");
+    testDb = createTestDb();
+    registry = new SessionRegistry(testDb);
     lifecycle = new LifecycleManager(registry, 5);
 
     // Default: tmux commands succeed; list-panes returns a valid pane
@@ -43,6 +67,10 @@ describe("LifecycleManager", () => {
         }
       }
     );
+  });
+
+  afterEach(() => {
+    if (testDb) testDb.close();
   });
 
   /**

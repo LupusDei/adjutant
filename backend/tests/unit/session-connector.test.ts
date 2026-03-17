@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import Database from "better-sqlite3";
 import { SessionConnector } from "../../src/services/session-connector.js";
 import { SessionRegistry } from "../../src/services/session-registry.js";
 
@@ -25,13 +26,36 @@ vi.mock("fs", () => ({
   appendFileSync: vi.fn(),
 }));
 
+function createTestDb(): Database.Database {
+  const db = new Database(":memory:");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS managed_sessions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      tmux_session TEXT NOT NULL,
+      tmux_pane TEXT NOT NULL,
+      project_path TEXT NOT NULL,
+      mode TEXT NOT NULL DEFAULT 'swarm',
+      status TEXT NOT NULL DEFAULT 'idle',
+      workspace_type TEXT NOT NULL DEFAULT 'primary',
+      pipe_active INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      last_activity TEXT NOT NULL
+    )
+  `);
+  return db;
+}
+
+let testDb: Database.Database;
+
 describe("SessionConnector", () => {
   let registry: SessionRegistry;
   let connector: SessionConnector;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    registry = new SessionRegistry("/tmp/test-sessions.json");
+    testDb = createTestDb();
+    registry = new SessionRegistry(testDb);
     connector = new SessionConnector(registry, "/tmp/adjutant-test");
 
     // Default: tmux commands succeed
@@ -45,6 +69,10 @@ describe("SessionConnector", () => {
         cb(null, "", "");
       }
     );
+  });
+
+  afterEach(() => {
+    if (testDb) testDb.close();
   });
 
   // ==========================================================================

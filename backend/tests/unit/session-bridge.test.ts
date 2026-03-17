@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import Database from "better-sqlite3";
 import {
   SessionBridge,
   getSessionBridge,
@@ -19,13 +20,42 @@ vi.mock("../../src/services/event-bus.js", () => ({
   getEventBus: () => ({ emit: vi.fn(), on: vi.fn(), off: vi.fn() }),
 }));
 
+// In-memory SQLite database for session registry
+let testDb: Database.Database;
+
+function createTestDb(): Database.Database {
+  const db = new Database(":memory:");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS managed_sessions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      tmux_session TEXT NOT NULL,
+      tmux_pane TEXT NOT NULL,
+      project_path TEXT NOT NULL,
+      mode TEXT NOT NULL DEFAULT 'swarm',
+      status TEXT NOT NULL DEFAULT 'idle',
+      workspace_type TEXT NOT NULL DEFAULT 'primary',
+      pipe_active INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      last_activity TEXT NOT NULL
+    )
+  `);
+  return db;
+}
+
+vi.mock("../../src/services/database.js", () => ({
+  getDatabase: () => testDb,
+  createDatabase: () => testDb,
+  runMigrations: () => {},
+}));
+
 // Mock child_process (used by connector, input-router, lifecycle)
 const mockExecFile = vi.fn();
 vi.mock("child_process", () => ({
   execFile: (...args: unknown[]) => mockExecFile(...args),
 }));
 
-// Mock fs (used by connector and registry)
+// Mock fs (used by connector)
 vi.mock("fs", () => ({
   mkdirSync: vi.fn(),
   existsSync: vi.fn(() => true),
@@ -47,9 +77,9 @@ describe("SessionBridge", () => {
     vi.clearAllMocks();
     resetSessionBridge();
     resetSessionRegistry();
+    testDb = createTestDb();
 
     bridge = new SessionBridge({
-      persistencePath: "/tmp/test-sessions.json",
       pipeDir: "/tmp/adjutant-test",
       maxSessions: 5,
     });
@@ -65,6 +95,10 @@ describe("SessionBridge", () => {
         cb(null, "", "");
       }
     );
+  });
+
+  afterEach(() => {
+    if (testDb) testDb.close();
   });
 
   // ==========================================================================
