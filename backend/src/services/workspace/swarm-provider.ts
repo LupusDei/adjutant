@@ -41,7 +41,7 @@ function extractBeadPrefix(beadId: string): string | null {
   return match?.[1]?.toLowerCase() ?? null;
 }
 
-/** Minimal project shape from ~/.adjutant/projects.json */
+/** Minimal project shape from the SQLite projects table. */
 interface RegisteredProject {
   name: string;
   path: string;

@@ -94,6 +94,15 @@ const SKIP_DIRS = new Set(["node_modules", ".git", ".beads", "dist", "build", ".
 // Row Mapping
 // ============================================================================
 
+/** Safely parse a JSON string as string[]. Returns [] on failure. */
+function safeParseJsonArray(raw: string): string[] {
+  try {
+    return JSON.parse(raw) as string[];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Map a SQLite row to the Project interface.
  * hasBeads is computed on read, not stored.
@@ -105,7 +114,7 @@ function rowToProject(row: ProjectRow): Project {
     path: row.path,
     gitRemote: row.git_remote ?? undefined,
     mode: "swarm",
-    sessions: JSON.parse(row.sessions) as string[],
+    sessions: safeParseJsonArray(row.sessions),
     createdAt: row.created_at,
     active: row.active === 1,
     hasBeads: hasBeadsDb(row.path),

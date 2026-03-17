@@ -175,6 +175,20 @@ describe("projects-service", () => {
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("NOT_FOUND");
     });
+
+    it("should default sessions to empty array when DB has malformed JSON", () => {
+      // Insert a row with invalid JSON in the sessions column
+      testDb.prepare(`
+        INSERT INTO projects (id, name, path, git_remote, mode, sessions, created_at, active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run("bad-json", "bad-project", "/path/bad", null, "swarm", "NOT_VALID_JSON", "2026-01-01T00:00:00.000Z", 0);
+
+      vi.mocked(existsSync).mockReturnValue(false);
+
+      const result = getProject("bad-json");
+      expect(result.success).toBe(true);
+      expect(result.data!.sessions).toEqual([]);
+    });
   });
 
   // ===========================================================================
