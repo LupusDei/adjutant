@@ -78,12 +78,120 @@ export function runMigrations(db: Database.Database): void {
 }
 
 /**
+ * Import data from legacy JSON files into SQLite tables if the tables are empty.
+ * Called once after migrations to seed the database from ~/.adjutant/*.json.
+ */
+export function importJsonIfNeeded(db: Database.Database): void {
+  // --- Projects ---
+  const projectsTableExists = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='projects'")
+    .get();
+
+  if (projectsTableExists) {
+    const projectCount = (db.prepare("SELECT COUNT(*) as cnt FROM projects").get() as { cnt: number }).cnt;
+    if (projectCount === 0) {
+      const projectsFile = join(homedir(), ".adjutant", "projects.json");
+      if (existsSync(projectsFile)) {
+        try {
+          const raw = readFileSync(projectsFile, "utf8");
+          const store = JSON.parse(raw) as { projects?: Array<Record<string, unknown>> };
+          const projects = store.projects;
+          if (Array.isArray(projects) && projects.length > 0) {
+            const insert = db.prepare(`
+              INSERT OR IGNORE INTO projects (id, name, path, git_remote, mode, sessions, created_at, active)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+
+            const importBatch = db.transaction(() => {
+              for (const p of projects) {
+                // Normalize legacy "standalone" mode to "swarm"
+                const rawMode = p["mode"] as string;
+                const mode = rawMode === "standalone" ? "swarm" : rawMode || "swarm";
+                const rawSessions = p["sessions"];
+                const sessions = Array.isArray(rawSessions) ? JSON.stringify(rawSessions) : "[]";
+                const active = p["active"] ? 1 : 0;
+                insert.run(
+                  p["id"] as string,
+                  p["name"] as string,
+                  p["path"] as string,
+                  (p["gitRemote"] as string) || null,
+                  mode,
+                  sessions,
+                  (p["createdAt"] as string) || new Date().toISOString(),
+                  active,
+                );
+              }
+            });
+
+            importBatch();
+            logInfo(`Imported ${projects.length} projects from projects.json into SQLite`);
+          }
+        } catch (err) {
+          logWarn(`Failed to import projects.json: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    }
+  }
+
+  // --- Sessions ---
+  const sessionsTableExists = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='managed_sessions'")
+    .get();
+
+  if (sessionsTableExists) {
+    const sessionCount = (db.prepare("SELECT COUNT(*) as cnt FROM managed_sessions").get() as { cnt: number }).cnt;
+    if (sessionCount === 0) {
+      const sessionsFile = join(homedir(), ".adjutant", "sessions.json");
+      if (existsSync(sessionsFile)) {
+        try {
+          const raw = readFileSync(sessionsFile, "utf8");
+          const sessions = JSON.parse(raw) as Array<Record<string, unknown>>;
+          if (Array.isArray(sessions) && sessions.length > 0) {
+            const insert = db.prepare(`
+              INSERT OR IGNORE INTO managed_sessions (id, name, tmux_session, tmux_pane, project_path, mode, status, workspace_type, pipe_active, created_at, last_activity)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+
+            const importBatch = db.transaction(() => {
+              for (const s of sessions) {
+                // Normalize legacy "standalone" mode to "swarm"
+                const rawMode = s["mode"] as string;
+                const mode = rawMode === "standalone" ? "swarm" : rawMode || "swarm";
+                insert.run(
+                  s["id"] as string,
+                  s["name"] as string,
+                  (s["tmuxSession"] as string) || "",
+                  (s["tmuxPane"] as string) || "",
+                  (s["projectPath"] as string) || "",
+                  mode,
+                  (s["status"] as string) || "idle",
+                  (s["workspaceType"] as string) || "primary",
+                  s["pipeActive"] ? 1 : 0,
+                  (s["createdAt"] as string) || new Date().toISOString(),
+                  (s["lastActivity"] as string) || new Date().toISOString(),
+                );
+              }
+            });
+
+            importBatch();
+            logInfo(`Imported ${sessions.length} sessions from sessions.json into SQLite`);
+          }
+        } catch (err) {
+          logWarn(`Failed to import sessions.json: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    }
+  }
+}
+
+/**
  * Get the singleton database instance. Creates it if it doesn't exist.
  */
 export function getDatabase(): Database.Database {
   if (singleton === null) {
     singleton = createDatabase(DEFAULT_DB_PATH);
     runMigrations(singleton);
+    importJsonIfNeeded(singleton);
   }
   return singleton;
 }
