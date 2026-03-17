@@ -231,16 +231,15 @@ function SwarmSummaryPanel({ agents }: SwarmSummaryPanelProps) {
     return { active, idle, blocked, offline };
   }, [agents]);
 
-  const swarmId = useMemo(() => agents.find(a => a.swarmId)?.swarmId ?? null, [agents]);
   const [spawnState, setSpawnState] = useState<SwarmSpawnState>('idle');
   const [spawnError, setSpawnError] = useState<string | null>(null);
 
   const handleSpawnAgent = useCallback(async () => {
-    if (spawnState === 'loading' || !swarmId) return;
+    if (spawnState === 'loading') return;
     setSpawnState('loading');
     setSpawnError(null);
     try {
-      await api.swarms.addAgent(swarmId);
+      await api.agents.spawn({});
       setSpawnState('success');
       setTimeout(() => { setSpawnState('idle'); }, 2000);
     } catch (err) {
@@ -248,7 +247,7 @@ function SwarmSummaryPanel({ agents }: SwarmSummaryPanelProps) {
       setSpawnError(err instanceof ApiError ? err.message : 'Failed to spawn agent');
       setTimeout(() => { setSpawnState('idle'); setSpawnError(null); }, 3000);
     }
-  }, [swarmId, spawnState]);
+  }, [spawnState]);
 
   const hasIssues = counts.blocked > 0;
   const overallStatus = hasIssues ? 'AGENTS BLOCKED' : 'OPERATIONAL';
@@ -264,7 +263,6 @@ function SwarmSummaryPanel({ agents }: SwarmSummaryPanelProps) {
     ...(spawnState === 'loading' ? { cursor: 'wait', opacity: 0.7 } : {}),
     ...(spawnState === 'success' ? { borderColor: colors.working, color: colors.working } : {}),
     ...(spawnState === 'error' ? { borderColor: colors.stuck, color: colors.stuck } : {}),
-    ...(!swarmId ? { opacity: 0.4, cursor: 'not-allowed' } : {}),
   };
 
   return (
@@ -294,8 +292,8 @@ function SwarmSummaryPanel({ agents }: SwarmSummaryPanelProps) {
           <button
             style={spawnBtnStyle}
             onClick={() => { void handleSpawnAgent(); }}
-            disabled={spawnState === 'loading' || !swarmId}
-            title={spawnError ?? (swarmId ? 'Spawn a new agent' : 'No active swarm')}
+            disabled={spawnState === 'loading'}
+            title={spawnError ?? 'Spawn a new agent'}
             aria-label="Spawn new agent"
           >
             {spawnLabel}
