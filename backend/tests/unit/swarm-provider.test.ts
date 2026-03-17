@@ -147,7 +147,7 @@ describe("SwarmProvider", () => {
       expect(configProj).toBeDefined();
     });
 
-    it("includes externally registered projects from projects.json", async () => {
+    it("does NOT include externally registered projects in bulk listing (adj-109)", async () => {
       mkdirSync(join(TEST_DIR, ".beads"), { recursive: true });
 
       // Create an external project directory outside TEST_DIR
@@ -167,37 +167,13 @@ describe("SwarmProvider", () => {
       const provider = new SwarmProvider(TEST_DIR);
       const dirs = await provider.listBeadsDirs();
 
-      expect(dirs).toHaveLength(2);
-      const ext = dirs.find((d) => d.project === "external-proj");
-      expect(ext).toBeDefined();
-      expect(ext!.workDir).toBe(externalDir);
+      // External projects are NOT included in bulk listing to prevent
+      // serial bd timeouts (adj-109). They are resolved on-demand via resolveProjectPath().
+      expect(dirs).toHaveLength(1);
+      expect(dirs[0].project).toBeNull();
 
       // Cleanup
       rmSync(externalDir, { recursive: true, force: true });
-    });
-
-    it("deduplicates projects found by both filesystem scan and projects.json", async () => {
-      mkdirSync(join(TEST_DIR, ".beads"), { recursive: true });
-
-      // Sub-project found by child scan
-      mkdirSync(join(TEST_DIR, "shared", ".beads"), { recursive: true });
-      writeFileSync(join(TEST_DIR, "shared", ".beads", "beads.db"), "");
-
-      // Same project also registered in projects.json
-      const adjutantDir = join(TEST_HOMEDIR, ".adjutant");
-      mkdirSync(adjutantDir, { recursive: true });
-      writeFileSync(join(adjutantDir, "projects.json"), JSON.stringify({
-        projects: [
-          { name: "shared", path: join(TEST_DIR, "shared"), hasBeads: true },
-        ],
-      }));
-
-      const provider = new SwarmProvider(TEST_DIR);
-      const dirs = await provider.listBeadsDirs();
-
-      // Should be 2 (root + shared), not 3 (no duplicate)
-      expect(dirs).toHaveLength(2);
-      expect(dirs.filter((d) => d.project === "shared")).toHaveLength(1);
     });
 
     it("follows .beads/redirect for sub-projects", async () => {
@@ -264,7 +240,7 @@ describe("SwarmProvider", () => {
       expect(names).toEqual([]);
     });
 
-    it("includes externally registered projects from projects.json", async () => {
+    it("does NOT include externally registered projects in bulk listing (adj-109)", async () => {
       // Create external project
       const externalDir = join(tmpdir(), `swarm-external-names-${Date.now()}`);
       mkdirSync(join(externalDir, ".beads"), { recursive: true });
@@ -281,7 +257,8 @@ describe("SwarmProvider", () => {
       const provider = new SwarmProvider(TEST_DIR);
       const names = await provider.listProjectNames();
 
-      expect(names).toContain("ext-proj");
+      // External projects not in bulk listing (adj-109 fix)
+      expect(names).not.toContain("ext-proj");
 
       rmSync(externalDir, { recursive: true, force: true });
     });

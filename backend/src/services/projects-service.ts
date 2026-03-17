@@ -157,16 +157,18 @@ function nameFromCloneUrl(url: string): string {
 // ============================================================================
 
 /**
- * Check if a directory contains a beads database.
- * Accepts: beads.db (SQLite), dolt/ (Dolt backend), or config.yaml (minimal signal).
+ * Check if a directory contains a queryable beads database (SQLite).
+ *
+ * Only checks for beads.db — NOT Dolt or config.yaml.
+ * Dolt-backed projects need a running server and are expensive to query.
+ * The overview route uses hasBeads to decide which projects to query in bulk,
+ * so including non-queryable projects causes serial bd timeouts (adj-109).
+ *
+ * For discovery/registration purposes (can this project have beads?),
+ * use SwarmProvider.hasBeadsDatabase() which checks all formats.
  */
 function hasBeadsDb(dirPath: string): boolean {
-  const beadsDir = join(dirPath, ".beads");
-  return (
-    existsSync(join(beadsDir, "beads.db")) ||
-    existsSync(join(beadsDir, "dolt")) ||
-    existsSync(join(beadsDir, "config.yaml"))
-  );
+  return existsSync(join(dirPath, ".beads", "beads.db"));
 }
 
 /**

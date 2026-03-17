@@ -178,21 +178,11 @@ export class SwarmProvider implements WorkspaceProvider {
       // If readdir fails (permissions, etc.), just return what we have
     }
 
-    // Include externally registered projects from ~/.adjutant/projects.json.
-    // These may be sibling directories outside projectRoot (not found by child scan)
-    // or Dolt-backed projects that don't have beads.db.
-    for (const project of loadRegisteredProjects()) {
-      const absPath = resolve(project.path);
-      if (seenPaths.has(absPath)) continue;
-
-      const projectBeadsPath = resolveBeadsDir(absPath);
-      results.push({
-        path: projectBeadsPath,
-        project: project.name,
-        workDir: absPath,
-      });
-      seenPaths.add(absPath);
-    }
+    // NOTE: We intentionally do NOT include external registered projects here.
+    // listBeadsDirs() is used by buildDatabaseList("all") which queries every
+    // database sequentially through a semaphore. Including all registered projects
+    // (siblings like OttoDom, gt, l2rr2l) causes 48-60+ second serial timeouts.
+    // External projects are resolved on-demand via resolveProjectPath() instead.
 
     return results;
   }
@@ -243,12 +233,8 @@ export class SwarmProvider implements WorkspaceProvider {
       // If readdir fails, continue with registered projects
     }
 
-    // Include externally registered projects
-    for (const project of loadRegisteredProjects()) {
-      if (!names.has(project.name)) {
-        names.add(project.name);
-      }
-    }
+    // NOTE: External registered projects are resolved on-demand via
+    // resolveProjectPath(), not included in bulk listing (see listBeadsDirs comment).
 
     return [...names];
   }
