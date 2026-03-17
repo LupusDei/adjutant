@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 
 import { agentLifecycleBehavior } from "../../../../src/services/adjutant/behaviors/agent-lifecycle.js";
 import type { BehaviorEvent } from "../../../../src/services/adjutant/behavior-registry.js";
+import { dispatchToBehavior } from "../../../helpers/behavior-dispatch.js";
 
 function createMockState() {
   return {
@@ -69,7 +70,7 @@ describe("agentLifecycleBehavior", () => {
         seq: 1,
       };
 
-      await agentLifecycleBehavior.act(event, state, comm);
+      await dispatchToBehavior(agentLifecycleBehavior, event, state, comm);
 
       // Two upsert calls: first for connection status, second for role inference
       expect(state.upsertAgentProfile).toHaveBeenCalledTimes(2);
@@ -109,7 +110,7 @@ describe("agentLifecycleBehavior", () => {
         seq: 2,
       };
 
-      await agentLifecycleBehavior.act(event, state, comm);
+      await dispatchToBehavior(agentLifecycleBehavior, event, state, comm);
 
       expect(state.upsertAgentProfile).toHaveBeenCalledOnce();
       const profileArg = state.upsertAgentProfile.mock.calls[0][0];
@@ -142,7 +143,7 @@ describe("agentLifecycleBehavior", () => {
         seq: 3,
       };
 
-      await agentLifecycleBehavior.act(event, state, comm);
+      await dispatchToBehavior(agentLifecycleBehavior, event, state, comm);
 
       expect(state.upsertAgentProfile).toHaveBeenCalledOnce();
       const profileArg = state.upsertAgentProfile.mock.calls[0][0];
@@ -165,7 +166,7 @@ describe("agentLifecycleBehavior", () => {
         seq: 4,
       };
 
-      await agentLifecycleBehavior.act(event, state, comm);
+      await dispatchToBehavior(agentLifecycleBehavior, event, state, comm);
 
       const profileArg = state.upsertAgentProfile.mock.calls[0][0];
       expect(profileArg.currentTask).toBeNull();
@@ -182,7 +183,7 @@ describe("agentLifecycleBehavior", () => {
         seq: 1,
       };
 
-      await agentLifecycleBehavior.act(event, state, comm);
+      await dispatchToBehavior(agentLifecycleBehavior, event, state, comm);
 
       // First call: initial upsert with connected status
       // Second call: role inference upsert
@@ -201,7 +202,7 @@ describe("agentLifecycleBehavior", () => {
         seq: 2,
       };
 
-      await agentLifecycleBehavior.act(event, state, comm);
+      await dispatchToBehavior(agentLifecycleBehavior, event, state, comm);
 
       expect(state.upsertAgentProfile).toHaveBeenCalledTimes(2);
       const roleCall = state.upsertAgentProfile.mock.calls[1][0];
@@ -217,7 +218,7 @@ describe("agentLifecycleBehavior", () => {
         seq: 3,
       };
 
-      await agentLifecycleBehavior.act(event, state, comm);
+      await dispatchToBehavior(agentLifecycleBehavior, event, state, comm);
 
       expect(state.upsertAgentProfile).toHaveBeenCalledTimes(2);
       const roleCall = state.upsertAgentProfile.mock.calls[1][0];
@@ -233,7 +234,7 @@ describe("agentLifecycleBehavior", () => {
         seq: 4,
       };
 
-      await agentLifecycleBehavior.act(event, state, comm);
+      await dispatchToBehavior(agentLifecycleBehavior, event, state, comm);
 
       expect(state.upsertAgentProfile).toHaveBeenCalledTimes(2);
       const roleCall = state.upsertAgentProfile.mock.calls[1][0];
@@ -250,7 +251,7 @@ describe("agentLifecycleBehavior", () => {
         seq: 5,
       };
 
-      await agentLifecycleBehavior.act(event, state, comm);
+      await dispatchToBehavior(agentLifecycleBehavior, event, state, comm);
 
       // Only one call for the disconnect upsert — no role inference
       expect(state.upsertAgentProfile).toHaveBeenCalledOnce();
@@ -270,7 +271,7 @@ describe("agentLifecycleBehavior", () => {
       };
 
       // Should not throw
-      await agentLifecycleBehavior.act(event, state, comm);
+      await dispatchToBehavior(agentLifecycleBehavior, event, state, comm);
 
       // Should not call any state or comm methods
       expect(state.upsertAgentProfile).not.toHaveBeenCalled();

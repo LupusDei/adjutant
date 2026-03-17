@@ -8,6 +8,7 @@ import type { ProposalStore } from "../../../../src/services/proposal-store.js";
 import type { Proposal } from "../../../../src/types/proposals.js";
 
 import { createIdleProposalNudge } from "../../../../src/services/adjutant/behaviors/idle-proposal-nudge.js";
+import { dispatchToBehavior } from "../../../helpers/behavior-dispatch.js";
 
 // ---------------------------------------------------------------------------
 // Mock factories
@@ -149,6 +150,72 @@ describe("createIdleProposalNudge", () => {
     });
   });
 
+  describe("dispatch — shouldAct filtering (adj-108)", () => {
+    it("should not call act when event is not agent:status_changed", async () => {
+      const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
+      const nonMatchingEvent: BehaviorEvent = {
+        name: "mcp:agent_connected",
+        data: { agentId: "agent-1", sessionId: "s1" },
+        seq: 1,
+      };
+
+      const actCalled = await dispatchToBehavior(behavior, nonMatchingEvent, state, comm);
+
+      expect(actCalled).toBe(false);
+      expect(stimulusEngine.scheduleCheck).not.toHaveBeenCalled();
+      expect(state.logDecision).not.toHaveBeenCalled();
+      expect(state.setMeta).not.toHaveBeenCalled();
+    });
+
+    it("should call act when event is agent:status_changed", async () => {
+      const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
+      const event = makeWorkingEvent("agent-1");
+
+      const actCalled = await dispatchToBehavior(behavior, event, state, comm);
+
+      expect(actCalled).toBe(true);
+      // Working event clears debounce
+      expect(state.setMeta).toHaveBeenCalled();
+    });
+  });
+
+  describe("dispatch — cleanup on non-idle via dispatch (adj-108)", () => {
+    it("should clear debounce when agent transitions to non-idle through full dispatch", async () => {
+      const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
+
+      (state.getAgentProfile as ReturnType<typeof vi.fn>).mockReturnValue({
+        agentId: "agent-1",
+        lastStatus: "idle",
+        disconnectedAt: null,
+        connectedAt: "2026-03-09T10:00:00Z",
+      });
+
+      // First: idle event sets debounce via scheduleCheck
+      (state.getMeta as ReturnType<typeof vi.fn>).mockReturnValue(null);
+      await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
+      expect(stimulusEngine.scheduleCheck).toHaveBeenCalledTimes(1);
+
+      // Then: working event through dispatch should clear debounce
+      const actCalled = await dispatchToBehavior(behavior, makeWorkingEvent("agent-1"), state, comm);
+      expect(actCalled).toBe(true);
+      expect(state.setMeta).toHaveBeenCalledWith(
+        expect.stringContaining("agent-1"),
+        "",
+      );
+    });
+
+    it("should not process disconnect events (filtered by shouldAct)", async () => {
+      const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
+      const disconnectEvent = makeDisconnectedEvent("agent-1");
+
+      const actCalled = await dispatchToBehavior(behavior, disconnectEvent, state, comm);
+
+      // mcp:agent_disconnected is NOT agent:status_changed, so shouldAct returns false
+      expect(actCalled).toBe(false);
+      expect(stimulusEngine.scheduleCheck).not.toHaveBeenCalled();
+    });
+  });
+
   describe("act — idle agent triggers scheduleCheck", () => {
     it("calls scheduleCheck with 300000ms delay when agent goes idle", async () => {
       const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
@@ -162,7 +229,7 @@ describe("createIdleProposalNudge", () => {
         connectedAt: "2026-03-09T10:00:00Z",
       });
 
-      await behavior.act(event, state, comm);
+      await dispatchToBehavior(behavior, event, state, comm);
 
       expect(stimulusEngine.scheduleCheck).toHaveBeenCalledWith(
         300000,
@@ -181,7 +248,7 @@ describe("createIdleProposalNudge", () => {
         connectedAt: "2026-03-09T10:00:00Z",
       });
 
-      await behavior.act(event, state, comm);
+      await dispatchToBehavior(behavior, event, state, comm);
 
       const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
       expect(reason).toContain("engineer-3");
@@ -198,7 +265,7 @@ describe("createIdleProposalNudge", () => {
         connectedAt: "2026-03-09T10:00:00Z",
       });
 
-      await behavior.act(event, state, comm);
+      await dispatchToBehavior(behavior, event, state, comm);
 
       expect(state.logDecision).toHaveBeenCalledWith({
         behavior: "idle-proposal-nudge",
@@ -216,7 +283,7 @@ describe("createIdleProposalNudge", () => {
 
       // shouldAct returns true for all agent:status_changed events
       expect(behavior.shouldAct(event, state)).toBe(true);
-      await behavior.act(event, state, comm);
+      await dispatchToBehavior(behavior, event, state, comm);
 
       expect(stimulusEngine.scheduleCheck).not.toHaveBeenCalled();
       // Debounce key should be cleared
@@ -246,7 +313,7 @@ describe("createIdleProposalNudge", () => {
         connectedAt: "2026-03-09T10:00:00Z",
       });
 
-      await behavior.act(event, state, comm);
+      await dispatchToBehavior(behavior, event, state, comm);
 
       expect(stimulusEngine.scheduleCheck).not.toHaveBeenCalled();
     });
@@ -257,7 +324,7 @@ describe("createIdleProposalNudge", () => {
 
       (state.getAgentProfile as ReturnType<typeof vi.fn>).mockReturnValue(null);
 
-      await behavior.act(event, state, comm);
+      await dispatchToBehavior(behavior, event, state, comm);
 
       expect(stimulusEngine.scheduleCheck).not.toHaveBeenCalled();
     });
@@ -277,7 +344,7 @@ describe("createIdleProposalNudge", () => {
 
       // First call: debounce key not set
       (state.getMeta as ReturnType<typeof vi.fn>).mockReturnValue(null);
-      await behavior.act(event, state, comm);
+      await dispatchToBehavior(behavior, event, state, comm);
       expect(stimulusEngine.scheduleCheck).toHaveBeenCalledTimes(1);
 
       // setMeta should have been called to store the check ID
@@ -288,7 +355,7 @@ describe("createIdleProposalNudge", () => {
 
       // Second call: debounce key IS set (previous check ID stored)
       (state.getMeta as ReturnType<typeof vi.fn>).mockReturnValue("check-id-123");
-      await behavior.act(event, state, comm);
+      await dispatchToBehavior(behavior, event, state, comm);
       expect(stimulusEngine.scheduleCheck).toHaveBeenCalledTimes(1); // Still 1
     });
 
@@ -304,17 +371,17 @@ describe("createIdleProposalNudge", () => {
 
       // First idle event, no debounce
       (state.getMeta as ReturnType<typeof vi.fn>).mockReturnValue(null);
-      await behavior.act(makeIdleEvent("agent-1"), state, comm);
+      await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
       expect(stimulusEngine.scheduleCheck).toHaveBeenCalledTimes(1);
 
       // Agent goes working — behavior should clear debounce via act on working event
       const workingEvent = makeWorkingEvent("agent-1");
-      await behavior.act(workingEvent, state, comm);
+      await dispatchToBehavior(behavior, workingEvent, state, comm);
 
       // Agent goes idle again — debounce was cleared so new check is allowed
       // (getMeta returns null because setMeta was called to clear it during working transition)
       (state.getMeta as ReturnType<typeof vi.fn>).mockReturnValue(null);
-      await behavior.act(makeIdleEvent("agent-1"), state, comm);
+      await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
       expect(stimulusEngine.scheduleCheck).toHaveBeenCalledTimes(2);
     });
   });
@@ -331,7 +398,7 @@ describe("createIdleProposalNudge", () => {
         connectedAt: "2026-03-09T10:00:00Z",
       });
 
-      await behavior.act(event, state, comm);
+      await dispatchToBehavior(behavior, event, state, comm);
 
       expect(comm.messageAgent).not.toHaveBeenCalled();
       expect(comm.sendImportant).not.toHaveBeenCalled();
@@ -386,7 +453,7 @@ describe("createIdleProposalNudge", () => {
       const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
       setupConnectedAgent("agent-1");
 
-      await behavior.act(makeIdleEvent("agent-1"), state, comm);
+      await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
 
       const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
       expect(reason).toContain("p-1");
@@ -414,7 +481,7 @@ describe("createIdleProposalNudge", () => {
       const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
       setupConnectedAgent("agent-1");
 
-      await behavior.act(makeIdleEvent("agent-1"), state, comm);
+      await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
 
       const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
       expect(reason).toContain("d-1");
@@ -429,7 +496,7 @@ describe("createIdleProposalNudge", () => {
       const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
       setupConnectedAgent("agent-1");
 
-      await behavior.act(makeIdleEvent("agent-1"), state, comm);
+      await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
 
       const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
       expect(reason.toLowerCase()).toContain("no existing proposals");
@@ -441,7 +508,7 @@ describe("createIdleProposalNudge", () => {
       const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
       setupConnectedAgent("engineer-5");
 
-      await behavior.act(makeIdleEvent("engineer-5"), state, comm);
+      await dispatchToBehavior(behavior, makeIdleEvent("engineer-5"), state, comm);
 
       const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
       expect(reason).toContain("send_message");
@@ -454,7 +521,7 @@ describe("createIdleProposalNudge", () => {
       const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
       setupConnectedAgent("agent-1");
 
-      await behavior.act(makeIdleEvent("agent-1"), state, comm);
+      await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
 
       expect(proposalStore.getProposals).toHaveBeenCalledWith({ status: "pending" });
       expect(proposalStore.getProposals).toHaveBeenCalledWith({ status: "dismissed" });
@@ -509,7 +576,7 @@ describe("createIdleProposalNudge", () => {
       const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
       setupConnectedAgent("agent-1");
 
-      await behavior.act(makeIdleEvent("agent-1"), state, comm);
+      await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
 
       const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
       expect(reason).toContain("PENDING CAP REACHED");
@@ -531,7 +598,7 @@ describe("createIdleProposalNudge", () => {
       const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
       setupConnectedAgent("agent-1");
 
-      await behavior.act(makeIdleEvent("agent-1"), state, comm);
+      await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
 
       const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
       expect(reason).toContain("PENDING CAP REACHED");
@@ -551,7 +618,7 @@ describe("createIdleProposalNudge", () => {
       const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
       setupConnectedAgent("agent-1");
 
-      await behavior.act(makeIdleEvent("agent-1"), state, comm);
+      await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
 
       const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
       expect(reason).not.toContain("PENDING CAP REACHED");
@@ -570,7 +637,7 @@ describe("createIdleProposalNudge", () => {
       const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
       setupConnectedAgent("agent-1");
 
-      await behavior.act(makeIdleEvent("agent-1"), state, comm);
+      await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
 
       const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
       expect(reason).not.toContain("PENDING CAP REACHED");

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { AdjutantState } from "../../../../src/services/adjutant/state-store.js";
 import type { CommunicationManager } from "../../../../src/services/adjutant/communication.js";
 import type { BehaviorEvent } from "../../../../src/services/adjutant/behavior-registry.js";
+import { dispatchToBehavior } from "../../../helpers/behavior-dispatch.js";
 
 const { mockIsAlive, mockSpawn } = vi.hoisted(() => ({
   mockIsAlive: vi.fn(),
@@ -82,7 +83,7 @@ describe("createHealthMonitorBehavior", () => {
     const state = createMockState();
     const comm = createMockComm();
 
-    await behavior.act(dummyEvent, state, comm);
+    await dispatchToBehavior(behavior, dummyEvent, state, comm);
 
     expect(mockIsAlive).toHaveBeenCalled();
     expect(state.setMeta).toHaveBeenCalledWith(
@@ -100,7 +101,7 @@ describe("createHealthMonitorBehavior", () => {
     const state = createMockState();
     const comm = createMockComm();
 
-    await behavior.act(dummyEvent, state, comm);
+    await dispatchToBehavior(behavior, dummyEvent, state, comm);
 
     expect(state.logDecision).toHaveBeenCalledWith({
       behavior: "health-monitor",
@@ -118,7 +119,7 @@ describe("createHealthMonitorBehavior", () => {
     const state = createMockState();
     const comm = createMockComm();
 
-    await behavior.act(dummyEvent, state, comm);
+    await dispatchToBehavior(behavior, dummyEvent, state, comm);
 
     expect(state.setMeta).toHaveBeenCalledWith(
       "adjutant_last_respawn",
@@ -136,7 +137,7 @@ describe("createHealthMonitorBehavior", () => {
     const state = createMockState();
     const comm = createMockComm();
 
-    await behavior.act(dummyEvent, state, comm);
+    await dispatchToBehavior(behavior, dummyEvent, state, comm);
 
     expect(comm.sendImportant).toHaveBeenCalledWith(
       expect.stringContaining("Health monitor: Adjutant agent is down and respawn failed"),
