@@ -34,13 +34,14 @@ Adjutant uses a 4-layer agent hierarchy. Every agent MUST know its layer and beh
 ### Layer 3: Squad Leaders (Named Adjutant Agents)
 
 - **Role**: Mission commanders. Own an epic, proposal, bug, or body of work end-to-end.
-- **Spawned by**: Coordinator via `spawn_worker` MCP tool (creates named, dashboard-visible agents)
+- **Spawned by**: Coordinator via `spawn_worker` MCP tool (creates named, dashboard-visible agents), or by the User
 - **Does**:
   - Owns their assigned beads (self-assigns, updates status, closes when done)
   - Plans execution strategy (reads specs, identifies parallel tracks)
   - Spawns native Claude Code teammates for parallel execution (using `isolation: "worktree"`)
   - Can execute work directly when spawning a squad is overkill
   - Manages their squad: monitors progress, unblocks, reassigns work
+  - Manages their squad's beads: updates status, create new bugs/tasks assigned to the epic, closes when complete
   - Runs build verification (npm run build, npm test) before merging
   - Commits, pushes, and merges work to main
   - Reports progress to the General via MCP messages (send_message, set_status, announce)
@@ -88,7 +89,7 @@ If a Squad Leader discovers the epic scope is wrong or a new area needs a separa
 
 #### Cross-Mission Bugs
 If a Squad Member finds a critical bug outside their mission scope:
-1. Create a bug bead under the parent epic with a clear description
+1. Inform the Squad Leader to create a bug bead under the parent epic with a clear description
 2. Report it to their Squad Leader via MCP
 3. The Squad Leader escalates to the General if it's blocking or urgent
 4. Do NOT fix it yourself — it belongs to a different mission
@@ -115,6 +116,7 @@ Every spawn point MUST inject the appropriate preamble verbatim. These are templ
 ```
 ## Your Role (Layer 3: Squad Leader)
 You are <name>, a Squad Leader. You own <epic-id> end-to-end.
+- Your specialization: <role or "general-purpose engineering agent">
 - You report UP to the General via MCP messages (send_message, set_status, announce)
 - You spawn DOWN native Claude Code teammates with isolation: "worktree" for parallel work
 - You do NOT spawn other Squad Leaders — only the Coordinator does that
@@ -128,13 +130,34 @@ You are <name>, a Squad Leader. You own <epic-id> end-to-end.
 ```
 ## Your Role (Layer 4: Squad Member)
 You are <name>, a Squad Member on <squad-leader>'s team.
+- Your specialization: <role — e.g., Staff Engineer, QA Sentinel, Code Reviewer, iOS Engineer>
 - Execute your assigned tasks and update beads via bd CLI
 - Report status via MCP when possible
+- Report your role in your first set_status call
 - You do NOT spawn additional agents
 - You do NOT merge to main without build verification
 - You do NOT communicate directly with the General — route through your Squad Leader
 - If you find bugs outside your scope, create a bead and report to your Squad Leader
 ```
+
+### Agent Role Discovery
+
+On startup, check for role specialization before defaulting to general-purpose:
+
+1. **Check your memories** — `query_memories({ category: "agent-profile" })` or read your Claude Code memory files for role/specialization notes
+2. **Check your spawn prompt** — if you were spawned with a role (QA Sentinel, Code Reviewer, iOS Engineer, etc.), that is your specialization
+3. **Check your bead assignments** — the types of beads assigned to you (all bugs = QA focus, all iOS tasks = iOS specialist) signal your role
+4. **Default** — if none of the above define a role, you are a general-purpose engineering agent
+
+Report your role in your first `set_status` call:
+```
+set_status({ status: "working", task: "Starting as <role>: <first task description>" })
+```
+
+Examples:
+- `"Starting as QA Sentinel: reviewing adj-110 for test coverage gaps"`
+- `"Starting as iOS Engineer: implementing adj-113 spawn agent modal"`
+- `"Starting as general-purpose agent: working on adj-111.4"`
 
 ### Dashboard Visibility
 
