@@ -45,7 +45,7 @@ async function buildPrefixMap(): Promise<Map<string, string>> {
     const beadsDirs = await listAllBeadsDirs();
     for (const dirInfo of beadsDirs) {
       if (!dirInfo.project) continue;
-      const prefix = readPrefixFromConfig(dirInfo.path);
+      const prefix = readPrefixFromConfig(dirInfo.path) ?? dirInfo.project;
       if (prefix && !map.has(prefix)) {
         map.set(prefix, dirInfo.project);
       }

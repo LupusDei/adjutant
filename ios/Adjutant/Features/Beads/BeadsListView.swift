@@ -80,7 +80,7 @@ struct BeadsListView: View {
         HStack(spacing: CRTTheme.Spacing.sm) {
             // Title
             VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxxs) {
-                CRTText("WORK BOARD", style: .header)
+                CRTText("BEADS", style: .header)
                     .crtGlow(color: theme.primary, radius: 4, intensity: 0.4)
             }
 

@@ -129,6 +129,18 @@ export function resolveBeadsDir(workDir: string): string {
 }
 
 /**
+ * Strips Dolt informational messages from stderr that are not actual errors.
+ * These appear when bd auto-cleans orphaned dolt sql-server processes.
+ */
+function stripDoltInfoMessages(stderr: string): string {
+  return stderr
+    .split("\n")
+    .filter((line) => !line.match(/^Info:\s+cleaned up \d+ orphaned dolt/))
+    .join("\n")
+    .trim();
+}
+
+/**
  * Detects Go runtime panics in stderr output.
  * Returns true if the stderr contains telltale signs of a Go panic/crash.
  */
@@ -240,7 +252,7 @@ export async function execBd<T = unknown>(
       child.on("close", (code) => {
         if (settled) return;
         const exitCode = code ?? 0;
-        const stderrTrimmed = stderr.trim();
+        const stderrTrimmed = stripDoltInfoMessages(stderr);
         const stdoutTrimmed = stdout.trim();
 
         // Failure if:
