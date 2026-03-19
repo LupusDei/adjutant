@@ -151,22 +151,19 @@ describe("events routes (SSE)", () => {
       await client.waitForEvents(1);
 
       // Emit an event
-      getEventBus().emit("mail:received", {
-        id: "msg-1",
-        from: "mayor/",
-        to: "operator",
-        subject: "Test Mail",
-        preview: "Hello",
+      getEventBus().emit("agent:status_changed", {
+        agent: "test-agent",
+        status: "working",
       });
 
       const received = await client.waitForEvents(2);
       client.close();
 
-      // Second chunk should contain the mail_received event
+      // Second chunk should contain the agent_status event
       const allText = received.join("");
-      expect(allText).toContain("event: mail_received");
-      expect(allText).toContain('"action":"received"');
-      expect(allText).toContain('"id":"msg-1"');
+      expect(allText).toContain("event: agent_status");
+      expect(allText).toContain('"action":"status_changed"');
+      expect(allText).toContain('"agent":"test-agent"');
     });
 
     it("should map bead events to bead_update SSE type", async () => {
@@ -250,9 +247,9 @@ describe("events routes (SSE)", () => {
 
       // Pre-emit some events to advance the sequence
       const bus = getEventBus();
-      bus.emit("mail:read", { id: "msg-1" });
-      bus.emit("mail:read", { id: "msg-2" });
-      bus.emit("mail:read", { id: "msg-3" });
+      bus.emit("bead:created", { id: "b-1", title: "t1", status: "open", type: "task" });
+      bus.emit("bead:created", { id: "b-2", title: "t2", status: "open", type: "task" });
+      bus.emit("bead:created", { id: "b-3", title: "t3", status: "open", type: "task" });
       const currentSeq = bus.getSeq(); // should be 3
 
       // Connect with Last-Event-ID = 3
@@ -298,26 +295,18 @@ describe("events routes (SSE)", () => {
         agent: "onyx",
         status: "idle",
       });
-      bus.emit("mail:received", {
-        id: "m-1",
-        from: "user",
-        to: "op",
-        subject: "S",
-        preview: "P",
-      });
       bus.emit("stream:status", {
         streamId: "stream-1",
         agent: "onyx",
         state: "started",
       });
 
-      const received = await client.waitForEvents(5);
+      const received = await client.waitForEvents(4);
       client.close();
 
       const allText = received.join("");
       expect(allText).toContain("event: bead_update");
       expect(allText).toContain("event: agent_status");
-      expect(allText).toContain("event: mail_received");
       expect(allText).toContain("event: stream_status");
     });
 

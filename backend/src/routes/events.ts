@@ -8,8 +8,6 @@
  * - bead_update: Bead created/updated/closed
  * - agent_status: Agent status changes
  * - power_state: Power state transitions
- * - mail_received: New mail messages
- * - mail_read: Mail marked as read
  * - mode_changed: Deployment mode switch
  * - stream_status: Agent streaming state changes
  *
@@ -32,8 +30,6 @@ const EVENT_TYPE_MAP: Partial<Record<EventName, string>> = {
   "bead:closed": "bead_update",
   "bead:assigned": "bead_update",
   "agent:status_changed": "agent_status",
-  "mail:received": "mail_received",
-  "mail:read": "mail_read",
   "stream:status": "stream_status",
   "session:cost": "session_cost",
   "session:cost_alert": "session_cost_alert",

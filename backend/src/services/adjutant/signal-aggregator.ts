@@ -9,8 +9,6 @@
 import { randomUUID } from "crypto";
 
 import type { EventName } from "../event-bus.js";
-import { KNOWN_COORDINATOR_IDS } from "./state-store.js";
-
 // ============================================================================
 // Types
 // ============================================================================
@@ -79,21 +77,6 @@ function classify(event: EventName, data: unknown): SignalUrgency {
       const priority = payload?.["priority"];
       if (typeof priority === "number" && priority <= 1) {
         return "critical";
-      }
-      return "context";
-    }
-
-    case "mail:received": {
-      // User→agent messages are context signals so the adjutant stays aware
-      // of instructions given to other agents. Messages to the adjutant itself
-      // are handled directly and classified as "ignore" (return context but
-      // with dedup key that collapses — effectively a no-op since the adjutant
-      // already processes its own mail).
-      const payload = data as Record<string, unknown> | null | undefined;
-      const from = payload?.["from"] as string | undefined;
-      const to = payload?.["to"] as string | undefined;
-      if (from === "user" && to && !KNOWN_COORDINATOR_IDS.has(to)) {
-        return "context";
       }
       return "context";
     }

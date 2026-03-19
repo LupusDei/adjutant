@@ -35,7 +35,6 @@ function createMockStatus(overrides: Record<string, unknown> = {}) {
     operator: {
       name: "Test User",
       email: "test@example.com",
-      unreadMail: 0,
     },
     rigs: [],
     agents: [],
@@ -92,7 +91,7 @@ describe("status routes", () => {
             name: "test-project",
             path: "/Users/test/projects/test-project",
             agents: [
-              { name: "furiosa", running: true, unreadMail: 0, state: "working" },
+              { name: "furiosa", running: true, state: "working" },
             ],
             mergeQueue: { pending: 3, inFlight: 1, blocked: 0 },
           },
@@ -145,7 +144,6 @@ describe("status routes", () => {
         operator: {
           name: "Will Saults",
           email: "will@saults.io",
-          unreadMail: 10,
         },
       });
 
@@ -159,7 +157,6 @@ describe("status routes", () => {
       expect(response.status).toBe(200);
       expect(response.body.data.operator.name).toBe("Will Saults");
       expect(response.body.data.operator.email).toBe("will@saults.io");
-      expect(response.body.data.operator.unreadMail).toBe(10);
     });
   });
 });

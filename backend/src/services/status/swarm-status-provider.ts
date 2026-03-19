@@ -57,10 +57,6 @@ export class SwarmStatusProvider implements StatusProvider {
       const agentsResult = await getAgents();
       const crewMembers: CrewMember[] = agentsResult.success && agentsResult.data ? agentsResult.data : [];
 
-      // In swarm mode, count user's unread mail
-      // For now, assume 0 since we don't have a specific user mailbox
-      const unreadMail = 0;
-
       const status: SystemStatus = {
         // Always running in swarm mode
         powerState: "running",
@@ -72,7 +68,6 @@ export class SwarmStatusProvider implements StatusProvider {
         operator: {
           name: config.owner?.name ?? "User",
           email: config.owner?.email ?? "",
-          unreadMail,
         },
         // No rigs in swarm mode
         rigs: [],

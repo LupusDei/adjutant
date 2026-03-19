@@ -2,10 +2,9 @@
  * Integration test: Full memory pipeline
  *
  * Verifies the end-to-end flow:
- *   1. Correction message → memory-collector → learning created
+ *   1. Bead closure → memory-collector → learning created (failure patterns)
  *   2. Trigger retro → session-retrospective → retrospective with metrics
- *   3. Trigger memory-reviewer → surfaces top learnings
- *   4. 5+ topic learnings → self-improver → proposal created
+ *   3. 5+ topic learnings → self-improver → proposal created
  *
  * Bead: adj-053.5.3
  */
@@ -67,88 +66,6 @@ describe("Memory System Integration (adj-053.5.3)", () => {
   afterEach(() => {
     db.close();
     rmSync(testDir, { recursive: true, force: true });
-  });
-
-  it("should detect correction from user message and create learning", async () => {
-    const { createMemoryCollector } = await import("../../../src/services/adjutant/behaviors/memory-collector.js");
-    const collector = createMemoryCollector(memoryStore);
-
-    const event: BehaviorEvent = {
-      name: "mail:received",
-      data: {
-        id: "msg-test-1",
-        from: "user",
-        to: "adjutant-core",
-        preview: "Don't use any types in TypeScript code",
-        threadId: "general",
-      },
-      seq: 1,
-    };
-
-    await collector.act(event, state, comm);
-
-    // Verify learning was created
-    const learnings = memoryStore.queryLearnings({ limit: 10 });
-    expect(learnings.length).toBeGreaterThanOrEqual(1);
-    expect(learnings[0]!.sourceType).toBe("user_correction");
-    expect(learnings[0]!.content).toContain("Don't use any types");
-
-    // Verify correction record exists
-    const corrections = memoryStore.getUnresolvedCorrections();
-    expect(corrections.length).toBeGreaterThanOrEqual(1);
-
-    // Verify decision was logged
-    const decisions = state.getRecentDecisions(10);
-    const correctionDecision = decisions.find((d) => d.action === "correction_detected");
-    expect(correctionDecision).toBeDefined();
-    expect(correctionDecision!.behavior).toBe("memory-collector");
-  });
-
-  it("should reinforce existing learning on duplicate correction", async () => {
-    const { createMemoryCollector } = await import("../../../src/services/adjutant/behaviors/memory-collector.js");
-    const collector = createMemoryCollector(memoryStore);
-
-    // First correction
-    const event1: BehaviorEvent = {
-      name: "mail:received",
-      data: {
-        id: "msg-1",
-        from: "user",
-        to: "adjutant-core",
-        preview: "Don't use any types in code",
-        threadId: "general",
-      },
-      seq: 1,
-    };
-    await collector.act(event1, state, comm);
-
-    const learningsBefore = memoryStore.queryLearnings({ limit: 10 });
-    const firstLearning = learningsBefore[0]!;
-    const confidenceBefore = firstLearning.confidence;
-
-    // Second similar correction
-    const event2: BehaviorEvent = {
-      name: "mail:received",
-      data: {
-        id: "msg-2",
-        from: "user",
-        to: "adjutant-core",
-        preview: "Don't use any types in TypeScript",
-        threadId: "general",
-      },
-      seq: 2,
-    };
-    await collector.act(event2, state, comm);
-
-    // Should have reinforced, not created a new one
-    const learningsAfter = memoryStore.queryLearnings({ limit: 10 });
-    // The count might be the same if dedup worked, or +1 if FTS didn't match
-    // Either way, the first learning should have been reinforced
-    const updatedLearning = memoryStore.getLearning(firstLearning.id)!;
-    if (learningsAfter.length === learningsBefore.length) {
-      // Dedup worked: confidence should be higher
-      expect(updatedLearning.confidence).toBeGreaterThanOrEqual(confidenceBefore);
-    }
   });
 
   it("should create retrospective from bead closure events", async () => {
@@ -218,91 +135,6 @@ describe("Memory System Integration (adj-053.5.3)", () => {
     expect(proposals[0]!.title).toContain("testing-workflow");
   });
 
-  it("should run full pipeline: correction -> learning -> retro -> self-improve", async () => {
-    const { createMemoryCollector } = await import("../../../src/services/adjutant/behaviors/memory-collector.js");
-    const { createSessionRetrospective } = await import("../../../src/services/adjutant/behaviors/session-retrospective.js");
-    const { createSelfImprover } = await import("../../../src/services/adjutant/behaviors/self-improver.js");
-
-    const collector = createMemoryCollector(memoryStore);
-    const retrospective = createSessionRetrospective(memoryStore);
-    const improver = createSelfImprover(memoryStore, proposalStore);
-
-    // Step 1: Generate 5 user corrections on the same topic
-    // Each correction creates a learning and correction record
-    const correctionMessages = [
-      "Always run tests before committing code",
-      "Always check build before pushing changes",
-      "Always verify lint passes before commit",
-      "Always run build command before deployment",
-      "Always ensure tests pass before closing a bead",
-    ];
-
-    for (let i = 0; i < correctionMessages.length; i++) {
-      const event: BehaviorEvent = {
-        name: "mail:received",
-        data: {
-          id: `msg-pipeline-${i}`,
-          from: "user",
-          to: "adjutant-core",
-          preview: correctionMessages[i],
-          threadId: "general",
-        },
-        seq: i + 1,
-      };
-      await collector.act(event, state, comm);
-    }
-
-    // Verify learnings were created (at least some — dedup may merge)
-    const learnings = memoryStore.queryLearnings({ limit: 20 });
-    expect(learnings.length).toBeGreaterThanOrEqual(1);
-
-    // Step 2: Trigger retrospective
-    const retroEvent: BehaviorEvent = {
-      name: "cron:tick",
-      data: { cronTick: true, behavior: "session-retrospective" },
-      seq: 100,
-    };
-    await retrospective.act(retroEvent, state, comm);
-
-    const retros = memoryStore.getRecentRetrospectives(5);
-    expect(retros.length).toBeGreaterThanOrEqual(1);
-
-    // Step 3: Ensure enough learnings in the topic for self-improver
-    // (Some may have been deduplicated, so add more to reach 5 if needed)
-    const topicLearnings = memoryStore.queryLearnings({ topic: learnings[0]!.topic });
-    const additionalNeeded = Math.max(0, 5 - topicLearnings.length);
-    for (let i = 0; i < additionalNeeded; i++) {
-      memoryStore.insertLearning({
-        category: "operational",
-        topic: topicLearnings[0]?.topic ?? "operational-run",
-        content: `Additional learning ${i} for threshold`,
-        sourceType: "user_correction",
-        confidence: 0.7,
-      });
-    }
-
-    // Step 4: Trigger self-improver
-    const topic = topicLearnings[0]?.topic ?? "operational-run";
-    const improverEvent: BehaviorEvent = {
-      name: "learning:created",
-      data: {
-        learningId: 999,
-        category: "operational",
-        topic,
-        sourceType: "user_correction",
-      },
-      seq: 200,
-    };
-    await improver.act(improverEvent, state, comm);
-
-    // The self-improver may or may not create a proposal depending on
-    // avg confidence and count. Verify the pipeline ran without errors.
-    const decisions = state.getRecentDecisions(50);
-    // Should have correction_detected decisions from step 1
-    const correctionDecisions = decisions.filter((d) => d.action === "correction_detected" || d.action === "correction_reinforced");
-    expect(correctionDecisions.length).toBeGreaterThanOrEqual(1);
-  });
-
   it("should capture bead outcome patterns in learning", async () => {
     const { createMemoryCollector } = await import("../../../src/services/adjutant/behaviors/memory-collector.js");
     const collector = createMemoryCollector(memoryStore);
@@ -352,8 +184,8 @@ describe("Memory System Integration (adj-053.5.3)", () => {
     expect(improver.name).toBe("self-improver");
 
     // Verify triggers
-    expect(collector.triggers).toContain("mail:received");
     expect(collector.triggers).toContain("bead:closed");
+    expect(collector.triggers).toContain("agent:status_changed");
     expect(improver.triggers).toContain("learning:created");
 
     // Verify shouldAct returns true for generic events
@@ -378,8 +210,8 @@ describe("Memory System Integration (adj-053.5.3)", () => {
     registry.register(createSelfImprover(memoryStore, proposalStore));
 
     // Should be able to get behaviors for relevant events
-    const mailBehaviors = registry.getBehaviorsForEvent("mail:received");
-    expect(mailBehaviors.some((b) => b.name === "memory-collector")).toBe(true);
+    const beadClosedBehaviors = registry.getBehaviorsForEvent("bead:closed");
+    expect(beadClosedBehaviors.some((b) => b.name === "memory-collector")).toBe(true);
 
     const learningBehaviors = registry.getBehaviorsForEvent("learning:created");
     expect(learningBehaviors.some((b) => b.name === "self-improver")).toBe(true);

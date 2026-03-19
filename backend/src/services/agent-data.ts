@@ -11,7 +11,6 @@ import {
 } from "./message-utils.js";
 import { getTopology } from "./topology/index.js";
 import { listTmuxSessions } from "./tmux.js";
-import { buildMailIndex, listMailIssues, type MailIndexEntry } from "./mail-data.js";
 
 export interface AgentRuntimeInfo {
   id: string;
@@ -24,9 +23,6 @@ export interface AgentRuntimeInfo {
   state?: string;
   hookBead?: string;
   hookBeadTitle?: string;
-  unreadMail: number;
-  firstSubject?: string;
-  firstFrom?: string;
   branch?: string;
   /** ISO timestamp of last activity (from session registry) */
   lastActivity?: string;
@@ -36,7 +32,6 @@ export interface AgentRuntimeInfo {
 
 export interface AgentSnapshot {
   agents: AgentRuntimeInfo[];
-  mailIndex: Map<string, MailIndexEntry>;
 }
 
 
@@ -113,7 +108,6 @@ async function fetchBeadTitles(
 }
 
 export async function collectAgentSnapshot(
-  townRoot: string,
   extraIdentities: string[] = []
 ): Promise<AgentSnapshot> {
   const topology = getTopology();
@@ -131,7 +125,7 @@ export async function collectAgentSnapshot(
   }
 
   const identities = new Set(extraIdentities.map(addressToIdentity));
-  const baseAgents: Omit<AgentRuntimeInfo, "unreadMail" | "firstSubject">[] = [];
+  const baseAgents: AgentRuntimeInfo[] = [];
 
   for (const { issue, sourceProject } of foundIssues) {
     const parsed = parseAgentBeadId(issue.id, sourceProject);
@@ -159,7 +153,7 @@ export async function collectAgentSnapshot(
     const state = issue.agent_state ?? fields.agentState;
     const hookBead = issue.hook_bead ?? fields.hookBead;
 
-    const agentEntry: Omit<AgentRuntimeInfo, "unreadMail" | "firstSubject"> = {
+    const agentEntry: AgentRuntimeInfo = {
       id: issue.id,
       name,
       role,
@@ -204,9 +198,6 @@ export async function collectAgentSnapshot(
     }
   }
 
-  const mailIssues = await listMailIssues(townRoot);
-  const mailIndex = buildMailIndex(mailIssues, Array.from(identities));
-
   // Collect all hook bead IDs and fetch their titles
   const hookBeadIds = baseAgents
     .filter((a) => a.hookBead)
@@ -217,12 +208,7 @@ export async function collectAgentSnapshot(
   const hookBeadTitles = await fetchBeadTitles(uniqueHookBeadIds);
 
   const agents: AgentRuntimeInfo[] = baseAgents.map((agent) => {
-    const mailInfo = mailIndex.get(addressToIdentity(agent.address));
-    const result: AgentRuntimeInfo = {
-      ...agent,
-      unreadMail: mailInfo?.unread ?? 0,
-    };
-    if (mailInfo?.firstSubject) result.firstSubject = mailInfo.firstSubject;
+    const result: AgentRuntimeInfo = { ...agent };
 
     // Add hook bead title for current task display
     if (agent.hookBead) {
@@ -233,5 +219,5 @@ export async function collectAgentSnapshot(
     return result;
   });
 
-  return { agents, mailIndex };
+  return { agents };
 }

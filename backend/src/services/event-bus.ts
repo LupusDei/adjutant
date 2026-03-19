@@ -4,7 +4,7 @@
  * In-process pub/sub using Node.js EventEmitter.
  * Services emit domain events, and consumers (SSE, WebSocket) subscribe to them.
  *
- * Event naming convention: "domain:action" (e.g., "mail:received", "bead:updated")
+ * Event naming convention: "domain:action" (e.g., "bead:updated", "agent:status_changed")
  */
 
 import { EventEmitter } from "events";
@@ -13,18 +13,6 @@ import { logInfo } from "../utils/index.js";
 // ============================================================================
 // Event Types
 // ============================================================================
-
-export interface MailReceivedEvent {
-  id: string;
-  from: string;
-  to: string;
-  subject: string;
-  preview: string;
-}
-
-export interface MailReadEvent {
-  id: string;
-}
 
 export interface BeadCreatedEvent {
   id: string;
@@ -140,8 +128,6 @@ export interface SpawnFailedEvent {
  * Map of event names to their payload types.
  */
 export interface EventMap {
-  "mail:received": MailReceivedEvent;
-  "mail:read": MailReadEvent;
   "bead:created": BeadCreatedEvent;
   "bead:updated": BeadUpdatedEvent;
   "bead:closed": BeadClosedEvent;
@@ -232,7 +218,6 @@ class EventBus {
     const counts: Record<string, number> = {};
     counts["*"] = this.emitter.listenerCount("*");
     const events: EventName[] = [
-      "mail:received", "mail:read",
       "bead:created", "bead:updated", "bead:closed", "bead:assigned",
       "agent:status_changed", "stream:status",
       "correction:detected", "learning:created",

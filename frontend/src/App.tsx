@@ -6,7 +6,6 @@ import { CrewStats } from "./components/crew/CrewStats";
 import { OverseerNotificationStatus } from "./components/notifications";
 import { SettingsView } from "./components/settings/SettingsView";
 import { CRTScreen } from "./components/shared/CRTScreen";
-import { QuickInput } from "./components/shared/QuickInput";
 import { KeyboardDismiss } from "./components/shared/KeyboardDismiss";
 import { ProjectSelector } from "./components/shared/ProjectSelector";
 import { ProjectProvider } from "./contexts/ProjectContext";
@@ -196,7 +195,6 @@ function AppContent() {
           </section>
         </main>
 
-        <QuickInput />
         <KeyboardDismiss />
       </div>
     </CRTScreen>

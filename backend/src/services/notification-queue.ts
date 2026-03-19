@@ -8,7 +8,7 @@
 // =============================================================================
 
 export type NotificationPriority = 'urgent' | 'high' | 'normal' | 'low';
-export type NotificationSource = 'mail' | 'system' | 'agent' | 'custom';
+export type NotificationSource = 'system' | 'agent' | 'custom';
 export type QueueEvent = 'enqueue' | 'dequeue' | 'clear';
 
 export interface NotificationItem {

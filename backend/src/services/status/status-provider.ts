@@ -40,8 +40,6 @@ export interface OperatorInfo {
   name: string;
   /** Email address */
   email: string;
-  /** Number of unread messages */
-  unreadMail: number;
 }
 
 /**

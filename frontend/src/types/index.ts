@@ -39,12 +39,6 @@ export interface CrewMember {
   status: CrewMemberStatus;
   /** Current task description (if working) */
   currentTask?: string;
-  /** Number of unread messages */
-  unreadMail: number;
-  /** First unread message subject (for preview) */
-  firstSubject?: string;
-  /** Sender of first unread message (for preview) */
-  firstFrom?: string;
   /** Current git branch */
   branch?: string;
   /** Session ID for linking to session chat (swarm) */

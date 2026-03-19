@@ -31,7 +31,6 @@ function createMockAgent(overrides: Partial<CrewMember> = {}): CrewMember {
     type: "agent",
     project: "proj1",
     status: "working",
-    unreadMail: 0,
     ...overrides,
   };
 }
@@ -102,24 +101,6 @@ describe("agents routes", () => {
       expect(response.body.data[1].status).toBe("idle");
       expect(response.body.data[2].status).toBe("blocked");
       expect(response.body.data[3].status).toBe("offline");
-    });
-
-    it("should include unreadMail count", async () => {
-      const mockAgents = [
-        createMockAgent({ id: "user-1", name: "user-1", unreadMail: 5 }),
-        createMockAgent({ id: "proj1/scout", name: "scout", unreadMail: 0 }),
-      ];
-
-      vi.mocked(getAgents).mockResolvedValue({
-        success: true,
-        data: mockAgents,
-      });
-
-      const response = await request(app).get("/api/agents");
-
-      expect(response.status).toBe(200);
-      expect(response.body.data[0].unreadMail).toBe(5);
-      expect(response.body.data[1].unreadMail).toBe(0);
     });
 
     it("should return 500 on service error", async () => {

@@ -71,7 +71,7 @@ type AssignState = 'idle' | 'loading';
 
 /**
  * Rich agent card for swarm mode.
- * Shows status, current task, branch, last activity, mail preview, and worktree.
+ * Shows status, current task, branch, last activity, and worktree.
  * Includes kill (D2) and assign (D3) controls.
  * Supports expandable inline terminal view with WebSocket streaming + polling fallback.
  */
@@ -221,9 +221,6 @@ export function SwarmAgentCard({ agent, onNavigateToChat }: SwarmAgentCardProps)
         {agent.isCoordinator && (
           <span style={styles.coordinatorBadge}>COORD</span>
         )}
-        {agent.unreadMail > 0 && (
-          <span style={styles.mailBadge}>📬{agent.unreadMail}</span>
-        )}
         {/* Cost & context indicators — stacked vertically */}
         {(agent.cost != null || agent.contextPercent != null) && (
           <span style={styles.costContextGroup}>
@@ -281,16 +278,6 @@ export function SwarmAgentCard({ agent, onNavigateToChat }: SwarmAgentCardProps)
         <div style={styles.detailRow}>
           <span style={styles.rowIcon}>⎇</span>
           <span style={styles.detailText}>{agent.branch}</span>
-        </div>
-      )}
-
-      {/* Mail preview */}
-      {agent.firstSubject && (
-        <div style={styles.detailRow}>
-          <span style={styles.rowIcon}>📨</span>
-          <span style={styles.mailPreview}>
-            "{agent.firstSubject}"{agent.firstFrom && ` from ${agent.firstFrom}`}
-          </span>
         </div>
       )}
 
@@ -460,12 +447,6 @@ const styles = {
     color: colors.primaryBright,
     flexShrink: 0,
   },
-  mailBadge: {
-    fontSize: '0.75rem',
-    color: colors.primaryBright,
-    fontWeight: 'bold',
-    flexShrink: 0,
-  },
   terminalToggle: {
     fontSize: '0.6rem',
     color: colors.primaryDim,
@@ -528,13 +509,6 @@ const styles = {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     fontFamily: 'monospace',
-    fontSize: '0.65rem',
-  },
-  mailPreview: {
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    fontStyle: 'italic',
     fontSize: '0.65rem',
   },
   footer: {

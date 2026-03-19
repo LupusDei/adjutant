@@ -125,7 +125,7 @@ describe("Overview API contracts", () => {
         data: [{
           id: "adj/kerrigan", name: "kerrigan", type: "agent", project: "adjutant",
           status: "working" as const, currentTask: "Working on adj-042",
-          sessionId: "sess-123", cost: 1.25, contextPercent: 45, unreadMail: 0,
+          sessionId: "sess-123", cost: 1.25, contextPercent: 45,
         }],
       });
       mockStore.getUnreadCounts.mockReturnValue([{ agentId: "adj/kerrigan", count: 2 }]);

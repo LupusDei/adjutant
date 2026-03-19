@@ -102,10 +102,6 @@ export interface AgentStatus {
   running: boolean;
   /** Work items pinned to this agent */
   pinnedWork?: string[];
-  /** Number of unread messages */
-  unreadMail: number;
-  /** First unread message subject (for preview) */
-  firstMessageSubject?: string;
   /** Special states like 'stuck' or 'awaiting-gate' */
   state?: "stuck" | "awaiting-gate" | "idle" | "working";
 }
@@ -128,12 +124,6 @@ export interface CrewMember {
   status: CrewMemberStatus;
   /** Current task description (if working) */
   currentTask?: string;
-  /** Number of unread messages */
-  unreadMail?: number;
-  /** First unread message subject (for preview) */
-  firstSubject?: string;
-  /** Sender of first unread message (for preview) */
-  firstFrom?: string;
   /** Current git branch */
   branch?: string;
   /** Session ID for linking to session chat (swarm) */
@@ -272,8 +262,6 @@ export const AgentStatusSchema = z.object({
   name: z.string(),
   running: z.boolean(),
   pinnedWork: z.array(z.string()).optional(),
-  unreadMail: z.number(),
-  firstMessageSubject: z.string().optional(),
   state: z.enum(["stuck", "awaiting-gate", "idle", "working"]).optional(),
 });
 
@@ -284,9 +272,6 @@ export const CrewMemberSchema = z.object({
   project: z.string().nullable(),
   status: CrewMemberStatusSchema,
   currentTask: z.string().optional(),
-  unreadMail: z.number().optional(),
-  firstSubject: z.string().optional(),
-  firstFrom: z.string().optional(),
   branch: z.string().optional(),
   sessionId: z.string().optional(),
   lastActivity: z.string().optional(),

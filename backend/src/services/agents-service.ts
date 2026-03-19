@@ -242,7 +242,6 @@ async function getTmuxAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
             : "idle"
           : "offline",
         sessionId: session.id,
-        unreadMail: 0,
         lastActivity: session.lastActivity,
       };
       if (session.workspaceType === "worktree") {

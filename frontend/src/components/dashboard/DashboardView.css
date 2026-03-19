@@ -63,14 +63,6 @@
     font-size: 0.65rem;
   }
 
-  .dashboard-mail-subject {
-    font-size: 0.8rem;
-  }
-
-  .dashboard-mail-meta {
-    font-size: 0.65rem;
-  }
-
   .dashboard-crew-card {
     padding: 8px 10px;
   }
@@ -244,37 +236,6 @@
 .dashboard-empty-text {
   color: var(--crt-phosphor-dim);
   font-style: italic;
-}
-
-/* Mail item styles */
-.dashboard-mail-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.dashboard-mail-subject {
-  color: var(--crt-phosphor);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.dashboard-mail-meta {
-  display: flex;
-  gap: 12px;
-  font-size: 0.75rem;
-  color: var(--crt-phosphor-dim);
-}
-
-.dashboard-mail-from {
-  text-transform: capitalize;
-}
-
-.dashboard-mail-time {
-  opacity: 0.7;
 }
 
 /* Crew status breakdown */
@@ -1201,15 +1162,6 @@
   color: var(--theme-text-secondary);
 }
 
-/* Mail items */
-[data-theme='document'] .dashboard-mail-subject {
-  color: var(--theme-text-primary);
-}
-
-[data-theme='document'] .dashboard-mail-meta {
-  color: var(--theme-text-secondary);
-}
-
 /* Overview epic cards */
 [data-theme='document'] .dashboard-overview-epic-card {
   background: var(--theme-bg-screen);
@@ -1624,16 +1576,6 @@
 
 /* Empty state */
 [data-theme='friendly'] .dashboard-empty-text {
-  color: var(--theme-text-secondary);
-}
-
-/* Mail items */
-[data-theme='friendly'] .dashboard-mail-subject {
-  color: var(--theme-text-primary);
-  font-weight: 600;
-}
-
-[data-theme='friendly'] .dashboard-mail-meta {
   color: var(--theme-text-secondary);
 }
 

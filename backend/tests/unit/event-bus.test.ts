@@ -34,18 +34,17 @@ describe("EventBus", () => {
       const bus = getEventBus();
       const handler = vi.fn();
 
-      bus.on("mail:received", handler);
-      bus.emit("mail:received", {
-        id: "msg-1",
-        from: "mayor/",
-        to: "operator",
-        subject: "Test",
-        preview: "Hello",
+      bus.on("bead:created", handler);
+      bus.emit("bead:created", {
+        id: "bead-1",
+        title: "Test",
+        status: "open",
+        type: "task",
       });
 
       expect(handler).toHaveBeenCalledOnce();
       expect(handler).toHaveBeenCalledWith(
-        expect.objectContaining({ id: "msg-1", subject: "Test" }),
+        expect.objectContaining({ id: "bead-1", title: "Test" }),
         1, // seq
       );
     });
@@ -55,12 +54,11 @@ describe("EventBus", () => {
       const handler = vi.fn();
 
       bus.on("mode:changed", handler);
-      bus.emit("mail:received", {
-        id: "msg-1",
-        from: "mayor/",
-        to: "operator",
-        subject: "Test",
-        preview: "Hello",
+      bus.emit("bead:created", {
+        id: "bead-1",
+        title: "Test",
+        status: "open",
+        type: "task",
       });
 
       expect(handler).not.toHaveBeenCalled();
@@ -91,29 +89,29 @@ describe("EventBus", () => {
       const handler = vi.fn();
 
       bus.onAny(handler);
-      bus.emit("mail:received", {
-        id: "msg-1",
-        from: "mayor/",
-        to: "operator",
-        subject: "Test",
-        preview: "Hello",
+      bus.emit("bead:created", {
+        id: "bead-1",
+        title: "Test",
+        status: "open",
+        type: "task",
       });
-      bus.emit("mode:changed", {
-        mode: "swarm",
-        features: ["dashboard"],
+      bus.emit("agent:status_changed", {
+        agent: "onyx",
+        status: "working",
+        activity: "testing",
       });
 
       expect(handler).toHaveBeenCalledTimes(2);
       expect(handler).toHaveBeenNthCalledWith(
         1,
-        "mail:received",
-        expect.objectContaining({ id: "msg-1" }),
+        "bead:created",
+        expect.objectContaining({ id: "bead-1" }),
         1,
       );
       expect(handler).toHaveBeenNthCalledWith(
         2,
-        "mode:changed",
-        expect.objectContaining({ mode: "swarm" }),
+        "agent:status_changed",
+        expect.objectContaining({ agent: "onyx" }),
         2,
       );
     });
@@ -128,13 +126,13 @@ describe("EventBus", () => {
     it("should increment monotonically with each emit", () => {
       const bus = getEventBus();
 
-      bus.emit("mail:read", { id: "msg-1" });
+      bus.emit("bead:updated", { id: "bead-1", status: "open", title: "Test", updatedAt: "2026-01-01" });
       expect(bus.getSeq()).toBe(1);
 
-      bus.emit("mail:read", { id: "msg-2" });
+      bus.emit("bead:updated", { id: "bead-2", status: "open", title: "Test2", updatedAt: "2026-01-01" });
       expect(bus.getSeq()).toBe(2);
 
-      bus.emit("mail:read", { id: "msg-3" });
+      bus.emit("bead:updated", { id: "bead-3", status: "open", title: "Test3", updatedAt: "2026-01-01" });
       expect(bus.getSeq()).toBe(3);
     });
 
@@ -142,9 +140,9 @@ describe("EventBus", () => {
       const bus = getEventBus();
       const handler = vi.fn();
 
-      bus.on("mail:read", handler);
-      bus.emit("mail:read", { id: "msg-1" });
-      bus.emit("mail:read", { id: "msg-2" });
+      bus.on("bead:updated", handler);
+      bus.emit("bead:updated", { id: "bead-1", status: "open", title: "Test", updatedAt: "2026-01-01" });
+      bus.emit("bead:updated", { id: "bead-2", status: "open", title: "Test2", updatedAt: "2026-01-01" });
 
       expect(handler).toHaveBeenNthCalledWith(1, expect.anything(), 1);
       expect(handler).toHaveBeenNthCalledWith(2, expect.anything(), 2);
@@ -170,11 +168,11 @@ describe("EventBus", () => {
       const handler = vi.fn();
 
       bus.onAny(handler);
-      bus.emit("mail:read", { id: "msg-1" });
+      bus.emit("bead:updated", { id: "bead-1", status: "open", title: "Test", updatedAt: "2026-01-01" });
       expect(handler).toHaveBeenCalledOnce();
 
       bus.offAny(handler);
-      bus.emit("mail:read", { id: "msg-2" });
+      bus.emit("bead:updated", { id: "bead-2", status: "open", title: "Test2", updatedAt: "2026-01-01" });
       expect(handler).toHaveBeenCalledOnce(); // still 1
     });
   });
@@ -192,13 +190,13 @@ describe("EventBus", () => {
     it("should report specific event listeners", () => {
       const bus = getEventBus();
 
-      bus.on("mail:received", vi.fn());
-      bus.on("mail:received", vi.fn());
       bus.on("bead:created", vi.fn());
+      bus.on("bead:created", vi.fn());
+      bus.on("bead:closed", vi.fn());
 
       const counts = bus.listenerCounts();
-      expect(counts["mail:received"]).toBe(2);
-      expect(counts["bead:created"]).toBe(1);
+      expect(counts["bead:created"]).toBe(2);
+      expect(counts["bead:closed"]).toBe(1);
     });
 
     it("should omit events with zero listeners", () => {

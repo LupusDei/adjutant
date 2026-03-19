@@ -217,23 +217,6 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
         if (mounted) setConnectionStatus('sse');
       });
 
-      // When a new mail arrives, notify subscribers with available data.
-      // Subscribers that need the full message body can fetch it themselves.
-      es.addEventListener('mail_received', (event: MessageEvent) => {
-        try {
-          const data = JSON.parse(event.data as string) as {
-            id: string; from: string; to: string; subject: string; preview: string;
-          };
-          notify({
-            id: data.id,
-            from: data.from,
-            to: data.to,
-            body: data.preview || data.subject,
-            timestamp: new Date().toISOString(),
-          });
-        } catch { /* ignore parse errors */ }
-      });
-
       es.onerror = () => {
         sseRetries++;
         if (sseRetries > MAX_SSE_RETRIES && mounted) {
