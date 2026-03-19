@@ -185,6 +185,19 @@ export function resolveProjectContext(
     logWarn("MCP project context: project root not in registry", { projectRoot });
   }
 
+  // Priority 3: Fall back to the server's own CWD project.
+  // The Adjutant backend always runs from the project root, which is registered
+  // via discoverLocalProjects() on startup. This handles agents that connect
+  // without ADJUTANT_PROJECT_ROOT set (empty X-Project-Root header).
+  const cwdContext = resolveProjectContextFromPath(process.cwd());
+  if (cwdContext) {
+    logInfo("MCP project context: fell back to CWD project", {
+      cwd: process.cwd(),
+      projectId: cwdContext.projectId,
+    });
+    return cwdContext;
+  }
+
   return undefined;
 }
 

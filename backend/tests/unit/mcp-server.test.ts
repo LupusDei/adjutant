@@ -23,6 +23,26 @@ vi.mock("../../src/services/event-bus.js", () => ({
   resetEventBus: vi.fn(),
 }));
 
+// Mock projects-service for resolveProjectContext tests
+const { mockListProjects, mockGetProject } = vi.hoisted(() => ({
+  mockListProjects: vi.fn(),
+  mockGetProject: vi.fn(),
+}));
+
+vi.mock("../../src/services/projects-service.js", () => ({
+  listProjects: mockListProjects,
+  getProject: mockGetProject,
+}));
+
+// Mock bd-client for resolveBeadsDir
+const { mockResolveBeadsDir } = vi.hoisted(() => ({
+  mockResolveBeadsDir: vi.fn(),
+}));
+
+vi.mock("../../src/services/bd-client.js", () => ({
+  resolveBeadsDir: mockResolveBeadsDir,
+}));
+
 // Mock MCP SDK
 const {
   mockConnect,
@@ -89,6 +109,7 @@ import {
   getTransportBySession,
   disconnectAgent,
   resolveAgentId,
+  resolveProjectContext,
   createSessionTransport,
   setToolRegistrar,
   recoverSession,
@@ -431,6 +452,70 @@ describe("MCP Server", () => {
 
       disconnectAgent("session-abc");
       expect(() => transport.onclose!()).not.toThrow();
+    });
+  });
+
+  describe("resolveProjectContext", () => {
+    const cwdProject = {
+      id: "adjutant",
+      name: "Adjutant",
+      path: "/Users/test/code/adjutant",
+      status: "active" as const,
+    };
+
+    beforeEach(() => {
+      mockListProjects.mockReturnValue({ success: true, data: [cwdProject] });
+      mockGetProject.mockReturnValue({ success: true, data: cwdProject });
+      mockResolveBeadsDir.mockReturnValue("/Users/test/code/adjutant/.beads");
+    });
+
+    it("should resolve from explicit X-Project-Id header", () => {
+      const ctx = resolveProjectContext({}, { "x-project-id": "adjutant" });
+      expect(ctx).toBeDefined();
+      expect(ctx!.projectId).toBe("adjutant");
+    });
+
+    it("should resolve from X-Project-Root header", () => {
+      const ctx = resolveProjectContext({}, { "x-project-root": "/Users/test/code/adjutant" });
+      expect(ctx).toBeDefined();
+      expect(ctx!.projectId).toBe("adjutant");
+    });
+
+    it("should return undefined when X-Project-Root is empty string and no CWD fallback available", () => {
+      mockListProjects.mockReturnValue({ success: true, data: [] });
+      const ctx = resolveProjectContext({}, { "x-project-root": "" });
+      expect(ctx).toBeUndefined();
+    });
+
+    it("should fall back to CWD project when X-Project-Root is empty string", () => {
+      // Mock CWD to match the registered project path
+      const cwdProject = { id: "cwd-proj", name: "CWD Project", path: process.cwd(), status: "active" as const };
+      mockListProjects.mockReturnValue({ success: true, data: [cwdProject] });
+      mockResolveBeadsDir.mockReturnValue(`${process.cwd()}/.beads`);
+
+      const ctx = resolveProjectContext({}, { "x-project-root": "" });
+      expect(ctx).toBeDefined();
+      expect(ctx!.projectId).toBe("cwd-proj");
+    });
+
+    it("should fall back to CWD project when no headers provided", () => {
+      const cwdProject = { id: "cwd-proj", name: "CWD Project", path: process.cwd(), status: "active" as const };
+      mockListProjects.mockReturnValue({ success: true, data: [cwdProject] });
+      mockResolveBeadsDir.mockReturnValue(`${process.cwd()}/.beads`);
+
+      const ctx = resolveProjectContext({}, {});
+      expect(ctx).toBeDefined();
+      expect(ctx!.projectId).toBe("cwd-proj");
+    });
+
+    it("should prefer X-Project-Id over CWD fallback", () => {
+      const otherProject = { id: "other", name: "Other", path: "/other", status: "active" as const };
+      mockGetProject.mockReturnValue({ success: true, data: otherProject });
+      mockResolveBeadsDir.mockReturnValue("/other/.beads");
+
+      const ctx = resolveProjectContext({}, { "x-project-id": "other" });
+      expect(ctx).toBeDefined();
+      expect(ctx!.projectId).toBe("other");
     });
   });
 
