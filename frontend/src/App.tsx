@@ -37,14 +37,14 @@ export const THEME_CONFIGS: Record<ThemeId, ThemeConfig> = {
 
 /** Migrate legacy theme values from old color-based system */
 function migrateTheme(stored: string | null): ThemeId {
-  if (!stored) return 'pipboy';
+  if (!stored) return 'starcraft';
   if (stored in THEME_CONFIGS) return stored as ThemeId;
-  // Legacy color names → pipboy (they were all CRT color variants)
+  // Legacy color names → starcraft (they were all CRT color variants)
   const legacyMap: Record<string, ThemeId> = {
-    green: 'pipboy', red: 'pipboy', blue: 'pipboy',
-    tan: 'pipboy', pink: 'pipboy', purple: 'pipboy',
+    green: 'starcraft', red: 'starcraft', blue: 'starcraft',
+    tan: 'starcraft', pink: 'starcraft', purple: 'starcraft',
   };
-  return legacyMap[stored] ?? 'pipboy';
+  return legacyMap[stored] ?? 'starcraft';
 }
 
 type TabId = "dashboard" | "chat" | "epics" | "crew" | "beads" | "personas" | "timeline" | "proposals" | "settings";

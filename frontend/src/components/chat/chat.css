@@ -228,7 +228,7 @@
 }
 
 .chat-bubble-content {
-  font-size: 0.9rem;
+  font-size: 1.1rem;
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-word;
@@ -262,7 +262,7 @@
   border: 1px solid var(--crt-phosphor-dim, #00aa00);
   color: var(--crt-phosphor, #00ff00);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: 1.1rem;
   outline: none;
   transition: border-color 0.15s ease;
 }

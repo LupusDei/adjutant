@@ -10,9 +10,9 @@ public enum CRTTheme {
 
     /// Available app-wide color schemes
     public enum ColorTheme: String, CaseIterable, Identifiable {
-        case pipboy = "pipboy"        // Green CRT (default)
+        case starcraft = "starcraft"  // Dark purple + teal (default)
+        case pipboy = "pipboy"        // Green CRT
         case document = "document"    // Clean white/black
-        case starcraft = "starcraft"  // Dark purple + teal
         case friendly = "friendly"    // Playful multi-color palette
         case glass = "glass"          // Apple-inspired frosted glass
 

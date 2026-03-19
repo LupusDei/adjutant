@@ -32,6 +32,11 @@ interface ThemeOption {
 
 const THEMES: ThemeOption[] = [
   {
+    id: 'starcraft', label: 'STARCRAFT', color: '#00FFD5',
+    description: 'Sci-fi electric',
+    previewBg: '#04041A', previewText: '#00FFD5', crtEffects: true,
+  },
+  {
     id: 'pipboy', label: 'PIP-BOY', color: '#20C20E',
     description: 'Retro CRT terminal',
     previewBg: '#020502', previewText: '#20C20E', crtEffects: true,
@@ -40,11 +45,6 @@ const THEMES: ThemeOption[] = [
     id: 'document', label: 'DOCUMENT', color: '#111111',
     description: 'Clean & professional',
     previewBg: '#FAFAF8', previewText: '#111111', crtEffects: false,
-  },
-  {
-    id: 'starcraft', label: 'STARCRAFT', color: '#00FFD5',
-    description: 'Sci-fi electric',
-    previewBg: '#04041A', previewText: '#00FFD5', crtEffects: true,
   },
   {
     id: 'friendly', label: 'FRIENDLY', color: '#5856D6',
