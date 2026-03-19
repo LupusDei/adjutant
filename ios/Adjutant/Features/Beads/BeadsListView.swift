@@ -81,6 +81,8 @@ struct BeadsListView: View {
             // Title
             VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxxs) {
                 CRTText("BEADS", style: .header)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                     .crtGlow(color: theme.primary, radius: 4, intensity: 0.4)
             }
 
