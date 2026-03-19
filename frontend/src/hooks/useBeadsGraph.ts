@@ -39,6 +39,8 @@ export interface UseBeadsGraphOptions {
   pollInterval?: number;
   /** Whether polling is enabled. Default: true. */
   enabled?: boolean;
+  /** Scope graph to a specific epic's subtree (server-side filtering). */
+  epicId?: string;
 }
 
 /** Return type for the useBeadsGraph hook. */
@@ -312,13 +314,18 @@ const EMPTY_CYCLE_DETECTION: CycleDetectionResult = {
 export function useBeadsGraph(
   options: UseBeadsGraphOptions = {}
 ): UseBeadsGraphResult {
-  const { pollInterval = 30000, enabled = true } = options;
+  const { pollInterval = 30000, enabled = true, epicId } = options;
 
   const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
   const [showCriticalPath, setShowCriticalPath] = useState(false);
 
+  const fetcher = useCallback(
+    () => epicId ? api.beads.graphForEpic(epicId) : api.beads.graph(),
+    [epicId]
+  );
+
   const { data, loading, error, refresh } = usePolling(
-    () => api.beads.graph(),
+    fetcher,
     { interval: pollInterval, enabled }
   );
 

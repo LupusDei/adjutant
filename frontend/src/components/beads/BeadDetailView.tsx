@@ -8,6 +8,7 @@ import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import type { BeadDetail, BeadDependency } from '../../types';
 import { AgentAssignDropdown } from '../shared/AgentAssignDropdown';
+import { EpicSubtreeGraph } from './EpicSubtreeGraph';
 
 export interface BeadDetailViewProps {
   beadId: string | null;
@@ -367,6 +368,17 @@ export function BeadDetailView({ beadId, onClose, onBeadNavigate }: BeadDetailVi
                   <div style={styles.description}>
                     {bead.description}
                   </div>
+                </div>
+              )}
+
+              {/* Epic Dependency Graph */}
+              {bead.type === 'epic' && (
+                <div style={styles.section}>
+                  <h4 style={styles.sectionTitle}>DEPENDENCY GRAPH</h4>
+                  <EpicSubtreeGraph
+                    epicId={bead.id}
+                    onBeadNavigate={handleBeadClick}
+                  />
                 </div>
               )}
 
