@@ -230,7 +230,7 @@ function getMimeType(ext: string): string {
  * List directory contents within a project.
  *
  * Returns entries sorted: directories first, then files, each group alphabetical.
- * Skips hidden files (starting with .) and directories in SKIP_DIRS.
+ * Skips directories in SKIP_DIRS (node_modules, .git, .beads, etc.).
  */
 export async function listDirectory(
   projectId: string,
@@ -284,8 +284,9 @@ export async function listDirectory(
     const results: DirectoryEntry[] = [];
 
     for (const name of entries) {
-      // Skip hidden files and directories in SKIP_DIRS
-      if (name.startsWith(".")) continue;
+      // Skip directories in SKIP_DIRS (e.g. .git, node_modules)
+      // adj-116: dotfiles are now shown — config files like .env, .gitignore, .mcp.json
+      // are important and were previously invisible in the project file browser
       if (SKIP_DIRS.has(name)) continue;
 
       const entryFullPath = join(fullPath, name);

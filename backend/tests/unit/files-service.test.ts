@@ -168,20 +168,12 @@ describe("files-service", () => {
       expect(names).not.toContain("dist");
     });
 
-    it("should skip hidden files (starting with .)", async () => {
+    it("should show hidden files (dotfiles) like .env, .gitignore, .mcp.json", async () => {
       mockProjectExists();
 
       vi.mocked(stat).mockImplementation(async (p: unknown) => {
         const ps = String(p);
-        if (ps === PROJECT_PATH) {
-          return {
-            isDirectory: () => true,
-            isFile: () => false,
-            size: 0,
-            mtime: new Date("2026-01-15T10:00:00.000Z"),
-          } as unknown as Awaited<ReturnType<typeof stat>>;
-        }
-        if (ps.endsWith("/src")) {
+        if (ps === PROJECT_PATH || ps.endsWith("/src") || ps.endsWith("/.adjutant")) {
           return {
             isDirectory: () => true,
             isFile: () => false,
@@ -201,6 +193,8 @@ describe("files-service", () => {
         "README.md",
         ".env",
         ".gitignore",
+        ".mcp.json",
+        ".adjutant",
         "src",
       ] as unknown as Awaited<ReturnType<typeof readdir>>);
 
@@ -209,8 +203,55 @@ describe("files-service", () => {
       const names = result.data!.map((e) => e.name);
       expect(names).toContain("README.md");
       expect(names).toContain("src");
-      expect(names).not.toContain(".env");
-      expect(names).not.toContain(".gitignore");
+      // adj-116: dotfiles should now be visible
+      expect(names).toContain(".env");
+      expect(names).toContain(".gitignore");
+      expect(names).toContain(".mcp.json");
+      expect(names).toContain(".adjutant");
+    });
+
+    it("should still skip SKIP_DIRS entries even if they start with a dot", async () => {
+      mockProjectExists();
+
+      vi.mocked(stat).mockImplementation(async (p: unknown) => {
+        const ps = String(p);
+        if (ps === PROJECT_PATH) {
+          return {
+            isDirectory: () => true,
+            isFile: () => false,
+            size: 0,
+            mtime: new Date("2026-01-15T10:00:00.000Z"),
+          } as unknown as Awaited<ReturnType<typeof stat>>;
+        }
+        // All these are directories
+        return {
+          isDirectory: () => true,
+          isFile: () => false,
+          size: 0,
+          mtime: new Date("2026-01-15T10:00:00.000Z"),
+        } as unknown as Awaited<ReturnType<typeof stat>>;
+      });
+
+      vi.mocked(readdir).mockResolvedValue([
+        ".git",
+        ".beads",
+        ".claude",
+        ".next",
+        ".env",
+        ".prettierrc",
+      ] as unknown as Awaited<ReturnType<typeof readdir>>);
+
+      const result = await listDirectory("proj-1", "");
+      expect(result.success).toBe(true);
+      const names = result.data!.map((e) => e.name);
+      // SKIP_DIRS entries should be hidden
+      expect(names).not.toContain(".git");
+      expect(names).not.toContain(".beads");
+      expect(names).not.toContain(".claude");
+      expect(names).not.toContain(".next");
+      // Regular dotfiles should be visible
+      expect(names).toContain(".env");
+      expect(names).toContain(".prettierrc");
     });
 
     it("should reject path traversal attempts", async () => {
