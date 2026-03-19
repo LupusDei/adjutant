@@ -372,7 +372,9 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
               id: p.id,
               author: p.author,
               title: p.title,
-              description: p.description,
+              descriptionPreview: p.description.length > 100
+                ? p.description.slice(0, 100) + "…"
+                : p.description,
               type: p.type,
               project: p.project,
               status: p.status,

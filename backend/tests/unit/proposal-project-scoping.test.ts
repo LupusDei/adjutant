@@ -795,6 +795,103 @@ describe("Proposal project scoping", () => {
   });
 
   // ===========================================================================
+  // adj-118: list_proposals response shape — slim payload
+  // ===========================================================================
+
+  describe("list_proposals response shape (adj-118)", () => {
+    it("should not include full description in list response", async () => {
+      const store = createMockStore();
+      (store.getProposals as ReturnType<typeof vi.fn>).mockReturnValue([{
+        id: "uuid-1",
+        author: "test-agent",
+        title: "Big Proposal",
+        description: "A very long description that should not appear in the list response because it wastes tokens",
+        type: "engineering",
+        project: "f1e8f895",
+        status: "pending",
+        createdAt: "2026-03-19T00:00:00Z",
+        updatedAt: "2026-03-19T00:00:00Z",
+      }]);
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "list_proposals");
+      const result = await handler(
+        { status: undefined, type: undefined, project: undefined },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result) as { proposals: Record<string, unknown>[] };
+      expect(parsed.proposals).toHaveLength(1);
+
+      const proposal = parsed.proposals[0]!;
+      // Must NOT have full description
+      expect(proposal).not.toHaveProperty("description");
+      // Must have summary fields
+      expect(proposal).toHaveProperty("id", "uuid-1");
+      expect(proposal).toHaveProperty("author", "test-agent");
+      expect(proposal).toHaveProperty("title", "Big Proposal");
+      expect(proposal).toHaveProperty("type", "engineering");
+      expect(proposal).toHaveProperty("project", "f1e8f895");
+      expect(proposal).toHaveProperty("status", "pending");
+      expect(proposal).toHaveProperty("createdAt", "2026-03-19T00:00:00Z");
+    });
+
+    it("should include descriptionPreview with first 100 chars", async () => {
+      const longDesc = "A".repeat(200);
+      const store = createMockStore();
+      (store.getProposals as ReturnType<typeof vi.fn>).mockReturnValue([{
+        id: "uuid-2",
+        author: "test-agent",
+        title: "Long Proposal",
+        description: longDesc,
+        type: "product",
+        project: "f1e8f895",
+        status: "pending",
+        createdAt: "2026-03-19T00:00:00Z",
+        updatedAt: "2026-03-19T00:00:00Z",
+      }]);
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "list_proposals");
+      const result = await handler(
+        { status: undefined, type: undefined, project: undefined },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result) as { proposals: Array<{ descriptionPreview: string }> };
+      expect(parsed.proposals[0]!.descriptionPreview).toBe("A".repeat(100) + "…");
+    });
+
+    it("should not truncate short descriptions in preview", async () => {
+      const store = createMockStore();
+      (store.getProposals as ReturnType<typeof vi.fn>).mockReturnValue([{
+        id: "uuid-3",
+        author: "test-agent",
+        title: "Short Proposal",
+        description: "Short desc",
+        type: "engineering",
+        project: "f1e8f895",
+        status: "pending",
+        createdAt: "2026-03-19T00:00:00Z",
+        updatedAt: "2026-03-19T00:00:00Z",
+      }]);
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "list_proposals");
+      const result = await handler(
+        { status: undefined, type: undefined, project: undefined },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result) as { proposals: Array<{ descriptionPreview: string }> };
+      expect(parsed.proposals[0]!.descriptionPreview).toBe("Short desc");
+    });
+  });
+
+  // ===========================================================================
   // adj-072.5.2: Edge cases — concurrent create_proposal calls
   // ===========================================================================
 
