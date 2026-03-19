@@ -608,7 +608,7 @@ describe("beads routes", () => {
       expect(response.body.data).toHaveLength(2);
       expect(response.body.data[0].id).toBe("hq-a1");
       expect(response.body.data[1].id).toBe("hq-a2");
-      expect(listRecentlyClosed).toHaveBeenCalledWith(1);
+      expect(listRecentlyClosed).toHaveBeenCalledWith(1, undefined);
     });
 
     it("should pass hours query parameter", async () => {
@@ -619,7 +619,7 @@ describe("beads routes", () => {
 
       await request(app).get("/api/beads/recent-closed?hours=6");
 
-      expect(listRecentlyClosed).toHaveBeenCalledWith(6);
+      expect(listRecentlyClosed).toHaveBeenCalledWith(6, undefined);
     });
 
     it("should clamp hours to minimum of 1", async () => {
@@ -630,7 +630,7 @@ describe("beads routes", () => {
 
       await request(app).get("/api/beads/recent-closed?hours=0");
 
-      expect(listRecentlyClosed).toHaveBeenCalledWith(1);
+      expect(listRecentlyClosed).toHaveBeenCalledWith(1, undefined);
     });
 
     it("should clamp hours to maximum of 24", async () => {
@@ -641,7 +641,7 @@ describe("beads routes", () => {
 
       await request(app).get("/api/beads/recent-closed?hours=100");
 
-      expect(listRecentlyClosed).toHaveBeenCalledWith(24);
+      expect(listRecentlyClosed).toHaveBeenCalledWith(24, undefined);
     });
 
     it("should default to 1 hour for non-numeric hours", async () => {
@@ -652,7 +652,7 @@ describe("beads routes", () => {
 
       await request(app).get("/api/beads/recent-closed?hours=abc");
 
-      expect(listRecentlyClosed).toHaveBeenCalledWith(1);
+      expect(listRecentlyClosed).toHaveBeenCalledWith(1, undefined);
     });
 
     it("should return 500 on service error", async () => {

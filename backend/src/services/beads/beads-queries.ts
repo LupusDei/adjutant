@@ -45,6 +45,7 @@ import {
   buildGraphNodes,
   filterGraphToEpicSubtree,
 } from "./beads-dependency.js";
+import { getActiveProjectName } from "../projects-service.js";
 
 // ============================================================================
 // Single Bead
@@ -92,14 +93,13 @@ export async function getBead(
       beadsDir: db.beadsDir,
     });
 
-    // Fallback: if bead not found in the prefix-resolved database, search all
-    // databases. The prefix map may be stale or the bead may live in a project
-    // database that wasn't mapped. This prevents BEAD_NOT_FOUND errors when
-    // navigating to beads from a different active project.
+    // Fallback: if bead not found in the prefix-resolved database, try the
+    // active project's database. This handles stale prefix maps and beads that
+    // live in a project not yet mapped. Avoids scanning ALL databases which
+    // causes 48-60s serial timeouts with many registered projects.
     if ((!result.success || !result.data || result.data.length === 0) && !options?.project) {
-      const allDatabases = await buildDatabaseList("all");
-      for (const fallbackDb of allDatabases) {
-        // Skip the database we already tried
+      const activeProjectDbs = await buildDatabaseList(getActiveProjectName());
+      for (const fallbackDb of activeProjectDbs) {
         if (fallbackDb.workDir === db.workDir && fallbackDb.beadsDir === db.beadsDir) continue;
 
         const fallbackResult = await execBd<BeadsIssue[]>(["show", beadId, "--json"], {
@@ -334,15 +334,16 @@ const RECENT_CLOSED_LIMIT = 10;
 
 /**
  * Lists beads closed within a configurable time window.
- * Queries all databases (town + projects), filters by closed_at timestamp.
+ * Defaults to the active project's database. Pass "all" to scan all databases.
  */
 export async function listRecentlyClosed(
-  hours: number = 1
+  hours: number = 1,
+  project?: string,
 ): Promise<BeadsServiceResult<RecentlyClosedBead[]>> {
   try {
     await ensurePrefixMap();
 
-    const databasesToQuery = await buildDatabaseList("all");
+    const databasesToQuery = await buildDatabaseList(project ?? getActiveProjectName());
     const cutoffMs = Date.now() - hours * 3600 * 1000;
 
     const allClosed: RecentlyClosedBead[] = [];

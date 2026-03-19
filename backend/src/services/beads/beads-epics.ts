@@ -14,6 +14,7 @@ import { buildDatabaseList, resolveBeadDatabase } from "./beads-database.js";
 import { ensurePrefixMap, prefixToSource } from "./beads-prefix-map.js";
 import { transformBead } from "./beads-transform.js";
 import { processEpicChildren, buildEpicWithChildren } from "./beads-dependency.js";
+import { getActiveProjectName } from "../projects-service.js";
 
 // ============================================================================
 // Epic Type Check
@@ -102,7 +103,7 @@ export async function getEpicChildren(
  * matching the pattern used by listAllBeads/listBeads.
  *
  * @param options.project - "all" for all databases, specific project name for that project only,
- *                          undefined/empty defaults to "all" for backwards compatibility
+ *                          undefined/empty defaults to the active project
  */
 export async function listEpicsWithProgress(
   options: { project?: string; status?: string } = {}
@@ -110,9 +111,10 @@ export async function listEpicsWithProgress(
   try {
     await ensurePrefixMap();
 
-    // Use buildDatabaseList to resolve the correct database directories,
-    // same pattern as listAllBeads. Default to "all" when no project specified.
-    const effectiveProject = options.project?.trim() || "all";
+    // Use buildDatabaseList to resolve the correct database directories.
+    // Default to active project when no project specified (avoids serial timeout
+    // scanning all databases). Pass "all" explicitly to scan everything.
+    const effectiveProject = options.project?.trim() || getActiveProjectName();
     const databasesToQuery = await buildDatabaseList(effectiveProject);
 
     const listArgs = ["list", "--json", "--type", "epic", "--all", "--limit", "200"];

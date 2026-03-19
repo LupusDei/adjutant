@@ -48,6 +48,7 @@ import {
   deleteProject,
   discoverLocalProjects,
   checkProjectHealth,
+  getActiveProjectName,
 } from "../../src/services/projects-service.js";
 import type { Project } from "../../src/services/projects-service.js";
 
@@ -420,6 +421,29 @@ describe("projects-service", () => {
       const result = activateProject("nonexistent");
       expect(result.success).toBe(false);
       expect(result.error!.code).toBe("NOT_FOUND");
+    });
+  });
+
+  // ===========================================================================
+  // getActiveProjectName
+  // ===========================================================================
+
+  describe("getActiveProjectName", () => {
+    it("should return the name of the active project", () => {
+      insertProject(testDb, createMockProject({ id: "p1", name: "adjutant", path: "/path/adj", active: true }));
+      insertProject(testDb, createMockProject({ id: "p2", name: "C4", path: "/path/c4", active: false }));
+
+      expect(getActiveProjectName()).toBe("adjutant");
+    });
+
+    it("should return 'town' when no project is active", () => {
+      insertProject(testDb, createMockProject({ id: "p1", name: "adjutant", path: "/path/adj", active: false }));
+
+      expect(getActiveProjectName()).toBe("town");
+    });
+
+    it("should return 'town' when projects table is empty", () => {
+      expect(getActiveProjectName()).toBe("town");
     });
   });
 

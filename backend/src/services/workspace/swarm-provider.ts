@@ -173,11 +173,21 @@ export class SwarmProvider implements WorkspaceProvider {
       // If readdir fails (permissions, etc.), just return what we have
     }
 
-    // NOTE: We intentionally do NOT include external registered projects here.
-    // listBeadsDirs() is used by buildDatabaseList("all") which queries every
-    // database sequentially through a semaphore. Including all registered projects
-    // (siblings like OttoDom, gt, l2rr2l) causes 48-60+ second serial timeouts.
-    // External projects are resolved on-demand via resolveProjectPath() instead.
+    // Include external registered projects from SQLite (e.g., C4, OttoDom).
+    // Now safe because adj-117.1 changed all default queries to use the active
+    // project — buildDatabaseList("all") is only called on explicit user request.
+    for (const reg of loadRegisteredProjects()) {
+      const regPath = resolve(reg.path);
+      if (seenPaths.has(regPath)) continue;
+      seenPaths.add(regPath);
+
+      const regBeadsDir = resolveBeadsDir(reg.path);
+      results.push({
+        path: regBeadsDir,
+        project: reg.name,
+        workDir: reg.path,
+      });
+    }
 
     return results;
   }

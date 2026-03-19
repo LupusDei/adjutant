@@ -534,6 +534,20 @@ function createEmpty(name: string): ProjectsServiceResult<Project> {
 }
 
 /**
+ * Get the name of the currently active project.
+ * Returns "town" if no project is active (safe default for bead queries).
+ */
+export function getActiveProjectName(): string {
+  try {
+    const db = getDatabase();
+    const row = db.prepare("SELECT name FROM projects WHERE active = 1 LIMIT 1").get() as { name: string } | undefined;
+    return row?.name ?? "town";
+  } catch {
+    return "town";
+  }
+}
+
+/**
  * Activate a project (mark it as the current active project).
  * Deactivates any previously active project.
  */

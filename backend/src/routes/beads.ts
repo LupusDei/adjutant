@@ -182,13 +182,14 @@ beadsRouter.get("/sources", async (_req, res) => {
  */
 beadsRouter.get("/recent-closed", async (req, res) => {
   const hoursStr = req.query["hours"] as string | undefined;
+  const projectParam = req.query["project"] as string | undefined;
   let hours = hoursStr ? parseInt(hoursStr, 10) : 1;
 
   // Clamp to valid range (1-24)
   if (isNaN(hours) || hours < 1) hours = 1;
   if (hours > 24) hours = 24;
 
-  const result = await listRecentlyClosed(hours);
+  const result = await listRecentlyClosed(hours, projectParam);
 
   if (!result.success) {
     return res.status(500).json(

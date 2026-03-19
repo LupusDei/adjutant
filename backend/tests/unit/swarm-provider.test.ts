@@ -183,10 +183,11 @@ describe("SwarmProvider", () => {
       const provider = new SwarmProvider(TEST_DIR);
       const dirs = await provider.listBeadsDirs();
 
-      // External projects are NOT included in bulk listing to prevent
-      // serial bd timeouts (adj-109). They are resolved on-demand via resolveProjectPath().
-      expect(dirs).toHaveLength(1);
-      expect(dirs[0].project).toBeNull();
+      // External registered projects ARE included (adj-117.2 restored this).
+      // Safe because adj-117.1 changed default queries to active project, not "all".
+      expect(dirs).toHaveLength(2);
+      expect(dirs[0].project).toBeNull(); // project root
+      expect(dirs[1].project).toBe("external-proj"); // registered project
 
       // Cleanup
       rmSync(externalDir, { recursive: true, force: true });
