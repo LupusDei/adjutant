@@ -1,9 +1,10 @@
 /**
- * Tests for EpicSubtreeGraph and its integration in BeadDetailView.
- * Verifies that epic beads show a dependency graph section.
+ * Tests for epic dependency graph feature:
+ * - EpicGraphPage renders the full-page graph
+ * - BeadDetailView shows "VIEW DEPENDENCY GRAPH" button for epics
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import { createElement } from 'react';
 
 // Mock usePolling to return controlled data
@@ -27,7 +28,7 @@ vi.mock('../../src/hooks/usePolling', () => ({
   })),
 }));
 
-// Mock React Flow to avoid canvas/DOM issues in jsdom
+// Mock React Flow
 vi.mock('@xyflow/react', () => ({
   ReactFlow: ({ nodes, edges }: { nodes?: unknown[]; edges?: unknown[] }) =>
     createElement('div', { 'data-testid': 'react-flow', 'data-node-count': nodes?.length ?? 0, 'data-edge-count': edges?.length ?? 0 }),
@@ -35,6 +36,7 @@ vi.mock('@xyflow/react', () => ({
     createElement('div', null, children),
   Background: () => null,
   Controls: () => null,
+  MiniMap: () => null,
   BackgroundVariant: { Dots: 'dots' },
 }));
 
@@ -103,51 +105,91 @@ vi.mock('../../src/services/api', () => ({
   },
 }));
 
-import { EpicSubtreeGraph } from '../../src/components/beads/EpicSubtreeGraph';
+import { EpicGraphPage } from '../../src/components/beads/EpicGraphPage';
 import { BeadDetailView } from '../../src/components/beads/BeadDetailView';
 
-describe('EpicSubtreeGraph', () => {
+describe('EpicGraphPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should render the React Flow graph with nodes', () => {
-    render(createElement(EpicSubtreeGraph, { epicId: 'adj-010' }));
+  it('should render the React Flow graph with nodes', async () => {
+    render(createElement(EpicGraphPage, { epicId: 'adj-010' }));
+
+    await act(async () => {
+      await new Promise((r) => { setTimeout(r, 10); });
+    });
+
     const reactFlow = screen.getByTestId('react-flow');
     expect(reactFlow).toBeTruthy();
     expect(reactFlow.getAttribute('data-node-count')).toBe('3');
     expect(reactFlow.getAttribute('data-edge-count')).toBe('2');
   });
 
-  it('should show double-click hint', () => {
-    render(createElement(EpicSubtreeGraph, { epicId: 'adj-010' }));
-    expect(screen.getByText('DOUBLE-CLICK NODE TO NAVIGATE')).toBeTruthy();
+  it('should show epic ID in the header', async () => {
+    render(createElement(EpicGraphPage, { epicId: 'adj-010' }));
+
+    await act(async () => {
+      await new Promise((r) => { setTimeout(r, 10); });
+    });
+
+    expect(screen.getByText('adj-010')).toBeTruthy();
+  });
+
+  it('should show stats in the header', async () => {
+    render(createElement(EpicGraphPage, { epicId: 'adj-010' }));
+
+    await act(async () => {
+      await new Promise((r) => { setTimeout(r, 10); });
+    });
+
+    expect(screen.getByText('OPEN')).toBeTruthy();
+    expect(screen.getByText('ACTIVE')).toBeTruthy();
+    expect(screen.getByText('CLOSED')).toBeTruthy();
   });
 });
 
-describe('BeadDetailView - Epic Graph Section', () => {
+describe('BeadDetailView - Epic Graph Button', () => {
   const mockOnClose = vi.fn();
+  let windowOpenSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
   });
 
-  it('should show DEPENDENCY GRAPH section for epic beads', async () => {
+  it('should show VIEW DEPENDENCY GRAPH button for epic beads', async () => {
     render(createElement(BeadDetailView, {
       beadId: 'adj-010',
       onClose: mockOnClose,
     }));
 
-    // Wait for bead data to load
     await act(async () => {
       await new Promise((r) => { setTimeout(r, 10); });
     });
 
-    expect(screen.getByText('DEPENDENCY GRAPH')).toBeTruthy();
-    expect(screen.getByTestId('react-flow')).toBeTruthy();
+    expect(screen.getByText('VIEW DEPENDENCY GRAPH')).toBeTruthy();
   });
 
-  it('should NOT show DEPENDENCY GRAPH section for task beads', async () => {
+  it('should open a new window when the graph button is clicked', async () => {
+    render(createElement(BeadDetailView, {
+      beadId: 'adj-010',
+      onClose: mockOnClose,
+    }));
+
+    await act(async () => {
+      await new Promise((r) => { setTimeout(r, 10); });
+    });
+
+    fireEvent.click(screen.getByText('VIEW DEPENDENCY GRAPH'));
+    expect(windowOpenSpy).toHaveBeenCalledWith(
+      expect.stringContaining('#graph/adj-010'),
+      '_blank',
+      'noopener',
+    );
+  });
+
+  it('should NOT show graph button for task beads', async () => {
     const { api } = await import('../../src/services/api');
     vi.mocked(api.beads.get).mockResolvedValueOnce({
       id: 'adj-010.1.1',
@@ -178,6 +220,6 @@ describe('BeadDetailView - Epic Graph Section', () => {
       await new Promise((r) => { setTimeout(r, 10); });
     });
 
-    expect(screen.queryByText('DEPENDENCY GRAPH')).toBeNull();
+    expect(screen.queryByText('VIEW DEPENDENCY GRAPH')).toBeNull();
   });
 });

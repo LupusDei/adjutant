@@ -8,7 +8,6 @@ import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import type { BeadDetail, BeadDependency } from '../../types';
 import { AgentAssignDropdown } from '../shared/AgentAssignDropdown';
-import { EpicSubtreeGraph } from './EpicSubtreeGraph';
 
 export interface BeadDetailViewProps {
   beadId: string | null;
@@ -371,14 +370,17 @@ export function BeadDetailView({ beadId, onClose, onBeadNavigate }: BeadDetailVi
                 </div>
               )}
 
-              {/* Epic Dependency Graph */}
+              {/* Epic Graph Button */}
               {bead.type === 'epic' && (
                 <div style={styles.section}>
-                  <h4 style={styles.sectionTitle}>DEPENDENCY GRAPH</h4>
-                  <EpicSubtreeGraph
-                    epicId={bead.id}
-                    onBeadNavigate={handleBeadClick}
-                  />
+                  <button
+                    style={styles.graphButton}
+                    onClick={() => {
+                      window.open(`${window.location.origin}#graph/${encodeURIComponent(bead.id)}`, '_blank', 'noopener');
+                    }}
+                  >
+                    VIEW DEPENDENCY GRAPH
+                  </button>
                 </div>
               )}
 
@@ -738,6 +740,18 @@ const styles = {
     textDecoration: 'underline',
     padding: 0,
     fontFamily: '"Share Tech Mono", monospace',
+  },
+  graphButton: {
+    width: '100%',
+    padding: '10px 16px',
+    fontSize: '0.8rem',
+    letterSpacing: '0.15em',
+    cursor: 'pointer',
+    fontFamily: '"Share Tech Mono", monospace',
+    border: '1px solid var(--crt-phosphor)',
+    background: 'rgba(0, 255, 0, 0.05)',
+    color: 'var(--crt-phosphor)',
+    textAlign: 'center',
   },
   pinnedBadge: {
     marginTop: '16px',

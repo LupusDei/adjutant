@@ -404,7 +404,7 @@ export async function getBeadsGraph(
   try {
     await ensurePrefixMap();
 
-    const project = options.project?.trim() || "town";
+    const project = options.project?.trim() || getActiveProjectName();
     const databasesToQuery = await buildDatabaseList(project);
 
     // Fetch from all databases sequentially

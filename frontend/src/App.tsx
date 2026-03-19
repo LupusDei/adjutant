@@ -15,6 +15,7 @@ import { DashboardView } from "./components/dashboard/OverviewDashboard";
 import { ProposalsView } from "./components/proposals/ProposalsView";
 import { PersonasView } from "./components/personas/PersonasView";
 import { TimelineView } from "./components/timeline/TimelineView";
+import { EpicGraphPage } from "./components/beads/EpicGraphPage";
 import { useUnreadCounts } from "./hooks/useUnreadCounts";
 
 export type ThemeId = 'pipboy' | 'document' | 'starcraft' | 'friendly' | 'glass';
@@ -202,7 +203,31 @@ function AppContent() {
   );
 }
 
+/**
+ * Parse hash route for standalone pages.
+ * Supports: #graph/<epicId> — full-page dependency graph for an epic.
+ */
+function parseHashRoute(): { type: 'graph'; epicId: string } | null {
+  const hash = window.location.hash;
+  const graphMatch = hash.match(/^#graph\/(.+)$/);
+  if (graphMatch?.[1]) {
+    return { type: 'graph', epicId: decodeURIComponent(graphMatch[1]) };
+  }
+  return null;
+}
+
 function App() {
+  const hashRoute = parseHashRoute();
+
+  // Standalone graph page — render without the full dashboard chrome
+  if (hashRoute?.type === 'graph') {
+    return (
+      <ProjectProvider>
+        <EpicGraphPage epicId={hashRoute.epicId} />
+      </ProjectProvider>
+    );
+  }
+
   return (
     <ProjectProvider>
       <CommunicationProvider>
