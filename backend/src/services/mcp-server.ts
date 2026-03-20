@@ -367,6 +367,22 @@ export function getProjectContextBySession(
 }
 
 /**
+ * Get the project context for an agent by agent ID.
+ * Searches all active connections for a matching agentId.
+ * Returns undefined if agent is not connected or has no project context.
+ */
+export function getProjectContextByAgent(
+  agentId: string,
+): ProjectContext | undefined {
+  for (const conn of connections.values()) {
+    if (conn.agentId === agentId && conn.projectContext) {
+      return conn.projectContext;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Set the project context for an existing MCP session.
  * Used when project context is resolved after initial connection
  * (e.g., from session bridge lookup).

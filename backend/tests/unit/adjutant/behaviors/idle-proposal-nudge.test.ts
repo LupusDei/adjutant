@@ -7,6 +7,17 @@ import type { StimulusEngine } from "../../../../src/services/adjutant/stimulus-
 import type { ProposalStore } from "../../../../src/services/proposal-store.js";
 import type { Proposal } from "../../../../src/types/proposals.js";
 
+// Mock mcp-server for project context resolution
+const { mockGetProjectContextByAgent } = vi.hoisted(() => {
+  return {
+    mockGetProjectContextByAgent: vi.fn().mockReturnValue(undefined),
+  };
+});
+
+vi.mock("../../../../src/services/mcp-server.js", () => ({
+  getProjectContextByAgent: mockGetProjectContextByAgent,
+}));
+
 import { createIdleProposalNudge } from "../../../../src/services/adjutant/behaviors/idle-proposal-nudge.js";
 import { dispatchToBehavior } from "../../../helpers/behavior-dispatch.js";
 
@@ -643,6 +654,133 @@ describe("createIdleProposalNudge", () => {
       expect(reason).not.toContain("PENDING CAP REACHED");
       // The reason should still list the proposals
       expect(reason).toContain("Pending proposals (5)");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Tests: adj-119 — Project-aware proposal filtering
+  // ---------------------------------------------------------------------------
+
+  describe("act — project-aware proposal filtering (adj-119)", () => {
+    const ADJUTANT_PROJECT_CONTEXT = {
+      projectId: "f1e8f895",
+      projectName: "adjutant",
+      projectPath: "/path/to/adjutant",
+      beadsDir: "/path/to/adjutant/.beads",
+    };
+
+    function makeProposal(overrides: Partial<Proposal>): Proposal {
+      return {
+        id: "p-1",
+        author: "adjutant-core",
+        title: "Proposal",
+        description: "desc",
+        type: "engineering",
+        status: "pending",
+        project: "f1e8f895",
+        createdAt: "2026-03-09T10:00:00Z",
+        updatedAt: "2026-03-09T10:00:00Z",
+        ...overrides,
+      };
+    }
+
+    function setupConnectedAgent(agentId: string): void {
+      (state.getAgentProfile as ReturnType<typeof vi.fn>).mockReturnValue({
+        agentId,
+        lastStatus: "idle",
+        disconnectedAt: null,
+        connectedAt: "2026-03-09T10:00:00Z",
+      });
+    }
+
+    it("filters proposals by agent's project context (projectId + projectName)", async () => {
+      mockGetProjectContextByAgent.mockReturnValue(ADJUTANT_PROJECT_CONTEXT);
+
+      const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
+      setupConnectedAgent("agent-1");
+
+      await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
+
+      // Should pass project filter [projectId, projectName] to getProposals
+      expect(proposalStore.getProposals).toHaveBeenCalledWith({
+        status: "pending",
+        project: ["f1e8f895", "adjutant"],
+      });
+      expect(proposalStore.getProposals).toHaveBeenCalledWith({
+        status: "dismissed",
+        project: ["f1e8f895", "adjutant"],
+      });
+    });
+
+    it("falls back to unfiltered proposals when agent has no project context", async () => {
+      mockGetProjectContextByAgent.mockReturnValue(undefined);
+
+      const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
+      setupConnectedAgent("agent-1");
+
+      await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
+
+      // Without project context, should query without project filter
+      expect(proposalStore.getProposals).toHaveBeenCalledWith({
+        status: "pending",
+      });
+      expect(proposalStore.getProposals).toHaveBeenCalledWith({
+        status: "dismissed",
+      });
+    });
+
+    it("only shows project-scoped proposals in reason string", async () => {
+      mockGetProjectContextByAgent.mockReturnValue(ADJUTANT_PROJECT_CONTEXT);
+
+      const adjutantProposal = makeProposal({
+        id: "adj-p1",
+        title: "Adjutant improvement",
+        project: "f1e8f895",
+      });
+
+      (proposalStore.getProposals as ReturnType<typeof vi.fn>).mockImplementation(
+        (opts?: { status?: string; project?: string | string[] }) => {
+          // The store is expected to filter by project — mock returns only matching proposals
+          if (opts?.status === "pending" && opts?.project) return [adjutantProposal];
+          if (opts?.status === "dismissed" && opts?.project) return [];
+          return [];
+        },
+      );
+
+      const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
+      setupConnectedAgent("agent-1");
+
+      await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
+
+      const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(reason).toContain("adj-p1");
+      expect(reason).toContain("Adjutant improvement");
+    });
+
+    it("pending cap applies per-project, not globally", async () => {
+      mockGetProjectContextByAgent.mockReturnValue(ADJUTANT_PROJECT_CONTEXT);
+
+      // Return 12 proposals scoped to this project
+      const projectProposals = Array.from({ length: 12 }, (_, i) =>
+        makeProposal({ id: `p-${i + 1}`, title: `Proposal ${i + 1}` }),
+      );
+
+      (proposalStore.getProposals as ReturnType<typeof vi.fn>).mockImplementation(
+        (opts?: { status?: string; project?: string | string[] }) => {
+          if (opts?.status === "pending") return projectProposals;
+          if (opts?.status === "dismissed") return [];
+          return [];
+        },
+      );
+
+      const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
+      setupConnectedAgent("agent-1");
+
+      await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
+
+      const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
+      expect(reason).toContain("PENDING CAP REACHED");
+      expect(reason).toContain("12/12");
     });
   });
 });

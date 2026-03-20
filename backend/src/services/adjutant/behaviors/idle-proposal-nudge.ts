@@ -4,6 +4,7 @@ import type { CommunicationManager } from "../communication.js";
 import type { StimulusEngine } from "../stimulus-engine.js";
 import type { ProposalStore } from "../../proposal-store.js";
 import type { AgentStatusEvent } from "../../event-bus.js";
+import { getProjectContextByAgent } from "../../mcp-server.js";
 
 /** Delay before waking the coordinator: 5 minutes */
 const IDLE_CHECK_DELAY_MS = 300_000;
@@ -20,8 +21,15 @@ const PENDING_CAP = 12;
  * The coordinator reads this as its situation prompt and decides how to nudge.
  */
 function buildScheduleReason(agentId: string, proposalStore: ProposalStore): string {
-  const pending = proposalStore.getProposals({ status: "pending" });
-  const dismissed = proposalStore.getProposals({ status: "dismissed" });
+  // Resolve agent's project context so we only show proposals for their project.
+  // Matches both projectId (UUID) and projectName for legacy proposals (adj-090).
+  const projectContext = getProjectContextByAgent(agentId);
+  const projectFilter = projectContext
+    ? { project: [projectContext.projectId, projectContext.projectName] as string[] }
+    : {};
+
+  const pending = proposalStore.getProposals({ status: "pending", ...projectFilter });
+  const dismissed = proposalStore.getProposals({ status: "dismissed", ...projectFilter });
 
   const parts: string[] = [];
   parts.push(`Agent "${agentId}" has been idle for 5 minutes.`);
