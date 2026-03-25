@@ -117,40 +117,25 @@ Agent tool call 3: { name: "engineer-3", isolation: "worktree", run_in_backgroun
 
 Launch all parallel-track engineers in the same message so they start simultaneously.
 
-**Every engineer spawn prompt MUST include this block verbatim:**
+**Every engineer spawn prompt MUST include:**
 
+1. The Layer 4 preamble:
 ```
-## Task Tracking (MANDATORY)
-Use the `bd` CLI for ALL task tracking. Do NOT use TaskCreate or TaskUpdate.
-
-Your name (for --assignee): <agent-name>
-Your assigned beads: <list their bead IDs>
-Parent epic: <epic-id>
-
-Before starting each task:
-  bd update <id> --assignee=<your-name> --status=in_progress
-  set_status({ status: "working", task: "<concise description>" })
-After completing each task:
-  1. npm run build              (must exit 0 — includes lint)
-  2. npm test                   (must pass — ALWAYS use `npm test`, NEVER bare `vitest` or `npx vitest` which starts watch mode)
-  3. npm run test:coverage      (coverage must meet thresholds: 80% lines, 70% branches, 60% functions)
-  4. git add <files> && git commit -m "task: <bead-id> <description>"
-  5. git push -u origin <your-branch>
-  6. bd close <id>
-  7. set_status({ status: "done", task: "Completed <bead-id>: <what you finished>" })
-**Do NOT merge to main yourself.** Worktree agents cannot `git checkout main` (main is checked out in the main repo). Push your branch — the squad leader will merge to main from the main repo after verification.
-If push fails, pull --rebase and retry.
-If build/tests fail, fix them before closing the bead.
-Before shutting down:
-  set_status({ status: "idle", task: "Finished work, shutting down" })
-
-## Question Routing (MANDATORY)
-All questions MUST go through Adjutant MCP: send_message({ to: "user", body: "..." })
-Do NOT use AskUserQuestion. Do NOT print questions to stdout.
-Send the question, state your assumption, and continue without blocking.
+## Your Role (Layer 4: Squad Member)
+You are <name>, a Squad Member on <squad-leader>'s team.
+- Your specialization: Staff Engineer
+- Your name (for --assignee): <agent-name>
+- Your assigned beads: <list their bead IDs>
+- Parent epic: <epic-id>
 ```
 
-Additionally include:
+2. Read the squad member protocol file into the spawn prompt:
+```
+Read skills/squad-execute/squad-member-context.md and include its contents verbatim in the spawn prompt.
+```
+This file contains task tracking, MCP communication, verification, and question routing — all the protocol a Layer 4 agent needs in a compact format.
+
+3. Additionally include:
 - The specific task descriptions from the spec/bead
 - File paths they'll be working on
 - Any dependencies they must wait for (e.g., "wait until adj-072.1 merges before starting")

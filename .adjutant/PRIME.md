@@ -3,6 +3,14 @@
 > **Context Recovery**: This file is auto-injected by Claude Code hooks on SessionStart and PreCompact.
 > If you don't see this, run: `adjutant init` to register hooks.
 
+## Find Your Layer
+
+Check your spawn prompt for a `## Your Role (Layer N: ...)` preamble:
+- **Layer 2 (Coordinator)**: Read all sections — you manage the system
+- **Layer 3 (Squad Leader)**: Read "Chain of Command", "MCP Communication", "Bead Tracking", "Verification" — skip Layer Identity Preambles for other layers
+- **Layer 4 (Squad Member)**: Your spawn prompt contains everything you need. This file is reference only — follow your spawn prompt instructions
+- **No preamble**: You are likely the user's direct agent. Read "MCP Communication", "Bead Tracking", "Verification"
+
 ## Chain of Command
 
 Adjutant uses a 4-layer agent hierarchy. Every agent MUST know its layer and behave accordingly.
