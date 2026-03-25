@@ -4,6 +4,10 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    // Suppress migration log spam during tests (20K+ lines of noise)
+    env: {
+      BACKEND_LOG_LEVEL: "warn",
+    },
     include: ["tests/**/*.test.ts"],
     exclude: ["tests/integration/**"],
     coverage: {

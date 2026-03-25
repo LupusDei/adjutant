@@ -441,39 +441,16 @@ describe("Memory Store Migration (011-memory-store.sql)", () => {
   });
 
   describe("indexes", () => {
-    it("should create index on learnings.category", () => {
-      const row = db.prepare(
-        "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_adjutant_learnings_category'"
-      ).get() as { name: string } | undefined;
-      expect(row).toBeDefined();
-    });
-
-    it("should create index on learnings.topic", () => {
-      const row = db.prepare(
-        "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_adjutant_learnings_topic'"
-      ).get() as { name: string } | undefined;
-      expect(row).toBeDefined();
-    });
-
-    it("should create index on learnings.confidence", () => {
-      const row = db.prepare(
-        "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_adjutant_learnings_confidence'"
-      ).get() as { name: string } | undefined;
-      expect(row).toBeDefined();
-    });
-
-    it("should create index on corrections.learning_id", () => {
-      const row = db.prepare(
-        "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_adjutant_corrections_learning_id'"
-      ).get() as { name: string } | undefined;
-      expect(row).toBeDefined();
-    });
-
-    it("should create index on retrospectives.session_date", () => {
-      const row = db.prepare(
-        "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_adjutant_retrospectives_session_date'"
-      ).get() as { name: string } | undefined;
-      expect(row).toBeDefined();
+    it("should create all expected indexes", () => {
+      const indexes = db.prepare(
+        "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_adjutant_%'"
+      ).all() as { name: string }[];
+      const indexNames = indexes.map((i) => i.name);
+      expect(indexNames).toContain("idx_adjutant_learnings_category");
+      expect(indexNames).toContain("idx_adjutant_learnings_topic");
+      expect(indexNames).toContain("idx_adjutant_learnings_confidence");
+      expect(indexNames).toContain("idx_adjutant_corrections_learning_id");
+      expect(indexNames).toContain("idx_adjutant_retrospectives_session_date");
     });
   });
 });
