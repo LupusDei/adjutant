@@ -37,6 +37,21 @@ export interface CreateSessionResult {
 
 const MAX_SESSIONS = 10;
 
+/** How often to poll tmux pane content when waiting for Claude readiness. */
+const READINESS_POLL_MS = 500;
+
+/** How long pane content must be stable before we consider Claude ready. */
+const READINESS_STABLE_MS = 2_000;
+
+/** Maximum time to wait for Claude Code to become ready for input. */
+const READINESS_TIMEOUT_MS = 30_000;
+
+/** Delay between pasting spawn prompt text and pressing Enter. */
+const PASTE_ENTER_DELAY_MS = 150;
+
+/** Max retries for spawn prompt delivery. */
+const PROMPT_DELIVERY_RETRIES = 2;
+
 /** Escape a string for safe use in a shell command sent via tmux send-keys. */
 function shellEscape(s: string): string {
   // Allow only alphanumeric, hyphen, underscore, dot
@@ -206,38 +221,19 @@ export class LifecycleManager {
       await this.waitForPane(tmuxPane);
 
       // If an initial prompt was provided, inject it after Claude is ready.
+      // adj-132: The old 3-second fixed delay was insufficient — Claude Code
+      // often hadn't finished startup (SessionStart hooks, CLAUDE.md loading)
+      // and the prompt was lost or arrived while the agent was bootstrapping.
+      //
+      // New approach: poll the tmux pane content until it stabilizes (Claude
+      // finished startup and is showing its input prompt), then deliver.
+      //
       // Two-phase delivery (adj-53kf, adj-twhj):
       //   1. set-buffer + paste-buffer delivers the text atomically into the pane.
       //   2. After a short delay, send-keys Enter submits the input.
-      // This avoids both the send-keys char-by-char race (adj-53kf) and the
-      // bracketed paste \n-as-literal-text issue (adj-twhj).
       if (req.initialPrompt) {
-        // Brief delay to let Claude Code finish initialization
-        await new Promise((resolve) => setTimeout(resolve, 3_000));
-        const bufferName = `adj-spawn-${Date.now()}`;
-        // Phase 1: Paste text (no trailing \n)
-        await execTmuxCommand([
-          "set-buffer",
-          "-b",
-          bufferName,
-          req.initialPrompt,
-        ]);
-        await execTmuxCommand([
-          "paste-buffer",
-          "-t",
-          tmuxSessionName,
-          "-b",
-          bufferName,
-          "-d",
-        ]);
-        // Phase 2: Wait for TUI to process paste, then send Enter
-        await new Promise((resolve) => setTimeout(resolve, 150));
-        await execTmuxCommand([
-          "send-keys",
-          "-t",
-          tmuxSessionName,
-          "Enter",
-        ]);
+        await this.waitForClaudeReady(tmuxPane);
+        await this.deliverSpawnPrompt(tmuxSessionName, tmuxPane, req.initialPrompt);
       }
 
       this.registry.updateStatus(session.id, "idle");
@@ -425,6 +421,111 @@ export class LifecycleManager {
       }
     }
     logWarn("Pane readiness timeout — continuing anyway", { pane });
+  }
+
+  /**
+   * Wait until Claude Code is ready to accept input (adj-132).
+   *
+   * Polls the tmux pane content until it stabilizes — meaning Claude has
+   * finished startup, processed SessionStart hooks, loaded CLAUDE.md, and
+   * is showing its input prompt.
+   *
+   * "Stable" means the pane content hasn't changed for READINESS_STABLE_MS.
+   * This handles variable startup times without a fragile prompt-pattern match.
+   */
+  private async waitForClaudeReady(pane: string): Promise<void> {
+    const startTime = Date.now();
+    let lastContent = "";
+    let lastChangeTime = Date.now();
+
+    while (Date.now() - startTime < READINESS_TIMEOUT_MS) {
+      await new Promise((r) => setTimeout(r, READINESS_POLL_MS));
+
+      let content: string;
+      try {
+        content = await execTmuxCommand(["capture-pane", "-t", pane, "-p"]);
+      } catch {
+        // Pane not ready yet
+        continue;
+      }
+
+      if (content !== lastContent) {
+        lastContent = content;
+        lastChangeTime = Date.now();
+      } else if (
+        lastContent.length > 0 &&
+        Date.now() - lastChangeTime >= READINESS_STABLE_MS
+      ) {
+        // Content has been stable for long enough — Claude is ready
+        logInfo("Claude readiness detected", {
+          pane,
+          waitMs: Date.now() - startTime,
+        });
+        return;
+      }
+    }
+
+    logWarn("Claude readiness timeout — delivering prompt anyway", {
+      pane,
+      timeoutMs: READINESS_TIMEOUT_MS,
+    });
+  }
+
+  /**
+   * Deliver a spawn prompt to a tmux session with retry logic (adj-132).
+   *
+   * After pasting, checks if the pane content changes (indicating Claude
+   * accepted the input). If no change detected, retries delivery.
+   */
+  private async deliverSpawnPrompt(
+    tmuxSession: string,
+    pane: string,
+    prompt: string,
+  ): Promise<void> {
+    for (let attempt = 0; attempt <= PROMPT_DELIVERY_RETRIES; attempt++) {
+      // Capture pane content before delivery for change detection
+      let contentBefore = "";
+      try {
+        contentBefore = await execTmuxCommand(["capture-pane", "-t", pane, "-p"]);
+      } catch {
+        // Ignore — we'll try delivery anyway
+      }
+
+      // Two-phase delivery: paste text, then send Enter
+      const bufferName = `adj-spawn-${Date.now()}`;
+      await execTmuxCommand(["set-buffer", "-b", bufferName, prompt]);
+      await execTmuxCommand([
+        "paste-buffer", "-t", tmuxSession, "-b", bufferName, "-d",
+      ]);
+      await new Promise((r) => setTimeout(r, PASTE_ENTER_DELAY_MS));
+      await execTmuxCommand(["send-keys", "-t", tmuxSession, "Enter"]);
+
+      // Wait briefly, then check if pane content changed (prompt was accepted)
+      await new Promise((r) => setTimeout(r, 2_000));
+      let contentAfter = "";
+      try {
+        contentAfter = await execTmuxCommand(["capture-pane", "-t", pane, "-p"]);
+      } catch {
+        // Can't verify — assume success
+        break;
+      }
+
+      if (contentAfter !== contentBefore) {
+        logInfo("Spawn prompt delivered", { pane, attempt });
+        return;
+      }
+
+      if (attempt < PROMPT_DELIVERY_RETRIES) {
+        logWarn("Spawn prompt may not have landed, retrying", {
+          pane,
+          attempt,
+        });
+        // Wait before retry — Claude may still be processing
+        await new Promise((r) => setTimeout(r, 3_000));
+      }
+    }
+
+    logWarn("Spawn prompt delivery — exhausted retries", { pane });
   }
 
   private generateTmuxName(name: string, _mode?: SessionMode): string {

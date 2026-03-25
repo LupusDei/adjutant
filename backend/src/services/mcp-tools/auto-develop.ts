@@ -6,6 +6,7 @@
  * - enable_auto_develop: Enable auto-develop for the agent's project
  * - disable_auto_develop: Disable auto-develop for the agent's project
  * - provide_vision_update: Update vision context and unpause the loop
+ * - advance_auto_develop_phase: Coordinator tool to push phase forward immediately (adj-135)
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -25,8 +26,32 @@ import {
 } from "../projects-service.js";
 import { getEventBus } from "../event-bus.js";
 import { logInfo } from "../../utils/index.js";
+import type { AdjutantState } from "../adjutant/state-store.js";
+import type { StimulusEngine } from "../adjutant/stimulus-engine.js";
+import {
+  phaseKey,
+  debounceKey,
+  buildPhaseReason,
+  determineNextPhase,
+} from "../adjutant/behaviors/auto-develop-loop.js";
+import type { AutoDevelopPhase } from "../../types/auto-develop.js";
 
-export function registerAutoDevelopTools(server: McpServer, proposalStore: ProposalStore, autoDevelopStore?: AutoDevelopStore): void {
+/** Valid phase transition order — each phase can only advance to the next in sequence */
+const PHASE_ORDER: AutoDevelopPhase[] = [
+  "analyze", "ideate", "review", "gate", "plan", "execute", "validate",
+];
+
+export interface AutoDevelopToolDeps {
+  adjutantState?: AdjutantState;
+  stimulusEngine?: StimulusEngine;
+}
+
+export function registerAutoDevelopTools(
+  server: McpServer,
+  proposalStore: ProposalStore,
+  autoDevelopStore?: AutoDevelopStore,
+  deps?: AutoDevelopToolDeps,
+): void {
   // ---------------------------------------------------------------------------
   // score_proposal
   // ---------------------------------------------------------------------------
@@ -345,6 +370,136 @@ export function registerAutoDevelopTools(server: McpServer, proposalStore: Propo
         content: [{
           type: "text" as const,
           text: JSON.stringify(status),
+        }],
+      };
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // advance_auto_develop_phase (adj-135)
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "advance_auto_develop_phase",
+    {
+      targetPhase: z.enum(["analyze", "ideate", "review", "gate", "plan", "execute", "validate"])
+        .optional()
+        .describe("Explicit phase to transition to. If omitted, auto-determines the next phase."),
+    },
+    async ({ targetPhase }, extra) => {
+      const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
+      if (!agentId) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Unknown session — not connected via MCP" }) }],
+        };
+      }
+
+      const projectContext = extra.sessionId ? getProjectContextBySession(extra.sessionId) : undefined;
+      if (!projectContext) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "No project context" }) }],
+        };
+      }
+
+      if (!deps?.adjutantState || !deps?.stimulusEngine) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Auto-develop dependencies not available" }) }],
+        };
+      }
+
+      const projectResult = getProject(projectContext.projectId);
+      if (!projectResult.success || !projectResult.data) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Project not found" }) }],
+        };
+      }
+
+      if (!projectResult.data.autoDevelop) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Auto-develop is not enabled for this project" }) }],
+        };
+      }
+
+      const { adjutantState, stimulusEngine } = deps;
+      const currentPhase = (adjutantState.getMeta(phaseKey(projectContext.projectId)) ?? "analyze") as AutoDevelopPhase;
+
+      // Determine next phase
+      let nextPhase: AutoDevelopPhase;
+      if (targetPhase) {
+        // Validate the transition is legal (can only advance forward in the phase order)
+        const currentIdx = PHASE_ORDER.indexOf(currentPhase);
+        const targetIdx = PHASE_ORDER.indexOf(targetPhase);
+
+        // Allow wrap-around (validate → analyze) and forward transitions
+        const isForward = targetIdx > currentIdx;
+        const isWrapAround = currentPhase === "validate" && targetPhase === "analyze";
+        const isSamePhase = targetPhase === currentPhase;
+
+        if (!isForward && !isWrapAround && !isSamePhase) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({
+                error: `Invalid phase transition: ${currentPhase} → ${targetPhase}. Can only advance forward or wrap from validate → analyze.`,
+              }),
+            }],
+          };
+        }
+        nextPhase = targetPhase;
+      } else {
+        // Auto-determine next phase
+        const result = determineNextPhase(
+          currentPhase,
+          projectContext.projectId,
+          projectContext.projectName,
+          proposalStore,
+        );
+        nextPhase = result.nextPhase;
+      }
+
+      // Update phase state
+      adjutantState.setMeta(phaseKey(projectContext.projectId), nextPhase);
+
+      // Get or create cycle ID for the event
+      const activeCycle = autoDevelopStore?.getActiveCycle(projectContext.projectId);
+      const cycleId = activeCycle?.id ?? `manual-${Date.now()}`;
+
+      // Emit phase change event
+      getEventBus().emit("auto_develop:phase_changed", {
+        projectId: projectContext.projectId,
+        cycleId,
+        previousPhase: currentPhase,
+        newPhase: nextPhase,
+      });
+
+      // Build reason and schedule coordinator wake
+      const reason = buildPhaseReason(
+        projectContext.projectId,
+        projectContext.projectName,
+        nextPhase,
+        proposalStore,
+        autoDevelopStore!,
+        adjutantState,
+      );
+      const checkId = stimulusEngine.scheduleCheck(5_000, reason);
+      adjutantState.setMeta(debounceKey(projectContext.projectId), checkId);
+
+      logInfo("advance_auto_develop_phase", {
+        agentId,
+        projectId: projectContext.projectId,
+        previousPhase: currentPhase,
+        newPhase: nextPhase,
+        scheduledCheckId: checkId,
+      });
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            success: true,
+            previousPhase: currentPhase,
+            newPhase: nextPhase,
+            scheduledCheckId: checkId,
+          }),
         }],
       };
     },

@@ -248,6 +248,148 @@ describe("LifecycleManager", () => {
   });
 
   // ==========================================================================
+  // Spawn prompt delivery (adj-132)
+  // ==========================================================================
+
+  describe("initialPrompt delivery", () => {
+    it("should wait for pane stability before delivering prompt", async () => {
+      // Track capture-pane calls to verify readiness polling
+      let captureCalls = 0;
+      let stableContent = false;
+
+      mockExecFile.mockImplementation(
+        (
+          _cmd: string,
+          args: string[],
+          _opts: unknown,
+          cb: (err: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          if (args[0] === "has-session") {
+            cb(new Error("no session"), "", "no session");
+          } else if (args[0] === "list-panes") {
+            cb(null, "adj-swarm-test:1.1\n", "");
+          } else if (args[0] === "capture-pane") {
+            captureCalls++;
+            // Simulate: first few calls show changing content, then stable
+            if (captureCalls <= 3) {
+              cb(null, `Loading... ${captureCalls}`, "");
+            } else {
+              stableContent = true;
+              cb(null, "Claude Code ready > ", "");
+            }
+          } else if (args[0] === "display-message") {
+            cb(null, "", "");
+          } else {
+            cb(null, "", "");
+          }
+        }
+      );
+
+      const result = await lifecycle.createSession({
+        name: "test",
+        projectPath: "/tmp",
+        initialPrompt: "You are a Squad Leader.",
+      });
+
+      expect(result.success).toBe(true);
+      expect(stableContent).toBe(true);
+      // Should have polled capture-pane multiple times for readiness
+      expect(captureCalls).toBeGreaterThan(3);
+    }, 60_000);
+
+    it("should use set-buffer + paste-buffer for prompt delivery", async () => {
+      // Make all capture-pane calls return stable content immediately
+      mockExecFile.mockImplementation(
+        (
+          _cmd: string,
+          args: string[],
+          _opts: unknown,
+          cb: (err: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          if (args[0] === "has-session") {
+            cb(new Error("no session"), "", "no session");
+          } else if (args[0] === "list-panes") {
+            cb(null, "adj-swarm-test:1.1\n", "");
+          } else if (args[0] === "capture-pane") {
+            // Return different content after set-buffer to simulate accepted prompt
+            const setBufferCalled = mockExecFile.mock.calls.some(
+              (c: unknown[]) => (c[1] as string[])[0] === "set-buffer"
+            );
+            cb(null, setBufferCalled ? "Processing prompt..." : "Ready > ", "");
+          } else if (args[0] === "display-message") {
+            cb(null, "", "");
+          } else {
+            cb(null, "", "");
+          }
+        }
+      );
+
+      await lifecycle.createSession({
+        name: "test",
+        projectPath: "/tmp",
+        initialPrompt: "You are a Squad Leader.",
+      });
+
+      // Verify set-buffer was called with the prompt
+      const setBufferCall = mockExecFile.mock.calls.find(
+        (c: unknown[]) => (c[1] as string[])[0] === "set-buffer"
+      );
+      expect(setBufferCall).toBeDefined();
+      expect((setBufferCall![1] as string[])[3]).toBe("You are a Squad Leader.");
+
+      // Verify paste-buffer was called
+      const pasteBufferCall = mockExecFile.mock.calls.find(
+        (c: unknown[]) => (c[1] as string[])[0] === "paste-buffer"
+      );
+      expect(pasteBufferCall).toBeDefined();
+    }, 60_000);
+
+    it("should retry delivery when pane content doesn't change", async () => {
+      let setBufferCount = 0;
+
+      mockExecFile.mockImplementation(
+        (
+          _cmd: string,
+          args: string[],
+          _opts: unknown,
+          cb: (err: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          if (args[0] === "has-session") {
+            cb(new Error("no session"), "", "no session");
+          } else if (args[0] === "list-panes") {
+            cb(null, "adj-swarm-test:1.1\n", "");
+          } else if (args[0] === "capture-pane") {
+            // Content never changes on first attempt (simulates failed delivery)
+            // Changes on second attempt
+            if (setBufferCount < 2) {
+              cb(null, "Ready > ", "");
+            } else {
+              cb(null, "Processing...", "");
+            }
+          } else if (args[0] === "set-buffer") {
+            setBufferCount++;
+            cb(null, "", "");
+          } else if (args[0] === "display-message") {
+            cb(null, "", "");
+          } else {
+            cb(null, "", "");
+          }
+        }
+      );
+
+      const result = await lifecycle.createSession({
+        name: "test",
+        projectPath: "/tmp",
+        initialPrompt: "You are a Squad Leader.",
+      });
+
+      expect(result.success).toBe(true);
+      // Should have called set-buffer at least twice (initial + retry)
+      expect(setBufferCount).toBeGreaterThanOrEqual(2);
+    }, 60_000);
+  });
+
+  // ==========================================================================
   // Generate tmux name
   // ==========================================================================
 

@@ -113,10 +113,16 @@ function createMockStore(): ProposalStore {
 function getToolHandler(
   store: ProposalStore,
   toolName: string,
+  deps?: { adjutantState?: unknown; stimulusEngine?: unknown },
 ): (...args: unknown[]) => Promise<unknown> {
   mockTool.mockClear();
   const server = createMockServer();
-  registerAutoDevelopTools(server, store);
+  registerAutoDevelopTools(
+    server,
+    store,
+    undefined,
+    deps as Parameters<typeof registerAutoDevelopTools>[3],
+  );
 
   const call = mockTool.mock.calls.find(
     (c: unknown[]) => c[0] === toolName,
@@ -417,5 +423,145 @@ describe("score_proposal MCP tool", () => {
     const parsed = JSON.parse(response.content[0].text);
     expect(parsed.score).toBe(90);
     expect(parsed.classification).toBe("accept");
+  });
+});
+
+// =============================================================================
+// advance_auto_develop_phase (adj-135)
+// =============================================================================
+
+describe("advance_auto_develop_phase MCP tool", () => {
+  const SESSION_ID = "session-123";
+  const PROJECT_CONTEXT = {
+    projectId: "proj-123",
+    projectName: "adjutant",
+    projectPath: "/code/adjutant",
+    beadsDir: "/code/adjutant/.beads",
+  };
+
+  function createMockDeps() {
+    return {
+      adjutantState: {
+        getMeta: vi.fn().mockReturnValue("analyze"),
+        setMeta: vi.fn(),
+        logDecision: vi.fn(),
+        countActiveSpawns: vi.fn().mockReturnValue(0),
+      },
+      stimulusEngine: {
+        scheduleCheck: vi.fn().mockReturnValue("check-123"),
+      },
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetAgentBySession.mockReturnValue("coordinator");
+    mockGetProjectContextBySession.mockReturnValue(PROJECT_CONTEXT);
+    mockGetProject.mockReturnValue({
+      success: true,
+      data: { id: "proj-123", name: "adjutant", autoDevelop: true },
+    });
+    mockEmit.mockClear();
+  });
+
+  it("should advance to auto-determined next phase when no targetPhase", async () => {
+    const store = createMockStore();
+    const deps = createMockDeps();
+    const handler = getToolHandler(store, "advance_auto_develop_phase", deps);
+
+    const result = await handler(
+      {},
+      { sessionId: SESSION_ID },
+    );
+
+    const response = result as { content: { type: string; text: string }[] };
+    const parsed = JSON.parse(response.content[0].text);
+    expect(parsed.success).toBe(true);
+    expect(parsed.previousPhase).toBe("analyze");
+    expect(parsed.newPhase).toBeDefined();
+    expect(parsed.scheduledCheckId).toBe("check-123");
+
+    // Should have updated state
+    expect(deps.adjutantState.setMeta).toHaveBeenCalled();
+    // Should have scheduled a coordinator wake
+    expect(deps.stimulusEngine.scheduleCheck).toHaveBeenCalledWith(
+      5_000,
+      expect.stringContaining("adjutant"),
+    );
+    // Should have emitted phase_changed event
+    expect(mockEmit).toHaveBeenCalledWith(
+      "auto_develop:phase_changed",
+      expect.objectContaining({ projectId: "proj-123" }),
+    );
+  });
+
+  it("should advance to explicit targetPhase when provided", async () => {
+    const store = createMockStore();
+    const deps = createMockDeps();
+    const handler = getToolHandler(store, "advance_auto_develop_phase", deps);
+
+    const result = await handler(
+      { targetPhase: "review" },
+      { sessionId: SESSION_ID },
+    );
+
+    const response = result as { content: { type: string; text: string }[] };
+    const parsed = JSON.parse(response.content[0].text);
+    expect(parsed.success).toBe(true);
+    expect(parsed.previousPhase).toBe("analyze");
+    expect(parsed.newPhase).toBe("review");
+  });
+
+  it("should reject invalid backward transition", async () => {
+    const store = createMockStore();
+    const deps = createMockDeps();
+    // Current phase is "review"
+    deps.adjutantState.getMeta.mockReturnValue("review");
+    const handler = getToolHandler(store, "advance_auto_develop_phase", deps);
+
+    const result = await handler(
+      { targetPhase: "analyze" },
+      { sessionId: SESSION_ID },
+    );
+
+    const response = result as { content: { type: string; text: string }[] };
+    const parsed = JSON.parse(response.content[0].text);
+    expect(parsed.error).toContain("Invalid phase transition");
+  });
+
+  it("should allow validate → analyze wrap-around", async () => {
+    const store = createMockStore();
+    const deps = createMockDeps();
+    deps.adjutantState.getMeta.mockReturnValue("validate");
+    const handler = getToolHandler(store, "advance_auto_develop_phase", deps);
+
+    const result = await handler(
+      { targetPhase: "analyze" },
+      { sessionId: SESSION_ID },
+    );
+
+    const response = result as { content: { type: string; text: string }[] };
+    const parsed = JSON.parse(response.content[0].text);
+    expect(parsed.success).toBe(true);
+    expect(parsed.newPhase).toBe("analyze");
+  });
+
+  it("should error when auto-develop is not enabled", async () => {
+    const store = createMockStore();
+    const deps = createMockDeps();
+    mockGetProject.mockReturnValue({
+      success: true,
+      data: { id: "proj-123", name: "adjutant", autoDevelop: false },
+    });
+    const handler = getToolHandler(store, "advance_auto_develop_phase", deps);
+
+    const result = await handler(
+      {},
+      { sessionId: SESSION_ID },
+    );
+
+    const response = result as { content: { type: string; text: string }[] };
+    const parsed = JSON.parse(response.content[0].text);
+    expect(parsed.error).toContain("not enabled");
   });
 });
