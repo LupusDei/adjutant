@@ -667,7 +667,7 @@ describe("createIdleProposalNudge", () => {
       });
     }
 
-    it("filters proposals by agent's project context (projectId + projectName)", async () => {
+    it("filters proposals by agent's project context (projectId UUID)", async () => {
       mockGetProjectContextByAgent.mockReturnValue(ADJUTANT_PROJECT_CONTEXT);
 
       const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
@@ -675,10 +675,10 @@ describe("createIdleProposalNudge", () => {
 
       await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
 
-      // Should pass project filter [projectId, projectName] to getProposals
+      // Should pass project UUID filter to getProposals
       expect(proposalStore.getProposals).toHaveBeenCalledWith({
         status: "pending",
-        project: ["f1e8f895", "adjutant"],
+        project: "f1e8f895",
       });
     });
 

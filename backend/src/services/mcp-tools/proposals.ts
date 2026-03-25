@@ -9,7 +9,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getAgentBySession, getProjectContextBySession } from "../mcp-server.js";
 import type { ProposalStore } from "../proposal-store.js";
-import { resolveProjectFilter } from "../proposal-store.js";
+import { getProject } from "../projects-service.js";
 import { logInfo } from "../../utils/index.js";
 
 /**
@@ -350,20 +350,21 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       project: z.string().optional().describe("Filter by project"),
     },
     async ({ status, type, project }, extra) => {
-      // Resolve project filter to both UUID and name so we match proposals
-      // stored with either format (adj-096, adj-136).
-      // When explicit project is provided, resolve it. When omitted, fall back
-      // to session context.
-      let resolvedProject: string | string[] | undefined;
+      // After migration (adj-141.1), all proposals store UUID in the project field.
+      // When explicit project is provided, use it directly. When omitted, fall back
+      // to session context (UUID).
+      let resolvedProject: string | undefined;
       if (project !== undefined && project !== "") {
-        resolvedProject = resolveProjectFilter(project);
+        // Look up the project to get its UUID if a name was passed
+        const projectResult = getProject(project);
+        resolvedProject = (projectResult.success && projectResult.data) ? projectResult.data.id : project;
       } else if (project === "") {
         // Empty string is an explicit value — pass through (adj-072.5.5)
         resolvedProject = project;
       } else if (extra.sessionId) {
         const projectContext = getProjectContextBySession(extra.sessionId);
         if (projectContext) {
-          resolvedProject = [projectContext.projectId, projectContext.projectName];
+          resolvedProject = projectContext.projectId;
         }
       }
       const proposals = store.getProposals({ status, type, project: resolvedProject });

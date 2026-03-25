@@ -26,14 +26,13 @@ export function buildAutoDevelopStatus(
   proposalStore: ProposalStore | undefined,
   autoDevelopStore: AutoDevelopStore | undefined,
 ): AutoDevelopStatus {
-  const projectIds = [project.id, project.name];
-  const pendingProposals = proposalStore?.getProposals({ status: "pending", project: projectIds }) ?? [];
+  const pendingProposals = proposalStore?.getProposals({ status: "pending", project: project.id }) ?? [];
   const escalated = pendingProposals.filter(
     p => p.confidenceScore !== undefined && p.confidenceScore >= 40 && p.confidenceScore < 60,
   ).length;
   const inReview = pendingProposals.length - escalated;
-  const accepted = proposalStore?.getProposals({ status: "accepted", project: projectIds }).length ?? 0;
-  const dismissed = proposalStore?.getProposals({ status: "dismissed", project: projectIds }).length ?? 0;
+  const accepted = proposalStore?.getProposals({ status: "accepted", project: project.id }).length ?? 0;
+  const dismissed = proposalStore?.getProposals({ status: "dismissed", project: project.id }).length ?? 0;
 
   const activeCycle = autoDevelopStore?.getActiveCycle(project.id) ?? null;
   const cycleHistory = autoDevelopStore?.getCycleHistory(project.id) ?? [];

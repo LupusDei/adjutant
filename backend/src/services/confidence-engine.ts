@@ -51,7 +51,7 @@ export function classifyConfidence(score: number): ConfidenceClassification {
  */
 export function getHistoricalSuccessRate(
   proposalStore: ProposalStore,
-  project: string | string[],
+  project: string,
   proposalType: "product" | "engineering",
 ): number {
   const proposals = proposalStore.getProposals({

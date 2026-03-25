@@ -26,14 +26,14 @@ describe("resolveProjectFilter (adj-136)", () => {
     mockListProjects.mockReturnValue({ success: true, data: PROJECTS });
   });
 
-  it("should resolve project name to [id, name] array", () => {
+  it("should resolve project name to UUID", () => {
     const result = resolveProjectFilter("auto-tank");
-    expect(result).toEqual(["71f9d993", "auto-tank"]);
+    expect(result).toBe("71f9d993");
   });
 
-  it("should resolve project UUID to [id, name] array", () => {
+  it("should resolve project UUID to same UUID", () => {
     const result = resolveProjectFilter("71f9d993");
-    expect(result).toEqual(["71f9d993", "auto-tank"]);
+    expect(result).toBe("71f9d993");
   });
 
   it("should return undefined for undefined input", () => {

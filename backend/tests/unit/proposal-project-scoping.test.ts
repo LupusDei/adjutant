@@ -21,6 +21,14 @@ vi.mock("../../src/services/mcp-server.js", () => ({
   getProjectContextBySession: mockGetProjectContextBySession,
 }));
 
+// Mock projects-service: getProject
+const { mockGetProject } = vi.hoisted(() => ({
+  mockGetProject: vi.fn(),
+}));
+vi.mock("../../src/services/projects-service.js", () => ({
+  getProject: mockGetProject,
+}));
+
 // Mock MCP SDK
 const { mockTool, MockMcpServer } = vi.hoisted(() => {
   const mockTool = vi.fn();
@@ -143,6 +151,8 @@ const TEST_PROJECT_CONTEXT = {
 describe("Proposal project scoping", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: getProject returns not found (tests override as needed)
+    mockGetProject.mockReturnValue({ success: false, error: { code: "NOT_FOUND", message: "Not found" } });
   });
 
   // ===========================================================================
@@ -216,7 +226,7 @@ describe("Proposal project scoping", () => {
       );
 
       expect(store.getProposals).toHaveBeenCalledWith(
-        expect.objectContaining({ project: ["f1e8f895", "adjutant"] }),
+        expect.objectContaining({ project: "f1e8f895" }),
       );
     });
 
