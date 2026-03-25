@@ -131,13 +131,14 @@ Before starting each task:
   bd update <id> --assignee=<your-name> --status=in_progress
   set_status({ status: "working", task: "<concise description>" })
 After completing each task:
-  1. npm run build          (must exit 0)
-  2. npm test               (must pass)
-  3. git add <files> && git commit -m "task: <bead-id> <description>"
-  4. git push -u origin <your-branch>
-  5. Merge to main: git checkout main && git pull && git merge <branch> && npm run build && npm test && git push origin main
-  6. bd close <id>
-  7. set_status({ status: "done", task: "Completed <bead-id>: <what you finished>" })
+  1. npm run build              (must exit 0 — includes lint)
+  2. npm test                   (must pass)
+  3. npm run test:coverage      (coverage must meet thresholds: 80% lines, 70% branches, 60% functions)
+  4. git add <files> && git commit -m "task: <bead-id> <description>"
+  5. git push -u origin <your-branch>
+  6. Merge to main: git checkout main && git pull && git merge <branch> && npm run build && npm test && git push origin main
+  7. bd close <id>
+  8. set_status({ status: "done", task: "Completed <bead-id>: <what you finished>" })
 If push to main fails (race), pull --rebase and retry.
 If build/tests fail, fix them before closing the bead.
 Before shutting down:
@@ -166,9 +167,11 @@ You are a QA sentinel for epic <epic-id>: <title>.
 Your job:
 1. Wait for engineers to merge work to main
 2. Pull main and review the changes against the spec
-3. Run the full test suite and look for gaps
-4. Check edge cases the spec mentions but tests don't cover
-5. For each bug or gap found, create a bead:
+3. Run the full test suite: npm test
+4. Run coverage check: npm run test:coverage — verify thresholds (80% lines, 70% branches, 60% functions)
+5. Check test quality: tests must verify behavior, not implementation. No brittle mocks. Mock data must use real CLI output shapes (see 03-testing.md adj-067 lesson).
+6. Check edge cases the spec mentions but tests don't cover
+7. For each bug or gap found, create a bead:
    bd create --id=<epic-id>.N.M.P --title="Bug: <description>" --type=bug --priority=<1-3>
    bd dep add <parent-bead> <new-bug-id>
 6. Report findings via: send_message({ to: "user", body: "QA found: <summary>" })
@@ -212,8 +215,9 @@ Your job:
 1. As engineers merge to main, review the code with a staff engineer's eye
 2. Check for:
    - Code quality: naming, structure, readability, DRY
-   - Test coverage: are critical paths tested? Are edge cases covered?
-   - Test reliability: are tests deterministic? Do they test behavior, not implementation?
+   - Test coverage: are critical paths tested? Are edge cases covered? Run npm run test:coverage and verify thresholds (80% lines, 70% branches, 60% functions)
+   - Test reliability: are tests deterministic? Do they test behavior, not implementation? Are mocks using real data shapes from CLI output (not hand-crafted from TS types — see 03-testing.md adj-067 lesson)?
+   - Test quality: minimum test counts met per 03-testing.md (3 per service method, 2 per MCP tool, 3 per hook, 2 per endpoint, 1 per bug fix)?
    - Error handling: are failure modes handled gracefully?
    - Security: any injection risks, data leaks, or auth bypasses?
 3. For each improvement needed, create a bead:
@@ -282,7 +286,8 @@ When all engineer tasks are closed and reviewer findings are either fixed or doc
 - **All communication via Adjutant MCP** — not stdout, not AskUserQuestion
 - **QA sentinel is mandatory** — never skip it, even for small epics
 - **Reviewers create their own beads** — they wire them under the epic hierarchy
-- **Engineers must build + test before merging** — the spawn prompt enforces this
+- **Engineers must build + test + check coverage before merging** — the spawn prompt enforces this
+- **All squad members must verify before pushing** — run `npm run build`, `npm test`, and `npm run test:coverage` before every push
 - **Report to user at every milestone** — silence is not acceptable
 
 ## Spawn Sequencing
