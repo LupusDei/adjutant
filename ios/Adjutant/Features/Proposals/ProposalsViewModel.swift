@@ -25,6 +25,15 @@ final class ProposalsViewModel: BaseViewModel {
     /// Active project name used to scope proposals. Loaded automatically on appear.
     @Published private(set) var activeProjectName: String?
 
+    /// All available projects for the project picker
+    @Published private(set) var projects: [Project] = []
+
+    /// User-selected project name filter. nil = all projects.
+    /// Defaults to active project on first load.
+    @Published var selectedProjectName: String? {
+        didSet { Task { await load() } }
+    }
+
     // MARK: - Dependencies
 
     private let apiClient: APIClient
@@ -39,6 +48,7 @@ final class ProposalsViewModel: BaseViewModel {
     // MARK: - Lifecycle
 
     override func onAppear() {
+        loadProjects()
         loadActiveProjectScope()
         super.onAppear()
     }
@@ -50,13 +60,13 @@ final class ProposalsViewModel: BaseViewModel {
     }
 
     /// Fetches proposals from the API using the current filters,
-    /// scoped to the active project when available.
+    /// scoped to the selected project (or active project) when available.
     func load() async {
         let result = await performAsync(showLoading: proposals.isEmpty) { [self] in
             try await self.apiClient.fetchProposals(
                 status: self.statusFilter,
                 type: self.typeFilter,
-                project: self.activeProjectName
+                project: self.selectedProjectName
             )
         }
         if let result {
@@ -64,17 +74,30 @@ final class ProposalsViewModel: BaseViewModel {
         }
     }
 
-    /// Loads the active project from the API and sets it as the project scope.
-    /// When the active project changes, proposals are reloaded with the new filter.
+    /// Loads available projects for the project picker.
+    private func loadProjects() {
+        Task<Void, Never> { [weak self] in
+            guard let self else { return }
+            do {
+                self.projects = try await self.apiClient.getProjects()
+            } catch {
+                // Non-critical — project picker will be empty
+            }
+        }
+    }
+
+    /// Loads the active project from the API and sets it as the default project scope.
+    /// Only sets the default if the user hasn't already selected a project.
     private func loadActiveProjectScope() {
         Task<Void, Never> { [weak self] in
             guard let self else { return }
             do {
                 let projects = try await self.apiClient.getProjects()
                 if let activeProject = projects.first(where: { $0.active }) {
-                    if self.activeProjectName != activeProject.name {
-                        self.activeProjectName = activeProject.name
-                        await self.load()
+                    self.activeProjectName = activeProject.name
+                    // Only set default if user hasn't already selected a project
+                    if self.selectedProjectName == nil {
+                        self.selectedProjectName = activeProject.name
                     }
                 }
             } catch {

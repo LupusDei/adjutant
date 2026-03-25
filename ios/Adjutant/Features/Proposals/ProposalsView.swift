@@ -60,6 +60,9 @@ struct ProposalsView: View {
             // Type filter
             typePicker
 
+            // Project filter
+            projectPicker
+
             Spacer()
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
@@ -169,6 +172,54 @@ struct ProposalsView: View {
         .accessibilityLabel("Type filter: \(typeFilterLabel)")
     }
 
+    private var projectPicker: some View {
+        Menu {
+            Button {
+                viewModel.selectedProjectName = nil
+            } label: {
+                HStack {
+                    Text("ALL PROJECTS")
+                    if viewModel.selectedProjectName == nil {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+
+            ForEach(viewModel.projects, id: \.id) { project in
+                Button {
+                    viewModel.selectedProjectName = project.name
+                } label: {
+                    HStack {
+                        Text(project.name.uppercased())
+                        if viewModel.selectedProjectName == project.name {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: CRTTheme.Spacing.xxs) {
+                Text(projectFilterLabel)
+                    .font(CRTTheme.Typography.font(size: 12, weight: .medium))
+                    .tracking(CRTTheme.Typography.letterSpacing)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10))
+            }
+            .foregroundColor(theme.dim)
+            .padding(.horizontal, CRTTheme.Spacing.sm)
+            .padding(.vertical, CRTTheme.Spacing.xs)
+            .background(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
+                    .fill(theme.primary.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.md)
+                    .stroke(theme.primary.opacity(0.2), lineWidth: 1)
+            )
+        }
+        .accessibilityLabel("Project filter: \(projectFilterLabel)")
+    }
+
     // MARK: - Proposal List
 
     private var proposalList: some View {
@@ -271,6 +322,13 @@ struct ProposalsView: View {
             return type.rawValue.uppercased()
         }
         return "ALL TYPES"
+    }
+
+    private var projectFilterLabel: String {
+        if let name = viewModel.selectedProjectName {
+            return name.uppercased()
+        }
+        return "ALL PROJECTS"
     }
 }
 
