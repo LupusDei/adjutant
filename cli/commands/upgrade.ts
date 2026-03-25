@@ -5,7 +5,7 @@
  * reinstalls the Claude Code plugin, and reports what changed.
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from "fs";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
@@ -26,6 +26,7 @@ import {
   printError,
   type CheckResult,
 } from "../lib/output.js";
+import { QUALITY_FILES, loadTemplate } from "../lib/quality-templates.js";
 
 /** Resolve the adjutant package root from this module's location. */
 function getPackageRoot(): string {
@@ -68,6 +69,55 @@ function upgradePrimeFile(
     status: "created",
     message: `updated (${currentLines} → ${newLines} lines)`,
   };
+}
+
+/** Sync all quality files from templates into the project. */
+export function syncQualityFiles(projectRoot: string): CheckResult[] {
+  const results: CheckResult[] = [];
+
+  for (const qf of QUALITY_FILES) {
+    if (qf.skipIfExists) {
+      results.push({ name: qf.destPath, status: "skipped", message: "skip-if-exists policy" });
+      continue;
+    }
+
+    const fullPath = join(projectRoot, qf.destPath);
+    const templateContent = loadTemplate(qf.templateName);
+
+    if (!fileExists(fullPath)) {
+      const dir = dirname(fullPath);
+      if (!dirExists(dir)) {
+        mkdirSync(dir, { recursive: true });
+      }
+      writeFileSync(fullPath, templateContent, "utf-8");
+      if (qf.executable) {
+        chmodSync(fullPath, 0o755);
+      }
+      results.push({ name: qf.destPath, status: "created", message: "did not exist — created" });
+      continue;
+    }
+
+    const currentContent = readFileSync(fullPath, "utf-8");
+    if (currentContent === templateContent) {
+      results.push({ name: qf.destPath, status: "pass", message: "up to date" });
+      continue;
+    }
+
+    // Content differs — overwrite with template
+    const currentLines = currentContent.split("\n").length;
+    const newLines = templateContent.split("\n").length;
+    writeFileSync(fullPath, templateContent, "utf-8");
+    if (qf.executable) {
+      chmodSync(fullPath, 0o755);
+    }
+    results.push({
+      name: qf.destPath,
+      status: "created",
+      message: `updated (${currentLines} → ${newLines} lines)`,
+    });
+  }
+
+  return results;
 }
 
 const MCP_CONFIG_ENTRY = {
@@ -189,6 +239,9 @@ export async function runUpgrade(): Promise<number> {
   } else {
     results.push(...installPlugin(packageRoot, pkg.version));
   }
+
+  // 6. Sync quality files (testing rules, code review, CI config, etc.)
+  results.push(...syncQualityFiles(projectRoot));
 
   // Print results
   for (const r of results) {
