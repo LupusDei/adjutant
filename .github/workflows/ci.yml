@@ -30,8 +30,29 @@ jobs:
 
       - name: Lint backend
         run: cd backend && npm run lint
-        continue-on-error: true
 
       - name: Lint frontend
         run: cd frontend && npm run lint
+
+      - name: Run backend tests
+        run: cd backend && npm test
+
+      - name: Run frontend tests
+        run: cd frontend && npm test
+
+      - name: Backend coverage
+        run: cd backend && npm run test:coverage
         continue-on-error: true
+
+      - name: Frontend coverage
+        run: cd frontend && npm run test:coverage
+        continue-on-error: true
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-reports
+          path: |
+            backend/coverage/
+            frontend/coverage/
