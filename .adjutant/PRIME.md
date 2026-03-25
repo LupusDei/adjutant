@@ -266,7 +266,7 @@ Do NOT close a bead or push code that doesn't pass these checks.
 # 1. Lint & build (from project root)
 npm run build                           # Must exit 0 with no errors
 
-# 2. Run tests
+# 2. Run tests (ALWAYS use npm test — NEVER bare vitest/npx vitest which starts watch mode)
 npm test                                # Must exit 0, all tests pass
 
 # 3. Check coverage thresholds
@@ -277,22 +277,35 @@ git add <files>
 git commit -m "task: <bead-id> <description>"
 git push -u origin <your-branch>
 
-# 5. Merge to main (if permitted — see rules below)
-git checkout main && git pull origin main
-git merge <your-branch>
-npm run build && npm test              # Re-verify after merge
-git push origin main
-
-# 6. Close the bead
+# 5. Close the bead
 bd close <id>
 ```
 
 ### Merge-to-Main Rules
 
-- **Default**: Agents may merge to main after verification passes.
+- **Worktree agents**: Do NOT merge to main. Worktree agents cannot `git checkout main` (it's checked out in the main repo). Push your branch — the squad leader merges from the main repo.
+- **Squad leaders / main-repo agents**: May merge to main after verification passes.
 - **After merging**: You MUST re-run `npm run build` + `npm test` on the merged result. If the merge introduced conflicts or broke something, fix it before pushing.
 - **If push fails** (another agent pushed first): `git pull --rebase origin main`, re-run build/tests, then push again.
 - **Coordinator may restrict this** in the spawn prompt (e.g., "push branch only, do not merge") for multi-agent scenarios where several agents touch overlapping files.
+
+### Squad Leader Post-Completion Merge Checklist
+
+When all squad members have pushed their branches:
+
+```bash
+# 1. Check for unmerged branches
+git branch -r --no-merged main
+
+# 2. For each unmerged agent branch:
+git checkout main && git pull origin main
+git merge origin/<agent-branch>
+npm run build && npm test              # Re-verify after each merge
+git push origin main
+
+# 3. Confirm all branches merged
+git branch -r --no-merged main         # Should return empty
+```
 
 ### General Rules
 

@@ -229,13 +229,13 @@ When assigning work to team agents, the **coordinator** must:
      set_status({ status: "working", task: "<concise description of what you're doing>" })
    After completing each task:
      1. npm run build          (must exit 0)
-     2. npm test               (must pass)
+     2. npm test               (must pass — ALWAYS use `npm test`, NEVER bare `vitest` or `npx vitest` which starts watch mode)
      3. git add <files> && bd sync && git commit -m "task: <bead-id> <description>" && bd sync
      4. git push -u origin <your-branch>
-     5. Merge to main: git checkout main && git pull && git merge <branch> && npm run build && npm test && git push origin main
-     6. bd close <id>
-     7. set_status({ status: "done", task: "Completed <bead-id>: <what you finished>" })
-   If push to main fails (race), pull --rebase and retry.
+     5. bd close <id>
+     6. set_status({ status: "done", task: "Completed <bead-id>: <what you finished>" })
+   **Do NOT merge to main yourself.** Worktree agents cannot `git checkout main` (main is checked out in the main repo). Push your branch — the squad leader will merge from the main repo.
+   If push fails, pull --rebase and retry.
    You may close parent epics manually when all children are done, or let them auto-close.
    If build/tests fail, fix them before closing the bead.
    Before shutting down:

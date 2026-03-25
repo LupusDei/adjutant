@@ -132,14 +132,14 @@ Before starting each task:
   set_status({ status: "working", task: "<concise description>" })
 After completing each task:
   1. npm run build              (must exit 0 — includes lint)
-  2. npm test                   (must pass)
+  2. npm test                   (must pass — ALWAYS use `npm test`, NEVER bare `vitest` or `npx vitest` which starts watch mode)
   3. npm run test:coverage      (coverage must meet thresholds: 80% lines, 70% branches, 60% functions)
   4. git add <files> && git commit -m "task: <bead-id> <description>"
   5. git push -u origin <your-branch>
-  6. Merge to main: git checkout main && git pull && git merge <branch> && npm run build && npm test && git push origin main
-  7. bd close <id>
-  8. set_status({ status: "done", task: "Completed <bead-id>: <what you finished>" })
-If push to main fails (race), pull --rebase and retry.
+  6. bd close <id>
+  7. set_status({ status: "done", task: "Completed <bead-id>: <what you finished>" })
+**Do NOT merge to main yourself.** Worktree agents cannot `git checkout main` (main is checked out in the main repo). Push your branch — the squad leader will merge to main from the main repo after verification.
+If push fails, pull --rebase and retry.
 If build/tests fail, fix them before closing the bead.
 Before shutting down:
   set_status({ status: "idle", task: "Finished work, shutting down" })
@@ -262,20 +262,31 @@ When QA, Product, or Code Review agents create bug/task beads:
 
 When all engineer tasks are closed and reviewer findings are either fixed or documented:
 
-1. Close the root epic if all children are done:
+1. **Merge all agent branches to main** from the main repo (not a worktree):
+   ```bash
+   # For each engineer's branch:
+   git fetch origin
+   git checkout main && git pull origin main
+   git merge origin/<engineer-branch>
+   npm run build && npm test              # Verify after each merge
+   git push origin main
+   ```
+   Use `git branch -r --no-merged main` to confirm no agent branches are left unmerged.
+
+2. Close the root epic if all children are done:
    ```bash
    bd close <epic-id> --reason="All phases complete"
    ```
-2. If reviewer bugs remain open, leave the epic open and report:
+3. If reviewer bugs remain open, leave the epic open and report:
    ```
    send_message({ to: "user", body: "Squad complete for <epic-title>.\n\nResults:\n- Tasks closed: N/M\n- QA bugs found: X (Y fixed, Z remaining)\n- Code review items: X (Y fixed, Z remaining)\n- Product issues: X (Y fixed, Z remaining)\n\nRemaining items need follow-up." })
    ```
-3. Final announcement:
+4. Final announcement:
    ```
    announce({ type: "completion", title: "Squad complete: <title>", body: "<summary>", beadId: "<epic-id>" })
    set_status({ status: "done", task: "Squad complete: <epic-title>" })
    ```
-4. Clean up worktrees — verify all agent branches are merged, then remove stale worktrees
+6. Clean up worktrees — verify all agent branches are merged (`git branch -r --no-merged main` should return empty), then remove stale worktrees
 
 ## Key Rules
 
