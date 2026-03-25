@@ -15,7 +15,7 @@ import { z } from "zod";
 import { execBd, type BdExecOptions, type BdResult } from "../bd-client.js";
 import { logError } from "../../utils/index.js";
 import { autoCompleteEpics } from "../beads/index.js";
-import { getProjectContextBySession, getAgentBySession } from "../mcp-server.js";
+import { getAgentBySession, resolveToolProjectContext } from "../mcp-server.js";
 import type { EventStore } from "../event-store.js";
 import { getEventBus } from "../event-bus.js";
 
@@ -78,14 +78,14 @@ function errorResult(result: BdResult) {
  * Logs warnings when agents access beads without project context,
  * helping catch misconfigured agents (adj-029.2.5).
  */
-function resolveBdOptions(extra?: { sessionId?: string | undefined }): BdExecOptions {
-  if (!extra?.sessionId) {
-    console.warn("[beads] Bead tool called without session ID — cannot scope to project");
-    return {};
-  }
-  const ctx = getProjectContextBySession(extra.sessionId);
+function resolveBdOptions(extra?: { sessionId?: string | undefined }, explicitProjectId?: string): BdExecOptions {
+  const ctx = resolveToolProjectContext(explicitProjectId, extra?.sessionId);
   if (!ctx) {
-    console.warn(`[beads] Agent session ${extra.sessionId} has no project context — beads will use workspace default`);
+    if (!extra?.sessionId) {
+      console.warn("[beads] Bead tool called without session ID — cannot scope to project");
+    } else {
+      console.warn(`[beads] Agent session ${extra.sessionId} has no project context — beads will use workspace default`);
+    }
     return {};
   }
   return { cwd: ctx.projectPath, beadsDir: ctx.beadsDir };
@@ -107,9 +107,10 @@ export function registerBeadTools(server: McpServer, eventStore?: EventStore): v
       description: z.string().describe("Bead description"),
       type: z.enum(["epic", "task", "bug"]).describe("Bead type"),
       priority: z.number().min(0).max(4).describe("Priority: 0=critical, 4=backlog"),
+      projectId: z.string().optional().describe("Project UUID for cross-project operations (defaults to session project)"),
     },
-    async ({ id, title, description, type, priority }, extra) => {
-      const bdOpts = resolveBdOptions(extra);
+    async ({ id, title, description, type, priority, projectId }, extra) => {
+      const bdOpts = resolveBdOptions(extra, projectId);
       return bdMutex.runExclusive(async () => {
         const args: string[] = [
           "create",
@@ -158,9 +159,10 @@ export function registerBeadTools(server: McpServer, eventStore?: EventStore): v
       description: z.string().optional().describe("New description"),
       assignee: z.string().optional().describe("Assignee name"),
       priority: z.number().min(0).max(4).optional().describe("Priority: 0=critical, 4=backlog"),
+      projectId: z.string().optional().describe("Project UUID for cross-project operations (defaults to session project)"),
     },
-    async ({ id, status, title, description, assignee, priority }, extra) => {
-      const bdOpts = resolveBdOptions(extra);
+    async ({ id, status, title, description, assignee, priority, projectId }, extra) => {
+      const bdOpts = resolveBdOptions(extra, projectId);
       return bdMutex.runExclusive(async () => {
         const args: string[] = ["update", id, "--json"];
 
@@ -211,9 +213,10 @@ export function registerBeadTools(server: McpServer, eventStore?: EventStore): v
     {
       id: z.string().describe("Bead ID to close"),
       reason: z.string().optional().describe("Close reason"),
+      projectId: z.string().optional().describe("Project UUID for cross-project operations (defaults to session project)"),
     },
-    async ({ id, reason }, extra) => {
-      const bdOpts = resolveBdOptions(extra);
+    async ({ id, reason, projectId }, extra) => {
+      const bdOpts = resolveBdOptions(extra, projectId);
       return bdMutex.runExclusive(async () => {
         const args: string[] = ["close", id, "--json"];
         if (reason) {
@@ -261,9 +264,10 @@ export function registerBeadTools(server: McpServer, eventStore?: EventStore): v
       status: z.enum(["open", "in_progress", "closed", "all"]).optional().describe("Filter by status (default: open)"),
       assignee: z.string().optional().describe("Filter by assignee"),
       type: z.enum(["epic", "task", "bug"]).optional().describe("Filter by bead type"),
+      projectId: z.string().optional().describe("Project UUID for cross-project operations (defaults to session project)"),
     },
-    async ({ status, assignee, type }, extra) => {
-      const bdOpts = resolveBdOptions(extra);
+    async ({ status, assignee, type, projectId }, extra) => {
+      const bdOpts = resolveBdOptions(extra, projectId);
       return bdMutex.runExclusive(async () => {
         const args: string[] = ["list", "--json"];
 
@@ -305,9 +309,10 @@ export function registerBeadTools(server: McpServer, eventStore?: EventStore): v
     "show_bead",
     {
       id: z.string().describe("Bead ID to show"),
+      projectId: z.string().optional().describe("Project UUID for cross-project operations (defaults to session project)"),
     },
-    async ({ id }, extra) => {
-      const bdOpts = resolveBdOptions(extra);
+    async ({ id, projectId }, extra) => {
+      const bdOpts = resolveBdOptions(extra, projectId);
       return bdMutex.runExclusive(async () => {
         const args: string[] = ["show", id, "--json"];
 
