@@ -39,6 +39,11 @@ export const AutoDevelopPanel: React.FC<AutoDevelopPanelProps> = ({ status }) =>
               PAUSED
             </span>
           )}
+          {status.productOwner && (
+            <span className="dashboard-header-stat" style={{ color: colors.primaryDim }}>
+              PO: {status.productOwner.toUpperCase()}
+            </span>
+          )}
           {status.activeCycleId && (
             <span className="dashboard-header-stat dashboard-header-stat-highlight">
               CYCLE ACTIVE
@@ -47,6 +52,22 @@ export const AutoDevelopPanel: React.FC<AutoDevelopPanelProps> = ({ status }) =>
         </div>
       </div>
       <div className="dashboard-widget-content">
+        {/* Current Phase Indicator */}
+        {status.currentPhase && (
+          <div className="auto-develop-current-phase">
+            <span className="auto-develop-current-phase-label">CURRENT PHASE</span>
+            <span
+              className="auto-develop-current-phase-value"
+              style={{
+                color: colors.primary,
+                textShadow: `0 0 12px ${colors.primaryGlow}, 0 0 24px ${colors.primaryGlow}`,
+              }}
+            >
+              {status.currentPhase.toUpperCase()}
+            </span>
+          </div>
+        )}
+
         {/* Phase Pipeline */}
         <div className="auto-develop-pipeline">
           <h4 className="auto-develop-section-title">PHASE PIPELINE</h4>

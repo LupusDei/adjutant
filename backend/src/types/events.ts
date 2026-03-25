@@ -8,6 +8,9 @@ export const EventType = z.enum([
   "bead_updated",
   "bead_closed",
   "coordinator_action",
+  "auto_develop_enabled",
+  "auto_develop_disabled",
+  "auto_develop_phase_changed",
 ]);
 export type EventType = z.infer<typeof EventType>;
 

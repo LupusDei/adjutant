@@ -27,7 +27,7 @@ import { createPersonaService, initPersonaService } from "./services/persona-ser
 import { createCallsignToggleService } from "./services/callsign-toggle-service.js";
 import { initMessageDelivery } from "./services/message-delivery.js";
 import { initBeadAssignNotification } from "./services/bead-assign-notification.js";
-import { discoverLocalProjects } from "./services/projects-service.js";
+import { discoverLocalProjects, setAutoDevelopProductOwner, clearAutoDevelopProductOwner } from "./services/projects-service.js";
 import { spawnAdjutant } from "./services/adjutant-spawner.js";
 import { wireSpawnHealthChecks } from "./services/agent-spawner-service.js";
 import { initCostTracker } from "./services/cost-tracker.js";
@@ -116,6 +116,43 @@ initCostTracker(messageDb);
 
 // Initialize event-driven cost extraction (subscribes to agent:status_changed)
 initEventDrivenCostExtraction();
+
+// Wire auto-develop events to timeline persistence + product owner assignment
+{
+  const bus = getEventBus();
+  bus.on("project:auto_develop_enabled", (data) => {
+    eventStore.insertEvent({
+      eventType: "auto_develop_enabled",
+      agentId: "system",
+      action: `Auto-develop enabled for ${data.projectName}`,
+      detail: { projectId: data.projectId, projectName: data.projectName, visionContext: data.visionContext ?? null },
+    });
+
+    // Auto-assign coordinator as product owner when auto-develop is enabled
+    if (!data.resumeFromPause) {
+      setAutoDevelopProductOwner(data.projectId, "adjutant-coordinator");
+    }
+  });
+  bus.on("project:auto_develop_disabled", (data) => {
+    eventStore.insertEvent({
+      eventType: "auto_develop_disabled",
+      agentId: "system",
+      action: `Auto-develop disabled for ${data.projectName}`,
+      detail: { projectId: data.projectId, projectName: data.projectName },
+    });
+
+    // Clear product owner when auto-develop is disabled
+    clearAutoDevelopProductOwner(data.projectId);
+  });
+  bus.on("auto_develop:phase_changed", (data) => {
+    eventStore.insertEvent({
+      eventType: "auto_develop_phase_changed",
+      agentId: "system",
+      action: `Phase: ${data.previousPhase} → ${data.newPhase}`,
+      detail: { projectId: data.projectId, previousPhase: data.previousPhase, newPhase: data.newPhase, cycleId: data.cycleId },
+    });
+  });
+}
 
 // Prune events older than 7 days on startup, then every 6 hours
 const PRUNE_DAYS = 7;

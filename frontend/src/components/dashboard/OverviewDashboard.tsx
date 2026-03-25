@@ -161,8 +161,13 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
     }
   }, [activeProjectId]);
 
+  // Poll auto-develop status every 15s for live phase updates
   useEffect(() => {
     void fetchAutoDevelopStatus();
+    const intervalId = setInterval(() => {
+      if (!document.hidden) { void fetchAutoDevelopStatus(); }
+    }, 15_000);
+    return () => { clearInterval(intervalId); };
   }, [fetchAutoDevelopStatus]);
 
   const handleAutoDevelopToggled = useCallback(() => {

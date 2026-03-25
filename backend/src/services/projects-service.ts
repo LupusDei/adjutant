@@ -36,6 +36,8 @@ export interface Project {
   autoDevelopPausedAt?: string | undefined;
   /** Vision context text for auto-develop AI generation */
   visionContext?: string | undefined;
+  /** Agent assigned as product owner for auto-develop lifecycle */
+  autoDevelopProductOwner?: string | undefined;
 }
 
 export interface ProjectsStore {
@@ -87,6 +89,7 @@ interface ProjectRow {
   auto_develop: number;
   auto_develop_paused_at: string | null;
   vision_context: string | null;
+  auto_develop_product_owner: string | null;
 }
 
 // ============================================================================
@@ -139,6 +142,7 @@ function rowToProject(row: ProjectRow): Project {
     autoDevelop: row.auto_develop === 1,
     autoDevelopPausedAt: row.auto_develop_paused_at ?? undefined,
     visionContext: row.vision_context ?? undefined,
+    autoDevelopProductOwner: row.auto_develop_product_owner ?? undefined,
   };
 }
 
@@ -699,7 +703,7 @@ export function disableAutoDevelop(id: string): ProjectsServiceResult<Project> {
       return { success: false, error: { code: "NOT_FOUND", message: `Project '${id}' not found` } };
     }
 
-    db.prepare("UPDATE projects SET auto_develop = 0, auto_develop_paused_at = NULL WHERE id = ?").run(id);
+    db.prepare("UPDATE projects SET auto_develop = 0, auto_develop_paused_at = NULL, auto_develop_product_owner = NULL WHERE id = ?").run(id);
     const updated = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow;
     logInfo("auto-develop disabled", { id, name: row.name });
     return { success: true, data: rowToProject(updated) };
@@ -787,6 +791,47 @@ export function getAutoDevelopProjects(): ProjectsServiceResult<Project[]> {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to get auto-develop projects";
     logError("getAutoDevelopProjects failed", { error: message });
+    return { success: false, error: { code: "INTERNAL_ERROR", message } };
+  }
+}
+
+/**
+ * Set the product owner agent for a project's auto-develop lifecycle.
+ */
+export function setAutoDevelopProductOwner(id: string, agentId: string): ProjectsServiceResult<Project> {
+  try {
+    const db = getDatabase();
+    const row = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow | undefined;
+    if (!row) {
+      return { success: false, error: { code: "NOT_FOUND", message: `Project '${id}' not found` } };
+    }
+
+    db.prepare("UPDATE projects SET auto_develop_product_owner = ? WHERE id = ?").run(agentId, id);
+    const updated = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow;
+    logInfo("auto-develop product owner set", { id, name: row.name, agentId });
+    return { success: true, data: rowToProject(updated) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to set product owner";
+    logError("setAutoDevelopProductOwner failed", { error: message });
+    return { success: false, error: { code: "INTERNAL_ERROR", message } };
+  }
+}
+
+/**
+ * Clear the product owner agent when auto-develop is disabled.
+ */
+export function clearAutoDevelopProductOwner(id: string): ProjectsServiceResult<Project> {
+  try {
+    const db = getDatabase();
+    db.prepare("UPDATE projects SET auto_develop_product_owner = NULL WHERE id = ?").run(id);
+    const updated = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow;
+    if (!updated) {
+      return { success: false, error: { code: "NOT_FOUND", message: `Project '${id}' not found` } };
+    }
+    return { success: true, data: rowToProject(updated) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to clear product owner";
+    logError("clearAutoDevelopProductOwner failed", { error: message });
     return { success: false, error: { code: "INTERNAL_ERROR", message } };
   }
 }

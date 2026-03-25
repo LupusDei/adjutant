@@ -469,6 +469,7 @@ export interface AutoDevelopStatus {
   proposals: { inReview: number; accepted: number; escalated: number; dismissed: number };
   epicsInExecution: number;
   cycleStats: { totalCycles: number; completedCycles: number };
+  productOwner: string | null;
 }
 
 /** Phases of the auto-develop loop in order. */

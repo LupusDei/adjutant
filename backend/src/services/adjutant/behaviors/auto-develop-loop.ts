@@ -39,6 +39,21 @@ const SCHEDULE_DELAY_MS = 5_000;
 /** Delay for backpressure re-checks */
 const BACKPRESSURE_DELAY_MS = 60_000;
 
+/**
+ * Autonomous mode preamble injected into every phase reason.
+ * Informs the coordinator and spawned agents that they are operating
+ * in auto-develop mode — largely without user input.
+ */
+const AUTONOMOUS_MODE_PREAMBLE = `\
+=== AUTONOMOUS MODE ===
+This project is in AUTO-DEVELOP mode. You are the product owner for this development lifecycle.
+Operate autonomously without waiting for user input. Make decisions, spawn agents, and drive
+the development loop forward. Only escalate to the user when confidence scores drop below
+the escalation threshold (40-59 range). All other decisions — ideation, review, planning,
+execution, and validation — are yours to make independently.
+===
+`;
+
 // ============================================================================
 // Metadata key helpers
 // ============================================================================
@@ -74,24 +89,33 @@ export function buildPhaseReason(
   autoDevelopStore: AutoDevelopStore,
   state: AdjutantState,
 ): string {
+  let reason: string;
   switch (phase) {
     case "analyze":
-      return buildAnalyzeReason(projectId, projectName, proposalStore);
+      reason = buildAnalyzeReason(projectId, projectName, proposalStore);
+      break;
     case "ideate":
-      return buildIdeateReason(projectId, projectName, proposalStore);
+      reason = buildIdeateReason(projectId, projectName, proposalStore);
+      break;
     case "review":
-      return buildReviewReason(projectId, projectName, proposalStore);
+      reason = buildReviewReason(projectId, projectName, proposalStore);
+      break;
     case "gate":
-      return buildGateReason(projectId, projectName, proposalStore);
+      reason = buildGateReason(projectId, projectName, proposalStore);
+      break;
     case "plan":
-      return buildPlanReason(projectId, projectName, proposalStore);
+      reason = buildPlanReason(projectId, projectName, proposalStore);
+      break;
     case "execute":
-      return buildExecuteReason(projectId, projectName, state);
+      reason = buildExecuteReason(projectId, projectName, state);
+      break;
     case "validate":
-      return buildValidateReason(projectId, projectName, autoDevelopStore);
+      reason = buildValidateReason(projectId, projectName, autoDevelopStore);
+      break;
     default:
-      return `Auto-develop loop: unknown phase "${String(phase)}" for project "${projectName}" (${projectId})`;
+      reason = `Auto-develop loop: unknown phase "${String(phase)}" for project "${projectName}" (${projectId})`;
   }
+  return AUTONOMOUS_MODE_PREAMBLE + reason;
 }
 
 function buildAnalyzeReason(
@@ -118,7 +142,12 @@ function buildAnalyzeReason(
     parts.push(`Vision context: ${visionContext.slice(0, 500)}`);
   }
   parts.push("");
-  parts.push("ACTION: Assess the project state and transition to IDEATE if the project needs new proposals, or skip to REVIEW/PLAN if there are pending/accepted proposals to process.");
+  parts.push("COORDINATOR RESPONSIBILITIES:");
+  parts.push("1. Use get_auto_develop_status to verify the current loop state.");
+  parts.push("2. If accepted proposals exist → call advance_auto_develop_phase to skip to PLAN.");
+  parts.push("3. If pending proposals exist → call advance_auto_develop_phase to skip to REVIEW.");
+  parts.push("4. If no proposals → call advance_auto_develop_phase to transition to IDEATE.");
+  parts.push("5. Report status via set_status and announce your assessment.");
 
   return parts.join("\n");
 }
@@ -149,7 +178,14 @@ function buildIdeateReason(
     parts.push(`Vision context: ${visionContext.slice(0, 500)}`);
   }
   parts.push("");
-  parts.push("ACTION: Spawn an ideation agent to analyze the codebase and create new proposals for this project. The ideation agent should consider the vision context and avoid duplicating existing proposals.");
+  parts.push("COORDINATOR RESPONSIBILITIES:");
+  parts.push("1. Use spawn_worker to create an ideation agent with a prompt that includes:");
+  parts.push("   - The project path and vision context (above).");
+  parts.push("   - Instructions to use create_proposal MCP tool for each proposal.");
+  parts.push("   - Instructions to avoid duplicating existing proposals (listed above).");
+  parts.push("2. The ideation agent should analyze the codebase, identify improvements, and create 1-3 proposals.");
+  parts.push("3. After spawning, call advance_auto_develop_phase to transition to REVIEW.");
+  parts.push("4. Report progress via set_status.");
 
   return parts.join("\n");
 }
@@ -173,7 +209,15 @@ function buildReviewReason(
     }
   }
   parts.push("");
-  parts.push("ACTION: Spawn reviewer agents to evaluate pending proposals. Each reviewer should score the proposals using the confidence signal dimensions (reviewerConsensus, specClarity, codebaseAlignment, riskAssessment, historicalSuccess).");
+  parts.push("COORDINATOR RESPONSIBILITIES:");
+  parts.push("1. For each pending proposal, use spawn_worker to create a reviewer agent.");
+  parts.push("2. Each reviewer's prompt must include the proposal ID and instructions to:");
+  parts.push("   - Read the proposal via get_proposal MCP tool.");
+  parts.push("   - Evaluate against the 5 confidence signals (0-100 each):");
+  parts.push("     reviewerConsensus, specClarity, codebaseAlignment, riskAssessment, historicalSuccess.");
+  parts.push("   - Submit scores via score_proposal MCP tool.");
+  parts.push("3. After all reviewers are spawned, call advance_auto_develop_phase to transition to GATE.");
+  parts.push("4. Report progress via set_status.");
 
   return parts.join("\n");
 }
@@ -206,11 +250,15 @@ function buildGateReason(
   }
 
   parts.push("");
-  parts.push("ACTION: Apply gate decisions to each scored proposal:");
-  parts.push("  - Score >= 80: Accept proposal, transition to PLAN");
-  parts.push("  - Score 60-79: Increment review round, send back to REVIEW (max 3 rounds)");
-  parts.push("  - Score 40-59: Escalate to user (pause auto-develop)");
-  parts.push("  - Score < 40: Dismiss proposal");
+  parts.push("COORDINATOR RESPONSIBILITIES:");
+  parts.push("1. For each scored proposal, apply the confidence gate:");
+  parts.push("   - Score >= 80: Accept the proposal (update status to 'accepted').");
+  parts.push("   - Score 60-79: Send back for revision (max 3 rounds). Call advance_auto_develop_phase(targetPhase='review').");
+  parts.push("   - Score 40-59: Escalate to user via send_message. The loop will auto-pause.");
+  parts.push("   - Score < 40: Dismiss the proposal (update status to 'dismissed').");
+  parts.push("2. After processing all proposals, call advance_auto_develop_phase to the appropriate next phase.");
+  parts.push("3. If any proposals were accepted → transition to PLAN.");
+  parts.push("4. Report all gate decisions via announce for user visibility.");
 
   return parts.join("\n");
 }
@@ -233,7 +281,14 @@ function buildPlanReason(
     }
   }
   parts.push("");
-  parts.push("ACTION: Run the epic-planner for each accepted proposal. This creates specs, plans, tasks, and beads for execution.");
+  parts.push("COORDINATOR RESPONSIBILITIES:");
+  parts.push("1. For each accepted proposal, use spawn_worker to create a planning agent.");
+  parts.push("2. The planning agent's prompt must include the proposal ID and instructions to:");
+  parts.push("   - Use the /execute-proposal skill or /epic-planner skill.");
+  parts.push("   - Create specs, plans, tasks, and beads for execution.");
+  parts.push("   - Assign beads to the project.");
+  parts.push("3. After all planning agents are spawned, call advance_auto_develop_phase to transition to EXECUTE.");
+  parts.push("4. Report progress via set_status.");
 
   return parts.join("\n");
 }
@@ -250,7 +305,15 @@ function buildExecuteReason(
   parts.push("");
   parts.push(`Current active agent spawns: ${activeSpawns}`);
   parts.push("");
-  parts.push("ACTION: Spawn engineering squads to execute the planned epics. Assign beads and monitor progress.");
+  parts.push("COORDINATOR RESPONSIBILITIES:");
+  parts.push("1. Use spawn_worker to create squad leaders for each planned epic.");
+  parts.push("2. Each squad leader's prompt must include:");
+  parts.push("   - The epic bead ID and project path.");
+  parts.push("   - Instructions to use /squad-execute skill for parallel execution.");
+  parts.push("   - Instructions to build, test, and push before closing beads.");
+  parts.push("3. Monitor agent status — if agents go idle or blocked, investigate and intervene.");
+  parts.push("4. When all execution completes, call advance_auto_develop_phase to transition to VALIDATE.");
+  parts.push("5. Report progress via set_status and announce milestones.");
 
   return parts.join("\n");
 }
@@ -273,7 +336,12 @@ function buildValidateReason(
     parts.push(`  - Proposals dismissed: ${activeCycle.proposalsDismissed}`);
   }
   parts.push("");
-  parts.push("ACTION: Spawn QA/review agents to validate the completed work. After validation, complete the cycle and transition back to ANALYZE.");
+  parts.push("COORDINATOR RESPONSIBILITIES:");
+  parts.push("1. Use spawn_worker to create QA agents for the completed work.");
+  parts.push("2. QA agents should run /code-review and verify build + tests pass.");
+  parts.push("3. If QA finds issues, create bug beads and transition back to EXECUTE.");
+  parts.push("4. If QA passes, call advance_auto_develop_phase to transition back to ANALYZE (starts new cycle).");
+  parts.push("5. Announce cycle completion via announce({ type: 'completion', ... }).");
 
   return parts.join("\n");
 }
@@ -457,7 +525,7 @@ export function createAutoDevelopLoop(
       "bead:closed",
       "proposal:scored",
     ],
-    schedule: "*/30 * * * *", // 30-minute heartbeat
+    schedule: "*/20 * * * *", // 20-minute heartbeat
     excludeRoles: ["coordinator"],
 
     shouldAct(event: BehaviorEvent, _state: AdjutantState): boolean {

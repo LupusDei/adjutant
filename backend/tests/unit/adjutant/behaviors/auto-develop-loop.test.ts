@@ -233,7 +233,7 @@ describe("AutoDevelopLoop", () => {
       expect(behavior.triggers).toContain("project:auto_develop_enabled");
       expect(behavior.triggers).toContain("bead:closed");
       expect(behavior.triggers).toContain("proposal:scored");
-      expect(behavior.schedule).toBe("*/30 * * * *");
+      expect(behavior.schedule).toBe("*/20 * * * *");
       expect(behavior.excludeRoles).toEqual(["coordinator"]);
     });
   });

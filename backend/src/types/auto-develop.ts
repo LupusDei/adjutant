@@ -65,7 +65,7 @@ export const AUTO_DEVELOP_LIMITS = {
   maxProposalsInReview: 3,
   maxEpicsInExecution: 2,
   proposalCooldownMs: 600_000, // 10 minutes
-  heartbeatIntervalMs: 1_800_000, // 30 minutes
+  heartbeatIntervalMs: 1_200_000, // 20 minutes
   escalationTimeoutMs: 86_400_000, // 24 hours
 } as const;
 
@@ -92,6 +92,8 @@ export interface AutoDevelopStatus {
     totalCycles: number;
     completedCycles: number;
   };
+  /** Agent assigned as product owner for the auto-develop lifecycle */
+  productOwner: string | null;
 }
 
 // ============================================================================

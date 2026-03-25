@@ -15,6 +15,7 @@ interface ProjectForStatus {
   autoDevelop: boolean;
   autoDevelopPausedAt?: string | null | undefined;
   visionContext?: string | null | undefined;
+  autoDevelopProductOwner?: string | null | undefined;
 }
 
 /**
@@ -51,5 +52,6 @@ export function buildAutoDevelopStatus(
       totalCycles: cycleHistory.length,
       completedCycles,
     },
+    productOwner: project.autoDevelopProductOwner ?? null,
   };
 }
