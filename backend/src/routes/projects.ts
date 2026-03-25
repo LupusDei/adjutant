@@ -40,8 +40,8 @@ import { getAgents } from "../services/agents-service.js";
 import type { MessageStore } from "../services/message-store.js";
 import { success, error as errorResponse, badRequest, notFound, internalError } from "../utils/responses.js";
 import { UpdateProjectAutoDevelopSchema } from "../types/auto-develop.js";
-import type { AutoDevelopStatus } from "../types/auto-develop.js";
 import { getEventBus } from "../services/event-bus.js";
+import { buildAutoDevelopStatus } from "../services/auto-develop-status.js";
 import type { ProposalStore } from "../services/proposal-store.js";
 import type { AutoDevelopStore } from "../services/auto-develop-store.js";
 
@@ -179,35 +179,8 @@ export function createProjectsRouter(store: MessageStore, proposalStore?: Propos
       return res.status(400).json(badRequest("Auto-develop is not enabled for this project"));
     }
 
-    // Get proposal counts by status
-    // ProposalStatus is "pending" | "accepted" | "dismissed" | "completed"
-    // escalated = pending proposals with confidence score in 40-59 range
-    const projectIds = [project.id, project.name];
-    const pendingProposals = proposalStore?.getProposals({ status: "pending", project: projectIds }) ?? [];
-    const escalated = pendingProposals.filter(p => p.confidenceScore !== undefined && p.confidenceScore >= 40 && p.confidenceScore < 60).length;
-    const inReview = pendingProposals.length - escalated;
-    const accepted = proposalStore?.getProposals({ status: "accepted", project: projectIds }).length ?? 0;
-    const dismissed = proposalStore?.getProposals({ status: "dismissed", project: projectIds }).length ?? 0;
-
-    // Get cycle stats
-    const activeCycle = autoDevelopStore?.getActiveCycle(project.id) ?? null;
-    const cycleHistory = autoDevelopStore?.getCycleHistory(project.id) ?? [];
-    const completedCycles = cycleHistory.filter(c => c.completedAt !== null).length;
-
-    const status: AutoDevelopStatus = {
-      enabled: project.autoDevelop,
-      paused: !!project.autoDevelopPausedAt,
-      pausedAt: project.autoDevelopPausedAt ?? null,
-      currentPhase: activeCycle ? (activeCycle.phase as AutoDevelopStatus["currentPhase"]) : null,
-      activeCycleId: activeCycle?.id ?? null,
-      visionContext: project.visionContext ?? null,
-      proposals: { inReview, accepted, escalated, dismissed },
-      epicsInExecution: accepted,
-      cycleStats: {
-        totalCycles: cycleHistory.length,
-        completedCycles,
-      },
-    };
+    // Use shared helper to build status (adj-122.10.6)
+    const status = buildAutoDevelopStatus(project, proposalStore, autoDevelopStore);
 
     return res.json(success(status));
   });

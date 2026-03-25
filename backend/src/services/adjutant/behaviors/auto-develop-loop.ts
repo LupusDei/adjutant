@@ -15,7 +15,8 @@ import type { CommunicationManager } from "../communication.js";
 import type { StimulusEngine } from "../stimulus-engine.js";
 import type { ProposalStore } from "../../proposal-store.js";
 import type { AutoDevelopStore } from "../../auto-develop-store.js";
-import { getAutoDevelopProjects, getProject } from "../../projects-service.js";
+import { getAutoDevelopProjects, getProject, pauseAutoDevelop, clearAutoDevelopPause } from "../../projects-service.js";
+import { logError } from "../../../utils/index.js";
 import { getEventBus } from "../../event-bus.js";
 import { classifyConfidence } from "../../confidence-engine.js";
 import { buildEscalationMessage } from "../../escalation-builder.js";
@@ -481,15 +482,31 @@ export function createAutoDevelopLoop(
       if (!projectsResult.success || !projectsResult.data?.length) return;
 
       for (const project of projectsResult.data) {
-        // Skip paused projects
-        if (project.autoDevelopPausedAt) continue;
+        try {
+        // Check escalation timeout for paused projects (adj-122.10.5)
+        if (project.autoDevelopPausedAt) {
+          const pausedAt = new Date(project.autoDevelopPausedAt).getTime();
+          if (Date.now() - pausedAt > AUTO_DEVELOP_LIMITS.escalationTimeoutMs) {
+            // Escalation timed out — auto-resume with fresh analysis
+            clearAutoDevelopPause(project.id);
+            state.setMeta(phaseKey(project.id), "analyze");
+            state.logDecision({
+              behavior: "auto-develop-loop",
+              action: "escalation_timeout_resume",
+              target: project.id,
+              reason: `Escalation timed out after ${AUTO_DEVELOP_LIMITS.escalationTimeoutMs}ms, resuming with fresh analysis`,
+            });
+            // Fall through to process this project
+          } else {
+            continue; // Still paused
+          }
+        }
+
+        // Clear debounce key so a new cycle can proceed (adj-122.10.1)
+        state.setMeta(debounceKey(project.id), "");
 
         // Get or determine current phase
         const currentPhase = (state.getMeta(phaseKey(project.id)) ?? "analyze") as AutoDevelopPhase;
-
-        // Debounce: skip if we already have a pending check
-        const existingCheck = state.getMeta(debounceKey(project.id));
-        if (existingCheck) continue;
 
         // Concurrency control: skip ideation if proposal cap reached
         if (currentPhase === "ideate" && shouldSkipIdeation(project.id, project.name, proposalStore)) {
@@ -513,6 +530,26 @@ export function createAutoDevelopLoop(
             reason: `Ideation cooldown active (${AUTO_DEVELOP_LIMITS.proposalCooldownMs}ms)`,
           });
           continue;
+        }
+
+        // Concurrency control: limit epics in execution (adj-122.10.5)
+        if (currentPhase === "execute") {
+          const projectFilter = { project: [project.id, project.name] };
+          const acceptedCount = proposalStore.getProposals({ status: "accepted", ...projectFilter }).length;
+          if (acceptedCount >= AUTO_DEVELOP_LIMITS.maxEpicsInExecution) {
+            const checkId = stimulusEngine.scheduleCheck(
+              BACKPRESSURE_DELAY_MS,
+              `Epic execution cap reached (${acceptedCount}>=${AUTO_DEVELOP_LIMITS.maxEpicsInExecution}) — Project: "${project.name}" (${project.id})`,
+            );
+            state.setMeta(debounceKey(project.id), checkId);
+            state.logDecision({
+              behavior: "auto-develop-loop",
+              action: "epic_cap_pause",
+              target: project.id,
+              reason: `Epic execution cap reached (${acceptedCount} >= ${AUTO_DEVELOP_LIMITS.maxEpicsInExecution})`,
+            });
+            continue;
+          }
         }
 
         // Backpressure: pause at execute when agent slots full
@@ -557,6 +594,9 @@ export function createAutoDevelopLoop(
                   );
                   await comm.escalate(escalationMsg.body);
 
+                  // Pause auto-develop during escalation (adj-122.10.3)
+                  pauseAutoDevelop(project.id);
+
                   // Emit escalation event
                   getEventBus().emit("auto_develop:escalated", {
                     projectId: project.id,
@@ -600,12 +640,21 @@ export function createAutoDevelopLoop(
         const checkId = stimulusEngine.scheduleCheck(SCHEDULE_DELAY_MS, reason);
         state.setMeta(debounceKey(project.id), checkId);
 
-        // Emit phase change event
+        // Determine and advance to the next phase (adj-122.10.2)
+        const { nextPhase } = determineNextPhase(
+          currentPhase,
+          project.id,
+          project.name,
+          proposalStore,
+        );
+        state.setMeta(phaseKey(project.id), nextPhase);
+
+        // Emit phase change event with correct previous and new values
         getEventBus().emit("auto_develop:phase_changed", {
           projectId: project.id,
           cycleId: activeCycle.id,
           previousPhase: currentPhase,
-          newPhase: currentPhase,
+          newPhase: nextPhase,
         });
 
         state.logDecision({
@@ -614,6 +663,10 @@ export function createAutoDevelopLoop(
           target: project.id,
           reason: `Auto-develop loop: ${currentPhase} phase for project ${project.name}`,
         });
+        } catch (err) {
+          // Per-project error isolation (adj-122.10.8)
+          logError("auto-develop-loop", { projectId: project.id, error: String(err) });
+        }
       }
     },
   };

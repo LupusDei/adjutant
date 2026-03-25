@@ -83,6 +83,42 @@ describe("computeConfidenceScore", () => {
     };
     expect(computeConfidenceScore(signals)).toBe(0);
   });
+
+  it("should treat NaN signals as 0 (adj-122.10.4)", () => {
+    const signals: ConfidenceSignals = {
+      reviewerConsensus: NaN,
+      specClarity: 100,
+      codebaseAlignment: 100,
+      riskAssessment: 100,
+      historicalSuccess: 100,
+    };
+    // NaN reviewerConsensus (30% weight) treated as 0 → 0 + 20 + 20 + 15 + 15 = 70
+    expect(computeConfidenceScore(signals)).toBe(70);
+  });
+
+  it("should treat Infinity signals as 0 (adj-122.10.4)", () => {
+    const signals: ConfidenceSignals = {
+      reviewerConsensus: Infinity,
+      specClarity: 0,
+      codebaseAlignment: 0,
+      riskAssessment: 0,
+      historicalSuccess: 0,
+    };
+    // Infinity treated as 0
+    expect(computeConfidenceScore(signals)).toBe(0);
+  });
+
+  it("should treat -Infinity signals as 0 (adj-122.10.4)", () => {
+    const signals: ConfidenceSignals = {
+      reviewerConsensus: -Infinity,
+      specClarity: 100,
+      codebaseAlignment: 100,
+      riskAssessment: 100,
+      historicalSuccess: 100,
+    };
+    // -Infinity treated as 0 → 0 + 20 + 20 + 15 + 15 = 70
+    expect(computeConfidenceScore(signals)).toBe(70);
+  });
 });
 
 // =============================================================================

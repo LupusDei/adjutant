@@ -14,8 +14,8 @@ import { z } from "zod";
 import { getAgentBySession, getProjectContextBySession } from "../mcp-server.js";
 import type { ProposalStore } from "../proposal-store.js";
 import type { AutoDevelopStore } from "../auto-develop-store.js";
-import type { AutoDevelopStatus } from "../../types/auto-develop.js";
 import { computeConfidenceScore, classifyConfidence } from "../confidence-engine.js";
+import { buildAutoDevelopStatus } from "../auto-develop-status.js";
 import {
   enableAutoDevelop,
   disableAutoDevelop,
@@ -348,40 +348,8 @@ export function registerAutoDevelopTools(server: McpServer, proposalStore: Propo
 
       const project = projectResult.data;
 
-      // Get proposal counts by status for this project
-      // ProposalStatus is "pending" | "accepted" | "dismissed" | "completed"
-      // Map: pending -> inReview, accepted -> accepted, dismissed -> dismissed
-      // escalated is tracked via confidence score range (40-59) on pending proposals
-      const projectIds = [projectContext.projectId, projectContext.projectName];
-      const pendingProposals = proposalStore.getProposals({ status: "pending", project: projectIds });
-      const escalated = pendingProposals.filter(p => p.confidenceScore !== undefined && p.confidenceScore >= 40 && p.confidenceScore < 60).length;
-      const inReview = pendingProposals.length - escalated;
-      const accepted = proposalStore.getProposals({ status: "accepted", project: projectIds }).length;
-      const dismissed = proposalStore.getProposals({ status: "dismissed", project: projectIds }).length;
-
-      // Get cycle stats
-      const activeCycle = autoDevelopStore?.getActiveCycle(projectContext.projectId) ?? null;
-      const cycleHistory = autoDevelopStore?.getCycleHistory(projectContext.projectId) ?? [];
-      const completedCycles = cycleHistory.filter(c => c.completedAt !== null).length;
-
-      // Count epics in execution (accepted proposals that are being worked on)
-      // Use accepted count as a proxy for epics in execution
-      const epicsInExecution = accepted;
-
-      const status: AutoDevelopStatus = {
-        enabled: project.autoDevelop,
-        paused: !!project.autoDevelopPausedAt,
-        pausedAt: project.autoDevelopPausedAt ?? null,
-        currentPhase: activeCycle ? (activeCycle.phase as AutoDevelopStatus["currentPhase"]) : null,
-        activeCycleId: activeCycle?.id ?? null,
-        visionContext: project.visionContext ?? null,
-        proposals: { inReview, accepted, escalated, dismissed },
-        epicsInExecution,
-        cycleStats: {
-          totalCycles: cycleHistory.length,
-          completedCycles,
-        },
-      };
+      // Use shared helper to build status (adj-122.10.6)
+      const status = buildAutoDevelopStatus(project, proposalStore, autoDevelopStore);
 
       return {
         content: [{

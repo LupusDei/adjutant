@@ -9,14 +9,18 @@ import type { AutoDevelopStore, AutoDevelopCycle } from "../../../../src/service
 import type { Proposal } from "../../../../src/types/proposals.js";
 
 // Mock projects-service
-const { mockGetAutoDevelopProjects, mockGetProject } = vi.hoisted(() => ({
+const { mockGetAutoDevelopProjects, mockGetProject, mockPauseAutoDevelop, mockClearAutoDevelopPause } = vi.hoisted(() => ({
   mockGetAutoDevelopProjects: vi.fn().mockReturnValue({ success: true, data: [] }),
   mockGetProject: vi.fn().mockReturnValue({ success: false }),
+  mockPauseAutoDevelop: vi.fn().mockReturnValue({ success: true }),
+  mockClearAutoDevelopPause: vi.fn().mockReturnValue({ success: true }),
 }));
 
 vi.mock("../../../../src/services/projects-service.js", () => ({
   getAutoDevelopProjects: mockGetAutoDevelopProjects,
   getProject: mockGetProject,
+  pauseAutoDevelop: mockPauseAutoDevelop,
+  clearAutoDevelopPause: mockClearAutoDevelopPause,
 }));
 
 // Mock event-bus
@@ -36,6 +40,13 @@ vi.mock("../../../../src/services/confidence-engine.js", () => ({
     if (score >= 40) return "escalate";
     return "dismiss";
   },
+}));
+
+// Mock utils (logError)
+vi.mock("../../../../src/utils/index.js", () => ({
+  logError: vi.fn(),
+  logInfo: vi.fn(),
+  logWarn: vi.fn(),
 }));
 
 // Mock escalation-builder
@@ -305,7 +316,9 @@ describe("AutoDevelopLoop", () => {
       expect(stimulusEngine.scheduleCheck).not.toHaveBeenCalled();
     });
 
-    it("should debounce when existing check is pending", async () => {
+    it("should clear debounce key and proceed even when previous check existed (adj-122.10.1)", async () => {
+      // The debounce key is now cleared at the start of act(), so the loop
+      // can run multiple iterations without stalling.
       vi.mocked(state.getMeta).mockImplementation((key: string) => {
         if (key === debounceKey("proj-1")) return "existing-check-id";
         return null;
@@ -316,7 +329,10 @@ describe("AutoDevelopLoop", () => {
 
       await dispatchToBehavior(behavior, event, state, comm);
 
-      expect(stimulusEngine.scheduleCheck).not.toHaveBeenCalled();
+      // Debounce key should have been cleared
+      expect(state.setMeta).toHaveBeenCalledWith(debounceKey("proj-1"), "");
+      // And a new check should be scheduled
+      expect(stimulusEngine.scheduleCheck).toHaveBeenCalledOnce();
     });
 
     it("should start a new cycle when none is active", async () => {
@@ -850,6 +866,173 @@ describe("AutoDevelopLoop", () => {
 
     it("should generate correct last ideation key", () => {
       expect(lastIdeationKey("proj-1")).toBe("auto_develop_last_ideation_proj-1");
+    });
+  });
+
+  // =========================================================================
+  // Regression tests for adj-122.10.x bug fixes
+  // =========================================================================
+
+  describe("regression: adj-122.10.1 — debounce key stall", () => {
+    it("should run multiple iterations without stalling on debounce", async () => {
+      const behavior = createAutoDevelopLoop(stimulusEngine, proposalStore, autoDevelopStore);
+      const event = makeEvent("project:auto_develop_enabled", { projectId: "proj-1" });
+
+      // First run
+      await dispatchToBehavior(behavior, event, state, comm);
+      expect(stimulusEngine.scheduleCheck).toHaveBeenCalledOnce();
+
+      vi.clearAllMocks();
+      mockGetAutoDevelopProjects.mockReturnValue({ success: true, data: [MOCK_PROJECT] });
+      mockGetProject.mockReturnValue({ success: true, data: MOCK_PROJECT });
+
+      // Simulate that debounce key is still set from first run
+      vi.mocked(state.getMeta).mockImplementation((key: string) => {
+        if (key === debounceKey("proj-1")) return "old-check-id";
+        return null;
+      });
+
+      // Second run — should NOT stall
+      await dispatchToBehavior(behavior, event, state, comm);
+      expect(stimulusEngine.scheduleCheck).toHaveBeenCalledOnce();
+      // Debounce key should be cleared then re-set
+      expect(state.setMeta).toHaveBeenCalledWith(debounceKey("proj-1"), "");
+    });
+  });
+
+  describe("regression: adj-122.10.2 — phase_changed event values", () => {
+    it("should emit different previousPhase and newPhase in phase_changed event", async () => {
+      // Start in analyze phase
+      vi.mocked(state.getMeta).mockImplementation((key: string) => {
+        if (key === phaseKey("proj-1")) return "analyze";
+        return null;
+      });
+
+      // No proposals -> next phase should be "ideate"
+      vi.mocked(proposalStore.getProposals).mockReturnValue([]);
+
+      const behavior = createAutoDevelopLoop(stimulusEngine, proposalStore, autoDevelopStore);
+      const event = makeEvent("project:auto_develop_enabled", {});
+
+      await dispatchToBehavior(behavior, event, state, comm);
+
+      // Verify the phase_changed event has different previous and new phases
+      expect(mockEmit).toHaveBeenCalledWith(
+        "auto_develop:phase_changed",
+        expect.objectContaining({
+          projectId: "proj-1",
+          previousPhase: "analyze",
+          newPhase: "ideate",
+        }),
+      );
+
+      // Phase key should be advanced to the next phase
+      expect(state.setMeta).toHaveBeenCalledWith(phaseKey("proj-1"), "ideate");
+    });
+  });
+
+  describe("regression: adj-122.10.3 — gate escalation pauses auto-develop", () => {
+    it("should call pauseAutoDevelop when gate encounters escalation-level proposals", async () => {
+      vi.mocked(state.getMeta).mockImplementation((key: string) => {
+        if (key === phaseKey("proj-1")) return "gate";
+        return null;
+      });
+
+      vi.mocked(proposalStore.getProposalsByConfidenceRange).mockReturnValue([
+        makeProposal({ id: "prop-1", confidenceScore: 45, title: "Low Confidence" }),
+      ]);
+      vi.mocked(proposalStore.getProposal).mockReturnValue(
+        makeProposal({ id: "prop-1", confidenceScore: 45, title: "Low Confidence" }),
+      );
+
+      const behavior = createAutoDevelopLoop(stimulusEngine, proposalStore, autoDevelopStore);
+      const event = makeEvent("proposal:scored", {});
+
+      await dispatchToBehavior(behavior, event, state, comm);
+
+      expect(mockPauseAutoDevelop).toHaveBeenCalledWith("proj-1");
+    });
+  });
+
+  describe("regression: adj-122.10.5 — maxEpicsInExecution enforcement", () => {
+    it("should pause execute phase when epic cap is reached", async () => {
+      vi.mocked(state.getMeta).mockImplementation((key: string) => {
+        if (key === phaseKey("proj-1")) return "execute";
+        return null;
+      });
+
+      // Mock 2 accepted proposals (at maxEpicsInExecution limit)
+      vi.mocked(proposalStore.getProposals).mockReturnValue([
+        makeProposal({ id: "p1", status: "accepted" }),
+        makeProposal({ id: "p2", status: "accepted" }),
+      ]);
+
+      // Agent slots are available (not backpressure)
+      vi.mocked(state.countActiveSpawns).mockReturnValue(2);
+
+      const behavior = createAutoDevelopLoop(stimulusEngine, proposalStore, autoDevelopStore);
+      const event = makeEvent("bead:closed", {});
+
+      await dispatchToBehavior(behavior, event, state, comm);
+
+      expect(state.logDecision).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "epic_cap_pause",
+          target: "proj-1",
+        }),
+      );
+    });
+  });
+
+  describe("regression: adj-122.10.5 — escalation timeout auto-resume", () => {
+    it("should auto-resume projects paused longer than escalationTimeoutMs", async () => {
+      const longAgo = new Date(Date.now() - 86_400_001).toISOString(); // Just past 24h
+      const pausedProject = {
+        ...MOCK_PROJECT,
+        autoDevelopPausedAt: longAgo,
+      };
+      mockGetAutoDevelopProjects.mockReturnValue({ success: true, data: [pausedProject] });
+
+      const behavior = createAutoDevelopLoop(stimulusEngine, proposalStore, autoDevelopStore);
+      const event = makeEvent("project:auto_develop_enabled", {});
+
+      await dispatchToBehavior(behavior, event, state, comm);
+
+      expect(mockClearAutoDevelopPause).toHaveBeenCalledWith("proj-1");
+      expect(state.setMeta).toHaveBeenCalledWith(phaseKey("proj-1"), "analyze");
+      expect(state.logDecision).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "escalation_timeout_resume",
+        }),
+      );
+      // Should proceed to schedule a check (not skip)
+      expect(stimulusEngine.scheduleCheck).toHaveBeenCalled();
+    });
+  });
+
+  describe("regression: adj-122.10.8 — per-project error isolation", () => {
+    it("should continue processing other projects when one throws", async () => {
+      const project2 = { ...MOCK_PROJECT, id: "proj-2", name: "test-project-2" };
+      mockGetAutoDevelopProjects.mockReturnValue({ success: true, data: [MOCK_PROJECT, project2] });
+
+      // Make the first project throw by having getActiveCycle throw
+      let callCount = 0;
+      vi.mocked(autoDevelopStore.getActiveCycle).mockImplementation((projectId) => {
+        callCount++;
+        if (projectId === "proj-1") throw new Error("Simulated failure");
+        return null;
+      });
+
+      const behavior = createAutoDevelopLoop(stimulusEngine, proposalStore, autoDevelopStore);
+      const event = makeEvent("project:auto_develop_enabled", {});
+
+      // Should not throw despite proj-1 erroring
+      await dispatchToBehavior(behavior, event, state, comm);
+
+      // proj-2 should still have been scheduled
+      expect(stimulusEngine.scheduleCheck).toHaveBeenCalledOnce();
+      // getActiveCycle should have been called for both projects
+      expect(callCount).toBe(2);
     });
   });
 });

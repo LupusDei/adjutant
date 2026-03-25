@@ -24,7 +24,9 @@ export function computeConfidenceScore(signals: ConfidenceSignals): number {
   const keys = Object.keys(CONFIDENCE_WEIGHTS) as (keyof ConfidenceSignals)[];
   let weightedSum = 0;
   for (const key of keys) {
-    weightedSum += signals[key] * CONFIDENCE_WEIGHTS[key];
+    // Guard against NaN/Infinity — treat as 0 (adj-122.10.4)
+    const value = Number.isFinite(signals[key]) ? signals[key] : 0;
+    weightedSum += value * CONFIDENCE_WEIGHTS[key];
   }
   // Clamp to 0-100 and round
   return Math.round(Math.min(100, Math.max(0, weightedSum)));
