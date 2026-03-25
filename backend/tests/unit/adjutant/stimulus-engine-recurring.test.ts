@@ -10,7 +10,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import {
   StimulusEngine,
+  buildSituationPrompt,
   type WakeReason,
+  type SituationPromptInput,
+  type PendingRecurringSchedule,
 } from "../../../src/services/adjutant/stimulus-engine.js";
 import type { CronSchedule } from "../../../src/services/adjutant/cron-schedule-store.js";
 import type { CronScheduleStore } from "../../../src/services/adjutant/cron-schedule-store.js";
@@ -217,5 +220,213 @@ describe("StimulusEngine — recurring schedules", () => {
       vi.advanceTimersByTime(60_000);
       expect(wakeSpy).not.toHaveBeenCalled();
     });
+  });
+
+  // ======================================================================
+  // getPendingSchedule — recurringSchedules
+  // ======================================================================
+
+  describe("getPendingSchedule", () => {
+    it("should include recurringSchedules from the cron store", () => {
+      const schedule = makeSchedule({
+        id: "sched-abc",
+        cronExpr: "*/30 * * * *",
+        reason: "Check agent health",
+        nextFireAt: "2026-03-24T12:30:00.000Z",
+        fireCount: 2,
+        maxFires: 10,
+        enabled: true,
+      });
+      const store = makeMockStore([schedule]);
+
+      engine.loadRecurringSchedules(store);
+      const pending = engine.getPendingSchedule();
+
+      expect(pending.recurringSchedules).toHaveLength(1);
+      expect(pending.recurringSchedules[0]).toEqual({
+        id: "sched-abc",
+        cronExpr: "*/30 * * * *",
+        reason: "Check agent health",
+        nextFireAt: "2026-03-24T12:30:00.000Z",
+        fireCount: 2,
+        maxFires: 10,
+        enabled: true,
+      });
+    });
+
+    it("should return empty recurringSchedules when no cron store is set", () => {
+      const pending = engine.getPendingSchedule();
+      expect(pending.recurringSchedules).toEqual([]);
+    });
+
+    it("should return multiple recurring schedules", () => {
+      const s1 = makeSchedule({ id: "s1", reason: "Health check" });
+      const s2 = makeSchedule({ id: "s2", reason: "Cost report", cronExpr: "0 * * * *" });
+      const store = makeMockStore([s1, s2]);
+
+      engine.loadRecurringSchedules(store);
+      const pending = engine.getPendingSchedule();
+
+      expect(pending.recurringSchedules).toHaveLength(2);
+      expect(pending.recurringSchedules.map((s: PendingRecurringSchedule) => s.id)).toEqual(["s1", "s2"]);
+    });
+  });
+
+  // ======================================================================
+  // setupRecurringTimer — drift fix (adj-121.5.1)
+  // ======================================================================
+
+  describe("recurring timer drift fix", () => {
+    it("should compute next fire from fire time, not wall clock", () => {
+      const schedule = makeSchedule({
+        nextFireAt: new Date(Date.now() + 1000).toISOString(),
+        cronExpr: "*/15 * * * *",
+      });
+      const store = makeMockStore([schedule]);
+
+      engine.loadRecurringSchedules(store);
+      vi.advanceTimersByTime(1000);
+
+      // incrementFireCount should have been called with a nextFireAt
+      // that is 15 minutes from the fire time, not from an arbitrary later time
+      expect(store.incrementFireCount).toHaveBeenCalledOnce();
+      const [, lastFiredAt, nextFireAt] = (store.incrementFireCount as ReturnType<typeof vi.fn>).mock.calls[0]!;
+      const lastFiredMs = new Date(lastFiredAt as string).getTime();
+      const nextFireMs = new Date(nextFireAt as string).getTime();
+
+      // Next fire should be exactly 15 minutes after lastFiredAt
+      expect(nextFireMs - lastFiredMs).toBe(15 * 60 * 1000);
+    });
+  });
+
+  // ======================================================================
+  // setupRecurringTimer — try-catch (adj-121.1.1)
+  // ======================================================================
+
+  describe("recurring timer error handling", () => {
+    it("should not throw when store.incrementFireCount throws", () => {
+      const schedule = makeSchedule({
+        nextFireAt: new Date(Date.now() + 1000).toISOString(),
+      });
+      const store = makeMockStore([schedule]);
+      (store.incrementFireCount as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        throw new Error("DB write failed");
+      });
+
+      engine.loadRecurringSchedules(store);
+
+      // Should not throw — timer callback has try-catch
+      expect(() => {
+        vi.advanceTimersByTime(1000);
+      }).not.toThrow();
+
+      // Wake should still have been called (it happens before incrementFireCount)
+      expect(wakeSpy).toHaveBeenCalledOnce();
+    });
+  });
+});
+
+// ========================================================================
+// buildSituationPrompt — recurring schedules section (adj-121.5.3)
+// ========================================================================
+
+describe("buildSituationPrompt — recurring schedules", () => {
+  function makePromptInput(
+    overrides: Partial<SituationPromptInput> = {},
+  ): SituationPromptInput {
+    return {
+      wakeReason: "Test wake",
+      signals: [],
+      contextSnapshot: {},
+      stateSnapshot: {
+        activeAgents: 3,
+        workingAgents: 2,
+        blockedAgents: 0,
+        idleAgents: 1,
+        inProgressBeads: 5,
+        readyBeads: 2,
+      },
+      pendingSchedule: {
+        checks: [],
+        watches: [],
+        recurringSchedules: [],
+      },
+      recentDecisions: [],
+      ...overrides,
+    };
+  }
+
+  it("should render Recurring Schedules section when schedules are present", () => {
+    const input = makePromptInput({
+      pendingSchedule: {
+        checks: [],
+        watches: [],
+        recurringSchedules: [
+          {
+            id: "s1",
+            cronExpr: "*/15 * * * *",
+            reason: "Health check",
+            nextFireAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+            fireCount: 3,
+            maxFires: null,
+            enabled: true,
+          },
+          {
+            id: "s2",
+            cronExpr: "0 * * * *",
+            reason: "Cost report",
+            nextFireAt: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
+            fireCount: 1,
+            maxFires: 5,
+            enabled: true,
+          },
+        ],
+      },
+    });
+
+    const result = buildSituationPrompt(input);
+
+    expect(result).toContain("Recurring Schedules");
+    expect(result).toContain("Health check");
+    expect(result).toContain("Cost report");
+    expect(result).toContain("3 times");
+    expect(result).toContain("1 time");
+  });
+
+  it("should not render Recurring Schedules section when no schedules exist", () => {
+    const input = makePromptInput({
+      pendingSchedule: {
+        checks: [],
+        watches: [],
+        recurringSchedules: [],
+      },
+    });
+
+    const result = buildSituationPrompt(input);
+    expect(result).not.toContain("Recurring Schedules");
+  });
+
+  it("should show interval label derived from cron expression", () => {
+    const input = makePromptInput({
+      pendingSchedule: {
+        checks: [],
+        watches: [],
+        recurringSchedules: [
+          {
+            id: "s1",
+            cronExpr: "0 * * * *",
+            reason: "Hourly report",
+            nextFireAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+            fireCount: 0,
+            maxFires: null,
+            enabled: true,
+          },
+        ],
+      },
+    });
+
+    const result = buildSituationPrompt(input);
+    // "0 * * * *" = 60 minutes = "1h"
+    expect(result).toContain("Every 1h");
   });
 });

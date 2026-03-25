@@ -111,6 +111,13 @@ export class CronScheduleStore {
 
   /** Insert a new cron schedule. Returns the created schedule. */
   create(params: CreateParams): CronSchedule {
+    // Validate cron expression before persisting
+    try {
+      cronToIntervalMs(params.cronExpr);
+    } catch (err) {
+      throw new Error(`Invalid cron expression "${params.cronExpr}": ${String(err)}`);
+    }
+
     const id = randomUUID();
     this.insertStmt.run(
       id,
@@ -205,9 +212,12 @@ export class CronScheduleStore {
 
 /**
  * Compute the next fire time from a cron expression.
- * Uses cronToIntervalMs() to get the interval, then returns Date.now() + interval as ISO string.
+ * Uses cronToIntervalMs() to get the interval, then adds it to the base time.
+ * When baseTime is provided (e.g., lastFiredAt), next fire is computed from that
+ * timestamp to maintain a fixed cadence and avoid schedule drift.
  */
-export function computeNextFireAt(cronExpr: string): string {
+export function computeNextFireAt(cronExpr: string, baseTime?: Date): string {
   const intervalMs = cronToIntervalMs(cronExpr);
-  return new Date(Date.now() + intervalMs).toISOString();
+  const base = baseTime ?? new Date();
+  return new Date(base.getTime() + intervalMs).toISOString();
 }

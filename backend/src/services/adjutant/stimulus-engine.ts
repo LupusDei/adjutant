@@ -375,33 +375,38 @@ export class StimulusEngine {
     const timer = setTimeout(() => {
       this.recurringTimers.delete(schedule.id);
 
-      // Fire the wake
-      const wakeReason: WakeReason = {
-        type: "recurring",
-        reason: schedule.reason,
-      };
-      this.wake(wakeReason);
+      try {
+        // Fire the wake
+        const wakeReason: WakeReason = {
+          type: "recurring",
+          reason: schedule.reason,
+        };
+        this.wake(wakeReason);
 
-      // Increment fire count in the store
-      const now = new Date().toISOString();
-      const newNextFireAt = computeNextFireAt(schedule.cronExpr);
-      store.incrementFireCount(schedule.id, now, newNextFireAt);
+        // Increment fire count in the store — compute next from lastFiredAt to avoid drift
+        const now = new Date();
+        const nowIso = now.toISOString();
+        const newNextFireAt = computeNextFireAt(schedule.cronExpr, now);
+        store.incrementFireCount(schedule.id, nowIso, newNextFireAt);
 
-      // Check if maxFires reached (current fire count is fireCount + 1 since we just incremented)
-      const newFireCount = schedule.fireCount + 1;
-      if (schedule.maxFires !== null && newFireCount >= schedule.maxFires) {
-        store.disable(schedule.id);
-        return;
+        // Check if maxFires reached (current fire count is fireCount + 1 since we just incremented)
+        const newFireCount = schedule.fireCount + 1;
+        if (schedule.maxFires !== null && newFireCount >= schedule.maxFires) {
+          store.disable(schedule.id);
+          return;
+        }
+
+        // Re-register for next fire
+        const updatedSchedule: CronSchedule = {
+          ...schedule,
+          fireCount: newFireCount,
+          lastFiredAt: nowIso,
+          nextFireAt: newNextFireAt,
+        };
+        this.setupRecurringTimer(updatedSchedule, store);
+      } catch {
+        // Timer callback must not break the engine — log and skip re-registration
       }
-
-      // Re-register for next fire
-      const updatedSchedule: CronSchedule = {
-        ...schedule,
-        fireCount: newFireCount,
-        lastFiredAt: now,
-        nextFireAt: newNextFireAt,
-      };
-      this.setupRecurringTimer(updatedSchedule, store);
     }, delayMs);
 
     this.recurringTimers.set(schedule.id, timer);

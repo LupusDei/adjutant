@@ -77,6 +77,17 @@ describe("CronScheduleStore", () => {
       expect(result.maxFires).toBe(5);
     });
 
+    it("should throw when given an invalid cron expression", () => {
+      expect(() => {
+        store.create({
+          cronExpr: "not a cron",
+          reason: "Invalid",
+          createdBy: "adjutant",
+          nextFireAt: "2026-03-24T12:00:00.000Z",
+        });
+      }).toThrow(/Invalid cron expression/);
+    });
+
     it("should generate unique IDs for each schedule", () => {
       const a = store.create({
         cronExpr: "*/10 * * * *",
@@ -289,5 +300,35 @@ describe("computeNextFireAt", () => {
     const resultMs = new Date(result).getTime();
     // Should be ~60 minutes in the future
     expect(resultMs).toBeGreaterThanOrEqual(before + 60 * 60 * 1000 - 1);
+  });
+
+  it("should compute next fire from baseTime when provided to avoid drift", async () => {
+    const { computeNextFireAt } = await import(
+      "../../../src/services/adjutant/cron-schedule-store.js"
+    );
+
+    // Simulate: schedule was supposed to fire at 12:00 but actually fired at 12:01:30 (90s delay)
+    const lastFiredAt = new Date("2026-03-24T12:00:00.000Z");
+    const result = computeNextFireAt("*/15 * * * *", lastFiredAt);
+    const resultMs = new Date(result).getTime();
+
+    // Next fire should be exactly 15 minutes after lastFiredAt, not 15 minutes after "now"
+    const expected = lastFiredAt.getTime() + 15 * 60 * 1000;
+    expect(resultMs).toBe(expected);
+  });
+
+  it("should default to Date.now() when baseTime is not provided", async () => {
+    const { computeNextFireAt } = await import(
+      "../../../src/services/adjutant/cron-schedule-store.js"
+    );
+
+    const before = Date.now();
+    const result = computeNextFireAt("*/15 * * * *");
+    const after = Date.now();
+    const resultMs = new Date(result).getTime();
+
+    // Should be ~15 minutes from now (not from some other base)
+    expect(resultMs).toBeGreaterThanOrEqual(before + 15 * 60 * 1000 - 1);
+    expect(resultMs).toBeLessThanOrEqual(after + 15 * 60 * 1000 + 1);
   });
 });
