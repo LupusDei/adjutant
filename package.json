@@ -42,7 +42,11 @@
     "acceptance": "npm run --prefix backend acceptance",
     "acceptance:generate": "npm run --prefix backend acceptance -- --generate",
     "acceptance:all": "npm run --prefix backend acceptance -- --all --generate",
-    "acceptance:report": "npm run --prefix backend acceptance -- --report"
+    "acceptance:report": "npm run --prefix backend acceptance -- --report",
+    "test": "cd backend && npm test && cd ../frontend && npm test",
+    "test:coverage": "cd backend && npm run test:coverage && cd ../frontend && npm run test:coverage",
+    "lint": "cd backend && npm run lint && cd ../frontend && npm run lint",
+    "lint:fix": "cd backend && npm run lint:fix && cd ../frontend && npm run lint:fix"
   },
   "keywords": [
     "dashboard",
