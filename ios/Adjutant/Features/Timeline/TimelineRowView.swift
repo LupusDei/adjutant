@@ -117,6 +117,9 @@ struct TimelineRowView: View {
         case "bead_updated": return "circle.grid.3x3"
         case "bead_closed": return "checkmark.circle.fill"
         case "coordinator_action": return "terminal.fill"
+        case "auto_develop_enabled": return "play.circle.fill"
+        case "auto_develop_disabled": return "stop.circle.fill"
+        case "auto_develop_phase_changed": return "arrow.right.circle.fill"
         default: return "circle.fill"
         }
     }
@@ -130,6 +133,9 @@ struct TimelineRowView: View {
         case "bead_updated": return CRTTheme.State.info
         case "bead_closed": return CRTTheme.State.success
         case "coordinator_action": return Color(red: 1.0, green: 0.8, blue: 0.0)
+        case "auto_develop_enabled": return CRTTheme.State.success
+        case "auto_develop_disabled": return CRTTheme.State.error
+        case "auto_develop_phase_changed": return Color(red: 0.4, green: 0.8, blue: 1.0)
         default: return theme.dim
         }
     }
@@ -143,6 +149,9 @@ struct TimelineRowView: View {
         case "bead_updated": return "BEAD"
         case "bead_closed": return "CLOSED"
         case "coordinator_action": return "COORD"
+        case "auto_develop_enabled": return "AUTO-DEV ON"
+        case "auto_develop_disabled": return "AUTO-DEV OFF"
+        case "auto_develop_phase_changed": return "PHASE"
         default: return event.eventType
         }
     }

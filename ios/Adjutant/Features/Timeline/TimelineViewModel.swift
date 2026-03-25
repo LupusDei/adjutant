@@ -86,6 +86,9 @@ final class TimelineViewModel: BaseViewModel {
         ("bead_updated", "BEAD"),
         ("bead_closed", "CLOSED"),
         ("coordinator_action", "COORD"),
+        ("auto_develop_enabled", "AUTO-DEV ON"),
+        ("auto_develop_disabled", "AUTO-DEV OFF"),
+        ("auto_develop_phase_changed", "PHASE"),
     ]
 
     // MARK: - Dependencies
