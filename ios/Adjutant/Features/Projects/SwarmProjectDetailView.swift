@@ -19,6 +19,7 @@ struct SwarmProjectDetailView: View {
         ScrollView {
             VStack(spacing: CRTTheme.Spacing.md) {
                 projectHeaderCard
+                autoDevelopCard
                 sessionsCard
                 swarmsCard
                 filesCard
@@ -136,6 +137,46 @@ struct SwarmProjectDetailView: View {
         VStack(spacing: CRTTheme.Spacing.xxxs) {
             CRTText(value, style: .body, glowIntensity: .subtle, color: color)
             CRTText(label, style: .caption, glowIntensity: .subtle, color: theme.dim)
+        }
+    }
+
+    // MARK: - Auto-Develop Card
+
+    private var autoDevelopCard: some View {
+        CRTCard(style: .standard) {
+            VStack(spacing: CRTTheme.Spacing.sm) {
+                HStack {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .foregroundColor(theme.primary)
+                    CRTText("AUTO-DEVELOP", style: .subheader)
+                    Spacer()
+                    if viewModel.isTogglingAutoDevelop {
+                        LoadingIndicator(size: .small)
+                    } else {
+                        CRTToggle(isOn: Binding(
+                            get: { viewModel.autoDevelopEnabled },
+                            set: { _ in
+                                Task<Void, Never> { await viewModel.toggleAutoDevelop() }
+                            }
+                        ))
+                    }
+                }
+
+                if viewModel.autoDevelopEnabled, let status = viewModel.autoDevelopStatus {
+                    Divider()
+                        .background(theme.dim.opacity(0.3))
+
+                    if status.paused {
+                        EscalationBannerView(
+                            onSubmitVision: { vision in
+                                Task<Void, Never> { await viewModel.updateVisionContext(vision) }
+                            }
+                        )
+                    } else {
+                        AutoDevelopStatusView(status: status)
+                    }
+                }
+            }
         }
     }
 

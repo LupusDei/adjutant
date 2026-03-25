@@ -15,6 +15,9 @@ final class SwarmProjectDetailViewModel: BaseViewModel {
     @Published private(set) var isCreatingSwarm = false
     @Published private(set) var isDeletingProject = false
     @Published var showDeleteConfirmation = false
+    @Published var autoDevelopEnabled = false
+    @Published private(set) var autoDevelopStatus: AutoDevelopStatus?
+    @Published private(set) var isTogglingAutoDevelop = false
 
     // MARK: - Dependencies
 
@@ -44,8 +47,12 @@ final class SwarmProjectDetailViewModel: BaseViewModel {
             // Refresh the project itself
             if let updated = try? await self.apiClient.getProject(id: self.project.id) {
                 self.project = updated
+                self.autoDevelopEnabled = updated.autoDevelop ?? false
             }
         }
+
+        // Fetch auto-develop status separately (non-critical)
+        await fetchAutoDevelopStatus()
     }
 
     // MARK: - Actions
@@ -116,6 +123,59 @@ final class SwarmProjectDetailViewModel: BaseViewModel {
         await performAsyncAction(showLoading: false) {
             let updated = try await self.apiClient.activateProject(id: self.project.id)
             self.project = updated
+        }
+    }
+
+    // MARK: - Auto-Develop
+
+    /// Fetch the current auto-develop status for this project.
+    func fetchAutoDevelopStatus() async {
+        let result = await performAsync(showLoading: false) {
+            try await self.apiClient.getAutoDevelopStatus(projectId: self.project.id)
+        }
+        if let status = result {
+            self.autoDevelopStatus = status
+            self.autoDevelopEnabled = status.enabled
+        }
+    }
+
+    /// Toggle auto-develop on or off for this project.
+    func toggleAutoDevelop() async {
+        let newValue = !autoDevelopEnabled
+        isTogglingAutoDevelop = true
+        defer { isTogglingAutoDevelop = false }
+
+        let result = await performAsync(showLoading: false) {
+            try await self.apiClient.updateProjectAutoDevelop(
+                projectId: self.project.id,
+                autoDevelop: newValue
+            )
+        }
+
+        if let updatedProject = result {
+            self.project = updatedProject
+            self.autoDevelopEnabled = newValue
+            // Refresh the status after toggling
+            await fetchAutoDevelopStatus()
+        }
+    }
+
+    /// Update auto-develop with a new vision context (used for escalation response).
+    func updateVisionContext(_ visionContext: String) async {
+        isTogglingAutoDevelop = true
+        defer { isTogglingAutoDevelop = false }
+
+        let result = await performAsync(showLoading: false) {
+            try await self.apiClient.updateProjectAutoDevelop(
+                projectId: self.project.id,
+                autoDevelop: true,
+                visionContext: visionContext
+            )
+        }
+
+        if let updatedProject = result {
+            self.project = updatedProject
+            await fetchAutoDevelopStatus()
         }
     }
 

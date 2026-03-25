@@ -11,6 +11,9 @@ public struct Project: Codable, Identifiable, Equatable, Hashable {
     public let sessions: [String]
     public let createdAt: String
     public let active: Bool
+    public let autoDevelop: Bool?
+    public let visionContext: String?
+    public let autoDevelopPausedAt: String?
 
     public init(
         id: String,
@@ -20,7 +23,10 @@ public struct Project: Codable, Identifiable, Equatable, Hashable {
         mode: String,
         sessions: [String] = [],
         createdAt: String,
-        active: Bool = false
+        active: Bool = false,
+        autoDevelop: Bool? = nil,
+        visionContext: String? = nil,
+        autoDevelopPausedAt: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -30,6 +36,9 @@ public struct Project: Codable, Identifiable, Equatable, Hashable {
         self.sessions = sessions
         self.createdAt = createdAt
         self.active = active
+        self.autoDevelop = autoDevelop
+        self.visionContext = visionContext
+        self.autoDevelopPausedAt = autoDevelopPausedAt
     }
 }
 

@@ -196,6 +196,34 @@ extension APIClient {
     }
 }
 
+// MARK: - Auto-Develop Endpoints
+
+extension APIClient {
+    /// Update the auto-develop setting for a project.
+    public func updateProjectAutoDevelop(projectId: String, autoDevelop: Bool, visionContext: String? = nil) async throws -> Project {
+        let encodedId = projectId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? projectId
+        let request = AutoDevelopUpdateRequest(autoDevelop: autoDevelop, visionContext: visionContext)
+        return try await requestWithEnvelope(.patch, path: "/projects/\(encodedId)", body: request)
+    }
+
+    /// Get the auto-develop loop status for a project.
+    public func getAutoDevelopStatus(projectId: String) async throws -> AutoDevelopStatus {
+        let encodedId = projectId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? projectId
+        return try await requestWithEnvelope(.get, path: "/projects/\(encodedId)/auto-develop")
+    }
+}
+
+/// Request body for updating auto-develop settings.
+public struct AutoDevelopUpdateRequest: Encodable {
+    public let autoDevelop: Bool
+    public let visionContext: String?
+
+    public init(autoDevelop: Bool, visionContext: String? = nil) {
+        self.autoDevelop = autoDevelop
+        self.visionContext = visionContext
+    }
+}
+
 // MARK: - Project Overview Endpoints
 
 extension APIClient {

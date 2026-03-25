@@ -54,6 +54,9 @@ public final class NotificationService: NSObject, ObservableObject {
         case taskUpdate = "TASK_UPDATE"
         case systemAlert = "SYSTEM_ALERT"
         case reminder = "REMINDER"
+        case autoDevelopEscalated = "AUTO_DEVELOP_ESCALATED"
+        case autoDevelopCycleComplete = "AUTO_DEVELOP_CYCLE_COMPLETE"
+        case autoDevelopProposalAccepted = "AUTO_DEVELOP_PROPOSAL_ACCEPTED"
     }
 
     /// Action identifiers for notification responses
@@ -192,13 +195,37 @@ public final class NotificationService: NSObject, ObservableObject {
             options: []
         )
 
+        let autoDevelopEscalatedCategory = UNNotificationCategory(
+            identifier: Category.autoDevelopEscalated.rawValue,
+            actions: [viewAction, dismissAction],
+            intentIdentifiers: [],
+            options: [.customDismissAction]
+        )
+
+        let autoDevelopCycleCompleteCategory = UNNotificationCategory(
+            identifier: Category.autoDevelopCycleComplete.rawValue,
+            actions: [viewAction, dismissAction],
+            intentIdentifiers: [],
+            options: []
+        )
+
+        let autoDevelopProposalAcceptedCategory = UNNotificationCategory(
+            identifier: Category.autoDevelopProposalAccepted.rawValue,
+            actions: [viewAction, dismissAction],
+            intentIdentifiers: [],
+            options: []
+        )
+
         notificationCenter.setNotificationCategories([
             newMailCategory,
             chatMessageCategory,
             agentMessageCategory,
             taskUpdateCategory,
             systemAlertCategory,
-            reminderCategory
+            reminderCategory,
+            autoDevelopEscalatedCategory,
+            autoDevelopCycleCompleteCategory,
+            autoDevelopProposalAcceptedCategory
         ])
     }
 
@@ -354,6 +381,114 @@ public final class NotificationService: NSObject, ObservableObject {
             userInfo: ["alertType": alertType, "type": "system"],
             identifier: "system-\(alertType)-\(Date().timeIntervalSince1970)"
         )
+    }
+
+    // MARK: - Auto-Develop Notifications
+
+    /// Schedules an auto-develop escalation notification.
+    /// - Parameters:
+    ///   - projectId: The project that needs attention
+    ///   - projectName: Display name for the project
+    ///   - reason: Why the escalation happened
+    /// - Returns: The notification identifier
+    @discardableResult
+    public func scheduleAutoDevelopEscalatedNotification(
+        projectId: String,
+        projectName: String,
+        reason: String
+    ) async -> String {
+        return await scheduleNotification(
+            title: "Vision Update Needed: \(projectName)",
+            body: reason,
+            category: .autoDevelopEscalated,
+            userInfo: ["projectId": projectId, "type": "auto_develop_escalated"],
+            identifier: "auto-develop-escalated-\(projectId)-\(Date().timeIntervalSince1970)"
+        )
+    }
+
+    /// Schedules a cycle completion notification.
+    /// - Parameters:
+    ///   - projectId: The project that completed a cycle
+    ///   - projectName: Display name for the project
+    ///   - cycleNumber: The completed cycle number
+    ///   - summary: Brief summary of what was accomplished
+    /// - Returns: The notification identifier
+    @discardableResult
+    public func scheduleAutoDevelopCycleCompleteNotification(
+        projectId: String,
+        projectName: String,
+        cycleNumber: Int,
+        summary: String
+    ) async -> String {
+        return await scheduleNotification(
+            title: "\(projectName): Cycle \(cycleNumber) Complete",
+            body: summary,
+            category: .autoDevelopCycleComplete,
+            userInfo: ["projectId": projectId, "type": "auto_develop_cycle_complete", "cycleNumber": cycleNumber],
+            identifier: "auto-develop-cycle-\(projectId)-\(cycleNumber)"
+        )
+    }
+
+    /// Schedules a proposal accepted notification.
+    /// - Parameters:
+    ///   - projectId: The project with the accepted proposal
+    ///   - projectName: Display name for the project
+    ///   - proposalTitle: Title of the accepted proposal
+    /// - Returns: The notification identifier
+    @discardableResult
+    public func scheduleAutoDevelopProposalAcceptedNotification(
+        projectId: String,
+        projectName: String,
+        proposalTitle: String
+    ) async -> String {
+        return await scheduleNotification(
+            title: "\(projectName): Proposal Accepted",
+            body: proposalTitle,
+            category: .autoDevelopProposalAccepted,
+            userInfo: ["projectId": projectId, "type": "auto_develop_proposal_accepted"],
+            identifier: "auto-develop-proposal-\(projectId)-\(Date().timeIntervalSince1970)"
+        )
+    }
+
+    /// Handles an incoming auto-develop push notification payload.
+    /// Routes to the appropriate scheduling method based on the notification type.
+    /// - Parameter payload: The push notification payload dictionary
+    public func handleAutoDevelopPushNotification(_ payload: [String: Any]) async {
+        guard let type = payload["type"] as? String,
+              let projectId = payload["projectId"] as? String else { return }
+
+        let projectName = payload["projectName"] as? String ?? "Project"
+
+        switch type {
+        case "auto_develop_escalated":
+            let reason = payload["reason"] as? String ?? "Auto-develop requires your attention."
+            await scheduleAutoDevelopEscalatedNotification(
+                projectId: projectId,
+                projectName: projectName,
+                reason: reason
+            )
+
+        case "auto_develop_cycle_complete":
+            let cycleNumber = payload["cycleNumber"] as? Int ?? 0
+            let summary = payload["summary"] as? String ?? "Development cycle completed."
+            await scheduleAutoDevelopCycleCompleteNotification(
+                projectId: projectId,
+                projectName: projectName,
+                cycleNumber: cycleNumber,
+                summary: summary
+            )
+
+        case "auto_develop_proposal_accepted":
+            let proposalTitle = payload["proposalTitle"] as? String ?? "A proposal was accepted."
+            await scheduleAutoDevelopProposalAcceptedNotification(
+                projectId: projectId,
+                projectName: projectName,
+                proposalTitle: proposalTitle
+            )
+
+        default:
+            break
+        }
     }
 
     // MARK: - Notification Management
@@ -582,6 +717,15 @@ extension NotificationService: UNUserNotificationCenterDelegate {
                 )
             }
 
+        case "auto_develop_escalated", "auto_develop_cycle_complete", "auto_develop_proposal_accepted":
+            if let projectId = userInfo["projectId"] as? String {
+                NotificationCenter.default.post(
+                    name: .navigateToProject,
+                    object: nil,
+                    userInfo: ["projectId": projectId]
+                )
+            }
+
         default:
             break
         }
@@ -634,6 +778,9 @@ extension Notification.Name {
 
     /// Posted when the user wants to switch to a specific session in the chat view
     static let switchToSession = Notification.Name("switchToSession")
+
+    /// Posted when the user wants to navigate to a specific project (e.g., from auto-develop notification)
+    static let navigateToProject = Notification.Name("navigateToProject")
 }
 
 // MARK: - Notification Error
