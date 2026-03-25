@@ -19,8 +19,14 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm run install:all
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install backend dependencies
+        run: cd backend && npm install --force
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm install --force
 
       - name: Build backend
         run: npm run build:backend
