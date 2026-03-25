@@ -17,12 +17,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
-      - name: Install dependencies (clean, no lockfile)
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Fix rollup platform binaries
         run: |
-          npm install
-          cd backend && rm -rf node_modules package-lock.json && npm install
-          cd ../frontend && rm -rf node_modules package-lock.json && npm install
+          cd backend && npm install @rollup/rollup-linux-x64-gnu --no-save
+          cd ../frontend && npm install @rollup/rollup-linux-x64-gnu --no-save
 
       - name: Build backend
         run: npm run build:backend
