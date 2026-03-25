@@ -20,6 +20,7 @@ import { registerStatusTools } from "./services/mcp-tools/status.js";
 import { registerBeadTools } from "./services/mcp-tools/beads.js";
 import { registerQueryTools } from "./services/mcp-tools/queries.js";
 import { registerProposalTools } from "./services/mcp-tools/proposals.js";
+import { registerAutoDevelopTools } from "./services/mcp-tools/auto-develop.js";
 import { createProposalStore } from "./services/proposal-store.js";
 import { createEventStore } from "./services/event-store.js";
 import { createPersonaService, initPersonaService } from "./services/persona-service.js";
@@ -225,6 +226,7 @@ const server = app.listen(PORT, () => {
     registerBeadTools(server, eventStore);
     registerQueryTools(server, messageStore);
     registerProposalTools(server, proposalStore);
+    registerAutoDevelopTools(server, proposalStore);
     registerMemoryTools(server, memoryStore, { getAgentBySession });
     registerCoordinationTools(server, adjutantState, messageStore, stimulusEngine, eventStore, cronScheduleStore);
   });
