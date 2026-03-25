@@ -20,12 +20,10 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm run install:all
-
-      - name: Fix rollup platform binaries
         run: |
-          cd backend && npm install @rollup/rollup-linux-x64-gnu --no-save
-          cd ../frontend && npm install @rollup/rollup-linux-x64-gnu --no-save
+          npm ci
+          cd backend && npm ci
+          cd ../frontend && npm ci
 
       - name: Build backend
         run: npm run build:backend
