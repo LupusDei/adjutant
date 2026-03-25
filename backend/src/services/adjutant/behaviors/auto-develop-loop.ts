@@ -123,7 +123,7 @@ function buildAnalyzeReason(
   projectName: string,
   proposalStore: ProposalStore,
 ): string {
-  const projectFilter = { project: [projectId, projectName] };
+  const projectFilter = { project: projectId };
   const pending = proposalStore.getProposals({ status: "pending", ...projectFilter });
   const accepted = proposalStore.getProposals({ status: "accepted", ...projectFilter });
 
@@ -157,7 +157,7 @@ function buildIdeateReason(
   projectName: string,
   proposalStore: ProposalStore,
 ): string {
-  const projectFilter = { project: [projectId, projectName] };
+  const projectFilter = { project: projectId };
   const existing = proposalStore.getProposals({ ...projectFilter });
 
   const projectResult = getProject(projectId);
@@ -195,7 +195,7 @@ function buildReviewReason(
   projectName: string,
   proposalStore: ProposalStore,
 ): string {
-  const projectFilter = { project: [projectId, projectName] };
+  const projectFilter = { project: projectId };
   const pending = proposalStore.getProposals({ status: "pending", ...projectFilter });
 
   const parts: string[] = [];
@@ -228,7 +228,7 @@ function buildGateReason(
   proposalStore: ProposalStore,
 ): string {
   const scored = proposalStore.getProposalsByConfidenceRange(
-    [projectId, projectName],
+    projectId,
     0,
     100,
   );
@@ -268,7 +268,7 @@ function buildPlanReason(
   projectName: string,
   proposalStore: ProposalStore,
 ): string {
-  const projectFilter = { project: [projectId, projectName] };
+  const projectFilter = { project: projectId };
   const accepted = proposalStore.getProposals({ status: "accepted", ...projectFilter });
 
   const parts: string[] = [];
@@ -357,10 +357,10 @@ function buildValidateReason(
 export function determineNextPhase(
   currentPhase: AutoDevelopPhase,
   projectId: string,
-  projectName: string,
+  _projectName: string,
   proposalStore: ProposalStore,
 ): { nextPhase: AutoDevelopPhase; gateActions?: GateAction[] } {
-  const projectFilter = { project: [projectId, projectName] };
+  const projectFilter = { project: projectId };
 
   switch (currentPhase) {
     case "analyze": {
@@ -385,7 +385,7 @@ export function determineNextPhase(
     case "gate": {
       // Evaluate scored proposals and build gate actions
       const scored = proposalStore.getProposalsByConfidenceRange(
-        [projectId, projectName],
+        projectId,
         0,
         100,
       );
@@ -470,10 +470,10 @@ export interface GateAction {
  */
 export function shouldSkipIdeation(
   projectId: string,
-  projectName: string,
+  _projectName: string,
   proposalStore: ProposalStore,
 ): boolean {
-  const projectFilter = { project: [projectId, projectName] };
+  const projectFilter = { project: projectId };
   const pending = proposalStore.getProposals({ status: "pending", ...projectFilter });
   return pending.length >= AUTO_DEVELOP_LIMITS.maxProposalsInReview;
 }
@@ -602,7 +602,7 @@ export function createAutoDevelopLoop(
 
         // Concurrency control: limit epics in execution (adj-122.10.5)
         if (currentPhase === "execute") {
-          const projectFilter = { project: [project.id, project.name] };
+          const projectFilter = { project: project.id };
           const acceptedCount = proposalStore.getProposals({ status: "accepted", ...projectFilter }).length;
           if (acceptedCount >= AUTO_DEVELOP_LIMITS.maxEpicsInExecution) {
             const checkId = stimulusEngine.scheduleCheck(
@@ -682,6 +682,21 @@ export function createAutoDevelopLoop(
           state.setMeta(lastIdeationKey(project.id), String(Date.now()));
         }
 
+        // Update cycle counters from actual proposal data (adj-142)
+        // Counters were never being incremented — sync from store each tick.
+        {
+          const projectFilter = { project: project.id };
+          const allProposals = proposalStore.getProposals({ ...projectFilter });
+          const acceptedCount = proposalStore.getProposals({ status: "accepted", ...projectFilter }).length;
+          const existingCycle = autoDevelopStore.getActiveCycle(project.id);
+          if (existingCycle) {
+            autoDevelopStore.updateCycle(existingCycle.id, {
+              proposalsGenerated: allProposals.length,
+              proposalsAccepted: acceptedCount,
+            });
+          }
+        }
+
         // Ensure we have an active cycle
         let activeCycle = autoDevelopStore.getActiveCycle(project.id);
         if (!activeCycle) {
@@ -708,22 +723,28 @@ export function createAutoDevelopLoop(
         const checkId = stimulusEngine.scheduleCheck(SCHEDULE_DELAY_MS, reason);
         state.setMeta(debounceKey(project.id), checkId);
 
-        // Determine and advance to the next phase (adj-122.10.2)
-        const { nextPhase } = determineNextPhase(
-          currentPhase,
-          project.id,
-          project.name,
-          proposalStore,
-        );
-        state.setMeta(phaseKey(project.id), nextPhase);
+        // Phases that require coordinator work (spawning agents, waiting for
+        // completion) must NOT auto-advance. The coordinator calls
+        // advance_auto_develop_phase when the work is done. (adj-142)
+        const coordinatorDrivenPhases: AutoDevelopPhase[] = ["plan", "execute", "review", "validate"];
+        if (!coordinatorDrivenPhases.includes(currentPhase)) {
+          // Auto-advance phases that are instant decisions (analyze, ideate, gate)
+          const { nextPhase } = determineNextPhase(
+            currentPhase,
+            project.id,
+            project.name,
+            proposalStore,
+          );
+          state.setMeta(phaseKey(project.id), nextPhase);
 
-        // Emit phase change event with correct previous and new values
-        getEventBus().emit("auto_develop:phase_changed", {
-          projectId: project.id,
-          cycleId: activeCycle.id,
-          previousPhase: currentPhase,
-          newPhase: nextPhase,
-        });
+          // Emit phase change event with correct previous and new values
+          getEventBus().emit("auto_develop:phase_changed", {
+            projectId: project.id,
+            cycleId: activeCycle.id,
+            previousPhase: currentPhase,
+            newPhase: nextPhase,
+          });
+        }
 
         state.logDecision({
           behavior: "auto-develop-loop",
