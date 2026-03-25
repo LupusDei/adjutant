@@ -75,6 +75,7 @@ const MCP_CONFIG_ENTRY = {
   url: "http://localhost:4201/mcp",
   headers: {
     "X-Agent-Id": "${ADJUTANT_AGENT_ID:-unknown}",
+    "X-Project-Root": "${ADJUTANT_PROJECT_ROOT:-}",
   },
 };
 
@@ -101,13 +102,33 @@ function upgradeMcpJson(projectRoot: string): CheckResult {
     return { name: ".mcp.json", status: "created", message: "added adjutant server entry" };
   }
 
-  // Check if the adjutant config needs updating (e.g., type field added)
+  // Check if the adjutant config needs updating
   const existing = parseJsonFile<{ mcpServers?: { adjutant?: Record<string, unknown> } }>(mcpPath);
   const currentConfig = existing?.mcpServers?.adjutant;
-  if (currentConfig && !currentConfig.type) {
+  if (!currentConfig) {
+    return { name: ".mcp.json", status: "pass", message: "up to date" };
+  }
+
+  const updates: string[] = [];
+
+  // Add type field if missing
+  if (!currentConfig.type) {
     currentConfig.type = "http";
+    updates.push("type: http");
+  }
+
+  // adj-138: Add X-Project-Root header if missing — without this, agents
+  // spawned for other projects resolve to Adjutant's project context
+  const headers = (currentConfig.headers ?? {}) as Record<string, string>;
+  if (!headers["X-Project-Root"]) {
+    headers["X-Project-Root"] = "${ADJUTANT_PROJECT_ROOT:-}";
+    currentConfig.headers = headers;
+    updates.push("X-Project-Root header");
+  }
+
+  if (updates.length > 0) {
     writeJsonFile(mcpPath, existing);
-    return { name: ".mcp.json", status: "created", message: "added type: http to adjutant config" };
+    return { name: ".mcp.json", status: "created", message: `added ${updates.join(", ")}` };
   }
 
   return { name: ".mcp.json", status: "pass", message: "up to date" };

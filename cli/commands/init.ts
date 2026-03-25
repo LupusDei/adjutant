@@ -35,6 +35,7 @@ const MCP_CONFIG = {
       url: "http://localhost:4201/mcp",
       headers: {
         "X-Agent-Id": "${ADJUTANT_AGENT_ID:-unknown}",
+        "X-Project-Root": "${ADJUTANT_PROJECT_ROOT:-}",
       },
     },
   },
