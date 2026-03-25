@@ -41,7 +41,7 @@ import { registerAutoDevelopTools } from "../../src/services/mcp-tools/auto-deve
 interface ToolRegistration {
   name: string;
   schema: Record<string, unknown>;
-  handler: (params: Record<string, unknown>, extra: Record<string, unknown>) => Promise<{ content: Array<{ type: string; text: string }> }>;
+  handler: (params: Record<string, unknown>, extra: Record<string, unknown>) => Promise<{ content: { type: string; text: string }[] }>;
 }
 
 function createFakeMcpServer() {
@@ -56,7 +56,7 @@ function createFakeMcpServer() {
 }
 
 /** Parse the JSON text from an MCP tool response */
-function parseResult(result: { content: Array<{ type: string; text: string }> }) {
+function parseResult(result: { content: { type: string; text: string }[] }) {
   return JSON.parse(result.content[0]!.text) as Record<string, unknown>;
 }
 
@@ -88,9 +88,9 @@ describe("Auto-Develop MCP Tools", () => {
     mockEmit = vi.fn();
     vi.mocked(getEventBus).mockReturnValue({ emit: mockEmit } as ReturnType<typeof getEventBus>);
 
-    // Register tools on the fake server
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- fake McpServer for testing
-    registerAutoDevelopTools(server as any);
+    // Register tools on the fake server — cast needed because createFakeMcpServer
+    // implements only the subset of McpServer used by registerAutoDevelopTools
+    registerAutoDevelopTools(server as unknown as Parameters<typeof registerAutoDevelopTools>[0]);
   });
 
   // =========================================================================
