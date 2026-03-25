@@ -231,9 +231,10 @@ describe("AutoDevelopLoop", () => {
       const behavior = createAutoDevelopLoop(stimulusEngine, proposalStore, autoDevelopStore);
       expect(behavior.name).toBe("auto-develop-loop");
       expect(behavior.triggers).toContain("project:auto_develop_enabled");
-      expect(behavior.triggers).toContain("bead:closed");
+      expect(behavior.triggers).toContain("agent:status_changed");
       expect(behavior.triggers).toContain("proposal:scored");
-      expect(behavior.schedule).toBe("*/20 * * * *");
+      expect(behavior.triggers).not.toContain("bead:closed");
+      expect(behavior.schedule).toBe("*/15 * * * *");
       expect(behavior.excludeRoles).toEqual(["coordinator"]);
     });
   });
@@ -251,22 +252,34 @@ describe("AutoDevelopLoop", () => {
 
     it("should return true for cron tick when auto-develop projects exist", () => {
       const behavior = createAutoDevelopLoop(stimulusEngine, proposalStore, autoDevelopStore);
-      const event = makeEvent("bead:closed", { cronTick: true });
+      const event = makeEvent("agent:status_changed", { cronTick: true });
       mockGetAutoDevelopProjects.mockReturnValue({ success: true, data: [MOCK_PROJECT] });
       expect(behavior.shouldAct(event, state)).toBe(true);
     });
 
     it("should return false for cron tick when no auto-develop projects", () => {
       const behavior = createAutoDevelopLoop(stimulusEngine, proposalStore, autoDevelopStore);
-      const event = makeEvent("bead:closed", { cronTick: true });
+      const event = makeEvent("agent:status_changed", { cronTick: true });
       mockGetAutoDevelopProjects.mockReturnValue({ success: true, data: [] });
       expect(behavior.shouldAct(event, state)).toBe(false);
     });
 
-    it("should return true for bead:closed event (non-cron)", () => {
+    it("should return true for agent:status_changed with done status", () => {
       const behavior = createAutoDevelopLoop(stimulusEngine, proposalStore, autoDevelopStore);
-      const event = makeEvent("bead:closed", { id: "adj-001" });
+      const event = makeEvent("agent:status_changed", { status: "done", agent: "worker-1" });
       expect(behavior.shouldAct(event, state)).toBe(true);
+    });
+
+    it("should return true for agent:status_changed with idle status", () => {
+      const behavior = createAutoDevelopLoop(stimulusEngine, proposalStore, autoDevelopStore);
+      const event = makeEvent("agent:status_changed", { status: "idle", agent: "worker-1" });
+      expect(behavior.shouldAct(event, state)).toBe(true);
+    });
+
+    it("should return false for agent:status_changed with working status", () => {
+      const behavior = createAutoDevelopLoop(stimulusEngine, proposalStore, autoDevelopStore);
+      const event = makeEvent("agent:status_changed", { status: "working", agent: "worker-1" });
+      expect(behavior.shouldAct(event, state)).toBe(false);
     });
 
     it("should return true for proposal:scored event", () => {
@@ -413,11 +426,7 @@ describe("AutoDevelopLoop", () => {
   // =========================================================================
 
   describe("buildPhaseReason", () => {
-    it("should build analyze reason with proposal counts", () => {
-      vi.mocked(proposalStore.getProposals).mockReturnValue([
-        makeProposal({ status: "pending" }),
-      ]);
-
+    it("should build analyze reason as a nudge with verification instructions", () => {
       const reason = buildPhaseReason(
         "proj-1", "test-project", "analyze",
         proposalStore, autoDevelopStore, state,
@@ -425,113 +434,88 @@ describe("AutoDevelopLoop", () => {
 
       expect(reason).toContain("AUTO-DEVELOP ANALYZE");
       expect(reason).toContain("test-project");
-      expect(reason).toContain("Pending: 1");
+      expect(reason).toContain("NUDGE:");
+      expect(reason).toContain("VERIFY STATE");
+      expect(reason).toContain("get_auto_develop_status");
     });
 
-    it("should build ideate reason with existing proposals", () => {
-      vi.mocked(proposalStore.getProposals).mockReturnValue([
-        makeProposal({ id: "prop-1", title: "Existing Proposal" }),
-      ]);
-
+    it("should build ideate reason as a nudge", () => {
       const reason = buildPhaseReason(
         "proj-1", "test-project", "ideate",
         proposalStore, autoDevelopStore, state,
       );
 
       expect(reason).toContain("AUTO-DEVELOP IDEATE");
-      expect(reason).toContain("Existing Proposal");
+      expect(reason).toContain("NUDGE:");
+      expect(reason).toContain("VERIFY STATE FIRST");
+      expect(reason).toContain("spawn_worker");
     });
 
-    it("should build review reason listing pending proposals", () => {
-      vi.mocked(proposalStore.getProposals).mockReturnValue([
-        makeProposal({ id: "prop-1", title: "Review Me" }),
-      ]);
-
+    it("should build review reason as a nudge with wait-if-working instruction", () => {
       const reason = buildPhaseReason(
         "proj-1", "test-project", "review",
         proposalStore, autoDevelopStore, state,
       );
 
       expect(reason).toContain("AUTO-DEVELOP REVIEW");
-      expect(reason).toContain("Review Me");
+      expect(reason).toContain("NUDGE:");
+      expect(reason).toContain("list_agents");
+      expect(reason).toContain("wait");
     });
 
-    it("should build gate reason with scored proposals", () => {
-      vi.mocked(proposalStore.getProposalsByConfidenceRange).mockReturnValue([
-        makeProposal({ id: "prop-1", confidenceScore: 85 }),
-      ]);
-
+    it("should build gate reason as a nudge", () => {
       const reason = buildPhaseReason(
         "proj-1", "test-project", "gate",
         proposalStore, autoDevelopStore, state,
       );
 
       expect(reason).toContain("AUTO-DEVELOP GATE");
-      expect(reason).toContain("score=85");
+      expect(reason).toContain("NUDGE:");
+      expect(reason).toContain("VERIFY STATE FIRST");
     });
 
-    it("should build plan reason with accepted proposals", () => {
-      vi.mocked(proposalStore.getProposals).mockReturnValue([
-        makeProposal({ id: "prop-1", title: "Plan This", status: "accepted" }),
-      ]);
-
+    it("should build plan reason as a nudge with wait-if-working instruction", () => {
       const reason = buildPhaseReason(
         "proj-1", "test-project", "plan",
         proposalStore, autoDevelopStore, state,
       );
 
       expect(reason).toContain("AUTO-DEVELOP PLAN");
-      expect(reason).toContain("Plan This");
+      expect(reason).toContain("NUDGE:");
+      expect(reason).toContain("list_beads");
     });
 
-    it("should build execute reason with spawn count", () => {
-      vi.mocked(state.countActiveSpawns).mockReturnValue(3);
-
+    it("should build execute reason as a nudge with completion check instructions", () => {
       const reason = buildPhaseReason(
         "proj-1", "test-project", "execute",
         proposalStore, autoDevelopStore, state,
       );
 
       expect(reason).toContain("AUTO-DEVELOP EXECUTE");
-      expect(reason).toContain("active agent spawns: 3");
+      expect(reason).toContain("NUDGE:");
+      expect(reason).toContain("list_agents");
+      expect(reason).toContain("list_beads");
+      expect(reason).toContain("QA sentinels");
     });
 
-    it("should build validate reason with cycle stats", () => {
-      const activeCycle: AutoDevelopCycle = {
-        id: "cycle-1",
-        projectId: "proj-1",
-        phase: "validate",
-        startedAt: new Date().toISOString(),
-        completedAt: null,
-        proposalsGenerated: 5,
-        proposalsAccepted: 3,
-        proposalsEscalated: 1,
-        proposalsDismissed: 1,
-      };
-      vi.mocked(autoDevelopStore.getActiveCycle).mockReturnValue(activeCycle);
-
+    it("should build validate reason as a nudge", () => {
       const reason = buildPhaseReason(
         "proj-1", "test-project", "validate",
         proposalStore, autoDevelopStore, state,
       );
 
       expect(reason).toContain("AUTO-DEVELOP VALIDATE");
-      expect(reason).toContain("Proposals generated: 5");
-      expect(reason).toContain("Proposals accepted: 3");
+      expect(reason).toContain("NUDGE:");
+      expect(reason).toContain("VERIFY STATE FIRST");
     });
 
-    it("should include vision context when available", () => {
-      mockGetProject.mockReturnValue({
-        success: true,
-        data: { ...MOCK_PROJECT, visionContext: "Build amazing things" },
-      });
-
+    it("should include autonomous mode preamble in all phase reasons", () => {
       const reason = buildPhaseReason(
         "proj-1", "test-project", "analyze",
         proposalStore, autoDevelopStore, state,
       );
 
-      expect(reason).toContain("Build amazing things");
+      expect(reason).toContain("AUTONOMOUS MODE");
     });
   });
 
@@ -755,7 +739,7 @@ describe("AutoDevelopLoop", () => {
       vi.mocked(state.countActiveSpawns).mockReturnValue(8);
 
       const behavior = createAutoDevelopLoop(stimulusEngine, proposalStore, autoDevelopStore);
-      const event = makeEvent("bead:closed", {});
+      const event = makeEvent("agent:status_changed", { status: "done" });
 
       await dispatchToBehavior(behavior, event, state, comm);
 
@@ -843,7 +827,7 @@ describe("AutoDevelopLoop", () => {
       });
 
       const behavior = createAutoDevelopLoop(stimulusEngine, proposalStore, autoDevelopStore);
-      const event = makeEvent("bead:closed", {});
+      const event = makeEvent("agent:status_changed", { status: "done" });
 
       await dispatchToBehavior(behavior, event, state, comm);
 
@@ -971,7 +955,7 @@ describe("AutoDevelopLoop", () => {
       vi.mocked(state.countActiveSpawns).mockReturnValue(2);
 
       const behavior = createAutoDevelopLoop(stimulusEngine, proposalStore, autoDevelopStore);
-      const event = makeEvent("bead:closed", {});
+      const event = makeEvent("agent:status_changed", { status: "done" });
 
       await dispatchToBehavior(behavior, event, state, comm);
 

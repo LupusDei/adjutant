@@ -15,7 +15,7 @@ import type { CommunicationManager } from "../communication.js";
 import type { StimulusEngine } from "../stimulus-engine.js";
 import type { ProposalStore } from "../../proposal-store.js";
 import type { AutoDevelopStore } from "../../auto-develop-store.js";
-import { getAutoDevelopProjects, getProject, pauseAutoDevelop, clearAutoDevelopPause } from "../../projects-service.js";
+import { getAutoDevelopProjects, pauseAutoDevelop, clearAutoDevelopPause } from "../../projects-service.js";
 import { logError } from "../../../utils/index.js";
 import { getEventBus } from "../../event-bus.js";
 import { classifyConfidence } from "../../confidence-engine.js";
@@ -121,33 +121,23 @@ export function buildPhaseReason(
 function buildAnalyzeReason(
   projectId: string,
   projectName: string,
-  proposalStore: ProposalStore,
+  _proposalStore: ProposalStore,
 ): string {
-  const projectFilter = { project: projectId };
-  const pending = proposalStore.getProposals({ status: "pending", ...projectFilter });
-  const accepted = proposalStore.getProposals({ status: "accepted", ...projectFilter });
-
-  // Get project vision context
-  const projectResult = getProject(projectId);
-  const visionContext = projectResult.success ? projectResult.data?.visionContext : undefined;
-
   const parts: string[] = [];
   parts.push(`AUTO-DEVELOP ANALYZE — Project: "${projectName}" (${projectId})`);
   parts.push("");
-  parts.push("Current proposal state:");
-  parts.push(`  - Pending: ${pending.length}`);
-  parts.push(`  - Accepted: ${accepted.length}`);
-  if (visionContext) {
-    parts.push("");
-    parts.push(`Vision context: ${visionContext.slice(0, 500)}`);
-  }
+  parts.push("NUDGE: Time to assess the project and decide the next phase.");
   parts.push("");
-  parts.push("COORDINATOR RESPONSIBILITIES:");
-  parts.push("1. Use get_auto_develop_status to verify the current loop state.");
-  parts.push("2. If accepted proposals exist → call advance_auto_develop_phase to skip to PLAN.");
-  parts.push("3. If pending proposals exist → call advance_auto_develop_phase to skip to REVIEW.");
-  parts.push("4. If no proposals → call advance_auto_develop_phase to transition to IDEATE.");
-  parts.push("5. Report status via set_status and announce your assessment.");
+  parts.push("VERIFY STATE (do not trust this prompt for data — check manually):");
+  parts.push("1. Call get_auto_develop_status to see current phase, proposals, and cycle state.");
+  parts.push("2. Call list_beads to see open/in-progress work.");
+  parts.push("3. Call list_agents to see who is active and what they are doing.");
+  parts.push("");
+  parts.push("THEN DECIDE:");
+  parts.push("- If accepted proposals exist → advance_auto_develop_phase to PLAN.");
+  parts.push("- If pending unscored proposals exist → advance_auto_develop_phase to REVIEW.");
+  parts.push("- If no proposals → advance_auto_develop_phase to IDEATE.");
+  parts.push("- Report your assessment via set_status.");
 
   return parts.join("\n");
 }
@@ -155,37 +145,24 @@ function buildAnalyzeReason(
 function buildIdeateReason(
   projectId: string,
   projectName: string,
-  proposalStore: ProposalStore,
+  _proposalStore: ProposalStore,
 ): string {
-  const projectFilter = { project: projectId };
-  const existing = proposalStore.getProposals({ ...projectFilter });
-
-  const projectResult = getProject(projectId);
-  const visionContext = projectResult.success ? projectResult.data?.visionContext : undefined;
-
   const parts: string[] = [];
   parts.push(`AUTO-DEVELOP IDEATE — Project: "${projectName}" (${projectId})`);
   parts.push("");
-  parts.push(`Existing proposals: ${existing.length}`);
-  if (existing.length > 0) {
-    parts.push("Recent proposals:");
-    for (const p of existing.slice(0, 5)) {
-      parts.push(`  - [${p.id}] "${p.title}" (${p.status})`);
-    }
-  }
-  if (visionContext) {
-    parts.push("");
-    parts.push(`Vision context: ${visionContext.slice(0, 500)}`);
-  }
+  parts.push("NUDGE: Time to generate new proposals for this project.");
   parts.push("");
-  parts.push("COORDINATOR RESPONSIBILITIES:");
-  parts.push("1. Use spawn_worker to create an ideation agent with a prompt that includes:");
-  parts.push("   - The project path and vision context (above).");
+  parts.push("VERIFY STATE FIRST:");
+  parts.push("1. Call get_auto_develop_status to check existing proposals and vision context.");
+  parts.push("2. Call list_proposals (if available) to see what already exists — avoid duplicates.");
+  parts.push("");
+  parts.push("THEN ACT:");
+  parts.push("1. Use spawn_worker to create an ideation agent. Include in the prompt:");
+  parts.push("   - The project path and vision context.");
   parts.push("   - Instructions to use create_proposal MCP tool for each proposal.");
-  parts.push("   - Instructions to avoid duplicating existing proposals (listed above).");
-  parts.push("2. The ideation agent should analyze the codebase, identify improvements, and create 1-3 proposals.");
-  parts.push("3. After spawning, call advance_auto_develop_phase to transition to REVIEW.");
-  parts.push("4. Report progress via set_status.");
+  parts.push("   - Instructions to analyze the codebase and create 1-3 proposals.");
+  parts.push("2. After spawning, call advance_auto_develop_phase to transition to REVIEW.");
+  parts.push("3. Report progress via set_status.");
 
   return parts.join("\n");
 }
@@ -193,31 +170,24 @@ function buildIdeateReason(
 function buildReviewReason(
   projectId: string,
   projectName: string,
-  proposalStore: ProposalStore,
+  _proposalStore: ProposalStore,
 ): string {
-  const projectFilter = { project: projectId };
-  const pending = proposalStore.getProposals({ status: "pending", ...projectFilter });
-
   const parts: string[] = [];
   parts.push(`AUTO-DEVELOP REVIEW — Project: "${projectName}" (${projectId})`);
   parts.push("");
-  parts.push(`Proposals awaiting review: ${pending.length}`);
-  if (pending.length > 0) {
-    for (const p of pending.slice(0, 5)) {
-      const scoreStr = p.confidenceScore !== undefined ? ` (score: ${p.confidenceScore})` : " (unscored)";
-      parts.push(`  - [${p.id}] "${p.title}"${scoreStr} round=${p.reviewRound}`);
-    }
-  }
+  parts.push("NUDGE: Proposals need reviewing. Check if reviewers are already working or need spawning.");
   parts.push("");
-  parts.push("COORDINATOR RESPONSIBILITIES:");
-  parts.push("1. For each pending proposal, use spawn_worker to create a reviewer agent.");
-  parts.push("2. Each reviewer's prompt must include the proposal ID and instructions to:");
+  parts.push("VERIFY STATE FIRST:");
+  parts.push("1. Call get_auto_develop_status to see pending proposal count and scores.");
+  parts.push("2. Call list_agents to check if reviewer agents are already active.");
+  parts.push("3. If reviewers are still working → wait (do nothing, you'll be nudged again).");
+  parts.push("4. If all proposals are scored → call advance_auto_develop_phase to transition to GATE.");
+  parts.push("");
+  parts.push("IF REVIEWERS NEED SPAWNING:");
+  parts.push("1. Use spawn_worker for each unscored proposal with instructions to:");
   parts.push("   - Read the proposal via get_proposal MCP tool.");
-  parts.push("   - Evaluate against the 5 confidence signals (0-100 each):");
-  parts.push("     reviewerConsensus, specClarity, codebaseAlignment, riskAssessment, historicalSuccess.");
-  parts.push("   - Submit scores via score_proposal MCP tool.");
-  parts.push("3. After all reviewers are spawned, call advance_auto_develop_phase to transition to GATE.");
-  parts.push("4. Report progress via set_status.");
+  parts.push("   - Score using the 5 confidence signals via score_proposal MCP tool.");
+  parts.push("2. Report progress via set_status.");
 
   return parts.join("\n");
 }
@@ -225,40 +195,26 @@ function buildReviewReason(
 function buildGateReason(
   projectId: string,
   projectName: string,
-  proposalStore: ProposalStore,
+  _proposalStore: ProposalStore,
 ): string {
-  const scored = proposalStore.getProposalsByConfidenceRange(
-    projectId,
-    0,
-    100,
-  );
-
   const parts: string[] = [];
   parts.push(`AUTO-DEVELOP GATE — Project: "${projectName}" (${projectId})`);
   parts.push("");
-
-  if (scored.length === 0) {
-    parts.push("No scored proposals found. Transition back to REVIEW.");
-  } else {
-    parts.push("Scored proposals:");
-    for (const p of scored.slice(0, 10)) {
-      const classification = p.confidenceScore !== undefined
-        ? classifyConfidence(p.confidenceScore)
-        : "unclassified";
-      parts.push(`  - [${p.id}] "${p.title}" score=${p.confidenceScore ?? "?"} → ${classification} (round ${p.reviewRound})`);
-    }
-  }
-
+  parts.push("NUDGE: Scored proposals need gate decisions.");
   parts.push("");
-  parts.push("COORDINATOR RESPONSIBILITIES:");
-  parts.push("1. For each scored proposal, apply the confidence gate:");
-  parts.push("   - Score >= 80: Accept the proposal (update status to 'accepted').");
-  parts.push("   - Score 60-79: Send back for revision (max 3 rounds). Call advance_auto_develop_phase(targetPhase='review').");
-  parts.push("   - Score 40-59: Escalate to user via send_message. The loop will auto-pause.");
-  parts.push("   - Score < 40: Dismiss the proposal (update status to 'dismissed').");
-  parts.push("2. After processing all proposals, call advance_auto_develop_phase to the appropriate next phase.");
-  parts.push("3. If any proposals were accepted → transition to PLAN.");
-  parts.push("4. Report all gate decisions via announce for user visibility.");
+  parts.push("VERIFY STATE FIRST:");
+  parts.push("1. Call get_auto_develop_status to see proposal scores and classifications.");
+  parts.push("2. If no scored proposals → advance_auto_develop_phase back to REVIEW.");
+  parts.push("");
+  parts.push("THEN APPLY GATE DECISIONS:");
+  parts.push("- Score >= 80: Accept (update status to 'accepted').");
+  parts.push("- Score 60-79: Send back for revision (max 3 rounds) → advance to REVIEW.");
+  parts.push("- Score 40-59: Escalate to user via send_message (loop auto-pauses).");
+  parts.push("- Score < 40: Dismiss (update status to 'dismissed').");
+  parts.push("");
+  parts.push("AFTER PROCESSING:");
+  parts.push("- If any accepted → advance_auto_develop_phase to PLAN.");
+  parts.push("- Report all gate decisions via announce for user visibility.");
 
   return parts.join("\n");
 }
@@ -266,29 +222,25 @@ function buildGateReason(
 function buildPlanReason(
   projectId: string,
   projectName: string,
-  proposalStore: ProposalStore,
+  _proposalStore: ProposalStore,
 ): string {
-  const projectFilter = { project: projectId };
-  const accepted = proposalStore.getProposals({ status: "accepted", ...projectFilter });
-
   const parts: string[] = [];
   parts.push(`AUTO-DEVELOP PLAN — Project: "${projectName}" (${projectId})`);
   parts.push("");
-  parts.push(`Accepted proposals ready for planning: ${accepted.length}`);
-  if (accepted.length > 0) {
-    for (const p of accepted.slice(0, 5)) {
-      parts.push(`  - [${p.id}] "${p.title}"`);
-    }
-  }
+  parts.push("NUDGE: Accepted proposals need planning. Check if planners are working or need spawning.");
   parts.push("");
-  parts.push("COORDINATOR RESPONSIBILITIES:");
-  parts.push("1. For each accepted proposal, use spawn_worker to create a planning agent.");
-  parts.push("2. The planning agent's prompt must include the proposal ID and instructions to:");
-  parts.push("   - Use the /execute-proposal skill or /epic-planner skill.");
-  parts.push("   - Create specs, plans, tasks, and beads for execution.");
-  parts.push("   - Assign beads to the project.");
-  parts.push("3. After all planning agents are spawned, call advance_auto_develop_phase to transition to EXECUTE.");
-  parts.push("4. Report progress via set_status.");
+  parts.push("VERIFY STATE FIRST:");
+  parts.push("1. Call get_auto_develop_status to see accepted proposals.");
+  parts.push("2. Call list_agents to check if planning agents are already active.");
+  parts.push("3. Call list_beads to see if epics/tasks have already been created for accepted proposals.");
+  parts.push("4. If planners are still working → wait (you'll be nudged again when they finish).");
+  parts.push("5. If all accepted proposals have been planned (beads exist) → advance_auto_develop_phase to EXECUTE.");
+  parts.push("");
+  parts.push("IF PLANNERS NEED SPAWNING:");
+  parts.push("1. Use spawn_worker for each accepted proposal with instructions to:");
+  parts.push("   - Use /execute-proposal or /epic-planner skill.");
+  parts.push("   - Create specs, plans, tasks, and beads.");
+  parts.push("2. Report progress via set_status.");
 
   return parts.join("\n");
 }
@@ -296,24 +248,25 @@ function buildPlanReason(
 function buildExecuteReason(
   projectId: string,
   projectName: string,
-  state: AdjutantState,
+  _state: AdjutantState,
 ): string {
-  const activeSpawns = state.countActiveSpawns();
-
   const parts: string[] = [];
   parts.push(`AUTO-DEVELOP EXECUTE — Project: "${projectName}" (${projectId})`);
   parts.push("");
-  parts.push(`Current active agent spawns: ${activeSpawns}`);
+  parts.push("NUDGE: Execution phase — check if squads are working, done, or need spawning.");
   parts.push("");
-  parts.push("COORDINATOR RESPONSIBILITIES:");
+  parts.push("VERIFY STATE FIRST:");
+  parts.push("1. Call list_agents to see who is active, idle, or done.");
+  parts.push("2. Call list_beads to check open/in-progress tasks under the planned epics.");
+  parts.push("3. If agents are still working → wait (you'll be nudged again on status changes).");
+  parts.push("4. If agents are done/idle AND open beads remain → investigate (blocked? crashed?).");
+  parts.push("5. If all epic tasks are closed → advance_auto_develop_phase to VALIDATE.");
+  parts.push("   NOTE: QA sentinels may have created follow-on beads — check those too.");
+  parts.push("");
+  parts.push("IF SQUADS NEED SPAWNING:");
   parts.push("1. Use spawn_worker to create squad leaders for each planned epic.");
-  parts.push("2. Each squad leader's prompt must include:");
-  parts.push("   - The epic bead ID and project path.");
-  parts.push("   - Instructions to use /squad-execute skill for parallel execution.");
-  parts.push("   - Instructions to build, test, and push before closing beads.");
-  parts.push("3. Monitor agent status — if agents go idle or blocked, investigate and intervene.");
-  parts.push("4. When all execution completes, call advance_auto_develop_phase to transition to VALIDATE.");
-  parts.push("5. Report progress via set_status and announce milestones.");
+  parts.push("   Include: epic bead ID, project path, /squad-execute skill instructions.");
+  parts.push("2. Report progress via set_status.");
 
   return parts.join("\n");
 }
@@ -321,27 +274,24 @@ function buildExecuteReason(
 function buildValidateReason(
   projectId: string,
   projectName: string,
-  autoDevelopStore: AutoDevelopStore,
+  _autoDevelopStore: AutoDevelopStore,
 ): string {
-  const activeCycle = autoDevelopStore.getActiveCycle(projectId);
-
   const parts: string[] = [];
   parts.push(`AUTO-DEVELOP VALIDATE — Project: "${projectName}" (${projectId})`);
   parts.push("");
-  if (activeCycle) {
-    parts.push(`Active cycle: ${activeCycle.id}`);
-    parts.push(`  - Proposals generated: ${activeCycle.proposalsGenerated}`);
-    parts.push(`  - Proposals accepted: ${activeCycle.proposalsAccepted}`);
-    parts.push(`  - Proposals escalated: ${activeCycle.proposalsEscalated}`);
-    parts.push(`  - Proposals dismissed: ${activeCycle.proposalsDismissed}`);
-  }
+  parts.push("NUDGE: Validation phase — check if QA is running, done, or needs spawning.");
   parts.push("");
-  parts.push("COORDINATOR RESPONSIBILITIES:");
-  parts.push("1. Use spawn_worker to create QA agents for the completed work.");
-  parts.push("2. QA agents should run /code-review and verify build + tests pass.");
-  parts.push("3. If QA finds issues, create bug beads and transition back to EXECUTE.");
-  parts.push("4. If QA passes, call advance_auto_develop_phase to transition back to ANALYZE (starts new cycle).");
-  parts.push("5. Announce cycle completion via announce({ type: 'completion', ... }).");
+  parts.push("VERIFY STATE FIRST:");
+  parts.push("1. Call list_agents to see if QA/review agents are active.");
+  parts.push("2. Call list_beads to check if any bug beads were created by QA.");
+  parts.push("3. Call get_auto_develop_status to see cycle stats.");
+  parts.push("4. If QA agents are still working → wait (you'll be nudged again).");
+  parts.push("5. If QA found bugs (new open beads) → advance_auto_develop_phase back to EXECUTE.");
+  parts.push("6. If QA passed (no new bugs) → advance_auto_develop_phase to ANALYZE (starts new cycle).");
+  parts.push("");
+  parts.push("IF QA NEEDS SPAWNING:");
+  parts.push("1. Use spawn_worker to create QA agents with /code-review skill.");
+  parts.push("2. Announce cycle completion when validation passes.");
 
   return parts.join("\n");
 }
@@ -522,10 +472,10 @@ export function createAutoDevelopLoop(
     name: "auto-develop-loop",
     triggers: [
       "project:auto_develop_enabled",
-      "bead:closed",
+      "agent:status_changed",
       "proposal:scored",
     ],
-    schedule: "*/20 * * * *", // 20-minute heartbeat
+    schedule: "*/15 * * * *", // 15-minute heartbeat
     excludeRoles: ["coordinator"],
 
     shouldAct(event: BehaviorEvent, _state: AdjutantState): boolean {
@@ -539,8 +489,14 @@ export function createAutoDevelopLoop(
         return projects.success && (projects.data?.length ?? 0) > 0;
       }
 
-      // For other events (bead:closed, proposal:scored), always act
-      // act() will check project scope
+      // For agent status changes, only act on completion signals (done/idle)
+      // These indicate an agent may have finished work for a coordinator-driven phase
+      if (event.name === "agent:status_changed") {
+        const status = data["status"] as string | undefined;
+        return status === "done" || status === "idle";
+      }
+
+      // For proposal:scored, always act — the gate phase needs to process scores
       return true;
     },
 
