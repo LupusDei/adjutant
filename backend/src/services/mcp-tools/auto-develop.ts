@@ -120,9 +120,10 @@ export function registerAutoDevelopTools(
       proposalStore.setConfidenceScore(proposalId, score, signals);
 
       // 9. Emit proposal:scored event
+      // Use resolved project UUID, not proposal.project which may be a legacy name string (adj-138)
       getEventBus().emit("proposal:scored", {
         proposalId,
-        projectId: proposal.project,
+        projectId: projectResult.data.id,
         score,
         classification,
         reviewRound: proposal.reviewRound,
@@ -139,7 +140,7 @@ export function registerAutoDevelopTools(
       // Audit trail for confidence gate decisions
       logInfo("confidence_gate_decision", {
         proposalId,
-        projectId: proposal.project,
+        projectId: projectResult.data.id,
         score,
         classification,
         signals,

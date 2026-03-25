@@ -376,14 +376,22 @@ export function listProjects(): ProjectsServiceResult<Project[]> {
 }
 
 /**
- * Get a single project by ID.
+ * Get a single project by ID or name.
+ *
+ * Looks up by UUID first, then falls back to name match. This handles
+ * legacy code that stored project names instead of UUIDs (adj-090, adj-138).
  */
-export function getProject(id: string): ProjectsServiceResult<Project> {
+export function getProject(idOrName: string): ProjectsServiceResult<Project> {
   try {
     const db = getDatabase();
-    const row = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow | undefined;
+    // Try UUID first (primary key)
+    let row = db.prepare("SELECT * FROM projects WHERE id = ?").get(idOrName) as ProjectRow | undefined;
+    // Fall back to name match (handles legacy proposals that stored project name)
     if (!row) {
-      return { success: false, error: { code: "NOT_FOUND", message: `Project '${id}' not found` } };
+      row = db.prepare("SELECT * FROM projects WHERE name = ?").get(idOrName) as ProjectRow | undefined;
+    }
+    if (!row) {
+      return { success: false, error: { code: "NOT_FOUND", message: `Project '${idOrName}' not found` } };
     }
     return { success: true, data: rowToProject(row) };
   } catch (err) {

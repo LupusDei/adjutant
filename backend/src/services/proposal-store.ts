@@ -11,6 +11,7 @@ import type {
   ProposalRevisionRow,
 } from "../types/proposals.js";
 import { listProjects } from "./projects-service.js";
+import { logWarn } from "../utils/index.js";
 
 function rowToProposal(row: ProposalRow): Proposal {
   let confidenceSignals: Record<string, number> | undefined;
@@ -298,8 +299,14 @@ export function createProposalStore(db: Database.Database): ProposalStore {
 export function resolveProjectFilter(project: string | undefined): string | string[] | undefined {
   if (!project) return undefined;
   const result = listProjects();
-  if (!result.success || !result.data) return project;
+  if (!result.success || !result.data) {
+    logWarn("resolveProjectFilter: project lookup failed, using raw value", { project });
+    return project;
+  }
   const match = result.data.find((p) => p.id === project || p.name === project);
-  if (!match) return project;
+  if (!match) {
+    logWarn("resolveProjectFilter: project not found in registry", { project });
+    return project;
+  }
   return match.id === match.name ? match.id : [match.id, match.name];
 }
