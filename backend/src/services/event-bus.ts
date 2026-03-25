@@ -124,6 +124,44 @@ export interface SpawnFailedEvent {
   tmuxSession?: string;
 }
 
+export interface AutoDevelopEnabledEvent {
+  projectId: string;
+  projectName: string;
+  visionContext?: string;
+}
+
+export interface AutoDevelopDisabledEvent {
+  projectId: string;
+  projectName: string;
+}
+
+export interface ProposalScoredEvent {
+  proposalId: string;
+  projectId: string;
+  score: number;
+  classification: "accept" | "refine" | "escalate" | "dismiss";
+  reviewRound: number;
+}
+
+export interface ProposalCompletedEvent {
+  proposalId: string;
+  projectId: string;
+  epicId?: string;
+}
+
+export interface AutoDevelopPhaseChangedEvent {
+  projectId: string;
+  cycleId: string;
+  previousPhase: string;
+  newPhase: string;
+}
+
+export interface AutoDevelopEscalatedEvent {
+  projectId: string;
+  reason: string;
+  proposalIds: string[];
+}
+
 /**
  * Map of event names to their payload types.
  */
@@ -148,6 +186,12 @@ export interface EventMap {
   "merge:conflict": MergeConflictEvent;
   "coordinator:action": CoordinatorActionEvent;
   "agent:spawn_failed": SpawnFailedEvent;
+  "project:auto_develop_enabled": AutoDevelopEnabledEvent;
+  "project:auto_develop_disabled": AutoDevelopDisabledEvent;
+  "proposal:scored": ProposalScoredEvent;
+  "proposal:completed": ProposalCompletedEvent;
+  "auto_develop:phase_changed": AutoDevelopPhaseChangedEvent;
+  "auto_develop:escalated": AutoDevelopEscalatedEvent;
 }
 
 export type EventName = keyof EventMap;
@@ -223,6 +267,9 @@ class EventBus {
       "correction:detected", "learning:created",
       "build:failed", "build:passed", "merge:completed", "merge:conflict", "coordinator:action",
       "agent:spawn_failed",
+      "project:auto_develop_enabled", "project:auto_develop_disabled",
+      "proposal:scored", "proposal:completed",
+      "auto_develop:phase_changed", "auto_develop:escalated",
     ];
     for (const e of events) {
       const count = this.emitter.listenerCount(e);
