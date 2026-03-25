@@ -52,23 +52,7 @@ export function registerAutoDevelopTools(server: McpServer, proposalStore: Propo
         };
       }
 
-      // 2. Resolve project context
-      const projectContext = extra.sessionId ? getProjectContextBySession(extra.sessionId) : undefined;
-      if (!projectContext) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: "No project context — cannot score proposals" }) }],
-        };
-      }
-
-      // 3. Verify auto-develop is enabled for this project
-      const projectResult = getProject(projectContext.projectId);
-      if (!projectResult.success || !projectResult.data?.autoDevelop) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: "Auto-develop is not enabled for this project" }) }],
-        };
-      }
-
-      // 4. Get proposal and validate it exists
+      // 2. Get proposal and validate it exists
       const proposal = proposalStore.getProposal(proposalId);
       if (!proposal) {
         return {
@@ -76,15 +60,21 @@ export function registerAutoDevelopTools(server: McpServer, proposalStore: Propo
         };
       }
 
-      // 5. Validate proposal belongs to agent's project
-      if (proposal.project !== projectContext.projectId && proposal.project !== projectContext.projectName) {
+      // 3. Resolve project from the proposal itself (adj-136).
+      // Agents spawned to review cross-project proposals may have a session
+      // context pointing to a different project (e.g., coordinator's project).
+      // The proposal's project field is the source of truth.
+      const projectResult = getProject(proposal.project);
+      if (!projectResult.success || !projectResult.data) {
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({
-              error: `Proposal belongs to project ${proposal.project}, but you are scoped to project ${projectContext.projectId}`,
-            }),
-          }],
+          content: [{ type: "text" as const, text: JSON.stringify({ error: `Project not found for proposal: ${proposal.project}` }) }],
+        };
+      }
+
+      // 4. Verify auto-develop is enabled for the proposal's project
+      if (!projectResult.data.autoDevelop) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Auto-develop is not enabled for this project" }) }],
         };
       }
 
@@ -107,7 +97,7 @@ export function registerAutoDevelopTools(server: McpServer, proposalStore: Propo
       // 9. Emit proposal:scored event
       getEventBus().emit("proposal:scored", {
         proposalId,
-        projectId: projectContext.projectId,
+        projectId: proposal.project,
         score,
         classification,
         reviewRound: proposal.reviewRound,
@@ -124,7 +114,7 @@ export function registerAutoDevelopTools(server: McpServer, proposalStore: Propo
       // Audit trail for confidence gate decisions
       logInfo("confidence_gate_decision", {
         proposalId,
-        projectId: projectContext.projectId,
+        projectId: proposal.project,
         score,
         classification,
         signals,
