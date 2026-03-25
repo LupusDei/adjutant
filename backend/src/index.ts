@@ -226,7 +226,7 @@ const server = app.listen(PORT, () => {
     registerBeadTools(server, eventStore);
     registerQueryTools(server, messageStore);
     registerProposalTools(server, proposalStore);
-    registerAutoDevelopTools(server);
+    registerAutoDevelopTools(server, proposalStore);
     registerMemoryTools(server, memoryStore, { getAgentBySession });
     registerCoordinationTools(server, adjutantState, messageStore, stimulusEngine, eventStore, cronScheduleStore);
   });

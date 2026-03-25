@@ -19,6 +19,13 @@ vi.mock("../../src/services/event-bus.js", () => ({
   })),
 }));
 
+vi.mock("../../src/services/proposal-store.js", () => ({}));
+
+vi.mock("../../src/services/confidence-engine.js", () => ({
+  computeConfidenceScore: vi.fn(),
+  classifyConfidence: vi.fn(),
+}));
+
 vi.mock("../../src/utils/index.js", () => ({
   logInfo: vi.fn(),
   logError: vi.fn(),
@@ -90,7 +97,8 @@ describe("Auto-Develop MCP Tools", () => {
 
     // Register tools on the fake server — cast needed because createFakeMcpServer
     // implements only the subset of McpServer used by registerAutoDevelopTools
-    registerAutoDevelopTools(server as unknown as Parameters<typeof registerAutoDevelopTools>[0]);
+    const fakeProposalStore = {} as Parameters<typeof registerAutoDevelopTools>[1];
+    registerAutoDevelopTools(server as unknown as Parameters<typeof registerAutoDevelopTools>[0], fakeProposalStore);
   });
 
   // =========================================================================
