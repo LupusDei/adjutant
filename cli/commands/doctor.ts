@@ -7,6 +7,8 @@
 
 import { execSync } from "child_process";
 
+import { join } from "path";
+
 import { printHeader, printCheck, printSummary, type CheckResult } from "../lib/output.js";
 import {
   fileExists,
@@ -22,6 +24,7 @@ import {
   type ClaudeSettings,
 } from "../lib/checks.js";
 import { PLUGIN_KEY, LEGACY_HOOK_COMMANDS } from "../lib/plugin.js";
+import { getQualityFilePaths } from "../lib/quality-templates.js";
 
 /** adj-013.3.1: File/directory existence checks. */
 function checkFiles(cwd: string): CheckResult[] {
@@ -176,6 +179,19 @@ function checkPlugin(): CheckResult[] {
   return results;
 }
 
+/** Check presence of quality gate files (testing rules, CI config, etc.). */
+export function checkQualityFiles(cwd: string): CheckResult[] {
+  const results: CheckResult[] = [];
+  for (const destPath of getQualityFilePaths()) {
+    if (fileExists(join(cwd, destPath))) {
+      results.push({ name: destPath, status: "pass" });
+    } else {
+      results.push({ name: destPath, status: "fail", message: "run adjutant upgrade" });
+    }
+  }
+  return results;
+}
+
 export async function runDoctor(): Promise<number> {
   printHeader("Adjutant Doctor");
   const cwd = process.cwd();
@@ -183,6 +199,9 @@ export async function runDoctor(): Promise<number> {
 
   // adj-013.3.1 - File/directory existence checks
   results.push(...checkFiles(cwd));
+
+  // Quality gate file checks
+  results.push(...checkQualityFiles(cwd));
 
   // adj-013.3.2 - Network checks (health, MCP SSE)
   results.push(...(await checkNetwork()));
