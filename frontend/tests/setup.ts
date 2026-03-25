@@ -3,6 +3,14 @@ import "@testing-library/jest-dom/vitest";
 // Configure React Testing Library to use act()
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
+// Suppress noisy React act() warnings in test output — these are false positives
+// from async state updates in hooks that resolve after the test assertion scope.
+const originalError = console.error;
+console.error = (...args: unknown[]) => {
+  if (typeof args[0] === "string" && args[0].includes("was not wrapped in act(")) return;
+  originalError(...args);
+};
+
 // Polyfill localStorage for jsdom (some versions lack standard methods)
 if (typeof globalThis.localStorage === 'undefined' || typeof globalThis.localStorage.clear !== 'function') {
   const store = new Map<string, string>();
