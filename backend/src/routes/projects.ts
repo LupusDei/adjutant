@@ -11,6 +11,7 @@
  * - GET    /api/projects/:id/overview - Get project overview (beads, epics, agents)
  * - GET    /api/projects/:id/health   - Check project health (path, git, beads)
  * - POST   /api/projects/:id/activate - Activate a project
+ * - PATCH  /api/projects/:id          - Update project settings (autoDevelop, visionContext)
  * - DELETE /api/projects/:id          - Delete project registration (not files)
  */
 
@@ -24,6 +25,9 @@ import {
   deleteProject,
   discoverLocalProjects,
   checkProjectHealth,
+  enableAutoDevelop,
+  disableAutoDevelop,
+  setVisionContext,
 } from "../services/projects-service.js";
 import { listDirectory, readFile } from "../services/files-service.js";
 import {
@@ -35,6 +39,8 @@ import type { EpicProgress } from "../services/beads/index.js";
 import { getAgents } from "../services/agents-service.js";
 import type { MessageStore } from "../services/message-store.js";
 import { success, error as errorResponse, badRequest, notFound, internalError } from "../utils/responses.js";
+import { UpdateProjectAutoDevelopSchema } from "../types/auto-develop.js";
+import { getEventBus } from "../services/event-bus.js";
 
 /**
  * Zod schema for file listing query params.
@@ -351,6 +357,62 @@ export function createProjectsRouter(store: MessageStore): Router {
       return res.status(500).json(
         internalError(result.error?.message ?? "Failed to activate project")
       );
+    }
+
+    return res.json(success(result.data));
+  });
+
+  /**
+   * PATCH /api/projects/:id
+   * Update project settings (currently: autoDevelop toggle + visionContext).
+   */
+  router.patch("/:id", (req, res) => {
+    const { id } = req.params;
+    const parsed = UpdateProjectAutoDevelopSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(badRequest(parsed.error.issues[0]?.message ?? "Invalid request"));
+    }
+
+    // Get existing project first
+    const existing = getProject(id);
+    if (!existing.success || !existing.data) {
+      return res.status(404).json(notFound("Project", id));
+    }
+
+    let result: ReturnType<typeof enableAutoDevelop> | undefined;
+
+    if (parsed.data.autoDevelop === true) {
+      result = enableAutoDevelop(id);
+      if (result.success) {
+        const enabledEvent: { projectId: string; projectName: string; visionContext?: string } = {
+          projectId: id,
+          projectName: existing.data.name,
+        };
+        if (parsed.data.visionContext !== undefined) {
+          enabledEvent.visionContext = parsed.data.visionContext;
+        }
+        getEventBus().emit("project:auto_develop_enabled", enabledEvent);
+      }
+    } else if (parsed.data.autoDevelop === false) {
+      result = disableAutoDevelop(id);
+      if (result.success) {
+        getEventBus().emit("project:auto_develop_disabled", {
+          projectId: id,
+          projectName: existing.data.name,
+        });
+      }
+    }
+
+    if (parsed.data.visionContext !== undefined) {
+      result = setVisionContext(id, parsed.data.visionContext);
+    }
+
+    if (!result) {
+      return res.status(400).json(badRequest("No update fields provided"));
+    }
+
+    if (!result.success) {
+      return res.status(500).json(internalError(result.error?.message ?? "Failed to update project"));
     }
 
     return res.json(success(result.data));
