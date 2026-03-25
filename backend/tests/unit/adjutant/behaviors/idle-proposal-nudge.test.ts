@@ -475,33 +475,7 @@ describe("createIdleProposalNudge", () => {
       expect(reason).toContain("Refactor auth module");
     });
 
-    it("includes dismissed proposal titles in the reason", async () => {
-      const dismissedProposals = [
-        makeProposal({ id: "d-1", title: "Remove legacy API", status: "dismissed" }),
-        makeProposal({ id: "d-2", title: "Switch to GraphQL", status: "dismissed" }),
-      ];
-
-      (proposalStore.getProposals as ReturnType<typeof vi.fn>).mockImplementation(
-        (opts?: { status?: string }) => {
-          if (opts?.status === "pending") return [];
-          if (opts?.status === "dismissed") return dismissedProposals;
-          return [];
-        },
-      );
-
-      const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
-      setupConnectedAgent("agent-1");
-
-      await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
-
-      const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
-      expect(reason).toContain("d-1");
-      expect(reason).toContain("Remove legacy API");
-      expect(reason).toContain("d-2");
-      expect(reason).toContain("Switch to GraphQL");
-    });
-
-    it("indicates no existing proposals when none exist", async () => {
+    it("indicates no pending proposals when none exist", async () => {
       (proposalStore.getProposals as ReturnType<typeof vi.fn>).mockReturnValue([]);
 
       const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
@@ -510,7 +484,7 @@ describe("createIdleProposalNudge", () => {
       await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
 
       const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
-      expect(reason.toLowerCase()).toContain("no existing proposals");
+      expect(reason.toLowerCase()).toContain("no pending proposals");
     });
 
     it("reason string instructs coordinator to send_message to the idle agent", async () => {
@@ -526,7 +500,7 @@ describe("createIdleProposalNudge", () => {
       expect(reason).toContain("engineer-5");
     });
 
-    it("queries proposalStore for both pending and dismissed proposals", async () => {
+    it("queries proposalStore for pending proposals only", async () => {
       (proposalStore.getProposals as ReturnType<typeof vi.fn>).mockReturnValue([]);
 
       const behavior = createIdleProposalNudge(stimulusEngine, proposalStore);
@@ -535,7 +509,7 @@ describe("createIdleProposalNudge", () => {
       await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
 
       expect(proposalStore.getProposals).toHaveBeenCalledWith({ status: "pending" });
-      expect(proposalStore.getProposals).toHaveBeenCalledWith({ status: "dismissed" });
+      expect(proposalStore.getProposals).not.toHaveBeenCalledWith(expect.objectContaining({ status: "dismissed" }));
     });
   });
 
@@ -574,7 +548,7 @@ describe("createIdleProposalNudge", () => {
       );
     }
 
-    it("includes PENDING CAP REACHED when 12 pending proposals exist", async () => {
+    it("includes PENDING CAP when 12 pending proposals exist", async () => {
       const pending = makePendingProposals(12);
       (proposalStore.getProposals as ReturnType<typeof vi.fn>).mockImplementation(
         (opts?: { status?: string }) => {
@@ -590,13 +564,13 @@ describe("createIdleProposalNudge", () => {
       await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
 
       const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
-      expect(reason).toContain("PENDING CAP REACHED");
+      expect(reason).toContain("PENDING CAP");
       expect(reason).toContain("12/12");
-      expect(reason.toLowerCase()).toContain("improve an existing proposal");
-      expect(reason.toLowerCase()).toContain("not create new ones");
+      expect(reason.toLowerCase()).toContain("must improve existing");
+      expect(reason.toLowerCase()).toContain("not create new");
     });
 
-    it("includes PENDING CAP REACHED when more than 12 pending proposals exist", async () => {
+    it("includes PENDING CAP when more than 12 pending proposals exist", async () => {
       const pending = makePendingProposals(15);
       (proposalStore.getProposals as ReturnType<typeof vi.fn>).mockImplementation(
         (opts?: { status?: string }) => {
@@ -612,11 +586,11 @@ describe("createIdleProposalNudge", () => {
       await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
 
       const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
-      expect(reason).toContain("PENDING CAP REACHED");
+      expect(reason).toContain("PENDING CAP");
       expect(reason).toContain("15/12");
     });
 
-    it("does NOT include PENDING CAP REACHED when fewer than 12 pending proposals exist", async () => {
+    it("does NOT include PENDING CAP when fewer than 12 pending proposals exist", async () => {
       const pending = makePendingProposals(11);
       (proposalStore.getProposals as ReturnType<typeof vi.fn>).mockImplementation(
         (opts?: { status?: string }) => {
@@ -632,7 +606,7 @@ describe("createIdleProposalNudge", () => {
       await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
 
       const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
-      expect(reason).not.toContain("PENDING CAP REACHED");
+      expect(reason).not.toContain("PENDING CAP");
     });
 
     it("allows new creation when under the cap", async () => {
@@ -651,7 +625,7 @@ describe("createIdleProposalNudge", () => {
       await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
 
       const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
-      expect(reason).not.toContain("PENDING CAP REACHED");
+      expect(reason).not.toContain("PENDING CAP");
       // The reason should still list the proposals
       expect(reason).toContain("Pending proposals (5)");
     });
@@ -706,10 +680,6 @@ describe("createIdleProposalNudge", () => {
         status: "pending",
         project: ["f1e8f895", "adjutant"],
       });
-      expect(proposalStore.getProposals).toHaveBeenCalledWith({
-        status: "dismissed",
-        project: ["f1e8f895", "adjutant"],
-      });
     });
 
     it("falls back to unfiltered proposals when agent has no project context", async () => {
@@ -723,9 +693,6 @@ describe("createIdleProposalNudge", () => {
       // Without project context, should query without project filter
       expect(proposalStore.getProposals).toHaveBeenCalledWith({
         status: "pending",
-      });
-      expect(proposalStore.getProposals).toHaveBeenCalledWith({
-        status: "dismissed",
       });
     });
 
@@ -779,7 +746,7 @@ describe("createIdleProposalNudge", () => {
       await dispatchToBehavior(behavior, makeIdleEvent("agent-1"), state, comm);
 
       const reason = (stimulusEngine.scheduleCheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string;
-      expect(reason).toContain("PENDING CAP REACHED");
+      expect(reason).toContain("PENDING CAP");
       expect(reason).toContain("12/12");
     });
   });

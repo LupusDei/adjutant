@@ -386,14 +386,14 @@ describe("buildSituationPrompt — recurring schedules", () => {
 
     const result = buildSituationPrompt(input);
 
-    expect(result).toContain("Recurring Schedules");
+    expect(result).toContain("## Recurring");
     expect(result).toContain("Health check");
     expect(result).toContain("Cost report");
-    expect(result).toContain("3 times");
-    expect(result).toContain("1 time");
+    expect(result).toContain("fired 3x");
+    expect(result).toContain("fired 1x");
   });
 
-  it("should not render Recurring Schedules section when no schedules exist", () => {
+  it("should not render Recurring section when no schedules exist", () => {
     const input = makePromptInput({
       pendingSchedule: {
         checks: [],
@@ -403,7 +403,7 @@ describe("buildSituationPrompt — recurring schedules", () => {
     });
 
     const result = buildSituationPrompt(input);
-    expect(result).not.toContain("Recurring Schedules");
+    expect(result).not.toContain("## Recurring");
   });
 
   it("should show interval label derived from cron expression", () => {

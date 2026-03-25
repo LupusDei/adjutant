@@ -490,7 +490,7 @@ describe("buildSituationPrompt", () => {
     expect(prompt).toContain("worker-5");
   });
 
-  it("includes available actions list", () => {
+  it("includes closing instruction", () => {
     const prompt = buildSituationPrompt({
       wakeReason: "test",
       signals: [],
@@ -506,8 +506,7 @@ describe("buildSituationPrompt", () => {
       pendingSchedule: { checks: [], watches: [] },
       recentDecisions: [],
     });
-    expect(prompt).toContain("schedule_check");
-    expect(prompt).toContain("watch_for");
+    expect(prompt).toContain("Assess and act");
   });
 
   it("produces a single-line prompt (no newlines) for tmux injection", () => {

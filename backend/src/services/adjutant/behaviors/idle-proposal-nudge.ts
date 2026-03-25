@@ -29,36 +29,26 @@ function buildScheduleReason(agentId: string, proposalStore: ProposalStore): str
     : {};
 
   const pending = proposalStore.getProposals({ status: "pending", ...projectFilter });
-  const dismissed = proposalStore.getProposals({ status: "dismissed", ...projectFilter });
 
   const parts: string[] = [];
-  parts.push(`Agent "${agentId}" has been idle for 5 minutes.`);
+  parts.push(`Agent "${agentId}" idle 5m.`);
 
-  if (pending.length === 0 && dismissed.length === 0) {
-    parts.push("No existing proposals — agent can create new proposals freely.");
+  if (pending.length === 0) {
+    parts.push("No pending proposals.");
   } else {
-    if (pending.length > 0) {
-      parts.push(`Pending proposals (${pending.length}):`);
-      for (const p of pending) {
-        parts.push(`  - [${p.id}] ${p.title}`);
-      }
-    }
-    if (dismissed.length > 0) {
-      parts.push(`Dismissed proposals (${dismissed.length}):`);
-      for (const p of dismissed) {
-        parts.push(`  - [${p.id}] ${p.title}`);
-      }
+    parts.push(`Pending proposals (${pending.length}):`);
+    for (const p of pending) {
+      parts.push(`  - [${p.id.slice(0, 8)}] ${p.title}`);
     }
 
-    // Pending cap check
     if (pending.length >= PENDING_CAP) {
       parts.push(
-        `PENDING CAP REACHED (${pending.length}/${PENDING_CAP}) — agent must improve an existing proposal, not create new ones.`,
+        `PENDING CAP (${pending.length}/${PENDING_CAP}) — must improve existing, not create new.`,
       );
     }
   }
 
-  parts.push(`ACTION: Use send_message to nudge agent "${agentId}" to work on proposals.`);
+  parts.push(`ACTION: send_message to nudge "${agentId}" to work on proposals.`);
   return parts.join("\n");
 }
 

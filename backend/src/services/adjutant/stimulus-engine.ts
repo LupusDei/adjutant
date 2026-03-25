@@ -524,15 +524,15 @@ export function buildSituationPrompt(input: SituationPromptInput): string {
 
   // Pending Schedule
   if (input.pendingSchedule.checks.length > 0 || input.pendingSchedule.watches.length > 0) {
-    lines.push("## Your Pending Schedule");
+    lines.push("## Pending");
     for (const check of input.pendingSchedule.checks) {
       const remainMs = check.firesAt - Date.now();
       const remainMin = Math.max(1, Math.round(remainMs / 60_000));
-      lines.push(`- In ${remainMin}m: "${check.reason}"`);
+      lines.push(`- In ${remainMin}m: ${check.reason}`);
     }
     for (const watch of input.pendingSchedule.watches) {
       const reason = watch.reason ?? watch.event;
-      lines.push(`- Watching: ${reason}`);
+      lines.push(`- Watch: ${reason}`);
     }
     lines.push("");
   }
@@ -541,43 +541,32 @@ export function buildSituationPrompt(input: SituationPromptInput): string {
   // recurringSchedules may be absent in legacy callers that haven't been updated
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (input.pendingSchedule.recurringSchedules && input.pendingSchedule.recurringSchedules.length > 0) {
-    lines.push("## Recurring Schedules");
+    lines.push("## Recurring");
     for (const sched of input.pendingSchedule.recurringSchedules) {
       const intervalMs = cronToIntervalMs(sched.cronExpr);
       const intervalLabel = formatIntervalLabel(intervalMs);
       const remainMs = new Date(sched.nextFireAt).getTime() - Date.now();
       const remainMin = Math.max(1, Math.round(remainMs / 60_000));
-      const firedStr = sched.fireCount === 1 ? "1 time" : `${sched.fireCount} times`;
-      lines.push(`- Every ${intervalLabel}: "${sched.reason}" (next: ${remainMin}m, fired ${firedStr})`);
+      lines.push(`- Every ${intervalLabel}: ${sched.reason} (next: ${remainMin}m, fired ${sched.fireCount}x)`);
     }
     lines.push("");
   }
 
   // Recent Decisions (with outcomes if available)
   if (input.recentDecisions.length > 0) {
-    lines.push("## Recent Decisions");
+    lines.push("## Recent");
     for (const decision of input.recentDecisions) {
       const ago = formatAgo(decision.createdAt);
       const target = decision.target ? ` -> ${decision.target}` : "";
       const outcome = decision.outcome
-        ? ` [outcome: ${decision.outcome}]`
-        : " [outcome: pending]";
+        ? ` [${decision.outcome}]`
+        : "";
       lines.push(`- ${ago}: ${decision.action}${target}${outcome}`);
     }
     lines.push("");
   }
 
-  // Available Actions
-  lines.push("## Available Actions");
-  lines.push("- spawn_worker({ prompt, beadId? })");
-  lines.push("- assign_bead({ beadId, agentId, reason })");
-  lines.push("- nudge_agent({ agentId, message })");
-  lines.push("- decommission_agent({ agentId, reason })");
-  lines.push("- rebalance_work({ agentId })");
-  lines.push("- schedule_check({ delay, reason })");
-  lines.push("- watch_for({ event, filter?, timeout?, reason })");
-  lines.push("");
-  lines.push("Assess the situation. Take action if warranted. Schedule follow-ups. Explain your reasoning.");
+  lines.push("Assess and act. Schedule follow-ups if needed.");
 
   // Collapse to single line for tmux injection
   return lines.join("\n").replace(/\n+/g, " ").trim();
