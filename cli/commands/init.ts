@@ -7,7 +7,7 @@
  * Idempotent: safe to run multiple times.
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from "fs";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
@@ -21,6 +21,7 @@ import {
   getGlobalAdjutantDir,
 } from "../lib/checks.js";
 import { installPlugin } from "../lib/plugin.js";
+import { QUALITY_FILES, loadTemplate } from "../lib/quality-templates.js";
 import { printHeader, printCheck, printSummary, printSuccess, printError, type CheckResult } from "../lib/output.js";
 import { PRIME_MD_CONTENT } from "../lib/prime.js";
 
@@ -134,6 +135,45 @@ function checkDatabase(): CheckResult {
   };
 }
 
+/**
+ * Scaffold quality-gate files (testing rules, code review, CI, etc.) into a project.
+ *
+ * Copies templates from cli/templates/quality/ to their destination paths.
+ * Respects skipIfExists (e.g. ci.yml is never overwritten) and force flag.
+ *
+ * @param projectRoot - Absolute path to the project root directory
+ * @param force - If true, overwrite existing files (except those with skipIfExists)
+ * @returns Array of CheckResults describing what was created or skipped
+ */
+export function scaffoldQualityFiles(projectRoot: string, force: boolean): CheckResult[] {
+  const results: CheckResult[] = [];
+
+  for (const qf of QUALITY_FILES) {
+    const fullPath = join(projectRoot, qf.destPath);
+
+    if (qf.skipIfExists && fileExists(fullPath)) {
+      results.push({ name: qf.destPath, status: "skipped", message: "existing CI config preserved" });
+      continue;
+    }
+
+    if (fileExists(fullPath) && !force) {
+      results.push({ name: qf.destPath, status: "skipped", message: "already exists" });
+      continue;
+    }
+
+    mkdirSync(dirname(fullPath), { recursive: true });
+    writeFileSync(fullPath, loadTemplate(qf.templateName), "utf-8");
+
+    if (qf.executable) {
+      chmodSync(fullPath, 0o755);
+    }
+
+    results.push({ name: qf.destPath, status: "created" });
+  }
+
+  return results;
+}
+
 export async function runInit(options: InitOptions): Promise<number> {
   printHeader("Adjutant Init");
   const projectRoot = process.cwd();
@@ -162,6 +202,9 @@ export async function runInit(options: InitOptions): Promise<number> {
     results.push(...checkDependencies(projectRoot));
     results.push(checkDatabase());
   }
+
+  // Quality-gate files (testing rules, code review, CI, etc.)
+  results.push(...scaffoldQualityFiles(projectRoot, options.force));
 
   for (const r of results) {
     printCheck(r);
