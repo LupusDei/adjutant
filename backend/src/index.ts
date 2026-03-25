@@ -43,6 +43,8 @@ import { createSessionRetrospective } from "./services/adjutant/behaviors/sessio
 import { createMemoryReviewer } from "./services/adjutant/behaviors/memory-reviewer.js";
 import { createSelfImprover } from "./services/adjutant/behaviors/self-improver.js";
 import { createIdleProposalNudge } from "./services/adjutant/behaviors/idle-proposal-nudge.js";
+import { createAutoDevelopLoop } from "./services/adjutant/behaviors/auto-develop-loop.js";
+import { createAutoDevelopStore } from "./services/auto-develop-store.js";
 import { createMemoryStore } from "./services/adjutant/memory-store.js";
 import { SignalAggregator } from "./services/adjutant/signal-aggregator.js";
 import { StimulusEngine, buildSituationPrompt, buildBootstrapPrompt, type StateSnapshot } from "./services/adjutant/stimulus-engine.js";
@@ -94,6 +96,7 @@ const proposalStore = createProposalStore(messageDb);
 const eventStore = createEventStore(messageDb);
 const memoryStore = createMemoryStore(messageDb);
 const cronScheduleStore = new CronScheduleStore(messageDb);
+const autoDevelopStore = createAutoDevelopStore(messageDb);
 app.use("/api/events", createEventsRouter(eventStore));
 app.use("/api/memory", createMemoryRouter(memoryStore));
 app.use("/api/messages", createMessagesRouter(messageStore));
@@ -209,6 +212,7 @@ const server = app.listen(PORT, () => {
 
   // Register stimulus-dependent behaviors (must come after stimulusEngine creation)
   behaviorRegistry.register(createIdleProposalNudge(stimulusEngine, proposalStore));
+  behaviorRegistry.register(createAutoDevelopLoop(stimulusEngine, proposalStore, autoDevelopStore));
 
   // Mount schedules route (needs both cronScheduleStore and stimulusEngine)
   app.use("/api/schedules", createSchedulesRouter(cronScheduleStore, stimulusEngine));
