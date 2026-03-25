@@ -20,6 +20,9 @@ import type { AdjutantState } from "../adjutant/state-store.js";
 import type { MessageStore } from "../message-store.js";
 import type { StimulusEngine } from "../adjutant/stimulus-engine.js";
 import type { EventStore } from "../event-store.js";
+import type { CronScheduleStore } from "../adjutant/cron-schedule-store.js";
+import { computeNextFireAt } from "../adjutant/cron-schedule-store.js";
+import { cronToIntervalMs } from "../adjutant/adjutant-core.js";
 
 // ============================================================================
 // Constants
@@ -156,6 +159,7 @@ export function registerCoordinationTools(
   messageStore: MessageStore,
   stimulusEngine?: StimulusEngine,
   eventStore?: EventStore,
+  cronScheduleStore?: CronScheduleStore,
 ): void {
   // --------------------------------------------------------------------------
   // spawn_worker
@@ -584,6 +588,239 @@ export function registerCoordinationTools(
         watching: event,
         timeout: timeout ?? null,
       });
+    },
+  );
+
+  // --------------------------------------------------------------------------
+  // create_schedule
+  // --------------------------------------------------------------------------
+  server.tool(
+    "create_schedule",
+    "Create a persistent recurring schedule that survives restarts",
+    {
+      cron: z.string().describe('5-field cron expression, e.g. "*/15 * * * *"'),
+      reason: z.string().describe("Why this schedule exists"),
+      maxFires: z.number().optional().describe("Maximum fires before auto-disable (null = unlimited)"),
+    },
+    async ({ cron, reason, maxFires }, extra) => {
+      const callerAgentId = checkAccess(extra.sessionId);
+      if (!callerAgentId) {
+        const resolved = resolveCallerOrError(extra.sessionId);
+        return resolved.error!;
+      }
+
+      if (!stimulusEngine) {
+        return jsonResult({ success: false, error: "Stimulus engine not available" });
+      }
+
+      if (!cronScheduleStore) {
+        return jsonResult({ success: false, error: "Cron schedule store not available" });
+      }
+
+      // Validate cron expression
+      try {
+        cronToIntervalMs(cron);
+      } catch (err) {
+        return jsonResult({
+          success: false,
+          error: `Invalid cron expression: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+
+      const nextFireAt = computeNextFireAt(cron);
+      const createParams: {
+        cronExpr: string;
+        reason: string;
+        createdBy: string;
+        nextFireAt: string;
+        maxFires?: number;
+      } = {
+        cronExpr: cron,
+        reason,
+        createdBy: callerAgentId,
+        nextFireAt,
+      };
+      if (maxFires !== undefined) {
+        createParams.maxFires = maxFires;
+      }
+      const schedule = cronScheduleStore.create(createParams);
+
+      stimulusEngine.registerRecurringSchedule(schedule, cronScheduleStore);
+
+      const decision = {
+        behavior: "adjutant",
+        action: "create_schedule",
+        target: schedule.id,
+        reason: `Created schedule "${cron}": ${reason}`,
+      };
+      state.logDecision(decision);
+      emitCoordinatorAction(eventStore, callerAgentId, decision);
+
+      logInfo("create_schedule: schedule created", { id: schedule.id, cron, reason });
+
+      return jsonResult({
+        success: true,
+        id: schedule.id,
+        cronExpr: schedule.cronExpr,
+        nextFireAt: schedule.nextFireAt,
+      });
+    },
+  );
+
+  // --------------------------------------------------------------------------
+  // list_schedules
+  // --------------------------------------------------------------------------
+  server.tool(
+    "list_schedules",
+    "List all recurring schedules",
+    {},
+    async (_params, extra) => {
+      const callerAgentId = checkAccess(extra.sessionId);
+      if (!callerAgentId) {
+        const resolved = resolveCallerOrError(extra.sessionId);
+        return resolved.error!;
+      }
+
+      if (!cronScheduleStore) {
+        return jsonResult({ success: true, schedules: [] });
+      }
+
+      const schedules = cronScheduleStore.listAll();
+      return jsonResult({ success: true, schedules });
+    },
+  );
+
+  // --------------------------------------------------------------------------
+  // cancel_schedule
+  // --------------------------------------------------------------------------
+  server.tool(
+    "cancel_schedule",
+    "Cancel and delete a recurring schedule",
+    {
+      id: z.string().describe("Schedule ID to cancel"),
+    },
+    async ({ id }, extra) => {
+      const callerAgentId = checkAccess(extra.sessionId);
+      if (!callerAgentId) {
+        const resolved = resolveCallerOrError(extra.sessionId);
+        return resolved.error!;
+      }
+
+      if (!cronScheduleStore) {
+        return jsonResult({ success: false, error: "Cron schedule store not available" });
+      }
+
+      const deleted = cronScheduleStore.delete(id);
+      if (!deleted) {
+        return jsonResult({ success: false, error: `Schedule not found: ${id}` });
+      }
+
+      if (stimulusEngine) {
+        stimulusEngine.cancelRecurringSchedule(id);
+      }
+
+      const decision = {
+        behavior: "adjutant",
+        action: "cancel_schedule",
+        target: id,
+        reason: `Cancelled schedule ${id}`,
+      };
+      state.logDecision(decision);
+      emitCoordinatorAction(eventStore, callerAgentId, decision);
+
+      logInfo("cancel_schedule: schedule cancelled", { id });
+
+      return jsonResult({ success: true, id });
+    },
+  );
+
+  // --------------------------------------------------------------------------
+  // pause_schedule
+  // --------------------------------------------------------------------------
+  server.tool(
+    "pause_schedule",
+    "Pause a recurring schedule (can be resumed later)",
+    {
+      id: z.string().describe("Schedule ID to pause"),
+    },
+    async ({ id }, extra) => {
+      const callerAgentId = checkAccess(extra.sessionId);
+      if (!callerAgentId) {
+        const resolved = resolveCallerOrError(extra.sessionId);
+        return resolved.error!;
+      }
+
+      if (!cronScheduleStore) {
+        return jsonResult({ success: false, error: "Cron schedule store not available" });
+      }
+
+      cronScheduleStore.disable(id);
+
+      if (stimulusEngine) {
+        stimulusEngine.cancelRecurringSchedule(id);
+      }
+
+      const decision = {
+        behavior: "adjutant",
+        action: "pause_schedule",
+        target: id,
+        reason: `Paused schedule ${id}`,
+      };
+      state.logDecision(decision);
+      emitCoordinatorAction(eventStore, callerAgentId, decision);
+
+      logInfo("pause_schedule: schedule paused", { id });
+
+      return jsonResult({ success: true, id, enabled: false });
+    },
+  );
+
+  // --------------------------------------------------------------------------
+  // resume_schedule
+  // --------------------------------------------------------------------------
+  server.tool(
+    "resume_schedule",
+    "Resume a paused recurring schedule",
+    {
+      id: z.string().describe("Schedule ID to resume"),
+    },
+    async ({ id }, extra) => {
+      const callerAgentId = checkAccess(extra.sessionId);
+      if (!callerAgentId) {
+        const resolved = resolveCallerOrError(extra.sessionId);
+        return resolved.error!;
+      }
+
+      if (!cronScheduleStore) {
+        return jsonResult({ success: false, error: "Cron schedule store not available" });
+      }
+
+      const schedule = cronScheduleStore.getById(id);
+      if (!schedule) {
+        return jsonResult({ success: false, error: `Schedule not found: ${id}` });
+      }
+
+      const nextFireAt = computeNextFireAt(schedule.cronExpr);
+      cronScheduleStore.update(id, { enabled: true, nextFireAt });
+
+      const updatedSchedule = { ...schedule, enabled: true, nextFireAt };
+
+      if (stimulusEngine) {
+        stimulusEngine.registerRecurringSchedule(updatedSchedule, cronScheduleStore);
+      }
+
+      const decision = {
+        behavior: "adjutant",
+        action: "resume_schedule",
+        target: id,
+        reason: `Resumed schedule ${id}`,
+      };
+      state.logDecision(decision);
+      emitCoordinatorAction(eventStore, callerAgentId, decision);
+
+      logInfo("resume_schedule: schedule resumed", { id, nextFireAt });
+
+      return jsonResult({ success: true, id, enabled: true, nextFireAt });
     },
   );
 }

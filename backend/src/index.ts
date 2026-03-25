@@ -1,7 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, costsRouter, createCallsignsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createPersonasRouter, createProjectsRouter, createProposalsRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, costsRouter, createCallsignsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createPersonasRouter, createProjectsRouter, createProposalsRouter, createSchedulesRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { createDashboardService } from "./services/dashboard-service.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
@@ -50,6 +50,7 @@ import { ADJUTANT_TMUX_SESSION } from "./services/adjutant-spawner.js";
 import { registerMemoryTools } from "./services/mcp-tools/memory.js";
 import { registerCoordinationTools } from "./services/mcp-tools/coordination.js";
 import { createMemoryRouter } from "./routes/memory.js";
+import { CronScheduleStore } from "./services/adjutant/cron-schedule-store.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
@@ -91,6 +92,7 @@ const messageStore = createMessageStore(messageDb);
 const proposalStore = createProposalStore(messageDb);
 const eventStore = createEventStore(messageDb);
 const memoryStore = createMemoryStore(messageDb);
+const cronScheduleStore = new CronScheduleStore(messageDb);
 app.use("/api/events", createEventsRouter(eventStore));
 app.use("/api/memory", createMemoryRouter(memoryStore));
 app.use("/api/messages", createMessagesRouter(messageStore));
@@ -207,6 +209,13 @@ const server = app.listen(PORT, () => {
   // Register stimulus-dependent behaviors (must come after stimulusEngine creation)
   behaviorRegistry.register(createIdleProposalNudge(stimulusEngine, proposalStore));
 
+  // Mount schedules route (needs both cronScheduleStore and stimulusEngine)
+  app.use("/api/schedules", createSchedulesRouter(cronScheduleStore, stimulusEngine));
+
+  // Load recurring schedules from DB so they survive restarts
+  stimulusEngine.loadRecurringSchedules(cronScheduleStore);
+  logInfo("Recurring schedules loaded from DB");
+
   // Set tool registrar BEFORE MCP init and agent spawn so that any
   // connecting agent gets a fully-tooled MCP server.
   // (adj-083 Bug 1: fixes race where agent gets zero tools)
@@ -217,7 +226,7 @@ const server = app.listen(PORT, () => {
     registerQueryTools(server, messageStore);
     registerProposalTools(server, proposalStore);
     registerMemoryTools(server, memoryStore, { getAgentBySession });
-    registerCoordinationTools(server, adjutantState, messageStore, stimulusEngine, eventStore);
+    registerCoordinationTools(server, adjutantState, messageStore, stimulusEngine, eventStore, cronScheduleStore);
   });
 
   // Initialize MCP server subsystem with tool registrar.
