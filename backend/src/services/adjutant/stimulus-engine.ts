@@ -15,6 +15,9 @@ import { randomUUID } from "crypto";
 import type { EventName } from "../event-bus.js";
 import type { Signal, SignalSnapshot } from "./signal-aggregator.js";
 import type { DecisionEntry } from "./state-store.js";
+import type { CronScheduleStore, CronSchedule } from "./cron-schedule-store.js";
+import { computeNextFireAt } from "./cron-schedule-store.js";
+import { cronToIntervalMs } from "./adjutant-core.js";
 
 // ============================================================================
 // Types
@@ -22,7 +25,7 @@ import type { DecisionEntry } from "./state-store.js";
 
 export interface WakeReason {
   /** What caused the wake */
-  type: "critical" | "scheduled" | "watch" | "watch_timeout" | "bootstrap";
+  type: "critical" | "scheduled" | "watch" | "watch_timeout" | "bootstrap" | "recurring";
   /** Human-readable reason */
   reason?: string;
   /** The critical signal that triggered the wake (for type "critical") */
@@ -51,9 +54,20 @@ export interface PendingWatch {
   registeredAt: number;
 }
 
+export interface PendingRecurringSchedule {
+  id: string;
+  cronExpr: string;
+  reason: string;
+  nextFireAt: string;
+  fireCount: number;
+  maxFires: number | null;
+  enabled: boolean;
+}
+
 export interface PendingSchedule {
   checks: PendingCheck[];
   watches: PendingWatch[];
+  recurringSchedules: PendingRecurringSchedule[];
 }
 
 // ============================================================================
@@ -93,6 +107,8 @@ export class StimulusEngine {
   private wakeCallbacks: WakeCallback[] = [];
   private scheduledChecks = new Map<string, ScheduledCheck>();
   private eventWatches = new Map<string, EventWatch>();
+  private recurringTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private cronStore?: CronScheduleStore;
   private lastWakeAt = 0;
   private cooldownTimer: ReturnType<typeof setTimeout> | null = null;
   private cooldownQueue: WakeReason[] = [];
@@ -243,6 +259,36 @@ export class StimulusEngine {
   }
 
   /**
+   * Load all enabled recurring schedules from the store and register timers.
+   */
+  loadRecurringSchedules(store: CronScheduleStore): void {
+    this.cronStore = store;
+    const schedules = store.listEnabled();
+    for (const schedule of schedules) {
+      this.setupRecurringTimer(schedule, store);
+    }
+  }
+
+  /**
+   * Register a single recurring schedule timer (called after create via MCP tools).
+   */
+  registerRecurringSchedule(schedule: CronSchedule, store: CronScheduleStore): void {
+    this.cronStore = store;
+    this.setupRecurringTimer(schedule, store);
+  }
+
+  /**
+   * Cancel a recurring schedule timer.
+   */
+  cancelRecurringSchedule(id: string): void {
+    const timer = this.recurringTimers.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      this.recurringTimers.delete(id);
+    }
+  }
+
+  /**
    * Get pending checks and watches for inclusion in prompts.
    */
   getPendingSchedule(): PendingSchedule {
@@ -269,7 +315,22 @@ export class StimulusEngine {
       watches.push(entry);
     }
 
-    return { checks, watches };
+    const recurringSchedules: PendingRecurringSchedule[] = [];
+    if (this.cronStore) {
+      for (const schedule of this.cronStore.listEnabled()) {
+        recurringSchedules.push({
+          id: schedule.id,
+          cronExpr: schedule.cronExpr,
+          reason: schedule.reason,
+          nextFireAt: schedule.nextFireAt,
+          fireCount: schedule.fireCount,
+          maxFires: schedule.maxFires,
+          enabled: schedule.enabled,
+        });
+      }
+    }
+
+    return { checks, watches, recurringSchedules };
   }
 
   /**
@@ -288,6 +349,11 @@ export class StimulusEngine {
     }
     this.eventWatches.clear();
 
+    for (const timer of this.recurringTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.recurringTimers.clear();
+
     if (this.cooldownTimer) {
       clearTimeout(this.cooldownTimer);
       this.cooldownTimer = null;
@@ -298,6 +364,48 @@ export class StimulusEngine {
   // ============================================================================
   // Private
   // ============================================================================
+
+  /**
+   * Set up a timer for a recurring schedule. Fires, increments, and re-registers.
+   */
+  private setupRecurringTimer(schedule: CronSchedule, store: CronScheduleStore): void {
+    const nextFireMs = new Date(schedule.nextFireAt).getTime();
+    const delayMs = Math.max(0, nextFireMs - Date.now());
+
+    const timer = setTimeout(() => {
+      this.recurringTimers.delete(schedule.id);
+
+      // Fire the wake
+      const wakeReason: WakeReason = {
+        type: "recurring",
+        reason: schedule.reason,
+      };
+      this.wake(wakeReason);
+
+      // Increment fire count in the store
+      const now = new Date().toISOString();
+      const newNextFireAt = computeNextFireAt(schedule.cronExpr);
+      store.incrementFireCount(schedule.id, now, newNextFireAt);
+
+      // Check if maxFires reached (current fire count is fireCount + 1 since we just incremented)
+      const newFireCount = schedule.fireCount + 1;
+      if (schedule.maxFires !== null && newFireCount >= schedule.maxFires) {
+        store.disable(schedule.id);
+        return;
+      }
+
+      // Re-register for next fire
+      const updatedSchedule: CronSchedule = {
+        ...schedule,
+        fireCount: newFireCount,
+        lastFiredAt: now,
+        nextFireAt: newNextFireAt,
+      };
+      this.setupRecurringTimer(updatedSchedule, store);
+    }, delayMs);
+
+    this.recurringTimers.set(schedule.id, timer);
+  }
 
   /**
    * Fire a wake or queue it if within cooldown.
@@ -425,6 +533,22 @@ export function buildSituationPrompt(input: SituationPromptInput): string {
     lines.push("");
   }
 
+  // Recurring Schedules
+  // recurringSchedules may be absent in legacy callers that haven't been updated
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (input.pendingSchedule.recurringSchedules && input.pendingSchedule.recurringSchedules.length > 0) {
+    lines.push("## Recurring Schedules");
+    for (const sched of input.pendingSchedule.recurringSchedules) {
+      const intervalMs = cronToIntervalMs(sched.cronExpr);
+      const intervalLabel = formatIntervalLabel(intervalMs);
+      const remainMs = new Date(sched.nextFireAt).getTime() - Date.now();
+      const remainMin = Math.max(1, Math.round(remainMs / 60_000));
+      const firedStr = sched.fireCount === 1 ? "1 time" : `${sched.fireCount} times`;
+      lines.push(`- Every ${intervalLabel}: "${sched.reason}" (next: ${remainMin}m, fired ${firedStr})`);
+    }
+    lines.push("");
+  }
+
   // Recent Decisions (with outcomes if available)
   if (input.recentDecisions.length > 0) {
     lines.push("## Recent Decisions");
@@ -504,6 +628,15 @@ function summarizeSignalData(signal: Signal): string {
   if (data["status"]) parts.push(`status: ${data["status"]}`);
 
   return parts.length > 0 ? parts.join(", ") : JSON.stringify(data);
+}
+
+function formatIntervalLabel(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.round(hours / 24);
+  return `${days}d`;
 }
 
 function formatAgo(isoString: string): string {
