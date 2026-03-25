@@ -25,7 +25,7 @@ const TYPE_OPTIONS: { value: ProposalType | "all"; label: string }[] = [
 ];
 
 export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
-  const { selectedProject } = useProject();
+  const { projects, selectedProject, selectProject } = useProject();
   const {
     proposals,
     loading,
@@ -107,6 +107,33 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
             </button>
           ))}
         </div>
+
+        {projects.length > 0 && (
+          <div style={styles.filterGroup}>
+            <span style={styles.filterLabel}>PROJECT:</span>
+            <button
+              style={{
+                ...styles.filterBtn,
+                ...(selectedProject === null ? styles.filterBtnActive : {}),
+              }}
+              onClick={() => { selectProject(null); }}
+            >
+              ALL
+            </button>
+            {projects.map((proj) => (
+              <button
+                key={proj.id}
+                style={{
+                  ...styles.filterBtn,
+                  ...(selectedProject?.id === proj.id ? styles.filterBtnActive : {}),
+                }}
+                onClick={() => { selectProject(proj.id); }}
+              >
+                {proj.name.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        )}
 
         <button style={styles.refreshBtn} onClick={() => { void refresh(); }}>
           REFRESH
