@@ -96,7 +96,7 @@ export function createCallsignToggleService(db: Database.Database): CallsignTogg
     },
 
     getDisabledCallsigns(): Set<string> {
-      const rows = getDisabledStmt.all(MASTER_KEY) as Array<{ name: string }>;
+      const rows = getDisabledStmt.all(MASTER_KEY) as { name: string }[];
       return new Set(rows.map((r) => r.name));
     },
 

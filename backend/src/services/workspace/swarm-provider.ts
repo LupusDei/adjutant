@@ -37,7 +37,7 @@ function resolveBeadsDir(workDir: string): string {
 }
 
 function extractBeadPrefix(beadId: string): string | null {
-  const match = beadId.match(/^([a-z0-9]{2,5})-/i);
+  const match = /^([a-z0-9]{2,5})-/i.exec(beadId);
   return match?.[1]?.toLowerCase() ?? null;
 }
 
@@ -69,7 +69,7 @@ function hasBeadsDatabase(dirPath: string): boolean {
 function loadRegisteredProjects(): RegisteredProject[] {
   try {
     const db = getDatabase();
-    const rows = db.prepare("SELECT name, path FROM projects").all() as Array<{ name: string; path: string }>;
+    const rows = db.prepare("SELECT name, path FROM projects").all() as { name: string; path: string }[];
     return rows
       .filter((r) => r.path && existsSync(r.path) && hasBeadsDatabase(r.path))
       .map((r) => ({ name: r.name, path: r.path }));
@@ -135,6 +135,7 @@ export class SwarmProvider implements WorkspaceProvider {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async listBeadsDirs(): Promise<BeadsDirInfo[]> {
     const results: BeadsDirInfo[] = [];
     const seenPaths = new Set<string>();
@@ -192,6 +193,7 @@ export class SwarmProvider implements WorkspaceProvider {
     return results;
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async resolveBeadsDirFromId(
     beadId: string
   ): Promise<{ workDir: string; beadsDir: string } | null> {
@@ -220,6 +222,7 @@ export class SwarmProvider implements WorkspaceProvider {
     return false;
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async listProjectNames(): Promise<string[]> {
     const skipDirs = new Set(["node_modules", ".git"]);
     const names = new Set<string>();

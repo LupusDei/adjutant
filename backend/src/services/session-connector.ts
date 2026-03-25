@@ -18,6 +18,7 @@ import { OutputParser, type OutputEvent } from "./output-parser.js";
 // ============================================================================
 
 const PIPE_LOG_PATH = join(
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd(),
   "logs",
   "session-pipe.log",
@@ -42,9 +43,7 @@ function pipeTrace(msg: string): void {
 
 export type { OutputEvent };
 
-export interface OutputHandler {
-  (sessionId: string, line: string, events: OutputEvent[]): void;
-}
+export type OutputHandler = (sessionId: string, line: string, events: OutputEvent[]) => void;
 
 interface PipeState {
   sessionId: string;
@@ -62,6 +61,7 @@ function execTmuxCommand(args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile("tmux", args, { encoding: "utf8" }, (err, stdout, stderr) => {
       if (err) {
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         reject(new Error(stderr?.trim() || err.message));
         return;
       }
@@ -283,9 +283,11 @@ export class SessionConnector {
         pipe.lastCaptureLines = output.split("\n");
         pipeTrace(`initial capture: ${pipe.lastCaptureLines.length} lines`);
       })
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
       .catch(() => {});
 
     // Poll every 1.5 seconds
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     pipe.capturePollTimer = setInterval(async () => {
       if (!pipe.active) return;
 
@@ -454,7 +456,7 @@ export function parseStatusBarCost(lines: string[]): OutputEvent | null {
   const CONTEXT_LEFT = /Context left[^:]*:\s*(\d+)%/;
 
   for (const line of lines) {
-    const statusMatch = line.match(STATUS_BAR);
+    const statusMatch = STATUS_BAR.exec(line);
     if (statusMatch) {
       const contextRemainingPercent = parseInt(statusMatch[1] ?? "0", 10);
       // Status bar shows remaining %, convert to used %
@@ -463,11 +465,11 @@ export function parseStatusBarCost(lines: string[]): OutputEvent | null {
       const estimatedTokens = Math.round((contextUsedPercent / 100) * 200_000);
 
       // Extract dollar cost from statusline (e.g., "$1.23")
-      const costMatch = line.match(COST_DOLLAR);
+      const costMatch = COST_DOLLAR.exec(line);
       const dollarCost = costMatch ? parseFloat(costMatch[1] ?? "0") : undefined;
 
       // Check for remaining context on the same or nearby lines
-      const leftMatch = line.match(CONTEXT_LEFT);
+      const leftMatch = CONTEXT_LEFT.exec(line);
       const contextLeftPercent = leftMatch ? parseInt(leftMatch[1] ?? "0", 10) : undefined;
 
       return {
@@ -511,14 +513,17 @@ export async function extractCostOnce(
     const output = await execTmuxCommand(["capture-pane", "-p", "-t", tmuxPane]);
     const lines = output.split("\n");
     const event = parseStatusBarCost(lines);
-    if (!event || event.type !== "cost_update") return null;
+    if (event?.type !== "cost_update") return null;
 
     // Flatten the OutputEvent into a CostSnapshot
     const snapshot: CostSnapshot = {};
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if ("cost" in event && event.cost !== undefined) snapshot.cost = event.cost;
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if ("contextPercent" in event && event.contextPercent !== undefined) {
       snapshot.contextPercent = event.contextPercent;
     }
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if ("tokens" in event && event.tokens) {
       snapshot.tokens = {
         input: event.tokens.input ?? 0,

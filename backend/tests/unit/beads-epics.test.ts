@@ -32,7 +32,7 @@ vi.mock("../../src/services/beads/beads-transform.js", () => ({
 }));
 
 vi.mock("../../src/services/beads/beads-dependency.js", () => ({
-  processEpicChildren: vi.fn().mockImplementation((issues: Array<{ id: string; status: string }>) =>
+  processEpicChildren: vi.fn().mockImplementation((issues: { id: string; status: string }[]) =>
     issues.map((i) => ({
       id: i.id,
       status: i.status,

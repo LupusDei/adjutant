@@ -78,11 +78,11 @@ export interface BudgetRecord {
 export interface BeadCostResult {
   beadId: string;
   totalCost: number;
-  sessions: Array<{
+  sessions: {
     sessionId: string;
     cost: number;
     tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
-  }>;
+  }[];
   tokenBreakdown: {
     input: number;
     output: number;

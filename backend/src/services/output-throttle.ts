@@ -76,6 +76,7 @@ export class OutputThrottle {
       this.startTimer(sessionId);
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const buffer = this.buffers.get(sessionId)!;
     buffer.push(line);
 
@@ -176,6 +177,7 @@ export class OutputThrottle {
     }, this.flushIntervalMs);
 
     // Don't prevent Node.js from exiting
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (timer.unref) timer.unref();
 
     this.timers.set(sessionId, timer);

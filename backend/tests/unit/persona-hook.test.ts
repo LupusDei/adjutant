@@ -30,6 +30,7 @@ describe("persona-inject.sh hook script", () => {
     expect(existsSync(HOOK_SCRIPT)).toBe(true);
 
     // Check executable permission
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { statSync } = require("node:fs");
     const stats = statSync(HOOK_SCRIPT);
     // Check user execute bit
@@ -141,7 +142,7 @@ describe(".claude/settings.json hook registration", () => {
     const content = JSON.parse(readFileSync(SETTINGS_PATH, "utf8"));
     const hooks = content.hooks.SessionStart;
 
-    const commands = hooks.map((h: { hooks: Array<{ command: string }> }) => h.hooks[0].command);
+    const commands = hooks.map((h: { hooks: { command: string }[] }) => h.hooks[0].command);
     // Both should reference the same script
     expect(new Set(commands).size).toBe(1);
   });

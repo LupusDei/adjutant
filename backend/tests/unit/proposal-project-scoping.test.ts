@@ -124,7 +124,7 @@ function getToolHandler(
 }
 
 function parseResult(result: unknown): unknown {
-  const r = result as { content: Array<{ text: string }> };
+  const r = result as { content: { text: string }[] };
   return JSON.parse(r.content[0].text);
 }
 
@@ -860,7 +860,7 @@ describe("Proposal project scoping", () => {
         { sessionId: TEST_SESSION_ID },
       );
 
-      const parsed = parseResult(result) as { proposals: Array<{ descriptionPreview: string }> };
+      const parsed = parseResult(result) as { proposals: { descriptionPreview: string }[] };
       expect(parsed.proposals[0]!.descriptionPreview).toBe("A".repeat(100) + "…");
     });
 
@@ -886,7 +886,7 @@ describe("Proposal project scoping", () => {
         { sessionId: TEST_SESSION_ID },
       );
 
-      const parsed = parseResult(result) as { proposals: Array<{ descriptionPreview: string }> };
+      const parsed = parseResult(result) as { proposals: { descriptionPreview: string }[] };
       expect(parsed.proposals[0]!.descriptionPreview).toBe("Short desc");
     });
   });

@@ -53,14 +53,14 @@ const {
   const mockConnect = vi.fn().mockResolvedValue(undefined);
   const mockClose = vi.fn().mockResolvedValue(undefined);
   const sessionIdState = { counter: 0 };
-  const createdTransports: Array<{
+  const createdTransports: {
     sessionId: string | undefined;
     onclose?: () => void;
     _onsessioninitialized?: (sessionId: string) => void;
     _onsessionclosed?: (sessionId: string) => void;
     handleRequest: ReturnType<typeof vi.fn>;
     close: ReturnType<typeof vi.fn>;
-  }> = [];
+  }[] = [];
   return { mockConnect, mockClose, sessionIdState, createdTransports };
 });
 
@@ -357,7 +357,7 @@ describe("MCP Server", () => {
     it("should handle onsessionclosed for unknown session gracefully", async () => {
       await createSessionTransport("researcher");
       const transport = createdTransports[0]!;
-      expect(() => transport._onsessionclosed!("nonexistent")).not.toThrow();
+      expect(() => { transport._onsessionclosed!("nonexistent"); }).not.toThrow();
     });
   });
 
@@ -392,7 +392,7 @@ describe("MCP Server", () => {
     });
 
     it("should handle disconnect of unknown session gracefully", () => {
-      expect(() => disconnectAgent("nonexistent")).not.toThrow();
+      expect(() => { disconnectAgent("nonexistent"); }).not.toThrow();
     });
   });
 
@@ -451,7 +451,7 @@ describe("MCP Server", () => {
       transport._onsessioninitialized!("session-abc");
 
       disconnectAgent("session-abc");
-      expect(() => transport.onclose!()).not.toThrow();
+      expect(() => { transport.onclose!(); }).not.toThrow();
     });
   });
 

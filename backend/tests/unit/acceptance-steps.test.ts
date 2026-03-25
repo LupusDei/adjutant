@@ -53,7 +53,7 @@ describe("MessagingSteps", () => {
   });
 
   it("should execute Given 'a message exists from <agent>' and seed a message", async () => {
-    const seededMessages: Array<Record<string, unknown>> = [];
+    const seededMessages: Record<string, unknown>[] = [];
     const fakeHarness = {
       seedMessage: async (opts: Record<string, unknown>) => {
         seededMessages.push(opts);
@@ -70,7 +70,7 @@ describe("MessagingSteps", () => {
   });
 
   it("should execute Given '<N> messages exist in thread <threadId>' and seed N messages", async () => {
-    const seededMessages: Array<Record<string, unknown>> = [];
+    const seededMessages: Record<string, unknown>[] = [];
     const fakeHarness = {
       seedMessage: async (opts: Record<string, unknown>) => {
         seededMessages.push(opts);
@@ -190,7 +190,7 @@ describe("AgentSteps", () => {
   });
 
   it("should execute Given 'an agent <name> is connected' and seed agent", async () => {
-    const seededAgents: Array<Record<string, unknown>> = [];
+    const seededAgents: Record<string, unknown>[] = [];
     const fakeHarness = {
       seedAgent: async (opts: Record<string, unknown>) => {
         seededAgents.push(opts);
@@ -206,7 +206,7 @@ describe("AgentSteps", () => {
   });
 
   it("should execute Given 'an agent with status <status>' and seed with status", async () => {
-    const seededAgents: Array<Record<string, unknown>> = [];
+    const seededAgents: Record<string, unknown>[] = [];
     const fakeHarness = {
       seedAgent: async (opts: Record<string, unknown>) => {
         seededAgents.push(opts);
@@ -270,7 +270,7 @@ describe("BeadSteps", () => {
   });
 
   it("should execute Given 'a bead exists with title <title>' and seed bead", async () => {
-    const seededBeads: Array<Record<string, unknown>> = [];
+    const seededBeads: Record<string, unknown>[] = [];
     const fakeHarness = {
       seedBead: async (opts: Record<string, unknown>) => {
         seededBeads.push(opts);

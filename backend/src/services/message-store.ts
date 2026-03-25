@@ -305,7 +305,7 @@ export function createMessageStore(db: Database.Database): MessageStore {
     },
 
     getUnreadCounts(): UnreadCount[] {
-      const rows = unreadCountsStmt.all() as Array<{ agent_id: string; count: number }>;
+      const rows = unreadCountsStmt.all() as { agent_id: string; count: number }[];
       return rows.map((r) => ({ agentId: r.agent_id, count: r.count }));
     },
 
@@ -324,12 +324,12 @@ export function createMessageStore(db: Database.Database): MessageStore {
         ORDER BY latest_created_at DESC
         LIMIT ?
       `;
-      const rows = db.prepare(sql).all(limit) as Array<{
+      const rows = db.prepare(sql).all(limit) as {
         agent_id: string;
         unread_count: number;
         latest_body: string;
         latest_created_at: string;
-      }>;
+      }[];
       return rows.map((r) => ({
         agentId: r.agent_id,
         unreadCount: r.unread_count,

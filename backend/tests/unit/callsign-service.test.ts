@@ -16,7 +16,7 @@ import {
 
 function mockSessions(
   ...names: string[]
-): Array<{ name: string; status: string }> {
+): { name: string; status: string }[] {
   return names.map((name) => ({ name, status: "idle" }));
 }
 

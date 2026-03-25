@@ -269,11 +269,11 @@ describe("StimulusEngine", () => {
     });
 
     it("cancelCheck with non-existent ID does not crash", () => {
-      expect(() => engine.cancelCheck("nonexistent-id")).not.toThrow();
+      expect(() => { engine.cancelCheck("nonexistent-id"); }).not.toThrow();
     });
 
     it("cancelWatch with non-existent ID does not crash", () => {
-      expect(() => engine.cancelWatch("nonexistent-id")).not.toThrow();
+      expect(() => { engine.cancelWatch("nonexistent-id"); }).not.toThrow();
     });
 
     it("destroy clears cooldown queue and timer", () => {

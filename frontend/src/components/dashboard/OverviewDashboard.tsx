@@ -152,7 +152,9 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
   }, [data?.beads]);
 
   // --- Epics data ---
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   const epicsInProgress: EpicProgress[] = data?.epics?.inProgress ?? [];
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   const epicsCompleted: EpicProgress[] = data?.epics?.recentlyCompleted ?? [];
 
   return (

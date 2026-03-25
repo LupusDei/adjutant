@@ -84,7 +84,7 @@ const KNOWN_TOOLS = new Set([
 ]);
 
 // Tool result prefix: indented lines or ⎿ marker
-const TOOL_RESULT_PREFIX = /^(\s{2,}|  ⎿\s?)/;
+const TOOL_RESULT_PREFIX = /^(\s{2,}| {2}⎿\s?)/;
 const TOOL_RESULT_MARKER = /^\s*⎿\s*/;
 
 // Permission prompt patterns
@@ -285,7 +285,7 @@ export class OutputParser {
     }
 
     // Check for error patterns
-    const errorMatch = clean.match(ERROR_PATTERN);
+    const errorMatch = ERROR_PATTERN.exec(clean);
     if (errorMatch) {
       events.push(...this.flushCurrent());
       events.push({ type: "error", message: (errorMatch[1] ?? "").trim() });
@@ -413,8 +413,8 @@ export class OutputParser {
     line: string,
   ): { tool: string; input: Record<string, unknown> } | null {
     // Pattern 1: ⏺ Tool(args)
-    let match = line.match(TOOL_USE_PAREN);
-    if (match && match[1] && match[2] !== undefined) {
+    let match = TOOL_USE_PAREN.exec(line);
+    if (match?.[1] && match[2] !== undefined) {
       const tool = match[1];
       if (KNOWN_TOOLS.has(tool)) {
         let args = match[2];
@@ -427,8 +427,8 @@ export class OutputParser {
     }
 
     // Pattern 2: ⏺ Tool file: /path
-    match = line.match(TOOL_USE_COLON);
-    if (match && match[1] && match[2]) {
+    match = TOOL_USE_COLON.exec(line);
+    if (match?.[1] && match[2]) {
       const tool = match[1];
       if (KNOWN_TOOLS.has(tool)) {
         return { tool, input: { file_path: match[2].trim() } };
@@ -436,8 +436,8 @@ export class OutputParser {
     }
 
     // Pattern 3: ⏺ Tool (bare, no args)
-    match = line.match(TOOL_USE_BARE);
-    if (match && match[1]) {
+    match = TOOL_USE_BARE.exec(line);
+    if (match?.[1]) {
       return { tool: match[1], input: {} };
     }
 
@@ -484,7 +484,7 @@ export class OutputParser {
     const trimmed = line.trim();
 
     // "Do you want to allow X?" or "Allow X?"
-    const allowMatch = trimmed.match(PERMISSION_ALLOW);
+    const allowMatch = PERMISSION_ALLOW.exec(trimmed);
     if (allowMatch) {
       this.permCounter++;
       return {
@@ -541,17 +541,17 @@ export class OutputParser {
     } = { type: "cost_update" };
 
     // Check for cost
-    const costMatch = trimmed.match(COST_PATTERN);
+    const costMatch = COST_PATTERN.exec(trimmed);
     if (costMatch) {
       event.cost = parseFloat((costMatch[1] ?? "0").replace(/,/g, ""));
       hasCostInfo = true;
     }
 
     // Check for token counts
-    const inputMatch = trimmed.match(INPUT_TOKENS);
-    const outputMatch = trimmed.match(OUTPUT_TOKENS);
-    const cacheReadMatch = trimmed.match(CACHE_READ_TOKENS);
-    const cacheWriteMatch = trimmed.match(CACHE_WRITE_TOKENS);
+    const inputMatch = INPUT_TOKENS.exec(trimmed);
+    const outputMatch = OUTPUT_TOKENS.exec(trimmed);
+    const cacheReadMatch = CACHE_READ_TOKENS.exec(trimmed);
+    const cacheWriteMatch = CACHE_WRITE_TOKENS.exec(trimmed);
 
     if (inputMatch || outputMatch || cacheReadMatch || cacheWriteMatch) {
       event.tokens = {};
@@ -578,7 +578,7 @@ export class OutputParser {
 
     // Fallback: "Total tokens: N"
     if (!hasCostInfo) {
-      const tokensMatch = trimmed.match(TOKENS_PATTERN);
+      const tokensMatch = TOKENS_PATTERN.exec(trimmed);
       if (tokensMatch) {
         event.tokens = {};
         if (tokensMatch[2]) {

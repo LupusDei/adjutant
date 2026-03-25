@@ -69,7 +69,7 @@ function connectSse(
 
   return {
     events,
-    close: () => controller.abort(),
+    close: () => { controller.abort(); },
     waitForEvents: (count: number, timeoutMs = 3000) => {
       return new Promise<string[]>((resolve, reject) => {
         const start = Date.now();
@@ -104,7 +104,7 @@ describe("events routes (SSE)", () => {
     resetEventBus();
     if (server.listening) {
       await new Promise<void>((resolve, reject) => {
-        server.close((err) => (err ? reject(err) : resolve()));
+        server.close((err) => { if (err) { reject(err); } else { resolve(); } });
       });
     }
   });
@@ -134,7 +134,7 @@ describe("events routes (SSE)", () => {
 
       const firstChunk = received[0]!;
       // Parse the data from the connected event
-      const dataMatch = firstChunk.match(/data: (.+)/);
+      const dataMatch = /data: (.+)/.exec(firstChunk);
       expect(dataMatch).not.toBeNull();
 
       const data = JSON.parse(dataMatch![1]!);

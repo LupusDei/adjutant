@@ -51,6 +51,7 @@ export interface SyncResult {
  * 4. Update MEMORY.md with auto-generated section
  * 5. Prune topic files where all learnings dropped below 0.3 confidence
  */
+// eslint-disable-next-line @typescript-eslint/require-await
 export async function syncMemoryFiles(
   memoryStore: MemoryStore,
   memoryDir: string,
@@ -195,6 +196,7 @@ function getExistingTopicFiles(memoryDir: string): string[] {
 function updateMemoryMd(
   memoryMdPath: string,
   topicGroups: Map<string, Learning[]>,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _memoryDir: string,
 ): void {
   let manualContent = "";
@@ -224,6 +226,7 @@ function updateMemoryMd(
     // Sort topics alphabetically for consistent output
     const sortedTopics = [...topicGroups.keys()].sort();
     for (const topic of sortedTopics) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const learnings = topicGroups.get(topic)!;
       autoLines.push(`### ${topic}`);
       // Sort by confidence descending

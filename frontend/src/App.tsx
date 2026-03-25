@@ -142,7 +142,7 @@ function AppContent() {
             hidden={activeTab !== "chat"}
             aria-hidden={activeTab !== "chat"}
           >
-            <ChatView isActive={activeTab === "chat"} initialAgent={chatRecipient} onInitialAgentConsumed={() => setChatRecipient('')} />
+            <ChatView isActive={activeTab === "chat"} initialAgent={chatRecipient} onInitialAgentConsumed={() => { setChatRecipient(''); }} />
           </section>
           <section
             className="tab-view"
@@ -207,7 +207,7 @@ function AppContent() {
  */
 function parseHashRoute(): { type: 'graph'; epicId: string } | null {
   const hash = window.location.hash;
-  const graphMatch = hash.match(/^#graph\/(.+)$/);
+  const graphMatch = /^#graph\/(.+)$/.exec(hash);
   if (graphMatch?.[1]) {
     return { type: 'graph', epicId: decodeURIComponent(graphMatch[1]) };
   }

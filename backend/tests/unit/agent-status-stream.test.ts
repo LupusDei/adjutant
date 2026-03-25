@@ -31,7 +31,7 @@ let closeAgentStatusStream: typeof import("../../src/services/agent-status-strea
 
 function waitForOpen(ws: WebSocket): Promise<void> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("Open timeout")), 3000);
+    const timeout = setTimeout(() => { reject(new Error("Open timeout")); }, 3000);
     ws.on("open", () => {
       clearTimeout(timeout);
       resolve();
@@ -45,7 +45,7 @@ function waitForOpen(ws: WebSocket): Promise<void> {
 
 function waitForMessage(ws: WebSocket): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("Message timeout")), 3000);
+    const timeout = setTimeout(() => { reject(new Error("Message timeout")); }, 3000);
     ws.once("message", (data) => {
       clearTimeout(timeout);
       resolve(JSON.parse(data.toString()));
@@ -87,7 +87,7 @@ describe("agent status stream", () => {
     closeAgentStatusStream();
     server.removeAllListeners("upgrade");
     await new Promise<void>((resolve) => {
-      server.close(() => resolve());
+      server.close(() => { resolve(); });
     });
     // Allow pending async work to settle
     await new Promise((r) => setTimeout(r, 50));

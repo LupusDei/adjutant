@@ -141,8 +141,8 @@ export function resolveProjectContext(
     (typeof query["projectId"] === "string" && query["projectId"].length > 0
       ? query["projectId"]
       : undefined) ??
-    (typeof headers["x-project-id"] === "string" && (headers["x-project-id"] as string).length > 0
-      ? headers["x-project-id"] as string
+    (typeof headers["x-project-id"] === "string" && (headers["x-project-id"]).length > 0
+      ? headers["x-project-id"]
       : undefined);
 
   if (projectId) {
@@ -169,8 +169,8 @@ export function resolveProjectContext(
   // ADJUTANT_PROJECT_ROOT is the canonical env var — the server derives
   // the project ID by matching the path against the project registry.
   const projectRoot =
-    (typeof headers["x-project-root"] === "string" && (headers["x-project-root"] as string).length > 0
-      ? headers["x-project-root"] as string
+    (typeof headers["x-project-root"] === "string" && (headers["x-project-root"]).length > 0
+      ? headers["x-project-root"]
       : undefined);
 
   if (projectRoot) {
@@ -249,6 +249,7 @@ export async function createSessionTransport(
 
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: options?.reuseSessionId
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       ? () => options.reuseSessionId!
       : () => randomUUID(),
     onsessioninitialized: (sessionId: string) => {
@@ -276,6 +277,7 @@ export async function createSessionTransport(
       }
 
       connections.delete(sessionId);
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
       connection.server.close().catch(() => {});
       clearAgentStatus(connection.agentId);
 
@@ -322,6 +324,7 @@ export function disconnectAgent(sessionId: string): void {
   connections.delete(sessionId);
 
   // Close the per-connection server to release resources
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
   connection.server.close().catch(() => {});
 
   // Clean up stale status data so disconnected agents

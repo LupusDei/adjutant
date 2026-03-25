@@ -20,7 +20,7 @@ const {
   mockRecordCostUpdate,
   mockGetAgentStatuses,
 } = vi.hoisted(() => {
-  const handlers = new Map<string, Array<(data: unknown, seq: number) => void>>();
+  const handlers = new Map<string, ((data: unknown, seq: number) => void)[]>();
   return {
     handlers,
     mockOn: vi.fn((event: string, handler: (data: unknown, seq: number) => void) => {

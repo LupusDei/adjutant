@@ -357,17 +357,14 @@ function createMockRes() {
 /**
  * Find a route handler on an Express router by method and path.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function findRouteHandler(router: any, method: string, path: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   for (const layer of router.stack) {
     if (
-      layer.route &&
-      layer.route.path === path &&
+      layer.route?.path === path &&
       layer.route.methods[method]
     ) {
       const handlers = layer.route.stack;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return handlers[handlers.length - 1].handle as (...args: any[]) => any;
     }
   }

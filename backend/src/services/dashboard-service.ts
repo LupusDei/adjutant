@@ -17,7 +17,6 @@ import type {
   BeadCategory,
   EpicWithProgressItem,
 } from "../types/dashboard.js";
-import type { UnreadAgentSummary } from "./message-store.js";
 import type { CrewMember } from "../types/index.js";
 
 // ============================================================================
@@ -103,7 +102,7 @@ function wrapBeadsResult(
 
 /** Wrap unread counts result. */
 function wrapUnreadCounts(
-  result: PromiseSettledResult<Array<{ agentId: string; count: number }>>,
+  result: PromiseSettledResult<{ agentId: string; count: number }[]>,
 ): DashboardSection<Record<string, number>> {
   return wrapResult(result, (counts) => {
     const map: Record<string, number> = {};
@@ -167,10 +166,12 @@ export function createDashboardService(messageStore: MessageStore): DashboardSer
         // 4: crew
         getAgents(),
         // 5: unread counts (sync method — wrap in async to catch throws)
+        // eslint-disable-next-line @typescript-eslint/require-await
         (async () => messageStore.getUnreadCounts())(),
         // 6: epics with progress
         listEpicsWithProgress({ status: "all" }),
         // 7: unread message summaries grouped by agent (max 8)
+        // eslint-disable-next-line @typescript-eslint/require-await
         (async () => messageStore.getUnreadSummaries(8))(),
       ]);
 
@@ -180,23 +181,23 @@ export function createDashboardService(messageStore: MessageStore): DashboardSer
           (r) => extractServiceData(r),
         ),
         beads: wrapBeadsResult(
-          results[1] as PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
-          results[2] as PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
-          results[3] as PromiseSettledResult<BeadsServiceResult<BeadInfo[]>>,
+          results[1],
+          results[2],
+          results[3],
         ),
         crew: wrapResult(
           results[4] as PromiseSettledResult<{ success: boolean; data?: CrewMember[]; error?: { message: string } }>,
           (r) => extractServiceData(r),
         ),
         unreadCounts: wrapUnreadCounts(
-          results[5] as PromiseSettledResult<Array<{ agentId: string; count: number }>>,
+          results[5] as PromiseSettledResult<{ agentId: string; count: number }[]>,
         ),
         unreadMessages: wrapResult(
-          results[7] as PromiseSettledResult<UnreadAgentSummary[]>,
+          results[7],
           (summaries) => summaries,
         ),
         epics: wrapEpicsResult(
-          results[6] as PromiseSettledResult<BeadsServiceResult<EpicWithChildren[]>>,
+          results[6],
         ),
         mail: { data: null },
         timestamp: new Date().toISOString(),

@@ -187,7 +187,7 @@ describe("TestHarness", () => {
       expect(msg.agentId).toBe("agent-x");
 
       // Verify via API
-      const res = await harness.get<{ success: boolean; data: { items: Array<{ id: string; body: string }> } }>(
+      const res = await harness.get<{ success: boolean; data: { items: { id: string; body: string }[] } }>(
         "/api/messages",
         { agentId: "agent-x" },
       );
@@ -244,7 +244,7 @@ describe("TestHarness", () => {
 
       // The agent should now have a record in the messages table
       // (we insert a system message as a registration marker)
-      const res = await harness.get<{ success: boolean; data: { items: Array<{ agentId: string }> } }>(
+      const res = await harness.get<{ success: boolean; data: { items: { agentId: string }[] } }>(
         "/api/messages",
         { agentId: "seeded-agent" },
       );

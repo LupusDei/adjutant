@@ -37,7 +37,7 @@ vi.mock("node:crypto", () => ({
 
 const { sessionIdState, createdTransports, mockConnect } = vi.hoisted(() => {
   const sessionIdState = { counter: 0 };
-  const createdTransports: Array<{
+  const createdTransports: {
     sessionId: string | undefined;
     onclose?: () => void;
     _onsessioninitialized?: (sessionId: string) => void;
@@ -45,7 +45,7 @@ const { sessionIdState, createdTransports, mockConnect } = vi.hoisted(() => {
     handleRequest: ReturnType<typeof vi.fn>;
     close: ReturnType<typeof vi.fn>;
     start: ReturnType<typeof vi.fn>;
-  }> = [];
+  }[] = [];
   const mockConnect = vi.fn().mockResolvedValue(undefined);
   return { sessionIdState, createdTransports, mockConnect };
 });
@@ -274,17 +274,14 @@ function createMockRes() {
   return res;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function findRouteHandler(router: any, method: string, path: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   for (const layer of router.stack) {
     if (
-      layer.route &&
-      layer.route.path === path &&
+      layer.route?.path === path &&
       layer.route.methods[method]
     ) {
       const handlers = layer.route.stack;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return handlers[handlers.length - 1].handle as (...args: any[]) => any;
     }
   }

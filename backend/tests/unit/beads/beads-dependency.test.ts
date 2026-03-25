@@ -331,7 +331,7 @@ describe("processEpicChildren", () => {
 describe("computeEpicProgressFromDeps", () => {
   it("should return zero progress for epic with no dependencies", () => {
     const epic = makeIssue({ id: "hq-ep1", title: "Epic 1" });
-    const deps: Array<{ issue_id: string; depends_on_id: string; type: string }> = [];
+    const deps: { issue_id: string; depends_on_id: string; type: string }[] = [];
     const statusMap = new Map<string, string>();
 
     const result = computeEpicProgressFromDeps(epic, deps, statusMap);

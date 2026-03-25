@@ -246,6 +246,7 @@ export class SessionRegistry {
    * Uses INSERT OR REPLACE so callers that still call save() after
    * bulk in-memory mutations get the expected behaviour.
    */
+  // eslint-disable-next-line @typescript-eslint/require-await
   async save(): Promise<void> {
     const upsert = this.db.prepare(`
       INSERT OR REPLACE INTO managed_sessions
@@ -263,7 +264,7 @@ export class SessionRegistry {
       } else {
         const existing = this.db
           .prepare("SELECT id FROM managed_sessions")
-          .all() as Array<{ id: string }>;
+          .all() as { id: string }[];
         for (const row of existing) {
           if (!inMemoryIds.includes(row.id)) {
             this.db.prepare("DELETE FROM managed_sessions WHERE id = ?").run(row.id);
@@ -297,6 +298,7 @@ export class SessionRegistry {
    * Load sessions from SQLite into the in-memory Map.
    * All loaded sessions start as "offline" until tmux is verified.
    */
+  // eslint-disable-next-line @typescript-eslint/require-await
   async load(): Promise<number> {
     try {
       const rows = this.db
@@ -338,6 +340,7 @@ export class SessionRegistry {
 let instance: SessionRegistry | null = null;
 
 export function getSessionRegistry(): SessionRegistry {
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   if (!instance) {
     instance = new SessionRegistry();
   }

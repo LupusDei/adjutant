@@ -23,7 +23,9 @@ export function initAgentStatusStream(server: HttpServer): WebSocketServer {
 
   server.on("upgrade", (request, socket, head) => {
     if (request.url === "/api/agents/stream") {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       wss!.handleUpgrade(request, socket, head, (ws) => {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         wss!.emit("connection", ws, request);
       });
     }

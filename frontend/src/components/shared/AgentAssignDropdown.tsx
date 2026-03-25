@@ -54,7 +54,7 @@ export function AgentAssignDropdown({
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => { document.removeEventListener('mousedown', handleClickOutside); };
   }, [isOpen]);
 
   // Close on escape
@@ -65,7 +65,7 @@ export function AgentAssignDropdown({
       if (e.key === 'Escape') setIsOpen(false);
     };
     window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    return () => { window.removeEventListener('keydown', handleKey); };
   }, [isOpen]);
 
   // Fetch agents when dropdown opens
@@ -79,6 +79,7 @@ export function AgentAssignDropdown({
       const available = result.filter((a) => a.status === 'idle' || a.status === 'working');
       setAgents(available);
       setLoading(false);
+    // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
     }).catch((err) => {
       setError(err instanceof Error ? err.message : 'Failed to fetch');
       setLoading(false);
@@ -96,7 +97,7 @@ export function AgentAssignDropdown({
     <div
       ref={dropdownRef}
       style={styles.container}
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => { e.stopPropagation(); }}
     >
       {/* Trigger button */}
       <button
@@ -106,7 +107,7 @@ export function AgentAssignDropdown({
           ...(disabled ? styles.triggerDisabled : {}),
           ...(displayName ? styles.triggerAssigned : {}),
         }}
-        onClick={isOpen ? () => setIsOpen(false) : handleOpen}
+        onClick={isOpen ? () => { setIsOpen(false); } : handleOpen}
         disabled={disabled}
         title={currentAssignee ? `Assigned to ${currentAssignee} — click to reassign` : `Assign ${beadId}`}
       >
@@ -137,7 +138,7 @@ export function AgentAssignDropdown({
                   ...styles.agentOption,
                   ...(isCurrentAssignee ? styles.agentOptionCurrent : {}),
                 }}
-                onClick={() => handleSelect(agent.name)}
+                onClick={() => { handleSelect(agent.name); }}
               >
                 <span style={styles.agentName}>{shortName(agent.name)}</span>
                 <span style={{

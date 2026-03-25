@@ -59,6 +59,7 @@ function execTmuxCommand(args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile("tmux", args, { encoding: "utf8" }, (err, stdout, stderr) => {
       if (err) {
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         reject(new Error(stderr?.trim() || err.message));
         return;
       }
@@ -180,6 +181,7 @@ export class InputRouter {
 
     let delivered = 0;
     while (queue.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const item = queue.shift()!;
       const ok = await this.deliverInput(session.tmuxPane, item.text);
       if (ok) delivered++;
@@ -227,7 +229,7 @@ export class InputRouter {
       // Deduplication: skip if the same text was sent to this pane recently
       const now = Date.now();
       const recent = this.recentInputs.get(tmuxPane);
-      if (recent && recent.text === clean && now - recent.sentAt < DEDUP_WINDOW_MS) {
+      if (recent?.text === clean && now - recent.sentAt < DEDUP_WINDOW_MS) {
         logInfo("Skipping duplicate input", { tmuxPane, textLength: clean.length });
         return true; // Report success — the message was already delivered
       }

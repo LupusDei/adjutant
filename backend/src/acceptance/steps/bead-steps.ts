@@ -46,6 +46,7 @@ defineWhen(/^a bead is created via POST \/api\/beads$/, async (harness) => {
  * Assert the bead status matches expected value.
  * Pattern: "the bead status is <status>"
  */
+// eslint-disable-next-line @typescript-eslint/require-await
 defineThen(/^the bead status is (\S+)$/, async (harness, expected) => {
   const h = harness as TestHarness;
   // Safe cast: body shape is { data: { status: string } }

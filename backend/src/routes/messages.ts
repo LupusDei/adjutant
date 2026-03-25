@@ -92,7 +92,7 @@ export function createMessagesRouter(store: MessageStore): Router {
   // GET /api/messages/:id
   router.get("/:id", (req, res) => {
     const { id } = req.params;
-    const message = store.getMessage(id!);
+    const message = store.getMessage(id);
 
     if (!message) {
       return res.status(404).json(notFound("Message", id));
@@ -104,13 +104,13 @@ export function createMessagesRouter(store: MessageStore): Router {
   // PATCH /api/messages/:id/read
   router.patch("/:id/read", (req, res) => {
     const { id } = req.params;
-    const message = store.getMessage(id!);
+    const message = store.getMessage(id);
 
     if (!message) {
       return res.status(404).json(notFound("Message", id));
     }
 
-    store.markRead(id!);
+    store.markRead(id);
     return res.json(success({ read: true }));
   });
 
@@ -161,6 +161,7 @@ export function createMessagesRouter(store: MessageStore): Router {
       for (const session of sessions) {
         bridge.sendInput(session.id, body).then((sent) => {
           if (sent) store.markDelivered(message.id);
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
         }).catch(() => {});
       }
     } catch {
@@ -211,6 +212,7 @@ export function createMessagesRouter(store: MessageStore): Router {
         for (const session of sessions) {
           bridge.sendInput(session.id, body).then((ok) => {
             if (ok) store.markDelivered(message.id);
+          // eslint-disable-next-line @typescript-eslint/no-empty-function
           }).catch(() => {});
         }
       } catch {

@@ -136,7 +136,7 @@ export function processEpicChildren(
  */
 export function computeEpicProgressFromDeps(
   epic: BeadsIssue,
-  deps: Array<{ issue_id: string; depends_on_id: string; type: string }>,
+  deps: { issue_id: string; depends_on_id: string; type: string }[],
   statusMap: Map<string, string>
 ): EpicProgress {
   const childIds = deps
@@ -221,12 +221,14 @@ export function buildEpicWithChildren(
  */
 export function transformClosedEpics(
   issues: BeadsIssue[],
-  limit: number = 5
+  limit = 5
 ): EpicProgress[] {
   return issues
     .filter((e) => e.closed_at)
     .sort((a, b) => {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const aTime = new Date(a.closed_at!).getTime();
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const bTime = new Date(b.closed_at!).getTime();
       return bTime - aTime;
     })

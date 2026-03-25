@@ -25,6 +25,7 @@ export function initMessageDelivery(store: MessageStore, state?: AdjutantState):
   const bus = getEventBus();
 
   bus.on("mcp:agent_connected", ({ agentId }) => {
+    // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
     deliverPendingMessages(store, agentId, state).catch((err) => {
       logWarn("Failed to deliver pending messages", { agentId, error: String(err) });
     });

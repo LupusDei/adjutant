@@ -220,7 +220,7 @@ function getToolHandler(
 }
 
 function parseResult(result: unknown): Record<string, unknown> {
-  const r = result as { content: Array<{ text: string }> };
+  const r = result as { content: { text: string }[] };
   return JSON.parse(r.content[0].text) as Record<string, unknown>;
 }
 
@@ -997,7 +997,7 @@ describe("MCP Coordination Tools", () => {
         { sessionId: "unknown-session" },
       );
 
-      const r = result as { content: Array<{ text: string }>; isError?: boolean };
+      const r = result as { content: { text: string }[]; isError?: boolean };
       expect(r.isError).toBe(true);
     });
 
@@ -1010,7 +1010,7 @@ describe("MCP Coordination Tools", () => {
         { sessionId: "worker-session" },
       );
 
-      const r = result as { content: Array<{ text: string }>; isError?: boolean };
+      const r = result as { content: { text: string }[]; isError?: boolean };
       expect(r.isError).toBe(true);
     });
   });

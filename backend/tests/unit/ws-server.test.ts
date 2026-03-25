@@ -10,9 +10,9 @@ let connectionHandler: ((ws: MockWs) => void) | undefined;
 
 class MockWs {
   readyState = 1; // WebSocket.OPEN
-  private messageHandlers: Array<(raw: Buffer) => void> = [];
-  private closeHandlers: Array<() => void> = [];
-  private errorHandlers: Array<(err: Error) => void> = [];
+  private messageHandlers: ((raw: Buffer) => void)[] = [];
+  private closeHandlers: (() => void)[] = [];
+  private errorHandlers: ((err: Error) => void)[] = [];
   sentMessages: string[] = [];
   closed = false;
   closeCode?: number;
@@ -52,7 +52,7 @@ class MockWs {
   }
 
   /** Get parsed sent messages */
-  get sentParsed(): Array<Record<string, unknown>> {
+  get sentParsed(): Record<string, unknown>[] {
     return this.sentMessages.map((s) => JSON.parse(s) as Record<string, unknown>);
   }
 
@@ -62,7 +62,7 @@ class MockWs {
   }
 
   /** Find all sent messages of a given type */
-  findAllSent(type: string): Array<Record<string, unknown>> {
+  findAllSent(type: string): Record<string, unknown>[] {
     return this.sentParsed.filter((m) => m.type === type);
   }
 }
@@ -71,6 +71,7 @@ const mockWssClose = vi.fn();
 
 vi.mock("ws", () => {
   class MockWebSocketServer {
+    // eslint-disable-next-line @typescript-eslint/no-useless-constructor
     constructor(_options: Record<string, unknown>) {}
     on(event: string, handler: (...args: unknown[]) => void) {
       if (event === "connection") {
@@ -308,7 +309,7 @@ describe("ws-server", () => {
 
       const syncResponse = ws2.findSent("sync_response");
       expect(syncResponse).toBeDefined();
-      const missed = syncResponse!.missed as Array<Record<string, unknown>>;
+      const missed = syncResponse!.missed as Record<string, unknown>[];
       expect(missed.length).toBe(2);
       expect(missed[0]!.id).toBe("msg-2");
       expect(missed[1]!.id).toBe("msg-3");
@@ -326,7 +327,7 @@ describe("ws-server", () => {
 
       const syncResponse = ws.findAllSent("sync_response").pop();
       expect(syncResponse).toBeDefined();
-      const missed = syncResponse!.missed as Array<Record<string, unknown>>;
+      const missed = syncResponse!.missed as Record<string, unknown>[];
       expect(missed.length).toBe(0);
     });
   });
@@ -349,7 +350,7 @@ describe("ws-server", () => {
 
       const syncResponse = ws2.findSent("sync_response");
       expect(syncResponse).toBeDefined();
-      const missed = syncResponse!.missed as Array<Record<string, unknown>>;
+      const missed = syncResponse!.missed as Record<string, unknown>[];
       // Should be capped at 1000
       expect(missed.length).toBeLessThanOrEqual(1000);
     });
@@ -374,7 +375,7 @@ describe("ws-server", () => {
       ws2._receiveMessage({ type: "sync", lastSeqSeen: 0 });
 
       const syncResponse = ws2.findSent("sync_response");
-      const missed = syncResponse!.missed as Array<Record<string, unknown>>;
+      const missed = syncResponse!.missed as Record<string, unknown>[];
 
       // The old message should have been evicted, only the new one remains
       const oldMsg = missed.find((m) => m.id === "old-msg");

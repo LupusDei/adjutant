@@ -209,7 +209,7 @@ export const TRAIT_PROMPT_TEMPLATES: Record<PersonaTrait, TraitPromptTemplate> =
 function getTopTraits(
   traits: Record<PersonaTrait, number>,
   n: number,
-): Array<[PersonaTrait, number]> {
+): [PersonaTrait, number][] {
   return (PERSONA_TRAIT_KEYS.map((key) => [key, traits[key]] as [PersonaTrait, number]))
     .filter(([, value]) => value > 0)
     .sort((a, b) => b[1] - a[1])
@@ -236,7 +236,7 @@ function getTraitDescription(key: PersonaTrait): string {
  * Build the Core Identity section summarizing the persona's dominant traits.
  */
 function buildCoreIdentity(
-  topTraits: Array<[PersonaTrait, number]>,
+  topTraits: [PersonaTrait, number][],
 ): string {
   if (topTraits.length === 0) {
     return "## Core Identity\n\nYou are a generalist agent. Follow standard best practices across all dimensions of software development without particular emphasis on any single area.";
@@ -250,6 +250,7 @@ function buildCoreIdentity(
   if (dominantDescriptions.length === 1) {
     identitySummary = `Your primary strength is ${dominantDescriptions[0]}.`;
   } else {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const last = dominantDescriptions.pop()!;
     identitySummary = `Your primary strengths are ${dominantDescriptions.join(", ")}, and ${last}.`;
   }

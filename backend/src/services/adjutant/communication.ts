@@ -28,6 +28,7 @@ export function createCommunicationManager(store: MessageStore): CommunicationMa
       routineQueue.push(message);
     },
 
+    // eslint-disable-next-line @typescript-eslint/require-await
     async sendImportant(message: string): Promise<void> {
       const msg = store.insertMessage({
         agentId: ADJUTANT_AGENT_ID,
@@ -70,10 +71,12 @@ export function createCommunicationManager(store: MessageStore): CommunicationMa
           category: "ADJUTANT_ESCALATION",
           threadId: "adjutant",
           data: { type: "adjutant_escalation", messageId: msg.id },
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
         }).catch(() => {}); // swallow APNS errors
       }
     },
 
+    // eslint-disable-next-line @typescript-eslint/require-await
     async messageAgent(agentId: string, message: string): Promise<void> {
       const msg = store.insertMessage({
         agentId: ADJUTANT_AGENT_ID,

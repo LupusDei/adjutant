@@ -31,6 +31,7 @@ export function AgentAssignModal({ beadId, onConfirm, onCancel }: AgentAssignMod
       const available = result.filter((a) => a.status === 'idle' || a.status === 'working');
       setAgents(available);
       setLoading(false);
+    // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
     }).catch((err) => {
       if (cancelled) return;
       setError(err instanceof Error ? err.message : 'Failed to fetch agents');
@@ -53,12 +54,12 @@ export function AgentAssignModal({ beadId, onConfirm, onCancel }: AgentAssignMod
       if (e.key === 'Enter' && selectedAgent) handleConfirm();
     };
     window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    return () => { window.removeEventListener('keydown', handleKey); };
   }, [onCancel, selectedAgent, handleConfirm]);
 
   return (
     <div style={styles.backdrop} onClick={onCancel}>
-      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+      <div style={styles.modal} onClick={(e) => { e.stopPropagation(); }}>
         {/* Header */}
         <div style={styles.header}>
           <span style={styles.headerText}>ASSIGN AGENT</span>
@@ -88,7 +89,7 @@ export function AgentAssignModal({ beadId, onConfirm, onCancel }: AgentAssignMod
                     ...styles.agentRow,
                     ...(selectedAgent === agent.name ? styles.agentRowSelected : {}),
                   }}
-                  onClick={() => setSelectedAgent(agent.name)}
+                  onClick={() => { setSelectedAgent(agent.name); }}
                 >
                   <span style={styles.agentName}>{agent.name}</span>
                   <span style={{

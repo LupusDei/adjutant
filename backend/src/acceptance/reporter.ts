@@ -241,7 +241,7 @@ export function analyzeTestFile(content: string): TestFileAnalysis {
     }
 
     // Detect start of it(
-    if (!inItBlock && /it\s*\(/.test(trimmed) && !/it\.skip/.test(trimmed)) {
+    if (!inItBlock && /it\s*\(/.test(trimmed) && !trimmed.includes('it.skip')) {
       inItBlock = true;
       currentBlockIsSkip = false;
       currentBlockHasTodo = false;

@@ -10,7 +10,7 @@ export interface ProposalsViewProps {
   isActive?: boolean;
 }
 
-const STATUS_OPTIONS: Array<{ value: ProposalStatus | "all"; label: string }> = [
+const STATUS_OPTIONS: { value: ProposalStatus | "all"; label: string }[] = [
   { value: "pending", label: "PENDING" },
   { value: "accepted", label: "ACCEPTED" },
   { value: "completed", label: "COMPLETED" },
@@ -18,12 +18,13 @@ const STATUS_OPTIONS: Array<{ value: ProposalStatus | "all"; label: string }> = 
   { value: "all", label: "ALL" },
 ];
 
-const TYPE_OPTIONS: Array<{ value: ProposalType | "all"; label: string }> = [
+const TYPE_OPTIONS: { value: ProposalType | "all"; label: string }[] = [
   { value: "all", label: "ALL TYPES" },
   { value: "product", label: "PRODUCT" },
   { value: "engineering", label: "ENGINEERING" },
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
   const { selectedProject } = useProject();
   const {
@@ -69,6 +70,7 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
     setSendToAgentProposal(proposal);
   }, []);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleSendToAgentComplete = useCallback((_target: string) => {
     setSendToAgentProposal(null);
   }, []);

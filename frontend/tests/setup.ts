@@ -8,6 +8,7 @@ if (typeof globalThis.localStorage === 'undefined' || typeof globalThis.localSto
   const store = new Map<string, string>();
   const localStoragePolyfill = {
     getItem: (key: string) => store.get(key) ?? null,
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-conversion
     setItem: (key: string, value: string) => { store.set(key, String(value)); },
     removeItem: (key: string) => { store.delete(key); },
     clear: () => { store.clear(); },

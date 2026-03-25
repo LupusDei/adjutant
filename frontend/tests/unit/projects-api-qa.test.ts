@@ -20,7 +20,7 @@ Object.defineProperty(globalThis, "sessionStorage", {
     getItem: (key: string) => mockSessionStorage.get(key) ?? null,
     setItem: (key: string, value: string) => mockSessionStorage.set(key, value),
     removeItem: (key: string) => mockSessionStorage.delete(key),
-    clear: () => mockSessionStorage.clear(),
+    clear: () => { mockSessionStorage.clear(); },
   },
   writable: true,
 });

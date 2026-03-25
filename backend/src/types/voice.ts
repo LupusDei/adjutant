@@ -22,9 +22,7 @@ export interface VoiceConfig {
 /**
  * Mapping from agent/project identifiers to voice configurations.
  */
-export interface AgentVoiceMapping {
-  [agentOrProject: string]: VoiceConfig;
-}
+export type AgentVoiceMapping = Record<string, VoiceConfig>;
 
 /**
  * Complete voice configuration including default and agent mappings.

@@ -160,7 +160,7 @@ describe("SessionRegistry (SQL-backed)", () => {
       expect(session.lastActivity).toBeInstanceOf(Date);
 
       // Verify DB row was created
-      const rows = testDb.prepare("SELECT * FROM managed_sessions").all() as Array<Record<string, unknown>>;
+      const rows = testDb.prepare("SELECT * FROM managed_sessions").all() as Record<string, unknown>[];
       expect(rows).toHaveLength(1);
       expect(rows[0].id).toBe(session.id);
       expect(rows[0].name).toBe("test-agent");
@@ -491,7 +491,7 @@ describe("SessionRegistry (SQL-backed)", () => {
 
       await registry.save();
 
-      const rows = testDb.prepare("SELECT * FROM managed_sessions").all() as Array<{ name: string }>;
+      const rows = testDb.prepare("SELECT * FROM managed_sessions").all() as { name: string }[];
       expect(rows).toHaveLength(1);
       expect(rows[0].name).toBe("fresh-agent");
     });

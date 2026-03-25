@@ -234,7 +234,7 @@ function getMimeType(ext: string): string {
  */
 export async function listDirectory(
   projectId: string,
-  relativePath: string = "",
+  relativePath = "",
 ): Promise<ProjectsServiceResult<DirectoryEntry[]>> {
   const validation = validateProjectPath(projectId, relativePath);
   if ("error" in validation) {

@@ -450,7 +450,7 @@ describe("cost-tracker", () => {
       // Should have 2 rows: one for adj-010, one for adj-020
       const rows = testDb.prepare(
         "SELECT * FROM agent_costs WHERE session_id = 'sess-1' ORDER BY id"
-      ).all() as Array<Record<string, unknown>>;
+      ).all() as Record<string, unknown>[];
 
       expect(rows).toHaveLength(2);
       expect(rows[0]!.bead_id).toBe("adj-010");
@@ -834,7 +834,7 @@ describe("cost-tracker", () => {
       // And the DB should not have duplicate rows for the same bead
       const rows = testDb.prepare(
         "SELECT * FROM agent_costs WHERE session_id = 'sess-1' AND bead_id = 'adj-010' AND finalized_at IS NULL"
-      ).all() as Array<Record<string, unknown>>;
+      ).all() as Record<string, unknown>[];
       // Ideally 1 row, but after restart a new row may be created.
       // The key invariant: SUM(total_cost) across all adj-010 rows should equal $8
       const totalDelta = rows.reduce((sum, r) => sum + (r.total_cost as number), 0);

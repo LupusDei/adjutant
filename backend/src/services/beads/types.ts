@@ -45,11 +45,11 @@ export interface BeadDetail extends BeadInfo {
   /** Agent state if assigned (working, idle, stuck, stale) */
   agentState: string | null;
   /** Dependencies this bead has */
-  dependencies: Array<{
+  dependencies: {
     issueId: string;
     dependsOnId: string;
     type: string;
-  }>;
+  }[];
   /** Whether this is a wisp (transient work unit) */
   isWisp: boolean;
   /** Whether this is pinned */

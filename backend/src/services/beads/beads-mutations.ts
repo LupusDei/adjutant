@@ -36,7 +36,7 @@ export async function autoCompleteEpics(
   const effectiveWorkDir = workDir ?? resolveWorkspaceRoot();
   const effectiveBeadsDir = beadsDir ?? resolveBeadsDir(effectiveWorkDir);
 
-  const result = await execBd<Array<{ id: string; title?: string }>>(
+  const result = await execBd<{ id: string; title?: string }[]>(
     ["epic", "close-eligible", "--json"],
     { cwd: effectiveWorkDir, beadsDir: effectiveBeadsDir }
   );
@@ -116,6 +116,7 @@ export async function updateBead(
     if (status) args.push("--status", status);
     if (assignee !== undefined) args.push("--assignee", assignee);
 
+    // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
     const result = await execBd<void>(args, { cwd: db.workDir, beadsDir: db.beadsDir, parseJson: false });
 
     if (!result.success) {
@@ -181,8 +182,11 @@ export async function updateBeadStatus(
   return {
     success: true,
     data: {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       id: result.data!.id,
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       status: result.data!.status ?? status,
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       ...(result.data!.autoCompleted ? { autoCompleted: result.data!.autoCompleted } : {}),
     },
   };

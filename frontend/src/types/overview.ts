@@ -72,7 +72,7 @@ export interface ProjectOverview {
 
 /** Global overview response from GET /api/overview (aggregated across all projects). */
 export interface GlobalOverview {
-  projects: Array<{ id: string; name: string; path: string; active: boolean }>;
+  projects: { id: string; name: string; path: string; active: boolean }[];
   beads: BeadsOverview;
   epics: EpicsOverview;
   agents: AgentOverview[];

@@ -35,7 +35,7 @@ import type { AgentType } from "../../src/types/index.js";
 // Test Helpers
 // =============================================================================
 
-function mockManagedSessions(sessions: Array<{
+function mockManagedSessions(sessions: {
   id: string;
   name: string;
   tmuxSession: string;
@@ -43,7 +43,7 @@ function mockManagedSessions(sessions: Array<{
   projectPath?: string;
   workspaceType?: string;
   lastActivity?: string;
-}>) {
+}[]) {
   vi.mocked(getSessionBridge).mockReturnValue({
     listSessions: () => sessions.map(s => ({
       id: s.id,

@@ -168,7 +168,7 @@ function EpicGraphInner({ epicId, epicTitle, onClose }: EpicGraphViewProps) {
   /** MiniMap node color callback. */
   const minimapNodeColor = useCallback((node: Node) => {
     // Safe cast: node.data comes from our BeadNodeData type
-    const data = node.data as Record<string, unknown>;
+    const data = node.data;
     const status = data['status'] as string;
     switch (status) {
       case 'closed':

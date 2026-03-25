@@ -163,6 +163,7 @@ export async function computeEpicProgress(
         continue;
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const detail = showResult.data[0]!;
       const deps = detail.dependencies ?? [];
       progress.push(computeEpicProgressFromDeps(epic, deps, statusMap));
@@ -192,7 +193,7 @@ export async function computeEpicProgress(
  */
 export async function getRecentlyCompletedEpics(
   projectPath: string,
-  limit: number = 5
+  limit = 5
 ): Promise<BeadsServiceResult<EpicProgress[]>> {
   try {
     const beadsDir = resolveBeadsDir(projectPath);

@@ -91,18 +91,21 @@ export function TimelineEventCard({ event, isNew }: TimelineEventCardProps) {
               {event.detail.behavior && (
                 <div style={styles.coordField}>
                   <span style={styles.coordLabel}>BEHAVIOR:</span>{' '}
+                  {/* eslint-disable-next-line @typescript-eslint/no-base-to-string */}
                   <span style={styles.coordValue}>{String(event.detail.behavior)}</span>
                 </div>
               )}
               {event.detail.target && (
                 <div style={styles.coordField}>
                   <span style={styles.coordLabel}>TARGET:</span>{' '}
+                  {/* eslint-disable-next-line @typescript-eslint/no-base-to-string */}
                   <span style={styles.coordValue}>{String(event.detail.target)}</span>
                 </div>
               )}
               {event.detail.reason && (
                 <div style={styles.coordField}>
                   <span style={styles.coordLabel}>REASON:</span>{' '}
+                  {/* eslint-disable-next-line @typescript-eslint/no-base-to-string */}
                   <span style={styles.coordReason}>{String(event.detail.reason)}</span>
                 </div>
               )}

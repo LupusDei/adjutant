@@ -57,7 +57,7 @@ export function ProjectSelector({ className = '' }: { className?: string }) {
         )}
         <button
           style={styles.newButton}
-          onClick={() => setShowCreateDialog(true)}
+          onClick={() => { setShowCreateDialog(true); }}
           title="Create new project"
         >
           + NEW
@@ -67,7 +67,7 @@ export function ProjectSelector({ className = '' }: { className?: string }) {
       {showCreateDialog && (
         <CreateProjectDialog
           onSuccess={handleCreateSuccess}
-          onCancel={() => setShowCreateDialog(false)}
+          onCancel={() => { setShowCreateDialog(false); }}
         />
       )}
     </>

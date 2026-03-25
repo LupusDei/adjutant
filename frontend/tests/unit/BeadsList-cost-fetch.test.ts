@@ -26,7 +26,7 @@ describe('BeadsList cost-fetch stability (adj-6ksw)', () => {
     expect(beadsA).not.toBe(beadsB);
 
     // The stable key derivation should produce the same string
-    const deriveKey = (beads: Array<{ id: string; status: string }>) =>
+    const deriveKey = (beads: { id: string; status: string }[]) =>
       beads
         .filter((b) => b.status === 'in_progress' || b.status === 'hooked')
         .map((b) => b.id)
@@ -48,7 +48,7 @@ describe('BeadsList cost-fetch stability (adj-6ksw)', () => {
       { id: 'adj-003', status: 'in_progress' }, // new active bead
     ];
 
-    const deriveKey = (beads: Array<{ id: string; status: string }>) =>
+    const deriveKey = (beads: { id: string; status: string }[]) =>
       beads
         .filter((b) => b.status === 'in_progress' || b.status === 'hooked')
         .map((b) => b.id)

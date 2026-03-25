@@ -115,14 +115,17 @@ function getLayoutedElements(
     Dagre.layout(g);
 
     for (const node of connectedNodes) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const pos = g.node(node.id);
       const isEpic = node.type === 'epic';
       const w = isEpic ? EPIC_NODE_WIDTH : NODE_WIDTH;
       const h = isEpic ? EPIC_NODE_HEIGHT : NODE_HEIGHT;
       const nodeData = buildNodeData(node);
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/restrict-plus-operands, @typescript-eslint/no-unsafe-member-access
       const nodeY = pos.y + h / 2;
       if (nodeY > maxDagreY) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         maxDagreY = nodeY;
       }
 
@@ -130,7 +133,9 @@ function getLayoutedElements(
         id: node.id,
         type: 'beadNode' as const,
         position: {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
           x: pos.x - w / 2,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
           y: pos.y - h / 2,
         },
         data: nodeData,

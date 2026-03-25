@@ -632,7 +632,7 @@ describe("MemoryStore", () => {
       store.supersedeLearning(l1.id, l2.id);
 
       // Trying to supersede l2 by l1 should throw (circular)
-      expect(() => store.supersedeLearning(l2.id, l1.id)).toThrow(/circular/i);
+      expect(() => { store.supersedeLearning(l2.id, l1.id); }).toThrow(/circular/i);
     });
 
     it("should throw on longer circular supersede chains (adj-c7ao)", () => {
@@ -645,7 +645,7 @@ describe("MemoryStore", () => {
       store.supersedeLearning(l2.id, l3.id);
 
       // Trying to supersede l3 by l1 should throw (l1 -> l2 -> l3 -> l1)
-      expect(() => store.supersedeLearning(l3.id, l1.id)).toThrow(/circular/i);
+      expect(() => { store.supersedeLearning(l3.id, l1.id); }).toThrow(/circular/i);
     });
 
     it("should allow valid non-circular supersede (adj-c7ao)", () => {
@@ -655,7 +655,7 @@ describe("MemoryStore", () => {
 
       // l1 -> l2, then l2 -> l3 — no cycle
       store.supersedeLearning(l1.id, l2.id);
-      expect(() => store.supersedeLearning(l2.id, l3.id)).not.toThrow();
+      expect(() => { store.supersedeLearning(l2.id, l3.id); }).not.toThrow();
     });
   });
 });

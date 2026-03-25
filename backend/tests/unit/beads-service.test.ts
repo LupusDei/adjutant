@@ -6,7 +6,7 @@ vi.mock("../../src/services/bd-client.js", () => ({
   resolveBeadsDir: vi.fn((dir: string) => `${dir}/.beads`),
   stripBeadPrefix: vi.fn((fullId: string) => {
     // Known prefixes are 2-5 alphanumeric chars followed by hyphen (hq-, gt-, zt20-, etc.)
-    const match = fullId.match(/^[a-z0-9]{2,5}-(.+)$/i);
+    const match = /^[a-z0-9]{2,5}-(.+)$/i.exec(fullId);
     return match?.[1] ?? fullId;
   }),
 }));

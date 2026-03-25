@@ -29,7 +29,7 @@ describe("BehaviorRegistry", () => {
   it("register throws on duplicate name", () => {
     const registry = new BehaviorRegistry();
     registry.register(createTestBehavior({ name: "dup" }));
-    expect(() => registry.register(createTestBehavior({ name: "dup" }))).toThrow(
+    expect(() => { registry.register(createTestBehavior({ name: "dup" })); }).toThrow(
       /already registered/,
     );
   });
@@ -132,40 +132,40 @@ describe("BehaviorRegistry", () => {
     it("throws when registering behavior with empty triggers and no schedule", () => {
       const registry = new BehaviorRegistry();
       expect(() =>
-        registry.register(
+        { registry.register(
           createTestBehavior({ name: "dead", triggers: [], schedule: undefined }),
-        ),
+        ); },
       ).toThrow(/no triggers and no schedule/);
     });
 
     it("does NOT throw when behavior has only triggers (no schedule)", () => {
       const registry = new BehaviorRegistry();
       expect(() =>
-        registry.register(
+        { registry.register(
           createTestBehavior({ name: "trigger-only", triggers: ["agent:status_changed"] }),
-        ),
+        ); },
       ).not.toThrow();
     });
 
     it("does NOT throw when behavior has only schedule (no triggers)", () => {
       const registry = new BehaviorRegistry();
       expect(() =>
-        registry.register(
+        { registry.register(
           createTestBehavior({ name: "schedule-only", triggers: [], schedule: "0 * * * *" }),
-        ),
+        ); },
       ).not.toThrow();
     });
 
     it("does NOT throw when behavior has both triggers and schedule", () => {
       const registry = new BehaviorRegistry();
       expect(() =>
-        registry.register(
+        { registry.register(
           createTestBehavior({
             name: "both",
             triggers: ["agent:status_changed"],
             schedule: "0 * * * *",
           }),
-        ),
+        ); },
       ).not.toThrow();
     });
   });
@@ -197,7 +197,7 @@ describe("BehaviorRegistry", () => {
       registry.register(createTestBehavior({ name: "reuse" }));
       registry.unregister("reuse");
       expect(() =>
-        registry.register(createTestBehavior({ name: "reuse" })),
+        { registry.register(createTestBehavior({ name: "reuse" })); },
       ).not.toThrow();
       expect(registry.getAll()).toHaveLength(1);
     });

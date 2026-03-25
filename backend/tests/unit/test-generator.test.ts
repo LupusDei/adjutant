@@ -876,7 +876,7 @@ describe("BugFixes", () => {
     };
     const content = generateTestContent(parsed);
     // The harness call should not contain literal :commentId (comments will though)
-    const harnessCall = content.match(/harness\.patch\(.+\)/)?.[0] ?? "";
+    const harnessCall = (/harness\.patch\(.+\)/.exec(content))?.[0] ?? "";
     expect(harnessCall).not.toContain(":commentId");
     // Should have template expressions for both params
     expect(harnessCall).toContain("${seeded.id}");
@@ -908,7 +908,7 @@ describe("BugFixes", () => {
     const content = generateTestContent(parsed);
     // The it() description string should have escaped backslashes
     // (descriptionFromThen lowercases, so check lowercase)
-    const itLine = content.match(/it\("should .+?",/)?.[0] ?? "";
+    const itLine = (/it\("should .+?",/.exec(content))?.[0] ?? "";
     expect(itLine).toContain('c:\\\\users\\\\test');
     // Should not have raw unescaped backslash producing \U in the string literal
     expect(itLine).not.toMatch(/c:\\u(?!sers)/i);

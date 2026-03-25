@@ -137,7 +137,7 @@ async function processStreamFile(stream: ActiveStream): Promise<void> {
         });
 
         // Schedule cleanup
-        setTimeout(() => cleanupStream(stream.streamId), CLEANUP_DELAY_MS);
+        setTimeout(() => { cleanupStream(stream.streamId); }, CLEANUP_DELAY_MS);
       } else if (token.error) {
         // Stream error
         stream.complete = true;
@@ -155,7 +155,7 @@ async function processStreamFile(stream: ActiveStream): Promise<void> {
           state: "error",
         });
 
-        setTimeout(() => cleanupStream(stream.streamId), CLEANUP_DELAY_MS);
+        setTimeout(() => { cleanupStream(stream.streamId); }, CLEANUP_DELAY_MS);
       } else if (token.token !== undefined) {
         // Regular token
         wsBroadcast({
@@ -224,6 +224,7 @@ function handleStreamFileChange(filename: string): void {
   }
 
   if (!stream.complete) {
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     processStreamFile(stream);
   }
 }
@@ -289,6 +290,7 @@ export function initStreamingBridge(): void {
   // Watch for new/changed files
   try {
     watcher = watch(streamsDir, (eventType, filename) => {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (filename && (eventType === "rename" || eventType === "change")) {
         handleStreamFileChange(filename);
       }

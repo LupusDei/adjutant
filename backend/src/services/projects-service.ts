@@ -167,7 +167,7 @@ function expandTilde(p: string): string {
 }
 
 function nameFromCloneUrl(url: string): string {
-  const match = url.match(/\/([^/]+?)(?:\.git)?$/);
+  const match = /\/([^/]+?)(?:\.git)?$/.exec(url);
   return match?.[1] ?? "project";
 }
 
@@ -203,7 +203,7 @@ function isProjectDir(dirPath: string): boolean {
 function scanForProjects(
   rootPath: string,
   maxDepth: number,
-  currentDepth: number = 0,
+  currentDepth = 0,
 ): string[] {
   if (currentDepth > maxDepth) return [];
 
@@ -261,11 +261,12 @@ function scanForProjects(
 export function discoverLocalProjects(options?: DiscoverOptions): ProjectsServiceResult<Project[]> {
   try {
     const db = getDatabase();
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     const projectRoot = resolve(process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd());
     const requestedDepth = options?.maxDepth ?? DEFAULT_SCAN_DEPTH;
     const maxDepth = Math.min(Math.max(0, requestedDepth), MAX_SCAN_DEPTH);
 
-    const existingRows = db.prepare("SELECT path FROM projects").all() as Array<{ path: string }>;
+    const existingRows = db.prepare("SELECT path FROM projects").all() as { path: string }[];
     const existingPaths = new Set(existingRows.map((r) => r.path));
     const discovered: Project[] = [];
 
@@ -293,7 +294,7 @@ export function discoverLocalProjects(options?: DiscoverOptions): ProjectsServic
     } else {
       // Mark the existing root project as active (and deactivate others)
       const existing = db.prepare("SELECT id, active FROM projects WHERE path = ?").get(projectRoot) as { id: string; active: number } | undefined;
-      if (existing && existing.active === 0) {
+      if (existing?.active === 0) {
         db.transaction(() => {
           db.prepare("UPDATE projects SET active = 0").run();
           db.prepare("UPDATE projects SET active = 1 WHERE path = ?").run(projectRoot);

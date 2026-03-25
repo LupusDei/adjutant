@@ -27,7 +27,7 @@ const ENGINEERING_CATEGORIES = new Set(["technical", "project"]);
  * Determine the proposal type from the majority category of learnings.
  * 'technical' and 'project' -> 'engineering'; everything else -> 'product'.
  */
-function inferProposalType(learnings: Array<{ category: string }>): "product" | "engineering" {
+function inferProposalType(learnings: { category: string }[]): "product" | "engineering" {
   let engineeringCount = 0;
   for (const l of learnings) {
     if (ENGINEERING_CATEGORIES.has(l.category)) {
@@ -139,10 +139,12 @@ export function createSelfImprover(
     triggers: ["learning:created"],
     schedule: "0 * * * *", // Hourly (actual weekly logic handled in act via meta check)
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     shouldAct(_event: BehaviorEvent, _state: AdjutantState): boolean {
       return true;
     },
 
+    // eslint-disable-next-line @typescript-eslint/require-await, @typescript-eslint/no-unused-vars
     async act(event: BehaviorEvent, state: AdjutantState, _comm: CommunicationManager): Promise<void> {
       const data = event.data as Record<string, unknown>;
 

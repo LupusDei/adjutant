@@ -76,6 +76,7 @@ export async function getBead(
     if (options?.project) {
       const databases = await buildDatabaseList(options.project);
       if (databases.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         const first = databases[0]!;
         db = { workDir: first.workDir, beadsDir: first.beadsDir };
       } else {
@@ -134,6 +135,7 @@ export async function getBead(
     const detail: BeadDetail = {
       id: issue.id,
       title: issue.title,
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       description: issue.description ?? "",
       status: issue.status,
       priority: issue.priority,
@@ -154,8 +156,8 @@ export async function getBead(
         if (typeof dep["dependency_type"] === "string" && typeof dep["id"] === "string") {
           return {
             issueId: beadId,
-            dependsOnId: dep["id"] as string,
-            type: dep["dependency_type"] as string,
+            dependsOnId: dep["id"],
+            type: dep["dependency_type"],
           };
         }
         // bd list format: {issue_id, depends_on_id, type} tuples
@@ -258,7 +260,7 @@ export async function listAllBeads(
 
     // Fetch from all databases sequentially (serialized through bd semaphore)
     const fetchResults: FetchResult[] = [];
-    const errors: Array<{ source: string; error: { code: string; message: string } }> = [];
+    const errors: { source: string; error: { code: string; message: string } }[] = [];
 
     for (const db of databasesToQuery) {
       const result = await fetchBeadsFromDatabase(db.workDir, db.beadsDir, db.source, options);
@@ -270,6 +272,7 @@ export async function listAllBeads(
 
     // If ALL databases failed, return an error
     if (errors.length === databasesToQuery.length && databasesToQuery.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const firstError = errors[0]!;
       return {
         success: false,
@@ -337,7 +340,7 @@ const RECENT_CLOSED_LIMIT = 10;
  * Defaults to the active project's database. Pass "all" to scan all databases.
  */
 export async function listRecentlyClosed(
-  hours: number = 1,
+  hours = 1,
   project?: string,
 ): Promise<BeadsServiceResult<RecentlyClosedBead[]>> {
   try {
@@ -404,12 +407,13 @@ export async function getBeadsGraph(
   try {
     await ensurePrefixMap();
 
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     const project = options.project?.trim() || getActiveProjectName();
     const databasesToQuery = await buildDatabaseList(project);
 
     // Fetch from all databases sequentially
     const allIssues: BeadsIssue[] = [];
-    const errors: Array<{ source: string; error: { code: string; message: string } }> = [];
+    const errors: { source: string; error: { code: string; message: string } }[] = [];
 
     for (const db of databasesToQuery) {
       const fetchResult = await fetchGraphBeadsFromDatabase(db.workDir, db.beadsDir, options);
@@ -421,6 +425,7 @@ export async function getBeadsGraph(
 
     // If ALL databases failed, return the first error
     if (errors.length === databasesToQuery.length && databasesToQuery.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const firstError = errors[0]!;
       return {
         success: false,

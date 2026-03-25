@@ -41,7 +41,7 @@ describe("Memory Store Migration (011-memory-store.sql)", () => {
     });
 
     it("should have all required columns", () => {
-      const columns = db.prepare("PRAGMA table_info(adjutant_learnings)").all() as Array<{ name: string; type: string; notnull: number }>;
+      const columns = db.prepare("PRAGMA table_info(adjutant_learnings)").all() as { name: string; type: string; notnull: number }[];
       const colNames = columns.map((c) => c.name);
 
       expect(colNames).toContain("id");
@@ -60,7 +60,7 @@ describe("Memory Store Migration (011-memory-store.sql)", () => {
     });
 
     it("should enforce NOT NULL on required columns", () => {
-      const columns = db.prepare("PRAGMA table_info(adjutant_learnings)").all() as Array<{ name: string; notnull: number }>;
+      const columns = db.prepare("PRAGMA table_info(adjutant_learnings)").all() as { name: string; notnull: number }[];
       const colMap = new Map(columns.map((c) => [c.name, c.notnull]));
 
       expect(colMap.get("category")).toBe(1);
@@ -124,7 +124,7 @@ describe("Memory Store Migration (011-memory-store.sql)", () => {
     });
 
     it("should have all required columns", () => {
-      const columns = db.prepare("PRAGMA table_info(adjutant_retrospectives)").all() as Array<{ name: string }>;
+      const columns = db.prepare("PRAGMA table_info(adjutant_retrospectives)").all() as { name: string }[];
       const colNames = columns.map((c) => c.name);
 
       expect(colNames).toContain("id");
@@ -168,7 +168,7 @@ describe("Memory Store Migration (011-memory-store.sql)", () => {
     });
 
     it("should have all required columns", () => {
-      const columns = db.prepare("PRAGMA table_info(adjutant_corrections)").all() as Array<{ name: string }>;
+      const columns = db.prepare("PRAGMA table_info(adjutant_corrections)").all() as { name: string }[];
       const colNames = columns.map((c) => c.name);
 
       expect(colNames).toContain("id");
@@ -227,7 +227,7 @@ describe("Memory Store Migration (011-memory-store.sql)", () => {
 
       const ftsResult = db.prepare(
         "SELECT rowid FROM adjutant_learnings_fts WHERE adjutant_learnings_fts MATCH ?"
-      ).all("strict mode") as Array<{ rowid: number }>;
+      ).all("strict mode") as { rowid: number }[];
 
       expect(ftsResult.length).toBeGreaterThan(0);
       expect(ftsResult[0].rowid).toBe(1);
@@ -245,13 +245,13 @@ describe("Memory Store Migration (011-memory-store.sql)", () => {
       // Old content should not match
       const oldResult = db.prepare(
         "SELECT rowid FROM adjutant_learnings_fts WHERE adjutant_learnings_fts MATCH ?"
-      ).all("old content") as Array<{ rowid: number }>;
+      ).all("old content") as { rowid: number }[];
       expect(oldResult.length).toBe(0);
 
       // New content should match
       const newResult = db.prepare(
         "SELECT rowid FROM adjutant_learnings_fts WHERE adjutant_learnings_fts MATCH ?"
-      ).all("testing") as Array<{ rowid: number }>;
+      ).all("testing") as { rowid: number }[];
       expect(newResult.length).toBeGreaterThan(0);
     });
 
@@ -264,7 +264,7 @@ describe("Memory Store Migration (011-memory-store.sql)", () => {
 
       const result = db.prepare(
         "SELECT rowid FROM adjutant_learnings_fts WHERE adjutant_learnings_fts MATCH ?"
-      ).all("deleted") as Array<{ rowid: number }>;
+      ).all("deleted") as { rowid: number }[];
       expect(result.length).toBe(0);
     });
   });
@@ -284,7 +284,7 @@ describe("Memory Store Migration (011-memory-store.sql)", () => {
         AND l.superseded_by IS NULL
         ORDER BY rank
         LIMIT 10
-      `).all("strict mode") as Array<{ id: number; category: string; topic: string; content: string; source_type: string; confidence: number }>;
+      `).all("strict mode") as { id: number; category: string; topic: string; content: string; source_type: string; confidence: number }[];
 
       expect(rows.length).toBe(1);
       expect(rows[0].id).toBe(1);
@@ -311,7 +311,7 @@ describe("Memory Store Migration (011-memory-store.sql)", () => {
         INNER JOIN adjutant_learnings_fts fts ON l.id = fts.rowid
         WHERE adjutant_learnings_fts MATCH ?
         ORDER BY rank
-      `).all("strict") as Array<{ id: number }>;
+      `).all("strict") as { id: number }[];
 
       // Should find the two entries mentioning "strict"
       expect(rows.length).toBe(2);
@@ -325,14 +325,14 @@ describe("Memory Store Migration (011-memory-store.sql)", () => {
       // Verify it's found
       let found = db.prepare(
         "SELECT rowid FROM adjutant_learnings_fts WHERE adjutant_learnings_fts MATCH ?"
-      ).all("xyz") as Array<{ rowid: number }>;
+      ).all("xyz") as { rowid: number }[];
       expect(found.length).toBe(1);
 
       // Delete and verify it's gone from FTS
       db.prepare("DELETE FROM adjutant_learnings WHERE id = 1").run();
       found = db.prepare(
         "SELECT rowid FROM adjutant_learnings_fts WHERE adjutant_learnings_fts MATCH ?"
-      ).all("xyz") as Array<{ rowid: number }>;
+      ).all("xyz") as { rowid: number }[];
       expect(found.length).toBe(0);
     });
   });
@@ -386,7 +386,7 @@ describe("Memory Store Migration (011-memory-store.sql)", () => {
         "INSERT INTO adjutant_learnings (category, topic, content, source_type, confidence) VALUES (?, ?, ?, ?, ?)"
       ).run("operational", "topic-one", "content one", "user_correction", 1.0);
 
-      const rows = db.prepare("SELECT confidence FROM adjutant_learnings ORDER BY id").all() as Array<{ confidence: number }>;
+      const rows = db.prepare("SELECT confidence FROM adjutant_learnings ORDER BY id").all() as { confidence: number }[];
       expect(rows[0].confidence).toBe(0.0);
       expect(rows[1].confidence).toBe(1.0);
     });

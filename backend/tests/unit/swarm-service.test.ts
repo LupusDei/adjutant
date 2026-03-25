@@ -381,9 +381,9 @@ describe("swarm-service", () => {
       // Setup execFile to return rev-list counts
       const execFileMock = vi.mocked(execFile);
       execFileMock.mockImplementation((_cmd: string, args: string[], _opts: unknown, cb: Function) => {
-        if (args && args[0] === "rev-list") {
+        if (args?.[0] === "rev-list") {
           cb(null, "0\t3\n", "");
-        } else if (args && args[0] === "merge-tree") {
+        } else if (args?.[0] === "merge-tree") {
           cb(null, "", "");
         } else {
           cb(null, "", "");

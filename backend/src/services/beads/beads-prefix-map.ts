@@ -30,7 +30,7 @@ function readPrefixFromConfig(beadsDir: string): string | null {
   try {
     const configPath = join(beadsDir, "config.yaml");
     const content = readFileSync(configPath, "utf8");
-    const prefixMatch = content.match(/^(?:prefix|issue-prefix):\s*["']?([a-zA-Z0-9_-]+)["']?\s*$/m);
+    const prefixMatch = /^(?:prefix|issue-prefix):\s*["']?([a-zA-Z0-9_-]+)["']?\s*$/m.exec(content);
     return prefixMatch?.[1] ?? null;
   } catch {
     return null;
@@ -111,6 +111,7 @@ export function startPrefixMapRefreshScheduler(
       prefixToSourceMap = map;
       logInfo("prefix map initialized", { prefixCount: map.size });
     })
+    // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
     .catch((err) => {
       console.error("[BeadsPrefixMap] Initial prefix map build failed:", err);
     });
@@ -127,6 +128,7 @@ export function startPrefixMapRefreshScheduler(
           });
         }
       })
+      // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
       .catch((err) => {
         console.error("[BeadsPrefixMap] Prefix map refresh failed:", err);
       });

@@ -139,7 +139,7 @@ describe('BeadsList', () => {
         expect(api.messages.send).toHaveBeenCalledWith(
           expect.objectContaining({
             to: 'user',
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+             
             body: expect.stringContaining('hq-001'),
           })
         );
@@ -171,7 +171,7 @@ describe('BeadsList', () => {
         expect(api.messages.send).toHaveBeenCalledWith(
           expect.objectContaining({
             to: 'user',
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+             
             body: expect.stringContaining('Delete request'),
           })
         );

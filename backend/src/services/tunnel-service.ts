@@ -60,7 +60,7 @@ let lastError: string | null = null;
 async function checkNgrokApi(): Promise<{ url: string | null; error: string | null }> {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => { controller.abort(); }, 2000);
 
     const response = await fetch("http://127.0.0.1:4040/api/tunnels", {
       signal: controller.signal,
@@ -255,6 +255,7 @@ export async function startTunnel(): Promise<TunnelServiceResult<TunnelStatus>> 
 
     // Failed to get URL
     currentState = "error";
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     lastError = lastError ?? "Failed to start ngrok tunnel";
     return {
       success: false,

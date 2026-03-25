@@ -256,7 +256,7 @@ export class SessionBridge {
     this.registry.removeClient(sessionId, clientId);
 
     const session = this.registry.get(sessionId);
-    if (session && session.connectedClients.size === 0) {
+    if (session?.connectedClients.size === 0) {
       // No more clients — detach pipe to save resources
       await this.connector.detach(sessionId);
     }
@@ -349,6 +349,7 @@ export class SessionBridge {
     const updated = this.registry.updateStatus(sessionId, status);
     if (updated && status === "idle") {
       // Flush queued input when session becomes idle
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
       this.inputRouter.flushQueue(sessionId).catch(() => {});
     }
     return updated;
@@ -380,6 +381,7 @@ export class SessionBridge {
 let instance: SessionBridge | null = null;
 
 export function getSessionBridge(config?: SessionBridgeConfig): SessionBridge {
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   if (!instance) {
     instance = new SessionBridge(config);
   }

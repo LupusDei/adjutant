@@ -161,6 +161,7 @@ export function PersonasView({ isActive }: PersonasViewProps) {
                 <div key={persona.id} style={styles.cardWrapper}>
                   <PersonaRosterCard
                     persona={persona}
+                    // eslint-disable-next-line @typescript-eslint/no-misused-promises
                     onDeploy={handleDeploy}
                     onEdit={handleEdit}
                   />

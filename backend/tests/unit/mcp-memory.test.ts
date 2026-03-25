@@ -94,7 +94,7 @@ function createMockMemoryStore(): MemoryStore {
 // ============================================================================
 
 type ToolHandler = (args: Record<string, unknown>, extra: Record<string, unknown>) => Promise<{
-  content: Array<{ type: string; text: string }>;
+  content: { type: string; text: string }[];
 }>;
 
 function createMockServer() {

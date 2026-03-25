@@ -91,10 +91,12 @@ function jsonResult(data: Record<string, unknown>) {
  * Returns null if the format is invalid.
  */
 function parseDelay(delay: string): number | null {
-  const match = delay.match(/^(\d+)(s|m|h)$/);
+  const match = /^(\d+)(s|m|h)$/.exec(delay);
   if (!match) return null;
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const value = parseInt(match[1]!, 10);
   if (value <= 0) return null;
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const unit = match[2]!;
   switch (unit) {
     case "s": return value * 1_000;
@@ -131,6 +133,7 @@ function emitCoordinatorAction(
     action: `${decision.action}: ${target ?? "system"}`,
     detail: { behavior: decision.behavior, action: decision.action, target, reason: decision.reason ?? null },
   };
+  // eslint-disable-next-line @typescript-eslint/prefer-optional-chain
   if (target && target.startsWith("adj-")) {
     input.beadId = target;
   }
@@ -160,6 +163,7 @@ export function registerCoordinationTools(
   // --------------------------------------------------------------------------
   // spawn_worker
   // --------------------------------------------------------------------------
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "spawn_worker",
     "Spawn a new agent worker with a specific task prompt",
@@ -174,6 +178,7 @@ export function registerCoordinationTools(
       if (!callerAgentId) {
         const resolved = resolveCallerOrError(extra.sessionId);
         // Safe: resolved.error is always defined when agentId is undefined
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         return resolved.error!;
       }
 
@@ -215,6 +220,7 @@ export function registerCoordinationTools(
   // --------------------------------------------------------------------------
   // assign_bead
   // --------------------------------------------------------------------------
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "assign_bead",
     "Assign a bead to a specific agent with reasoning",
@@ -227,6 +233,7 @@ export function registerCoordinationTools(
       const callerAgentId = checkAccess(extra.sessionId);
       if (!callerAgentId) {
         const resolved = resolveCallerOrError(extra.sessionId);
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         return resolved.error!;
       }
 
@@ -274,6 +281,7 @@ export function registerCoordinationTools(
   // --------------------------------------------------------------------------
   // nudge_agent
   // --------------------------------------------------------------------------
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "nudge_agent",
     "Send a targeted prompt to an agent's tmux session to nudge them",
@@ -285,12 +293,14 @@ export function registerCoordinationTools(
       const callerAgentId = checkAccess(extra.sessionId);
       if (!callerAgentId) {
         const resolved = resolveCallerOrError(extra.sessionId);
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         return resolved.error!;
       }
 
       const bridge = getSessionBridge();
       const sessions = bridge.registry.findByName(agentId);
 
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!sessions || sessions.length === 0) {
         return jsonResult({
           success: false,
@@ -302,6 +312,7 @@ export function registerCoordinationTools(
       const singleLine = message.replace(/\n+/g, " ").trim();
 
       // Send to the first matching session — length check above guarantees index 0 exists
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const session = sessions[0]!;
       const sent = await bridge.sendInput(session.id, singleLine);
 
@@ -330,6 +341,7 @@ export function registerCoordinationTools(
   // --------------------------------------------------------------------------
   // decommission_agent
   // --------------------------------------------------------------------------
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "decommission_agent",
     "Gracefully shut down an idle agent",
@@ -337,10 +349,12 @@ export function registerCoordinationTools(
       agentId: z.string().describe("The agent to decommission"),
       reason: z.string().describe("Why decommissioning"),
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ agentId, reason }, extra) => {
       const callerAgentId = checkAccess(extra.sessionId);
       if (!callerAgentId) {
         const resolved = resolveCallerOrError(extra.sessionId);
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         return resolved.error!;
       }
 
@@ -410,6 +424,7 @@ export function registerCoordinationTools(
   // --------------------------------------------------------------------------
   // rebalance_work
   // --------------------------------------------------------------------------
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "rebalance_work",
     "Return an agent's in-progress beads to the open pool",
@@ -421,6 +436,7 @@ export function registerCoordinationTools(
       const callerAgentId = checkAccess(extra.sessionId);
       if (!callerAgentId) {
         const resolved = resolveCallerOrError(extra.sessionId);
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         return resolved.error!;
       }
 
@@ -438,7 +454,7 @@ export function registerCoordinationTools(
         });
       }
 
-      const beads = listResult.data as Array<{ id: string; title?: string }>;
+      const beads = listResult.data as { id: string; title?: string }[];
       const rebalancedIds: string[] = [];
 
       for (const bead of beads) {
@@ -478,6 +494,7 @@ export function registerCoordinationTools(
   // --------------------------------------------------------------------------
   // schedule_check
   // --------------------------------------------------------------------------
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "schedule_check",
     "Schedule a future wake-up for the adjutant",
@@ -485,10 +502,12 @@ export function registerCoordinationTools(
       delay: z.string().describe('Delay before firing, e.g. "15m", "1h", "30s"'),
       reason: z.string().describe("Why this check is needed"),
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ delay, reason }, extra) => {
       const callerAgentId = checkAccess(extra.sessionId);
       if (!callerAgentId) {
         const resolved = resolveCallerOrError(extra.sessionId);
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         return resolved.error!;
       }
 
@@ -528,6 +547,7 @@ export function registerCoordinationTools(
   // --------------------------------------------------------------------------
   // watch_for
   // --------------------------------------------------------------------------
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "watch_for",
     "Register a conditional wake-up — fire when event occurs or timeout expires",
@@ -537,10 +557,12 @@ export function registerCoordinationTools(
       timeout: z.string().optional().describe('Optional timeout, e.g. "30m" — fire even if event doesn\'t occur'),
       reason: z.string().describe("Why watching"),
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ event, filter, timeout, reason }, extra) => {
       const callerAgentId = checkAccess(extra.sessionId);
       if (!callerAgentId) {
         const resolved = resolveCallerOrError(extra.sessionId);
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         return resolved.error!;
       }
 

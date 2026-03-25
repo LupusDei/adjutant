@@ -215,12 +215,12 @@ describe("proposal-store", () => {
     it("should create proposal_comments table", () => {
       const tables = db
         .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='proposal_comments'")
-        .all() as Array<{ name: string }>;
+        .all() as { name: string }[];
       expect(tables).toHaveLength(1);
     });
 
     it("should have correct columns on proposal_comments", () => {
-      const columns = db.prepare("PRAGMA table_info(proposal_comments)").all() as Array<{ name: string }>;
+      const columns = db.prepare("PRAGMA table_info(proposal_comments)").all() as { name: string }[];
       const colNames = columns.map((c) => c.name);
       expect(colNames).toContain("id");
       expect(colNames).toContain("proposal_id");
@@ -232,7 +232,7 @@ describe("proposal-store", () => {
     it("should have index on proposal_comments(proposal_id, created_at)", () => {
       const indexes = db
         .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='proposal_comments'")
-        .all() as Array<{ name: string }>;
+        .all() as { name: string }[];
       const indexNames = indexes.map((i) => i.name);
       expect(indexNames).toContain("idx_proposal_comments_proposal");
     });
@@ -245,12 +245,12 @@ describe("proposal-store", () => {
     it("should create proposal_revisions table", () => {
       const tables = db
         .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='proposal_revisions'")
-        .all() as Array<{ name: string }>;
+        .all() as { name: string }[];
       expect(tables).toHaveLength(1);
     });
 
     it("should have correct columns on proposal_revisions", () => {
-      const columns = db.prepare("PRAGMA table_info(proposal_revisions)").all() as Array<{ name: string }>;
+      const columns = db.prepare("PRAGMA table_info(proposal_revisions)").all() as { name: string }[];
       const colNames = columns.map((c) => c.name);
       expect(colNames).toContain("id");
       expect(colNames).toContain("proposal_id");
@@ -266,7 +266,7 @@ describe("proposal-store", () => {
     it("should have index on proposal_revisions(proposal_id, revision_number)", () => {
       const indexes = db
         .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='proposal_revisions'")
-        .all() as Array<{ name: string }>;
+        .all() as { name: string }[];
       const indexNames = indexes.map((i) => i.name);
       expect(indexNames).toContain("idx_proposal_revisions_proposal");
     });
@@ -510,7 +510,7 @@ describe("proposal-store", () => {
     it("should have unique index on (proposal_id, revision_number)", () => {
       const indexes = db
         .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='proposal_revisions'")
-        .all() as Array<{ name: string }>;
+        .all() as { name: string }[];
       const indexNames = indexes.map((i) => i.name);
       expect(indexNames).toContain("idx_proposal_revisions_unique");
     });

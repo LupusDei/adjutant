@@ -16,7 +16,7 @@ class BdSemaphore {
   private queue: (() => void)[] = [];
   private running = 0;
 
-  constructor(private readonly maxConcurrency: number = 1) {}
+  constructor(private readonly maxConcurrency = 1) {}
 
   async acquire(): Promise<void> {
     if (this.running < this.maxConcurrency) {
@@ -101,7 +101,7 @@ const REDIRECT_DEPTH = 3;
 export function stripBeadPrefix(fullId: string): string {
   // Known prefixes are 2-5 alphanumeric chars followed by hyphen (hq-, gt-, zt20-, etc.)
   // Pattern: <prefix>-<rest> where prefix is 2-5 alphanumeric chars
-  const match = fullId.match(/^[a-z0-9]{2,5}-(.+)$/i);
+  const match = /^[a-z0-9]{2,5}-(.+)$/i.exec(fullId);
   return match?.[1] ?? fullId;
 }
 
@@ -135,7 +135,7 @@ export function resolveBeadsDir(workDir: string): string {
 function stripDoltInfoMessages(stderr: string): string {
   return stderr
     .split("\n")
-    .filter((line) => !line.match(/^Info:\s+cleaned up \d+ orphaned dolt/))
+    .filter((line) => !(/^Info:\s+cleaned up \d+ orphaned dolt/.exec(line)))
     .join("\n")
     .trim();
 }

@@ -141,7 +141,7 @@ describe("CrewStats", () => {
       // that lives inside a stat item (not the h2 header or section title).
       const footer = screen.getByRole("contentinfo") ?? document.querySelector("footer");
       expect(footer).toBeTruthy();
-      expect(footer!.textContent).toContain("2");
+      expect(footer.textContent).toContain("2");
     });
 
     it("should show online count in footer", () => {

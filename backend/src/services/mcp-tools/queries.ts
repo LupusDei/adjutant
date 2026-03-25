@@ -43,6 +43,7 @@ export function registerQueryTools(server: McpServer, store: MessageStore): void
 // ============================================================================
 
 function registerListAgents(server: McpServer): void {
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "list_agents",
     {
@@ -120,6 +121,7 @@ function registerListAgents(server: McpServer): void {
 // ============================================================================
 
 function registerGetProjectState(server: McpServer, store: MessageStore): void {
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "get_project_state",
     {},
@@ -167,6 +169,7 @@ function registerGetProjectState(server: McpServer, store: MessageStore): void {
 // ============================================================================
 
 function registerSearchMessages(server: McpServer, store: MessageStore): void {
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "search_messages",
     {
@@ -174,7 +177,9 @@ function registerSearchMessages(server: McpServer, store: MessageStore): void {
       agentId: z.string().optional().describe("Filter to specific agent"),
       limit: z.number().optional().default(20).describe("Max results"),
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ query, agentId, limit }) => {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       const effectiveLimit = limit ?? 20;
       const results = store.searchMessages(query, { agentId, limit: effectiveLimit });
 

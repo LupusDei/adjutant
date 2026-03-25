@@ -80,6 +80,7 @@ beadsRouter.get("/", async (req, res) => {
   }
 
   // Normalize project parameter: undefined/empty defaults to "town"
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   const project = projectParam?.trim() || "town";
 
   // project=all: Query ALL beads databases (town + all projects)
@@ -304,7 +305,7 @@ beadsRouter.get("/epics-with-progress", async (req, res) => {
  * - { success: true, data: BeadInfo[] }
  */
 beadsRouter.get("/:id/children", async (req, res) => {
-  const beadId = req.params["id"];
+  const beadId = req.params.id;
 
   if (!beadId) {
     return res.status(400).json(badRequest("Bead ID is required"));
@@ -332,7 +333,7 @@ beadsRouter.get("/:id/children", async (req, res) => {
  * - { success: true, data: BeadDetail }
  */
 beadsRouter.get("/:id", async (req, res) => {
-  const beadId = req.params["id"];
+  const beadId = req.params.id;
   const projectParam = req.query["project"] as string | undefined;
 
   if (!beadId) {
@@ -372,7 +373,7 @@ beadsRouter.get("/:id", async (req, res) => {
  * - { success: true, data: { id: string, status?: string, assignee?: string } }
  */
 beadsRouter.patch("/:id", async (req, res) => {
-  const beadId = req.params["id"];
+  const beadId = req.params.id;
 
   if (!beadId) {
     return res.status(400).json(badRequest("Bead ID is required"));

@@ -48,7 +48,7 @@ export function parseAgentBeadId(id: string, defaultRig?: string | null): Parsed
   const second = parts[1];
   const third = parts[2];
 
-  if (parts.length >= 2 && first && first.toLowerCase() === "dog") {
+  if (parts.length >= 2 && first?.toLowerCase() === "dog") {
     return { project: null, role: "dog", name: parts.slice(1).join("-") };
   }
 
@@ -226,6 +226,6 @@ export function beadsIssueToMessage(issue: BeadsIssue): Message {
  * E.g., "adj-abc123" → "adj", "hq-xlzm" → "hq"
  */
 export function extractBeadPrefix(beadId: string): string | null {
-  const match = beadId.match(/^([a-z0-9]{2,5})-/i);
+  const match = /^([a-z0-9]{2,5})-/i.exec(beadId);
   return match?.[1]?.toLowerCase() ?? null;
 }

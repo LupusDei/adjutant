@@ -7,7 +7,7 @@ export class AppError extends Error {
   constructor(
     public readonly code: string,
     message: string,
-    public readonly statusCode: number = 500,
+    public readonly statusCode = 500,
     public readonly details?: string
   ) {
     super(message);
@@ -48,6 +48,7 @@ interface ErrorResponse {
  * Global error handling middleware.
  * Catches all errors and returns structured ApiResponse format.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   // Determine error details
   let statusCode = 500;

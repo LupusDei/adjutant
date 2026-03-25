@@ -5,7 +5,7 @@ vi.mock("../../src/services/bd-client.js", () => ({
   execBd: vi.fn(),
   resolveBeadsDir: vi.fn((dir: string) => `${dir}/.beads`),
   stripBeadPrefix: vi.fn((fullId: string) => {
-    const match = fullId.match(/^[a-z0-9]{2,5}-(.+)$/i);
+    const match = /^[a-z0-9]{2,5}-(.+)$/i.exec(fullId);
     return match?.[1] ?? fullId;
   }),
 }));

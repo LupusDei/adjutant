@@ -84,7 +84,7 @@ export const CALLSIGNS: readonly CallsignEntry[] = [
  * matching the SessionInfo shape returned by SessionBridge.listSessions().
  */
 function getActiveNames(
-  sessions: Array<{ name: string; status: string }>
+  sessions: { name: string; status: string }[]
 ): Set<string> {
   return new Set(
     sessions
@@ -97,7 +97,7 @@ function getActiveNames(
  * Returns all 44 callsigns with availability based on active sessions.
  */
 export function getCallsigns(
-  sessions: Array<{ name: string; status: string }>
+  sessions: { name: string; status: string }[]
 ): CallsignStatus[] {
   const active = getActiveNames(sessions);
   return CALLSIGNS.map((c) => ({
@@ -110,7 +110,7 @@ export function getCallsigns(
  * Pick a random available callsign. Returns undefined if all are taken.
  */
 export function pickRandomCallsign(
-  sessions: Array<{ name: string; status: string }>
+  sessions: { name: string; status: string }[]
 ): CallsignEntry | undefined {
   const active = getActiveNames(sessions);
   const available = CALLSIGNS.filter((c) => !active.has(c.name));
@@ -122,7 +122,7 @@ export function pickRandomCallsign(
  * Pick N unique random callsigns. Returns as many as available (up to count).
  */
 export function pickRandomCallsigns(
-  sessions: Array<{ name: string; status: string }>,
+  sessions: { name: string; status: string }[],
   count: number
 ): CallsignEntry[] {
   const active = getActiveNames(sessions);
@@ -132,6 +132,7 @@ export function pickRandomCallsigns(
   const shuffled = [...available];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
   }
 
@@ -142,7 +143,7 @@ export function pickRandomCallsigns(
  * Check if a specific callsign name is available.
  */
 export function isCallsignAvailable(
-  sessions: Array<{ name: string; status: string }>,
+  sessions: { name: string; status: string }[],
   name: string
 ): boolean {
   const active = getActiveNames(sessions);
@@ -163,7 +164,7 @@ export function isKnownCallsign(name: string): boolean {
  * Returns undefined if all 100 variants are taken.
  */
 export function nextAvailableName(
-  sessions: Array<{ name: string; status: string }>,
+  sessions: { name: string; status: string }[],
   baseName: string
 ): string | undefined {
   const active = getActiveNames(sessions);

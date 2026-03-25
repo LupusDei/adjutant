@@ -125,16 +125,20 @@ export function generateTestContent(parsed: ParseResult): string {
       descCounts.set(desc, (descCounts.get(desc) ?? 0) + 1);
     }
     for (let i = 0; i < itDescriptions.length; i++) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const desc = itDescriptions[i]!;
       if ((descCounts.get(desc) ?? 0) > 1) {
         const occ = (descOccurrence.get(desc) ?? 0) + 1;
         descOccurrence.set(desc, occ);
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         itDescriptions[i] = `${desc} (scenario ${story.scenarios[i]!.index})`;
       }
     }
 
     for (let si = 0; si < story.scenarios.length; si++) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const scenario = story.scenarios[si]!;
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const itDescription = itDescriptions[si]!;
       const classification = classifications.get(scenario) ?? "unknown";
 
@@ -168,7 +172,7 @@ export async function generateTestFiles(
 
   // Skip if file already exists and overwrite is not set
   if (existsSync(filePath) && !options.overwrite) {
-    // eslint-disable-next-line no-console
+     
     console.log(`Skipping ${filePath} (already exists, use --overwrite to replace)`);
     return [];
   }
@@ -214,9 +218,13 @@ function extractItBlocks(content: string): ItBlock[] {
 
   let match;
   while ((match = regex.exec(content)) !== null) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const opening = match[1]!;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const description = match[2]!.slice(1, -1); // Remove quotes
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const body = match[3]!;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const closing = match[4]!;
     const fullText = `${opening}\n${body}\n${closing}`;
 
@@ -626,11 +634,12 @@ function generateItDescription(scenario: Scenario): string {
  * @returns A "should ..." description string
  */
 export function descriptionFromThen(thenText: string): string {
-  if (!thenText || !thenText.trim()) {
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (!thenText?.trim()) {
     return "should handle empty then clause";
   }
 
-  let text = thenText.trim();
+  const text = thenText.trim();
 
   // Try specialized pattern transforms first
   const specialized = trySpecializedTransforms(text);
@@ -679,13 +688,13 @@ function trySpecializedTransforms(text: string): string | null {
   // Pattern: "X are returned Y" -> "should return X Y"
   // e.g. "only pending proposals are returned sorted by newest first"
   // Skip when subject is just a pronoun (they, it, etc.)
-  const areReturnedMatch = text.match(
-    /^(?:only )?(.+?)\s+are\s+returned\b(.*)$/i
-  );
+  const areReturnedMatch = /^(?:only )?(.+?)\s+are\s+returned\b(.*)$/i.exec(text);
   if (areReturnedMatch) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const subject = areReturnedMatch[1]!.toLowerCase();
     const isPronoun = /^(they|it|these|those)$/i.test(subject.replace(/^only\s+/, ""));
     if (!isPronoun) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const rest = areReturnedMatch[2]!.toLowerCase().trim();
       const onlyPrefix = /^only /i.test(text) ? "only " : "";
       const cleanSubject = subject.replace(/^only\s+/, "");
@@ -695,36 +704,40 @@ function trySpecializedTransforms(text: string): string | null {
 
   // Pattern: "X updates to Y and Z is refreshed"
   // -> "should update X to Y and refresh Z"
-  const updatesAndRefreshed = text.match(
-    /^(.+?)\s+updates?\s+to\s+(.+?)\s+and\s+(.+?)\s+is\s+refreshed$/i
-  );
+  const updatesAndRefreshed = /^(.+?)\s+updates?\s+to\s+(.+?)\s+and\s+(.+?)\s+is\s+refreshed$/i.exec(text);
   if (updatesAndRefreshed) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const subject = updatesAndRefreshed[1]!.toLowerCase();
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const target = updatesAndRefreshed[2]!;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const refreshTarget = updatesAndRefreshed[3]!.toLowerCase();
     return `should update ${subject} to ${target} and refresh ${refreshTarget}`;
   }
 
   // Pattern: "a/an X is VERBed" -> "should VERB a/an X"
-  const articlePassive = text.match(
-    /^(a|an)\s+(.+?)\s+is\s+(\w+ed)\b(.*)$/i
-  );
+  const articlePassive = /^(a|an)\s+(.+?)\s+is\s+(\w+ed)\b(.*)$/i.exec(text);
   if (articlePassive) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const article = articlePassive[1]!.toLowerCase();
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const noun = articlePassive[2]!.toLowerCase();
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const verb = depassivize(articlePassive[3]!.toLowerCase());
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const rest = articlePassive[4]!.toLowerCase().trim();
     return `should ${verb} ${article} ${noun}${rest ? " " + rest : ""}`;
   }
 
   // Pattern: "the discussion is appended to the proposal"
   // -> "should append the discussion to the proposal"
-  const theXIsVerbed = text.match(
-    /^the\s+(.+?)\s+is\s+(\w+ed)\b(.*)$/i
-  );
+  const theXIsVerbed = /^the\s+(.+?)\s+is\s+(\w+ed)\b(.*)$/i.exec(text);
   if (theXIsVerbed) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const noun = theXIsVerbed[1]!.toLowerCase();
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const verb = depassivize(theXIsVerbed[2]!.toLowerCase());
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const rest = theXIsVerbed[3]!.toLowerCase().trim();
     return `should ${verb} the ${noun}${rest ? " " + rest : ""}`;
   }
@@ -737,8 +750,9 @@ function trySpecializedTransforms(text: string): string | null {
  * "proposal has required fields" -> "have required fields for each proposal"
  */
 function transformEachClause(text: string): string | null {
-  const hasMatch = text.match(/^(.+?)\s+has\s+(.+)$/i);
+  const hasMatch = /^(.+?)\s+has\s+(.+)$/i.exec(text);
   if (hasMatch) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     return `have ${hasMatch[2]!.toLowerCase()} for each ${hasMatch[1]!.toLowerCase()}`;
   }
   return null;
@@ -762,7 +776,7 @@ function depassivize(pastParticiple: string): string {
   };
 
   if (irregulars[pastParticiple]) {
-    return irregulars[pastParticiple]!;
+    return irregulars[pastParticiple];
   }
 
   // Regular: remove -ed, handle doubling and -e stems
@@ -772,6 +786,7 @@ function depassivize(pastParticiple: string): string {
   if (pastParticiple.endsWith("ed")) {
     const stem = pastParticiple.slice(0, -2);
     // If stem ends with doubled consonant, remove one
+    // eslint-disable-next-line @typescript-eslint/prefer-string-starts-ends-with
     if (stem.length >= 2 && stem[stem.length - 1] === stem[stem.length - 2]) {
       return stem.slice(0, -1);
     }
@@ -799,9 +814,11 @@ function deconjugateLeadingVerb(text: string): string {
 
   // Words ending in -es where base form drops the -es
   // "responds" -> "respond", but "includes" -> "include"
-  const esMatch = text.match(/^(\w+)(es)\b(.*)/);
+  const esMatch = /^(\w+)(es)\b(.*)/.exec(text);
   if (esMatch) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const stem = esMatch[1]!;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const rest = esMatch[3]!;
     // "includes" -> "include" (stem ends in consonant before -es -> add e)
     if (/[sc]h$/.test(stem) || /[sxz]$/.test(stem)) {
@@ -813,9 +830,11 @@ function deconjugateLeadingVerb(text: string): string {
   }
 
   // Words ending in -s (simple third person)
-  const sMatch = text.match(/^(\w+)s\b(.*)/);
+  const sMatch = /^(\w+)s\b(.*)/.exec(text);
   if (sMatch) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const stem = sMatch[1]!;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const rest = sMatch[2]!;
     // Don't strip 's' from short words or words where it's not a verb inflection
     if (stem.length >= 3) {

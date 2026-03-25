@@ -29,6 +29,7 @@ export function registerMemoryTools(
   // ========================================================================
   // query_memories
   // ========================================================================
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "query_memories",
     "Query the Adjutant memory for learnings by category, topic, or text search",
@@ -46,6 +47,7 @@ export function registerMemoryTools(
         .describe("Minimum confidence threshold"),
       limit: z.number().optional().describe("Max results to return (default 10)"),
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ query, category, topic, minConfidence, limit }) => {
       const effectiveLimit = limit ?? 10;
 
@@ -78,12 +80,14 @@ export function registerMemoryTools(
   // ========================================================================
   // get_session_retros
   // ========================================================================
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "get_session_retros",
     "Get recent session retrospectives",
     {
       limit: z.number().optional().describe("Max retrospectives to return (default 5)"),
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ limit }) => {
       const effectiveLimit = limit ?? 5;
       const retrospectives = memoryStore.getRecentRetrospectives(effectiveLimit);
@@ -102,6 +106,7 @@ export function registerMemoryTools(
   // ========================================================================
   // store_memory (adj-053.6.1)
   // ========================================================================
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "store_memory",
     "Store a new learning in the Adjutant memory system",
@@ -117,9 +122,10 @@ export function registerMemoryTools(
         .optional()
         .describe("Confidence level 0-1 (default 0.5)"),
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ content, category, topic, source, confidence }, extra) => {
       // Resolve the calling agent's name from the session
-      const sessionId = extra.sessionId as string | undefined;
+      const sessionId = extra.sessionId;
       let agentName = "unknown";
       if (sessionId && deps.getAgentBySession) {
         agentName = deps.getAgentBySession(sessionId) ?? "unknown";
@@ -148,6 +154,7 @@ export function registerMemoryTools(
   // ========================================================================
   // update_memory (adj-053.6.2)
   // ========================================================================
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "update_memory",
     "Update an existing learning's content, confidence, category, or topic",
@@ -158,6 +165,7 @@ export function registerMemoryTools(
       category: CATEGORY_ENUM.optional().describe("New category"),
       topic: z.string().optional().describe("New topic"),
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ id, content, confidence, category, topic }) => {
       // Build updates object with only provided fields
       const updates: Partial<Pick<Learning, "content" | "confidence" | "category" | "topic">> = {};
@@ -182,12 +190,14 @@ export function registerMemoryTools(
   // ========================================================================
   // reinforce_memory (adj-053.6.2)
   // ========================================================================
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "reinforce_memory",
     "Reinforce a learning — increases its confidence and reinforcement count",
     {
       id: z.number().describe("Learning ID to reinforce"),
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ id }) => {
       memoryStore.reinforceLearning(id);
       const learning = memoryStore.getLearning(id);
@@ -217,6 +227,7 @@ export function registerMemoryTools(
   // ========================================================================
   // record_correction (adj-053.6.3)
   // ========================================================================
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "record_correction",
     "Record a correction — tracks wrong patterns and the right approach. Auto-deduplicates by reinforcing existing corrections.",
@@ -226,6 +237,7 @@ export function registerMemoryTools(
       rightPattern: z.string().describe("The correct pattern or approach"),
       context: z.string().optional().describe("Additional context about when this correction was discovered"),
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ correctionType, wrongPattern, rightPattern, context }) => {
       // Check for existing similar correction
       const existing = memoryStore.findSimilarCorrection(correctionType, wrongPattern);

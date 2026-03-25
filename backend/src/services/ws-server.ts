@@ -159,6 +159,7 @@ function addToReplay(msg: WsServerMessage): void {
   }
   // Trim by age
   const cutoff = Date.now() - REPLAY_TTL_MS;
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   while (replayBuffer.length > 0 && replayBuffer[0]!.timestamp < cutoff) {
     replayBuffer.shift();
   }
@@ -167,6 +168,7 @@ function addToReplay(msg: WsServerMessage): void {
 function isRateLimited(timestamps: number[], limit: number): boolean {
   const now = Date.now();
   // Clean old entries
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   while (timestamps.length > 0 && timestamps[0]! < now - RATE_WINDOW_MS) {
     timestamps.shift();
   }
@@ -272,10 +274,12 @@ function handleMessage(client: WsClient, msg: WsClientMessage): void {
       for (const session of sessions) {
         if (session.status !== "offline") {
           logInfo("Delivering WS message to agent tmux pane", { to: recipient, sessionId: session.id });
+          // eslint-disable-next-line @typescript-eslint/no-empty-function
           bridge.sendInput(session.id, msg.body ?? "").catch(() => {});
         }
       }
     })
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
     .catch(() => {});
 }
 
@@ -543,6 +547,7 @@ export function initWebSocketServer(_server: HttpServer, store?: MessageStore): 
     ws.on("message", (raw) => {
       let msg: WsClientMessage;
       try {
+        // eslint-disable-next-line @typescript-eslint/no-base-to-string
         msg = JSON.parse(raw.toString()) as WsClientMessage;
       } catch {
         send(client, { type: "error", code: "parse_error", message: "Invalid JSON" });
@@ -587,26 +592,31 @@ export function initWebSocketServer(_server: HttpServer, store?: MessageStore): 
           break;
         // Session v2 message types
         case "session_connect":
+          // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
           handleSessionConnect(client, msg).catch((err) => {
             logWarn("session_connect error", { error: String(err) });
           });
           break;
         case "session_disconnect":
+          // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
           handleSessionDisconnect(client, msg).catch((err) => {
             logWarn("session_disconnect error", { error: String(err) });
           });
           break;
         case "session_input":
+          // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
           handleSessionInput(client, msg).catch((err) => {
             logWarn("session_input error", { error: String(err) });
           });
           break;
         case "session_interrupt":
+          // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
           handleSessionInterrupt(client, msg).catch((err) => {
             logWarn("session_interrupt error", { error: String(err) });
           });
           break;
         case "session_permission_response":
+          // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
           handleSessionPermissionResponse(client, msg).catch((err) => {
             logWarn("session_permission_response error", { error: String(err) });
           });
@@ -632,10 +642,12 @@ export function initWebSocketServer(_server: HttpServer, store?: MessageStore): 
           }
           for (const s of bridge.registry.getAll()) {
             if (s.connectedClients.has(client.sessionId)) {
+              // eslint-disable-next-line @typescript-eslint/no-empty-function
               bridge.disconnectClient(s.id, client.sessionId).catch(() => {});
             }
           }
         })
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
         .catch(() => {});
     });
 

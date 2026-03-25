@@ -116,9 +116,9 @@ beforeEach(() => {
   localStorage.clear();
   originalWebSocket = globalThis.WebSocket;
   originalEventSource = globalThis.EventSource;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+   
   globalThis.WebSocket = MockWebSocket as any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+   
   globalThis.EventSource = MockEventSource as any;
 });
 
@@ -368,7 +368,7 @@ describe("CommunicationContext", () => {
   describe("fallback behavior", () => {
     it("should fall back to SSE when WebSocket is not available", async () => {
       // Make WebSocket constructor throw
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-extraneous-class
+      // eslint-disable-next-line @typescript-eslint/no-extraneous-class
       globalThis.WebSocket = class ThrowingWs { constructor() { throw new Error("No WS"); } } as any;
 
       const { result } = renderHook(() => useCommunication(), { wrapper });
@@ -379,9 +379,9 @@ describe("CommunicationContext", () => {
     });
 
     it("should fall back to polling when both WS and SSE are unavailable", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-extraneous-class
+      // eslint-disable-next-line @typescript-eslint/no-extraneous-class
       globalThis.WebSocket = class { constructor() { throw new Error("No WS"); } } as any;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-extraneous-class
+      // eslint-disable-next-line @typescript-eslint/no-extraneous-class
       globalThis.EventSource = class { constructor() { throw new Error("No SSE"); } } as any;
 
       const { result } = renderHook(() => useCommunication(), { wrapper });
@@ -535,7 +535,7 @@ describe("CommunicationContext", () => {
   describe("WebSocket auth error handling", () => {
     it("should fall back to SSE on auth failure", async () => {
       // Create a WebSocket that rejects auth
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+       
       globalThis.WebSocket = class AuthFailWs {
         static readonly OPEN = 1;
         readyState = 0;
@@ -569,7 +569,7 @@ describe("CommunicationContext", () => {
         close() {
           this.readyState = 3;
         }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
       } as any;
 
       const { result } = renderHook(() => useCommunication(), { wrapper });

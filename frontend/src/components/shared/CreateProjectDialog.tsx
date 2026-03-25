@@ -39,7 +39,7 @@ export function CreateProjectDialog({ onSuccess, onCancel }: CreateProjectDialog
       if (e.key === 'Escape') onCancel();
     };
     window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    return () => { window.removeEventListener('keydown', handleKey); };
   }, [onCancel]);
 
   const canSubmit = useCallback((): boolean => {
@@ -105,7 +105,7 @@ export function CreateProjectDialog({ onSuccess, onCancel }: CreateProjectDialog
 
   return (
     <div style={styles.backdrop} onClick={onCancel}>
-      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+      <div style={styles.modal} onClick={(e) => { e.stopPropagation(); }}>
         {/* Header */}
         <div style={styles.header}>
           <span style={styles.headerText}>NEW PROJECT</span>
@@ -144,7 +144,7 @@ export function CreateProjectDialog({ onSuccess, onCancel }: CreateProjectDialog
                   style={styles.input}
                   type="text"
                   value={cloneUrl}
-                  onChange={(e) => setCloneUrl(e.target.value)}
+                  onChange={(e) => { setCloneUrl(e.target.value); }}
                   onKeyDown={handleFieldKeyDown}
                   placeholder="https://github.com/user/repo.git"
                   disabled={submitting}
@@ -157,7 +157,7 @@ export function CreateProjectDialog({ onSuccess, onCancel }: CreateProjectDialog
                   style={styles.input}
                   type="text"
                   value={targetDir}
-                  onChange={(e) => setTargetDir(e.target.value)}
+                  onChange={(e) => { setTargetDir(e.target.value); }}
                   onKeyDown={handleFieldKeyDown}
                   placeholder="/path/to/clone/into (optional)"
                   disabled={submitting}
@@ -172,7 +172,7 @@ export function CreateProjectDialog({ onSuccess, onCancel }: CreateProjectDialog
                   style={styles.input}
                   type="text"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => { setName(e.target.value); }}
                   onKeyDown={handleFieldKeyDown}
                   placeholder="(optional - derived from URL)"
                   disabled={submitting}
@@ -189,7 +189,7 @@ export function CreateProjectDialog({ onSuccess, onCancel }: CreateProjectDialog
                   style={styles.input}
                   type="text"
                   value={localPath}
-                  onChange={(e) => setLocalPath(e.target.value)}
+                  onChange={(e) => { setLocalPath(e.target.value); }}
                   onKeyDown={handleFieldKeyDown}
                   placeholder="/path/to/existing/project"
                   disabled={submitting}
@@ -202,7 +202,7 @@ export function CreateProjectDialog({ onSuccess, onCancel }: CreateProjectDialog
                   style={styles.input}
                   type="text"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => { setName(e.target.value); }}
                   onKeyDown={handleFieldKeyDown}
                   placeholder="(optional - derived from directory)"
                   disabled={submitting}
@@ -218,7 +218,7 @@ export function CreateProjectDialog({ onSuccess, onCancel }: CreateProjectDialog
                 style={styles.input}
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => { setName(e.target.value); }}
                 onKeyDown={handleFieldKeyDown}
                 placeholder="my-new-project"
                 disabled={submitting}

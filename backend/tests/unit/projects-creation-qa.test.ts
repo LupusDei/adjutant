@@ -391,7 +391,7 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
       expect(result.success).toBe(true);
 
       // Verify it was inserted into SQLite
-      const rows = testDb.prepare("SELECT * FROM projects").all() as Array<{ path: string; git_remote: string }>;
+      const rows = testDb.prepare("SELECT * FROM projects").all() as { path: string; git_remote: string }[];
       expect(rows).toHaveLength(1);
       expect(rows[0].path).toBe("/tmp/target-dir");
       expect(rows[0].git_remote).toBe("git@github.com:user/repo.git");

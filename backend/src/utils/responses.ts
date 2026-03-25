@@ -59,6 +59,7 @@ export function success<T>(data: T): ApiResponse<T> {
  * ```
  */
 export function error(
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
   code: ErrorCode | string,
   message: string,
   details?: string

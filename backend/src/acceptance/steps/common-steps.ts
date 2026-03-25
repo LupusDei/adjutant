@@ -122,6 +122,7 @@ defineWhen(
  */
 defineThen(
   /^it is persisted with status "(\w+)"/,
+  // eslint-disable-next-line @typescript-eslint/require-await
   async (harness, status) => {
     const h = harness as TestHarness;
     // Safe cast: body shape is { data: { status: string } } from proposals API
@@ -138,10 +139,11 @@ defineThen(
  */
 defineThen(
   /^only (\w+) proposals are returned sorted by newest first$/,
+  // eslint-disable-next-line @typescript-eslint/require-await
   async (harness, filterStatus) => {
     const h = harness as TestHarness;
     // Safe cast: body shape is { data: Array<{ status, created_at }> } from proposals list API
-    const body = h.lastResponse?.body as { data?: Array<{ status: string; created_at: string }> } | undefined;
+    const body = h.lastResponse?.body as { data?: { status: string; created_at: string }[] } | undefined;
     const data = body?.data;
     if (!data) {
       throw new Error("No response data found");
@@ -162,6 +164,7 @@ defineThen(
  */
 defineThen(
   /^the response status is (\d+)$/,
+  // eslint-disable-next-line @typescript-eslint/require-await
   async (harness, statusCode) => {
     const h = harness as TestHarness;
     const actual = h.lastResponse?.status;

@@ -13,6 +13,7 @@ import {
   MiniMap,
   BackgroundVariant,
 } from '@xyflow/react';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { Node, Edge, NodeMouseHandler } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -92,7 +93,7 @@ function EpicGraphPageInner({ epicId }: EpicGraphPageProps) {
   );
 
   const minimapNodeColor = useCallback((node: Node) => {
-    const data = node.data as Record<string, unknown>;
+    const data = node.data;
     const status = data['status'] as string;
     switch (status) {
       case 'closed': return '#00ff00';
@@ -106,7 +107,7 @@ function EpicGraphPageInner({ epicId }: EpicGraphPageProps) {
   const stats = useMemo(() => {
     let open = 0, inProgress = 0, closed = 0;
     for (const n of nodes) {
-      const s = (n.data as BeadNodeData).status;
+      const s = (n.data).status;
       if (s === 'closed') closed++;
       else if (s === 'in_progress' || s === 'hooked') inProgress++;
       else open++;
@@ -118,7 +119,7 @@ function EpicGraphPageInner({ epicId }: EpicGraphPageProps) {
   const selectedNode = useMemo(() => {
     if (!selectedNodeId) return null;
     const node = nodes.find((n: Node<BeadNodeData>) => n.id === selectedNodeId);
-    return node ? node.data as BeadNodeData : null;
+    return node ? node.data : null;
   }, [nodes, selectedNodeId]);
 
   if (loading && nodes.length === 0) {

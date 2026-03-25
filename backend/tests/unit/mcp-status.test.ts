@@ -128,7 +128,6 @@ describe("MCP Status Tools", () => {
     mockGetAgentBySession.mockReturnValue("agent-1");
 
     // Register the tools with the fake server
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     registerStatusTools(server as any, store);
   });
 
@@ -272,7 +271,7 @@ describe("MCP Status Tools", () => {
           beadId: "adj-42",
         },
         fakeExtra(),
-      )) as { content: Array<{ text: string }> };
+      )) as { content: { text: string }[] };
 
       // Verify response contains messageId and timestamp
       const parsed = JSON.parse(result.content[0]!.text);
@@ -309,12 +308,12 @@ describe("MCP Status Tools", () => {
           beadId: "adj-99",
         },
         fakeExtra(),
-      )) as { content: Array<{ text: string }> };
+      )) as { content: { text: string }[] };
 
       const parsed = JSON.parse(result.content[0]!.text);
 
       expect(mockSend).toHaveBeenCalledTimes(1);
-      const notification = mockSend.mock.calls[0]![0]!;
+      const notification = mockSend.mock.calls[0]![0];
 
       // Verify payload matches AnnouncementPayload contract
       expect(notification.data.type).toBe("announcement");

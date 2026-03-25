@@ -79,9 +79,9 @@ export function createProposalsRouter(store: ProposalStore): Router {
 
   // GET /api/proposals/:id
   router.get("/:id", (req, res) => {
-    const proposal = store.getProposal(req.params["id"]!);
+    const proposal = store.getProposal(req.params.id);
     if (!proposal) {
-      res.status(404).json(notFound("Proposal", req.params["id"]));
+      res.status(404).json(notFound("Proposal", req.params.id));
       return;
     }
     res.json(success(proposal));
@@ -95,9 +95,9 @@ export function createProposalsRouter(store: ProposalStore): Router {
       return;
     }
 
-    const proposal = store.updateProposalStatus(req.params["id"]!, bodyResult.data.status);
+    const proposal = store.updateProposalStatus(req.params.id, bodyResult.data.status);
     if (!proposal) {
-      res.status(404).json(notFound("Proposal", req.params["id"]));
+      res.status(404).json(notFound("Proposal", req.params.id));
       return;
     }
 
@@ -106,9 +106,9 @@ export function createProposalsRouter(store: ProposalStore): Router {
 
   // POST /api/proposals/:id/comments
   router.post("/:id/comments", (req, res) => {
-    const proposal = store.getProposal(req.params["id"]!);
+    const proposal = store.getProposal(req.params.id);
     if (!proposal) {
-      res.status(404).json(notFound("Proposal", req.params["id"]));
+      res.status(404).json(notFound("Proposal", req.params.id));
       return;
     }
 
@@ -119,7 +119,7 @@ export function createProposalsRouter(store: ProposalStore): Router {
     }
 
     const comment = store.insertComment({
-      proposalId: req.params["id"]!,
+      proposalId: req.params.id,
       author: bodyResult.data.author,
       body: bodyResult.data.body,
     });
@@ -129,21 +129,21 @@ export function createProposalsRouter(store: ProposalStore): Router {
 
   // GET /api/proposals/:id/comments
   router.get("/:id/comments", (req, res) => {
-    const proposal = store.getProposal(req.params["id"]!);
+    const proposal = store.getProposal(req.params.id);
     if (!proposal) {
-      res.status(404).json(notFound("Proposal", req.params["id"]));
+      res.status(404).json(notFound("Proposal", req.params.id));
       return;
     }
 
-    const comments = store.getComments(req.params["id"]!);
+    const comments = store.getComments(req.params.id);
     res.json(success(comments));
   });
 
   // POST /api/proposals/:id/revisions
   router.post("/:id/revisions", (req, res) => {
-    const proposal = store.getProposal(req.params["id"]!);
+    const proposal = store.getProposal(req.params.id);
     if (!proposal) {
-      res.status(404).json(notFound("Proposal", req.params["id"]));
+      res.status(404).json(notFound("Proposal", req.params.id));
       return;
     }
 
@@ -153,7 +153,7 @@ export function createProposalsRouter(store: ProposalStore): Router {
       return;
     }
 
-    const revised = store.reviseProposal(req.params["id"]!, {
+    const revised = store.reviseProposal(req.params.id, {
       author: bodyResult.data.author,
       title: bodyResult.data.title,
       description: bodyResult.data.description,
@@ -162,7 +162,7 @@ export function createProposalsRouter(store: ProposalStore): Router {
     });
 
     if (!revised) {
-      res.status(404).json(notFound("Proposal", req.params["id"]));
+      res.status(404).json(notFound("Proposal", req.params.id));
       return;
     }
 
@@ -171,13 +171,13 @@ export function createProposalsRouter(store: ProposalStore): Router {
 
   // GET /api/proposals/:id/revisions
   router.get("/:id/revisions", (req, res) => {
-    const proposal = store.getProposal(req.params["id"]!);
+    const proposal = store.getProposal(req.params.id);
     if (!proposal) {
-      res.status(404).json(notFound("Proposal", req.params["id"]));
+      res.status(404).json(notFound("Proposal", req.params.id));
       return;
     }
 
-    const revisions = store.getRevisions(req.params["id"]!);
+    const revisions = store.getRevisions(req.params.id);
     res.json(success(revisions));
   });
 

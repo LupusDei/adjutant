@@ -351,7 +351,7 @@ describe("AdjutantCore", () => {
       ) => void;
 
       // Should not throw
-      expect(() => handler("agent:status_changed", {}, 1)).not.toThrow();
+      expect(() => { handler("agent:status_changed", {}, 1); }).not.toThrow();
 
       await vi.waitFor(() => {
         expect(behavior.act).toHaveBeenCalledOnce();
@@ -377,7 +377,7 @@ describe("AdjutantCore", () => {
       ) => void;
 
       // Should not throw
-      expect(() => handler("agent:status_changed", {}, 1)).not.toThrow();
+      expect(() => { handler("agent:status_changed", {}, 1); }).not.toThrow();
 
       await vi.advanceTimersByTimeAsync(10);
 
@@ -670,7 +670,7 @@ describe("AdjutantCore", () => {
     });
 
     it("should be safe to call without init", () => {
-      expect(() => stopAdjutantCore()).not.toThrow();
+      expect(() => { stopAdjutantCore(); }).not.toThrow();
     });
 
     it("should allow re-initialization after stop", () => {

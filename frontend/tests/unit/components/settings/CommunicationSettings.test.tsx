@@ -109,9 +109,9 @@ describe("Communication Settings", () => {
     localStorage.clear();
     originalWebSocket = globalThis.WebSocket;
     originalEventSource = globalThis.EventSource;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+     
     globalThis.WebSocket = MockWebSocket as any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+     
     globalThis.EventSource = MockEventSource as any;
 
     // Mock fetch for tunnel API calls

@@ -11,8 +11,8 @@ import type { GraphNodeData, GraphDependency } from '../../src/types/beads-graph
 /** Helper to create a node with defaults. */
 function makeNode(
   id: string,
-  status: string = 'open',
-  type: string = 'task'
+  status = 'open',
+  type = 'task'
 ): GraphNodeData {
   return {
     id,

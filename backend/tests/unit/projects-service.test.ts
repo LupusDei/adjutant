@@ -137,7 +137,7 @@ describe("projects-service", () => {
     it("should auto-seed on empty store via discoverLocalProjects", () => {
       // Table is empty, so listProjects calls discoverLocalProjects
       // Mock: project root exists and has .git
-      const projectRoot = resolve(process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd());
+      const projectRoot = resolve(process.env["ADJUTANT_PROJECT_ROOT"] ?? process.cwd());
       vi.mocked(existsSync).mockImplementation((p: unknown) => {
         const ps = String(p);
         if (ps === projectRoot) return true;
@@ -475,7 +475,7 @@ describe("projects-service", () => {
   // ===========================================================================
 
   describe("discoverLocalProjects", () => {
-    const PROJECT_ROOT = resolve(process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd());
+    const PROJECT_ROOT = resolve(process.env["ADJUTANT_PROJECT_ROOT"] ?? process.cwd());
 
     function mockDiscoverFs(dirs: Record<string, { hasGit?: boolean; hasBeads?: boolean; children?: string[] }>) {
       vi.mocked(existsSync).mockImplementation((p: unknown) => {

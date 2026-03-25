@@ -143,7 +143,7 @@ describe("CallsignToggleService", () => {
     it("should return all 44 callsigns with enabled/disabled status", () => {
       const settings = service.getAllSettings();
       expect(settings).toHaveLength(44);
-      expect(settings.every((s) => s.enabled === true)).toBe(true);
+      expect(settings.every((s) => s.enabled)).toBe(true);
     });
 
     it("should reflect disabled callsigns", () => {

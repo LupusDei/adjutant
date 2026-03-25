@@ -376,9 +376,7 @@ describe("PromptGenerator", () => {
       const prompt = generatePrompt(persona);
 
       // Extract core identity section
-      const coreMatch = prompt.match(
-        /## Core Identity\n([\s\S]*?)(?=\n## |$)/,
-      );
+      const coreMatch = /## Core Identity\n([\s\S]*?)(?=\n## |$)/.exec(prompt);
       expect(coreMatch).not.toBeNull();
       const coreSection = coreMatch![1]!;
 

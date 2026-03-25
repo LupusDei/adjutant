@@ -44,6 +44,7 @@ export function createPersonasRouter(service: PersonaService): Router {
    */
   router.post("/", (req, res) => {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       const persona = service.createPersona(req.body);
       return res.status(201).json(success(persona));
     } catch (err) {
@@ -108,6 +109,7 @@ export function createPersonasRouter(service: PersonaService): Router {
    */
   router.put("/:id", (req, res) => {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       const updated = service.updatePersona(req.params.id, req.body);
       if (updated === null) {
         return res.status(404).json(notFound("Persona", req.params.id));

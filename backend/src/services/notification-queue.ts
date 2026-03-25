@@ -63,7 +63,7 @@ interface QueueEntry extends NotificationItem {
 export function createNotificationQueue(): NotificationQueue {
   const items: QueueEntry[] = [];
   const seenIds = new Set<string>();
-  const eventHandlers: Map<QueueEvent, Set<EventHandler>> = new Map([
+  const eventHandlers = new Map<QueueEvent, Set<EventHandler>>([
     ['enqueue', new Set()],
     ['dequeue', new Set()],
     ['clear', new Set()],
@@ -76,7 +76,7 @@ export function createNotificationQueue(): NotificationQueue {
     const now = Date.now();
     for (let i = items.length - 1; i >= 0; i--) {
       const item = items[i];
-      if (item !== undefined && item.ttl !== undefined) {
+      if (item?.ttl !== undefined) {
         const expiresAt = item.enqueuedAt + item.ttl;
         if (now > expiresAt) {
           seenIds.delete(item.id);
@@ -125,6 +125,7 @@ export function createNotificationQueue(): NotificationQueue {
   }
 
   return {
+    // eslint-disable-next-line @typescript-eslint/require-await
     async enqueue(
       item: NotificationItem | Omit<NotificationItem, 'priority'>
     ): Promise<void> {
@@ -204,6 +205,7 @@ let defaultQueue: NotificationQueue | null = null;
  * Get the default notification queue instance (singleton)
  */
 export function getNotificationQueue(): NotificationQueue {
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   if (!defaultQueue) {
     defaultQueue = createNotificationQueue();
   }

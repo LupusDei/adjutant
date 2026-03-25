@@ -31,6 +31,7 @@ import type { AcceptanceOptions, DiscoveredSpec } from "./types.js";
 // ============================================================================
 
 const DEFAULT_OUTPUT_DIR = resolve(
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   import.meta.dirname ?? ".",
   "../../tests/acceptance"
 );
@@ -60,6 +61,7 @@ Examples:
   npx tsx src/acceptance/cli.ts   (runs all acceptance tests)
 `.trim();
 
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 const SPECS_DIR = resolve(import.meta.dirname ?? ".", "../../../specs");
 
 // ============================================================================
@@ -158,7 +160,7 @@ export function parseArgs(argv: string[]): AcceptanceOptions {
     } else if (arg === "--watch") {
       watch = true;
     } else if (arg === "--help") {
-      // eslint-disable-next-line no-console
+       
       console.log(USAGE);
       process.exit(0);
     } else if (!arg.startsWith("-")) {
@@ -186,29 +188,29 @@ async function handleGenerate(
 ): Promise<void> {
   const specDir = options.specDir;
   if (!specDir) {
-    // eslint-disable-next-line no-console
+     
     console.error("Error: --generate requires a spec directory argument.");
-    // eslint-disable-next-line no-console
+     
     console.error("  Example: npx tsx src/acceptance/cli.ts specs/017-agent-proposals --generate");
     process.exit(1);
   }
 
   const specPath = join(specDir, "spec.md");
   if (!existsSync(specPath)) {
-    // eslint-disable-next-line no-console
+     
     console.error(`Error: spec.md not found at ${specPath}`);
     process.exit(1);
   }
 
   if (options.verbose) {
-    // eslint-disable-next-line no-console
+     
     console.log(`Parsing spec: ${specPath}`);
   }
 
   const parsed = await parseSpec(specPath);
 
   if (options.verbose) {
-    // eslint-disable-next-line no-console
+     
     console.log(
       `Found ${parsed.userStories.length} user stories with ` +
         `${parsed.userStories.reduce((sum, s) => sum + s.scenarios.length, 0)} scenarios`
@@ -222,10 +224,10 @@ async function handleGenerate(
     sync: options.sync ?? false,
   });
 
-  // eslint-disable-next-line no-console
+   
   console.log(`Generated ${files.length} test file(s):`);
   for (const f of files) {
-    // eslint-disable-next-line no-console
+     
     console.log(`  ${f}`);
   }
 }
@@ -243,7 +245,7 @@ async function handleGenerateAll(
   const specsDir = SPECS_DIR;
 
   if (options.verbose) {
-    // eslint-disable-next-line no-console
+     
     console.log(`Scanning specs directory: ${specsDir}`);
   }
 
@@ -268,7 +270,7 @@ async function handleGenerateAll(
 
   for (const spec of discovered) {
     if (options.verbose) {
-      // eslint-disable-next-line no-console
+       
       console.log(`Processing: ${spec.dirName}`);
     }
 
@@ -281,13 +283,13 @@ async function handleGenerateAll(
 
     for (const f of files) {
       if (options.verbose) {
-        // eslint-disable-next-line no-console
+         
         console.log(`  ${f}`);
       }
     }
   }
 
-  // eslint-disable-next-line no-console
+   
   console.log(
     `Generated ${totalFiles} test files from ${discovered.length} specs` +
     (skippedSpecs > 0 ? ` (${skippedSpecs} specs had no GWT scenarios)` : "")
@@ -303,12 +305,13 @@ async function handleGenerateAll(
  */
 function handleRun(options: AcceptanceOptions): void {
   const configPath = resolve(
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     import.meta.dirname ?? ".",
     "../../vitest.acceptance.config.ts"
   );
 
   if (!existsSync(configPath)) {
-    // eslint-disable-next-line no-console
+     
     console.error(
       `Error: vitest.acceptance.config.ts not found at ${configPath}`
     );
@@ -342,13 +345,14 @@ function handleRun(options: AcceptanceOptions): void {
   }
 
   if (options.verbose) {
-    // eslint-disable-next-line no-console
+     
     console.log(`Running: ${cmd.join(" ")}`);
   }
 
   try {
     execSync(cmd.join(" "), {
       stdio: "inherit",
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       cwd: resolve(import.meta.dirname ?? ".", "../.."),
     });
   } catch {
@@ -365,8 +369,10 @@ function handleRun(options: AcceptanceOptions): void {
  * Show a spec coverage report: which specs have tests and their status.
  */
 function handleReport(): void {
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   const specsDir = resolve(import.meta.dirname ?? ".", "../../../specs");
   const testsDir = resolve(
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     import.meta.dirname ?? ".",
     "../../tests/acceptance"
   );
@@ -374,7 +380,7 @@ function handleReport(): void {
   const entries = scanSpecCoverage(specsDir, testsDir);
   const output = formatCoverageReport(entries);
 
-  // eslint-disable-next-line no-console
+   
   console.log(output);
 }
 
@@ -435,7 +441,7 @@ async function processSpecChange(
   specName: string,
   options: AcceptanceOptions
 ): Promise<void> {
-  // eslint-disable-next-line no-console
+   
   console.log(`\n--- spec changed: ${specName} ---\n`);
 
   try {
@@ -450,13 +456,13 @@ async function processSpecChange(
       sync: true,
     });
 
-    // eslint-disable-next-line no-console
+     
     console.log(`Regenerated test files for ${specName}`);
 
     // Re-run tests for this spec
     handleRun({ ...options, specDir, run: true });
   } catch (err: unknown) {
-    // eslint-disable-next-line no-console
+     
     console.error(`Error processing spec change for ${specName}:`, err);
   }
 }
@@ -474,13 +480,13 @@ async function handleWatch(options: AcceptanceOptions): Promise<void> {
     : SPECS_DIR;
 
   if (!existsSync(watchDir)) {
-    // eslint-disable-next-line no-console
+     
     console.error(`Error: watch directory not found: ${watchDir}`);
     process.exit(1);
   }
 
   // Initial run: generate + run tests
-  // eslint-disable-next-line no-console
+   
   console.log("Running initial generate + test pass...\n");
 
   if (options.specDir) {
@@ -493,7 +499,7 @@ async function handleWatch(options: AcceptanceOptions): Promise<void> {
     handleRun({ ...options, run: true });
   }
 
-  // eslint-disable-next-line no-console
+   
   console.log("\nWatching for spec changes...\n");
 
   // Per-spec debounce map so concurrent edits to different specs don't collide
@@ -514,6 +520,7 @@ async function handleWatch(options: AcceptanceOptions): Promise<void> {
 
     if (parts.length >= 2) {
       // Watching specs/ root — filename is like "017-agent-proposals/spec.md"
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       specName = parts[0]!;
       specFullDir = join(watchDir, specName);
     } else {
@@ -532,12 +539,13 @@ async function handleWatch(options: AcceptanceOptions): Promise<void> {
       );
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     debouncers.get(specName)!();
   });
 
   // Clean exit on SIGINT
   process.on("SIGINT", () => {
-    // eslint-disable-next-line no-console
+     
     console.log("\nStopping watch mode...");
     watcher.close();
     for (const d of debouncers.values()) {
@@ -588,7 +596,7 @@ const isEntryPoint =
 
 if (isEntryPoint) {
   main().catch((err: unknown) => {
-    // eslint-disable-next-line no-console
+     
     console.error("Acceptance CLI error:", err);
     process.exit(1);
   });

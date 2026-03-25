@@ -19,7 +19,7 @@ export interface TimelineViewProps {
 
 /** Group events by date for date separators. */
 function groupByDate(events: TimelineEvent[]): { date: string; events: TimelineEvent[] }[] {
-  const groups: Map<string, TimelineEvent[]> = new Map();
+  const groups = new Map<string, TimelineEvent[]>();
 
   for (const event of events) {
     const date = formatDate(event.createdAt);

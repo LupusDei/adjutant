@@ -46,7 +46,7 @@ export function runMigrations(db: Database.Database): void {
 
   // Get already-applied migration names
   const applied = new Set(
-    (db.prepare("SELECT name FROM migrations").all() as Array<{ name: string }>).map((r) => r.name),
+    (db.prepare("SELECT name FROM migrations").all() as { name: string }[]).map((r) => r.name),
   );
 
   // Read migration files in sorted order
@@ -94,7 +94,7 @@ export function importJsonIfNeeded(db: Database.Database): void {
       if (existsSync(projectsFile)) {
         try {
           const raw = readFileSync(projectsFile, "utf8");
-          const store = JSON.parse(raw) as { projects?: Array<Record<string, unknown>> };
+          const store = JSON.parse(raw) as { projects?: Record<string, unknown>[] };
           const projects = store.projects;
           if (Array.isArray(projects) && projects.length > 0) {
             const insert = db.prepare(`
@@ -142,7 +142,7 @@ export function importJsonIfNeeded(db: Database.Database): void {
       if (existsSync(sessionsFile)) {
         try {
           const raw = readFileSync(sessionsFile, "utf8");
-          const sessions = JSON.parse(raw) as Array<Record<string, unknown>>;
+          const sessions = JSON.parse(raw) as Record<string, unknown>[];
           if (Array.isArray(sessions) && sessions.length > 0) {
             const insert = db.prepare(`
               INSERT OR IGNORE INTO managed_sessions (id, name, tmux_session, tmux_pane, project_path, mode, status, workspace_type, pipe_active, created_at, last_activity)
