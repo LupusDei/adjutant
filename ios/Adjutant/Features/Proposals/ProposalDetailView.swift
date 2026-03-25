@@ -25,6 +25,9 @@ struct ProposalDetailView: View {
                     titleCard(proposal)
                     badgesCard(proposal)
                     metadataCard(proposal)
+                    if proposal.confidenceScore != nil {
+                        confidenceCard(proposal)
+                    }
                     descriptionCard(proposal)
                     commentsSection
                     revisionsSection
@@ -160,6 +163,102 @@ struct ProposalDetailView: View {
                 .frame(width: 80, alignment: .leading)
             CRTText(value, style: .body, glowIntensity: .subtle)
         }
+    }
+
+    // MARK: - Confidence Card
+
+    @ViewBuilder
+    private func confidenceCard(_ proposal: Proposal) -> some View {
+        CRTCard(header: "CONFIDENCE") {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+                // Composite score + classification
+                if let score = proposal.confidenceScore {
+                    HStack(alignment: .firstTextBaseline, spacing: CRTTheme.Spacing.sm) {
+                        Text("\(score)")
+                            .font(CRTTheme.Typography.font(size: 32, weight: .bold).monospaced())
+                            .foregroundColor(confidenceColor(score))
+                            .crtGlow(color: confidenceColor(score), radius: 4, intensity: 0.3)
+
+                        if let classification = proposal.classification {
+                            Text(classification)
+                                .font(CRTTheme.Typography.font(size: 14, weight: .bold))
+                                .tracking(CRTTheme.Typography.letterSpacing)
+                                .foregroundColor(confidenceColor(score))
+                        }
+
+                        Spacer()
+                    }
+                }
+
+                // Signal breakdown
+                if let signals = proposal.confidenceSignals, !signals.isEmpty {
+                    Divider()
+                        .background(theme.dim.opacity(0.3))
+
+                    VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
+                        signalRow(label: "CONSENSUS", signals: signals, key: "reviewerConsensus")
+                        signalRow(label: "CLARITY", signals: signals, key: "specClarity")
+                        signalRow(label: "ALIGNMENT", signals: signals, key: "codebaseAlignment")
+                        signalRow(label: "RISK", signals: signals, key: "riskAssessment")
+                        signalRow(label: "HISTORY", signals: signals, key: "historicalSuccess")
+                    }
+                }
+
+                // Review round
+                if let round = proposal.reviewRound {
+                    Divider()
+                        .background(theme.dim.opacity(0.3))
+
+                    HStack {
+                        CRTText("REVIEW ROUND:", style: .caption, glowIntensity: .subtle)
+                            .foregroundColor(theme.dim)
+                        Text("\(round)")
+                            .font(CRTTheme.Typography.font(size: 12, weight: .bold).monospaced())
+                            .foregroundColor(theme.bright)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func signalRow(label: String, signals: [String: Double], key: String) -> some View {
+        let value = signals[key] ?? 0
+        let score = Int(value)
+        HStack(spacing: CRTTheme.Spacing.xs) {
+            Text(label)
+                .font(CRTTheme.Typography.font(size: 10, weight: .medium))
+                .tracking(CRTTheme.Typography.letterSpacing)
+                .foregroundColor(theme.dim)
+                .frame(width: 90, alignment: .leading)
+
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Background track
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(theme.dim.opacity(0.15))
+                        .frame(height: 6)
+
+                    // Filled bar
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(confidenceColor(score))
+                        .frame(width: geometry.size.width * CGFloat(value) / 100.0, height: 6)
+                }
+            }
+            .frame(height: 6)
+
+            Text("\(score)")
+                .font(CRTTheme.Typography.font(size: 10, weight: .bold).monospaced())
+                .foregroundColor(theme.bright)
+                .frame(width: 28, alignment: .trailing)
+        }
+    }
+
+    private func confidenceColor(_ score: Int) -> Color {
+        if score >= 80 { return CRTTheme.State.success }
+        if score >= 60 { return CRTTheme.State.warning }
+        if score >= 40 { return CRTTheme.State.info }
+        return CRTTheme.State.error
     }
 
     // MARK: - Description Card

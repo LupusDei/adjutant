@@ -100,9 +100,30 @@ struct ProposalCard: View {
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+            // Confidence score badge
+            if let score = proposal.confidenceScore {
+                scoreBadge(score)
+            }
+
             // Type badge
             typeBadge
         }
+    }
+
+    private func scoreBadge(_ score: Int) -> some View {
+        let color = confidenceColor(score)
+        return Text("\(score)")
+            .font(CRTTheme.Typography.font(size: 10, weight: .bold).monospaced())
+            .foregroundColor(color)
+            .padding(.horizontal, CRTTheme.Spacing.xxs + 2)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.15))
+            .overlay(
+                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                    .stroke(color.opacity(0.4), lineWidth: 1)
+            )
+            .cornerRadius(CRTTheme.CornerRadius.sm)
+            .crtGlow(color: color, radius: 2, intensity: 0.2)
     }
 
     private var typeBadge: some View {
@@ -187,6 +208,13 @@ struct ProposalCard: View {
         }
     }
 
+    private func confidenceColor(_ score: Int) -> Color {
+        if score >= 80 { return CRTTheme.State.success }
+        if score >= 60 { return CRTTheme.State.warning }
+        if score >= 40 { return CRTTheme.State.info }
+        return CRTTheme.State.error
+    }
+
     private var borderColor: Color {
         switch proposal.status {
         case .pending:
@@ -222,7 +250,9 @@ struct ProposalCard: View {
             type: .product,
             status: .pending,
             createdAt: "2026-02-24T10:00:00Z",
-            updatedAt: "2026-02-24T10:00:00Z"
+            updatedAt: "2026-02-24T10:00:00Z",
+            confidenceScore: 72,
+            reviewRound: 2
         ),
         onAccept: {},
         onDismiss: {}
