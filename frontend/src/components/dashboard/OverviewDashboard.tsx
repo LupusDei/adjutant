@@ -1,8 +1,14 @@
-import React, { Suspense, useMemo } from 'react';
+import React, { Suspense, useMemo, useState, useEffect, useCallback } from 'react';
 
 import { useOverview } from '../../hooks/useProjectOverview';
 import { priorityLabel } from '../../hooks/useDashboardBeads';
+import { api } from '../../services/api';
+import type { AutoDevelopStatus } from '../../types';
 import type { AgentOverview, EpicProgress, OverviewBeadSummary, OverviewUnreadSummary } from '../../types/overview';
+import { AutoDevelopToggle } from './AutoDevelopToggle';
+import { AutoDevelopPanel } from './AutoDevelopPanel';
+import { EscalationBanner } from './EscalationBanner';
+import { CycleHistory } from './CycleHistory';
 import './DashboardView.css';
 
 /** Lazy-loaded CostPanel — loads independently from other overview widgets. */
@@ -133,6 +139,36 @@ interface DashboardViewProps {
 export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
   const { data, loading } = useOverview();
 
+  // --- Auto-Develop status ---
+  const [autoDevelopStatus, setAutoDevelopStatus] = useState<AutoDevelopStatus | null>(null);
+
+  // Use the first active project as the auto-develop target
+  const projects = data?.projects;
+  const activeProjectId = useMemo(() => {
+    if (!projects) return null;
+    const active = projects.find((p) => p.active);
+    return active?.id ?? projects[0]?.id ?? null;
+  }, [projects]);
+
+  const fetchAutoDevelopStatus = useCallback(async () => {
+    if (!activeProjectId) return;
+    try {
+      const status = await api.projects.getAutoDevelopStatus(activeProjectId);
+      setAutoDevelopStatus(status);
+    } catch {
+      // API may not exist yet - silently ignore
+      setAutoDevelopStatus(null);
+    }
+  }, [activeProjectId]);
+
+  useEffect(() => {
+    void fetchAutoDevelopStatus();
+  }, [fetchAutoDevelopStatus]);
+
+  const handleAutoDevelopToggled = useCallback(() => {
+    void fetchAutoDevelopStatus();
+  }, [fetchAutoDevelopStatus]);
+
   // --- Agents ---
   const agents: AgentOverview[] = data?.agents ?? [];
 
@@ -155,9 +191,38 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
   const epicsInProgress: EpicProgress[] = data?.epics?.inProgress ?? [];
   const epicsCompleted: EpicProgress[] = data?.epics?.recentlyCompleted ?? [];
 
+  const showEscalation = autoDevelopStatus?.paused && autoDevelopStatus?.enabled && activeProjectId;
+  const showAutoDevPanel = autoDevelopStatus?.enabled && activeProjectId;
+
   return (
     <div className="dashboard-view-container">
+      {/* Escalation Banner - above all widgets when escalation needed */}
+      {showEscalation && activeProjectId && (
+        <div style={{ marginBottom: '20px' }}>
+          <EscalationBanner
+            projectId={activeProjectId}
+            onSubmitted={handleAutoDevelopToggled}
+          />
+        </div>
+      )}
+
       <div className="dashboard-view-grid">
+
+        {/* Auto-Develop Toggle - rendered before agents when project exists */}
+        {activeProjectId && (
+          <div className="dashboard-widget-full-width" style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 4px' }}>
+            <AutoDevelopToggle
+              projectId={activeProjectId}
+              status={autoDevelopStatus}
+              onToggled={handleAutoDevelopToggled}
+            />
+          </div>
+        )}
+
+        {/* Auto-Develop Panel - shown when enabled */}
+        {showAutoDevPanel && autoDevelopStatus && (
+          <AutoDevelopPanel status={autoDevelopStatus} />
+        )}
 
         {/* Agents Widget (top, full width) */}
         <DashboardWidget
@@ -369,6 +434,11 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
             </>
           )}
         </DashboardWidget>
+
+        {/* Cycle History Widget - shown when auto-develop has cycle data */}
+        {showAutoDevPanel && autoDevelopStatus && (
+          <CycleHistory status={autoDevelopStatus} />
+        )}
 
         {/* Cost Widget (full width, lazy-loaded) */}
         <DashboardWidget
