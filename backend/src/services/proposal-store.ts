@@ -10,6 +10,7 @@ import type {
   ProposalRevision,
   ProposalRevisionRow,
 } from "../types/proposals.js";
+import { listProjects } from "./projects-service.js";
 
 function rowToProposal(row: ProposalRow): Proposal {
   let confidenceSignals: Record<string, number> | undefined;
@@ -288,4 +289,17 @@ export function createProposalStore(db: Database.Database): ProposalStore {
       return rows.map(rowToProposal);
     },
   };
+}
+
+/**
+ * Resolve a project filter string (name or UUID) into both identifiers
+ * so getProposals matches proposals stored with either format (adj-096, adj-136).
+ */
+export function resolveProjectFilter(project: string | undefined): string | string[] | undefined {
+  if (!project) return undefined;
+  const result = listProjects();
+  if (!result.success || !result.data) return project;
+  const match = result.data.find((p) => p.id === project || p.name === project);
+  if (!match) return project;
+  return match.id === match.name ? match.id : [match.id, match.name];
 }
