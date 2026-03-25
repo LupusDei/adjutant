@@ -9,7 +9,7 @@ export default defineConfig({
       BACKEND_LOG_LEVEL: "warn",
     },
     include: ["tests/**/*.test.ts"],
-    exclude: ["tests/integration/**", "tests/acceptance/**"],
+    exclude: ["tests/acceptance/**"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
