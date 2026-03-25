@@ -11,7 +11,7 @@ import type {
   ProposalRevisionRow,
 } from "../types/proposals.js";
 import { listProjects } from "./projects-service.js";
-import { logWarn } from "../utils/index.js";
+import { logInfo, logWarn } from "../utils/index.js";
 
 function rowToProposal(row: ProposalRow): Proposal {
   let confidenceSignals: Record<string, number> | undefined;
@@ -309,4 +309,76 @@ export function resolveProjectFilter(project: string | undefined): string | stri
     return project;
   }
   return match.id === match.name ? match.id : [match.id, match.name];
+}
+
+// UUID v4 pattern: 8-4-4-4-12 hex chars with dashes (36 chars total)
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Check if a string looks like a UUID.
+ */
+export function isUUID(value: string): boolean {
+  return UUID_REGEX.test(value);
+}
+
+/**
+ * Migrate legacy proposals that have a project name string instead of a UUID.
+ *
+ * Before adj-090 added server-side project resolution, proposals stored the
+ * project name (e.g., "adjutant") instead of the project UUID. This migration
+ * finds those proposals and updates them to use the correct UUID.
+ *
+ * Safe to call multiple times — already-migrated proposals (with UUIDs) are skipped.
+ */
+export function migrateProposalProjectNames(db: Database.Database): { migrated: number; skipped: number; warnings: string[] } {
+  const result = listProjects();
+  if (!result.success || !result.data) {
+    logWarn("migrateProposalProjectNames: could not list projects, skipping migration");
+    return { migrated: 0, skipped: 0, warnings: ["Could not list projects"] };
+  }
+
+  const projects = result.data;
+
+  // Build a name-to-UUID lookup map
+  const nameToUUID = new Map<string, string>();
+  for (const p of projects) {
+    nameToUUID.set(p.name, p.id);
+  }
+
+  // Find all proposals where project field is not a UUID
+  const allProposals = db.prepare("SELECT id, project FROM proposals").all() as { id: string; project: string }[];
+
+  const updateStmt = db.prepare("UPDATE proposals SET project = ? WHERE id = ?");
+  let migrated = 0;
+  let skipped = 0;
+  const warnings: string[] = [];
+
+  const runMigration = db.transaction(() => {
+    for (const row of allProposals) {
+      if (isUUID(row.project)) {
+        skipped++;
+        continue;
+      }
+
+      // This is a name-based project field — look up the UUID
+      const uuid = nameToUUID.get(row.project);
+      if (uuid) {
+        updateStmt.run(uuid, row.id);
+        migrated++;
+      } else {
+        const msg = `Proposal ${row.id} has unknown project name "${row.project}" — left unchanged`;
+        warnings.push(msg);
+        logWarn("migrateProposalProjectNames", { proposalId: row.id, project: row.project });
+        skipped++;
+      }
+    }
+  });
+
+  runMigration();
+
+  if (migrated > 0) {
+    logInfo("migrateProposalProjectNames: migration complete", { migrated, skipped, warnings: warnings.length });
+  }
+
+  return { migrated, skipped, warnings };
 }
