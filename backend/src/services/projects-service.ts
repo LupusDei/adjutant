@@ -30,6 +30,12 @@ export interface Project {
   active: boolean;
   /** Whether this project has a .beads/ directory */
   hasBeads?: boolean | undefined;
+  /** Whether auto-develop mode is enabled for this project */
+  autoDevelop: boolean;
+  /** ISO timestamp when auto-develop was paused, if paused */
+  autoDevelopPausedAt?: string | undefined;
+  /** Vision context text for auto-develop AI generation */
+  visionContext?: string | undefined;
 }
 
 export interface ProjectsStore {
@@ -78,6 +84,9 @@ interface ProjectRow {
   mode: string;
   created_at: string;
   active: number;
+  auto_develop: number;
+  auto_develop_paused_at: string | null;
+  vision_context: string | null;
 }
 
 // ============================================================================
@@ -127,6 +136,9 @@ function rowToProject(row: ProjectRow): Project {
     createdAt: row.created_at,
     active: row.active === 1,
     hasBeads: hasBeadsCached(row.path),
+    autoDevelop: row.auto_develop === 1,
+    autoDevelopPausedAt: row.auto_develop_paused_at ?? undefined,
+    visionContext: row.vision_context ?? undefined,
   };
 }
 
@@ -287,6 +299,7 @@ export function discoverLocalProjects(options?: DiscoverOptions): ProjectsServic
       const rootProject: Project = {
         id, name, path: projectRoot, gitRemote, mode: "swarm",
         sessions: [], createdAt, active: true, hasBeads: hasBeadsDb(projectRoot),
+        autoDevelop: false,
       };
       discovered.push(rootProject);
       logInfo("discovered project root", { id, name, path: projectRoot, hasBeads: rootProject.hasBeads });
@@ -322,6 +335,7 @@ export function discoverLocalProjects(options?: DiscoverOptions): ProjectsServic
           const project: Project = {
             id, name, path: childPath, gitRemote, mode: "swarm",
             sessions: [], createdAt, active: false, hasBeads: hasBeadsDb(childPath),
+            autoDevelop: false,
           };
           discovered.push(project);
           logInfo("discovered child project", { id, name, path: childPath, hasBeads: project.hasBeads });
@@ -436,6 +450,7 @@ function createFromPath(dirPath: string, name?: string): ProjectsServiceResult<P
     sessions: [],
     createdAt: new Date().toISOString(),
     active: false,
+    autoDevelop: false,
   };
 
   db.prepare(`
@@ -482,6 +497,7 @@ function createFromClone(cloneUrl: string, name?: string, inputTargetDir?: strin
     sessions: [],
     createdAt: new Date().toISOString(),
     active: false,
+    autoDevelop: false,
   };
 
   db.prepare(`
@@ -522,6 +538,7 @@ function createEmpty(name: string): ProjectsServiceResult<Project> {
     sessions: [],
     createdAt: new Date().toISOString(),
     active: false,
+    autoDevelop: false,
   };
 
   db.prepare(`
@@ -632,6 +649,136 @@ export function checkProjectHealth(id: string): ProjectsServiceResult<ProjectHea
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to check project health";
     logError("checkProjectHealth failed", { error: message });
+    return { success: false, error: { code: "INTERNAL_ERROR", message } };
+  }
+}
+
+// ============================================================================
+// Auto-Develop Functions
+// ============================================================================
+
+/**
+ * Enable auto-develop mode for a project.
+ */
+export function enableAutoDevelop(id: string): ProjectsServiceResult<Project> {
+  try {
+    const db = getDatabase();
+    const row = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow | undefined;
+    if (!row) {
+      return { success: false, error: { code: "NOT_FOUND", message: `Project '${id}' not found` } };
+    }
+
+    db.prepare("UPDATE projects SET auto_develop = 1 WHERE id = ?").run(id);
+    const updated = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow;
+    logInfo("auto-develop enabled", { id, name: row.name });
+    return { success: true, data: rowToProject(updated) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to enable auto-develop";
+    logError("enableAutoDevelop failed", { error: message });
+    return { success: false, error: { code: "INTERNAL_ERROR", message } };
+  }
+}
+
+/**
+ * Disable auto-develop mode for a project.
+ * Also clears auto_develop_paused_at.
+ */
+export function disableAutoDevelop(id: string): ProjectsServiceResult<Project> {
+  try {
+    const db = getDatabase();
+    const row = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow | undefined;
+    if (!row) {
+      return { success: false, error: { code: "NOT_FOUND", message: `Project '${id}' not found` } };
+    }
+
+    db.prepare("UPDATE projects SET auto_develop = 0, auto_develop_paused_at = NULL WHERE id = ?").run(id);
+    const updated = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow;
+    logInfo("auto-develop disabled", { id, name: row.name });
+    return { success: true, data: rowToProject(updated) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to disable auto-develop";
+    logError("disableAutoDevelop failed", { error: message });
+    return { success: false, error: { code: "INTERNAL_ERROR", message } };
+  }
+}
+
+/**
+ * Set the vision context text for auto-develop AI generation.
+ */
+export function setVisionContext(id: string, context: string): ProjectsServiceResult<Project> {
+  try {
+    const db = getDatabase();
+    const row = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow | undefined;
+    if (!row) {
+      return { success: false, error: { code: "NOT_FOUND", message: `Project '${id}' not found` } };
+    }
+
+    db.prepare("UPDATE projects SET vision_context = ? WHERE id = ?").run(context, id);
+    const updated = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow;
+    logInfo("vision context set", { id, name: row.name });
+    return { success: true, data: rowToProject(updated) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to set vision context";
+    logError("setVisionContext failed", { error: message });
+    return { success: false, error: { code: "INTERNAL_ERROR", message } };
+  }
+}
+
+/**
+ * Clear the auto-develop pause timestamp.
+ */
+export function clearAutoDevelopPause(id: string): ProjectsServiceResult<Project> {
+  try {
+    const db = getDatabase();
+    const row = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow | undefined;
+    if (!row) {
+      return { success: false, error: { code: "NOT_FOUND", message: `Project '${id}' not found` } };
+    }
+
+    db.prepare("UPDATE projects SET auto_develop_paused_at = NULL WHERE id = ?").run(id);
+    const updated = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow;
+    logInfo("auto-develop pause cleared", { id, name: row.name });
+    return { success: true, data: rowToProject(updated) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to clear auto-develop pause";
+    logError("clearAutoDevelopPause failed", { error: message });
+    return { success: false, error: { code: "INTERNAL_ERROR", message } };
+  }
+}
+
+/**
+ * Pause auto-develop mode for a project (sets auto_develop_paused_at to now).
+ */
+export function pauseAutoDevelop(id: string): ProjectsServiceResult<Project> {
+  try {
+    const db = getDatabase();
+    const row = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow | undefined;
+    if (!row) {
+      return { success: false, error: { code: "NOT_FOUND", message: `Project '${id}' not found` } };
+    }
+
+    db.prepare("UPDATE projects SET auto_develop_paused_at = datetime('now') WHERE id = ?").run(id);
+    const updated = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow;
+    logInfo("auto-develop paused", { id, name: row.name });
+    return { success: true, data: rowToProject(updated) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to pause auto-develop";
+    logError("pauseAutoDevelop failed", { error: message });
+    return { success: false, error: { code: "INTERNAL_ERROR", message } };
+  }
+}
+
+/**
+ * Get all projects with auto-develop mode enabled.
+ */
+export function getAutoDevelopProjects(): ProjectsServiceResult<Project[]> {
+  try {
+    const db = getDatabase();
+    const rows = db.prepare("SELECT * FROM projects WHERE auto_develop = 1").all() as ProjectRow[];
+    return { success: true, data: rows.map(rowToProject) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to get auto-develop projects";
+    logError("getAutoDevelopProjects failed", { error: message });
     return { success: false, error: { code: "INTERNAL_ERROR", message } };
   }
 }
