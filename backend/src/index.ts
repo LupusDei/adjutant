@@ -63,7 +63,6 @@ app.use((req, res, next) => {
     const durationMs = Date.now() - start;
     logInfo("request completed", {
       method: req.method,
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       path: req.originalUrl ?? req.url,
       status: res.statusCode,
       durationMs,
@@ -179,7 +178,6 @@ const server = app.listen(PORT, () => {
   // NOTE: adjutantState and stimulusEngine must be created BEFORE
   // spawnAdjutant() so the tool registrar is ready when agents connect.
   // (adj-083 Bug 1: MCP tool registration race condition)
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   const projectRoot = process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd();
   const adjutantState = createAdjutantState(messageDb);
 
@@ -243,7 +241,6 @@ const server = app.listen(PORT, () => {
   getSessionBridge()
     .init()
     .then(() => spawnAdjutant(projectRoot))
-    // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
     .catch((err) => {
       logInfo("session bridge init failed (non-fatal)", { error: String(err) });
     });

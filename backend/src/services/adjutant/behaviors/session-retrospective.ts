@@ -25,7 +25,6 @@ function gatherMetrics(
   memoryStore: MemoryStore,
   sinceCutoff: string,
 ): SessionMetrics {
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const today = new Date().toISOString().split("T")[0]!;
   const allDecisions = state.getRecentDecisions(500);
 
@@ -65,7 +64,6 @@ function gatherMetrics(
     const timestamps = closeDecisions
       .map((d) => new Date(d.createdAt).getTime())
       .sort((a, b) => a - b);
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const totalSpanMs = timestamps[timestamps.length - 1]! - timestamps[0]!;
     avgBeadTimeMins = Math.round(totalSpanMs / closeDecisions.length / 60000);
   }
@@ -226,7 +224,6 @@ export function createSessionRetrospective(memoryStore: MemoryStore): AdjutantBe
     triggers: [],
     schedule: "0 23 * * *", // Daily at 11 PM
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     shouldAct(_event: BehaviorEvent, _state: AdjutantState): boolean {
       return true;
     },
@@ -237,7 +234,6 @@ export function createSessionRetrospective(memoryStore: MemoryStore): AdjutantBe
       comm: CommunicationManager,
     ): Promise<void> {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         const today = new Date().toISOString().split("T")[0]!;
         // Use last retro timestamp as cutoff, or start of today if no previous retro
         const lastRetroAt = state.getMeta("last_retro_at");

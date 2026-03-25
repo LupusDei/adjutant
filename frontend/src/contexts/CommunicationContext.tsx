@@ -392,7 +392,6 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
 /**
  * Hook to access communication context.
  */
-// eslint-disable-next-line react-refresh/only-export-components
 export function useCommunication(): CommunicationContextValue {
   const context = useContext(CommunicationContext);
   if (!context) {

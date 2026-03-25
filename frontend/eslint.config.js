@@ -30,8 +30,24 @@ export default tseslint.config(
       ],
       "@typescript-eslint/restrict-template-expressions": [
         "error",
-        { allowNumber: true },
+        { allowNumber: true, allowBoolean: true },
       ],
+
+      // Turn OFF — too noisy, low value for this codebase
+      "@typescript-eslint/require-await": "off",
+      "@typescript-eslint/prefer-nullish-coalescing": "off",
+      "@typescript-eslint/use-unknown-in-catch-callback-variable": "off",
+      "@typescript-eslint/no-empty-function": "off",
+      "@typescript-eslint/no-unnecessary-type-parameters": "off",
+      "@typescript-eslint/no-redundant-type-constituents": "off",
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+      "no-control-regex": "off",
+
+      // Downgrade to WARN — useful signal but shouldn't block builds
+      "@typescript-eslint/no-non-null-assertion": "warn",
+      "@typescript-eslint/no-unnecessary-condition": "warn",
+      "@typescript-eslint/no-deprecated": "warn",
+      "@typescript-eslint/no-base-to-string": "warn",
     },
   },
   {

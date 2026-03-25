@@ -87,7 +87,6 @@ export class SwarmStatusProvider implements StatusProvider {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async powerUp(): Promise<StatusResult<PowerTransitionResult>> {
     return {
       success: false,
@@ -98,7 +97,6 @@ export class SwarmStatusProvider implements StatusProvider {
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async powerDown(): Promise<StatusResult<PowerTransitionResult>> {
     return {
       success: false,

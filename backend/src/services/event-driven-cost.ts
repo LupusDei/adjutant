@@ -93,7 +93,6 @@ function handleStatusChanged(agentId: string): void {
   // Set a new debounce timer
   const timer = setTimeout(() => {
     debounceTimers.delete(agentId);
-    // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
     runExtraction(agentId).catch((err) => {
       logWarn("Event-driven cost extraction failed", {
         agentId,
@@ -118,7 +117,6 @@ async function runExtraction(agentId: string): Promise<void> {
   }
 
   // Use the first matching session (agents typically have one session)
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const session = sessions[0]!;
 
   // Skip if the session doesn't have tmux info

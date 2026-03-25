@@ -31,7 +31,6 @@ import type { AcceptanceOptions, DiscoveredSpec } from "./types.js";
 // ============================================================================
 
 const DEFAULT_OUTPUT_DIR = resolve(
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   import.meta.dirname ?? ".",
   "../../tests/acceptance"
 );
@@ -61,7 +60,6 @@ Examples:
   npx tsx src/acceptance/cli.ts   (runs all acceptance tests)
 `.trim();
 
-// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 const SPECS_DIR = resolve(import.meta.dirname ?? ".", "../../../specs");
 
 // ============================================================================
@@ -305,7 +303,6 @@ async function handleGenerateAll(
  */
 function handleRun(options: AcceptanceOptions): void {
   const configPath = resolve(
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     import.meta.dirname ?? ".",
     "../../vitest.acceptance.config.ts"
   );
@@ -352,7 +349,6 @@ function handleRun(options: AcceptanceOptions): void {
   try {
     execSync(cmd.join(" "), {
       stdio: "inherit",
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       cwd: resolve(import.meta.dirname ?? ".", "../.."),
     });
   } catch {
@@ -369,10 +365,8 @@ function handleRun(options: AcceptanceOptions): void {
  * Show a spec coverage report: which specs have tests and their status.
  */
 function handleReport(): void {
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   const specsDir = resolve(import.meta.dirname ?? ".", "../../../specs");
   const testsDir = resolve(
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     import.meta.dirname ?? ".",
     "../../tests/acceptance"
   );
@@ -397,8 +391,7 @@ function handleReport(): void {
  * @param delayMs - Delay in milliseconds
  * @returns Debounced function with cancel method
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic debounce needs flexible args
-export function createDebounce<T extends (...args: any[]) => void>(
+export function createDebounce<T extends (...args: unknown[]) => void>(
   fn: T,
   delayMs: number
 ): ((...args: Parameters<T>) => void) & { cancel: () => void } {
@@ -520,7 +513,6 @@ async function handleWatch(options: AcceptanceOptions): Promise<void> {
 
     if (parts.length >= 2) {
       // Watching specs/ root — filename is like "017-agent-proposals/spec.md"
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       specName = parts[0]!;
       specFullDir = join(watchDir, specName);
     } else {
@@ -539,7 +531,6 @@ async function handleWatch(options: AcceptanceOptions): Promise<void> {
       );
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     debouncers.get(specName)!();
   });
 

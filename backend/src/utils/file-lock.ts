@@ -66,7 +66,6 @@ export interface AcquireLockOptions {
  * Generate a unique lock ID.
  */
 function generateLockId(): string {
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
   return `${process.pid}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
@@ -210,7 +209,6 @@ export async function releaseLock(lock: Lock): Promise<void> {
 /**
  * Check if a file is currently locked.
  */
-// eslint-disable-next-line @typescript-eslint/require-await
 export async function isLocked(filePath: string): Promise<boolean> {
   const lockFilePath = getLockFilePath(filePath);
   return existsSync(lockFilePath);

@@ -221,7 +221,6 @@ async function handleApiError(response: Response): Promise<never> {
     const errorBody = (await response.json()) as {
       detail?: { message?: string } | string;
     };
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (typeof errorBody.detail === "object" && errorBody.detail?.message) {
       message = errorBody.detail.message;
     } else if (typeof errorBody.detail === "string") {
@@ -361,7 +360,6 @@ export async function synthesizeSpeech(
     }
 
     const arrayBuffer = await response.arrayBuffer();
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     const contentType = response.headers.get("content-type") || "audio/mpeg";
 
     return {
@@ -420,7 +418,6 @@ export async function transcribeSpeech(
     const result = (await response.json()) as { text?: string; confidence?: number };
 
     return {
-      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
       text: result.text || "",
       confidence: result.confidence ?? 1.0,
     };
@@ -451,7 +448,6 @@ export async function listVoices(): Promise<VoiceInfo[]> {
       voices?: { voice_id: string; name: string; category: string; labels?: Record<string, string> }[];
     };
 
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     return (result.voices || []).map((voice) => ({
       voiceId: voice.voice_id,
       name: voice.name,

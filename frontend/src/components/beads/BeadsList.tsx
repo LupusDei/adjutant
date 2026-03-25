@@ -174,7 +174,6 @@ function groupBeadsBySource(beads: BeadInfo[]): BeadGroup[] {
     const sourceBeads = groupMap.get(source) ?? [];
     groups.push({
       source,
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       displayName: source === 'town' ? 'TOWN (hq-*)' : (source ?? 'UNKNOWN').toUpperCase().replace(/_/g, ' '),
       beads: sourceBeads,
     });
@@ -314,7 +313,6 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
   // every 30s poll cycle that produces a new array reference (adj-6ksw).
   const activeBeadIds = useMemo(
     () =>
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       (searchedBeads ?? [])
         .filter((b) => b.status.toLowerCase() === 'in_progress' || b.status.toLowerCase() === 'hooked')
         .map((b) => b.id)

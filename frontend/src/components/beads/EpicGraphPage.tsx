@@ -13,8 +13,7 @@ import {
   MiniMap,
   BackgroundVariant,
 } from '@xyflow/react';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import type { Node, Edge, NodeMouseHandler } from '@xyflow/react';
+import type { Node, NodeMouseHandler } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import { BeadGraphNode } from './BeadGraphNode';

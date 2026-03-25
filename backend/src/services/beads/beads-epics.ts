@@ -114,7 +114,6 @@ export async function listEpicsWithProgress(
     // Use buildDatabaseList to resolve the correct database directories.
     // Default to active project when no project specified (avoids serial timeout
     // scanning all databases). Pass "all" explicitly to scan everything.
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     const effectiveProject = options.project?.trim() || getActiveProjectName();
     const databasesToQuery = await buildDatabaseList(effectiveProject);
 
@@ -171,7 +170,6 @@ export async function listEpicsWithProgress(
         continue;
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const detail = showResult.data[0]!;
       results.push(buildEpicWithChildren(epicInfo, detail));
     }

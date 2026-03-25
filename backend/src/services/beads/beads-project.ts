@@ -163,7 +163,6 @@ export async function computeEpicProgress(
         continue;
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const detail = showResult.data[0]!;
       const deps = detail.dependencies ?? [];
       progress.push(computeEpicProgressFromDeps(epic, deps, statusMap));

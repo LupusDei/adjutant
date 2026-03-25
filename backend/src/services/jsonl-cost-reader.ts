@@ -54,7 +54,6 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
 };
 
 /** Default pricing for unknown models (use Sonnet as a reasonable default). */
-// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 const DEFAULT_PRICING: ModelPricing = MODEL_PRICING["claude-sonnet-4-6"]!;
 
 /**

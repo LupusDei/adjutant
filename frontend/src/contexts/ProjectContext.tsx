@@ -122,7 +122,6 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 /**
  * Hook to access project context.
  */
-// eslint-disable-next-line react-refresh/only-export-components
 export function useProject(): ProjectContextValue {
   const context = useContext(ProjectContext);
   if (!context) {

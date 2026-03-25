@@ -87,7 +87,6 @@ function enrichWithSessionData(members: CrewMember[]): void {
       : sessions.find((s) => s.name === member.name);
 
     if (session) {
-      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
       if (!member.sessionId) member.sessionId = session.id;
       member.lastActivity = session.lastActivity;
       if (session.workspaceType === "worktree") {

@@ -70,7 +70,6 @@ export function useCostDashboard(
         costApi.fetchBudgets(),
       ]);
 
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
       if (mountedRef.current) {
         setSummary(summaryResult);
         setBurnRate(burnRateResult);
@@ -79,18 +78,15 @@ export function useCostDashboard(
         setLastUpdated(new Date());
       }
     } catch (err) {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
       if (mountedRef.current) {
         setError(err instanceof Error ? err : new Error(String(err)));
       }
     } finally {
       fetchingRef.current = false;
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
       if (mountedRef.current) {
         setLoading(false);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- summary ref used only for loading flag
   }, []);
 
   useEffect(() => {

@@ -78,7 +78,6 @@ export class TestHarness {
     }
     // 1. Create temp directory
     this.testDir = config?.dbPath ? null : freshTestDir();
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const dbPath = config?.dbPath ?? join(this.testDir!, "test.db");
 
     // 2. Create database + run migrations (dynamic import for clean module state)
@@ -134,7 +133,6 @@ export class TestHarness {
    * if setup() threw midway through, destroy() cleans up whatever was
    * created).
    */
-  // eslint-disable-next-line @typescript-eslint/require-await
   async destroy(): Promise<void> {
     if (this.destroyed) {
       return;
@@ -189,7 +187,6 @@ export class TestHarness {
   // ── Typed API Client Wrapper (adj-035.3.2) ─────────────────────────
 
   /** POST JSON to a path and return the parsed response. */
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   async post<T = Record<string, unknown>>(
     path: string,
     body: Record<string, unknown>,
@@ -199,7 +196,6 @@ export class TestHarness {
   }
 
   /** GET a path and return the parsed response. */
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   async get<T = Record<string, unknown>>(
     path: string,
     query?: Record<string, string>,
@@ -213,7 +209,6 @@ export class TestHarness {
   }
 
   /** PATCH a path and return the parsed response. */
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   async patch<T = Record<string, unknown>>(
     path: string,
     body: Record<string, unknown>,
@@ -223,7 +218,6 @@ export class TestHarness {
   }
 
   /** PUT JSON to a path and return the parsed response. */
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   async put<T = Record<string, unknown>>(
     path: string,
     body: Record<string, unknown>,
@@ -233,7 +227,6 @@ export class TestHarness {
   }
 
   /** DELETE a path and return the parsed response. */
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   async delete<T = Record<string, unknown>>(
     path: string,
   ): Promise<{ status: number; body: T }> {
@@ -246,7 +239,6 @@ export class TestHarness {
   /**
    * Insert a message into the store via the real service layer.
    */
-  // eslint-disable-next-line @typescript-eslint/require-await
   async seedMessage(opts: {
     agentId: string;
     role: "user" | "agent" | "system" | "announcement";
@@ -272,7 +264,6 @@ export class TestHarness {
    * registration marker. This makes the agent visible in the
    * message store's agent-related queries.
    */
-  // eslint-disable-next-line @typescript-eslint/require-await
   async seedAgent(opts: { agentId: string; name?: string; status?: string }): Promise<void> {
     if (!this._messageStore) {
       throw new Error("TestHarness.seedAgent() called before setup()");
@@ -290,7 +281,6 @@ export class TestHarness {
    * Beads are managed via the `bd` CLI in production, so in tests
    * we simulate their existence with a marker message.
    */
-  // eslint-disable-next-line @typescript-eslint/require-await
   async seedBead(opts: {
     title: string;
     type?: string;
@@ -311,7 +301,6 @@ export class TestHarness {
   /**
    * Create a proposal via the real proposal store.
    */
-  // eslint-disable-next-line @typescript-eslint/require-await
   async seedProposal(opts: {
     author: string;
     title: string;

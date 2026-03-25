@@ -18,7 +18,6 @@ import { OutputParser, type OutputEvent } from "./output-parser.js";
 // ============================================================================
 
 const PIPE_LOG_PATH = join(
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd(),
   "logs",
   "session-pipe.log",
@@ -61,7 +60,6 @@ function execTmuxCommand(args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile("tmux", args, { encoding: "utf8" }, (err, stdout, stderr) => {
       if (err) {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         reject(new Error(stderr?.trim() || err.message));
         return;
       }
@@ -283,12 +281,10 @@ export class SessionConnector {
         pipe.lastCaptureLines = output.split("\n");
         pipeTrace(`initial capture: ${pipe.lastCaptureLines.length} lines`);
       })
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
       .catch(() => {});
 
     // Poll every 1.5 seconds
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
-    pipe.capturePollTimer = setInterval(async () => {
+    pipe.capturePollTimer = setInterval(() => void (async () => {
       if (!pipe.active) return;
 
       try {
@@ -318,7 +314,7 @@ export class SessionConnector {
       } catch {
         // tmux pane might be gone
       }
-    }, 1500);
+    })(), 1500);
   }
 
   /**
@@ -517,13 +513,10 @@ export async function extractCostOnce(
 
     // Flatten the OutputEvent into a CostSnapshot
     const snapshot: CostSnapshot = {};
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if ("cost" in event && event.cost !== undefined) snapshot.cost = event.cost;
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if ("contextPercent" in event && event.contextPercent !== undefined) {
       snapshot.contextPercent = event.contextPercent;
     }
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if ("tokens" in event && event.tokens) {
       snapshot.tokens = {
         input: event.tokens.input ?? 0,

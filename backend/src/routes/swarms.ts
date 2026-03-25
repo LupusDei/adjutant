@@ -174,13 +174,12 @@ swarmsRouter.get("/:id/branches", async (req, res) => {
  * Merge an agent's branch back into main.
  */
 swarmsRouter.post("/:id/merge", async (req, res) => {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const { branch } = req.body ?? {};
+  const body = req.body as Record<string, unknown> | undefined;
+  const branch = typeof body?.["branch"] === "string" ? body["branch"] : undefined;
   if (!branch) {
     return res.status(400).json(badRequest("branch is required"));
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   const result = await mergeAgentBranch(req.params.id, branch);
 
   if (!result.success) {

@@ -343,7 +343,6 @@ export function getCostSummary(): CostSummary {
     totalTokens.cacheWrite += entry.tokens.cacheWrite;
 
     // Build project aggregation
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     if (!projects[entry.projectPath]) {
       projects[entry.projectPath] = {
         projectPath: entry.projectPath,
@@ -353,7 +352,6 @@ export function getCostSummary(): CostSummary {
       };
     }
     // Safe to assert: we just created the entry above if it didn't exist
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const proj = projects[entry.projectPath]!;
     proj.totalCost += entry.cost;
     proj.totalTokens.input += entry.tokens.input;
@@ -892,7 +890,6 @@ function upsertSessionCost(
             tokensAtStart: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
             rowId: existing.id,
           });
-        // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
         } else if (!tracker.rowId) {
           tracker.rowId = existing.id;
         }
@@ -1038,7 +1035,6 @@ function mapBudgetRow(row: BudgetRow): BudgetRecord {
  * Deduplicates alerts per session per level (warning/critical/exceeded)
  * so each level fires at most once per session (adj-066.3.2).
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function checkAndEmitBudgetAlerts(sessionId: string, _entry: CostEntry): void {
   const budgetStatus = checkBudget(sessionId);
   if (!budgetStatus) return;

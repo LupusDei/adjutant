@@ -146,14 +146,12 @@ export const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1";
  * Default model for TTS.
  */
 export const DEFAULT_ELEVENLABS_MODEL: ElevenLabsModel =
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   (process.env["ELEVENLABS_MODEL"] as ElevenLabsModel) || "eleven_turbo_v2";
 
 /**
  * Default output format.
  */
 export const DEFAULT_OUTPUT_FORMAT: AudioOutputFormat =
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   (process.env["ELEVENLABS_OUTPUT_FORMAT"] as AudioOutputFormat) ||
   "mp3_44100_128";
 

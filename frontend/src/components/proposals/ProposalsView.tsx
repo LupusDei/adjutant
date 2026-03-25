@@ -24,7 +24,6 @@ const TYPE_OPTIONS: { value: ProposalType | "all"; label: string }[] = [
   { value: "engineering", label: "ENGINEERING" },
 ];
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
   const { selectedProject } = useProject();
   const {
@@ -70,7 +69,6 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
     setSendToAgentProposal(proposal);
   }, []);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleSendToAgentComplete = useCallback((_target: string) => {
     setSendToAgentProposal(null);
   }, []);

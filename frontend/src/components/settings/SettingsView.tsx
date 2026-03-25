@@ -244,7 +244,7 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
       input.value = urlToCopy;
       document.body.appendChild(input);
       input.select();
-      document.execCommand('copy'); // eslint-disable-line @typescript-eslint/no-deprecated -- fallback for old browsers
+      document.execCommand('copy'); // fallback for old browsers
       document.body.removeChild(input);
       setCopied(true);
       setTimeout(() => { setCopied(false); }, 2000);

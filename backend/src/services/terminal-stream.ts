@@ -35,7 +35,6 @@ let wss: WebSocketServer | null = null;
 /**
  * Initialize the terminal stream WebSocket server.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function initTerminalStream(_server: HttpServer): WebSocketServer {
   if (wss) return wss;
 
@@ -51,10 +50,8 @@ export function initTerminalStream(_server: HttpServer): WebSocketServer {
 
     ws.on("message", (raw) => {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-base-to-string
-        const msg = JSON.parse(String(raw));
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/use-unknown-in-catch-callback-variable
-        handleMessage(client, msg).catch((err) => {
+        const msg = JSON.parse(String(raw)) as Record<string, unknown>;
+        handleMessage(client, msg).catch((err: unknown) => {
           logWarn("terminal-stream message handler error", { error: String(err) });
         });
       } catch {
@@ -143,7 +140,6 @@ async function handleSubscribe(client: StreamClient, sessionId: string): Promise
       if (client.ws.readyState !== WebSocket.OPEN) return;
 
       const events = data['events'] as OutputEvent[];
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (events && events.length > 0) {
         sendToClient(client, {
           type: "output",
@@ -157,8 +153,7 @@ async function handleSubscribe(client: StreamClient, sessionId: string): Promise
     client.eventHandler = handler;
 
     // Periodic full snapshot for sync recovery
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
-    client.snapshotTimer = setInterval(async () => {
+    client.snapshotTimer = setInterval(() => void (async () => {
       if (client.ws.readyState !== WebSocket.OPEN) return;
       try {
         const { captureTmuxPane } = await import("./tmux.js");
@@ -171,7 +166,7 @@ async function handleSubscribe(client: StreamClient, sessionId: string): Promise
       } catch {
         // tmux pane might be gone — ignore
       }
-    }, SNAPSHOT_INTERVAL_MS);
+    })(), SNAPSHOT_INTERVAL_MS);
 
   } catch (err) {
     sendToClient(client, { type: "error", message: String(err) });

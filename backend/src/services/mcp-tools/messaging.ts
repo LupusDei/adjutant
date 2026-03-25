@@ -21,7 +21,6 @@ export function registerMessagingTools(server: McpServer, store: MessageStore, e
   // ========================================================================
   // send_message
   // ========================================================================
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "send_message",
     {
@@ -30,7 +29,6 @@ export function registerMessagingTools(server: McpServer, store: MessageStore, e
       threadId: z.string().optional().describe("Thread ID for conversation grouping"),
       metadata: z.record(z.string(), z.unknown()).optional().describe("Optional metadata"),
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ to, body, threadId, metadata }, extra) => {
       const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
       if (!agentId) {
@@ -88,7 +86,6 @@ export function registerMessagingTools(server: McpServer, store: MessageStore, e
             agentId,
             body: truncatedBody,
           },
-        // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
         }).catch((err) => {
           logWarn("Failed to send APNS for agent message", { error: String(err) });
         });
@@ -112,7 +109,6 @@ export function registerMessagingTools(server: McpServer, store: MessageStore, e
   // ========================================================================
   // read_messages
   // ========================================================================
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "read_messages",
     {
@@ -122,7 +118,6 @@ export function registerMessagingTools(server: McpServer, store: MessageStore, e
       before: z.string().optional().describe("Cursor: return messages before this timestamp"),
       beforeId: z.string().optional().describe("Cursor: disambiguate same-second messages"),
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ threadId, agentId, limit, before, beforeId }) => {
       const opts: Parameters<typeof store.getMessages>[0] = {
         limit: limit ?? 50,
@@ -156,13 +151,11 @@ export function registerMessagingTools(server: McpServer, store: MessageStore, e
   // ========================================================================
   // list_threads
   // ========================================================================
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "list_threads",
     {
       agentId: z.string().optional().describe("Filter threads by agent ID"),
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ agentId }) => {
       const threads = store.getThreads(agentId);
 
@@ -180,14 +173,12 @@ export function registerMessagingTools(server: McpServer, store: MessageStore, e
   // ========================================================================
   // mark_read
   // ========================================================================
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "mark_read",
     {
       messageId: z.string().optional().describe("Mark a single message as read"),
       agentId: z.string().optional().describe("Mark all messages from this agent as read"),
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ messageId, agentId }) => {
       if (!messageId && !agentId) {
         return {

@@ -615,20 +615,16 @@ export function cleanTerminalOutput(str: string): string {
 
   // 1. Replace cursor-forward (\x1b[nC) with a single space.
   //    Claude Code's TUI uses this as word spacing.
-  // eslint-disable-next-line no-control-regex
   result = result.replace(/\x1b\[\d*C/g, " ");
 
   // 2. Strip all remaining CSI sequences including DEC private modes (\x1b[?...l/h)
   //    The [?!>] handles private mode prefixes like \x1b[?2026h (kitty keyboard protocol)
-  // eslint-disable-next-line no-control-regex
   result = result.replace(/\x1b\[[?!>]?[0-9;]*[A-Za-z]/g, "");
 
   // 3. Strip OSC sequences (title setting, hyperlinks)
-  // eslint-disable-next-line no-control-regex
   result = result.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "");
 
   // 4. Strip other ESC sequences (single-char escapes)
-  // eslint-disable-next-line no-control-regex
   result = result.replace(/\x1b[^[\]]/g, "");
 
   // 5. Replace \r with \n so we can split into sublines

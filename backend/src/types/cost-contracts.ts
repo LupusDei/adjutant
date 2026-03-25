@@ -29,7 +29,6 @@ export const TokenBreakdownSchema = z.object({
 // ============================================================================
 
 /** Standard success wrapper used by all API endpoints. */
-// eslint-disable-next-line @typescript-eslint/no-deprecated
 export function apiSuccessSchema<T extends z.ZodTypeAny>(dataSchema: T) {
   return z.object({
     success: z.literal(true),

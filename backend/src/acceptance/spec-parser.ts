@@ -146,7 +146,6 @@ export function parseSpecContent(content: string, specPath: string): ParseResult
   }
 
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const line = lines[lineIdx]!;
     const trimmed = line.trim();
 
@@ -158,11 +157,8 @@ export function parseSpecContent(content: string, specPath: string): ParseResult
       finalizeStory();
 
       currentStory = {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         title: storyMatch[2]!.trim(),
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         storyNumber: parseInt(storyMatch[1]!, 10),
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         priority: storyMatch[3]!,
         scenarios: [],
         requirementIds: [],
@@ -239,7 +235,6 @@ export function parseSpecContent(content: string, specPath: string): ParseResult
       case "IN_EDGE_CASES": {
         const edgeMatch = EDGE_CASE_RE.exec(trimmed);
         if (edgeMatch) {
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           edgeCases.push(edgeMatch[1]!);
         }
         break;
@@ -249,9 +244,7 @@ export function parseSpecContent(content: string, specPath: string): ParseResult
         const frMatch = FR_LINE_RE.exec(trimmed);
         if (frMatch) {
           requirements.push({
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             id: frMatch[1]!,
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             text: frMatch[2]!.trim(),
             coveredByStories: [],
           });
@@ -289,7 +282,6 @@ function extractFeatureName(lines: string[]): string {
   for (const line of lines) {
     const match = /^#\s+Feature Specification:\s*(.+)/.exec(line.trim());
     if (match) {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       return match[1]!.trim();
     }
   }

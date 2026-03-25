@@ -201,7 +201,6 @@ export async function sendNotification(
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const config = getAPNsConfig()!;
   const note = createNotification(notification, config.bundleId);
 
@@ -228,7 +227,6 @@ export async function sendNotification(
           tokenPrefix: deviceToken.substring(0, 8),
           reason,
         });
-        // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
         unregisterDeviceToken(deviceToken).catch((err) => {
           logWarn("Failed to unregister invalid token", { error: String(err) });
         });

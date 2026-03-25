@@ -111,7 +111,6 @@ export function startPrefixMapRefreshScheduler(
       prefixToSourceMap = map;
       logInfo("prefix map initialized", { prefixCount: map.size });
     })
-    // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
     .catch((err) => {
       console.error("[BeadsPrefixMap] Initial prefix map build failed:", err);
     });
@@ -128,7 +127,6 @@ export function startPrefixMapRefreshScheduler(
           });
         }
       })
-      // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
       .catch((err) => {
         console.error("[BeadsPrefixMap] Prefix map refresh failed:", err);
       });

@@ -61,7 +61,6 @@ const createProjectSchema = z.object({
   /** Target directory for clone operations. Overrides default ~/projects/<name>. */
   targetDir: z.string().min(1).optional(),
 }).refine(
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   (data) => data.path || data.cloneUrl || (data.empty && data.name),
   { message: "Must provide path, cloneUrl, or empty with name" }
 );
@@ -272,18 +271,15 @@ export function createProjectsRouter(store: MessageStore): Router {
     if (!result.success) {
       const code = result.error?.code;
       if (code === "VALIDATION_ERROR") {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         return res.status(400).json(badRequest(result.error!.message));
       }
       if (code === "CONFLICT") {
         return res.status(409).json(
           // conflict() helper exists but using internalError for consistency
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           internalError(result.error!.message)
         );
       }
       if (code === "CLI_ERROR") {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         return res.status(500).json(internalError(result.error!.message));
       }
       return res.status(500).json(
@@ -300,10 +296,9 @@ export function createProjectsRouter(store: MessageStore): Router {
    * Accepts optional { maxDepth: number } in body (default 1, max 3).
    */
   router.post("/discover", (req, res) => {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const maxDepth = typeof req.body?.maxDepth === "number"
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      ? req.body.maxDepth as number
+    const body = req.body as Record<string, unknown> | undefined;
+    const maxDepth = typeof body?.["maxDepth"] === "number"
+      ? body["maxDepth"]
       : undefined;
     const result = discoverLocalProjects(maxDepth !== undefined ? { maxDepth } : undefined);
 

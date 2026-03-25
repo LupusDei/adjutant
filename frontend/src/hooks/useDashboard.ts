@@ -55,20 +55,17 @@ export function useDashboard(options: UseDashboardOptions = {}): UseDashboardRes
 
     try {
       const result = await api.dashboard.get();
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
       if (mountedRef.current) {
         setData(result);
         setError(null);
         setLastUpdated(new Date());
       }
     } catch (err) {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
       if (mountedRef.current) {
         setError(err instanceof Error ? err : new Error(String(err)));
         // Keep stale data on refetch error (stale-while-revalidate)
       }
     } finally {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
       if (mountedRef.current) {
         setLoading(false);
         setRefreshing(false);

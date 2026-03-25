@@ -250,7 +250,6 @@ function buildCoreIdentity(
   if (dominantDescriptions.length === 1) {
     identitySummary = `Your primary strength is ${dominantDescriptions[0]}.`;
   } else {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const last = dominantDescriptions.pop()!;
     identitySummary = `Your primary strengths are ${dominantDescriptions.join(", ")}, and ${last}.`;
   }

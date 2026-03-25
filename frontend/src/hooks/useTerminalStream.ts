@@ -11,11 +11,8 @@ import { api } from '../services/api';
 /** Strip ANSI escape codes for clean text display. */
 function stripAnsi(str: string): string {
   return str
-    // eslint-disable-next-line no-control-regex
     .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
-    // eslint-disable-next-line no-control-regex
     .replace(/\x1b\][^\x07]*\x07/g, '')
-    // eslint-disable-next-line no-control-regex
     .replace(/\x1b[^[\]].?/g, '')
     .replace(/\r/g, '');
 }

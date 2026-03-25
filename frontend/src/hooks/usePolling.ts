@@ -68,20 +68,17 @@ export function usePolling<T>(
     setLoading(true);
     try {
       const result = await fetchFnRef.current();
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (mountedRef.current) {
         setData(result);
         setError(null);
         setLastUpdated(new Date());
       }
     } catch (err) {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (mountedRef.current) {
         setError(err instanceof Error ? err : new Error(String(err)));
       }
     } finally {
       fetchingRef.current = false;
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (mountedRef.current) {
         setLoading(false);
       }

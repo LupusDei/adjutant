@@ -221,7 +221,6 @@ function SessionBreakdown({ summary }: { summary: CostSummary }) {
             return (
               <tr key={session.sessionId} style={styles.tr}>
                 <td style={styles.td}>
-                  {/* eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- intentional: empty string should fall through */}
                   <span style={styles.sessionId}>{session.agentId?.toUpperCase() || session.sessionId.slice(0, 12)}</span>
                 </td>
                 <td style={{ ...styles.td, textAlign: 'right' }}>

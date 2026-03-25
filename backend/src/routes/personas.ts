@@ -14,6 +14,7 @@ import { Router } from "express";
 import { ZodError } from "zod";
 
 import type { PersonaService } from "../services/persona-service.js";
+import type { CreatePersonaInput, UpdatePersonaInput } from "../types/personas.js";
 import { generatePrompt } from "../services/prompt-generator.js";
 import { success, notFound, conflict, validationError, internalError } from "../utils/responses.js";
 
@@ -44,8 +45,8 @@ export function createPersonasRouter(service: PersonaService): Router {
    */
   router.post("/", (req, res) => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      const persona = service.createPersona(req.body);
+      // Zod validates inside createPersona
+      const persona = service.createPersona(req.body as CreatePersonaInput);
       return res.status(201).json(success(persona));
     } catch (err) {
       if (err instanceof ZodError) {
@@ -109,8 +110,8 @@ export function createPersonasRouter(service: PersonaService): Router {
    */
   router.put("/:id", (req, res) => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      const updated = service.updatePersona(req.params.id, req.body);
+      // Zod validates inside updatePersona
+      const updated = service.updatePersona(req.params.id, req.body as UpdatePersonaInput);
       if (updated === null) {
         return res.status(404).json(notFound("Persona", req.params.id));
       }

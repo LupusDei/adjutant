@@ -39,7 +39,6 @@ defineGiven(/^an agent with status (\S+)$/, async (harness, status) => {
  * Assert agent status matches expected value.
  * Pattern: "agent status is <status>"
  */
-// eslint-disable-next-line @typescript-eslint/require-await
 defineThen(/^agent status is (\S+)$/, async (harness, expected) => {
   const h = harness as TestHarness;
   // Safe cast: body shape is { data: { status: string } }

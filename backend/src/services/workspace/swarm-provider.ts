@@ -135,7 +135,6 @@ export class SwarmProvider implements WorkspaceProvider {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async listBeadsDirs(): Promise<BeadsDirInfo[]> {
     const results: BeadsDirInfo[] = [];
     const seenPaths = new Set<string>();
@@ -193,7 +192,6 @@ export class SwarmProvider implements WorkspaceProvider {
     return results;
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async resolveBeadsDirFromId(
     beadId: string
   ): Promise<{ workDir: string; beadsDir: string } | null> {
@@ -222,7 +220,6 @@ export class SwarmProvider implements WorkspaceProvider {
     return false;
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async listProjectNames(): Promise<string[]> {
     const skipDirs = new Set(["node_modules", ".git"]);
     const names = new Set<string>();

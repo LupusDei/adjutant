@@ -55,7 +55,6 @@ export function createMemoryReviewer(memoryStore: MemoryStore): AdjutantBehavior
     triggers: ["agent:status_changed"],
     schedule: "0 0 * * 1", // Weekly on Monday midnight
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     shouldAct(_event: BehaviorEvent, _state: AdjutantState): boolean {
       return true;
     },
@@ -84,7 +83,6 @@ export function createMemoryReviewer(memoryStore: MemoryStore): AdjutantBehavior
 // Startup Review
 // ============================================================================
 
-// eslint-disable-next-line @typescript-eslint/require-await
 async function performStartupReview(
   memoryStore: MemoryStore,
   state: AdjutantState,

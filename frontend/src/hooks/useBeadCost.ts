@@ -50,19 +50,16 @@ export function useBeadCost(
     setLoading(true);
     try {
       const result = await costApi.fetchBeadCost(beadId, children);
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
       if (mountedRef.current) {
         setCost(result);
         setError(null);
       }
     } catch (err) {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
       if (mountedRef.current) {
         // 404 is expected for beads with no cost data
         setError(err instanceof Error ? err : new Error(String(err)));
       }
     } finally {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
       if (mountedRef.current) {
         setLoading(false);
       }

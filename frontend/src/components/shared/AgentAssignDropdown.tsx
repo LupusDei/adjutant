@@ -79,7 +79,6 @@ export function AgentAssignDropdown({
       const available = result.filter((a) => a.status === 'idle' || a.status === 'working');
       setAgents(available);
       setLoading(false);
-    // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
     }).catch((err) => {
       setError(err instanceof Error ? err.message : 'Failed to fetch');
       setLoading(false);
