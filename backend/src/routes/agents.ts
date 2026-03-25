@@ -19,6 +19,35 @@ import { generatePersonaPrompt } from "../services/prompt-generator.js";
 import { writeAgentFile } from "../services/agent-file-writer.js";
 import { success, internalError, badRequest, notFound, conflict } from "../utils/responses.js";
 
+/**
+ * Generate the Layer 3 (Squad Leader) identity preamble for a spawned agent (adj-145).
+ *
+ * Agents spawned via the REST API (frontend/iOS) were starting without knowing
+ * their role, name, or reporting instructions. This preamble ensures they
+ * bootstrap correctly as named Squad Leaders.
+ */
+function buildAgentIdentityPrompt(agentName: string, projectName: string): string {
+  return [
+    `## Your Role (Layer 3: Squad Leader)`,
+    `You are ${agentName}, a Squad Leader spawned via the Adjutant dashboard.`,
+    `- Your name (for --assignee and set_status): ${agentName}`,
+    `- Your project: ${projectName}`,
+    `- You report UP to the General (user) via MCP messages (send_message, set_status, announce)`,
+    `- You may spawn DOWN native Claude Code teammates with isolation: "worktree" for parallel work`,
+    `- Route ALL questions to the General via MCP — never use AskUserQuestion`,
+    ``,
+    `## On Startup`,
+    `1. Call set_status({ status: "working", task: "Starting as ${agentName}: awaiting orders" })`,
+    `2. Call read_messages({ agentId: "${agentName}", limit: 5 }) to check for pending instructions`,
+    `3. If you have assigned beads, run: bd update <id> --assignee=${agentName} --status=in_progress`,
+    ``,
+    `## Task Tracking`,
+    `Use the \`bd\` CLI for ALL task tracking. Do NOT use TaskCreate or TaskUpdate.`,
+    `Before starting work: bd update <id> --assignee=${agentName} --status=in_progress`,
+    `After completing work: npm run build && npm test && git commit && bd close <id>`,
+  ].join("\n");
+}
+
 export const agentsRouter = Router();
 
 /**
@@ -149,6 +178,20 @@ agentsRouter.post("/spawn", async (req, res) => {
     claudeArgs = ["--agent", agentName];
   }
 
+  // Generate layer identity preamble for non-persona spawns (adj-145).
+  // Persona spawns already get identity via --agent file; non-persona spawns
+  // were starting without knowing their name, role, or reporting instructions.
+  let initialPrompt: string | undefined;
+  if (!personaPrompt) {
+    // Resolve project name for the preamble
+    let projectName = "unknown";
+    if (parsed.data.projectId) {
+      const proj = getProject(parsed.data.projectId);
+      if (proj.success && proj.data) projectName = proj.data.name;
+    }
+    initialPrompt = buildAgentIdentityPrompt(name, projectName);
+  }
+
   const result = await bridge.createSession({
     name,
     projectPath,
@@ -156,6 +199,7 @@ agentsRouter.post("/spawn", async (req, res) => {
     workspaceType: "primary",
     claudeArgs,
     envVars: Object.keys(envVars).length > 0 ? envVars : undefined,
+    initialPrompt,
   });
 
   if (!result.success) {
