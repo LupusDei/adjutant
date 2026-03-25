@@ -29,6 +29,7 @@ After each task:
 # 1. Verify
 npm run build                    # Must exit 0
 npm test                         # Must pass (ALWAYS npm test, NEVER bare vitest)
+npm run test:coverage            # Must meet: 80% lines, 70% branches, 60% functions
 
 # 2. Commit & push
 git add <files>
