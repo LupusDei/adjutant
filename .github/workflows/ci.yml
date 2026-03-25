@@ -17,16 +17,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
-      - name: Install root dependencies
-        run: npm install
-
-      - name: Install backend dependencies
-        run: cd backend && npm install --force
-
-      - name: Install frontend dependencies
-        run: cd frontend && npm install --force
+      - name: Install dependencies (clean, no lockfile)
+        run: |
+          npm install
+          cd backend && rm -rf node_modules package-lock.json && npm install
+          cd ../frontend && rm -rf node_modules package-lock.json && npm install
 
       - name: Build backend
         run: npm run build:backend
