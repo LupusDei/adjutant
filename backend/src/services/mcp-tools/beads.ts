@@ -81,11 +81,8 @@ function errorResult(result: BdResult) {
 function resolveBdOptions(extra?: { sessionId?: string | undefined }, explicitProjectId?: string): BdExecOptions {
   const ctx = resolveToolProjectContext(explicitProjectId, extra?.sessionId);
   if (!ctx) {
-    if (!extra?.sessionId) {
-      console.warn("[beads] Bead tool called without session ID — cannot scope to project");
-    } else {
-      console.warn(`[beads] Agent session ${extra.sessionId} has no project context — beads will use workspace default`);
-    }
+    if (!extra?.sessionId) console.warn("[beads] Bead tool called without session ID");
+    else console.warn(`[beads] Agent session ${extra.sessionId} has no project context`);
     return {};
   }
   return { cwd: ctx.projectPath, beadsDir: ctx.beadsDir };

@@ -7,7 +7,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getAgentBySession, getProjectContextBySession } from "../mcp-server.js";
+import { getAgentBySession, getProjectContextBySession, resolveToolProjectContext } from "../mcp-server.js";
 import type { ProposalStore } from "../proposal-store.js";
 import { getProject } from "../projects-service.js";
 import { logInfo } from "../../utils/index.js";
@@ -55,8 +55,9 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       description: z.string().describe("Deep description of the improvement: what, why, and how"),
       type: z.enum(["product", "engineering"]).describe("Proposal type: 'product' for UX/product improvements, 'engineering' for refactoring/architecture"),
       project: z.string().describe("Project this proposal is for (e.g., 'adjutant')"),
+      projectId: z.string().optional().describe("Project UUID for cross-project operations (defaults to session project)"),
     },
-    async ({ title, description, type, project: _clientProject }, extra) => {
+    async ({ title, description, type, project: _clientProject, projectId }, extra) => {
       const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
       if (!agentId) {
         return {
@@ -65,7 +66,7 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       }
 
       // Server-side project resolution — ignore client-supplied project
-      const projectContext = extra.sessionId ? getProjectContextBySession(extra.sessionId) : undefined;
+      const projectContext = resolveToolProjectContext(projectId, extra.sessionId);
       if (!projectContext) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: "No project context — cannot create proposal" }) }],
@@ -366,14 +367,18 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       status: z.enum(["pending", "accepted", "dismissed", "completed"]).optional().describe("Filter by status"),
       type: z.enum(["product", "engineering"]).optional().describe("Filter by type"),
       project: z.string().optional().describe("Filter by project"),
+      projectId: z.string().optional().describe("Project UUID for cross-project operations (defaults to session project)"),
     },
-    async ({ status, type, project }, extra) => {
+    async ({ status, type, project, projectId }, extra) => {
       // After migration (adj-141.1), all proposals store UUID in the project field.
       // When explicit project is provided, use it directly. When omitted, fall back
       // to session context (UUID).
       let resolvedProject: string | undefined;
-      if (project !== undefined && project !== "") {
-        // Look up the project to get its UUID if a name was passed
+      if (projectId !== undefined && projectId !== "") {
+        // Priority 1: Explicit projectId param (adj-146)
+        resolvedProject = projectId;
+      } else if (project !== undefined && project !== "") {
+        // Priority 2: Legacy project param — look up UUID if a name was passed
         const projectResult = getProject(project);
         resolvedProject = (projectResult.success && projectResult.data) ? projectResult.data.id : project;
       } else if (project === "") {

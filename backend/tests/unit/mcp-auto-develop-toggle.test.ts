@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../src/services/mcp-server.js", () => ({
   getAgentBySession: vi.fn(),
   getProjectContextBySession: vi.fn(),
+  resolveToolProjectContext: vi.fn(),
 }));
 
 vi.mock("../../src/services/projects-service.js", () => ({
@@ -33,7 +34,7 @@ vi.mock("../../src/utils/index.js", () => ({
   logDebug: vi.fn(),
 }));
 
-import { getAgentBySession, getProjectContextBySession } from "../../src/services/mcp-server.js";
+import { getAgentBySession, resolveToolProjectContext } from "../../src/services/mcp-server.js";
 import {
   enableAutoDevelop,
   disableAutoDevelop,
@@ -145,7 +146,7 @@ describe("Auto-Develop MCP Tools", () => {
   describe("enable_auto_develop", () => {
     it("should enable auto-develop for the agent's project", async () => {
       vi.mocked(getAgentBySession).mockReturnValue("scout");
-      vi.mocked(getProjectContextBySession).mockReturnValue(mockProjectContext);
+      vi.mocked(resolveToolProjectContext).mockReturnValue(mockProjectContext);
       vi.mocked(enableAutoDevelop).mockReturnValue({ success: true, data: mockProject });
 
       const tool = server.getTool("enable_auto_develop")!;
@@ -164,7 +165,7 @@ describe("Auto-Develop MCP Tools", () => {
 
     it("should set vision context when provided", async () => {
       vi.mocked(getAgentBySession).mockReturnValue("scout");
-      vi.mocked(getProjectContextBySession).mockReturnValue(mockProjectContext);
+      vi.mocked(resolveToolProjectContext).mockReturnValue(mockProjectContext);
       vi.mocked(enableAutoDevelop).mockReturnValue({ success: true, data: mockProject });
       vi.mocked(setVisionContext).mockReturnValue({ success: true, data: { ...mockProject, visionContext: "Build a chat app" } });
 
@@ -189,7 +190,7 @@ describe("Auto-Develop MCP Tools", () => {
 
     it("should return error when no project context", async () => {
       vi.mocked(getAgentBySession).mockReturnValue("scout");
-      vi.mocked(getProjectContextBySession).mockReturnValue(undefined);
+      vi.mocked(resolveToolProjectContext).mockReturnValue(undefined);
 
       const tool = server.getTool("enable_auto_develop")!;
       const result = await tool.handler({}, { sessionId: "sess-1" });
@@ -205,7 +206,7 @@ describe("Auto-Develop MCP Tools", () => {
   describe("disable_auto_develop", () => {
     it("should disable auto-develop for the agent's project", async () => {
       vi.mocked(getAgentBySession).mockReturnValue("scout");
-      vi.mocked(getProjectContextBySession).mockReturnValue(mockProjectContext);
+      vi.mocked(resolveToolProjectContext).mockReturnValue(mockProjectContext);
       vi.mocked(disableAutoDevelop).mockReturnValue({ success: true, data: { ...mockProject, autoDevelop: false } });
 
       const tool = server.getTool("disable_auto_develop")!;
@@ -233,7 +234,7 @@ describe("Auto-Develop MCP Tools", () => {
 
     it("should return error when service call fails", async () => {
       vi.mocked(getAgentBySession).mockReturnValue("scout");
-      vi.mocked(getProjectContextBySession).mockReturnValue(mockProjectContext);
+      vi.mocked(resolveToolProjectContext).mockReturnValue(mockProjectContext);
       vi.mocked(disableAutoDevelop).mockReturnValue({
         success: false,
         error: { code: "INTERNAL_ERROR", message: "DB failure" },
@@ -253,7 +254,7 @@ describe("Auto-Develop MCP Tools", () => {
   describe("provide_vision_update", () => {
     it("should update vision context and clear pause", async () => {
       vi.mocked(getAgentBySession).mockReturnValue("scout");
-      vi.mocked(getProjectContextBySession).mockReturnValue(mockProjectContext);
+      vi.mocked(resolveToolProjectContext).mockReturnValue(mockProjectContext);
       vi.mocked(setVisionContext).mockReturnValue({ success: true, data: { ...mockProject, visionContext: "New direction" } });
       vi.mocked(clearAutoDevelopPause).mockReturnValue({ success: true, data: mockProject });
 
@@ -285,7 +286,7 @@ describe("Auto-Develop MCP Tools", () => {
 
     it("should return error when no project context", async () => {
       vi.mocked(getAgentBySession).mockReturnValue("scout");
-      vi.mocked(getProjectContextBySession).mockReturnValue(undefined);
+      vi.mocked(resolveToolProjectContext).mockReturnValue(undefined);
 
       const tool = server.getTool("provide_vision_update")!;
       const result = await tool.handler({ visionContext: "New direction" }, { sessionId: "sess-1" });
@@ -296,7 +297,7 @@ describe("Auto-Develop MCP Tools", () => {
 
     it("should return error when setVisionContext fails", async () => {
       vi.mocked(getAgentBySession).mockReturnValue("scout");
-      vi.mocked(getProjectContextBySession).mockReturnValue(mockProjectContext);
+      vi.mocked(resolveToolProjectContext).mockReturnValue(mockProjectContext);
       vi.mocked(setVisionContext).mockReturnValue({
         success: false,
         error: { code: "INTERNAL_ERROR", message: "Vision update failed" },
@@ -319,7 +320,7 @@ describe("Auto-Develop MCP Tools", () => {
   describe("get_auto_develop_status", () => {
     it("should return full auto-develop status for the project", async () => {
       vi.mocked(getAgentBySession).mockReturnValue("scout");
-      vi.mocked(getProjectContextBySession).mockReturnValue(mockProjectContext);
+      vi.mocked(resolveToolProjectContext).mockReturnValue(mockProjectContext);
       vi.mocked(getProject).mockReturnValue({
         success: true,
         data: {
@@ -378,7 +379,7 @@ describe("Auto-Develop MCP Tools", () => {
 
     it("should return error when no project context", async () => {
       vi.mocked(getAgentBySession).mockReturnValue("scout");
-      vi.mocked(getProjectContextBySession).mockReturnValue(undefined);
+      vi.mocked(resolveToolProjectContext).mockReturnValue(undefined);
 
       const tool = server.getTool("get_auto_develop_status")!;
       const result = await tool.handler({}, { sessionId: "sess-1" });
