@@ -100,7 +100,7 @@ const autoDevelopStore = createAutoDevelopStore(messageDb);
 app.use("/api/events", createEventsRouter(eventStore));
 app.use("/api/memory", createMemoryRouter(memoryStore));
 app.use("/api/messages", createMessagesRouter(messageStore));
-app.use("/api/projects", createProjectsRouter(messageStore));
+app.use("/api/projects", createProjectsRouter(messageStore, proposalStore, autoDevelopStore));
 app.use("/api/overview", createOverviewRouter(messageStore));
 app.use("/api/proposals", createProposalsRouter(proposalStore));
 
@@ -230,7 +230,7 @@ const server = app.listen(PORT, () => {
     registerBeadTools(server, eventStore);
     registerQueryTools(server, messageStore);
     registerProposalTools(server, proposalStore);
-    registerAutoDevelopTools(server, proposalStore);
+    registerAutoDevelopTools(server, proposalStore, autoDevelopStore);
     registerMemoryTools(server, memoryStore, { getAgentBySession });
     registerCoordinationTools(server, adjutantState, messageStore, stimulusEngine, eventStore, cronScheduleStore);
   });

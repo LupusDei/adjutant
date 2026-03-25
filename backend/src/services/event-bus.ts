@@ -128,6 +128,8 @@ export interface AutoDevelopEnabledEvent {
   projectId: string;
   projectName: string;
   visionContext?: string;
+  /** When true, loop should resume from pause rather than starting fresh */
+  resumeFromPause?: boolean;
 }
 
 export interface AutoDevelopDisabledEvent {

@@ -32,6 +32,21 @@ vi.mock("../../src/services/event-bus.js", () => ({
   getEventBus: () => ({ emit: mockEmit }),
 }));
 
+// Mock projects-service (getProject for auto-develop check)
+const { mockGetProject } = vi.hoisted(() => {
+  return {
+    mockGetProject: vi.fn(),
+  };
+});
+
+vi.mock("../../src/services/projects-service.js", () => ({
+  enableAutoDevelop: vi.fn(),
+  disableAutoDevelop: vi.fn(),
+  setVisionContext: vi.fn(),
+  clearAutoDevelopPause: vi.fn(),
+  getProject: mockGetProject,
+}));
+
 // Mock MCP SDK
 const { mockTool, MockMcpServer } = vi.hoisted(() => {
   const mockTool = vi.fn();
@@ -53,6 +68,7 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ProposalStore } from "../../src/services/proposal-store.js";
 import { registerAutoDevelopTools } from "../../src/services/mcp-tools/auto-develop.js";
+import { logInfo } from "../../src/utils/index.js";
 
 // =============================================================================
 // Helpers
@@ -129,6 +145,10 @@ describe("score_proposal MCP tool", () => {
     vi.clearAllMocks();
     mockGetAgentBySession.mockReturnValue("reviewer-agent");
     mockGetProjectContextBySession.mockReturnValue(PROJECT_CONTEXT);
+    mockGetProject.mockReturnValue({
+      success: true,
+      data: { id: "proj-123", name: "adjutant", autoDevelop: true },
+    });
     mockEmit.mockClear();
   });
 
@@ -279,6 +299,91 @@ describe("score_proposal MCP tool", () => {
     const response = result as { content: { type: string; text: string }[] };
     const parsed = JSON.parse(response.content[0].text);
     expect(parsed.error).toContain("No project context");
+    expect(store.setConfidenceScore).not.toHaveBeenCalled();
+  });
+
+  it("should log confidence_gate_decision with all relevant fields (adj-122.9.2)", async () => {
+    const store = createMockStore();
+    const handler = getToolHandler(store, "score_proposal");
+
+    await handler(
+      {
+        proposalId: "test-uuid",
+        reviewerConsensus: 80,
+        specClarity: 70,
+        codebaseAlignment: 60,
+        riskAssessment: 50,
+        historicalSuccess: 40,
+      },
+      { sessionId: SESSION_ID },
+    );
+
+    expect(logInfo).toHaveBeenCalledWith("confidence_gate_decision", {
+      proposalId: "test-uuid",
+      projectId: "proj-123",
+      score: 64,
+      classification: "refine",
+      signals: {
+        reviewerConsensus: 80,
+        specClarity: 70,
+        codebaseAlignment: 60,
+        riskAssessment: 50,
+        historicalSuccess: 40,
+      },
+      reviewRound: 1,
+      scoredBy: "reviewer-agent",
+    });
+  });
+
+  it("should return error when auto-develop is not enabled for project (adj-122.9.4)", async () => {
+    mockGetProject.mockReturnValue({
+      success: true,
+      data: { id: "proj-123", name: "adjutant", autoDevelop: false },
+    });
+    const store = createMockStore();
+    const handler = getToolHandler(store, "score_proposal");
+
+    const result = await handler(
+      {
+        proposalId: "test-uuid",
+        reviewerConsensus: 80,
+        specClarity: 70,
+        codebaseAlignment: 60,
+        riskAssessment: 50,
+        historicalSuccess: 40,
+      },
+      { sessionId: SESSION_ID },
+    );
+
+    const response = result as { content: { type: string; text: string }[] };
+    const parsed = JSON.parse(response.content[0].text);
+    expect(parsed.error).toContain("Auto-develop is not enabled");
+    expect(store.setConfidenceScore).not.toHaveBeenCalled();
+  });
+
+  it("should return error when project lookup fails (adj-122.9.4)", async () => {
+    mockGetProject.mockReturnValue({
+      success: false,
+      error: { code: "NOT_FOUND", message: "Project not found" },
+    });
+    const store = createMockStore();
+    const handler = getToolHandler(store, "score_proposal");
+
+    const result = await handler(
+      {
+        proposalId: "test-uuid",
+        reviewerConsensus: 80,
+        specClarity: 70,
+        codebaseAlignment: 60,
+        riskAssessment: 50,
+        historicalSuccess: 40,
+      },
+      { sessionId: SESSION_ID },
+    );
+
+    const response = result as { content: { type: string; text: string }[] };
+    const parsed = JSON.parse(response.content[0].text);
+    expect(parsed.error).toContain("Auto-develop is not enabled");
     expect(store.setConfidenceScore).not.toHaveBeenCalled();
   });
 

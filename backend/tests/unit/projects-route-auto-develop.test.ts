@@ -46,6 +46,8 @@ import {
 } from "../../src/services/projects-service.js";
 import { getEventBus } from "../../src/services/event-bus.js";
 import type { MessageStore } from "../../src/services/message-store.js";
+import type { ProposalStore } from "../../src/services/proposal-store.js";
+import type { AutoDevelopStore } from "../../src/services/auto-develop-store.js";
 
 /** Minimal mock MessageStore for the router factory. */
 const mockMessageStore = {
@@ -53,10 +55,19 @@ const mockMessageStore = {
   getUnreadSummaries: vi.fn().mockReturnValue([]),
 } as unknown as MessageStore;
 
+const mockProposalStore = {
+  getProposals: vi.fn().mockReturnValue([]),
+} as unknown as ProposalStore;
+
+const mockAutoDevelopStore = {
+  getActiveCycle: vi.fn().mockReturnValue(null),
+  getCycleHistory: vi.fn().mockReturnValue([]),
+} as unknown as AutoDevelopStore;
+
 function createTestApp() {
   const app = express();
   app.use(express.json());
-  app.use("/api/projects", createProjectsRouter(mockMessageStore));
+  app.use("/api/projects", createProjectsRouter(mockMessageStore, mockProposalStore, mockAutoDevelopStore));
   return app;
 }
 
@@ -202,6 +213,95 @@ describe("PATCH /api/projects/:id", () => {
       .send({ autoDevelop: true });
 
     expect(response.status).toBe(500);
+    expect(response.body.success).toBe(false);
+  });
+
+  it("should NOT call setVisionContext when enableAutoDevelop fails (adj-122.9.1 regression)", async () => {
+    vi.mocked(getProject).mockReturnValue({ success: true, data: mockProject });
+    vi.mocked(enableAutoDevelop).mockReturnValue({
+      success: false,
+      error: { code: "INTERNAL_ERROR", message: "Enable failed" },
+    });
+
+    const response = await request(app)
+      .patch("/api/projects/proj-1")
+      .send({ autoDevelop: true, visionContext: "Build a chat app" });
+
+    expect(response.status).toBe(500);
+    expect(response.body.success).toBe(false);
+    // The bug: setVisionContext was called even when enableAutoDevelop failed
+    expect(setVisionContext).not.toHaveBeenCalled();
+  });
+
+  it("should NOT call setVisionContext when disableAutoDevelop fails (adj-122.9.1 regression)", async () => {
+    vi.mocked(getProject).mockReturnValue({ success: true, data: mockProjectWithAutoDevelop });
+    vi.mocked(disableAutoDevelop).mockReturnValue({
+      success: false,
+      error: { code: "INTERNAL_ERROR", message: "Disable failed" },
+    });
+
+    const response = await request(app)
+      .patch("/api/projects/proj-1")
+      .send({ autoDevelop: false, visionContext: "Build a chat app" });
+
+    expect(response.status).toBe(500);
+    expect(response.body.success).toBe(false);
+    expect(setVisionContext).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/projects/:id/auto-develop", () => {
+  let app: express.Express;
+
+  beforeEach(() => {
+    app = createTestApp();
+    vi.clearAllMocks();
+  });
+
+  it("should return auto-develop status when enabled", async () => {
+    vi.mocked(getProject).mockReturnValue({
+      success: true,
+      data: {
+        ...mockProjectWithAutoDevelop,
+        autoDevelopPausedAt: undefined,
+        visionContext: "Build a chat app",
+      },
+    });
+
+    const response = await request(app)
+      .get("/api/projects/proj-1/auto-develop");
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.data.enabled).toBe(true);
+    expect(response.body.data.visionContext).toBe("Build a chat app");
+    expect(response.body.data.proposals).toBeDefined();
+    expect(response.body.data.cycleStats).toBeDefined();
+  });
+
+  it("should return 404 when project not found", async () => {
+    vi.mocked(getProject).mockReturnValue({
+      success: false,
+      error: { code: "NOT_FOUND", message: "Project not found" },
+    });
+
+    const response = await request(app)
+      .get("/api/projects/missing/auto-develop");
+
+    expect(response.status).toBe(404);
+    expect(response.body.success).toBe(false);
+  });
+
+  it("should return 400 when auto-develop is not enabled", async () => {
+    vi.mocked(getProject).mockReturnValue({
+      success: true,
+      data: mockProject,  // autoDevelop: false
+    });
+
+    const response = await request(app)
+      .get("/api/projects/proj-1/auto-develop");
+
+    expect(response.status).toBe(400);
     expect(response.body.success).toBe(false);
   });
 });

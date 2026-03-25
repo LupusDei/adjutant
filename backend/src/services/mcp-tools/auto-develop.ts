@@ -13,17 +13,20 @@ import { z } from "zod";
 
 import { getAgentBySession, getProjectContextBySession } from "../mcp-server.js";
 import type { ProposalStore } from "../proposal-store.js";
+import type { AutoDevelopStore } from "../auto-develop-store.js";
+import type { AutoDevelopStatus } from "../../types/auto-develop.js";
 import { computeConfidenceScore, classifyConfidence } from "../confidence-engine.js";
 import {
   enableAutoDevelop,
   disableAutoDevelop,
   setVisionContext,
   clearAutoDevelopPause,
+  getProject,
 } from "../projects-service.js";
 import { getEventBus } from "../event-bus.js";
 import { logInfo } from "../../utils/index.js";
 
-export function registerAutoDevelopTools(server: McpServer, proposalStore: ProposalStore): void {
+export function registerAutoDevelopTools(server: McpServer, proposalStore: ProposalStore, autoDevelopStore?: AutoDevelopStore): void {
   // ---------------------------------------------------------------------------
   // score_proposal
   // ---------------------------------------------------------------------------
@@ -57,7 +60,15 @@ export function registerAutoDevelopTools(server: McpServer, proposalStore: Propo
         };
       }
 
-      // 3. Get proposal and validate it exists
+      // 3. Verify auto-develop is enabled for this project
+      const projectResult = getProject(projectContext.projectId);
+      if (!projectResult.success || !projectResult.data?.autoDevelop) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Auto-develop is not enabled for this project" }) }],
+        };
+      }
+
+      // 4. Get proposal and validate it exists
       const proposal = proposalStore.getProposal(proposalId);
       if (!proposal) {
         return {
@@ -65,7 +76,7 @@ export function registerAutoDevelopTools(server: McpServer, proposalStore: Propo
         };
       }
 
-      // 4. Validate proposal belongs to agent's project
+      // 5. Validate proposal belongs to agent's project
       if (proposal.project !== projectContext.projectId && proposal.project !== projectContext.projectName) {
         return {
           content: [{
@@ -77,7 +88,7 @@ export function registerAutoDevelopTools(server: McpServer, proposalStore: Propo
         };
       }
 
-      // 5. Build ConfidenceSignals
+      // 6. Build ConfidenceSignals
       const signals = {
         reviewerConsensus,
         specClarity,
@@ -86,14 +97,14 @@ export function registerAutoDevelopTools(server: McpServer, proposalStore: Propo
         historicalSuccess,
       };
 
-      // 6. Compute score and classify
+      // 7. Compute score and classify
       const score = computeConfidenceScore(signals);
       const classification = classifyConfidence(score);
 
-      // 7. Store score on proposal
+      // 8. Store score on proposal
       proposalStore.setConfidenceScore(proposalId, score, signals);
 
-      // 8. Emit proposal:scored event
+      // 9. Emit proposal:scored event
       getEventBus().emit("proposal:scored", {
         proposalId,
         projectId: projectContext.projectId,
@@ -108,6 +119,17 @@ export function registerAutoDevelopTools(server: McpServer, proposalStore: Propo
         score,
         classification,
         reviewRound: proposal.reviewRound,
+      });
+
+      // Audit trail for confidence gate decisions
+      logInfo("confidence_gate_decision", {
+        proposalId,
+        projectId: projectContext.projectId,
+        score,
+        classification,
+        signals,
+        reviewRound: proposal.reviewRound,
+        scoredBy: agentId,
       });
 
       // 9. Return result
@@ -270,11 +292,13 @@ export function registerAutoDevelopTools(server: McpServer, proposalStore: Propo
       // Clear pause — unpauses the auto-develop loop
       clearAutoDevelopPause(projectContext.projectId);
 
-      // Emit enabled event to signal the loop to resume
+      // Emit enabled event with resumeFromPause flag to signal the loop to resume
+      // from where it paused, rather than starting a fresh cycle
       getEventBus().emit("project:auto_develop_enabled", {
         projectId: projectContext.projectId,
         projectName: projectContext.projectName,
         visionContext,
+        resumeFromPause: true,
       });
 
       logInfo("provide_vision_update", { agentId, projectId: projectContext.projectId });
@@ -289,6 +313,80 @@ export function registerAutoDevelopTools(server: McpServer, proposalStore: Propo
             visionContext,
             pauseCleared: true,
           }),
+        }],
+      };
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // get_auto_develop_status
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "get_auto_develop_status",
+    {},
+    async (_params, extra) => {
+      const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
+      if (!agentId) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Unknown session — not connected via MCP" }) }],
+        };
+      }
+
+      const projectContext = extra.sessionId ? getProjectContextBySession(extra.sessionId) : undefined;
+      if (!projectContext) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "No project context — cannot get auto-develop status" }) }],
+        };
+      }
+
+      const projectResult = getProject(projectContext.projectId);
+      if (!projectResult.success || !projectResult.data) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Project not found" }) }],
+        };
+      }
+
+      const project = projectResult.data;
+
+      // Get proposal counts by status for this project
+      // ProposalStatus is "pending" | "accepted" | "dismissed" | "completed"
+      // Map: pending -> inReview, accepted -> accepted, dismissed -> dismissed
+      // escalated is tracked via confidence score range (40-59) on pending proposals
+      const projectIds = [projectContext.projectId, projectContext.projectName];
+      const pendingProposals = proposalStore.getProposals({ status: "pending", project: projectIds });
+      const escalated = pendingProposals.filter(p => p.confidenceScore !== undefined && p.confidenceScore >= 40 && p.confidenceScore < 60).length;
+      const inReview = pendingProposals.length - escalated;
+      const accepted = proposalStore.getProposals({ status: "accepted", project: projectIds }).length;
+      const dismissed = proposalStore.getProposals({ status: "dismissed", project: projectIds }).length;
+
+      // Get cycle stats
+      const activeCycle = autoDevelopStore?.getActiveCycle(projectContext.projectId) ?? null;
+      const cycleHistory = autoDevelopStore?.getCycleHistory(projectContext.projectId) ?? [];
+      const completedCycles = cycleHistory.filter(c => c.completedAt !== null).length;
+
+      // Count epics in execution (accepted proposals that are being worked on)
+      // Use accepted count as a proxy for epics in execution
+      const epicsInExecution = accepted;
+
+      const status: AutoDevelopStatus = {
+        enabled: project.autoDevelop,
+        paused: !!project.autoDevelopPausedAt,
+        pausedAt: project.autoDevelopPausedAt ?? null,
+        currentPhase: activeCycle ? (activeCycle.phase as AutoDevelopStatus["currentPhase"]) : null,
+        activeCycleId: activeCycle?.id ?? null,
+        visionContext: project.visionContext ?? null,
+        proposals: { inReview, accepted, escalated, dismissed },
+        epicsInExecution,
+        cycleStats: {
+          totalCycles: cycleHistory.length,
+          completedCycles,
+        },
+      };
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify(status),
         }],
       };
     },
