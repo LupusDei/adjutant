@@ -1031,9 +1031,10 @@ describe("AutoDevelopLoop", () => {
 
       // proj-2 should still have been scheduled
       expect(stimulusEngine.scheduleCheck).toHaveBeenCalledOnce();
-      // getActiveCycle is called for counter sync + cycle management per project
-      // proj-1 throws on first call (counter sync), proj-2 gets 2 calls (counter sync + cycle mgmt)
-      expect(callCount).toBe(3);
+      // getActiveCycle is called once per project for cycle management (adj-143: counter sync
+      // now runs after cycle creation, reusing the resolved activeCycle variable).
+      // proj-1 throws on its call, proj-2 gets 1 call. Total = 2.
+      expect(callCount).toBe(2);
     });
   });
 });

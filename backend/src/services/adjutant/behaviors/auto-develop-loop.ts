@@ -682,27 +682,30 @@ export function createAutoDevelopLoop(
           state.setMeta(lastIdeationKey(project.id), String(Date.now()));
         }
 
-        // Update cycle counters from actual proposal data (adj-142)
-        // Counters were never being incremented — sync from store each tick.
-        {
-          const projectFilter = { project: project.id };
-          const allProposals = proposalStore.getProposals({ ...projectFilter });
-          const acceptedCount = proposalStore.getProposals({ status: "accepted", ...projectFilter }).length;
-          const existingCycle = autoDevelopStore.getActiveCycle(project.id);
-          if (existingCycle) {
-            autoDevelopStore.updateCycle(existingCycle.id, {
-              proposalsGenerated: allProposals.length,
-              proposalsAccepted: acceptedCount,
-            });
-          }
-        }
-
         // Ensure we have an active cycle
         let activeCycle = autoDevelopStore.getActiveCycle(project.id);
         if (!activeCycle) {
           activeCycle = autoDevelopStore.startCycle(project.id, currentPhase);
         } else if (activeCycle.phase !== currentPhase) {
           autoDevelopStore.updateCycle(activeCycle.id, { phase: currentPhase });
+        }
+
+        // Update cycle counters from actual proposal data (adj-142, adj-143)
+        // Sync counters AFTER cycle creation to ensure we always have a valid cycle.
+        {
+          const projectFilter = { project: project.id };
+          const allProposals = proposalStore.getProposals({ ...projectFilter });
+          const acceptedCount = proposalStore.getProposals({ status: "accepted", ...projectFilter }).length;
+          const escalatedCount = allProposals.filter(
+            p => p.confidenceScore !== undefined && p.confidenceScore !== null && p.confidenceScore >= 40 && p.confidenceScore < 60,
+          ).length;
+          const dismissedCount = proposalStore.getProposals({ status: "dismissed", ...projectFilter }).length;
+          autoDevelopStore.updateCycle(activeCycle.id, {
+            proposalsGenerated: allProposals.length,
+            proposalsAccepted: acceptedCount,
+            proposalsEscalated: escalatedCount,
+            proposalsDismissed: dismissedCount,
+          });
         }
 
         // Complete cycle and start fresh when returning to analyze from validate
