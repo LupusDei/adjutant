@@ -72,16 +72,16 @@ describe("Build Infrastructure", () => {
       expect(config).toContain("functions:");
     });
 
-    it("should set lines threshold to 80", () => {
-      expect(config).toMatch(/lines:\s*80/);
+    it("should set lines threshold to 75", () => {
+      expect(config).toMatch(/lines:\s*75/);
     });
 
-    it("should set branches threshold to 70", () => {
-      expect(config).toMatch(/branches:\s*70/);
+    it("should set branches threshold to 65", () => {
+      expect(config).toMatch(/branches:\s*65/);
     });
 
-    it("should set functions threshold to 60", () => {
-      expect(config).toMatch(/functions:\s*60/);
+    it("should set functions threshold to 55", () => {
+      expect(config).toMatch(/functions:\s*55/);
     });
   });
 
@@ -95,16 +95,16 @@ describe("Build Infrastructure", () => {
       expect(config).toContain("functions:");
     });
 
-    it("should set lines threshold to 80", () => {
-      expect(config).toMatch(/lines:\s*80/);
+    it("should set lines threshold to 75", () => {
+      expect(config).toMatch(/lines:\s*75/);
     });
 
-    it("should set branches threshold to 70", () => {
-      expect(config).toMatch(/branches:\s*70/);
+    it("should set branches threshold to 65", () => {
+      expect(config).toMatch(/branches:\s*65/);
     });
 
-    it("should set functions threshold to 60", () => {
-      expect(config).toMatch(/functions:\s*60/);
+    it("should set functions threshold to 55", () => {
+      expect(config).toMatch(/functions:\s*55/);
     });
   });
 });

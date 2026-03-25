@@ -30,6 +30,15 @@ describe('verify-before-push.sh', () => {
     expect(scriptContent).toMatch(/WIP branch.*skip/i);
   });
 
+  it('should cd to monorepo root before doing anything else', () => {
+    scriptContent = readFileSync(SCRIPT_PATH, 'utf-8');
+    expect(scriptContent).toContain('git rev-parse --show-toplevel');
+    // The root guard must appear before the branch detection
+    const rootGuardPos = scriptContent.indexOf('--show-toplevel');
+    const branchDetectPos = scriptContent.indexOf('--abbrev-ref HEAD');
+    expect(rootGuardPos).toBeLessThan(branchDetectPos);
+  });
+
   it('should detect current branch using git rev-parse', () => {
     scriptContent = readFileSync(SCRIPT_PATH, 'utf-8');
     expect(scriptContent).toContain('git rev-parse --abbrev-ref HEAD');
@@ -51,6 +60,18 @@ describe('verify-before-push.sh', () => {
     scriptContent = readFileSync(SCRIPT_PATH, 'utf-8');
     expect(scriptContent).toContain('cd backend');
     expect(scriptContent).toContain('cd ../frontend');
+  });
+
+  it('should have numbered step labels for clear failure reporting', () => {
+    scriptContent = readFileSync(SCRIPT_PATH, 'utf-8');
+    expect(scriptContent).toContain('Step 1/3');
+    expect(scriptContent).toContain('Step 2/3');
+    expect(scriptContent).toContain('Step 3/3');
+  });
+
+  it('should not suppress stderr with 2>/dev/null', () => {
+    scriptContent = readFileSync(SCRIPT_PATH, 'utf-8');
+    expect(scriptContent).not.toContain('2>/dev/null');
   });
 });
 
