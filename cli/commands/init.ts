@@ -28,6 +28,8 @@ interface InitOptions {
   force: boolean;
 }
 
+const BACKEND_BASE_URL = "http://localhost:4201";
+
 const MCP_CONFIG = {
   mcpServers: {
     adjutant: {
@@ -133,6 +135,31 @@ function checkDatabase(): CheckResult {
   };
 }
 
+export async function registerWithBackend(projectRoot: string): Promise<CheckResult> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const response = await fetch(`${BACKEND_BASE_URL}/api/projects`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: projectRoot }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (response.status === 201) {
+      return { name: "Backend registration", status: "created", message: "project registered" };
+    }
+    if (response.status === 409) {
+      return { name: "Backend registration", status: "skipped", message: "already registered" };
+    }
+    const body = await response.text();
+    return { name: "Backend registration", status: "warn", message: `HTTP ${response.status}: ${body.slice(0, 100)}` };
+  } catch {
+    return { name: "Backend registration", status: "warn", message: "backend not running — project will be registered on next startup" };
+  }
+}
+
 export async function runInit(options: InitOptions): Promise<number> {
   printHeader("Adjutant Init");
   const projectRoot = process.cwd();
@@ -153,6 +180,9 @@ export async function runInit(options: InitOptions): Promise<number> {
   const adjutantRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
   const pkg = JSON.parse(readFileSync(join(adjutantRoot, "package.json"), "utf-8"));
   results.push(...installPlugin(adjutantRoot, pkg.version));
+
+  // adj-125: Register project with backend API
+  results.push(await registerWithBackend(projectRoot));
 
   // Adjutant-project-specific checks (only when running inside the adjutant repo)
   const isAdjutantProject = fileExists(join(projectRoot, "package.json")) &&
