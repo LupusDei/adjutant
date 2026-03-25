@@ -20,7 +20,6 @@ import {
   ReviseProposalSchema,
 } from "../types/proposals.js";
 import type { ProposalStore } from "../services/proposal-store.js";
-import { resolveProjectFilter } from "../services/proposal-store.js";
 import { success, badRequest, notFound, validationError } from "../utils/responses.js";
 
 export function createProposalsRouter(store: ProposalStore): Router {
@@ -34,8 +33,7 @@ export function createProposalsRouter(store: ProposalStore): Router {
       return;
     }
 
-    const { project, ...rest } = filterResult.data;
-    const proposals = store.getProposals({ ...rest, project: resolveProjectFilter(project) });
+    const proposals = store.getProposals(filterResult.data);
     res.json(success(proposals));
   });
 

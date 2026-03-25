@@ -258,9 +258,9 @@ describe("getHistoricalSuccessRate", () => {
 
   it("should pass project and type filters to store", () => {
     const store = createMockStore([]);
-    getHistoricalSuccessRate(store, ["proj-1", "proj-name"], "product");
+    getHistoricalSuccessRate(store, "proj-1", "product");
     expect(store.getProposals).toHaveBeenCalledWith({
-      project: ["proj-1", "proj-name"],
+      project: "proj-1",
       type: "product",
     });
   });

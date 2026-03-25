@@ -25,7 +25,7 @@ function buildScheduleReason(agentId: string, proposalStore: ProposalStore): str
   // Matches both projectId (UUID) and projectName for legacy proposals (adj-090).
   const projectContext = getProjectContextByAgent(agentId);
   const projectFilter = projectContext
-    ? { project: [projectContext.projectId, projectContext.projectName] as string[] }
+    ? { project: projectContext.projectId }
     : {};
 
   const pending = proposalStore.getProposals({ status: "pending", ...projectFilter });
