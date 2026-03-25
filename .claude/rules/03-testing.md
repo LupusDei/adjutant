@@ -1,87 +1,177 @@
 # Testing Rules
 
-## TDD is Mandatory
+## Testing Mandate
 
-**All development MUST follow Test-Driven Development. No exceptions.**
+Every new function, service, hook, endpoint, and tool handler MUST have tests. No exceptions. Code without tests does not merge.
 
-### The Red-Green-Refactor Cycle
+## What to Test (Minimum Counts)
 
-1. **Red**: Write a failing test first
-2. **Green**: Write minimal code to make the test pass
-3. **Refactor**: Clean up while keeping tests green
+### Backend Service Method
+Minimum **3 tests** per public method:
+1. Happy path — valid input produces expected output
+2. Error path — invalid input or dependency failure produces expected error
+3. Edge case — boundary values, empty arrays, null fields, concurrent calls
 
-### TDD Applies To
+### MCP Tool Handler
+Minimum **2 tests** per tool:
+1. Success — valid parameters produce correct result and side effects
+2. Validation error — missing or invalid parameters return a structured error
 
-- Backend services (`message-store`, `bd-client`, `mcp-tools`, `agents-service`)
-- Custom React hooks (`useChatMessages`, `useAgentStatus`, `usePolling`)
-- All new features and functionality
-- Bug fixes (write a test that reproduces the bug first)
-- API endpoints and request handlers
+### React Hook
+Minimum **3 tests** per hook:
+1. Initial state — hook returns correct defaults before any action
+2. State change — calling a hook method updates state correctly
+3. Error handling — failed API call or invalid input puts hook in error state
 
-### Workflow for Each Task
+### API Endpoint
+Minimum **2 tests** per route handler:
+1. Success response — valid request returns correct status code and body
+2. Error response — invalid request returns structured error with correct status code
 
-```
-1. Read the requirements
-2. Write test(s) that verify expected behavior
-3. Run tests - confirm they FAIL (Red phase)
-4. Implement the minimum code to pass
-5. Run tests - confirm they PASS (Green phase)
-6. Refactor if needed, keeping tests green
-7. Commit test + implementation together
-```
+### Bug Fix
+**1 regression test** that reproduces the bug before the fix, then passes after.
 
-### Enforcement
-
-- PRs without tests for new functionality will be rejected
-- Bug fixes must include a regression test
-- Code coverage should not decrease
-
-## What to Test
-
-### Backend
-- Service methods (mock `bd-client` and external commands for unit tests)
-- MCP tool handlers (mock message store and bd client)
-- Request/response validation (Zod schemas)
-- Error handling paths
-
-### Frontend
-- Custom hooks (state changes, API calls)
-- Complex component logic (not pure UI styling)
-
-## What NOT to Test
-
-- Pure UI components (styling, layout only)
-- Third-party library behavior
-- Trivial getters/setters
-
-## Test File Locations
+## File Location Convention
 
 ```
-backend/tests/unit/*.test.ts
-frontend/tests/unit/*.test.ts
+backend/tests/unit/<module-name>.test.ts        # Backend unit tests
+frontend/tests/unit/<module-name>.test.ts        # Frontend unit tests
+backend/tests/integration/<boundary>.test.ts     # Backend integration tests
 ```
 
-## Testing Tools
+Examples:
+- `backend/tests/unit/message-store.test.ts`
+- `backend/tests/unit/mcp-messaging.test.ts`
+- `frontend/tests/unit/useChatMessages.test.ts`
+- `backend/tests/integration/mcp-agent-flow.test.ts`
 
-- **Framework**: Vitest
-- **React Testing**: @testing-library/react
-- **Mocking**: Vitest mocks
-
-## Test Naming
+## Test Naming Convention
 
 ```typescript
-describe('MessageStore', () => {
-  it('should return messages sorted by newest first', () => {})
-  it('should throw when database is unavailable', () => {})
+describe('ModuleName', () => {
+  it('should <behavior> when <condition>', () => {})
 })
 ```
 
-## Mocking External Dependencies
+Examples:
+```typescript
+describe('MessageStore', () => {
+  it('should return messages sorted by newest first when limit is specified', () => {})
+  it('should throw DatabaseError when connection is unavailable', () => {})
+  it('should return empty array when no messages match the filter', () => {})
+})
+```
 
-For service tests, mock external CLI wrappers:
+## Mocking Rules
 
+1. **Mock external dependencies** — bd CLI, file system, network, databases
+2. **Do NOT mock the module under test** — if you're testing `MessageStore`, do not mock `MessageStore`
+3. **Use real data shapes from CLI output** — do NOT hand-craft mock objects from TypeScript type definitions
+
+### Why Real Data Shapes Matter (adj-067 Lesson)
+
+TypeScript types can be wrong. If tests mock data matching the TS interface instead of real CLI output, they test the assumption, not reality. The bug ships and lives for weeks.
+
+**Correct approach:**
+```bash
+# Capture real output first
+bd show adj-001 --format json > test-fixtures/bd-show-adj-001.json
+```
+
+```typescript
+// Use real output shape in tests
+const realBdShowOutput = {
+  id: "adj-001",
+  title: "Example epic",
+  type: "epic",
+  status: "open",
+  dependencies: [
+    { id: "adj-001.1", title: "Sub-task", dependency_type: "child" }  // Real shape from bd show
+  ]
+};
+```
+
+**Wrong approach:**
+```typescript
+// DON'T DO THIS — matches TS type, not real CLI output
+const fakeBdShowOutput = {
+  dependencies: [
+    { issue_id: "adj-001", depends_on_id: "adj-001.1", type: "depends_on" }  // Wrong shape!
+  ]
+};
+```
+
+For standard Vitest mocking:
 ```typescript
 vi.mock('../services/bd-client', () => ({
   executeBd: vi.fn()
 }))
 ```
+
+## Coverage Requirements
+
+Coverage is enforced via `npm run test:coverage`:
+- **Lines**: 80% minimum
+- **Branches**: 70% minimum
+- **Functions**: 60% minimum
+
+Coverage is checked in CI. Code below threshold blocks merge.
+
+## TDD Workflow (Step by Step)
+
+Follow this exact sequence for every new feature or bug fix:
+
+```bash
+# 1. Create or open the test file
+#    Backend: backend/tests/unit/<module>.test.ts
+#    Frontend: frontend/tests/unit/<module>.test.ts
+
+# 2. Write the failing test(s) — describe expected behavior
+
+# 3. Run the test — confirm RED (fails)
+cd backend && npx vitest run tests/unit/<module>.test.ts
+# or for frontend:
+cd frontend && npx vitest run tests/unit/<module>.test.ts
+
+# 4. Verify the test FAILS for the right reason
+#    (missing function, wrong return value — NOT a syntax error)
+
+# 5. Implement the minimum code to make the test pass
+
+# 6. Run the test again — confirm GREEN (passes)
+cd backend && npx vitest run tests/unit/<module>.test.ts
+
+# 7. Refactor if needed — run the test again to confirm still GREEN
+
+# 8. Run the full suite to check for regressions
+npm test        # from project root — runs backend + frontend tests
+```
+
+## Pre-Push Verification
+
+Before every push, run the full verification:
+
+```bash
+# 1. Build (includes lint)
+npm run build                    # Must exit 0
+
+# 2. Run all tests
+npm test                         # Must pass
+
+# 3. Check coverage thresholds
+npm run test:coverage            # Must meet: 80% lines, 70% branches, 60% functions
+```
+
+WIP branches are exempt from coverage thresholds but MUST still pass build + tests.
+
+## What NOT to Test
+
+- Pure UI components (styling, layout only — no logic)
+- Third-party library behavior (test YOUR code, not theirs)
+- Trivial getters/setters with no logic
+
+## Testing Tools
+
+- **Framework**: Vitest
+- **React Testing**: @testing-library/react
+- **Mocking**: Vitest built-in mocks (`vi.mock`, `vi.fn`, `vi.spyOn`)

@@ -269,18 +269,21 @@ npm run build                           # Must exit 0 with no errors
 # 2. Run tests
 npm test                                # Must exit 0, all tests pass
 
-# 3. If both pass — commit and push
+# 3. Check coverage thresholds
+npm run test:coverage                   # Must meet: 80% lines, 70% branches, 60% functions
+
+# 4. If all pass — commit and push
 git add <files>
 git commit -m "task: <bead-id> <description>"
 git push -u origin <your-branch>
 
-# 4. Merge to main (if permitted — see rules below)
+# 5. Merge to main (if permitted — see rules below)
 git checkout main && git pull origin main
 git merge <your-branch>
 npm run build && npm test              # Re-verify after merge
 git push origin main
 
-# 5. Close the bead
+# 6. Close the bead
 bd close <id>
 ```
 
