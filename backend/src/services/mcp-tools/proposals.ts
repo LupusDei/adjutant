@@ -13,6 +13,13 @@ import { resolveProjectFilter } from "../proposal-store.js";
 import { logInfo } from "../../utils/index.js";
 
 /**
+ * UUID v4 format regex: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (8-4-4-4-12 hex with dashes).
+ * Used to enforce that project identifiers stored in proposals are always UUIDs,
+ * never human-readable project names (adj-141.3).
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
  * Cross-project validation helper. Returns an error response if the proposal
  * belongs to a different project than the agent's session context.
  * Requires project context — agents without it are rejected.
@@ -62,6 +69,17 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       if (!projectContext) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: "No project context — cannot create proposal" }) }],
+        };
+      }
+
+      // Validate that the resolved project ID is a UUID, not a human-readable name (adj-141.3).
+      // This is a safety net — projectContext.projectId SHOULD always be a UUID,
+      // but we enforce it here to prevent legacy name strings from leaking into storage.
+      if (!UUID_RE.test(projectContext.projectId)) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({
+            error: `Project ID must be a UUID, got: "${projectContext.projectId}"`,
+          }) }],
         };
       }
 

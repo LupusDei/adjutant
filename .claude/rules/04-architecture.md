@@ -86,6 +86,32 @@ User → POST /api/messages → Message Store (SQLite) → wsBroadcast → WebSo
    - Serialized through mutex to prevent concurrent access
    - Supports epics, tasks, bugs with hierarchical dependencies
 
+## Project Identity
+
+The system uses three project identifiers with distinct roles:
+
+1. **projectId** (UUID) — The canonical identifier for all backend operations
+   - Store in databases, emit in events, pass in API calls, use in filters
+   - Example: `"a1b2c3d4-e5f6-7890-abcd-ef1234567890"`
+   - All MCP tools, services, and event emissions MUST use projectId
+
+2. **projectName** (string) — Display-only, for frontend and iOS
+   - Never use as a database key, filter value, or event field
+   - Never store as a foreign reference in other tables
+   - Example: `"adjutant"`
+
+3. **projectPath** (filesystem path) — Agent CWD and beads resolution only
+   - Used to set working directory when spawning agents
+   - Used to locate `.beads/` directory for bd CLI operations
+   - Never use to query project information
+
+### Don't Do
+
+- Don't pass `projectName` where `projectId` is expected
+- Don't use `[projectId, projectName]` arrays for dual-matching (legacy shim, being removed)
+- Don't store `projectName` in proposal, event, or bead records — always store UUID
+- Don't use `projectPath` to identify a project — use `projectId`
+
 ## Don't Do
 
 - Don't create complex state management (Redux, etc.)

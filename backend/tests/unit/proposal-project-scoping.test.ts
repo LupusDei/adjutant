@@ -59,7 +59,7 @@ function createMockStore(): ProposalStore {
       title: "Test Proposal",
       description: "A test proposal",
       type: "engineering",
-      project: "f1e8f895",
+      project: "f1e8f895-0000-4000-8000-000000000000",
       status: "pending",
       createdAt: "2026-03-11T00:00:00Z",
       updatedAt: "2026-03-11T00:00:00Z",
@@ -70,7 +70,7 @@ function createMockStore(): ProposalStore {
       title: "Test Proposal",
       description: "A test proposal",
       type: "engineering",
-      project: "f1e8f895",
+      project: "f1e8f895-0000-4000-8000-000000000000",
       status: "pending",
       createdAt: "2026-03-11T00:00:00Z",
       updatedAt: "2026-03-11T00:00:00Z",
@@ -91,7 +91,7 @@ function createMockStore(): ProposalStore {
       title: "Revised Proposal",
       description: "A revised proposal",
       type: "engineering",
-      project: "f1e8f895",
+      project: "f1e8f895-0000-4000-8000-000000000000",
       status: "pending",
       createdAt: "2026-03-11T00:00:00Z",
       updatedAt: "2026-03-11T00:00:00Z",
@@ -130,7 +130,7 @@ function parseResult(result: unknown): unknown {
 
 const TEST_SESSION_ID = "session-123";
 const TEST_PROJECT_CONTEXT = {
-  projectId: "f1e8f895",
+  projectId: "f1e8f895-0000-4000-8000-000000000000",
   projectName: "adjutant",
   projectPath: "/path/to/adjutant",
   beadsDir: "/path/to/adjutant/.beads",
@@ -168,7 +168,7 @@ describe("Proposal project scoping", () => {
 
       // The store should receive the server-resolved project ID, not the client-supplied one
       expect(store.insertProposal).toHaveBeenCalledWith(
-        expect.objectContaining({ project: "f1e8f895" }),
+        expect.objectContaining({ project: "f1e8f895-0000-4000-8000-000000000000" }),
       );
       // Should NOT have used the client-supplied "other-project"
       expect(store.insertProposal).not.toHaveBeenCalledWith(
@@ -216,7 +216,7 @@ describe("Proposal project scoping", () => {
       );
 
       expect(store.getProposals).toHaveBeenCalledWith(
-        expect.objectContaining({ project: ["f1e8f895", "adjutant"] }),
+        expect.objectContaining({ project: ["f1e8f895-0000-4000-8000-000000000000", "adjutant"] }),
       );
     });
 
@@ -268,12 +268,12 @@ describe("Proposal project scoping", () => {
       const parsed = parseResult(result);
       expect(parsed).toHaveProperty("error");
       expect((parsed as { error: string }).error).toContain("other-project");
-      expect((parsed as { error: string }).error).toContain("f1e8f895");
+      expect((parsed as { error: string }).error).toContain("f1e8f895-0000-4000-8000-000000000000");
     });
 
     it("should allow when proposal belongs to agent's project", async () => {
       const store = createMockStore();
-      // Proposal belongs to "f1e8f895" — same as agent's project ID
+      // Proposal belongs to "f1e8f895-0000-4000-8000-000000000000" — same as agent's project ID
       mockGetAgentBySession.mockReturnValue("test-agent");
       mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
 
@@ -618,9 +618,9 @@ describe("Proposal project scoping", () => {
       );
 
       const parsed = parseResult(result);
-      // Empty string !== "f1e8f895" (projectId) and !== "adjutant" (projectName), so scoped agents are rejected
+      // Empty string !== "f1e8f895-0000-4000-8000-000000000000" (projectId) and !== "adjutant" (projectName), so scoped agents are rejected
       expect(parsed).toHaveProperty("error");
-      expect((parsed as { error: string }).error).toContain("f1e8f895");
+      expect((parsed as { error: string }).error).toContain("f1e8f895-0000-4000-8000-000000000000");
     });
 
     it("list_proposals explicit empty-string project filter should pass empty string to store (adj-072.5.5)", async () => {
@@ -671,7 +671,7 @@ describe("Proposal project scoping", () => {
       const parsed = parseResult(result);
       expect(parsed).toHaveProperty("error");
       expect((parsed as { error: string }).error).toContain("secret-project");
-      expect((parsed as { error: string }).error).toContain("f1e8f895");
+      expect((parsed as { error: string }).error).toContain("f1e8f895-0000-4000-8000-000000000000");
     });
 
     it("should allow when proposal belongs to agent's project", async () => {
@@ -687,7 +687,7 @@ describe("Proposal project scoping", () => {
 
       const parsed = parseResult(result);
       expect(parsed).not.toHaveProperty("error");
-      expect((parsed as { project: string }).project).toBe("f1e8f895");
+      expect((parsed as { project: string }).project).toBe("f1e8f895-0000-4000-8000-000000000000");
     });
   });
 
@@ -807,7 +807,7 @@ describe("Proposal project scoping", () => {
         title: "Big Proposal",
         description: "A very long description that should not appear in the list response because it wastes tokens",
         type: "engineering",
-        project: "f1e8f895",
+        project: "f1e8f895-0000-4000-8000-000000000000",
         status: "pending",
         createdAt: "2026-03-19T00:00:00Z",
         updatedAt: "2026-03-19T00:00:00Z",
@@ -832,7 +832,7 @@ describe("Proposal project scoping", () => {
       expect(proposal).toHaveProperty("author", "test-agent");
       expect(proposal).toHaveProperty("title", "Big Proposal");
       expect(proposal).toHaveProperty("type", "engineering");
-      expect(proposal).toHaveProperty("project", "f1e8f895");
+      expect(proposal).toHaveProperty("project", "f1e8f895-0000-4000-8000-000000000000");
       expect(proposal).toHaveProperty("status", "pending");
       expect(proposal).toHaveProperty("createdAt", "2026-03-19T00:00:00Z");
     });
@@ -846,7 +846,7 @@ describe("Proposal project scoping", () => {
         title: "Long Proposal",
         description: longDesc,
         type: "product",
-        project: "f1e8f895",
+        project: "f1e8f895-0000-4000-8000-000000000000",
         status: "pending",
         createdAt: "2026-03-19T00:00:00Z",
         updatedAt: "2026-03-19T00:00:00Z",
@@ -872,7 +872,7 @@ describe("Proposal project scoping", () => {
         title: "Short Proposal",
         description: "Short desc",
         type: "engineering",
-        project: "f1e8f895",
+        project: "f1e8f895-0000-4000-8000-000000000000",
         status: "pending",
         createdAt: "2026-03-19T00:00:00Z",
         updatedAt: "2026-03-19T00:00:00Z",
@@ -914,8 +914,8 @@ describe("Proposal project scoping", () => {
         };
       });
 
-      const projectA = { projectId: "project-a", projectName: "proj-a", projectPath: "/a", beadsDir: "/a/.beads" };
-      const projectB = { projectId: "project-b", projectName: "proj-b", projectPath: "/b", beadsDir: "/b/.beads" };
+      const projectA = { projectId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", projectName: "proj-a", projectPath: "/a", beadsDir: "/a/.beads" };
+      const projectB = { projectId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", projectName: "proj-b", projectPath: "/b", beadsDir: "/b/.beads" };
 
       // Simulate two agents with different project contexts
       mockGetAgentBySession.mockImplementation((sid: string) => {
@@ -946,8 +946,8 @@ describe("Proposal project scoping", () => {
       const parsedA = parseResult(resultA) as { project: string };
       const parsedB = parseResult(resultB) as { project: string };
 
-      expect(parsedA.project).toBe("project-a");
-      expect(parsedB.project).toBe("project-b");
+      expect(parsedA.project).toBe("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+      expect(parsedB.project).toBe("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
       expect(store.insertProposal).toHaveBeenCalledTimes(2);
     });
   });
