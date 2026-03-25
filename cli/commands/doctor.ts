@@ -6,6 +6,7 @@
  */
 
 import { execSync } from "child_process";
+import { readFileSync } from "fs";
 
 import { join } from "path";
 
@@ -24,7 +25,7 @@ import {
   type ClaudeSettings,
 } from "../lib/checks.js";
 import { PLUGIN_KEY, LEGACY_HOOK_COMMANDS } from "../lib/plugin.js";
-import { getQualityFilePaths } from "../lib/quality-templates.js";
+import { getQualityFilePaths, QUALITY_FILES, loadTemplate } from "../lib/quality-templates.js";
 
 /** adj-013.3.1: File/directory existence checks. */
 function checkFiles(cwd: string): CheckResult[] {
@@ -179,14 +180,27 @@ function checkPlugin(): CheckResult[] {
   return results;
 }
 
-/** Check presence of quality gate files (testing rules, CI config, etc.). */
+/** Check presence and freshness of quality gate files (testing rules, CI config, etc.). */
 export function checkQualityFiles(cwd: string): CheckResult[] {
   const results: CheckResult[] = [];
-  for (const destPath of getQualityFilePaths()) {
-    if (fileExists(join(cwd, destPath))) {
-      results.push({ name: destPath, status: "pass" });
-    } else {
-      results.push({ name: destPath, status: "fail", message: "run adjutant upgrade" });
+  for (const qf of QUALITY_FILES) {
+    const fullPath = join(cwd, qf.destPath);
+    if (!fileExists(fullPath)) {
+      results.push({ name: qf.destPath, status: "fail", message: "run adjutant upgrade" });
+      continue;
+    }
+    // Compare content against template to detect outdated files
+    try {
+      const currentContent = readFileSync(fullPath, "utf-8");
+      const templateContent = loadTemplate(qf.templateName);
+      if (currentContent !== templateContent) {
+        results.push({ name: qf.destPath, status: "warn", message: "outdated — run adjutant upgrade" });
+      } else {
+        results.push({ name: qf.destPath, status: "pass" });
+      }
+    } catch {
+      // Template loading failed — just report existence
+      results.push({ name: qf.destPath, status: "pass" });
     }
   }
   return results;

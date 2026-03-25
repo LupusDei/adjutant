@@ -4,7 +4,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 
 import { checkQualityFiles } from "../../../cli/commands/doctor.js";
-import { getQualityFilePaths } from "../../../cli/lib/quality-templates.js";
+import { getQualityFilePaths, loadTemplate, QUALITY_FILES } from "../../../cli/lib/quality-templates.js";
 import { runPrime } from "../../../cli/commands/prime.js";
 
 describe("checkQualityFiles", () => {
@@ -18,17 +18,16 @@ describe("checkQualityFiles", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("should report pass for all present quality files", () => {
-    const paths = getQualityFilePaths();
-    for (const p of paths) {
-      const fullPath = join(tempDir, p);
+  it("should report pass for all present and up-to-date quality files", () => {
+    for (const qf of QUALITY_FILES) {
+      const fullPath = join(tempDir, qf.destPath);
       mkdirSync(join(fullPath, ".."), { recursive: true });
-      writeFileSync(fullPath, "content", "utf-8");
+      writeFileSync(fullPath, loadTemplate(qf.templateName), "utf-8");
     }
 
     const results = checkQualityFiles(tempDir);
 
-    expect(results).toHaveLength(paths.length);
+    expect(results).toHaveLength(QUALITY_FILES.length);
     for (const r of results) {
       expect(r.status).toBe("pass");
     }
@@ -47,9 +46,11 @@ describe("checkQualityFiles", () => {
 
   it("should report fail only for specific missing files", () => {
     const paths = getQualityFilePaths();
-    const firstPath = join(tempDir, paths[0]);
+    // Create only the first file with correct template content
+    const firstQf = QUALITY_FILES[0];
+    const firstPath = join(tempDir, firstQf.destPath);
     mkdirSync(join(firstPath, ".."), { recursive: true });
-    writeFileSync(firstPath, "content", "utf-8");
+    writeFileSync(firstPath, loadTemplate(firstQf.templateName), "utf-8");
 
     const results = checkQualityFiles(tempDir);
 
@@ -58,6 +59,23 @@ describe("checkQualityFiles", () => {
     for (let i = 1; i < results.length; i++) {
       expect(results[i].status).toBe("fail");
       expect(results[i].message).toBe("run adjutant upgrade");
+    }
+  });
+
+  it("should report warn for outdated quality files", () => {
+    // Create all files but with wrong content
+    for (const qf of QUALITY_FILES) {
+      const fullPath = join(tempDir, qf.destPath);
+      mkdirSync(join(fullPath, ".."), { recursive: true });
+      writeFileSync(fullPath, "outdated content", "utf-8");
+    }
+
+    const results = checkQualityFiles(tempDir);
+
+    expect(results).toHaveLength(QUALITY_FILES.length);
+    for (const r of results) {
+      expect(r.status).toBe("warn");
+      expect(r.message).toBe("outdated — run adjutant upgrade");
     }
   });
 });

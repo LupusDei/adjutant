@@ -101,10 +101,11 @@ program
 program
   .command('upgrade')
   .description('Repair and upgrade local Adjutant files (PRIME.md, .mcp.json, plugin)')
-  .action(async () => {
+  .option('--force', 'Overwrite user-customized quality files with package versions')
+  .action(async (opts) => {
     try {
       const { runUpgrade } = await import('../dist/cli/commands/upgrade.js');
-      const exitCode = await runUpgrade();
+      const exitCode = await runUpgrade({ force: !!opts.force });
       process.exit(exitCode);
     } catch (error) {
       if (error.code === 'ERR_MODULE_NOT_FOUND') {

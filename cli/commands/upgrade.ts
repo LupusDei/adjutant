@@ -72,19 +72,15 @@ function upgradePrimeFile(
 }
 
 /** Sync all quality files from templates into the project. */
-export function syncQualityFiles(projectRoot: string): CheckResult[] {
+export function syncQualityFiles(projectRoot: string, force = false): CheckResult[] {
   const results: CheckResult[] = [];
 
   for (const qf of QUALITY_FILES) {
-    if (qf.skipIfExists) {
-      results.push({ name: qf.destPath, status: "skipped", message: "skip-if-exists policy" });
-      continue;
-    }
-
     const fullPath = join(projectRoot, qf.destPath);
     const templateContent = loadTemplate(qf.templateName);
 
     if (!fileExists(fullPath)) {
+      // Missing file — always create, even for skipIfExists entries
       const dir = dirname(fullPath);
       if (!dirExists(dir)) {
         mkdirSync(dir, { recursive: true });
@@ -97,13 +93,24 @@ export function syncQualityFiles(projectRoot: string): CheckResult[] {
       continue;
     }
 
+    // File exists — skipIfExists entries are never overwritten
+    if (qf.skipIfExists) {
+      results.push({ name: qf.destPath, status: "skipped", message: "existing file preserved" });
+      continue;
+    }
+
     const currentContent = readFileSync(fullPath, "utf-8");
     if (currentContent === templateContent) {
       results.push({ name: qf.destPath, status: "pass", message: "up to date" });
       continue;
     }
 
-    // Content differs — overwrite with template
+    // Content differs — only overwrite with --force, otherwise skip
+    if (!force) {
+      results.push({ name: qf.destPath, status: "skipped", message: "differs from package (use --force to overwrite)" });
+      continue;
+    }
+
     const currentLines = currentContent.split("\n").length;
     const newLines = templateContent.split("\n").length;
     writeFileSync(fullPath, templateContent, "utf-8");
@@ -184,7 +191,11 @@ function upgradeMcpJson(projectRoot: string): CheckResult {
   return { name: ".mcp.json", status: "pass", message: "up to date" };
 }
 
-export async function runUpgrade(): Promise<number> {
+interface UpgradeOptions {
+  force?: boolean;
+}
+
+export async function runUpgrade(options: UpgradeOptions = {}): Promise<number> {
   const packageRoot = getPackageRoot();
   const pkg = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf-8"));
   const projectRoot = process.cwd();
@@ -241,7 +252,7 @@ export async function runUpgrade(): Promise<number> {
   }
 
   // 6. Sync quality files (testing rules, code review, CI config, etc.)
-  results.push(...syncQualityFiles(projectRoot));
+  results.push(...syncQualityFiles(projectRoot, options.force));
 
   // Print results
   for (const r of results) {
