@@ -21,7 +21,6 @@ export function ChatAgentSelector({ value, onChange, unreadCounts }: ChatAgentSe
 
   // Fetch agents on mount
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
     void api.agents.list().then(setAgents).catch(() => {});
   }, []);
 

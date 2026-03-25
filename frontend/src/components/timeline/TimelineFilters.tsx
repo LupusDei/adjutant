@@ -81,7 +81,6 @@ export function TimelineFilters({ filters, onFiltersChange, events }: TimelineFi
     onFiltersChange({});
   }, [onFiltersChange]);
 
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   const hasActiveFilters = filters.agentId || filters.eventType || filters.beadId || filters.timeRange;
 
   return (

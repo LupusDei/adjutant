@@ -224,7 +224,6 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
       voiceInput.clearTranscript();
       inputRef.current?.focus();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- voiceInput is a stable object ref
   }, [voiceInput.transcript, voiceInput.clearTranscript]);
 
   // Scroll to bottom when messages change

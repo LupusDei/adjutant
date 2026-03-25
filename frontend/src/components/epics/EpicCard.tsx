@@ -58,8 +58,7 @@ export function EpicCard({ epic, onClick, onAssign }: EpicCardProps) {
   const statusInfo = getStatusInfo(epic.epic.status, epic.isComplete);
 
   // Fetch cost for this epic (without children -- detail view does full aggregation)
-  // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-  const childIds = useMemo(() => undefined, []);
+  const childIds = useMemo((): string[] | undefined => undefined, []);
   const { cost: beadCost } = useBeadCost(epic.epic.id, { children: childIds });
 
   const handleAssign = useCallback((agentName: string) => {

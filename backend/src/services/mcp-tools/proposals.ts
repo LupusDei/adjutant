@@ -40,7 +40,6 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
   // ---------------------------------------------------------------------------
   // create_proposal
   // ---------------------------------------------------------------------------
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "create_proposal",
     {
@@ -49,7 +48,6 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       type: z.enum(["product", "engineering"]).describe("Proposal type: 'product' for UX/product improvements, 'engineering' for refactoring/architecture"),
       project: z.string().describe("Project this proposal is for (e.g., 'adjutant')"),
     },
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/require-await
     async ({ title, description, type, project: _clientProject }, extra) => {
       const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
       if (!agentId) {
@@ -95,13 +93,11 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
   // ---------------------------------------------------------------------------
   // get_proposal
   // ---------------------------------------------------------------------------
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "get_proposal",
     {
       id: z.string().describe("Proposal UUID to fetch"),
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ id }, extra) => {
       const proposal = store.getProposal(id);
       if (!proposal) {
@@ -127,13 +123,11 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
   // ---------------------------------------------------------------------------
   // discuss_proposal
   // ---------------------------------------------------------------------------
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "discuss_proposal",
     {
       id: z.string().describe("Proposal UUID to discuss"),
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ id }, extra) => {
       const proposal = store.getProposal(id);
       if (!proposal) {
@@ -165,14 +159,12 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
   // ---------------------------------------------------------------------------
   // comment_on_proposal
   // ---------------------------------------------------------------------------
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "comment_on_proposal",
     {
       id: z.string().describe("Proposal UUID to comment on"),
       body: z.string().min(1).describe("Comment text"),
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ id, body }, extra) => {
       const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
       if (!agentId) {
@@ -216,13 +208,11 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
   // ---------------------------------------------------------------------------
   // list_proposal_comments
   // ---------------------------------------------------------------------------
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "list_proposal_comments",
     {
       id: z.string().describe("Proposal UUID to list comments for"),
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ id }, extra) => {
       const proposal = store.getProposal(id);
       if (!proposal) {
@@ -252,7 +242,6 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
   // ---------------------------------------------------------------------------
   // revise_proposal
   // ---------------------------------------------------------------------------
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "revise_proposal",
     {
@@ -262,7 +251,6 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       type: z.enum(["product", "engineering"]).optional().describe("New type (optional — omit to keep current)"),
       changelog: z.string().min(1).describe("Description of what changed and why"),
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ id, title, description, type, changelog }, extra) => {
       const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
       if (!agentId) {
@@ -319,13 +307,11 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
   // ---------------------------------------------------------------------------
   // list_revisions
   // ---------------------------------------------------------------------------
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "list_revisions",
     {
       id: z.string().describe("Proposal UUID to list revisions for"),
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ id }, extra) => {
       const proposal = store.getProposal(id);
       if (!proposal) {
@@ -355,7 +341,6 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
   // ---------------------------------------------------------------------------
   // list_proposals
   // ---------------------------------------------------------------------------
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "list_proposals",
     {
@@ -363,7 +348,6 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       type: z.enum(["product", "engineering"]).optional().describe("Filter by type"),
       project: z.string().optional().describe("Filter by project"),
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ status, type, project }, extra) => {
       // Default to agent's project when no explicit filter is specified.
       // Treat undefined as "use session default" but preserve explicit values

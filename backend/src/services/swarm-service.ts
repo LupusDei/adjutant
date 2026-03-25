@@ -60,7 +60,6 @@ function execCommand(
   return new Promise((resolve, reject) => {
     execFile(cmd, args, { encoding: "utf8", cwd }, (err, stdout, stderr) => {
       if (err) {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         reject(new Error(stderr?.trim() || err.message));
         return;
       }
@@ -134,8 +133,7 @@ export async function createSwarm(config: SwarmConfig): Promise<CreateSwarmResul
       try {
         await execCommand("git", ["worktree", "add", "-b", branch, `worktrees/${name}`], projectPath);
       } catch (err) {
-        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-        errors.push(`Failed to create worktree for ${name}: ${err}`);
+        errors.push(`Failed to create worktree for ${name}: ${String(err)}`);
         continue;
       }
     }
@@ -212,8 +210,7 @@ export async function addAgentToSwarm(
       swarm.projectPath
     );
   } catch (err) {
-    // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-    return { success: false, error: `Failed to create worktree: ${err}` };
+    return { success: false, error: `Failed to create worktree: ${String(err)}` };
   }
 
   const result = await bridge.createSession({
@@ -228,7 +225,6 @@ export async function addAgentToSwarm(
   }
 
   const agent: SwarmAgent = {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     sessionId: result.sessionId!,
     name: agentName,
     branch,
@@ -256,7 +252,6 @@ export async function removeAgentFromSwarm(
   const agentIndex = swarm.agents.findIndex((a) => a.sessionId === sessionId);
   if (agentIndex === -1) return false;
 
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const agent = swarm.agents[agentIndex]!;
   const bridge = getSessionBridge();
 

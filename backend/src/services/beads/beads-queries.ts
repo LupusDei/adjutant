@@ -76,7 +76,6 @@ export async function getBead(
     if (options?.project) {
       const databases = await buildDatabaseList(options.project);
       if (databases.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         const first = databases[0]!;
         db = { workDir: first.workDir, beadsDir: first.beadsDir };
       } else {
@@ -135,7 +134,6 @@ export async function getBead(
     const detail: BeadDetail = {
       id: issue.id,
       title: issue.title,
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       description: issue.description ?? "",
       status: issue.status,
       priority: issue.priority,
@@ -272,7 +270,6 @@ export async function listAllBeads(
 
     // If ALL databases failed, return an error
     if (errors.length === databasesToQuery.length && databasesToQuery.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const firstError = errors[0]!;
       return {
         success: false,
@@ -407,7 +404,6 @@ export async function getBeadsGraph(
   try {
     await ensurePrefixMap();
 
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     const project = options.project?.trim() || getActiveProjectName();
     const databasesToQuery = await buildDatabaseList(project);
 
@@ -425,7 +421,6 @@ export async function getBeadsGraph(
 
     // If ALL databases failed, return the first error
     if (errors.length === databasesToQuery.length && databasesToQuery.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const firstError = errors[0]!;
       return {
         success: false,

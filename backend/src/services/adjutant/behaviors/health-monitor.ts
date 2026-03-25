@@ -9,7 +9,6 @@ export function createHealthMonitorBehavior(projectPath: string): AdjutantBehavi
     triggers: [],
     schedule: "*/5 * * * *",
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     shouldAct(_event: BehaviorEvent, _state: AdjutantState): boolean {
       return true;
     },

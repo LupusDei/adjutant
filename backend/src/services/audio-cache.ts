@@ -45,7 +45,6 @@ export function getCacheDir(): string {
   }
 
   const envCacheDir = process.env["AUDIO_CACHE_DIR"];
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   const baseDir = envCacheDir || DEFAULT_CACHE_DIR;
 
   // Resolve relative to backend directory
@@ -111,8 +110,7 @@ export async function loadCacheMetadata(): Promise<void> {
 
   try {
     const data = await readFile(metadataPath, "utf-8");
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const entries: AudioCacheEntry[] = JSON.parse(data);
+    const entries = JSON.parse(data) as AudioCacheEntry[];
     cacheMetadata = new Map(entries.map((e) => [e.key, e]));
   } catch {
     // If metadata is corrupted, start fresh
@@ -259,7 +257,6 @@ export async function removeCachedAudio(
  */
 function getMaxAgeMs(): number {
   const hours = parseInt(
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     process.env["AUDIO_CACHE_MAX_AGE_HOURS"] || String(DEFAULT_MAX_AGE_HOURS),
     10
   );
@@ -341,9 +338,7 @@ export async function getCacheStats(): Promise<{
   return {
     entries: cacheMetadata.size,
     totalSize,
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     oldestEntry: oldest?.createdAt || null,
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     newestEntry: newest?.createdAt || null,
   };
 }
@@ -408,7 +403,6 @@ export function startCacheCleanupScheduler(
   }
 
   // Run cleanup immediately on start
-  // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
   cleanupCache().catch((err) => {
     console.error("[AudioCache] Initial cleanup failed:", err);
   });
@@ -423,7 +417,6 @@ export function startCacheCleanupScheduler(
           );
         }
       })
-      // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
       .catch((err) => {
         console.error("[AudioCache] Scheduled cleanup failed:", err);
       });

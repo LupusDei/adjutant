@@ -30,12 +30,10 @@ export function extractProject(assignee: string | null | undefined): string | nu
  * @param issue The raw issue from bd CLI
  * @param _dbSource The database source (unused — derived from prefix)
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function transformBead(issue: BeadsIssue, _dbSource: string): BeadInfo {
   return {
     id: issue.id,
     title: issue.title,
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     description: issue.description ?? "",
     status: issue.status,
     priority: issue.priority,

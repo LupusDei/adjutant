@@ -166,12 +166,10 @@ export function createDashboardService(messageStore: MessageStore): DashboardSer
         // 4: crew
         getAgents(),
         // 5: unread counts (sync method — wrap in async to catch throws)
-        // eslint-disable-next-line @typescript-eslint/require-await
         (async () => messageStore.getUnreadCounts())(),
         // 6: epics with progress
         listEpicsWithProgress({ status: "all" }),
         // 7: unread message summaries grouped by agent (max 8)
-        // eslint-disable-next-line @typescript-eslint/require-await
         (async () => messageStore.getUnreadSummaries(8))(),
       ]);
 

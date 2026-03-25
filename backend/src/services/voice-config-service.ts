@@ -73,7 +73,6 @@ export function createVoiceConfigService(configPath: string = VOICE_CONFIG_PATH)
     return {
       voiceId: defaultVoice.voiceId,
       voiceName: defaultVoice.name,
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       speed: defaultVoice.speed ?? 1.0,
       stability: defaultVoice.stability ?? 0.5,
       similarityBoost: defaultVoice.similarityBoost ?? 0.75,
@@ -94,7 +93,6 @@ export function createVoiceConfigService(configPath: string = VOICE_CONFIG_PATH)
         const parsed = JSON.parse(content) as PersistedConfig;
 
         // Validate structure
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (parsed.version === CONFIG_VERSION && parsed.agentConfigs) {
           cachedConfig = parsed;
           return cachedConfig;
@@ -133,7 +131,6 @@ export function createVoiceConfigService(configPath: string = VOICE_CONFIG_PATH)
   /**
    * Get agent-specific voice config, falling back to defaults
    */
-  // eslint-disable-next-line @typescript-eslint/require-await
   async function getAgentConfig(agentId: string): Promise<AgentVoiceConfig> {
     const config = loadConfig();
     const agentConfig = config.agentConfigs[agentId];
@@ -164,7 +161,6 @@ export function createVoiceConfigService(configPath: string = VOICE_CONFIG_PATH)
   /**
    * Set agent-specific voice config
    */
-  // eslint-disable-next-line @typescript-eslint/require-await
   async function setAgentConfig(agentId: string, agentConfig: AgentVoiceConfig): Promise<void> {
     if (!agentConfig.voiceId || agentConfig.voiceId.trim() === '') {
       throw new Error('Voice ID is required');
@@ -181,18 +177,16 @@ export function createVoiceConfigService(configPath: string = VOICE_CONFIG_PATH)
   /**
    * Delete agent-specific voice config
    */
-  // eslint-disable-next-line @typescript-eslint/require-await
   async function deleteAgentConfig(agentId: string): Promise<void> {
     const config = loadConfig();
-    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-    delete config.agentConfigs[agentId];
+    const { [agentId]: _, ...rest } = config.agentConfigs;
+    config.agentConfigs = rest;
     saveConfig(config);
   }
 
   /**
    * List all custom agent configs
    */
-  // eslint-disable-next-line @typescript-eslint/require-await
   async function listAgentConfigs(): Promise<AgentVoiceConfig[]> {
     const config = loadConfig();
     return Object.values(config.agentConfigs);
@@ -201,7 +195,6 @@ export function createVoiceConfigService(configPath: string = VOICE_CONFIG_PATH)
   /**
    * Get default voice config
    */
-  // eslint-disable-next-line @typescript-eslint/require-await
   async function getDefaultConfig(): Promise<DefaultVoiceConfig> {
     const config = loadConfig();
     return config.defaultConfig;
@@ -210,7 +203,6 @@ export function createVoiceConfigService(configPath: string = VOICE_CONFIG_PATH)
   /**
    * Set default voice config
    */
-  // eslint-disable-next-line @typescript-eslint/require-await
   async function setDefaultConfig(defaultConfig: DefaultVoiceConfig): Promise<void> {
     if (!defaultConfig.voiceId || defaultConfig.voiceId.trim() === '') {
       throw new Error('Voice ID is required');
@@ -244,7 +236,6 @@ let defaultService: VoiceConfigService | null = null;
  * Get the default voice config service instance (singleton)
  */
 export function getVoiceConfigService(): VoiceConfigService {
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   if (!defaultService) {
     defaultService = createVoiceConfigService();
   }

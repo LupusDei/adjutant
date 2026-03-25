@@ -267,7 +267,6 @@ export async function synthesizeNotification(
     normal: 1.0,
     low: 0.95,
   };
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   const rawSpeed = (voiceConfig.speed ?? 1.0) * (speedMultiplier[priority] ?? 1.0);
   // Clamp to ElevenLabs API limits (0.7-1.2)
   const speed = Math.max(0.7, Math.min(1.2, rawSpeed));
@@ -293,9 +292,7 @@ export async function synthesizeNotification(
   const result = await synthesizeSpeech({
     text: truncatedText,
     voiceId,
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     stability: voiceConfig.stability ?? 0.6, // Slightly more stable for notifications
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     similarityBoost: voiceConfig.similarityBoost ?? 0.75,
     speed,
   });

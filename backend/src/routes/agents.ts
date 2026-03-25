@@ -77,9 +77,7 @@ agentsRouter.post("/spawn", async (req, res) => {
   }
 
   // Fall back to ADJUTANT_PROJECT_ROOT or cwd when no project specified
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   if (!projectPath) {
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     projectPath = process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd();
   }
 
@@ -112,7 +110,6 @@ agentsRouter.post("/spawn", async (req, res) => {
   let name: string;
   if (persona) {
     // Persona spawn: use explicit callsign or persona name as base, auto-suffix if taken
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     const baseName = callsign || persona.name.toLowerCase();
     const resolved = nextAvailableName(sessions, baseName);
     if (!resolved) {
@@ -135,7 +132,6 @@ agentsRouter.post("/spawn", async (req, res) => {
   } else {
     // Non-persona, no callsign: random StarCraft name
     const auto = pickRandomCallsign(sessions);
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     name = auto?.name || "agent";
   }
 
@@ -168,7 +164,6 @@ agentsRouter.post("/spawn", async (req, res) => {
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const session = bridge.getSession(result.sessionId!);
   return res.status(201).json(success({
     sessionId: result.sessionId,

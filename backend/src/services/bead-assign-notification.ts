@@ -54,7 +54,6 @@ export function initBeadAssignNotification(store: MessageStore): void {
       for (const session of sessions) {
         bridge.sendInput(session.id, body).then((sent) => {
           if (sent) store.markDelivered(message.id);
-        // eslint-disable-next-line @typescript-eslint/no-empty-function
         }).catch(() => {});
       }
     } catch {

@@ -25,13 +25,10 @@ export function useOverview(pollInterval = 30000): UseOverviewResult {
     if (isInitial) { setLoading(true); } else { setRefreshing(true); }
     try {
       const result = await api.overview.get();
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
       if (mountedRef.current) { setData(result); setError(null); setLastUpdated(new Date()); }
     } catch (err) {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
       if (mountedRef.current) { setError(err instanceof Error ? err : new Error(String(err))); }
     } finally {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async safety
       if (mountedRef.current) { setLoading(false); setRefreshing(false); }
     }
   }, []);

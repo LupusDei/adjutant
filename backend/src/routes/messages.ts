@@ -161,7 +161,6 @@ export function createMessagesRouter(store: MessageStore): Router {
       for (const session of sessions) {
         bridge.sendInput(session.id, body).then((sent) => {
           if (sent) store.markDelivered(message.id);
-        // eslint-disable-next-line @typescript-eslint/no-empty-function
         }).catch(() => {});
       }
     } catch {
@@ -212,7 +211,6 @@ export function createMessagesRouter(store: MessageStore): Router {
         for (const session of sessions) {
           bridge.sendInput(session.id, body).then((ok) => {
             if (ok) store.markDelivered(message.id);
-          // eslint-disable-next-line @typescript-eslint/no-empty-function
           }).catch(() => {});
         }
       } catch {

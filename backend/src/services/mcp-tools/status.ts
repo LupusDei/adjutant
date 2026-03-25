@@ -118,7 +118,6 @@ export function registerStatusTools(server: McpServer, store: MessageStore, even
   // --------------------------------------------------------------------------
   // set_status
   // --------------------------------------------------------------------------
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "set_status",
     "Set the agent's current status (working, blocked, idle, done)",
@@ -127,7 +126,6 @@ export function registerStatusTools(server: McpServer, store: MessageStore, even
       task: z.string().optional().describe("Current task description"),
       beadId: z.string().optional().describe("Bead ID being worked on"),
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ status, task, beadId }, extra) => {
       const agentId = resolveAgent(extra);
       if (!agentId) return unknownAgentError();
@@ -187,7 +185,6 @@ export function registerStatusTools(server: McpServer, store: MessageStore, even
   // --------------------------------------------------------------------------
   // report_progress
   // --------------------------------------------------------------------------
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "report_progress",
     "Report progress on a task with percentage",
@@ -196,7 +193,6 @@ export function registerStatusTools(server: McpServer, store: MessageStore, even
       percentage: z.number().min(0).max(100).describe("Completion percentage"),
       description: z.string().optional().describe("Progress details"),
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ task, percentage, description }, extra) => {
       const agentId = resolveAgent(extra);
       if (!agentId) return unknownAgentError();
@@ -225,7 +221,6 @@ export function registerStatusTools(server: McpServer, store: MessageStore, even
   // --------------------------------------------------------------------------
   // announce
   // --------------------------------------------------------------------------
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
   server.tool(
     "announce",
     "Make an announcement (completion, blocker, or question)",
@@ -235,7 +230,6 @@ export function registerStatusTools(server: McpServer, store: MessageStore, even
       body: z.string().describe("Announcement body"),
       beadId: z.string().optional().describe("Related bead ID"),
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
     async ({ type, title, body, beadId }, extra) => {
       const agentId = resolveAgent(extra);
       if (!agentId) return unknownAgentError();
@@ -291,7 +285,6 @@ export function registerStatusTools(server: McpServer, store: MessageStore, even
             announcementType: type,
             beadId,
           },
-        // eslint-disable-next-line @typescript-eslint/use-unknown-in-catch-callback-variable
         }).catch((err) => {
           logWarn("Failed to send APNS for announcement", { error: String(err) });
         });

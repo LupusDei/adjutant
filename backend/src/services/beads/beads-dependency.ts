@@ -226,9 +226,7 @@ export function transformClosedEpics(
   return issues
     .filter((e) => e.closed_at)
     .sort((a, b) => {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const aTime = new Date(a.closed_at!).getTime();
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const bTime = new Date(b.closed_at!).getTime();
       return bTime - aTime;
     })

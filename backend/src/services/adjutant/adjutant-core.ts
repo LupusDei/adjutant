@@ -78,10 +78,8 @@ export function cronToIntervalMs(schedule: string): number {
   // Hour-level schedules: minute must be a fixed number, hour is specific or stepped
   if (hour !== "*") {
     // "0 */N * * *" → every N hours
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const hourStep = /^\*\/(\d+)$/.exec((hour!));
     if (hourStep) {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const hours = parseInt(hourStep[1]!, 10);
       if (hours <= 0) {
         throw new Error(`Invalid hour step value in cron expression: "${schedule}"`);
@@ -90,7 +88,6 @@ export function cronToIntervalMs(schedule: string): number {
     }
 
     // "0 H * * *" → specific hour = once per day (24h interval)
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const fixedHour = parseInt(hour!, 10);
     if (!isNaN(fixedHour) && fixedHour >= 0 && fixedHour <= 23) {
       return 24 * 60 * 60 * 1000;
@@ -102,10 +99,8 @@ export function cronToIntervalMs(schedule: string): number {
   // Minute-level schedules (hour is "*")
 
   // "*/N" → every N minutes
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const stepMatch = /^\*\/(\d+)$/.exec((minute!));
   if (stepMatch) {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const minutes = parseInt(stepMatch[1]!, 10);
     if (minutes <= 0) {
       throw new Error(`Invalid step value in cron expression: "${schedule}"`);
@@ -222,7 +217,6 @@ export function initAdjutantCore(deps: AdjutantCoreDeps): void {
   // Register interval timers for scheduled behaviors
   const scheduled = registry.getScheduledBehaviors();
   for (const behavior of scheduled) {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const intervalMs = cronToIntervalMs(behavior.schedule!);
     const timer = setInterval(() => {
       const cronEvent: BehaviorEvent = {

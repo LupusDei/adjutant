@@ -76,7 +76,6 @@ defineWhen(/^GET \/api\/messages is called$/, async (harness) => {
 /**
  * Assert the message is persisted (response has data with an id).
  */
-// eslint-disable-next-line @typescript-eslint/require-await
 defineThen(/^the message is persisted$/, async (harness) => {
   const h = harness as TestHarness;
   // Safe cast: body shape is { data: { id: string, ... } } from messages API
@@ -90,7 +89,6 @@ defineThen(/^the message is persisted$/, async (harness) => {
  * Assert unread count matches expected value.
  * Pattern: "unread count is <N>"
  */
-// eslint-disable-next-line @typescript-eslint/require-await
 defineThen(/^unread count is (\d+)$/, async (harness, expected) => {
   const h = harness as TestHarness;
   // Safe cast: body shape is { data: { unreadCount: number } }

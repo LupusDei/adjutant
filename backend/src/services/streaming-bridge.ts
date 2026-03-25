@@ -224,8 +224,7 @@ function handleStreamFileChange(filename: string): void {
   }
 
   if (!stream.complete) {
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    processStreamFile(stream);
+    void processStreamFile(stream);
   }
 }
 
@@ -290,7 +289,6 @@ export function initStreamingBridge(): void {
   // Watch for new/changed files
   try {
     watcher = watch(streamsDir, (eventType, filename) => {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (filename && (eventType === "rename" || eventType === "change")) {
         handleStreamFileChange(filename);
       }

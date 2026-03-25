@@ -32,7 +32,7 @@ export const OverseerToggle: React.FC<OverseerToggleProps> = ({
   // Notify parent on initial mount
   useEffect(() => {
     onChange(enabled);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // intentionally run only on mount
 
   const handleToggle = () => {
     const newValue = !enabled;

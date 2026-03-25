@@ -2,7 +2,6 @@ export { getAgents } from './agents-service.js';
 export type { AgentsServiceResult } from './agents-service.js';
 
 export { getCrewMembers } from './status-service.js';
-// eslint-disable-next-line @typescript-eslint/no-deprecated
 export type { StatusServiceResult } from './status-service.js';
 
 export {

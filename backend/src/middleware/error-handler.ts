@@ -48,7 +48,7 @@ interface ErrorResponse {
  * Global error handling middleware.
  * Catches all errors and returns structured ApiResponse format.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+// Express requires 4 parameters to identify error middleware
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   // Determine error details
   let statusCode = 500;

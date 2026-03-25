@@ -133,7 +133,6 @@ function rowToProfile(row: AgentProfileRow): AgentProfile {
     disconnectedAt: row.disconnected_at,
     assignmentCount: row.assignment_count,
     lastEpicId: row.last_epic_id,
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     role: (row.role as AgentRole) ?? "worker",
   };
 }
@@ -271,10 +270,8 @@ export function createAdjutantState(db: Database.Database): AdjutantState {
           current_bead_id: profile.currentBeadId !== undefined ? profile.currentBeadId : existing.current_bead_id,
           connected_at: profile.connectedAt !== undefined ? profile.connectedAt : existing.connected_at,
           disconnected_at: profile.disconnectedAt !== undefined ? profile.disconnectedAt : existing.disconnected_at,
-          // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
           assignment_count: profile.assignmentCount !== undefined ? profile.assignmentCount : existing.assignment_count,
           last_epic_id: profile.lastEpicId !== undefined ? profile.lastEpicId : existing.last_epic_id,
-          // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
           role: profile.role !== undefined ? profile.role : existing.role,
         };
 

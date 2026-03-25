@@ -59,7 +59,6 @@ function execTmuxCommand(args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile("tmux", args, { encoding: "utf8" }, (err, stdout, stderr) => {
       if (err) {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         reject(new Error(stderr?.trim() || err.message));
         return;
       }
@@ -181,7 +180,6 @@ export class InputRouter {
 
     let delivered = 0;
     while (queue.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const item = queue.shift()!;
       const ok = await this.deliverInput(session.tmuxPane, item.text);
       if (ok) delivered++;

@@ -16,7 +16,6 @@ export type StatusServiceResult<T> = ServiceResult<T>;
  * Gets all crew members.
  * Returns agents transformed into CrewMember format for dashboard display.
  */
-// eslint-disable-next-line @typescript-eslint/no-deprecated
 export async function getCrewMembers(): Promise<StatusServiceResult<CrewMember[]>> {
   return getAgents();
 }

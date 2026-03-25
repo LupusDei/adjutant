@@ -49,7 +49,6 @@ async function fetchAgents(cwd: string, beadsDir: string): Promise<BeadsIssue[]>
   // Filter for active agents (open) and tombstone
   const relevantStatuses = new Set(["open", "tombstone"]);
   return result.data.filter((issue) =>
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     relevantStatuses.has(issue.status?.toLowerCase() ?? "")
   );
 }
@@ -202,7 +201,6 @@ export async function collectAgentSnapshot(
   // Collect all hook bead IDs and fetch their titles
   const hookBeadIds = baseAgents
     .filter((a) => a.hookBead)
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     .map((a) => a.hookBead!);
   const uniqueHookBeadIds = [...new Set(hookBeadIds)];
 

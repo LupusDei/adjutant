@@ -39,8 +39,7 @@ const HTTP_METHODS = ["DELETE", "PATCH", "POST", "PUT", "GET"] as const;
  *   - "PATCH /api/proposals/:id with ..."
  */
 const API_CALL_REGEX = new RegExp(
-  // eslint-disable-next-line no-useless-escape
-  `(?:via\\s+)?(${HTTP_METHODS.join("|")})\\s+(\/[\\w/:.-]+)`,
+  `(?:via\\s+)?(${HTTP_METHODS.join("|")})\\s+(/[\\w/:.-]+)`,
   "i",
 );
 
@@ -66,9 +65,7 @@ export function detectApiCall(whenText: string): DetectedApiCall | null {
   const methodMatch = API_CALL_REGEX.exec(whenText);
   if (!methodMatch) return null;
 
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const method = methodMatch[1]!.toUpperCase() as DetectedApiCall["method"];
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const path = methodMatch[2]!;
 
   const result: DetectedApiCall = { method, path };
@@ -76,7 +73,6 @@ export function detectApiCall(whenText: string): DetectedApiCall | null {
   // Extract query parameters
   const queryMatch = QUERY_PARAM_REGEX.exec(whenText);
   if (queryMatch) {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const queryString = queryMatch[1]!;
     const query: Record<string, string> = {};
     for (const pair of queryString.split("&")) {
@@ -96,11 +92,9 @@ export function detectApiCall(whenText: string): DetectedApiCall | null {
   const bodyMatch = JSON_BODY_REGEX.exec(whenText);
   if (bodyMatch) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       result.body = JSON.parse(bodyMatch[1]!) as Record<string, unknown>;
     } catch {
       // Try fixing non-standard JSON (unquoted keys like { status: "accepted" })
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const fixed = bodyMatch[1]!.replace(
         /(\{|,)\s*(\w+)\s*:/g,
         '$1 "$2":',
@@ -135,7 +129,6 @@ const ASSERTION_PATTERNS: AssertionPattern[] = [
   {
     regex: /status\s+(?:\w+\s+)*?"(\w+)"/i,
     extract: (match) => [
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       { path: "data.status", value: match[1]!, matcher: "toBe" },
     ],
   },
@@ -153,7 +146,6 @@ const ASSERTION_PATTERNS: AssertionPattern[] = [
   {
     regex: /response\s+status\s+is\s+(\d+)/i,
     extract: (match) => [
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       { path: "status", value: parseInt(match[1]!, 10), matcher: "toBe" },
     ],
   },
@@ -206,7 +198,6 @@ const PRECONDITION_PATTERNS: PreconditionPattern[] = [
     regex: /(?:a|an)\s+(\w+)\s+proposal/i,
     extract: (match) => ({
       type: "proposal",
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       params: { status: match[1]!.toLowerCase() },
     }),
   },

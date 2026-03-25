@@ -48,7 +48,6 @@ const CreateSessionSchema = z.object({
   claudeArgs: z.array(z.string()).optional(),
   personaId: z.string().min(1).optional(),
 }).refine(
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   (data) => data.projectPath || data.projectId,
   { message: "Either projectPath or projectId is required" },
 );
@@ -169,7 +168,6 @@ sessionsRouter.post("/", async (req, res) => {
   // Fallback priority: explicit name > random callsign > persona name > project-based name
   const sessions = bridge.listSessions();
   const callsign = pickRandomCallsign(sessions);
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   const name = data.name || callsign?.name || persona?.name || `${basename(projectPath)}-agent`;
 
   // Build claudeArgs — add --agent flag if persona prompt was generated
@@ -201,7 +199,6 @@ sessionsRouter.post("/", async (req, res) => {
     return res.status(400).json(badRequest(result.error ?? "Failed to create session"));
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const session = bridge.getSession(result.sessionId!);
   return res.status(201).json(success(session));
 });
@@ -237,14 +234,13 @@ sessionsRouter.post("/:id/connect", async (req, res) => {
  * Disconnect a WebSocket client from a session.
  */
 sessionsRouter.post("/:id/disconnect", async (req, res) => {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const { clientId } = req.body ?? {};
+  const body = req.body as Record<string, unknown> | undefined;
+  const clientId = typeof body?.["clientId"] === "string" ? body["clientId"] : undefined;
   if (!clientId) {
     return res.status(400).json(badRequest("clientId is required"));
   }
 
   const bridge = getSessionBridge();
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   await bridge.disconnectClient(req.params.id, clientId);
   return res.json(success({ disconnected: true }));
 });

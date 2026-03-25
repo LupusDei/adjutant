@@ -154,7 +154,6 @@ export function processOutputLine(
   if (!parsers.has(sessionId)) {
     parsers.set(sessionId, new OutputParser());
   }
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const parser = parsers.get(sessionId)!;
 
   const events = parser.parseLine(line);

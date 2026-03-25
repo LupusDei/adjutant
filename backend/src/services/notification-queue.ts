@@ -125,7 +125,6 @@ export function createNotificationQueue(): NotificationQueue {
   }
 
   return {
-    // eslint-disable-next-line @typescript-eslint/require-await
     async enqueue(
       item: NotificationItem | Omit<NotificationItem, 'priority'>
     ): Promise<void> {
@@ -205,7 +204,6 @@ let defaultQueue: NotificationQueue | null = null;
  * Get the default notification queue instance (singleton)
  */
 export function getNotificationQueue(): NotificationQueue {
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   if (!defaultQueue) {
     defaultQueue = createNotificationQueue();
   }

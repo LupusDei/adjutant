@@ -132,7 +132,6 @@ export function pickRandomCallsigns(
   const shuffled = [...available];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
   }
 

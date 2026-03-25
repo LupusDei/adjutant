@@ -130,7 +130,6 @@ function DependencyGraphInner({ isActive = true }: DependencyGraphViewProps) {
   }, []);
 
   /** Handle assign action from the detail panel. */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleAssign = useCallback((_beadId: string) => {
     // Assignment would be handled by parent or API call
     // For now, just close the panel
@@ -161,7 +160,6 @@ function DependencyGraphInner({ isActive = true }: DependencyGraphViewProps) {
     const visible = new Set<string>([epicFilter]);
     const queue = [epicFilter];
     while (queue.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const current = queue.shift()!;
       const children = childMap.get(current);
       if (children) {

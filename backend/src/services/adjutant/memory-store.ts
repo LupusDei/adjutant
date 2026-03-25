@@ -413,7 +413,6 @@ export function createMemoryStore(db: Database.Database): MemoryStore {
       const hasLimit = query.limit !== undefined;
       const limitClause = hasLimit ? "LIMIT ?" : "";
       if (hasLimit) {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         params.push(Math.max(0, Math.min(query.limit!, 1000)));
       }
 

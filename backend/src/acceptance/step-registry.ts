@@ -91,7 +91,6 @@ export function findStep(
       const match = step.pattern.exec(text);
       if (match) {
         // Extract capture groups (skip the full match at index 0)
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         const args = match.slice(1).filter((g): g is string => g !== undefined);
         return { step, args };
       }

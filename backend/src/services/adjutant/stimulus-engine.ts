@@ -339,7 +339,6 @@ export class StimulusEngine {
       this.cooldownTimer = null;
       if (this.cooldownQueue.length > 0) {
         // Fire the latest queued reason (most recent signal is most relevant)
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         const reason = this.cooldownQueue[this.cooldownQueue.length - 1]!;
         this.cooldownQueue = [];
         this.fireWake(reason);
@@ -488,20 +487,13 @@ function summarizeSignalData(signal: Signal): string {
   if (!data) return "no data";
 
   const parts: string[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-base-to-string, @typescript-eslint/restrict-template-expressions
-  if (data["agentId"]) parts.push(`agent "${data["agentId"]}"`);
-  // eslint-disable-next-line @typescript-eslint/no-base-to-string, @typescript-eslint/restrict-template-expressions
-  if (data["agent"]) parts.push(`agent "${data["agent"]}"`);
-  // eslint-disable-next-line @typescript-eslint/no-base-to-string, @typescript-eslint/restrict-template-expressions
-  if (data["id"]) parts.push(`${data["id"]}`);
-  // eslint-disable-next-line @typescript-eslint/no-base-to-string, @typescript-eslint/restrict-template-expressions
-  if (data["title"]) parts.push(`"${data["title"]}"`);
-  // eslint-disable-next-line @typescript-eslint/no-base-to-string, @typescript-eslint/restrict-template-expressions
-  if (data["exitCode"] !== undefined) parts.push(`exit ${data["exitCode"]}`);
-  // eslint-disable-next-line @typescript-eslint/no-base-to-string, @typescript-eslint/restrict-template-expressions
-  if (data["branch"]) parts.push(`branch ${data["branch"]}`);
-  // eslint-disable-next-line @typescript-eslint/no-base-to-string, @typescript-eslint/restrict-template-expressions
-  if (data["status"]) parts.push(`status: ${data["status"]}`);
+  if (data["agentId"]) parts.push(`agent "${String(data["agentId"])}"`);
+  if (data["agent"]) parts.push(`agent "${String(data["agent"])}"`);
+  if (data["id"]) parts.push(String(data["id"]));
+  if (data["title"]) parts.push(`"${String(data["title"])}"`);
+  if (data["exitCode"] !== undefined) parts.push(`exit ${String(data["exitCode"])}`);
+  if (data["branch"]) parts.push(`branch ${String(data["branch"])}`);
+  if (data["status"]) parts.push(`status: ${String(data["status"])}`);
 
   return parts.length > 0 ? parts.join(", ") : JSON.stringify(data);
 }

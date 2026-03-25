@@ -249,7 +249,6 @@ export async function createSessionTransport(
 
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: options?.reuseSessionId
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       ? () => options.reuseSessionId!
       : () => randomUUID(),
     onsessioninitialized: (sessionId: string) => {
@@ -277,7 +276,6 @@ export async function createSessionTransport(
       }
 
       connections.delete(sessionId);
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
       connection.server.close().catch(() => {});
       clearAgentStatus(connection.agentId);
 
@@ -324,7 +322,6 @@ export function disconnectAgent(sessionId: string): void {
   connections.delete(sessionId);
 
   // Close the per-connection server to release resources
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
   connection.server.close().catch(() => {});
 
   // Clean up stale status data so disconnected agents

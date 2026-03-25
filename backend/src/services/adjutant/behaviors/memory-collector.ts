@@ -23,12 +23,10 @@ export function createMemoryCollector(memoryStore: MemoryStore): AdjutantBehavio
     name: "memory-collector",
     triggers: ["bead:closed", "agent:status_changed"],
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     shouldAct(_event: BehaviorEvent, _state: AdjutantState): boolean {
       return true;
     },
 
-    // eslint-disable-next-line @typescript-eslint/require-await, @typescript-eslint/no-unused-vars
     async act(event: BehaviorEvent, state: AdjutantState, _comm: CommunicationManager): Promise<void> {
       switch (event.name) {
         case "bead:closed":

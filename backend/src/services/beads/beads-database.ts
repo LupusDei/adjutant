@@ -73,7 +73,6 @@ export async function buildDatabaseList(
   project?: string
 ): Promise<{ workDir: string; beadsDir: string; source: string }[]> {
   const townRoot = resolveWorkspaceRoot();
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   const effectiveProject = project?.trim() || "town";
 
   if (effectiveProject === "all") {
@@ -87,7 +86,6 @@ export async function buildDatabaseList(
       databases.push({
         workDir: dirInfo.workDir,
         beadsDir: dirInfo.path,
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         source: dirInfo.project!,
       });
     }
@@ -106,7 +104,6 @@ export async function buildDatabaseList(
     return [{
       workDir: projectDir.workDir,
       beadsDir: projectDir.path,
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       source: projectDir.project!,
     }];
   }
@@ -182,7 +179,6 @@ export async function fetchBeadsFromDatabase(
 
   let beads = excludeWisps(result.data).map((issue) => transformBead(issue, source));
 
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (needsClientSideFilter && statusesToInclude) {
     beads = beads.filter((b) =>
       statusesToInclude.includes(b.status.toLowerCase() as BeadStatus)

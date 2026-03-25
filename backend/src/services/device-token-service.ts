@@ -287,49 +287,42 @@ export function createDeviceTokenService(db: Database.Database): DeviceTokenServ
 let _singleton: DeviceTokenService | null = null;
 
 function getSingleton(): DeviceTokenService {
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   if (_singleton === null) {
     _singleton = createDeviceTokenService(getDatabase());
   }
   return _singleton;
 }
 
-// eslint-disable-next-line @typescript-eslint/require-await
 export async function registerDeviceToken(
   request: RegisterDeviceTokenRequest
 ): Promise<DeviceTokenServiceResult<RegisterDeviceTokenResponse>> {
   return getSingleton().registerDeviceToken(request);
 }
 
-// eslint-disable-next-line @typescript-eslint/require-await
 export async function unregisterDeviceToken(
   token: string
 ): Promise<DeviceTokenServiceResult<void>> {
   return getSingleton().unregisterDeviceToken(token);
 }
 
-// eslint-disable-next-line @typescript-eslint/require-await
 export async function getAllDeviceTokens(): Promise<
   DeviceTokenServiceResult<DeviceToken[]>
 > {
   return getSingleton().getAllDeviceTokens();
 }
 
-// eslint-disable-next-line @typescript-eslint/require-await
 export async function getDeviceTokensByPlatform(
   platform: DevicePlatform
 ): Promise<DeviceTokenServiceResult<DeviceToken[]>> {
   return getSingleton().getDeviceTokensByPlatform(platform);
 }
 
-// eslint-disable-next-line @typescript-eslint/require-await
 export async function getDeviceTokensByAgent(
   agentId: string
 ): Promise<DeviceTokenServiceResult<DeviceToken[]>> {
   return getSingleton().getDeviceTokensByAgent(agentId);
 }
 
-// eslint-disable-next-line @typescript-eslint/require-await
 export async function cleanupStaleTokens(
   maxAgeDays = 30
 ): Promise<DeviceTokenServiceResult<{ removed: number }>> {

@@ -261,7 +261,6 @@ function scanForProjects(
 export function discoverLocalProjects(options?: DiscoverOptions): ProjectsServiceResult<Project[]> {
   try {
     const db = getDatabase();
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     const projectRoot = resolve(process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd());
     const requestedDepth = options?.maxDepth ?? DEFAULT_SCAN_DEPTH;
     const maxDepth = Math.min(Math.max(0, requestedDepth), MAX_SCAN_DEPTH);

@@ -92,9 +92,7 @@ async function tryUnlockAudio(): Promise<boolean> {
 
   // Approach 1: Unlock via AudioContext (more reliable on newer iOS)
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- webkitAudioContext fallback for older iOS
     const AudioContextClass = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- may be undefined on older browsers
     if (AudioContextClass) {
       const ctx = new AudioContextClass();
       if (ctx.state === 'suspended') {

@@ -139,12 +139,10 @@ export function createSelfImprover(
     triggers: ["learning:created"],
     schedule: "0 * * * *", // Hourly (actual weekly logic handled in act via meta check)
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     shouldAct(_event: BehaviorEvent, _state: AdjutantState): boolean {
       return true;
     },
 
-    // eslint-disable-next-line @typescript-eslint/require-await, @typescript-eslint/no-unused-vars
     async act(event: BehaviorEvent, state: AdjutantState, _comm: CommunicationManager): Promise<void> {
       const data = event.data as Record<string, unknown>;
 

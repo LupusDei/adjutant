@@ -85,7 +85,6 @@ export function PersonaEditor({ persona, onSave, onCancel }: PersonaEditorProps)
 
     try {
       let result: Persona;
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (isEdit && persona) {
         const input: UpdatePersonaInput = {
           name: name.trim(),

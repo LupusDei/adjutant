@@ -17,12 +17,10 @@ export const agentLifecycleBehavior: AdjutantBehavior = {
     "agent:status_changed",
   ] as EventName[],
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   shouldAct(_event: BehaviorEvent, _state: AdjutantState): boolean {
     return true; // Always track lifecycle events
   },
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async act(
     event: BehaviorEvent,
     state: AdjutantState,

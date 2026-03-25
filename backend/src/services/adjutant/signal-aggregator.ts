@@ -97,7 +97,6 @@ function classify(event: EventName, data: unknown): SignalUrgency {
 function dedupKey(event: EventName, data: unknown): string {
   const payload = data as Record<string, unknown> | null;
   const source =
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     (payload?.["agentId"] as string) ??
     (payload?.["agent"] as string) ??
     (payload?.["id"] as string) ??
@@ -192,7 +191,6 @@ export class SignalAggregator {
     const grouped: SignalSnapshot = {};
     for (const signal of this.contextBuffer.values()) {
       const key = signal.event;
-      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
       if (!grouped[key]) {
         grouped[key] = [];
       }

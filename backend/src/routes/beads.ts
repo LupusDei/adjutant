@@ -80,7 +80,6 @@ beadsRouter.get("/", async (req, res) => {
   }
 
   // Normalize project parameter: undefined/empty defaults to "town"
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   const project = projectParam?.trim() || "town";
 
   // project=all: Query ALL beads databases (town + all projects)

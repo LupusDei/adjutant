@@ -78,14 +78,12 @@ export function createIdleProposalNudge(
     triggers: ["agent:status_changed"],
     excludeRoles: ["coordinator"],
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     shouldAct(event: BehaviorEvent, _state: AdjutantState): boolean {
       // Must return true for ALL agent:status_changed events (not just idle)
       // because act() needs to clear debounce keys on non-idle transitions.
       return event.name === "agent:status_changed";
     },
 
-    // eslint-disable-next-line @typescript-eslint/require-await, @typescript-eslint/no-unused-vars
     async act(event: BehaviorEvent, state: AdjutantState, _comm: CommunicationManager): Promise<void> {
       const data = event.data as AgentStatusEvent;
       const agentId = data.agent;

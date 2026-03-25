@@ -255,7 +255,6 @@ export async function startTunnel(): Promise<TunnelServiceResult<TunnelStatus>> 
 
     // Failed to get URL
     currentState = "error";
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     lastError = lastError ?? "Failed to start ngrok tunnel";
     return {
       success: false,
