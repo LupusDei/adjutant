@@ -21,6 +21,7 @@ import type {
   CreatePersonaInput,
   UpdatePersonaInput,
   CallsignListResponse,
+  AutoDevelopStatus,
 } from '../types';
 import type { DashboardResponse } from '../types/dashboard';
 import type { ProjectOverview, GlobalOverview } from '../types/overview';
@@ -449,6 +450,17 @@ export const api = {
       empty?: boolean;
     }): Promise<ProjectInfo> {
       return apiFetch('/projects', { method: 'POST', body: params });
+    },
+
+    async updateAutoDevelop(id: string, autoDevelop: boolean, visionContext?: string): Promise<ProjectInfo> {
+      return apiFetch(`/projects/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: { autoDevelop, visionContext },
+      });
+    },
+
+    async getAutoDevelopStatus(id: string): Promise<AutoDevelopStatus> {
+      return apiFetch(`/projects/${encodeURIComponent(id)}/auto-develop`);
     },
   },
 

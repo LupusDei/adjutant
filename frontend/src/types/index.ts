@@ -450,6 +450,36 @@ export function emptyTraits(): TraitValues {
   return traits as TraitValues;
 }
 
+// ============================================================================
+// Auto-Develop Types
+// ============================================================================
+
+/** Status of the auto-develop loop for a project. */
+export interface AutoDevelopStatus {
+  enabled: boolean;
+  paused: boolean;
+  pausedAt: string | null;
+  currentPhase: string | null;
+  activeCycleId: string | null;
+  visionContext: string | null;
+  proposals: { inReview: number; accepted: number; escalated: number; dismissed: number };
+  epicsInExecution: number;
+  cycleStats: { totalCycles: number; completedCycles: number };
+}
+
+/** Phases of the auto-develop loop in order. */
+export const AUTO_DEVELOP_PHASES = [
+  'ANALYZE',
+  'IDEATE',
+  'REVIEW',
+  'GATE',
+  'PLAN',
+  'EXECUTE',
+  'VALIDATE',
+] as const;
+
+export type AutoDevelopPhase = (typeof AUTO_DEVELOP_PHASES)[number];
+
 export * from './epics';
 export * from './kanban';
 export * from './beads-graph';
