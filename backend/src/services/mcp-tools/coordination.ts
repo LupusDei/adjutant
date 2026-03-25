@@ -517,8 +517,8 @@ export function registerCoordinationTools(
       const scheduleDecision = {
         behavior: "adjutant",
         action: "schedule_check",
-        target: checkId,
-        reason: `Scheduled in ${delay}: ${reason}`,
+        target: `next check at ${new Date(Date.now() + delayMs).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })} (in ${delay})`,
+        reason,
       };
       state.logDecision(scheduleDecision);
       emitCoordinatorAction(eventStore, callerAgentId, scheduleDecision);
