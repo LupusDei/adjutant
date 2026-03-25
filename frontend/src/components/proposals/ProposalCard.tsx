@@ -1,5 +1,22 @@
 import type { CSSProperties } from "react";
+
 import type { Proposal } from "../../types";
+
+/** Map a confidence score to its classification color. */
+export function getConfidenceColor(score: number): string {
+  if (score >= 80) return "#00ff00";
+  if (score >= 60) return "#ffaa00";
+  if (score >= 40) return "#ff6600";
+  return "#fe1414";
+}
+
+/** Map a confidence score to its classification label. */
+export function getConfidenceLabel(score: number): string {
+  if (score >= 80) return "ACCEPT";
+  if (score >= 60) return "REFINE";
+  if (score >= 40) return "ESCALATE";
+  return "DISMISS";
+}
 
 export interface ProposalCardProps {
   proposal: Proposal;
@@ -31,6 +48,18 @@ export function ProposalCard({ proposal, onAccept, onDismiss, onComplete, onSend
         }}>
           {proposal.type === "product" ? "PRODUCT" : "ENGINEERING"}
         </span>
+        {proposal.confidenceScore != null && (
+          <span
+            style={{
+              ...styles.scoreBadge,
+              color: getConfidenceColor(proposal.confidenceScore),
+              borderColor: getConfidenceColor(proposal.confidenceScore),
+            }}
+            title={getConfidenceLabel(proposal.confidenceScore)}
+          >
+            {proposal.confidenceScore}
+          </span>
+        )}
       </div>
 
       <div style={styles.meta}>
@@ -129,6 +158,14 @@ const styles: Record<string, CSSProperties> = {
     padding: "2px 6px",
     fontWeight: "bold",
     letterSpacing: "0.5px",
+  },
+  scoreBadge: {
+    fontSize: "10px",
+    padding: "2px 6px",
+    fontWeight: "bold",
+    letterSpacing: "0.5px",
+    border: "1px solid",
+    fontFamily: "var(--font-mono, monospace)",
   },
   badgeProduct: {
     color: "var(--pipboy-green, #00ff00)",

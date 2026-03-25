@@ -16,6 +16,20 @@ const mockProposal: Proposal = {
   updatedAt: "2026-02-24T01:00:00Z",
 };
 
+const proposalWithConfidence: Proposal = {
+  ...mockProposal,
+  id: "p3",
+  confidenceScore: 72,
+  reviewRound: 2,
+  confidenceSignals: {
+    reviewerConsensus: 80,
+    specClarity: 65,
+    codebaseAlignment: 70,
+    riskAssessment: 55,
+    historicalSuccess: 90,
+  },
+};
+
 const acceptedProposal: Proposal = {
   ...mockProposal,
   id: "p2",
@@ -166,5 +180,55 @@ describe("ProposalDetailView", () => {
     // The backdrop is the first child div
     fireEvent.click(screen.getByText("PROPOSAL DETAIL").closest("div")!.parentElement!.previousElementSibling!);
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("should render confidence section when confidenceScore is present", async () => {
+    mockGet.mockResolvedValue(proposalWithConfidence);
+    renderDetail("p3");
+
+    await waitFor(() => {
+      expect(screen.getByText("CONFIDENCE")).toBeTruthy();
+    });
+
+    // Composite score and label
+    expect(screen.getByText("72")).toBeTruthy();
+    expect(screen.getByText("REFINE")).toBeTruthy();
+
+    // Review round
+    expect(screen.getByText("REVIEW ROUND: 2")).toBeTruthy();
+  });
+
+  it("should not render confidence section when confidenceScore is absent", async () => {
+    mockGet.mockResolvedValue(mockProposal);
+    renderDetail("p1");
+
+    await waitFor(() => {
+      expect(screen.getByText("Improve UX")).toBeTruthy();
+    });
+
+    expect(screen.queryByText("CONFIDENCE")).toBeNull();
+  });
+
+  it("should render signal breakdown bars when confidenceSignals are present", async () => {
+    mockGet.mockResolvedValue(proposalWithConfidence);
+    renderDetail("p3");
+
+    await waitFor(() => {
+      expect(screen.getByText("CONFIDENCE")).toBeTruthy();
+    });
+
+    // Signal labels should be visible
+    expect(screen.getByText("CONSENSUS (30%)")).toBeTruthy();
+    expect(screen.getByText("CLARITY (20%)")).toBeTruthy();
+    expect(screen.getByText("ALIGNMENT (20%)")).toBeTruthy();
+    expect(screen.getByText("RISK (15%)")).toBeTruthy();
+    expect(screen.getByText("HISTORY (15%)")).toBeTruthy();
+
+    // Signal values
+    expect(screen.getByText("80")).toBeTruthy();
+    expect(screen.getByText("65")).toBeTruthy();
+    expect(screen.getByText("70")).toBeTruthy();
+    expect(screen.getByText("55")).toBeTruthy();
+    expect(screen.getByText("90")).toBeTruthy();
   });
 });

@@ -4,8 +4,19 @@
  */
 
 import { type CSSProperties, useCallback, useEffect, useState } from 'react';
+
 import { api } from '../../services/api';
 import type { Proposal } from '../../types';
+import { getConfidenceColor, getConfidenceLabel } from './ProposalCard';
+
+/** Signal display configuration with labels and weights. */
+const CONFIDENCE_SIGNALS = [
+  { key: 'reviewerConsensus', label: 'CONSENSUS', weight: '30%' },
+  { key: 'specClarity', label: 'CLARITY', weight: '20%' },
+  { key: 'codebaseAlignment', label: 'ALIGNMENT', weight: '20%' },
+  { key: 'riskAssessment', label: 'RISK', weight: '15%' },
+  { key: 'historicalSuccess', label: 'HISTORY', weight: '15%' },
+] as const;
 
 export interface ProposalDetailViewProps {
   proposalId: string | null;
@@ -174,6 +185,63 @@ export function ProposalDetailView({
                   <span style={styles.infoValue}>{formatTimestamp(proposal.updatedAt)}</span>
                 </div>
               </div>
+
+              {/* Confidence */}
+              {proposal.confidenceScore != null && (
+                <div style={styles.section}>
+                  <h4 style={styles.sectionTitle}>CONFIDENCE</h4>
+
+                  {/* Composite score */}
+                  <div style={styles.compositeScore}>
+                    <span style={{
+                      ...styles.compositeNumber,
+                      color: getConfidenceColor(proposal.confidenceScore),
+                      textShadow: `0 0 8px ${getConfidenceColor(proposal.confidenceScore)}66`,
+                    }}>
+                      {proposal.confidenceScore}
+                    </span>
+                    <span style={{
+                      ...styles.compositeLabel,
+                      color: getConfidenceColor(proposal.confidenceScore),
+                    }}>
+                      {getConfidenceLabel(proposal.confidenceScore)}
+                    </span>
+                  </div>
+
+                  {/* Signal breakdown */}
+                  {proposal.confidenceSignals && (
+                    <div style={styles.signalBreakdown}>
+                      {CONFIDENCE_SIGNALS.map(({ key, label, weight }) => {
+                        const value = proposal.confidenceSignals?.[key] ?? 0;
+                        return (
+                          <div key={key} style={styles.signalRow}>
+                            <div style={styles.signalHeader}>
+                              <span style={styles.signalLabel}>{label} ({weight})</span>
+                              <span style={styles.signalValue}>{value}</span>
+                            </div>
+                            <div style={styles.signalBarTrack}>
+                              <div
+                                style={{
+                                  ...styles.signalBarFill,
+                                  width: `${Math.min(100, Math.max(0, value))}%`,
+                                  backgroundColor: getConfidenceColor(value),
+                                }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Review round */}
+                  {proposal.reviewRound != null && (
+                    <div style={styles.reviewRound}>
+                      REVIEW ROUND: {proposal.reviewRound}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Description */}
               <div style={styles.section}>
@@ -373,6 +441,66 @@ const styles = {
   infoValue: {
     color: 'var(--crt-phosphor)',
     wordBreak: 'break-all',
+  },
+  compositeScore: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: '10px',
+    marginBottom: '14px',
+  },
+  compositeNumber: {
+    fontSize: '2rem',
+    fontWeight: 'bold',
+    fontFamily: '"Share Tech Mono", monospace',
+    letterSpacing: '0.05em',
+  },
+  compositeLabel: {
+    fontSize: '0.85rem',
+    fontWeight: 'bold',
+    letterSpacing: '0.15em',
+  },
+  signalBreakdown: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    marginBottom: '12px',
+  },
+  signalRow: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '3px',
+  },
+  signalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  signalLabel: {
+    fontSize: '0.65rem',
+    color: 'var(--crt-phosphor-dim)',
+    letterSpacing: '0.1em',
+  },
+  signalValue: {
+    fontSize: '0.7rem',
+    color: 'var(--crt-phosphor)',
+    fontWeight: 'bold',
+  },
+  signalBarTrack: {
+    height: '6px',
+    backgroundColor: 'rgba(0, 255, 0, 0.1)',
+    borderRadius: '1px',
+    overflow: 'hidden',
+  },
+  signalBarFill: {
+    height: '100%',
+    borderRadius: '1px',
+    transition: 'width 0.3s ease',
+  },
+  reviewRound: {
+    fontSize: '0.7rem',
+    color: 'var(--crt-phosphor-dim)',
+    letterSpacing: '0.1em',
+    marginTop: '4px',
   },
   description: {
     fontSize: '0.85rem',
