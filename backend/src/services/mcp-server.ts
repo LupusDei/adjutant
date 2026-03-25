@@ -383,6 +383,28 @@ export function getProjectContextByAgent(
 }
 
 /**
+ * Resolve project context for an MCP tool call (adj-146).
+ * If explicit projectId is provided, resolves that project.
+ * Falls back to session project context when omitted.
+ */
+export function resolveToolProjectContext(
+  explicitProjectId: string | undefined,
+  sessionId: string | undefined,
+): ProjectContext | undefined {
+  if (explicitProjectId) {
+    const result = getProject(explicitProjectId);
+    if (!result.success || !result.data) return undefined;
+    const project = result.data;
+    try {
+      const beadsDir = resolveBeadsDir(project.path);
+      return { projectId: project.id, projectName: project.name, projectPath: project.path, beadsDir };
+    } catch { return undefined; }
+  }
+  if (sessionId) return getProjectContextBySession(sessionId);
+  return undefined;
+}
+
+/**
  * Set the project context for an existing MCP session.
  * Used when project context is resolved after initial connection
  * (e.g., from session bridge lookup).

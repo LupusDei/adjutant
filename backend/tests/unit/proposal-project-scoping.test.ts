@@ -8,17 +8,19 @@ vi.mock("../../src/utils/index.js", () => ({
   logDebug: vi.fn(),
 }));
 
-// Mock mcp-server: getAgentBySession and getProjectContextBySession
-const { mockGetAgentBySession, mockGetProjectContextBySession } = vi.hoisted(() => {
+// Mock mcp-server: getAgentBySession, getProjectContextBySession, and resolveToolProjectContext
+const { mockGetAgentBySession, mockGetProjectContextBySession, mockResolveToolProjectContext } = vi.hoisted(() => {
   return {
     mockGetAgentBySession: vi.fn(),
     mockGetProjectContextBySession: vi.fn(),
+    mockResolveToolProjectContext: vi.fn(),
   };
 });
 
 vi.mock("../../src/services/mcp-server.js", () => ({
   getAgentBySession: mockGetAgentBySession,
   getProjectContextBySession: mockGetProjectContextBySession,
+  resolveToolProjectContext: mockResolveToolProjectContext,
 }));
 
 // Mock projects-service: getProject
@@ -153,6 +155,11 @@ describe("Proposal project scoping", () => {
     vi.clearAllMocks();
     // Default: getProject returns not found (tests override as needed)
     mockGetProject.mockReturnValue({ success: false, error: { code: "NOT_FOUND", message: "Not found" } });
+    // resolveToolProjectContext delegates to getProjectContextBySession when no explicit projectId (adj-146)
+    mockResolveToolProjectContext.mockImplementation((_explicitProjectId: string | undefined, sessionId: string | undefined) => {
+      if (sessionId) return mockGetProjectContextBySession(sessionId);
+      return undefined;
+    });
   });
 
   // ===========================================================================

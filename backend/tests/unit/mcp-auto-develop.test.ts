@@ -9,16 +9,18 @@ vi.mock("../../src/utils/index.js", () => ({
 }));
 
 // Mock mcp-server
-const { mockGetAgentBySession, mockGetProjectContextBySession } = vi.hoisted(() => {
+const { mockGetAgentBySession, mockGetProjectContextBySession, mockResolveToolProjectContext } = vi.hoisted(() => {
   return {
     mockGetAgentBySession: vi.fn(),
     mockGetProjectContextBySession: vi.fn(),
+    mockResolveToolProjectContext: vi.fn(),
   };
 });
 
 vi.mock("../../src/services/mcp-server.js", () => ({
   getAgentBySession: mockGetAgentBySession,
   getProjectContextBySession: mockGetProjectContextBySession,
+  resolveToolProjectContext: mockResolveToolProjectContext,
 }));
 
 // Mock event-bus
@@ -457,6 +459,7 @@ describe("advance_auto_develop_phase MCP tool", () => {
     vi.clearAllMocks();
     mockGetAgentBySession.mockReturnValue("coordinator");
     mockGetProjectContextBySession.mockReturnValue(PROJECT_CONTEXT);
+    mockResolveToolProjectContext.mockReturnValue(PROJECT_CONTEXT);
     mockGetProject.mockReturnValue({
       success: true,
       data: { id: "proj-123", name: "adjutant", autoDevelop: true },

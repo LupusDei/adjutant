@@ -12,7 +12,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import { getAgentBySession, getProjectContextBySession } from "../mcp-server.js";
+import { getAgentBySession, resolveToolProjectContext } from "../mcp-server.js";
 import type { ProposalStore } from "../proposal-store.js";
 import type { AutoDevelopStore } from "../auto-develop-store.js";
 import { computeConfidenceScore, classifyConfidence } from "../confidence-engine.js";
@@ -165,8 +165,9 @@ export function registerAutoDevelopTools(
     "enable_auto_develop",
     {
       visionContext: z.string().max(10000).optional().describe("Optional vision/direction context to guide proposal generation"),
+      projectId: z.string().optional().describe("Project UUID to operate on (defaults to session project)"),
     },
-    async ({ visionContext }, extra) => {
+    async ({ visionContext, projectId }, extra) => {
       const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
       if (!agentId) {
         return {
@@ -174,7 +175,7 @@ export function registerAutoDevelopTools(
         };
       }
 
-      const projectContext = extra.sessionId ? getProjectContextBySession(extra.sessionId) : undefined;
+      const projectContext = resolveToolProjectContext(projectId, extra.sessionId);
       if (!projectContext) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: "No project context — cannot enable auto-develop" }) }],
@@ -230,8 +231,10 @@ export function registerAutoDevelopTools(
   // ---------------------------------------------------------------------------
   server.tool(
     "disable_auto_develop",
-    {},
-    async (_params, extra) => {
+    {
+      projectId: z.string().optional().describe("Project UUID to operate on (defaults to session project)"),
+    },
+    async ({ projectId }, extra) => {
       const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
       if (!agentId) {
         return {
@@ -239,7 +242,7 @@ export function registerAutoDevelopTools(
         };
       }
 
-      const projectContext = extra.sessionId ? getProjectContextBySession(extra.sessionId) : undefined;
+      const projectContext = resolveToolProjectContext(projectId, extra.sessionId);
       if (!projectContext) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: "No project context — cannot disable auto-develop" }) }],
@@ -281,8 +284,9 @@ export function registerAutoDevelopTools(
     "provide_vision_update",
     {
       visionContext: z.string().min(1).max(10000).describe("Updated vision/direction for the project"),
+      projectId: z.string().optional().describe("Project UUID to operate on (defaults to session project)"),
     },
-    async ({ visionContext }, extra) => {
+    async ({ visionContext, projectId }, extra) => {
       const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
       if (!agentId) {
         return {
@@ -290,7 +294,7 @@ export function registerAutoDevelopTools(
         };
       }
 
-      const projectContext = extra.sessionId ? getProjectContextBySession(extra.sessionId) : undefined;
+      const projectContext = resolveToolProjectContext(projectId, extra.sessionId);
       if (!projectContext) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: "No project context — cannot update vision" }) }],
@@ -339,8 +343,10 @@ export function registerAutoDevelopTools(
   // ---------------------------------------------------------------------------
   server.tool(
     "get_auto_develop_status",
-    {},
-    async (_params, extra) => {
+    {
+      projectId: z.string().optional().describe("Project UUID to operate on (defaults to session project)"),
+    },
+    async ({ projectId }, extra) => {
       const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
       if (!agentId) {
         return {
@@ -348,7 +354,7 @@ export function registerAutoDevelopTools(
         };
       }
 
-      const projectContext = extra.sessionId ? getProjectContextBySession(extra.sessionId) : undefined;
+      const projectContext = resolveToolProjectContext(projectId, extra.sessionId);
       if (!projectContext) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: "No project context — cannot get auto-develop status" }) }],
@@ -385,8 +391,9 @@ export function registerAutoDevelopTools(
       targetPhase: z.enum(["analyze", "ideate", "review", "gate", "plan", "execute", "validate"])
         .optional()
         .describe("Explicit phase to transition to. If omitted, auto-determines the next phase."),
+      projectId: z.string().optional().describe("Project UUID to operate on (defaults to session project)"),
     },
-    async ({ targetPhase }, extra) => {
+    async ({ targetPhase, projectId }, extra) => {
       const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
       if (!agentId) {
         return {
@@ -394,7 +401,7 @@ export function registerAutoDevelopTools(
         };
       }
 
-      const projectContext = extra.sessionId ? getProjectContextBySession(extra.sessionId) : undefined;
+      const projectContext = resolveToolProjectContext(projectId, extra.sessionId);
       if (!projectContext) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: "No project context" }) }],

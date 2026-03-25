@@ -13,16 +13,18 @@ vi.mock("../../src/utils/index.js", () => ({
 }));
 
 // Mock mcp-server
-const { mockGetAgentBySession, mockGetProjectContextBySession } = vi.hoisted(() => {
+const { mockGetAgentBySession, mockGetProjectContextBySession, mockResolveToolProjectContext } = vi.hoisted(() => {
   return {
     mockGetAgentBySession: vi.fn(),
     mockGetProjectContextBySession: vi.fn(),
+    mockResolveToolProjectContext: vi.fn(),
   };
 });
 
 vi.mock("../../src/services/mcp-server.js", () => ({
   getAgentBySession: mockGetAgentBySession,
   getProjectContextBySession: mockGetProjectContextBySession,
+  resolveToolProjectContext: mockResolveToolProjectContext,
 }));
 
 // Mock event-bus
@@ -184,6 +186,11 @@ describe("create_proposal UUID enforcement (adj-141.3)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetAgentBySession.mockReturnValue("test-agent");
+    // resolveToolProjectContext delegates to getProjectContextBySession when no explicit projectId (adj-146)
+    mockResolveToolProjectContext.mockImplementation((_explicitProjectId: string | undefined, sessionId: string | undefined) => {
+      if (sessionId) return mockGetProjectContextBySession(sessionId);
+      return undefined;
+    });
   });
 
   it("should create proposal when projectContext.projectId is a valid UUID", async () => {
@@ -271,6 +278,7 @@ describe("event bus emissions use UUID projectId (adj-141.4)", () => {
     vi.clearAllMocks();
     mockGetAgentBySession.mockReturnValue("reviewer-agent");
     mockGetProjectContextBySession.mockReturnValue(PROJECT_CONTEXT);
+    mockResolveToolProjectContext.mockReturnValue(PROJECT_CONTEXT);
     mockGetProject.mockReturnValue({
       success: true,
       data: { id: VALID_UUID, name: "adjutant", autoDevelop: true },
