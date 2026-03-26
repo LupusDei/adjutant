@@ -108,10 +108,6 @@ struct ChatView: View {
             coordinator.activeViewingAgentId = viewModel.selectedRecipient
             NotificationService.shared.isViewingChat = true
             NotificationService.shared.activeViewingAgentId = viewModel.selectedRecipient
-            // Always scroll to bottom when (re)opening the chat view.
-            // The inner ScrollViewReader.onAppear may not re-fire on tab switches
-            // or navigation back, but this outer onAppear reliably does.
-            scrollToBottom(animated: false)
             // Handle deep link from push notification
             if let agentId = coordinator.pendingChatAgentId {
                 coordinator.pendingChatAgentId = nil
@@ -378,13 +374,18 @@ struct ChatView: View {
                 }
                 .padding(.vertical, CRTTheme.Spacing.sm)
             }
+            // Tell SwiftUI to anchor at the bottom on initial render.
+            // This is the native solution that avoids all timing races with
+            // LazyVStack materialization, cached messages, and scroll restoration.
+            // Previous attempts used scrollTo("bottom") with async delays which
+            // failed intermittently on long conversations (adj-150).
+            .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
             .refreshable {
                 await viewModel.refresh()
             }
             .onAppear {
                 scrollProxy = proxy
-                scrollToBottom(animated: false)
             }
         }
     }
@@ -467,18 +468,19 @@ struct ChatView: View {
     // MARK: - Private Methods
 
     private func scrollToBottom(animated: Bool = true) {
-        // Defer scroll to next run-loop tick so SwiftUI finishes laying out
-        // any newly-inserted LazyVStack children before we measure "bottom".
-        // Use asyncAfter with a small delay to ensure LazyVStack has materialized
-        // the bottom anchor — DispatchQueue.main.async alone isn't always enough
-        // when messages are pre-loaded from cache before the ScrollViewReader appears.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            if animated {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    scrollProxy?.scrollTo("bottom", anchor: .bottom)
+        // Used for dynamic updates (new messages, send, recipient switch).
+        // Initial scroll position is handled by .defaultScrollAnchor(.bottom).
+        // Double-dispatch: first at 50ms for fast updates, then at 300ms as a
+        // safety net for LazyVStack catching up on long conversations.
+        for delay in [0.05, 0.3] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                if animated {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        self.scrollProxy?.scrollTo("bottom", anchor: .bottom)
+                    }
+                } else {
+                    self.scrollProxy?.scrollTo("bottom", anchor: .bottom)
                 }
-            } else {
-                scrollProxy?.scrollTo("bottom", anchor: .bottom)
             }
         }
     }
