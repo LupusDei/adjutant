@@ -4,6 +4,7 @@ import type { CommunicationManager } from "../communication.js";
 import type { MemoryStore } from "../memory-store.js";
 import type { ProposalStore } from "../../proposal-store.js";
 import type { LearningCreatedEvent } from "../../event-bus.js";
+import { getProject } from "../../projects-service.js";
 
 /** Minimum number of learnings in a topic before proposing improvements */
 const MIN_LEARNINGS_FOR_PROPOSAL = 5;
@@ -106,7 +107,7 @@ export function createSelfImprover(
         `Review and consolidate these ${learnings.length} learnings into actionable process improvements.`,
       ].join("\n"),
       type: proposalType,
-      project: "adjutant",
+      project: getProject("adjutant").data?.id ?? "adjutant",
     });
 
     markProposed(topic, state);
