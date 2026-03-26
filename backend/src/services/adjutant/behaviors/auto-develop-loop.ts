@@ -271,6 +271,57 @@ function buildExecuteReason(
   return parts.join("\n");
 }
 
+/**
+ * QA Sentinel spawn prompt template.
+ *
+ * The coordinator fills in {{acceptance_criteria}} and {{epic_id}} before
+ * passing this to spawn_worker. The sentinel verifies each criterion,
+ * files bug beads for failures, and reports findings.
+ */
+export const QA_SENTINEL_PROMPT_TEMPLATE = `\
+=== QA SENTINEL — VALIDATION PASS ===
+
+You are a QA Sentinel. Your job is to validate that the implemented feature
+meets ALL acceptance criteria and works end-to-end as a user would experience it.
+
+## Epic Under Test
+{{epic_id}}
+
+## Acceptance Criteria to Verify
+{{acceptance_criteria}}
+
+## Instructions
+
+1. **Run the app** — start the backend and frontend (npm run dev or equivalent).
+   Verify the app boots without errors.
+
+2. **Verify EACH acceptance criterion** listed above:
+   - For each criterion, describe what you tested and whether it passed or failed.
+   - Do NOT skip any criterion. Every one must have an explicit pass/fail.
+
+3. **Check integration gaps**:
+   - Are all new systems wired together? (e.g., new backend route actually called by frontend)
+   - Are new MCP tools registered and callable by agents?
+   - Are new database tables/columns migrated and populated?
+   - Do WebSocket events propagate from backend to frontend?
+
+4. **Run tests**: Execute \`npm test\` and \`npm run build\` to confirm CI-level checks pass.
+
+5. **File bugs for failures**:
+   - For each failed criterion or integration gap, create a bug bead:
+     \`bd create --id={{epic_id}}.N.M.P --title="Bug: <description>" --type=bug --priority=1\`
+   - Use priority=1 for blocking issues, priority=2 for non-blocking issues.
+   - Include reproduction steps in the bug description.
+
+6. **Report findings**:
+   - Use send_message to report your findings to the coordinator.
+   - Summarize: total criteria checked, passed, failed, bugs filed.
+   - If all criteria pass and no integration gaps found, state: "VALIDATION PASSED".
+   - If any criterion fails, state: "VALIDATION FAILED — N bugs filed".
+
+7. **Set status**: Use set_status({ status: "done" }) when finished.
+`;
+
 function buildValidateReason(
   projectId: string,
   projectName: string,
@@ -286,12 +337,38 @@ function buildValidateReason(
   parts.push("2. Call list_beads to check if any bug beads were created by QA.");
   parts.push("3. Call get_auto_develop_status to see cycle stats.");
   parts.push("4. If QA agents are still working → wait (you'll be nudged again).");
-  parts.push("5. If QA found bugs (new open beads) → advance_auto_develop_phase back to EXECUTE.");
-  parts.push("6. If QA passed (no new bugs) → advance_auto_develop_phase to ANALYZE (starts new cycle).");
+  parts.push("5. If QA found bugs (open P0/P1 bug beads under the epic) → advance_auto_develop_phase back to EXECUTE.");
+  parts.push("6. If QA passed (no open P0/P1 bugs) → advance_auto_develop_phase to ANALYZE (starts new cycle).");
+  parts.push("");
+  parts.push("BEFORE SPAWNING QA — LOOK UP ACCEPTANCE CRITERIA:");
+  parts.push("1. Find the epic being validated (the accepted proposal that was just executed).");
+  parts.push("2. Read the proposal description or the spec.md in the specs/ directory for acceptance criteria.");
+  parts.push("3. Extract a concrete checklist of acceptance criteria to pass to the QA Sentinel.");
+  parts.push("4. If no explicit criteria exist, derive them from the proposal title and description.");
   parts.push("");
   parts.push("IF QA NEEDS SPAWNING:");
-  parts.push("1. Use spawn_worker to create QA agents with /code-review skill.");
-  parts.push("2. Announce cycle completion when validation passes.");
+  parts.push("1. Use spawn_worker to create a QA Sentinel agent.");
+  parts.push("2. Use the QA_SENTINEL_PROMPT_TEMPLATE (exported from auto-develop-loop.ts) as the base prompt.");
+  parts.push("3. Replace {{acceptance_criteria}} with the checklist you extracted above.");
+  parts.push("4. Replace {{epic_id}} with the epic bead ID under validation.");
+  parts.push("5. Instruct the QA Sentinel to verify EACH criterion, not just 'check tests pass'.");
+  parts.push("");
+  parts.push("CHECK FOR INTEGRATION GAPS:");
+  parts.push("- Systems built but not wired together (e.g., API exists but frontend never calls it).");
+  parts.push("- Database migrations created but not applied.");
+  parts.push("- MCP tools registered but not exposed or documented.");
+  parts.push("- Include integration gap checks in the QA Sentinel spawn prompt.");
+  parts.push("");
+  parts.push("END-TO-END VERIFICATION:");
+  parts.push("- The feature must work as a user would experience it, not just pass unit tests.");
+  parts.push("- QA should attempt the user flow described in the acceptance criteria.");
+  parts.push("- If the feature involves UI, QA should verify the UI renders and behaves correctly.");
+  parts.push("");
+  parts.push("AFTER QA COMPLETES:");
+  parts.push("- Check for open P0/P1 bug beads under the epic.");
+  parts.push("- advance_auto_develop_phase will BLOCK if P0/P1 bugs remain open.");
+  parts.push("- Fix bugs first (loop back to EXECUTE), then re-validate.");
+  parts.push("- Announce cycle completion only when validation passes with no open critical bugs.");
 
   return parts.join("\n");
 }

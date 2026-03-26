@@ -35,6 +35,7 @@ import {
   determineNextPhase,
 } from "../adjutant/behaviors/auto-develop-loop.js";
 import type { AutoDevelopPhase } from "../../types/auto-develop.js";
+import { execBd, type BeadsIssue } from "../bd-client.js";
 
 /** Valid phase transition order — each phase can only advance to the next in sequence */
 const PHASE_ORDER: AutoDevelopPhase[] = [
@@ -464,6 +465,24 @@ export function registerAutoDevelopTools(
         nextPhase = result.nextPhase;
       }
 
+      // Gate: block advancement FROM validate phase if open P0/P1 bugs exist (adj-152.2.3)
+      if (currentPhase === "validate") {
+        const openBugs = await checkOpenCriticalBugs(projectContext.projectId);
+        if (openBugs.length > 0) {
+          const bugList = openBugs.map(b => `${b.id}: ${b.title} (P${b.priority})`).join("; ");
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({
+                error: `Cannot advance from validate: ${openBugs.length} open P0/P1 bug(s) must be fixed first`,
+                openBugs: openBugs.map(b => ({ id: b.id, title: b.title, priority: b.priority })),
+                hint: `Fix these bugs and close them before advancing: ${bugList}`,
+              }),
+            }],
+          };
+        }
+      }
+
       // Update phase state
       adjutantState.setMeta(phaseKey(projectContext.projectId), nextPhase);
 
@@ -512,4 +531,27 @@ export function registerAutoDevelopTools(
       };
     },
   );
+}
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+/**
+ * Check for open P0 (priority=0) or P1 (priority=1) bug beads.
+ * Used to gate advancement out of the validate phase — critical bugs
+ * must be resolved before validation can pass.
+ */
+export async function checkOpenCriticalBugs(
+  _projectId: string,
+): Promise<{ id: string; title: string; priority: number }[]> {
+  const result = await execBd<BeadsIssue[]>(["list", "--status=open", "--type=bug", "--json"]);
+  if (!result.success || !Array.isArray(result.data)) {
+    return [];
+  }
+
+  // Filter to P0 (priority 0) and P1 (priority 1) bugs only
+  return result.data
+    .filter(b => b.priority <= 1)
+    .map(b => ({ id: b.id, title: b.title, priority: b.priority }));
 }
