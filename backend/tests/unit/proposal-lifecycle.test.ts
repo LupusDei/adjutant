@@ -43,10 +43,10 @@ describe("ProposalLifecycle", () => {
     rmSync(testDir, { recursive: true, force: true });
   });
 
-  describe("checkProposalCompletion", () => {
-    it("should emit proposal:completed and update status when epic linked via proposal_epics is closed", async () => {
+  describe("completeProposal (coordinator-driven)", () => {
+    it("should emit proposal:completed and update status", async () => {
       const { createProposalStore } = await import("../../src/services/proposal-store.js");
-      const { checkProposalCompletion } = await import("../../src/services/mcp-tools/beads.js");
+      const { completeProposal } = await import("../../src/services/proposal-lifecycle.js");
       const { getEventBus } = await import("../../src/services/event-bus.js");
 
       const store = createProposalStore(db);
@@ -58,68 +58,54 @@ describe("ProposalLifecycle", () => {
         project: "test-project-id",
       });
 
-      insertProposalEpicLink(db, proposal.id, "adj-100", "test-project-id");
-
       const events: { proposalId: string; projectId: string; epicId?: string }[] = [];
       getEventBus().on("proposal:completed", (data) => {
         events.push(data);
       });
 
-      checkProposalCompletion("adj-100", db, store);
+      const result = completeProposal(store, proposal.id, "test-project-id", "adj-100");
 
+      expect(result).toBe(true);
       expect(events).toHaveLength(1);
       expect(events[0].proposalId).toBe(proposal.id);
       expect(events[0].projectId).toBe("test-project-id");
-      expect(events[0].epicId).toBe("adj-100");
 
-      // Verify proposal status was updated
       const updated = store.getProposal(proposal.id);
       expect(updated?.status).toBe("completed");
     });
 
-    it("should NOT emit if the bead is not linked to any proposal", async () => {
+    it("should return false for nonexistent proposal", async () => {
       const { createProposalStore } = await import("../../src/services/proposal-store.js");
-      const { checkProposalCompletion } = await import("../../src/services/mcp-tools/beads.js");
-      const { getEventBus } = await import("../../src/services/event-bus.js");
+      const { completeProposal } = await import("../../src/services/proposal-lifecycle.js");
 
       const store = createProposalStore(db);
-
-      const events: unknown[] = [];
-      getEventBus().on("proposal:completed", (data) => {
-        events.push(data);
-      });
-
-      checkProposalCompletion("adj-999", db, store);
-
-      expect(events).toHaveLength(0);
+      const result = completeProposal(store, "nonexistent", "test-project-id");
+      expect(result).toBe(false);
     });
 
-    it("should NOT emit if proposal is already completed", async () => {
+    it("should return false if proposal is already completed", async () => {
       const { createProposalStore } = await import("../../src/services/proposal-store.js");
-      const { checkProposalCompletion } = await import("../../src/services/mcp-tools/beads.js");
+      const { completeProposal } = await import("../../src/services/proposal-lifecycle.js");
       const { getEventBus } = await import("../../src/services/event-bus.js");
 
       const store = createProposalStore(db);
       const proposal = store.insertProposal({
         author: "test-agent",
         title: "Already Done",
-        description: "Already completed proposal.",
+        description: "Already completed.",
         type: "engineering",
         project: "test-project-id",
       });
 
-      // Mark as completed first
       store.updateProposalStatus(proposal.id, "completed");
-
-      insertProposalEpicLink(db, proposal.id, "adj-200", "test-project-id");
 
       const events: unknown[] = [];
       getEventBus().on("proposal:completed", (data) => {
         events.push(data);
       });
 
-      checkProposalCompletion("adj-200", db, store);
-
+      const result = completeProposal(store, proposal.id, "test-project-id");
+      expect(result).toBe(false);
       expect(events).toHaveLength(0);
     });
   });
@@ -159,127 +145,7 @@ describe("ProposalLifecycle", () => {
     });
   });
 
-  describe("checkAndCompleteProposal", () => {
-    it("should NOT complete proposal when some linked beads are still open", async () => {
-      const { createProposalStore } = await import("../../src/services/proposal-store.js");
-      const { checkAndCompleteProposal } = await import("../../src/services/proposal-lifecycle.js");
-
-      // Mock isBeadClosed via bd-client mock
-      const bdClient = await import("../../src/services/bd-client.js");
-      const execBdSpy = vi.spyOn(bdClient, "execBd");
-      // First epic is closed, second is still open
-      execBdSpy.mockResolvedValueOnce({
-        success: true,
-        data: { id: "adj-300", status: "closed" },
-        raw: "",
-      });
-      execBdSpy.mockResolvedValueOnce({
-        success: true,
-        data: { id: "adj-301", status: "open" },
-        raw: "",
-      });
-
-      const store = createProposalStore(db);
-      const proposal = store.insertProposal({
-        author: "test-agent",
-        title: "Partially Done",
-        description: "Some beads still open.",
-        type: "engineering",
-        project: "project-1",
-      });
-
-      insertProposalEpicLink(db, proposal.id, "adj-300", "project-1");
-      insertProposalEpicLink(db, proposal.id, "adj-301", "project-1");
-
-      const result = await checkAndCompleteProposal(db, store, proposal.id, "project-1");
-      expect(result).toBe(false);
-
-      const unchanged = store.getProposal(proposal.id);
-      expect(unchanged?.status).toBe("pending");
-
-      execBdSpy.mockRestore();
-    });
-
-    it("should complete proposal when ALL linked beads are closed", async () => {
-      const { createProposalStore } = await import("../../src/services/proposal-store.js");
-      const { checkAndCompleteProposal } = await import("../../src/services/proposal-lifecycle.js");
-      const { getEventBus } = await import("../../src/services/event-bus.js");
-
-      // Mock all epics as closed
-      const bdClient = await import("../../src/services/bd-client.js");
-      const execBdSpy = vi.spyOn(bdClient, "execBd");
-      execBdSpy.mockResolvedValueOnce({
-        success: true,
-        data: { id: "adj-400", status: "closed" },
-        raw: "",
-      });
-      execBdSpy.mockResolvedValueOnce({
-        success: true,
-        data: { id: "adj-401", status: "closed" },
-        raw: "",
-      });
-
-      const store = createProposalStore(db);
-      const proposal = store.insertProposal({
-        author: "test-agent",
-        title: "All Done",
-        description: "All beads closed.",
-        type: "engineering",
-        project: "project-1",
-      });
-
-      insertProposalEpicLink(db, proposal.id, "adj-400", "project-1");
-      insertProposalEpicLink(db, proposal.id, "adj-401", "project-1");
-
-      const events: unknown[] = [];
-      getEventBus().on("proposal:completed", (data) => {
-        events.push(data);
-      });
-
-      const result = await checkAndCompleteProposal(db, store, proposal.id, "project-1");
-      expect(result).toBe(true);
-
-      const updated = store.getProposal(proposal.id);
-      expect(updated?.status).toBe("completed");
-
-      expect(events).toHaveLength(1);
-
-      execBdSpy.mockRestore();
-    });
-
-    it("should update proposal status to completed", async () => {
-      const { createProposalStore } = await import("../../src/services/proposal-store.js");
-      const { checkAndCompleteProposal } = await import("../../src/services/proposal-lifecycle.js");
-
-      // Mock single epic as closed
-      const bdClient = await import("../../src/services/bd-client.js");
-      const execBdSpy = vi.spyOn(bdClient, "execBd");
-      execBdSpy.mockResolvedValueOnce({
-        success: true,
-        data: { id: "adj-500", status: "closed" },
-        raw: "",
-      });
-
-      const store = createProposalStore(db);
-      const proposal = store.insertProposal({
-        author: "test-agent",
-        title: "Single Epic Proposal",
-        description: "One epic linked.",
-        type: "engineering",
-        project: "project-1",
-      });
-
-      insertProposalEpicLink(db, proposal.id, "adj-500", "project-1");
-
-      await checkAndCompleteProposal(db, store, proposal.id, "project-1");
-
-      const updated = store.getProposal(proposal.id);
-      expect(updated?.status).toBe("completed");
-      expect(updated?.updatedAt).toBeTruthy();
-
-      execBdSpy.mockRestore();
-    });
-  });
+  // checkAndCompleteProposal was removed in adj-153 — proposal completion is now coordinator-driven
 
   describe("idle-proposal-nudge skips completed proposals", () => {
     it("should only query pending proposals (completed are excluded)", async () => {

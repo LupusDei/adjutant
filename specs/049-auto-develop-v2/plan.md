@@ -52,7 +52,7 @@ Enables deeper proposal generation with external research.
 The behavioral change that keeps the loop running continuously.
 
 ### Phase 5: Proposal Lifecycle (US4, US5)
-Completion events + auto-complete stale proposals.
+Coordinator-driven proposal completion during VALIDATE phase. The coordinator marks proposals complete after QA passes, emitting proposal:completed events. No automated bead:closed listeners (agents use bd CLI which bypasses EventBus).
 
 ### Phase 6: Execution & Loop Fixes (US6, US7, US8)
 Parallel execution, empty cycle fix, counter sync.

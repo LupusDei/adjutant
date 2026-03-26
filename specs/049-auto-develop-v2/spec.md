@@ -61,24 +61,26 @@ Comprehensive improvements to the auto-develop loop based on an 8-cycle retrospe
 **So that** I can track the proposal → epic → completion lifecycle in the timeline.
 
 **Acceptance Criteria:**
-- [ ] When an epic born from a proposal is closed, a `proposal:completed` event is emitted on the EventBus
-- [ ] Event payload includes: proposalId, epicId, projectId, title, summary of what was delivered
+- [ ] The coordinator marks proposals as completed during the VALIDATE phase after QA passes
+- [ ] A `proposal:completed` event is emitted on the EventBus when the coordinator completes a proposal
+- [ ] Event payload includes: proposalId, epicId, projectId
 - [ ] The event appears in the timeline as a distinct event type with appropriate icon/color
-- [ ] The proposal's status in the DB is auto-updated to "completed"
+- [ ] The proposal's status in the DB is updated to "completed"
 - [ ] iOS and frontend timeline views render the new event type
+- [ ] Proposal completion is NOT triggered by automated bead:closed listeners (agents use bd CLI which bypasses EventBus)
 
-### US5: Auto-Complete Stale Proposals (Priority: P1)
+### US5: Coordinator-Driven Proposal Completion (Priority: P1)
 
 **As** a coordinator managing auto-develop,
-**I want** proposals to be automatically marked completed when their beads are all closed,
-**So that** the REVIEW phase doesn't keep nudging about proposals that were already executed.
+**I want** the VALIDATE phase to explicitly mark proposals as completed after QA passes,
+**So that** proposal lifecycle is deterministic and not dependent on EventBus events that agents may bypass.
 
 **Acceptance Criteria:**
-- [ ] When all beads associated with a proposal are closed, the proposal status auto-updates to "completed"
-- [ ] The check runs on `bead:updated` events (specifically status → closed)
-- [ ] Proposals that were executed as beads but never formally linked are handled (match by title/description similarity or explicit proposal→epic link field)
+- [ ] The `buildValidateReason()` prompt instructs the coordinator to mark proposals completed after QA passes
+- [ ] A `completeProposal()` helper is available for the coordinator to call
 - [ ] The idle-proposal-nudge behavior skips proposals in "completed" status
 - [ ] No more spam from stale proposals in SITUATION reports
+- [ ] The proposal_epics junction table links proposals to epics for coordinator lookup
 
 ### US6: Parallel Agent Execution (Priority: P1)
 

@@ -49,7 +49,7 @@ import { createMemoryStore } from "./services/adjutant/memory-store.js";
 import { SignalAggregator } from "./services/adjutant/signal-aggregator.js";
 import { StimulusEngine, buildSituationPrompt, buildBootstrapPrompt, type StateSnapshot } from "./services/adjutant/stimulus-engine.js";
 import { getEventBus } from "./services/event-bus.js";
-import { initProposalLifecycle } from "./services/proposal-lifecycle.js";
+
 import { ADJUTANT_TMUX_SESSION } from "./services/adjutant-spawner.js";
 import { registerMemoryTools } from "./services/mcp-tools/memory.js";
 import { registerCoordinationTools } from "./services/mcp-tools/coordination.js";
@@ -164,8 +164,8 @@ initEventDrivenCostExtraction();
   });
 }
 
-// Initialize proposal lifecycle listeners (auto-complete on all epics closed)
-initProposalLifecycle(messageDb, proposalStore);
+// Proposal completion is coordinator-driven in VALIDATE phase (adj-153)
+// The coordinator marks proposals complete after QA passes — no automated bead:closed listener
 
 // Prune events older than 7 days on startup, then every 6 hours
 const PRUNE_DAYS = 7;

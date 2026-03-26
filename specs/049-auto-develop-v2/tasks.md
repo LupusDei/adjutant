@@ -28,8 +28,8 @@
 
 ## Phase 5: Proposal Lifecycle (US4, US5)
 
-- [ ] T015 [US4] Emit `proposal:completed` event when epic linked to proposal is closed: add hook in `close_bead` MCP tool (`backend/src/services/mcp-tools/beads.ts`) that checks for proposal linkage and emits event
-- [ ] T016 [US5] Auto-complete stale proposals: add `bead:updated` event listener in `backend/src/services/adjutant/behaviors/auto-develop-loop.ts` that checks if all beads linked to a proposal are closed; if so, update proposal status to "completed"
+- [x] T015 [US4] Coordinator-driven proposal completion: `buildValidateReason()` instructs coordinator to mark proposals complete after QA passes. `completeProposal()` helper in `proposal-lifecycle.ts` emits `proposal:completed` event. Removed automated `close_bead` hook (adj-153: agents use bd CLI which bypasses EventBus).
+- [x] T016 [US5] Removed `initProposalLifecycle()` bead:closed listener — coordinator marks proposals complete explicitly during VALIDATE phase instead of automated event-driven approach
 - [ ] T017 [P] [US4] Add timeline rendering for `proposal:completed` events in frontend (`frontend/src/components/`) and iOS (`ios/Adjutant/`) — distinct icon/color
 - [ ] T018 [US4,US5] Write tests for proposal lifecycle: test event emission on epic close, test auto-complete on all beads closed, test stale proposal detection in `backend/tests/unit/proposal-lifecycle.test.ts`
 

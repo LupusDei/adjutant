@@ -648,6 +648,12 @@ function buildValidateReason(
   parts.push("- advance_auto_develop_phase will BLOCK if P0/P1 bugs remain open.");
   parts.push("- Fix bugs first (loop back to EXECUTE), then re-validate.");
   parts.push("- Announce cycle completion only when validation passes with no open critical bugs.");
+  parts.push("");
+  parts.push("MARK PROPOSAL AS COMPLETED:");
+  parts.push("- After QA passes, mark the source proposal as completed via the proposals API.");
+  parts.push("- Call update_proposal_status or equivalent to set status to 'completed'.");
+  parts.push("- This emits proposal:completed for timeline visibility.");
+  parts.push("- Do NOT rely on automated bead:closed listeners — agents use bd CLI which bypasses EventBus.");
 
   return parts.join("\n");
 }
