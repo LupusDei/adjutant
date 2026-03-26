@@ -23,7 +23,11 @@ import { buildEscalationMessage } from "../../escalation-builder.js";
 import {
   AUTO_DEVELOP_LIMITS,
   MAX_REVIEW_ROUNDS,
+  MAX_ESCALATION_STRIKES,
   type AutoDevelopPhase,
+  type IdeateSubState,
+  type ResearchFindings,
+  type EscalationState,
 } from "../../../types/auto-develop.js";
 
 // ============================================================================
@@ -73,6 +77,21 @@ export function lastIdeationKey(projectId: string): string {
   return `${META_PREFIX}last_ideation_${projectId}`;
 }
 
+/** Metadata key for IDEATE sub-state per project */
+export function ideateSubstateKey(projectId: string): string {
+  return `auto_develop:ideate_substate:${projectId}`;
+}
+
+/** Metadata key for research findings per project */
+export function researchFindingsKey(projectId: string): string {
+  return `auto_develop:research_findings:${projectId}`;
+}
+
+/** Metadata key for escalation state per project */
+export function escalationStateKey(projectId: string): string {
+  return `auto_develop:escalation_state:${projectId}`;
+}
+
 // ============================================================================
 // Phase reason builders
 // ============================================================================
@@ -94,9 +113,29 @@ export function buildPhaseReason(
     case "analyze":
       reason = buildAnalyzeReason(projectId, projectName, proposalStore);
       break;
-    case "ideate":
-      reason = buildIdeateReason(projectId, projectName, proposalStore);
+    case "ideate": {
+      // Check ideate sub-state for never-idle loop (adj-152.4.1)
+      const substate = getIdeateSubstate(projectId, state);
+      switch (substate) {
+        case "ideate:research":
+          reason = buildResearchReason(projectId, projectName, state);
+          break;
+        case "ideate:refine":
+          reason = buildRefineReason(projectId, projectName);
+          break;
+        case "ideate:escalate": {
+          // For escalate, we still schedule a coordinator wake but with escalation context
+          const escState = getEscalationState(projectId, state);
+          reason = buildNeverIdleEscalationMessage(
+            projectId, projectName, escState.count, escState.anglesTried,
+          );
+          break;
+        }
+        default:
+          reason = buildIdeateReason(projectId, projectName, proposalStore, state);
+      }
       break;
+    }
     case "review":
       reason = buildReviewReason(projectId, projectName, proposalStore);
       break;
@@ -146,6 +185,7 @@ function buildIdeateReason(
   projectId: string,
   projectName: string,
   _proposalStore: ProposalStore,
+  state?: AdjutantState,
 ): string {
   const parts: string[] = [];
   parts.push(`AUTO-DEVELOP IDEATE — Project: "${projectName}" (${projectId})`);
@@ -155,6 +195,39 @@ function buildIdeateReason(
   parts.push("VERIFY STATE FIRST:");
   parts.push("1. Call get_auto_develop_status to check existing proposals and vision context.");
   parts.push("2. Call list_proposals (if available) to see what already exists — avoid duplicates.");
+
+  // Include research findings if available (adj-152.3.2)
+  if (state) {
+    const findingsJson = state.getMeta(researchFindingsKey(projectId));
+    if (findingsJson) {
+      try {
+        // Safe: we validate shape usage below; parse may throw on invalid JSON
+        const findings = JSON.parse(findingsJson) as ResearchFindings;
+        parts.push("");
+        parts.push("=== RESEARCH FINDINGS (use these to inform proposals) ===");
+        parts.push(`Summary: ${findings.summary}`);
+        if (findings.codebaseGaps.length > 0) {
+          parts.push(`Codebase gaps: ${findings.codebaseGaps.join("; ")}`);
+        }
+        if (findings.refactoringOpportunities.length > 0) {
+          parts.push(`Refactoring opportunities: ${findings.refactoringOpportunities.join("; ")}`);
+        }
+        if (findings.featureIdeas.length > 0) {
+          parts.push(`Feature ideas: ${findings.featureIdeas.join("; ")}`);
+        }
+        if (findings.sources.length > 0) {
+          parts.push("Sources:");
+          for (const source of findings.sources) {
+            parts.push(`  - [${source.title}](${source.url}) — ${source.relevance}`);
+          }
+        }
+        parts.push("=== END RESEARCH FINDINGS ===");
+      } catch {
+        // Invalid JSON in findings — ignore and proceed without them
+      }
+    }
+  }
+
   parts.push("");
   parts.push("THEN ACT:");
   parts.push("1. Use spawn_worker to create an ideation agent. Include in the prompt:");
@@ -165,6 +238,204 @@ function buildIdeateReason(
   parts.push("3. Report progress via set_status.");
 
   return parts.join("\n");
+}
+
+/**
+ * Build a coordinator prompt for the research sub-state of IDEATE.
+ * Instructs spawning a Research Agent that uses WebSearch + codebase analysis
+ * to find inspiration and identify gaps before ideation. (adj-152.3.1)
+ */
+export function buildResearchReason(
+  projectId: string,
+  projectName: string,
+  state: AdjutantState,
+): string {
+  const parts: string[] = [];
+  parts.push(`AUTO-DEVELOP IDEATE:RESEARCH — Project: "${projectName}" (${projectId})`);
+  parts.push("");
+  parts.push("NUDGE: Research phase — gather external inspiration and analyze codebase before ideating.");
+  parts.push("");
+  parts.push("VERIFY STATE FIRST:");
+  parts.push("1. Call get_auto_develop_status to see current project state and vision context.");
+  parts.push("2. Check if research findings already exist (avoid duplicate work).");
+  parts.push("");
+  parts.push("THEN ACT:");
+  parts.push("1. Use spawn_worker to create a Research Agent with these instructions:");
+  parts.push("   a) Use WebSearch to research the project domain:");
+  parts.push("      - Search for similar tools, competitors, and best practices.");
+  parts.push("      - Look for inspiration from the project README and vision context.");
+  parts.push("      - Find recent trends and techniques relevant to the project.");
+  parts.push("   b) Analyze the codebase for gaps:");
+  parts.push("      - Compare README vision/goals against current implementation.");
+  parts.push("      - Identify features described but not yet implemented.");
+  parts.push("      - Look for test coverage gaps and areas with low quality.");
+  parts.push("      - Spot refactoring opportunities (code smells, duplication, complexity).");
+  parts.push("      - Evaluate UX improvements based on current UI patterns.");
+  parts.push("   c) Store findings using set_meta with key:");
+  parts.push(`      "auto_develop:research_findings:${projectId}"`);
+  parts.push("      Value: JSON string matching ResearchFindings type with fields:");
+  parts.push("      { sources, codebaseGaps, refactoringOpportunities, featureIdeas, summary }");
+  parts.push("2. After the research agent finishes, advance ideate sub-state to normal ideation.");
+  parts.push("3. Report progress via set_status.");
+
+  // Include escalation state context so research can try different angles
+  const escStateJson = state.getMeta(escalationStateKey(projectId));
+  if (escStateJson) {
+    try {
+      // Safe: we only read anglesTried which is guarded by length check
+      const escState = JSON.parse(escStateJson) as EscalationState;
+      if (escState.anglesTried.length > 0) {
+        parts.push("");
+        parts.push("IMPORTANT — Previous research angles already tried (avoid repeating):");
+        for (const angle of escState.anglesTried) {
+          parts.push(`  - ${angle}`);
+        }
+        parts.push("Try a DIFFERENT research angle this time.");
+      }
+    } catch {
+      // Invalid JSON — ignore
+    }
+  }
+
+  return parts.join("\n");
+}
+
+/**
+ * Build a refinement prompt for the ideate:refine sub-state.
+ * Focuses on tighter scope and UX polish from existing proposals. (adj-152.4.1)
+ */
+export function buildRefineReason(
+  projectId: string,
+  projectName: string,
+): string {
+  const parts: string[] = [];
+  parts.push(`AUTO-DEVELOP IDEATE:REFINE — Project: "${projectName}" (${projectId})`);
+  parts.push("");
+  parts.push("NUDGE: Previous proposals had low confidence. Refine with tighter scope and UX focus.");
+  parts.push("");
+  parts.push("VERIFY STATE FIRST:");
+  parts.push("1. Call get_auto_develop_status to see dismissed/low-confidence proposals.");
+  parts.push("2. Call list_proposals to review what was tried and why it scored low.");
+  parts.push("");
+  parts.push("THEN ACT:");
+  parts.push("1. Use spawn_worker to create a refinement agent with these instructions:");
+  parts.push("   - Review dismissed/low-scoring proposals for salvageable ideas.");
+  parts.push("   - Focus on SMALLER scope — single-file changes, minor UX polish, config improvements.");
+  parts.push("   - Prioritize high codebase-alignment (easy wins that fit existing patterns).");
+  parts.push("   - Create 1-2 tightly scoped proposals using create_proposal.");
+  parts.push("2. After spawning, advance ideate sub-state to check results.");
+  parts.push("3. Report progress via set_status.");
+
+  return parts.join("\n");
+}
+
+/**
+ * Build an escalation message for the ideate:escalate sub-state.
+ * Explains what was tried and asks the user for direction. (adj-152.4.2)
+ */
+export function buildNeverIdleEscalationMessage(
+  _projectId: string,
+  projectName: string,
+  escalationCount: number,
+  anglesTried: string[],
+): string {
+  const parts: string[] = [];
+  parts.push(`=== AUTO-DEVELOP NEEDS DIRECTION — ${projectName} ===`);
+  parts.push("");
+  parts.push(`The auto-develop loop has been unable to generate high-confidence proposals after ${escalationCount} attempt(s).`);
+  parts.push("");
+
+  if (anglesTried.length > 0) {
+    parts.push("Research angles tried:");
+    for (const angle of anglesTried) {
+      parts.push(`  - ${angle}`);
+    }
+    parts.push("");
+  }
+
+  parts.push("Why proposals did not meet the confidence threshold:");
+  parts.push("  - Generated ideas may not align well with the current codebase architecture.");
+  parts.push("  - Scope may be too large or too vague for confident implementation.");
+  parts.push("  - Vision context may need updating to reflect current priorities.");
+  parts.push("");
+  parts.push("What would help:");
+  parts.push("  - Provide a vision update with specific goals or feature requests.");
+  parts.push("  - Identify a specific area of the codebase that needs attention.");
+  parts.push("  - Suggest a concrete feature, refactor, or improvement.");
+  parts.push("  - Adjust confidence thresholds if the bar is too high.");
+  parts.push("");
+
+  if (escalationCount >= MAX_ESCALATION_STRIKES - 1) {
+    parts.push(`WARNING: This is escalation ${escalationCount + 1} of ${MAX_ESCALATION_STRIKES}. The loop will auto-pause after this if no direction is provided.`);
+    parts.push("");
+  }
+
+  parts.push("Reply with guidance or use provide_vision_update to set new direction.");
+
+  return parts.join("\n");
+}
+
+/** Default research angles to cycle through on escalation retries */
+const RESEARCH_ANGLES = [
+  "competitor features and industry best practices",
+  "engineering debt, code quality, and test coverage gaps",
+  "UX improvements, accessibility, and developer experience",
+  "performance optimization and scalability concerns",
+  "security hardening and error handling improvements",
+];
+
+/**
+ * Get the next research angle to try, cycling through available angles.
+ * Avoids angles already tried in the current escalation state.
+ */
+export function getNextResearchAngle(anglesTried: string[]): string {
+  for (const angle of RESEARCH_ANGLES) {
+    if (!anglesTried.includes(angle)) {
+      return angle;
+    }
+  }
+  // All angles tried — cycle back to the first one (array is non-empty constant)
+  return RESEARCH_ANGLES[0]!;
+}
+
+/**
+ * Get the current escalation state from meta, or a fresh default.
+ */
+export function getEscalationState(projectId: string, state: AdjutantState): EscalationState {
+  const json = state.getMeta(escalationStateKey(projectId));
+  if (json) {
+    try {
+      return JSON.parse(json) as EscalationState;
+    } catch {
+      // Invalid JSON — return fresh state
+    }
+  }
+  return { count: 0, lastAt: null, anglesTried: [] };
+}
+
+/**
+ * Save escalation state to meta.
+ */
+export function setEscalationState(projectId: string, state: AdjutantState, escState: EscalationState): void {
+  state.setMeta(escalationStateKey(projectId), JSON.stringify(escState));
+}
+
+/**
+ * Get the current ideate sub-state for a project, defaulting to "ideate".
+ */
+export function getIdeateSubstate(projectId: string, state: AdjutantState): IdeateSubState {
+  const raw = state.getMeta(ideateSubstateKey(projectId));
+  if (raw === "ideate:research" || raw === "ideate:refine" || raw === "ideate:escalate") {
+    return raw;
+  }
+  return "ideate";
+}
+
+/**
+ * Set the ideate sub-state for a project.
+ */
+export function setIdeateSubstate(projectId: string, state: AdjutantState, substate: IdeateSubState): void {
+  state.setMeta(ideateSubstateKey(projectId), substate);
 }
 
 function buildReviewReason(
@@ -636,6 +907,48 @@ export function createAutoDevelopLoop(
         // Record ideation timestamp when entering ideate phase
         if (currentPhase === "ideate") {
           state.setMeta(lastIdeationKey(project.id), String(Date.now()));
+        }
+
+        // Never-idle sub-state handling for IDEATE phase (adj-152.4.1, adj-152.4.3)
+        if (currentPhase === "ideate") {
+          const substate = getIdeateSubstate(project.id, state);
+
+          if (substate === "ideate:escalate") {
+            // Track escalation in cycle and state (adj-152.4.3)
+            const escState = getEscalationState(project.id, state);
+            const newAngle = getNextResearchAngle(escState.anglesTried);
+            escState.count += 1;
+            escState.lastAt = new Date().toISOString();
+            escState.anglesTried.push(newAngle);
+            setEscalationState(project.id, state, escState);
+
+            // Update cycle escalation tracking
+            const activeCycleForEsc = autoDevelopStore.getActiveCycle(project.id);
+            if (activeCycleForEsc) {
+              autoDevelopStore.updateCycle(activeCycleForEsc.id, {
+                escalationCount: escState.count,
+                lastEscalationAt: escState.lastAt,
+              });
+            }
+
+            // Send escalation message to user
+            const escalationBody = buildNeverIdleEscalationMessage(
+              project.id, project.name, escState.count, escState.anglesTried,
+            );
+            await comm.escalate(escalationBody);
+
+            // Check 3-strike limit — pause if exceeded (adj-152.4.3)
+            if (escState.count >= MAX_ESCALATION_STRIKES) {
+              pauseAutoDevelop(project.id);
+              state.logDecision({
+                behavior: "auto-develop-loop",
+                action: "escalation_strikes_exceeded",
+                target: project.id,
+                reason: `Escalation count (${escState.count}) >= MAX_ESCALATION_STRIKES (${MAX_ESCALATION_STRIKES}), pausing loop`,
+              });
+              continue;
+            }
+          }
         }
 
         // Ensure we have an active cycle
