@@ -15,8 +15,8 @@ extension APIClient {
     /// // Fetch all engineering proposals
     /// let engineering = try await client.fetchProposals(type: .engineering)
     ///
-    /// // Fetch proposals for a specific project
-    /// let scoped = try await client.fetchProposals(project: "adjutant")
+    /// // Fetch proposals for a specific project (by UUID)
+    /// let scoped = try await client.fetchProposals(project: "a1b2c3d4-...")
     ///
     /// // Fetch all proposals (no filter)
     /// let all = try await client.fetchProposals()
@@ -25,7 +25,7 @@ extension APIClient {
     /// - Parameters:
     ///   - status: Optional status filter (pending, accepted, dismissed).
     ///   - type: Optional type filter (product, engineering).
-    ///   - project: Optional project name filter. When provided, only proposals belonging to this project are returned.
+    ///   - project: Optional project UUID filter. When provided, only proposals belonging to this project are returned.
     /// - Returns: An array of ``Proposal`` items.
     /// - Throws: ``APIClientError`` if the request fails.
     public func fetchProposals(

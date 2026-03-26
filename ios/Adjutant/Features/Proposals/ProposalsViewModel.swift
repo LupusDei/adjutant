@@ -28,10 +28,16 @@ final class ProposalsViewModel: BaseViewModel {
     /// All available projects for the project picker
     @Published private(set) var projects: [Project] = []
 
-    /// User-selected project name filter. nil = all projects.
+    /// User-selected project ID filter. nil = all projects.
     /// Defaults to active project on first load.
-    @Published var selectedProjectName: String? {
+    @Published var selectedProjectId: String? {
         didSet { Task { await load() } }
+    }
+
+    /// Display name for the currently selected project (derived from projects list).
+    var selectedProjectName: String? {
+        guard let id = selectedProjectId else { return nil }
+        return projects.first(where: { $0.id == id })?.name
     }
 
     // MARK: - Dependencies
@@ -66,7 +72,7 @@ final class ProposalsViewModel: BaseViewModel {
             try await self.apiClient.fetchProposals(
                 status: self.statusFilter,
                 type: self.typeFilter,
-                project: self.selectedProjectName
+                project: self.selectedProjectId
             )
         }
         if let result {
@@ -96,8 +102,8 @@ final class ProposalsViewModel: BaseViewModel {
                 if let activeProject = projects.first(where: { $0.active }) {
                     self.activeProjectName = activeProject.name
                     // Only set default if user hasn't already selected a project
-                    if self.selectedProjectName == nil {
-                        self.selectedProjectName = activeProject.name
+                    if self.selectedProjectId == nil {
+                        self.selectedProjectId = activeProject.id
                     }
                 }
             } catch {

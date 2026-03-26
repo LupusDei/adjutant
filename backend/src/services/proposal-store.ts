@@ -178,7 +178,8 @@ export function createProposalStore(db: Database.Database): ProposalStore {
       }
 
       if (opts?.project !== undefined) {
-        conditions.push("project = ?");
+        // Include proposals with matching project AND unscoped proposals (empty/null project)
+        conditions.push("(project = ? OR project IS NULL OR project = '')");
         params.push(opts.project);
       }
 

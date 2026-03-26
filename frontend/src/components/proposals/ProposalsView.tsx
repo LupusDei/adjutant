@@ -38,7 +38,7 @@ export function ProposalsView({ isActive: _isActive }: ProposalsViewProps) {
     dismiss,
     complete,
     refresh,
-  } = useProposals({ project: selectedProject?.name });
+  } = useProposals({ project: selectedProject?.id });
 
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   const [sendToAgentProposal, setSendToAgentProposal] = useState<Proposal | null>(null);

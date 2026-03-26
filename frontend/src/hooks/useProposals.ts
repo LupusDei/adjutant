@@ -3,7 +3,7 @@ import type { Proposal, ProposalType, ProposalStatus } from "../types";
 import api from "../services/api";
 
 export interface UseProposalsOptions {
-  /** Filter proposals by project name */
+  /** Filter proposals by project UUID */
   project?: string;
 }
 

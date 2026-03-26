@@ -175,11 +175,11 @@ struct ProposalsView: View {
     private var projectPicker: some View {
         Menu {
             Button {
-                viewModel.selectedProjectName = nil
+                viewModel.selectedProjectId = nil
             } label: {
                 HStack {
                     Text("ALL PROJECTS")
-                    if viewModel.selectedProjectName == nil {
+                    if viewModel.selectedProjectId == nil {
                         Image(systemName: "checkmark")
                     }
                 }
@@ -187,11 +187,11 @@ struct ProposalsView: View {
 
             ForEach(viewModel.projects, id: \.id) { project in
                 Button {
-                    viewModel.selectedProjectName = project.name
+                    viewModel.selectedProjectId = project.id
                 } label: {
                     HStack {
                         Text(project.name.uppercased())
-                        if viewModel.selectedProjectName == project.name {
+                        if viewModel.selectedProjectId == project.id {
                             Image(systemName: "checkmark")
                         }
                     }
