@@ -35,6 +35,10 @@ function validateProjectAccess(
   if (!projectContext) {
     return { error: "No project context — cannot access proposals across projects" };
   }
+  // Allow access to unscoped legacy proposals (empty/null project field)
+  if (!proposal.project) {
+    return null;
+  }
   // Match against both projectId (UUID) and projectName (human-readable).
   // Proposals created before server-side project resolution (adj-088) stored
   // the project name string; newer ones store the UUID. (adj-090)

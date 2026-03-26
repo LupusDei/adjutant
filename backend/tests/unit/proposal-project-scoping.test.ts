@@ -611,8 +611,7 @@ describe("Proposal project scoping", () => {
 
   describe("empty string project edge cases", () => {
     it("discuss_proposal should not reject when proposal has empty string project and agent has project context", async () => {
-      // Edge case: proposal.project is "" (empty string) — it won't match
-      // any agent's projectId, causing rejection for all scoped agents
+      // Legacy proposals with empty project are unscoped — accessible to any agent (adj-149)
       const store = createMockStore();
       (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue({
         id: "empty-project-uuid",
@@ -635,9 +634,9 @@ describe("Proposal project scoping", () => {
       );
 
       const parsed = parseResult(result);
-      // Empty string !== "f1e8f895-0000-4000-8000-000000000000" (projectId) and !== "adjutant" (projectName), so scoped agents are rejected
-      expect(parsed).toHaveProperty("error");
-      expect((parsed as { error: string }).error).toContain("f1e8f895-0000-4000-8000-000000000000");
+      // Empty/null project proposals are unscoped legacy — allow access from any project
+      expect(parsed).toHaveProperty("proposal");
+      expect((parsed as { proposal: { id: string } }).proposal.id).toBe("empty-project-uuid");
     });
 
     it("list_proposals explicit empty-string project filter should pass empty string to store (adj-072.5.5)", async () => {
