@@ -5,6 +5,7 @@ import type { StimulusEngine } from "../stimulus-engine.js";
 import type { ProposalStore } from "../../proposal-store.js";
 import type { AgentStatusEvent } from "../../event-bus.js";
 import { getProjectContextByAgent } from "../../mcp-server.js";
+import { getProject } from "../../projects-service.js";
 
 /** Delay before waking the coordinator: 5 minutes */
 const IDLE_CHECK_DELAY_MS = 300_000;
@@ -92,6 +93,22 @@ export function createIdleProposalNudge(
       // Debounce: skip if we already have a pending check for this agent
       const existingCheckId = state.getMeta(`${DEBOUNCE_META_PREFIX}${agentId}`);
       if (existingCheckId) return;
+
+      // Skip nudge if the agent's project has auto-develop enabled (adj-152.6.3)
+      // Auto-develop manages its own work loop — nudges would just spam the coordinator
+      const projectContext = getProjectContextByAgent(agentId);
+      if (projectContext?.projectId) {
+        const projectResult = getProject(projectContext.projectId);
+        if (projectResult.success && projectResult.data?.autoDevelop) {
+          state.logDecision({
+            behavior: "idle-proposal-nudge",
+            action: "skipped_auto_develop_project",
+            target: agentId,
+            reason: `Agent's project "${projectContext.projectId}" has auto-develop enabled — skipping nudge`,
+          });
+          return;
+        }
+      }
 
       // Build reason string with proposal context
       const reason = buildScheduleReason(agentId, proposalStore);
