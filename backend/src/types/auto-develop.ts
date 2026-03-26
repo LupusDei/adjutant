@@ -60,6 +60,43 @@ export type AutoDevelopPhase =
   | "execute"
   | "validate";
 
+/** IDEATE sub-states for the never-idle loop */
+export type IdeateSubState =
+  | "ideate"           // Normal ideation (existing behavior)
+  | "ideate:research"  // Deep exploration — spawn research agent with WebSearch
+  | "ideate:refine"    // Look at existing code for improvement opportunities
+  | "ideate:escalate"; // Message user for direction
+
+/** Escalation state tracked per cycle */
+export interface EscalationState {
+  /** Number of escalations in this cycle (pause after 3) */
+  count: number;
+  /** ISO timestamp of last escalation */
+  lastAt: string | null;
+  /** Research angles already tried (to avoid repeating) */
+  anglesTried: string[];
+}
+
+/** Research findings passed from research agent to ideation */
+export interface ResearchFindings {
+  /** External sources discovered (URLs, titles) */
+  sources: { url: string; title: string; relevance: string }[];
+  /** Codebase gaps identified */
+  codebaseGaps: string[];
+  /** Refactoring opportunities */
+  refactoringOpportunities: string[];
+  /** Feature ideas from research */
+  featureIdeas: string[];
+  /** Summary for the coordinator */
+  summary: string;
+}
+
+/** Maximum escalations before auto-pause */
+export const MAX_ESCALATION_STRIKES = 3;
+
+/** Default escalation timeout (1 hour) */
+export const ESCALATION_TIMEOUT_MS = 3_600_000;
+
 /** Auto-develop concurrency limits */
 export const AUTO_DEVELOP_LIMITS = {
   maxProposalsInReview: 3,

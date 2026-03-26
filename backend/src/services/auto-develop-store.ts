@@ -15,6 +15,10 @@ export interface AutoDevelopCycle {
   proposalsAccepted: number;
   proposalsEscalated: number;
   proposalsDismissed: number;
+  /** Number of user escalations in this cycle (3-strike limit) */
+  escalationCount: number;
+  /** ISO timestamp of last escalation to user */
+  lastEscalationAt: string | null;
 }
 
 interface CycleRow {
@@ -27,6 +31,8 @@ interface CycleRow {
   proposals_accepted: number;
   proposals_escalated: number;
   proposals_dismissed: number;
+  escalation_count: number;
+  last_escalation_at: string | null;
 }
 
 export interface AutoDevelopStore {
@@ -41,6 +47,8 @@ export interface AutoDevelopStore {
         | "proposalsAccepted"
         | "proposalsEscalated"
         | "proposalsDismissed"
+        | "escalationCount"
+        | "lastEscalationAt"
       >
     >,
   ): AutoDevelopCycle | null;
@@ -64,6 +72,8 @@ function rowToCycle(row: CycleRow): AutoDevelopCycle {
     proposalsAccepted: row.proposals_accepted,
     proposalsEscalated: row.proposals_escalated,
     proposalsDismissed: row.proposals_dismissed,
+    escalationCount: row.escalation_count ?? 0,
+    lastEscalationAt: row.last_escalation_at ?? null,
   };
 }
 
@@ -105,6 +115,8 @@ export function createAutoDevelopStore(db: Database.Database): AutoDevelopStore 
           | "proposalsAccepted"
           | "proposalsEscalated"
           | "proposalsDismissed"
+          | "escalationCount"
+          | "lastEscalationAt"
         >
       >,
     ): AutoDevelopCycle | null {
@@ -133,6 +145,14 @@ export function createAutoDevelopStore(db: Database.Database): AutoDevelopStore 
       if (updates.proposalsDismissed !== undefined) {
         setClauses.push("proposals_dismissed = ?");
         params.push(updates.proposalsDismissed);
+      }
+      if (updates.escalationCount !== undefined) {
+        setClauses.push("escalation_count = ?");
+        params.push(updates.escalationCount);
+      }
+      if (updates.lastEscalationAt !== undefined) {
+        setClauses.push("last_escalation_at = ?");
+        params.push(updates.lastEscalationAt);
       }
 
       if (setClauses.length === 0) {

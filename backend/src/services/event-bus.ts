@@ -164,6 +164,15 @@ export interface AutoDevelopEscalatedEvent {
   proposalIds: string[];
 }
 
+export interface IdeateResearchCompleteEvent {
+  projectId: string;
+  cycleId: string;
+  /** Summary of research findings */
+  findings: string;
+  /** Number of research angles explored */
+  anglesExplored: number;
+}
+
 /**
  * Map of event names to their payload types.
  */
@@ -194,6 +203,7 @@ export interface EventMap {
   "proposal:completed": ProposalCompletedEvent;
   "auto_develop:phase_changed": AutoDevelopPhaseChangedEvent;
   "auto_develop:escalated": AutoDevelopEscalatedEvent;
+  "ideate:research_complete": IdeateResearchCompleteEvent;
 }
 
 export type EventName = keyof EventMap;
@@ -272,6 +282,7 @@ class EventBus {
       "project:auto_develop_enabled", "project:auto_develop_disabled",
       "proposal:scored", "proposal:completed",
       "auto_develop:phase_changed", "auto_develop:escalated",
+      "ideate:research_complete",
     ];
     for (const e of events) {
       const count = this.emitter.listenerCount(e);
