@@ -49,6 +49,18 @@ vi.mock("../../src/services/projects-service.js", () => ({
   getProject: mockGetProject,
 }));
 
+// Mock bd-client (for checkOpenCriticalBugs)
+const { mockExecBd } = vi.hoisted(() => {
+  return {
+    mockExecBd: vi.fn().mockResolvedValue({ success: true, data: [] }),
+  };
+});
+
+vi.mock("../../src/services/bd-client.js", () => ({
+  execBd: mockExecBd,
+  executeBd: vi.fn(),
+}));
+
 // Mock MCP SDK
 const { mockTool, MockMcpServer } = vi.hoisted(() => {
   const mockTool = vi.fn();
