@@ -120,6 +120,7 @@ struct TimelineRowView: View {
         case "auto_develop_enabled": return "play.circle.fill"
         case "auto_develop_disabled": return "stop.circle.fill"
         case "auto_develop_phase_changed": return "arrow.right.circle.fill"
+        case "proposal_completed": return "checkmark.seal.fill"
         default: return "circle.fill"
         }
     }
@@ -136,6 +137,7 @@ struct TimelineRowView: View {
         case "auto_develop_enabled": return CRTTheme.State.success
         case "auto_develop_disabled": return CRTTheme.State.error
         case "auto_develop_phase_changed": return Color(red: 0.4, green: 0.8, blue: 1.0)
+        case "proposal_completed": return CRTTheme.State.success
         default: return theme.dim
         }
     }
@@ -152,6 +154,7 @@ struct TimelineRowView: View {
         case "auto_develop_enabled": return "AUTO-DEV ON"
         case "auto_develop_disabled": return "AUTO-DEV OFF"
         case "auto_develop_phase_changed": return "PHASE"
+        case "proposal_completed": return "PROPOSAL DONE"
         default: return event.eventType
         }
     }

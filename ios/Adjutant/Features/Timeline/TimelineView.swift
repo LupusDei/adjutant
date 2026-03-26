@@ -302,6 +302,7 @@ struct TimelineView: View {
         case "auto_develop_enabled": return "play.circle.fill"
         case "auto_develop_disabled": return "stop.circle.fill"
         case "auto_develop_phase_changed": return "arrow.right.circle.fill"
+        case "proposal_completed": return "checkmark.seal.fill"
         default: return "circle.fill"
         }
     }

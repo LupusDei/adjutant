@@ -49,6 +49,7 @@ import { createMemoryStore } from "./services/adjutant/memory-store.js";
 import { SignalAggregator } from "./services/adjutant/signal-aggregator.js";
 import { StimulusEngine, buildSituationPrompt, buildBootstrapPrompt, type StateSnapshot } from "./services/adjutant/stimulus-engine.js";
 import { getEventBus } from "./services/event-bus.js";
+import { initProposalLifecycle } from "./services/proposal-lifecycle.js";
 import { ADJUTANT_TMUX_SESSION } from "./services/adjutant-spawner.js";
 import { registerMemoryTools } from "./services/mcp-tools/memory.js";
 import { registerCoordinationTools } from "./services/mcp-tools/coordination.js";
@@ -145,6 +146,14 @@ initEventDrivenCostExtraction();
     // Clear product owner when auto-develop is disabled
     clearAutoDevelopProductOwner(data.projectId);
   });
+  bus.on("proposal:completed", (data) => {
+    eventStore.insertEvent({
+      eventType: "proposal_completed",
+      agentId: "system",
+      action: `Proposal completed${data.epicId ? ` (epic: ${data.epicId})` : ""}`,
+      detail: { proposalId: data.proposalId, projectId: data.projectId, epicId: data.epicId ?? null },
+    });
+  });
   bus.on("auto_develop:phase_changed", (data) => {
     eventStore.insertEvent({
       eventType: "auto_develop_phase_changed",
@@ -154,6 +163,9 @@ initEventDrivenCostExtraction();
     });
   });
 }
+
+// Initialize proposal lifecycle listeners (auto-complete on all epics closed)
+initProposalLifecycle(messageDb, proposalStore);
 
 // Prune events older than 7 days on startup, then every 6 hours
 const PRUNE_DAYS = 7;
@@ -265,7 +277,7 @@ const server = app.listen(PORT, () => {
   setToolRegistrar((server) => {
     registerMessagingTools(server, messageStore, eventStore);
     registerStatusTools(server, messageStore, eventStore);
-    registerBeadTools(server, eventStore);
+    registerBeadTools(server, eventStore, proposalStore, messageDb);
     registerQueryTools(server, messageStore);
     registerProposalTools(server, proposalStore);
     registerAutoDevelopTools(server, proposalStore, autoDevelopStore, { adjutantState, stimulusEngine });
