@@ -409,7 +409,7 @@ export function registerAutoDevelopTools(
         };
       }
 
-      if (!deps?.adjutantState || !deps?.stimulusEngine) {
+      if (!deps?.adjutantState || !deps?.stimulusEngine || !autoDevelopStore) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: "Auto-develop dependencies not available" }) }],
         };
@@ -504,7 +504,7 @@ export function registerAutoDevelopTools(
         projectContext.projectName,
         nextPhase,
         proposalStore,
-        autoDevelopStore!,
+        autoDevelopStore, // safe: guarded by deps check above
         adjutantState,
       );
       const checkId = stimulusEngine.scheduleCheck(5_000, reason);
@@ -543,9 +543,18 @@ export function registerAutoDevelopTools(
  * must be resolved before validation can pass.
  */
 export async function checkOpenCriticalBugs(
-  _projectId: string,
+  projectId: string,
 ): Promise<{ id: string; title: string; priority: number }[]> {
-  const result = await execBd<BeadsIssue[]>(["list", "--status=open", "--type=bug", "--json"]);
+  // Resolve project path so bd operates on the correct project's .beads/ directory
+  const projectResult = getProject(projectId);
+  const cwd = projectResult.success && projectResult.data?.path
+    ? projectResult.data.path
+    : undefined;
+
+  const result = await execBd<BeadsIssue[]>(
+    ["list", "--status=open", "--type=bug", "--json"],
+    cwd ? { cwd } : {},
+  );
   if (!result.success || !Array.isArray(result.data)) {
     return [];
   }

@@ -131,10 +131,17 @@ function getToolHandler(
 ): (...args: unknown[]) => Promise<unknown> {
   mockTool.mockClear();
   const server = createMockServer();
+  const mockAutoDevelopStore = {
+    getActiveCycle: vi.fn().mockReturnValue({ id: "cycle-1" }),
+    getCycleHistory: vi.fn().mockReturnValue([]),
+    startCycle: vi.fn(),
+    updateCycle: vi.fn(),
+    completeCycle: vi.fn(),
+  };
   registerAutoDevelopTools(
     server,
     store,
-    undefined,
+    mockAutoDevelopStore as unknown as Parameters<typeof registerAutoDevelopTools>[2],
     deps as Parameters<typeof registerAutoDevelopTools>[3],
   );
 

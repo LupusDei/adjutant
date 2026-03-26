@@ -316,6 +316,7 @@ describe("VALIDATE phase behavior", () => {
 
       expect(mockExecBd).toHaveBeenCalledWith(
         ["list", "--status=open", "--type=bug", "--json"],
+        {}, // no cwd when getProject returns failure
       );
     });
   });
