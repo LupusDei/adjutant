@@ -263,9 +263,19 @@ function buildExecuteReason(
   parts.push("5. If all epic tasks are closed → advance_auto_develop_phase to VALIDATE.");
   parts.push("   NOTE: QA sentinels may have created follow-on beads — check those too.");
   parts.push("");
+  parts.push("PARALLEL EXECUTION — DEPENDENCY ANALYSIS (REQUIRED BEFORE SPAWNING):");
+  parts.push("Before assigning agents, analyze epic dependencies:");
+  parts.push("1. Call list_beads to get all planned epics for this project.");
+  parts.push("2. For each epic, check its dependency chain (parent/child beads).");
+  parts.push("3. Classify epics into groups:");
+  parts.push("   - INDEPENDENT: Epics with no shared dependency chains → assign to DIFFERENT agents via separate spawn_worker calls.");
+  parts.push("   - DEPENDENT: Epics sharing dependency chains → assign to the SAME agent sequentially.");
+  parts.push("4. Spawn one squad leader per independent group. For dependent groups, include ALL epics in a single spawn_worker prompt.");
+  parts.push("5. Monitor ALL parallel agents — only advance_auto_develop_phase to VALIDATE when ALL agents are done.");
+  parts.push("");
   parts.push("IF SQUADS NEED SPAWNING:");
-  parts.push("1. Use spawn_worker to create squad leaders for each planned epic.");
-  parts.push("   Include: epic bead ID, project path, /squad-execute skill instructions.");
+  parts.push("1. Use spawn_worker to create squad leaders for each planned epic (or group of dependent epics).");
+  parts.push("   Include: epic bead ID(s), project path, /squad-execute skill instructions.");
   parts.push("2. Report progress via set_status.");
 
   return parts.join("\n");
@@ -578,6 +588,30 @@ export function createAutoDevelopLoop(
     },
 
     async act(_event: BehaviorEvent, state: AdjutantState, comm: CommunicationManager): Promise<void> {
+      // Handle proposal:scored event — increment cycle counter in real-time (adj-152.6.4)
+      if (_event.name === "proposal:scored") {
+        const scoredData = _event.data as { projectId?: string };
+        if (scoredData.projectId) {
+          const activeCycle = autoDevelopStore.getActiveCycle(scoredData.projectId);
+          if (activeCycle) {
+            // Re-sync counters using cycle-scoped filter
+            const cycleFilter = { project: scoredData.projectId, createdAfter: activeCycle.startedAt };
+            const allProposals = proposalStore.getProposals({ ...cycleFilter });
+            const acceptedCount = proposalStore.getProposals({ status: "accepted", ...cycleFilter }).length;
+            const escalatedCount = allProposals.filter(
+              p => p.confidenceScore !== undefined && p.confidenceScore !== null && p.confidenceScore >= 40 && p.confidenceScore < 60,
+            ).length;
+            const dismissedCount = proposalStore.getProposals({ status: "dismissed", ...cycleFilter }).length;
+            autoDevelopStore.updateCycle(activeCycle.id, {
+              proposalsGenerated: allProposals.length,
+              proposalsAccepted: acceptedCount,
+              proposalsEscalated: escalatedCount,
+              proposalsDismissed: dismissedCount,
+            });
+          }
+        }
+      }
+
       // Get all auto-develop projects
       const projectsResult = getAutoDevelopProjects();
       if (!projectsResult.success || !projectsResult.data?.length) return;
@@ -715,24 +749,50 @@ export function createAutoDevelopLoop(
           state.setMeta(lastIdeationKey(project.id), String(Date.now()));
         }
 
-        // Ensure we have an active cycle
+        // Ensure we have an active cycle (single getActiveCycle call, reused below)
         let activeCycle = autoDevelopStore.getActiveCycle(project.id);
+
+        // Empty cycle prevention (adj-152.6.2): avoid creating cycles that show 0/0/0.
+        // Only applies when: (a) no active cycle, (b) a completed cycle exists (we looped back),
+        // (c) analyze/ideate phase, and (d) no proposals exist. First-ever cycle is always allowed.
+        if (!activeCycle) {
+          const previousCycles = autoDevelopStore.getCycleHistory(project.id, 1);
+          if (previousCycles.length > 0 && (currentPhase === "analyze" || currentPhase === "ideate")) {
+            const projectFilter = { project: project.id };
+            const hasPendingProposals = proposalStore.getProposals({ status: "pending", ...projectFilter }).length > 0;
+            const hasAcceptedProposals = proposalStore.getProposals({ status: "accepted", ...projectFilter }).length > 0;
+
+            if (!hasPendingProposals && !hasAcceptedProposals) {
+              // No work to do — transition to ideate:research instead of creating empty cycle
+              state.setMeta(phaseKey(project.id), "ideate");
+              state.logDecision({
+                behavior: "auto-develop-loop",
+                action: "empty_cycle_prevention",
+                target: project.id,
+                reason: "No pending/accepted proposals after previous cycle — transitioning to ideate:research instead of creating empty cycle",
+              });
+              continue;
+            }
+          }
+        }
+
         if (!activeCycle) {
           activeCycle = autoDevelopStore.startCycle(project.id, currentPhase);
         } else if (activeCycle.phase !== currentPhase) {
           autoDevelopStore.updateCycle(activeCycle.id, { phase: currentPhase });
         }
 
-        // Update cycle counters from actual proposal data (adj-142, adj-143)
+        // Update cycle counters from actual proposal data (adj-142, adj-143, adj-152.6.4)
         // Sync counters AFTER cycle creation to ensure we always have a valid cycle.
+        // Filter by cycle start time so we only count proposals created during THIS cycle.
         {
-          const projectFilter = { project: project.id };
-          const allProposals = proposalStore.getProposals({ ...projectFilter });
-          const acceptedCount = proposalStore.getProposals({ status: "accepted", ...projectFilter }).length;
+          const cycleFilter = { project: project.id, createdAfter: activeCycle.startedAt };
+          const allProposals = proposalStore.getProposals({ ...cycleFilter });
+          const acceptedCount = proposalStore.getProposals({ status: "accepted", ...cycleFilter }).length;
           const escalatedCount = allProposals.filter(
             p => p.confidenceScore !== undefined && p.confidenceScore !== null && p.confidenceScore >= 40 && p.confidenceScore < 60,
           ).length;
-          const dismissedCount = proposalStore.getProposals({ status: "dismissed", ...projectFilter }).length;
+          const dismissedCount = proposalStore.getProposals({ status: "dismissed", ...cycleFilter }).length;
           autoDevelopStore.updateCycle(activeCycle.id, {
             proposalsGenerated: allProposals.length,
             proposalsAccepted: acceptedCount,

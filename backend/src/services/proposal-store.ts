@@ -86,11 +86,13 @@ interface InsertProposalInput {
   project: string;
 }
 
-interface GetProposalsOptions {
+export interface GetProposalsOptions {
   status?: ProposalStatus | undefined;
   type?: ProposalType | undefined;
   /** Project UUID to filter by. After adj-141.1 migration, all proposals store UUID. */
   project?: string | undefined;
+  /** ISO timestamp — only return proposals created at or after this time. Used for per-cycle filtering. */
+  createdAfter?: string | undefined;
 }
 
 export interface ProposalStore {
@@ -181,6 +183,11 @@ export function createProposalStore(db: Database.Database): ProposalStore {
         // Include proposals with matching project AND unscoped proposals (empty/null project)
         conditions.push("(project = ? OR project IS NULL OR project = '')");
         params.push(opts.project);
+      }
+
+      if (opts?.createdAfter !== undefined) {
+        conditions.push("created_at >= ?");
+        params.push(opts.createdAfter);
       }
 
       const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
