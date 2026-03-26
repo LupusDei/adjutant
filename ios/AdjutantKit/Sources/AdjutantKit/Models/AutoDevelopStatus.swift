@@ -54,10 +54,13 @@ public struct AutoDevelopStatus: Codable, Equatable {
     public struct CycleStats: Codable, Equatable {
         public let totalCycles: Int
         public let completedCycles: Int
+        /// Current cycle number (1-based). Falls back to totalCycles if not provided.
+        public let currentCycleNumber: Int
 
-        public init(totalCycles: Int, completedCycles: Int) {
+        public init(totalCycles: Int, completedCycles: Int, currentCycleNumber: Int? = nil) {
             self.totalCycles = totalCycles
             self.completedCycles = completedCycles
+            self.currentCycleNumber = currentCycleNumber ?? totalCycles
         }
     }
 }

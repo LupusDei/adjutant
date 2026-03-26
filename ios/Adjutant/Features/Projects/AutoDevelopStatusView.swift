@@ -91,12 +91,12 @@ struct AutoDevelopStatusView: View {
         HStack(spacing: CRTTheme.Spacing.lg) {
             VStack(spacing: 2) {
                 CRTText(
-                    "\(status.cycleStats.completedCycles)/\(status.cycleStats.totalCycles)",
+                    "CYCLE \(status.cycleStats.currentCycleNumber)",
                     style: .body,
                     glowIntensity: .subtle,
                     color: theme.primary
                 )
-                CRTText("CYCLES", style: .caption, glowIntensity: .subtle, color: theme.dim)
+                CRTText("\(status.cycleStats.completedCycles) COMPLETED", style: .caption, glowIntensity: .subtle, color: theme.dim)
             }
 
             VStack(spacing: 2) {

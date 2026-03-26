@@ -468,7 +468,7 @@ export interface AutoDevelopStatus {
   visionContext: string | null;
   proposals: { inReview: number; accepted: number; escalated: number; dismissed: number };
   epicsInExecution: number;
-  cycleStats: { totalCycles: number; completedCycles: number };
+  cycleStats: { totalCycles: number; completedCycles: number; currentCycleNumber: number };
   productOwner: string | null;
 }
 

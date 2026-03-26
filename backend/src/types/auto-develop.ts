@@ -91,6 +91,8 @@ export interface AutoDevelopStatus {
   cycleStats: {
     totalCycles: number;
     completedCycles: number;
+    /** Current cycle number (1-based, equal to totalCycles when a cycle is active) */
+    currentCycleNumber: number;
   };
   /** Agent assigned as product owner for the auto-develop lifecycle */
   productOwner: string | null;

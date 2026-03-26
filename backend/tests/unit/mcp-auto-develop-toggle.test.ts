@@ -374,6 +374,7 @@ describe("Auto-Develop MCP Tools", () => {
       expect(data.cycleStats).toEqual({
         totalCycles: 2,
         completedCycles: 1,
+        currentCycleNumber: 2,
       });
     });
 

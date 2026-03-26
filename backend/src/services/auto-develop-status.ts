@@ -50,6 +50,7 @@ export function buildAutoDevelopStatus(
     cycleStats: {
       totalCycles: cycleHistory.length,
       completedCycles,
+      currentCycleNumber: cycleHistory.length > 0 ? cycleHistory.length : 0,
     },
     productOwner: project.autoDevelopProductOwner ?? null,
   };

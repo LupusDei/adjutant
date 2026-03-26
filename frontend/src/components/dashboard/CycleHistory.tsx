@@ -110,9 +110,7 @@ const styles = {
 
 /** Cycle history timeline widget showing aggregate auto-develop cycle stats. */
 export const CycleHistory: React.FC<CycleHistoryProps> = ({ status }) => {
-  const { totalCycles, completedCycles } = status.cycleStats;
-  const completionRate = totalCycles > 0 ? completedCycles / totalCycles : 0;
-  const completionPercent = Math.round(completionRate * 100);
+  const { totalCycles, completedCycles, currentCycleNumber } = status.cycleStats;
 
   if (totalCycles === 0 && !status.activeCycleId) {
     return (
@@ -133,7 +131,7 @@ export const CycleHistory: React.FC<CycleHistoryProps> = ({ status }) => {
         <h3 className="dashboard-widget-title">CYCLE HISTORY</h3>
         <div className="dashboard-header-stats">
           <span className="dashboard-header-stat">
-            {completedCycles}/{totalCycles} completed
+            CYCLE {currentCycleNumber || totalCycles}
           </span>
         </div>
       </div>
@@ -152,37 +150,18 @@ export const CycleHistory: React.FC<CycleHistoryProps> = ({ status }) => {
           {/* Stats */}
           <div style={styles.statsRow}>
             <div style={styles.statBlock}>
-              <span style={styles.statValue}>{totalCycles}</span>
-              <span style={styles.statLabel}>TOTAL</span>
+              <span style={styles.statValue}>{currentCycleNumber || totalCycles}</span>
+              <span style={styles.statLabel}>CURRENT</span>
             </div>
             <div style={styles.statBlock}>
               <span style={styles.statValue}>{completedCycles}</span>
               <span style={styles.statLabel}>COMPLETED</span>
             </div>
             <div style={styles.statBlock}>
-              <span style={styles.statValue}>{totalCycles - completedCycles}</span>
-              <span style={styles.statLabel}>IN PROGRESS</span>
+              <span style={styles.statValue}>{totalCycles}</span>
+              <span style={styles.statLabel}>TOTAL</span>
             </div>
           </div>
-
-          {/* Completion Progress */}
-          {totalCycles > 0 && (
-            <div style={styles.progressRow}>
-              <span style={styles.progressLabel}>COMPLETION</span>
-              <div style={styles.progressTrack}>
-                <div
-                  style={{
-                    height: '100%',
-                    width: `${completionPercent}%`,
-                    backgroundColor: colors.primary,
-                    boxShadow: `0 0 4px ${colors.primaryGlow}`,
-                    transition: 'width 0.3s ease',
-                  }}
-                />
-              </div>
-              <span style={styles.progressValue}>{completionPercent}%</span>
-            </div>
-          )}
         </div>
       </div>
     </div>
