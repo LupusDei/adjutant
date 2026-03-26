@@ -11,12 +11,14 @@
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type Database from "better-sqlite3";
 import { z } from "zod";
 import { execBd, type BdExecOptions, type BdResult } from "../bd-client.js";
-import { logError } from "../../utils/index.js";
+import { logError, logInfo } from "../../utils/index.js";
 import { autoCompleteEpics } from "../beads/index.js";
 import { getAgentBySession, resolveToolProjectContext } from "../mcp-server.js";
 import type { EventStore } from "../event-store.js";
+import type { ProposalStore } from "../proposal-store.js";
 import { getEventBus } from "../event-bus.js";
 
 // =============================================================================
@@ -92,7 +94,40 @@ function resolveBdOptions(extra?: { sessionId?: string | undefined }, explicitPr
 // Tool registration
 // =============================================================================
 
-export function registerBeadTools(server: McpServer, eventStore?: EventStore): void {
+/**
+ * Check if a closed bead is linked to a proposal via the proposal_epics junction table.
+ * If so, emit proposal:completed and update the proposal status.
+ */
+export function checkProposalCompletion(
+  beadId: string,
+  db: Database.Database,
+  proposalStore: ProposalStore,
+): void {
+  const row = db.prepare(
+    "SELECT proposal_id, project_id FROM proposal_epics WHERE epic_id = ?",
+  ).get(beadId) as { proposal_id: string; project_id: string } | undefined;
+
+  if (!row) return;
+
+  const proposal = proposalStore.getProposal(row.proposal_id);
+  if (!proposal) return;
+  if (proposal.status === "completed") return;
+
+  proposalStore.updateProposalStatus(row.proposal_id, "completed");
+
+  getEventBus().emit("proposal:completed", {
+    proposalId: row.proposal_id,
+    projectId: row.project_id,
+    epicId: beadId,
+  });
+
+  logInfo("Proposal completed via epic close", {
+    proposalId: row.proposal_id,
+    epicId: beadId,
+  });
+}
+
+export function registerBeadTools(server: McpServer, eventStore?: EventStore, proposalStore?: ProposalStore, db?: Database.Database): void {
   // ---------------------------------------------------------------------------
   // create_bead
   // ---------------------------------------------------------------------------
@@ -243,6 +278,14 @@ export function registerBeadTools(server: McpServer, eventStore?: EventStore): v
         const messages = [`Closed bead ${id}`];
         if (autoCompleted.length > 0) {
           messages.push(`Auto-completed epics: ${autoCompleted.join(", ")}`);
+        }
+
+        // Check if this bead (or any auto-completed epic) is linked to a proposal
+        if (proposalStore && db) {
+          checkProposalCompletion(id, db, proposalStore);
+          for (const epicId of autoCompleted) {
+            checkProposalCompletion(epicId, db, proposalStore);
+          }
         }
 
         return {

@@ -17,6 +17,10 @@ const EVENT_TYPE_CONFIG: Record<string, { icon: string; label: string; color: st
   bead_updated: { icon: '\u{1F4DD}', label: 'BEAD UPD', color: 'var(--crt-phosphor)' },
   bead_closed: { icon: '\u2705', label: 'CLOSED', color: '#44ff44' },
   coordinator_action: { icon: '\u{1F4BB}', label: 'COORD', color: '#ffcc00' },
+  auto_develop_enabled: { icon: '\u25B6', label: 'AUTO-DEV ON', color: '#44ff44' },
+  auto_develop_disabled: { icon: '\u23F9', label: 'AUTO-DEV OFF', color: '#ff4444' },
+  auto_develop_phase_changed: { icon: '\u27A1', label: 'PHASE', color: '#66ccff' },
+  proposal_completed: { icon: '\u2714', label: 'PROPOSAL DONE', color: '#44ff44' },
 };
 
 export interface TimelineEventCardProps {
