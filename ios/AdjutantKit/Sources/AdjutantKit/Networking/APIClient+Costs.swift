@@ -8,7 +8,7 @@ extension APIClient {
     /// - Returns: A ``CostSummary`` with total cost, token breakdown, and per-entity data.
     /// - Throws: ``APIClientError`` if the request fails.
     public func getCostSummary() async throws -> CostSummary {
-        try await request(.get, path: "/costs")
+        try await requestWithEnvelope(.get, path: "/costs")
     }
 
     /// Fetch the current burn rate (cost velocity).
@@ -16,7 +16,7 @@ extension APIClient {
     /// - Returns: A ``BurnRate`` with 10-minute and 1-hour rates plus trend direction.
     /// - Throws: ``APIClientError`` if the request fails.
     public func getBurnRate() async throws -> BurnRate {
-        try await request(.get, path: "/costs/burn-rate")
+        try await requestWithEnvelope(.get, path: "/costs/burn-rate")
     }
 
     /// Fetch all configured budgets with current spend status.
@@ -24,7 +24,7 @@ extension APIClient {
     /// - Returns: An array of ``BudgetStatus`` entries.
     /// - Throws: ``APIClientError`` if the request fails.
     public func getBudgets() async throws -> [BudgetStatus] {
-        try await request(.get, path: "/costs/budget")
+        try await requestWithEnvelope(.get, path: "/costs/budget")
     }
 
     /// Create a new budget.
@@ -51,7 +51,7 @@ extension APIClient {
             warningPercent: warningPercent,
             criticalPercent: criticalPercent
         )
-        return try await request(.post, path: "/costs/budget", body: body)
+        return try await requestWithEnvelope(.post, path: "/costs/budget", body: body)
     }
 
     /// Delete a budget by ID.
@@ -59,7 +59,7 @@ extension APIClient {
     /// - Parameter id: The budget identifier to delete.
     /// - Throws: ``APIClientError`` if the request fails.
     public func deleteBudget(id: Int) async throws {
-        let _: EmptyResponse = try await request(.delete, path: "/costs/budget/\(id)")
+        let _: EmptyResponse = try await requestWithEnvelope(.delete, path: "/costs/budget/\(id)")
     }
 
     /// Fetch cost data for a specific bead, optionally aggregated with child beads.
@@ -75,7 +75,7 @@ extension APIClient {
         if let children, !children.isEmpty {
             queryItems.append(URLQueryItem(name: "children", value: children.joined(separator: ",")))
         }
-        return try await request(
+        return try await requestWithEnvelope(
             .get,
             path: "/costs/by-bead/\(encodedId)",
             queryItems: queryItems.isEmpty ? nil : queryItems
