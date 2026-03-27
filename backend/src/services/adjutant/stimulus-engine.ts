@@ -110,8 +110,24 @@ export class StimulusEngine {
   private recurringTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private cronStore?: CronScheduleStore;
   private lastWakeAt = 0;
+  private lastNudgeAt: string | null = null;
   private cooldownTimer: ReturnType<typeof setTimeout> | null = null;
   private cooldownQueue: WakeReason[] = [];
+
+  /**
+   * Get the ISO timestamp of the last nudge sent to the coordinator.
+   * Used to compute deltas for the next nudge.
+   */
+  getLastNudgeAt(): string | null {
+    return this.lastNudgeAt;
+  }
+
+  /**
+   * Record that a nudge was just sent. Called after prompt injection.
+   */
+  markNudgeSent(): void {
+    this.lastNudgeAt = new Date().toISOString();
+  }
 
   /**
    * Register a callback to be called when the adjutant should be woken.
@@ -477,6 +493,16 @@ export interface StateSnapshot {
 // Situation prompt builder
 // ============================================================================
 
+/** A change that happened since the last nudge */
+export interface DeltaItem {
+  /** Short category: "agent", "message", "proposal", "bead", "phase" */
+  category: string;
+  /** Human-readable summary, e.g. "duke: working → done" */
+  summary: string;
+  /** ISO timestamp */
+  timestamp: string;
+}
+
 export interface SituationPromptInput {
   wakeReason: string;
   signals: Signal[];
@@ -484,6 +510,8 @@ export interface SituationPromptInput {
   stateSnapshot: StateSnapshot;
   pendingSchedule: PendingSchedule;
   recentDecisions: DecisionEntry[];
+  /** Changes since last nudge — empty array means no changes */
+  delta?: DeltaItem[];
 }
 
 /**
@@ -562,6 +590,20 @@ export function buildSituationPrompt(input: SituationPromptInput): string {
         ? ` [${decision.outcome}]`
         : "";
       lines.push(`- ${ago}: ${decision.action}${target}${outcome}`);
+    }
+    lines.push("");
+  }
+
+  // Delta Since Last Nudge
+  if (input.delta !== undefined) {
+    lines.push("## Delta Since Last Nudge");
+    if (input.delta.length === 0) {
+      lines.push("DELTA: no changes");
+    } else {
+      for (const item of input.delta) {
+        const ago = formatAgo(item.timestamp);
+        lines.push(`- [${item.category}] ${item.summary} (${ago})`);
+      }
     }
     lines.push("");
   }

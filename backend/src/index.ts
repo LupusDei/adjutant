@@ -47,7 +47,7 @@ import { createAutoDevelopLoop } from "./services/adjutant/behaviors/auto-develo
 import { createAutoDevelopStore } from "./services/auto-develop-store.js";
 import { createMemoryStore } from "./services/adjutant/memory-store.js";
 import { SignalAggregator } from "./services/adjutant/signal-aggregator.js";
-import { StimulusEngine, buildSituationPrompt, buildBootstrapPrompt, type StateSnapshot } from "./services/adjutant/stimulus-engine.js";
+import { StimulusEngine, buildSituationPrompt, buildBootstrapPrompt, type StateSnapshot, type DeltaItem } from "./services/adjutant/stimulus-engine.js";
 import { getEventBus } from "./services/event-bus.js";
 
 import { ADJUTANT_TMUX_SESSION } from "./services/adjutant-spawner.js";
@@ -345,6 +345,60 @@ const server = app.listen(PORT, () => {
       readyBeads: 0,      // Will be populated by the adjutant via list_beads
     };
 
+    // Compute delta since last nudge
+    const lastNudgeAt = stimulusEngine.getLastNudgeAt();
+    const delta: DeltaItem[] = [];
+    if (lastNudgeAt) {
+      const recentEvents = eventStore.getEvents({ after: lastNudgeAt, limit: 20 });
+      for (const evt of recentEvents) {
+        const detail = evt.detail;
+        switch (evt.eventType) {
+          case "status_change":
+            delta.push({
+              category: "agent",
+              summary: `${evt.agentId}: ${String(detail?.["previousStatus"] ?? "?")} → ${String(detail?.["status"] ?? "?")}`,
+              timestamp: evt.createdAt,
+            });
+            break;
+          case "announcement":
+            delta.push({
+              category: "announcement",
+              summary: `${evt.agentId}: ${evt.action}`,
+              timestamp: evt.createdAt,
+            });
+            break;
+          case "auto_develop_phase_changed":
+            delta.push({
+              category: "phase",
+              summary: `${String(detail?.["previousPhase"] ?? "?")} → ${String(detail?.["newPhase"] ?? "?")}`,
+              timestamp: evt.createdAt,
+            });
+            break;
+          case "bead_updated":
+          case "bead_closed":
+            delta.push({
+              category: "bead",
+              summary: evt.action,
+              timestamp: evt.createdAt,
+            });
+            break;
+          case "proposal_completed":
+            delta.push({
+              category: "proposal",
+              summary: `Proposal completed: ${String(detail?.["proposalId"] ?? "?")}`,
+              timestamp: evt.createdAt,
+            });
+            break;
+          default:
+            delta.push({
+              category: evt.eventType.replace(/_/g, " "),
+              summary: evt.action,
+              timestamp: evt.createdAt,
+            });
+        }
+      }
+    }
+
     const prompt = buildSituationPrompt({
       wakeReason: reason.reason ?? reason.type,
       signals: reason.signal ? [reason.signal] : [],
@@ -352,10 +406,12 @@ const server = app.listen(PORT, () => {
       stateSnapshot,
       pendingSchedule: stimulusEngine.getPendingSchedule(),
       recentDecisions: adjutantState.getRecentDecisions(5),
+      delta,
     });
 
     bridge.sendInput(session.id, prompt).then((success) => {
       if (success) {
+        stimulusEngine.markNudgeSent();
         adjutantState.logDecision({
           behavior: "stimulus-engine",
           action: `wake_${reason.type}`,
