@@ -22,19 +22,29 @@ struct AgentsSectionView: View {
             if agents.isEmpty {
                 emptyState
             } else {
-                VStack(spacing: CRTTheme.Spacing.xs) {
+                List {
                     ForEach(agents) { agent in
                         agentRow(agent)
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 coordinator.navigate(to: .agentDetail(member: crewMember(from: agent)))
                             }
-                            .onLongPressGesture {
-                                coordinator.pendingChatAgentId = agent.name
-                                coordinator.selectTab(.chat)
+                            .swipeActions(edge: .trailing) {
+                                Button {
+                                    coordinator.pendingChatAgentId = agent.name
+                                    coordinator.selectTab(.chat)
+                                } label: {
+                                    Label("Chat", systemImage: "message")
+                                }
+                                .tint(theme.primary)
                             }
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
+                            .listRowSeparator(.hidden)
                     }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
     }
@@ -48,23 +58,9 @@ struct AgentsSectionView: View {
                 .fill(statusColor(for: agent.status))
                 .frame(width: 8, height: 8)
 
-            // Name + project + current bead
+            // Name + current bead (left side)
             VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxxs) {
-                HStack(spacing: CRTTheme.Spacing.xs) {
-                    CRTText(agent.name.uppercased(), style: .body)
-                    if let project = agent.project, !project.isEmpty {
-                        Text(project.uppercased())
-                            .font(CRTTheme.Typography.font(size: 8, weight: .bold))
-                            .tracking(0.5)
-                            .foregroundColor(theme.dim)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 3)
-                                    .stroke(theme.dim.opacity(0.4), lineWidth: 0.5)
-                            )
-                    }
-                }
+                CRTText(agent.name.uppercased(), style: .body)
                 if let bead = agent.currentBead {
                     CRTText(bead, style: .caption, color: theme.dim)
                 }
@@ -72,20 +68,37 @@ struct AgentsSectionView: View {
 
             Spacer()
 
-            // Status text
-            CRTText(
-                agent.status.uppercased(),
-                style: .caption,
-                color: statusColor(for: agent.status)
-            )
-
-            // Unread badge
-            if agent.unreadCount > 0 {
-                CRTText("\(agent.unreadCount)", style: .caption, color: .black)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(theme.primary)
-                    .clipShape(Capsule())
+            // Right side: status + project stacked
+            VStack(alignment: .trailing, spacing: CRTTheme.Spacing.xxxs) {
+                HStack(spacing: CRTTheme.Spacing.xs) {
+                    // Status text
+                    CRTText(
+                        agent.status.uppercased(),
+                        style: .caption,
+                        color: statusColor(for: agent.status)
+                    )
+                    // Unread badge
+                    if agent.unreadCount > 0 {
+                        CRTText("\(agent.unreadCount)", style: .caption, color: .black)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(theme.primary)
+                            .clipShape(Capsule())
+                    }
+                }
+                // Project label (bottom-right)
+                if let project = agent.project, !project.isEmpty {
+                    Text(project.uppercased())
+                        .font(CRTTheme.Typography.font(size: 8, weight: .bold))
+                        .tracking(0.5)
+                        .foregroundColor(theme.dim)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 3)
+                                .stroke(theme.dim.opacity(0.4), lineWidth: 0.5)
+                        )
+                }
             }
 
             // Navigation chevron

@@ -33,7 +33,7 @@ describe('DashboardView', () => {
     expect(screen.getByText('AGENTS')).toBeInTheDocument();
     expect(screen.getByText('UNREAD MESSAGES')).toBeInTheDocument();
     expect(screen.getByText('TASKS')).toBeInTheDocument();
-    expect(screen.getByText('EPICS')).toBeInTheDocument();
+    expect(screen.getByText('TIMELINE')).toBeInTheDocument();
   });
 
   it('renders empty states when no data is available', () => {

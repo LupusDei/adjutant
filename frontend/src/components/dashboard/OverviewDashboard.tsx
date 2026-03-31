@@ -4,7 +4,9 @@ import { useOverview } from '../../hooks/useProjectOverview';
 import { priorityLabel } from '../../hooks/useDashboardBeads';
 import { api } from '../../services/api';
 import type { AutoDevelopStatus } from '../../types';
-import type { AgentOverview, EpicProgress, OverviewBeadSummary, OverviewUnreadSummary } from '../../types/overview';
+import { getTimelineEvents, type TimelineEvent } from '../../services/api';
+import type { AgentOverview, OverviewBeadSummary, OverviewUnreadSummary } from '../../types/overview';
+// EpicProgress import removed — Epics widget replaced by Timeline (adj-156)
 import { AutoDevelopToggle } from './AutoDevelopToggle';
 import { AutoDevelopPanel } from './AutoDevelopPanel';
 import { EscalationBanner } from './EscalationBanner';
@@ -117,12 +119,22 @@ function statusLabel(status: string): string {
   }
 }
 
-/** Get progress bar color based on epic completion percentage */
-function getEpicProgressColor(completionPercent: number, status: string): string {
-  if (status === 'closed' || completionPercent >= 100) return '#00FF00';
-  if (completionPercent > 50) return 'var(--crt-phosphor)';
-  if (completionPercent > 0) return '#FFB000';
-  return 'var(--crt-phosphor-dim)';
+/** Map timeline event type to short label */
+function timelineEventLabel(eventType: string): string {
+  switch (eventType) {
+    case 'status_change': return 'STATUS';
+    case 'progress_report': return 'PROGRESS';
+    case 'announcement': return 'ANNOUNCE';
+    case 'message_sent': return 'MESSAGE';
+    case 'bead_updated': return 'BEAD';
+    case 'bead_closed': return 'CLOSED';
+    case 'coordinator_action': return 'COORD';
+    case 'auto_develop_enabled': return 'AUTO-DEV ON';
+    case 'auto_develop_disabled': return 'AUTO-DEV OFF';
+    case 'auto_develop_phase_changed': return 'PHASE';
+    case 'proposal_completed': return 'PROPOSAL';
+    default: return eventType.replace(/_/g, ' ').toUpperCase();
+  }
 }
 
 /** Truncate a message body for preview display */
@@ -192,9 +204,21 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
     };
   }, [data?.beads]);
 
-  // --- Epics data ---
-  const epicsInProgress: EpicProgress[] = data?.epics?.inProgress ?? [];
-  const epicsCompleted: EpicProgress[] = data?.epics?.recentlyCompleted ?? [];
+  // --- Timeline events (replaces Epics widget) ---
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
+  useEffect(() => {
+    void getTimelineEvents({ limit: 20 }).then((res) => {
+      setTimelineEvents(res.events);
+    }).catch(() => { /* silently fail */ });
+    const intervalId = setInterval(() => {
+      if (!document.hidden) {
+        void getTimelineEvents({ limit: 20 }).then((res) => {
+          setTimelineEvents(res.events);
+        }).catch(() => { /* ignore */ });
+      }
+    }, 15_000);
+    return () => { clearInterval(intervalId); };
+  }, []);
 
   const showEscalation = autoDevelopStatus?.paused && autoDevelopStatus?.enabled && activeProjectId;
   const showAutoDevPanel = autoDevelopStatus?.enabled && activeProjectId;
@@ -394,49 +418,35 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
           )}
         </DashboardWidget>
 
-        {/* Epics Widget (full width) */}
+        {/* Timeline Events Widget (full width, replaces Epics) */}
         <DashboardWidget
-          title="EPICS"
+          title="TIMELINE"
           className="dashboard-widget-full-width"
           headerRight={
-            !loading && (
+            timelineEvents.length > 0 && (
               <div className="dashboard-header-stats">
-                <span className={`dashboard-header-stat ${epicsInProgress.length > 0 ? 'dashboard-header-stat-highlight' : ''}`}>
-                  {epicsInProgress.length} in progress
+                <span className="dashboard-header-stat">
+                  {timelineEvents.length} recent
                 </span>
-                <span className="dashboard-header-stat">{epicsCompleted.length} completed</span>
               </div>
             )
           }
         >
-          {loading && <p>Loading epics...</p>}
-          {!loading && (
-            <>
-              {epicsInProgress.length > 0 ? (
-                <div className="dashboard-epics-list">
-                  {epicsInProgress.map((epic) => (
-                    <OverviewEpicCard key={epic.id} epic={epic} />
-                  ))}
+          {timelineEvents.length > 0 ? (
+            <div className="dashboard-timeline-list">
+              {timelineEvents.map((evt) => (
+                <div key={evt.id} className="dashboard-timeline-row">
+                  <span className={`dashboard-timeline-type dashboard-timeline-type-${evt.eventType.replace(/_/g, '-')}`}>
+                    {timelineEventLabel(evt.eventType)}
+                  </span>
+                  <span className="dashboard-timeline-action">{truncateBody(evt.action, 70)}</span>
+                  <span className="dashboard-timeline-agent">{evt.agentId}</span>
+                  <span className="dashboard-timeline-time">{formatChatTimestamp(evt.createdAt)}</span>
                 </div>
-              ) : (
-                <p className="dashboard-empty-text">No active epics</p>
-              )}
-              {epicsCompleted.length > 0 && (
-                <>
-                  <h4 className="dashboard-view-sub-title" style={{ marginTop: '16px' }}>RECENTLY COMPLETED</h4>
-                  <div className="dashboard-epics-list">
-                    {epicsCompleted.map((epic) => (
-                      <div key={epic.id} className="dashboard-epic-completed-row">
-                        <OverviewEpicCard epic={epic} />
-                        {epic.closedAt && (
-                          <span className="dashboard-epic-completed-time">{formatChatTimestamp(epic.closedAt)}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </>
+              ))}
+            </div>
+          ) : (
+            <p className="dashboard-empty-text">No timeline events</p>
           )}
         </DashboardWidget>
 
@@ -455,48 +465,6 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
           </Suspense>
         </DashboardWidget>
 
-      </div>
-    </div>
-  );
-}
-
-/** Inline epic card for the overview — uses EpicProgress directly instead of EpicWithProgress wrapper */
-function OverviewEpicCard({ epic }: { epic: EpicProgress }) {
-  const progressColor = getEpicProgressColor(epic.completionPercent, epic.status);
-  const isComplete = epic.status === 'closed' || epic.completionPercent >= 100;
-  const statusText = isComplete ? 'COMPLETE' : epic.status === 'in_progress' ? 'IN PROGRESS' : epic.status.toUpperCase();
-  const statusColor = isComplete ? '#00FF00' : epic.status === 'in_progress' ? 'var(--crt-phosphor)' : 'var(--crt-phosphor-dim)';
-
-  return (
-    <div className="dashboard-overview-epic-card">
-      <div className="dashboard-overview-epic-header">
-        <span className="dashboard-overview-epic-id">{epic.id.toUpperCase()}</span>
-        <span
-          className="dashboard-overview-epic-status"
-          style={{
-            color: statusColor,
-            borderColor: statusColor,
-            backgroundColor: `${statusColor}15`,
-          }}
-        >
-          {statusText}
-        </span>
-      </div>
-      <div className="dashboard-overview-epic-title">{epic.title}</div>
-      <div className="dashboard-overview-epic-progress">
-        <div className="dashboard-progress-bar">
-          <div
-            className="dashboard-progress-fill"
-            style={{
-              width: `${Math.round(epic.completionPercent)}%`,
-              backgroundColor: progressColor,
-              boxShadow: `0 0 6px ${progressColor}`,
-            }}
-          />
-        </div>
-        <span className="dashboard-progress-text">
-          {epic.closedChildren}/{epic.totalChildren} ({Math.round(epic.completionPercent)}%)
-        </span>
       </div>
     </div>
   );

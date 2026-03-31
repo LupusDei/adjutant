@@ -24,6 +24,9 @@ final class SwarmOverviewViewModel: ObservableObject {
     /// Brief confirmation text shown after a successful broadcast
     @Published var broadcastResult: String?
 
+    /// Recent timeline events for the overview (replaces epics — adj-156)
+    @Published var timelineEvents: [TimelineEvent] = []
+
     // MARK: - Dependencies
 
     private let apiClient: APIClient
@@ -72,9 +75,17 @@ final class SwarmOverviewViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            overview = try await apiClient.getGlobalOverview()
+            async let overviewTask = apiClient.getGlobalOverview()
+            async let timelineTask = apiClient.getTimelineEvents(limit: 20)
+
+            overview = try await overviewTask
             errorMessage = nil
             lastSuccessfulRefresh = Date()
+
+            // Timeline is best-effort — don't fail the whole refresh if it errors
+            if let response = try? await timelineTask {
+                timelineEvents = response.events
+            }
         } catch {
             errorMessage = userFriendlyMessage(for: error)
         }
