@@ -128,6 +128,8 @@ private struct TabContent: View {
             EpicDetailView(epicId: id)
         case .agentDetail(let member):
             AgentDetailView(member: member)
+        case .agentDetailById(let id):
+            AgentDetailByIdView(agentId: id)
         case .beadDetail(let id):
             BeadDetailView(beadId: id)
         case .proposalDetail(let id):

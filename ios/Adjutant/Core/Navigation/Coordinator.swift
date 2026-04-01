@@ -42,6 +42,7 @@ enum AppRoute: Hashable {
 
     // Detail routes
     case agentDetail(member: CrewMember)
+    case agentDetailById(id: String)
     case beadDetail(id: String)
     case epicDetail(id: String)
     case proposalDetail(id: String)
