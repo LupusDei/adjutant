@@ -125,6 +125,7 @@ function emitCoordinatorAction(
   eventStore: EventStore | undefined,
   callerAgent: string | undefined,
   decision: { behavior: string; action: string; target?: string; reason?: string },
+  extraDetail?: Record<string, unknown>,
 ): void {
   if (!eventStore) return;
   const target = decision.target ?? null;
@@ -132,7 +133,7 @@ function emitCoordinatorAction(
     eventType: "coordinator_action",
     agentId: callerAgent ?? "adjutant-coordinator",
     action: `${decision.action}: ${target ?? "system"}`,
-    detail: { behavior: decision.behavior, action: decision.action, target, reason: decision.reason ?? null },
+    detail: { behavior: decision.behavior, action: decision.action, target, reason: decision.reason ?? null, ...extraDetail },
   };
   if (target?.startsWith("adj-")) {
     input.beadId = target;
@@ -267,7 +268,7 @@ export function registerCoordinationTools(
         reason,
       };
       state.logDecision(assignDecision);
-      emitCoordinatorAction(eventStore, callerAgentId, assignDecision);
+      emitCoordinatorAction(eventStore, callerAgentId, assignDecision, { agentId });
 
       logInfo("assign_bead: bead assigned", { beadId, agentId });
 
