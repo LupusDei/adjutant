@@ -1,12 +1,10 @@
 import React, { Suspense, useMemo, useState, useEffect, useCallback } from 'react';
 
 import { useOverview } from '../../hooks/useProjectOverview';
-import { priorityLabel } from '../../hooks/useDashboardBeads';
 import { api } from '../../services/api';
 import type { AutoDevelopStatus } from '../../types';
 import { getTimelineEvents, type TimelineEvent } from '../../services/api';
-import type { AgentOverview, OverviewBeadSummary, OverviewUnreadSummary } from '../../types/overview';
-// EpicProgress import removed — Epics widget replaced by Timeline (adj-156)
+import type { AgentOverview, OverviewUnreadSummary } from '../../types/overview';
 import { AutoDevelopToggle } from './AutoDevelopToggle';
 import { AutoDevelopPanel } from './AutoDevelopPanel';
 import { EscalationBanner } from './EscalationBanner';
@@ -81,22 +79,6 @@ function formatChatTimestamp(timestamp: string): string {
     const day = date.getDate();
     return `${month}/${day} ${timeStr}`;
   }
-}
-
-/** Render a compact bead row with optional completion timestamp */
-function BeadRow({ bead, completedAt }: { bead: OverviewBeadSummary; completedAt?: string }) {
-  return (
-    <div className="dashboard-bead-row">
-      <span className="dashboard-bead-id">{bead.id}</span>
-      <span className="dashboard-bead-title">{bead.title}</span>
-      {completedAt && (
-        <span className="dashboard-bead-timestamp">{formatChatTimestamp(completedAt)}</span>
-      )}
-      <span className={`dashboard-bead-priority dashboard-bead-priority-${bead.priority}`}>
-        {priorityLabel(bead.priority)}
-      </span>
-    </div>
-  );
 }
 
 /** Get the CSS class suffix for an agent status */
@@ -192,19 +174,7 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
   // --- Unread messages ---
   const unreadMessages: OverviewUnreadSummary[] = data?.unreadMessages ?? [];
 
-  // --- Beads data (tasks only — exclude epics) ---
-  const { tasksInProgress, tasksCompleted } = useMemo(() => {
-    if (!data?.beads) return { tasksInProgress: [], tasksCompleted: [] };
-
-    const filterTasks = (items: OverviewBeadSummary[]) => items.filter((b) => b.type !== 'epic');
-
-    return {
-      tasksInProgress: filterTasks(data.beads.inProgress).slice(0, 7),
-      tasksCompleted: filterTasks(data.beads.recentlyClosed).slice(0, 5),
-    };
-  }, [data?.beads]);
-
-  // --- Timeline events (replaces Epics widget) ---
+  // --- Timeline events ---
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   useEffect(() => {
     void getTimelineEvents({ limit: 20 }).then((res) => {
@@ -325,6 +295,38 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
           )}
         </DashboardWidget>
 
+        {/* Timeline Events Widget (directly below Agents — adj-157) */}
+        <DashboardWidget
+          title="TIMELINE"
+          className="dashboard-widget-full-width"
+          headerRight={
+            timelineEvents.length > 0 && (
+              <div className="dashboard-header-stats">
+                <span className="dashboard-header-stat">
+                  {timelineEvents.length} recent
+                </span>
+              </div>
+            )
+          }
+        >
+          {timelineEvents.length > 0 ? (
+            <div className="dashboard-timeline-list">
+              {timelineEvents.map((evt) => (
+                <div key={evt.id} className="dashboard-timeline-row">
+                  <span className={`dashboard-timeline-type dashboard-timeline-type-${evt.eventType.replace(/_/g, '-')}`}>
+                    {timelineEventLabel(evt.eventType)}
+                  </span>
+                  <span className="dashboard-timeline-action">{truncateBody(evt.action, 70)}</span>
+                  <span className="dashboard-timeline-agent">{evt.agentId}</span>
+                  <span className="dashboard-timeline-time">{formatChatTimestamp(evt.createdAt)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="dashboard-empty-text">No timeline events</p>
+          )}
+        </DashboardWidget>
+
         {/* Unread Messages Widget (full width) */}
         <DashboardWidget
           title="UNREAD MESSAGES"
@@ -371,84 +373,7 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
           )}
         </DashboardWidget>
 
-        {/* Tasks Widget (full width) */}
-        <DashboardWidget
-          title="TASKS"
-          className="dashboard-widget-full-width"
-          headerRight={
-            !loading && (
-              <div className="dashboard-header-stats">
-                <span className={`dashboard-header-stat ${tasksInProgress.length > 0 ? 'dashboard-header-stat-highlight' : ''}`}>
-                  {tasksInProgress.length} in progress
-                </span>
-                <span className="dashboard-header-stat">{tasksCompleted.length} completed</span>
-              </div>
-            )
-          }
-        >
-          {loading && <p>Loading tasks...</p>}
-          {!loading && (
-            <>
-              {tasksInProgress.length > 0 && (
-                <>
-                  <h4 className="dashboard-view-sub-title">IN PROGRESS</h4>
-                  <div className="dashboard-beads-list">
-                    {tasksInProgress.map((bead) => (
-                      <BeadRow key={bead.id} bead={bead} />
-                    ))}
-                  </div>
-                </>
-              )}
-              {tasksCompleted.length > 0 && (
-                <>
-                  <h4 className="dashboard-view-sub-title" style={tasksInProgress.length > 0 ? { marginTop: '16px' } : undefined}>
-                    RECENTLY COMPLETED
-                  </h4>
-                  <div className="dashboard-beads-list">
-                    {tasksCompleted.map((bead) => (
-                      <BeadRow key={bead.id} bead={bead} completedAt={bead.updatedAt ?? undefined} />
-                    ))}
-                  </div>
-                </>
-              )}
-              {tasksInProgress.length === 0 && tasksCompleted.length === 0 && (
-                <p className="dashboard-empty-text">No tasks</p>
-              )}
-            </>
-          )}
-        </DashboardWidget>
-
-        {/* Timeline Events Widget (full width, replaces Epics) */}
-        <DashboardWidget
-          title="TIMELINE"
-          className="dashboard-widget-full-width"
-          headerRight={
-            timelineEvents.length > 0 && (
-              <div className="dashboard-header-stats">
-                <span className="dashboard-header-stat">
-                  {timelineEvents.length} recent
-                </span>
-              </div>
-            )
-          }
-        >
-          {timelineEvents.length > 0 ? (
-            <div className="dashboard-timeline-list">
-              {timelineEvents.map((evt) => (
-                <div key={evt.id} className="dashboard-timeline-row">
-                  <span className={`dashboard-timeline-type dashboard-timeline-type-${evt.eventType.replace(/_/g, '-')}`}>
-                    {timelineEventLabel(evt.eventType)}
-                  </span>
-                  <span className="dashboard-timeline-action">{truncateBody(evt.action, 70)}</span>
-                  <span className="dashboard-timeline-agent">{evt.agentId}</span>
-                  <span className="dashboard-timeline-time">{formatChatTimestamp(evt.createdAt)}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="dashboard-empty-text">No timeline events</p>
-          )}
-        </DashboardWidget>
+        {/* Tasks widget removed — adj-157 */}
 
         {/* Cycle History Widget - shown when auto-develop has cycle data */}
         {showAutoDevPanel && autoDevelopStatus && (

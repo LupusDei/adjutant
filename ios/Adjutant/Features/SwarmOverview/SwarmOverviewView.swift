@@ -54,16 +54,15 @@ struct SwarmOverviewView: View {
                 // 1. Agents with status (top element)
                 agentsSection(overview.agents)
 
-                // 2. Unread messages grouped by agent
-                unreadMessagesSection(overview.unreadMessages ?? [])
-
-                // 3. Tasks: In Progress + Recently Completed
-                tasksSection(overview.beads)
-
-                // 4. Timeline Events (replaces Epics — adj-156)
+                // 2. Timeline Events (directly below agents — adj-157)
                 timelineSection
 
-                // 5. Spending overview (loads independently)
+                // 3. Unread messages grouped by agent
+                unreadMessagesSection(overview.unreadMessages ?? [])
+
+                // Tasks removed — adj-157
+
+                // 4. Spending overview (loads independently)
                 CostOverviewWidget()
             }
             .padding(.vertical, CRTTheme.Spacing.md)

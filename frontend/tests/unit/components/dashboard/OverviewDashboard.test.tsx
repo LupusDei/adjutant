@@ -31,9 +31,8 @@ describe('DashboardView', () => {
   it('renders dashboard widgets', () => {
     render(<DashboardView />);
     expect(screen.getByText('AGENTS')).toBeInTheDocument();
-    expect(screen.getByText('UNREAD MESSAGES')).toBeInTheDocument();
-    expect(screen.getByText('TASKS')).toBeInTheDocument();
     expect(screen.getByText('TIMELINE')).toBeInTheDocument();
+    expect(screen.getByText('UNREAD MESSAGES')).toBeInTheDocument();
   });
 
   it('renders empty states when no data is available', () => {
