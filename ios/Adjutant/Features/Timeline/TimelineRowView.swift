@@ -9,6 +9,9 @@ struct TimelineRowView: View {
 
     let event: TimelineEvent
 
+    /// Optional callback for navigation actions (context menu, tappable bead links)
+    var onNavigate: ((TimelineEvent) -> Void)? = nil
+
     /// Whether the event has non-empty detail data
     private var hasDetail: Bool {
         guard let detail = event.detail else { return false }
@@ -62,20 +65,36 @@ struct TimelineRowView: View {
                             .lineLimit(3)
                             .multilineTextAlignment(.leading)
 
-                        // Bead reference
-                        if let beadId = event.beadId {
-                            HStack(spacing: CRTTheme.Spacing.xxxs) {
-                                Image(systemName: "link")
-                                    .font(.system(size: 9))
-                                Text(beadId)
-                                    .font(CRTTheme.Typography.font(size: 10))
+                        // Bead reference — tappable link
+                        if let beadId = event.beadId, !beadId.isEmpty {
+                            Button {
+                                onNavigate?(event)
+                            } label: {
+                                HStack(spacing: CRTTheme.Spacing.xxxs) {
+                                    Image(systemName: "link")
+                                        .font(.system(size: 9))
+                                    Text(beadId)
+                                        .font(CRTTheme.Typography.font(size: 10))
+                                        .underline()
+                                }
+                                .foregroundColor(theme.primary)
                             }
-                            .foregroundColor(theme.dim)
+                            .buttonStyle(.plain)
                         }
                     }
                 }
             }
             .buttonStyle(.plain)
+            .contextMenu {
+                if let label = TimelineNavigationResolver.actionLabel(event),
+                   let icon = TimelineNavigationResolver.actionIcon(event) {
+                    Button {
+                        onNavigate?(event)
+                    } label: {
+                        Label(label, systemImage: icon)
+                    }
+                }
+            }
 
             // Expandable detail section
             if isExpanded, let detail = event.detail {

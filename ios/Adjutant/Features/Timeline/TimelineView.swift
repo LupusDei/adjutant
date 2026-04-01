@@ -5,6 +5,7 @@ import AdjutantKit
 /// Supports filtering by agent and event type, with pull-to-refresh and pagination.
 struct TimelineView: View {
     @StateObject private var viewModel = TimelineViewModel()
+    @EnvironmentObject private var coordinator: AppCoordinator
     @Environment(\.crtTheme) private var theme
 
     var body: some View {
@@ -249,7 +250,17 @@ struct TimelineView: View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 ForEach(viewModel.events) { event in
-                    TimelineRowView(event: event)
+                    TimelineRowView(event: event) { event in
+                        if let route = TimelineNavigationResolver.resolve(event) {
+                            if event.eventType == "message_sent" {
+                                // Chat navigation: switch to chat tab with agent selected
+                                coordinator.pendingChatAgentId = event.agentId
+                                coordinator.navigate(to: .chat)
+                            } else {
+                                coordinator.navigate(to: route)
+                            }
+                        }
+                    }
                 }
 
                 if viewModel.hasMore {
