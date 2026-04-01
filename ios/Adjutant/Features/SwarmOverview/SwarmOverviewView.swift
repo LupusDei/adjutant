@@ -438,6 +438,21 @@ struct SwarmOverviewView: View {
                             )
                         }
                         .padding(.vertical, 3)
+                        .contextMenu {
+                            let actions = TimelineNavigationResolver.actions(for: event)
+                            ForEach(Array(actions.enumerated()), id: \.offset) { _, action in
+                                Button {
+                                    if action.isChatNavigation {
+                                        coordinator.pendingChatAgentId = event.agentId
+                                        coordinator.navigate(to: .chat)
+                                    } else {
+                                        coordinator.navigate(to: action.route)
+                                    }
+                                } label: {
+                                    Label(action.label, systemImage: action.icon)
+                                }
+                            }
+                        }
                     }
                 }
             }

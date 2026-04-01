@@ -250,17 +250,24 @@ struct TimelineView: View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 ForEach(viewModel.events) { event in
-                    TimelineRowView(event: event) { event in
-                        if let route = TimelineNavigationResolver.resolve(event) {
-                            if event.eventType == "message_sent" {
-                                // Chat navigation: switch to chat tab with agent selected
+                    TimelineRowView(
+                        event: event,
+                        onNavigate: { event in
+                            // Bead link tap — navigate to first resolved route
+                            if let route = TimelineNavigationResolver.resolve(event) {
+                                coordinator.navigate(to: route)
+                            }
+                        },
+                        onAction: { action in
+                            // Context menu action — route based on action type
+                            if action.isChatNavigation {
                                 coordinator.pendingChatAgentId = event.agentId
                                 coordinator.navigate(to: .chat)
                             } else {
-                                coordinator.navigate(to: route)
+                                coordinator.navigate(to: action.route)
                             }
                         }
-                    }
+                    )
                 }
 
                 if viewModel.hasMore {

@@ -9,8 +9,11 @@ struct TimelineRowView: View {
 
     let event: TimelineEvent
 
-    /// Optional callback for navigation actions (context menu, tappable bead links)
+    /// Optional callback for navigation actions (tappable bead links — resolves first action)
     var onNavigate: ((TimelineEvent) -> Void)? = nil
+
+    /// Optional callback for a specific context menu action
+    var onAction: ((TimelineAction) -> Void)? = nil
 
     /// Whether the event has non-empty detail data
     private var hasDetail: Bool {
@@ -86,12 +89,12 @@ struct TimelineRowView: View {
             }
             .buttonStyle(.plain)
             .contextMenu {
-                if let label = TimelineNavigationResolver.actionLabel(event),
-                   let icon = TimelineNavigationResolver.actionIcon(event) {
+                let actions = TimelineNavigationResolver.actions(for: event)
+                ForEach(Array(actions.enumerated()), id: \.offset) { _, action in
                     Button {
-                        onNavigate?(event)
+                        onAction?(action)
                     } label: {
-                        Label(label, systemImage: icon)
+                        Label(action.label, systemImage: action.icon)
                     }
                 }
             }
