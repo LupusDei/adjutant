@@ -44,6 +44,18 @@ function createTestDb(): Database.Database {
     )
   `);
 
+  // Create persona_evolution_log table (adj-158 migration)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS persona_evolution_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      persona_id TEXT NOT NULL,
+      trait TEXT NOT NULL,
+      old_value INTEGER NOT NULL,
+      new_value INTEGER NOT NULL,
+      changed_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
   return db;
 }
 
