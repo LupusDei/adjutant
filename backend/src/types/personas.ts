@@ -147,6 +147,8 @@ export interface Persona {
   description: string;
   /** Point allocation across all 12 trait dimensions */
   traits: TraitValues;
+  /** Origin: "hand-crafted" (user-created) or "self-generated" (agent genesis) */
+  source: string;
   /** ISO 8601 creation timestamp */
   createdAt: string;
   /** ISO 8601 last-update timestamp */
@@ -159,6 +161,7 @@ export interface PersonaRow {
   name: string;
   description: string;
   traits: string; // JSON-serialized TraitValues
+  source: string;
   created_at: string;
   updated_at: string;
 }

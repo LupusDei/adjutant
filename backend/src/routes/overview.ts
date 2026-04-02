@@ -16,19 +16,13 @@ import type { BeadInfo, EpicProgress } from "../services/beads/index.js";
 import { getAgents } from "../services/agents-service.js";
 import type { MessageStore } from "../services/message-store.js";
 import { success, internalError } from "../utils/responses.js";
-import type Database from "better-sqlite3";
 
 /**
  * Creates the overview router.
  * Requires the message store for unread counts/summaries.
  */
-export function createOverviewRouter(store: MessageStore, db?: Database.Database): Router {
+export function createOverviewRouter(store: MessageStore): Router {
   const router = Router();
-
-  // Prepare callsign_personas lookup if DB is available
-  const callsignPersonaStmt = db?.prepare(
-    "SELECT cp.persona_id, p.source FROM callsign_personas cp JOIN personas p ON cp.persona_id = p.id WHERE cp.callsign = ? COLLATE NOCASE",
-  );
 
   /**
    * GET /api/overview
@@ -94,37 +88,20 @@ export function createOverviewRouter(store: MessageStore, db?: Database.Database
         unreadMap.set(uc.agentId, uc.count);
       }
 
-      // Transform agents to overview format
+      // Transform agents to overview format (persona data already enriched by getAgents)
       const agents = (agentsResult.success && agentsResult.data)
-        ? agentsResult.data.map((a) => {
-            // Look up persona linkage via callsign_personas junction table
-            let personaId: string | null = null;
-            let personaSource: string | null = null;
-            if (callsignPersonaStmt) {
-              try {
-                const row = callsignPersonaStmt.get(a.name) as { persona_id: string; source: string } | undefined;
-                if (row) {
-                  personaId = row.persona_id;
-                  personaSource = row.source;
-                }
-              } catch {
-                // Table may not exist yet if migration hasn't run — silently ignore
-              }
-            }
-
-            return {
-              id: a.id,
-              name: a.name,
-              status: a.status,
-              project: a.project ?? null,
-              currentBead: a.currentTask ?? null,
-              unreadCount: unreadMap.get(a.id) ?? unreadMap.get(a.name) ?? 0,
-              sessionId: a.sessionId ?? null,
-              cost: a.cost ?? null,
-              contextPercent: a.contextPercent ?? null,
-              ...(personaId ? { personaId, personaSource } : {}),
-            };
-          })
+        ? agentsResult.data.map((a) => ({
+            id: a.id,
+            name: a.name,
+            status: a.status,
+            project: a.project ?? null,
+            currentBead: a.currentTask ?? null,
+            unreadCount: unreadMap.get(a.id) ?? unreadMap.get(a.name) ?? 0,
+            sessionId: a.sessionId ?? null,
+            cost: a.cost ?? null,
+            contextPercent: a.contextPercent ?? null,
+            ...(a.personaId ? { personaId: a.personaId, personaSource: a.personaSource } : {}),
+          }))
         : [];
 
       return res.json(success({

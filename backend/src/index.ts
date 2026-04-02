@@ -104,7 +104,7 @@ app.use("/api/events", createEventsRouter(eventStore));
 app.use("/api/memory", createMemoryRouter(memoryStore));
 app.use("/api/messages", createMessagesRouter(messageStore));
 app.use("/api/projects", createProjectsRouter(messageStore, proposalStore, autoDevelopStore));
-app.use("/api/overview", createOverviewRouter(messageStore, messageDb));
+app.use("/api/overview", createOverviewRouter(messageStore));
 app.use("/api/proposals", createProposalsRouter(proposalStore));
 
 // Initialize persona and callsign toggle services and mount routes

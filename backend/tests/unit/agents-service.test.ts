@@ -24,10 +24,11 @@ vi.mock("../../src/services/mcp-tools/status.js", () => ({
   getAgentStatuses: vi.fn(() => new Map()),
 }));
 
-const mockDbGet = vi.fn();
-const mockDbPrepare = vi.fn(() => ({ get: mockDbGet }));
-vi.mock("../../src/services/database.js", () => ({
-  getDatabase: vi.fn(() => ({ prepare: mockDbPrepare })),
+const mockGetPersonaByCallsign = vi.fn();
+vi.mock("../../src/services/persona-service.js", () => ({
+  getPersonaService: vi.fn(() => ({
+    getPersonaByCallsign: mockGetPersonaByCallsign,
+  })),
 }));
 
 import { listTmuxSessions } from "../../src/services/tmux.js";
@@ -308,12 +309,11 @@ describe("agents-service", () => {
       mockManagedSessions([
         { id: "s1", name: "nova", tmuxSession: "adj-swarm-nova" },
       ]);
-      // Mock DB returning a persona link for "nova"
-      mockDbGet.mockImplementation((callsign: string) => {
+      mockGetPersonaByCallsign.mockImplementation((callsign: string) => {
         if (callsign === "nova") {
-          return { persona_id: "8d621bc7-fake-uuid", source: "self-generated" };
+          return { id: "8d621bc7-fake-uuid", name: "November \"Nova\" Terra", source: "self-generated", description: "", traits: {}, createdAt: "", updatedAt: "" };
         }
-        return undefined;
+        return null;
       });
 
       const result = await getAgents();
@@ -329,7 +329,7 @@ describe("agents-service", () => {
       mockManagedSessions([
         { id: "s1", name: "bob", tmuxSession: "adj-swarm-bob" },
       ]);
-      mockDbGet.mockReturnValue(undefined);
+      mockGetPersonaByCallsign.mockReturnValue(null);
 
       const result = await getAgents();
 
@@ -339,13 +339,13 @@ describe("agents-service", () => {
       expect(bob?.personaSource).toBeUndefined();
     });
 
-    it("should handle database not available gracefully", async () => {
+    it("should handle persona service not available gracefully", async () => {
       vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-nova"]));
       mockManagedSessions([
         { id: "s1", name: "nova", tmuxSession: "adj-swarm-nova" },
       ]);
-      // Simulate DB prepare throwing (table doesn't exist)
-      mockDbPrepare.mockImplementationOnce(() => { throw new Error("no such table"); });
+      // Simulate service throwing on lookup
+      mockGetPersonaByCallsign.mockImplementation(() => { throw new Error("DB error"); });
 
       const result = await getAgents();
 

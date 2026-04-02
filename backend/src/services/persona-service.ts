@@ -22,6 +22,7 @@ function rowToPersona(row: PersonaRow): Persona {
     name: row.name,
     description: row.description,
     traits: JSON.parse(row.traits) as TraitValues,
+    source: row.source ?? "hand-crafted",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
