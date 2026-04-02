@@ -11,11 +11,13 @@ import { getAgentBySession } from "../mcp-server.js";
 import { getEventBus } from "../event-bus.js";
 import { logInfo, logWarn } from "../../utils/index.js";
 import type { PersonaService } from "../persona-service.js";
+import { getPersonaService } from "../persona-service.js";
 import {
   TraitValuesSchema,
   POINT_BUDGET,
   TRAIT_MIN,
   TRAIT_MAX,
+  EVOLUTION_MAX_DELTA,
   sumTraits,
   type TraitValues,
 } from "../../types/personas.js";
@@ -161,6 +163,44 @@ export function registerPersonaTools(
         }
 
         logWarn("create_persona: failed", { agentId, callsign, error: message });
+        return errorResult(message);
+      }
+    },
+  );
+
+  // --------------------------------------------------------------------------
+  // evolve_persona
+  // --------------------------------------------------------------------------
+  server.tool(
+    "evolve_persona",
+    "Evolve a persona's traits by applying small adjustments (max +/-2 per trait). Total must remain exactly 100.",
+    {
+      personaId: z.string().describe("The persona ID to evolve"),
+      adjustments: z
+        .record(z.string(), z.number().int().min(-EVOLUTION_MAX_DELTA).max(EVOLUTION_MAX_DELTA))
+        .describe(
+          `Object mapping trait names to delta values (each between -${EVOLUTION_MAX_DELTA} and +${EVOLUTION_MAX_DELTA})`,
+        ),
+    },
+    async ({ personaId, adjustments }) => {
+      const service = personaService ?? getPersonaService();
+      if (!service) {
+        return errorResult("Persona service not initialized");
+      }
+
+      try {
+        const updated = service.evolvePersona(personaId, adjustments);
+        if (updated === null) {
+          return errorResult(`Persona '${personaId}' not found`);
+        }
+        return jsonResult({
+          personaId: updated.id,
+          name: updated.name,
+          traits: updated.traits,
+          updatedAt: updated.updatedAt,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to evolve persona";
         return errorResult(message);
       }
     },

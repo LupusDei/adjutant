@@ -47,6 +47,10 @@ export interface AgentOverview {
   sessionId: string | null;
   cost: number | null;
   contextPercent: number | null;
+  /** Linked persona ID (if agent has a persona) */
+  personaId?: string;
+  /** Persona source: "hand-crafted" or "self-generated" */
+  personaSource?: string;
 }
 
 /** Unread message summary from the overview endpoint. */

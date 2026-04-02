@@ -9,8 +9,8 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 
-import type { Persona, PersonaRow, TraitValues, CreatePersonaInput, UpdatePersonaInput } from "../types/personas.js";
-import { CreatePersonaSchema, UpdatePersonaSchema } from "../types/personas.js";
+import type { Persona, PersonaRow, TraitValues, CreatePersonaInput, UpdatePersonaInput, PersonaEvolution } from "../types/personas.js";
+import { CreatePersonaSchema, UpdatePersonaSchema, EVOLUTION_MAX_DELTA, TRAIT_MIN, TRAIT_MAX, POINT_BUDGET, sumTraits } from "../types/personas.js";
 
 // ============================================================================
 // Row Mapping
@@ -58,6 +58,15 @@ export interface PersonaService {
 
   /** Update the source field of a persona (hand-crafted vs self-generated). */
   updatePersonaSource?(id: string, source: "hand-crafted" | "self-generated"): void;
+
+  /** Evolve a persona's traits by applying deltas (+/-2 max per trait, total must stay at 100). */
+  evolvePersona(id: string, adjustments: Partial<Record<string, number>>): Persona | null;
+
+  /** Log a single trait evolution event to the persona_evolution_log table. */
+  logEvolution(personaId: string, trait: string, oldValue: number, newValue: number): void;
+
+  /** Get evolution history for a persona, ordered by changed_at DESC. */
+  getEvolutionHistory(personaId: string, limit?: number): PersonaEvolution[];
 }
 
 // ============================================================================
@@ -129,6 +138,15 @@ export function createPersonaService(db: Database.Database): PersonaService {
 
   const updateSourceStmt = db.prepare(
     "UPDATE personas SET source = ? WHERE id = ?",
+  );
+
+  const insertEvolutionStmt = db.prepare(`
+    INSERT INTO persona_evolution_log (persona_id, trait, old_value, new_value, changed_at)
+    VALUES (?, ?, ?, ?, datetime('now'))
+  `);
+
+  const getEvolutionStmt = db.prepare(
+    "SELECT * FROM persona_evolution_log WHERE persona_id = ? ORDER BY changed_at DESC, id DESC LIMIT ?",
   );
 
   return {
@@ -232,6 +250,66 @@ export function createPersonaService(db: Database.Database): PersonaService {
 
     updatePersonaSource(id: string, source: "hand-crafted" | "self-generated"): void {
       updateSourceStmt.run(source, id);
+    },
+
+    evolvePersona(id: string, adjustments: Partial<Record<string, number>>): Persona | null {
+      const row = getByIdStmt.get(id) as PersonaRow | undefined;
+      if (row === undefined) return null;
+
+      const persona = rowToPersona(row);
+      const currentTraits = { ...persona.traits };
+      const changes: { trait: string; oldValue: number; newValue: number }[] = [];
+
+      for (const [trait, delta] of Object.entries(adjustments)) {
+        if (delta === undefined || delta === 0) continue;
+        if (!Number.isInteger(delta) || delta < -EVOLUTION_MAX_DELTA || delta > EVOLUTION_MAX_DELTA) {
+          throw new Error(`Delta for '${trait}' must be an integer between -${EVOLUTION_MAX_DELTA} and +${EVOLUTION_MAX_DELTA}, got ${delta}`);
+        }
+        if (!(trait in currentTraits)) {
+          throw new Error(`Unknown trait: '${trait}'`);
+        }
+        const oldValue = currentTraits[trait as keyof TraitValues];
+        const newValue = oldValue + delta;
+        if (newValue < TRAIT_MIN || newValue > TRAIT_MAX) {
+          throw new Error(`Trait '${trait}' would be ${newValue} after applying delta ${delta}, but must be between ${TRAIT_MIN} and ${TRAIT_MAX}`);
+        }
+        changes.push({ trait, oldValue, newValue });
+        (currentTraits as Record<string, number>)[trait] = newValue;
+      }
+
+      const newTotal = sumTraits(currentTraits);
+      if (newTotal !== POINT_BUDGET) {
+        throw new Error(`Total trait points must equal ${POINT_BUDGET} after evolution, but would be ${newTotal}`);
+      }
+
+      if (changes.length === 0) return persona;
+
+      const traitsJson = JSON.stringify(currentTraits);
+      db.prepare("UPDATE personas SET traits = ?, updated_at = datetime('now') WHERE id = ?").run(traitsJson, id);
+      for (const change of changes) {
+        insertEvolutionStmt.run(id, change.trait, change.oldValue, change.newValue);
+      }
+      const updated = getByIdStmt.get(id) as PersonaRow;
+      return rowToPersona(updated);
+    },
+
+    logEvolution(personaId: string, trait: string, oldValue: number, newValue: number): void {
+      insertEvolutionStmt.run(personaId, trait, oldValue, newValue);
+    },
+
+    getEvolutionHistory(personaId: string, limit?: number): PersonaEvolution[] {
+      const effectiveLimit = limit ?? 100;
+      const rows = getEvolutionStmt.all(personaId, effectiveLimit) as {
+        id: number; persona_id: string; trait: string; old_value: number; new_value: number; changed_at: string;
+      }[];
+      return rows.map((r) => ({
+        id: r.id,
+        personaId: r.persona_id,
+        trait: r.trait as PersonaEvolution["trait"],
+        oldValue: r.old_value,
+        newValue: r.new_value,
+        changedAt: r.changed_at,
+      }));
     },
   };
 }

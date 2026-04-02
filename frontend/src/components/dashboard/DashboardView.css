@@ -755,6 +755,17 @@
   text-transform: uppercase;
 }
 
+.dashboard-agent-persona-badge {
+  font-size: 0.5rem;
+  color: var(--crt-phosphor);
+  border: 1px solid var(--crt-phosphor);
+  padding: 0 3px;
+  letter-spacing: 0.08em;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
 .dashboard-agent-task {
   font-size: 0.75rem;
   color: var(--crt-phosphor-dim);
