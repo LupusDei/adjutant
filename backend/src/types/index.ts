@@ -142,6 +142,10 @@ export interface CrewMember {
   cost?: number;
   /** Estimated context window usage percentage (0-100) */
   contextPercent?: number;
+  /** Linked persona ID (from callsign_personas junction table) */
+  personaId?: string;
+  /** Persona source: "hand-crafted" or "self-generated" */
+  personaSource?: string;
 }
 
 // ============================================================================

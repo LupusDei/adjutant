@@ -12,6 +12,7 @@ import { getConnectedAgents } from "./mcp-server.js";
 import { getAgentStatuses } from "./mcp-tools/status.js";
 import { listProjects } from "./projects-service.js";
 import { getSessionCost, estimateContextPercent } from "./cost-tracker.js";
+import { getDatabase } from "./database.js";
 import type { CrewMember, CrewMemberStatus, AgentType } from "../types/index.js";
 
 // ============================================================================
@@ -196,6 +197,37 @@ function enrichWithCostData(members: CrewMember[]): void {
   }
 }
 
+/**
+ * Enriches crew members with persona linkage from the callsign_personas table.
+ * Looks up each member's name (callsign) and attaches personaId + personaSource.
+ */
+function enrichWithPersonaData(members: CrewMember[]): void {
+  const db = getDatabase();
+  if (!db) return;
+
+  let stmt: ReturnType<typeof db.prepare> | null = null;
+  try {
+    stmt = db.prepare(
+      "SELECT cp.persona_id, p.source FROM callsign_personas cp JOIN personas p ON cp.persona_id = p.id WHERE cp.callsign = ? COLLATE NOCASE",
+    );
+  } catch {
+    // Table may not exist yet if migration hasn't run
+    return;
+  }
+
+  for (const member of members) {
+    try {
+      const row = stmt.get(member.name) as { persona_id: string; source: string } | undefined;
+      if (row) {
+        member.personaId = row.persona_id;
+        member.personaSource = row.source;
+      }
+    } catch {
+      // Silently ignore per-member lookup failures
+    }
+  }
+}
+
 // ============================================================================
 // Service Functions
 // ============================================================================
@@ -268,6 +300,7 @@ async function getTmuxAgents(): Promise<AgentsServiceResult<CrewMember[]>> {
     enrichWithSessionData(crewMembers);
     enrichWithMcpStatus(crewMembers);
     enrichWithCostData(crewMembers);
+    enrichWithPersonaData(crewMembers);
     crewMembers.sort((a, b) => a.name.localeCompare(b.name));
     emitStatusChanges(crewMembers);
     return { success: true, data: crewMembers };

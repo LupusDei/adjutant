@@ -24,6 +24,12 @@ vi.mock("../../src/services/mcp-tools/status.js", () => ({
   getAgentStatuses: vi.fn(() => new Map()),
 }));
 
+const mockDbGet = vi.fn();
+const mockDbPrepare = vi.fn(() => ({ get: mockDbGet }));
+vi.mock("../../src/services/database.js", () => ({
+  getDatabase: vi.fn(() => ({ prepare: mockDbPrepare })),
+}));
+
 import { listTmuxSessions } from "../../src/services/tmux.js";
 import { getSessionBridge } from "../../src/services/session-bridge.js";
 import { getAgents, resetAgentStatusCache } from "../../src/services/agents-service.js";
@@ -289,6 +295,63 @@ describe("agents-service", () => {
       // Should only have alice, not the ghost agent
       expect(result.data).toHaveLength(1);
       expect(result.data?.[0].name).toBe("alice");
+    });
+  });
+
+  // ===========================================================================
+  // Persona Enrichment
+  // ===========================================================================
+
+  describe("persona enrichment", () => {
+    it("should attach personaId and personaSource when callsign_personas link exists", async () => {
+      vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-nova"]));
+      mockManagedSessions([
+        { id: "s1", name: "nova", tmuxSession: "adj-swarm-nova" },
+      ]);
+      // Mock DB returning a persona link for "nova"
+      mockDbGet.mockImplementation((callsign: string) => {
+        if (callsign === "nova") {
+          return { persona_id: "8d621bc7-fake-uuid", source: "self-generated" };
+        }
+        return undefined;
+      });
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      const nova = result.data?.find(a => a.name === "nova");
+      expect(nova?.personaId).toBe("8d621bc7-fake-uuid");
+      expect(nova?.personaSource).toBe("self-generated");
+    });
+
+    it("should not attach persona fields when no link exists", async () => {
+      vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-bob"]));
+      mockManagedSessions([
+        { id: "s1", name: "bob", tmuxSession: "adj-swarm-bob" },
+      ]);
+      mockDbGet.mockReturnValue(undefined);
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      const bob = result.data?.find(a => a.name === "bob");
+      expect(bob?.personaId).toBeUndefined();
+      expect(bob?.personaSource).toBeUndefined();
+    });
+
+    it("should handle database not available gracefully", async () => {
+      vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-nova"]));
+      mockManagedSessions([
+        { id: "s1", name: "nova", tmuxSession: "adj-swarm-nova" },
+      ]);
+      // Simulate DB prepare throwing (table doesn't exist)
+      mockDbPrepare.mockImplementationOnce(() => { throw new Error("no such table"); });
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      const nova = result.data?.find(a => a.name === "nova");
+      expect(nova?.personaId).toBeUndefined();
     });
   });
 });
