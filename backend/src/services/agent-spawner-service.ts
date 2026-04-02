@@ -16,6 +16,8 @@ import { getEventBus } from "./event-bus.js";
 import { getSessionBridge } from "./session-bridge.js";
 import type { SessionMode } from "./session-registry.js";
 import { listTmuxSessions } from "./tmux.js";
+import { getPersonaService } from "./persona-service.js";
+import { buildGenesisPrompt, extractLoreExcerpt } from "./adjutant/genesis-prompt.js";
 
 // ============================================================================
 // Spawn Health Check
@@ -136,6 +138,30 @@ export async function spawnAgent(
       return { success: true, tmuxSession };
     }
 
+    // Living Personas (adj-158.2.3): If the callsign has no linked persona
+    // and no agent file is specified, prepend a genesis prompt so the agent
+    // creates its persona before starting work.
+    let effectivePrompt = req.initialPrompt;
+    if (!req.agentFile) {
+      const personaService = getPersonaService();
+      if (personaService) {
+        const existingPersona = personaService.getPersonaByCallsign(req.name);
+        if (!existingPersona) {
+          const loreExcerpt = extractLoreExcerpt(req.name);
+          const genesisPrompt = buildGenesisPrompt(
+            req.name,
+            loreExcerpt,
+            req.initialPrompt,
+          );
+          // Genesis prompt goes BEFORE any task-specific prompt
+          effectivePrompt = req.initialPrompt
+            ? `${genesisPrompt}\n\n---\n\n${req.initialPrompt}`
+            : genesisPrompt;
+          logInfo("Injecting genesis prompt for persona-less callsign", { name: req.name });
+        }
+      }
+    }
+
     // Build claudeArgs
     const claudeArgs: string[] = [];
     if (req.agentFile) {
@@ -154,7 +180,7 @@ export async function spawnAgent(
       projectPath: req.projectPath,
       mode,
       ...(claudeArgs.length > 0 ? { claudeArgs } : {}),
-      ...(req.initialPrompt ? { initialPrompt: req.initialPrompt } : {}),
+      ...(effectivePrompt ? { initialPrompt: effectivePrompt } : {}),
       ...(req.envVars ? { envVars: req.envVars } : {}),
     });
 

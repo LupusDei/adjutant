@@ -110,7 +110,7 @@ agentsRouter.post("/spawn", async (req, res) => {
     projectPath = process.env["ADJUTANT_PROJECT_ROOT"] || process.cwd();
   }
 
-  // Look up persona if personaId is provided
+  // Look up persona if personaId is provided, or check callsign linkage
   let persona = null;
   let personaPrompt: string | undefined;
   const { personaId } = parsed.data;
@@ -129,6 +129,17 @@ agentsRouter.post("/spawn", async (req, res) => {
       );
     }
     personaPrompt = generatePersonaPrompt(persona);
+  } else if (parsed.data.callsign) {
+    // Living Personas (adj-158.3.3): Check if the callsign has a linked persona
+    const personaService = getPersonaService();
+    if (personaService) {
+      const linkedPersona = personaService.getPersonaByCallsign(parsed.data.callsign);
+      if (linkedPersona) {
+        persona = linkedPersona;
+        personaPrompt = generatePersonaPrompt(linkedPersona);
+      }
+    }
+    // If no linked persona, genesis prompt injection happens in agent-spawner-service
   }
 
   const { callsign } = parsed.data;

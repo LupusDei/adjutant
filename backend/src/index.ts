@@ -53,6 +53,7 @@ import { getEventBus } from "./services/event-bus.js";
 import { ADJUTANT_TMUX_SESSION } from "./services/adjutant-spawner.js";
 import { registerMemoryTools } from "./services/mcp-tools/memory.js";
 import { registerCoordinationTools } from "./services/mcp-tools/coordination.js";
+import { registerPersonaTools } from "./services/mcp-tools/personas.js";
 import { createMemoryRouter } from "./routes/memory.js";
 import { CronScheduleStore } from "./services/adjutant/cron-schedule-store.js";
 
@@ -160,6 +161,14 @@ initEventDrivenCostExtraction();
       agentId: "system",
       action: `Phase: ${data.previousPhase} → ${data.newPhase}`,
       detail: { projectId: data.projectId, previousPhase: data.previousPhase, newPhase: data.newPhase, cycleId: data.cycleId },
+    });
+  });
+  bus.on("persona:created", (data) => {
+    eventStore.insertEvent({
+      eventType: "persona_created",
+      agentId: data.callsign,
+      action: `Persona "${data.personaName}" created via ${data.source}`,
+      detail: { personaId: data.personaId, personaName: data.personaName, callsign: data.callsign, source: data.source },
     });
   });
 }
@@ -283,6 +292,7 @@ const server = app.listen(PORT, () => {
     registerAutoDevelopTools(server, proposalStore, autoDevelopStore, { adjutantState, stimulusEngine });
     registerMemoryTools(server, memoryStore, { getAgentBySession });
     registerCoordinationTools(server, adjutantState, messageStore, stimulusEngine, eventStore, cronScheduleStore);
+    registerPersonaTools(server, personaService);
   });
 
   // Initialize MCP server subsystem with tool registrar.

@@ -16,6 +16,9 @@ import { getEventBus } from "../event-bus.js";
 import type { EventName } from "../event-bus.js";
 import { execBd } from "../bd-client.js";
 import { logInfo, logWarn } from "../../utils/index.js";
+import { getPersonaService } from "../persona-service.js";
+import { generatePrompt } from "../prompt-generator.js";
+import { writeAgentFile } from "../agent-file-writer.js";
 import type { AdjutantState } from "../adjutant/state-store.js";
 import type { MessageStore } from "../message-store.js";
 import type { StimulusEngine } from "../adjutant/stimulus-engine.js";
@@ -185,10 +188,26 @@ export function registerCoordinationTools(
       const name = agentName ?? generateAgentName();
       const resolvedProjectPath = projectPath ?? process.env["ADJUTANT_PROJECT_ROOT"] ?? process.cwd();
 
+      // Living Personas (adj-158.3.2): Check if the callsign has a linked persona.
+      // If yes, write agent file with persona prompt and pass --agent flag.
+      // If no, the agent-spawner-service will handle genesis prompt injection.
+      let agentFile: string | undefined;
+      const personaService = getPersonaService();
+      if (personaService) {
+        const linkedPersona = personaService.getPersonaByCallsign(name);
+        if (linkedPersona) {
+          const personaPrompt = generatePrompt(linkedPersona);
+          const agentName_sanitized = await writeAgentFile(resolvedProjectPath, linkedPersona.name, personaPrompt);
+          agentFile = agentName_sanitized;
+          logInfo("spawn_worker: using linked persona", { name, personaId: linkedPersona.id });
+        }
+      }
+
       const result = await spawnAgent({
         name,
         projectPath: resolvedProjectPath,
         initialPrompt: prompt,
+        ...(agentFile ? { agentFile } : {}),
       });
 
       if (!result.success) {

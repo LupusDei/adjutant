@@ -173,6 +173,13 @@ export interface IdeateResearchCompleteEvent {
   anglesExplored: number;
 }
 
+export interface PersonaCreatedEvent {
+  personaId: string;
+  personaName: string;
+  callsign: string;
+  source: "hand-crafted" | "self-generated";
+}
+
 /**
  * Map of event names to their payload types.
  */
@@ -204,6 +211,7 @@ export interface EventMap {
   "auto_develop:phase_changed": AutoDevelopPhaseChangedEvent;
   "auto_develop:escalated": AutoDevelopEscalatedEvent;
   "ideate:research_complete": IdeateResearchCompleteEvent;
+  "persona:created": PersonaCreatedEvent;
 }
 
 export type EventName = keyof EventMap;
@@ -283,6 +291,7 @@ class EventBus {
       "proposal:scored", "proposal:completed",
       "auto_develop:phase_changed", "auto_develop:escalated",
       "ideate:research_complete",
+      "persona:created",
     ];
     for (const e of events) {
       const count = this.emitter.listenerCount(e);

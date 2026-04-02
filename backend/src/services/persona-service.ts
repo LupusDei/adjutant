@@ -49,6 +49,15 @@ export interface PersonaService {
 
   /** Delete a persona by ID. Returns true if deleted, false if not found. */
   deletePersona(id: string): boolean;
+
+  /** Get the persona linked to a callsign. Returns null if no link exists. */
+  getPersonaByCallsign(callsign: string): Persona | null;
+
+  /** Link a callsign to a persona. Uses INSERT OR IGNORE for race-condition safety. */
+  linkCallsignPersona(callsign: string, personaId: string): void;
+
+  /** Update the source field of a persona (hand-crafted vs self-generated). */
+  updatePersonaSource?(id: string, source: "hand-crafted" | "self-generated"): void;
 }
 
 // ============================================================================
@@ -105,6 +114,22 @@ export function createPersonaService(db: Database.Database): PersonaService {
   );
 
   const deleteStmt = db.prepare("DELETE FROM personas WHERE id = ?");
+
+  // Living Personas (adj-158) — callsign-persona linkage
+  const getByCallsignStmt = db.prepare(`
+    SELECT p.* FROM personas p
+    INNER JOIN callsign_personas cp ON cp.persona_id = p.id
+    WHERE cp.callsign = ?
+  `);
+
+  const linkCallsignStmt = db.prepare(`
+    INSERT OR IGNORE INTO callsign_personas (callsign, persona_id)
+    VALUES (?, ?)
+  `);
+
+  const updateSourceStmt = db.prepare(
+    "UPDATE personas SET source = ? WHERE id = ?",
+  );
 
   return {
     createPersona(input: CreatePersonaInput): Persona {
@@ -194,6 +219,19 @@ export function createPersonaService(db: Database.Database): PersonaService {
     deletePersona(id: string): boolean {
       const result = deleteStmt.run(id);
       return result.changes > 0;
+    },
+
+    getPersonaByCallsign(callsign: string): Persona | null {
+      const row = getByCallsignStmt.get(callsign) as PersonaRow | undefined;
+      return row !== undefined ? rowToPersona(row) : null;
+    },
+
+    linkCallsignPersona(callsign: string, personaId: string): void {
+      linkCallsignStmt.run(callsign, personaId);
+    },
+
+    updatePersonaSource(id: string, source: "hand-crafted" | "self-generated"): void {
+      updateSourceStmt.run(source, id);
     },
   };
 }

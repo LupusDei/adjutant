@@ -90,6 +90,7 @@ final class TimelineViewModel: BaseViewModel {
         ("auto_develop_disabled", "AUTO-DEV OFF"),
         ("auto_develop_phase_changed", "PHASE"),
         ("proposal_completed", "PROPOSAL DONE"),
+        ("persona_created", "PERSONA"),
     ]
 
     // MARK: - Dependencies

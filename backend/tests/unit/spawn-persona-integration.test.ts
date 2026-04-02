@@ -49,6 +49,9 @@ function createTestDb(): Database.Database {
 const mockPersonaService = {
   getPersona: vi.fn(),
   getPersonaByName: vi.fn(),
+  getPersonaByCallsign: vi.fn().mockReturnValue(null),
+  linkCallsignPersona: vi.fn(),
+  updatePersonaSource: vi.fn(),
   listPersonas: vi.fn().mockReturnValue([]),
   createPersona: vi.fn(),
   updatePersona: vi.fn(),

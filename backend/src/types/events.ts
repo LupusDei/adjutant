@@ -13,6 +13,7 @@ export const EventType = z.enum([
   "auto_develop_phase_changed",
   "proposal_completed",
   "ideate_research_complete",
+  "persona_created",
 ]);
 export type EventType = z.infer<typeof EventType>;
 
