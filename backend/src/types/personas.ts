@@ -261,3 +261,30 @@ export const UpdatePersonaSchema = z
 
 /** Inferred type from the update schema */
 export type UpdatePersonaInput = z.infer<typeof UpdatePersonaSchema>;
+
+// ============================================================================
+// Living Personas Types (adj-158)
+// ============================================================================
+
+/** How a persona was created */
+export type PersonaSource = "hand-crafted" | "self-generated";
+
+/** Junction record linking a StarCraft callsign to a persona */
+export interface CallsignPersona {
+  callsign: string;
+  personaId: string;
+  createdAt: string;
+}
+
+/** A single trait evolution event */
+export interface PersonaEvolution {
+  id: number;
+  personaId: string;
+  trait: PersonaTrait;
+  oldValue: number;
+  newValue: number;
+  changedAt: string;
+}
+
+/** Maximum adjustment per trait in a single evolve_persona call */
+export const EVOLUTION_MAX_DELTA = 2;
