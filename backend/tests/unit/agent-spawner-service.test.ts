@@ -13,7 +13,8 @@ const mockBridgeCreateSession = vi.fn();
 const mockDiscoverSessions = vi.fn();
 const mockRegistrySave = vi.fn();
 const mockFindByTmuxSession = vi.fn();
-const mockLifecycle = { discoverSessions: mockDiscoverSessions };
+const mockExportEnvVars = vi.fn();
+const mockLifecycle = { discoverSessions: mockDiscoverSessions, exportEnvVars: mockExportEnvVars };
 const mockRegistry = {
   findByTmuxSession: mockFindByTmuxSession,
   save: mockRegistrySave,
@@ -33,6 +34,14 @@ vi.mock("../../src/services/session-bridge.js", () => ({
 const mockListTmuxSessions = vi.fn();
 vi.mock("../../src/services/tmux.js", () => ({
   listTmuxSessions: () => mockListTmuxSessions(),
+}));
+
+// Mock persona service
+const mockGetPersonaByCallsign = vi.fn();
+vi.mock("../../src/services/persona-service.js", () => ({
+  getPersonaService: () => ({
+    getPersonaByCallsign: mockGetPersonaByCallsign,
+  }),
 }));
 
 import {
@@ -121,6 +130,67 @@ describe("agent-spawner-service", () => {
 
       expect(result.success).toBe(true);
       expect(mockBridgeCreateSession).not.toHaveBeenCalled();
+    });
+
+    it("should re-export persona env var on respawn when persona exists", async () => {
+      mockListTmuxSessions.mockResolvedValue(
+        new Set(["adj-swarm-test-agent"])
+      );
+      mockFindByTmuxSession.mockReturnValue({ name: "test-agent" });
+      mockGetPersonaByCallsign.mockReturnValue({ id: "persona-123", name: "Test Persona" });
+      mockExportEnvVars.mockResolvedValue(undefined);
+
+      const result = await spawnAgent({
+        name: "test-agent",
+        projectPath: "/tmp/project",
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockExportEnvVars).toHaveBeenCalledWith(
+        "adj-swarm-test-agent",
+        expect.objectContaining({ ADJUTANT_PERSONA_ID: "persona-123" })
+      );
+    });
+
+    it("should not call exportEnvVars on respawn when no persona and no env vars", async () => {
+      mockListTmuxSessions.mockResolvedValue(
+        new Set(["adj-swarm-test-agent"])
+      );
+      mockFindByTmuxSession.mockReturnValue({ name: "test-agent" });
+      mockGetPersonaByCallsign.mockReturnValue(undefined);
+
+      const result = await spawnAgent({
+        name: "test-agent",
+        projectPath: "/tmp/project",
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockExportEnvVars).not.toHaveBeenCalled();
+    });
+
+    it("should use caller-provided ADJUTANT_PERSONA_ID over auto-resolved persona", async () => {
+      mockListTmuxSessions.mockResolvedValue(
+        new Set(["adj-swarm-test-agent"])
+      );
+      mockFindByTmuxSession.mockReturnValue({ name: "test-agent" });
+      // Persona service would return a different ID
+      mockGetPersonaByCallsign.mockReturnValue({ id: "auto-456", name: "Auto" });
+      mockExportEnvVars.mockResolvedValue(undefined);
+
+      const result = await spawnAgent({
+        name: "test-agent",
+        projectPath: "/tmp/project",
+        envVars: { ADJUTANT_PERSONA_ID: "explicit-789" },
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockExportEnvVars).toHaveBeenCalledWith(
+        "adj-swarm-test-agent",
+        expect.objectContaining({ ADJUTANT_PERSONA_ID: "explicit-789" })
+      );
+      // Should NOT have been overridden by the auto-resolved persona
+      const envVarArg = mockExportEnvVars.mock.calls[0][1] as Record<string, string>;
+      expect(envVarArg.ADJUTANT_PERSONA_ID).toBe("explicit-789");
     });
 
     it("should re-register orphaned session via discoverSessions", async () => {

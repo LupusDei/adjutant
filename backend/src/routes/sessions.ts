@@ -184,7 +184,7 @@ sessionsRouter.post("/", async (req, res) => {
   const claudeArgs = [...(data.claudeArgs ?? [])];
 
   if (personaPrompt && persona) {
-    const agentName = await writeAgentFile(projectPath, persona.name, personaPrompt);
+    const agentName = await writeAgentFile(projectPath, persona.name, personaPrompt, persona.description);
     claudeArgs.push("--agent", agentName);
   }
 

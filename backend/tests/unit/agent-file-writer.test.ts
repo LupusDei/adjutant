@@ -2,7 +2,7 @@
  * Agent File Writer — TDD Tests
  *
  * Tests for writeAgentFile utility and sanitizePersonaName helper.
- * Covers: sanitization rules, directory creation, file writing, idempotency.
+ * Covers: sanitization rules, directory creation, file writing, idempotency, frontmatter.
  */
 
 import { describe, it, expect, afterEach } from "vitest";
@@ -81,44 +81,84 @@ describe("writeAgentFile", () => {
     tmpDirs.length = 0;
   });
 
-  it("should create .claude/agents/ directory and write the file", async () => {
+  it("should create .claude/agents/ directory and write the file with frontmatter", async () => {
     const projectPath = await makeTmpDir();
     const prompt = "You are Sentinel. Watch for bugs.";
 
-    const name = await writeAgentFile(projectPath, "Sentinel", prompt);
+    const name = await writeAgentFile(projectPath, "Sentinel", prompt, "Bug-hunting QA agent");
 
     expect(name).toBe("sentinel");
 
     const filePath = join(projectPath, ".claude", "agents", "sentinel.md");
     const content = await readFile(filePath, "utf-8");
-    expect(content).toBe(prompt);
+    expect(content).toContain("---\nname: sentinel\n");
+    expect(content).toContain('description: "Bug-hunting QA agent"');
+    expect(content).toContain("---\n\n");
+    expect(content).toContain(prompt);
+  });
+
+  it("should prepend YAML frontmatter before the prompt text", async () => {
+    const projectPath = await makeTmpDir();
+    const prompt = "# Agent Persona: Architect\n\nDesign systems.";
+
+    await writeAgentFile(projectPath, "Architect", prompt, "Systems architect");
+
+    const filePath = join(projectPath, ".claude", "agents", "architect.md");
+    const content = await readFile(filePath, "utf-8");
+    // Frontmatter must come first
+    expect(content.startsWith("---\n")).toBe(true);
+    // Prompt text must follow the closing frontmatter delimiter
+    const afterFrontmatter = content.split("---\n\n")[1];
+    expect(afterFrontmatter).toBe(prompt);
+  });
+
+  it("should use fallback description when none provided", async () => {
+    const projectPath = await makeTmpDir();
+
+    await writeAgentFile(projectPath, "Sentinel", "Watch for bugs.");
+
+    const filePath = join(projectPath, ".claude", "agents", "sentinel.md");
+    const content = await readFile(filePath, "utf-8");
+    expect(content).toContain('description: "Persona agent: Sentinel"');
+  });
+
+  it("should escape quotes in description", async () => {
+    const projectPath = await makeTmpDir();
+    const desc = 'Agent who says "hello" a lot';
+
+    await writeAgentFile(projectPath, "Greeter", "Hi!", desc);
+
+    const filePath = join(projectPath, ".claude", "agents", "greeter.md");
+    const content = await readFile(filePath, "utf-8");
+    expect(content).toContain('description: "Agent who says \\"hello\\" a lot"');
   });
 
   it("should overwrite existing file (idempotent)", async () => {
     const projectPath = await makeTmpDir();
 
     // Write first version
-    await writeAgentFile(projectPath, "Sentinel", "Version 1");
+    await writeAgentFile(projectPath, "Sentinel", "Version 1", "V1");
     // Write second version
-    const name = await writeAgentFile(projectPath, "Sentinel", "Version 2");
+    const name = await writeAgentFile(projectPath, "Sentinel", "Version 2", "V2");
 
     expect(name).toBe("sentinel");
     const filePath = join(projectPath, ".claude", "agents", "sentinel.md");
     const content = await readFile(filePath, "utf-8");
-    expect(content).toBe("Version 2");
+    expect(content).toContain("Version 2");
+    expect(content).not.toContain("Version 1");
   });
 
   it("should handle completely missing .claude/ directory", async () => {
     const projectPath = await makeTmpDir();
-    // Ensure no .claude dir exists
     const prompt = "# Agent Persona: QA Lead\n\nYou focus on quality.";
 
-    const name = await writeAgentFile(projectPath, "QA Lead", prompt);
+    const name = await writeAgentFile(projectPath, "QA Lead", prompt, "QA specialist");
 
     expect(name).toBe("qa-lead");
     const filePath = join(projectPath, ".claude", "agents", "qa-lead.md");
     const content = await readFile(filePath, "utf-8");
-    expect(content).toBe(prompt);
+    expect(content).toContain("name: qa-lead");
+    expect(content).toContain(prompt);
   });
 
   it("should handle existing .claude/ directory without agents/ subdirectory", async () => {
@@ -126,18 +166,19 @@ describe("writeAgentFile", () => {
     await mkdir(join(projectPath, ".claude"), { recursive: true });
     await writeFile(join(projectPath, ".claude", "settings.json"), "{}");
 
-    const name = await writeAgentFile(projectPath, "Architect", "Design things");
+    const name = await writeAgentFile(projectPath, "Architect", "Design things", "Architect agent");
 
     expect(name).toBe("architect");
     const filePath = join(projectPath, ".claude", "agents", "architect.md");
     const content = await readFile(filePath, "utf-8");
-    expect(content).toBe("Design things");
+    expect(content).toContain("name: architect");
+    expect(content).toContain("Design things");
   });
 
   it("should return the sanitized name used for the file", async () => {
     const projectPath = await makeTmpDir();
 
-    const name = await writeAgentFile(projectPath, "C++_Expert", "Low-level wizardry");
+    const name = await writeAgentFile(projectPath, "C++_Expert", "Low-level wizardry", "C expert");
 
     expect(name).toBe("c-expert");
     const filePath = join(projectPath, ".claude", "agents", "c-expert.md");

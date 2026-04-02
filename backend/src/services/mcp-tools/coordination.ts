@@ -201,7 +201,7 @@ export function registerCoordinationTools(
         const linkedPersona = personaService.getPersonaByCallsign(name);
         if (linkedPersona) {
           const personaPrompt = generatePrompt(linkedPersona);
-          const agentName_sanitized = await writeAgentFile(resolvedProjectPath, linkedPersona.name, personaPrompt);
+          const agentName_sanitized = await writeAgentFile(resolvedProjectPath, linkedPersona.name, personaPrompt, linkedPersona.description);
           agentFile = agentName_sanitized;
           spawnEnvVars = { ADJUTANT_PERSONA_ID: linkedPersona.id };
           logInfo("spawn_worker: using linked persona", { name, personaId: linkedPersona.id });

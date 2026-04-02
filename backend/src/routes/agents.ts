@@ -187,7 +187,7 @@ agentsRouter.post("/spawn", async (req, res) => {
   // instead of injecting via paste-buffer (FR-001, FR-002, FR-005).
   let claudeArgs: string[] | undefined;
   if (personaPrompt && persona) {
-    const agentName = await writeAgentFile(projectPath, persona.name, personaPrompt);
+    const agentName = await writeAgentFile(projectPath, persona.name, personaPrompt, persona.description);
     claudeArgs = ["--agent", agentName];
   }
 

@@ -38,26 +38,43 @@ export function sanitizePersonaName(name: string): string {
 }
 
 /**
+ * Build YAML frontmatter block required by Claude Code's --agent flag.
+ *
+ * Agent files in .claude/agents/ must start with YAML frontmatter
+ * containing at minimum `name` and `description` fields for Claude Code
+ * to recognize and load them.
+ */
+function buildFrontmatter(name: string, description: string): string {
+  // Escape any quotes in the description for YAML safety
+  const safeDesc = description.replace(/"/g, '\\"');
+  return `---\nname: ${name}\ndescription: "${safeDesc}"\n---\n\n`;
+}
+
+/**
  * Write persona prompt to .claude/agents/<sanitized-name>.md in the target project.
  *
  * Creates the .claude/agents/ directory if it doesn't exist.
  * Overwrites any existing file at that path (idempotent).
+ * Prepends YAML frontmatter required by Claude Code's --agent flag.
  *
  * @param projectPath - Absolute path to the target project directory
  * @param personaName - The persona's display name (will be sanitized)
  * @param promptText - The full persona prompt markdown to write
+ * @param description - Short description of the agent (used in frontmatter)
  * @returns The sanitized name used for the file (without .md extension)
  */
 export async function writeAgentFile(
   projectPath: string,
   personaName: string,
   promptText: string,
+  description = "",
 ): Promise<string> {
   const name = sanitizePersonaName(personaName);
   const agentsDir = join(projectPath, ".claude", "agents");
+  const frontmatter = buildFrontmatter(name, description || `Persona agent: ${personaName}`);
 
   await mkdir(agentsDir, { recursive: true });
-  await writeFile(join(agentsDir, `${name}.md`), promptText, "utf-8");
+  await writeFile(join(agentsDir, `${name}.md`), frontmatter + promptText, "utf-8");
 
   return name;
 }

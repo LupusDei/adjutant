@@ -247,7 +247,7 @@ describe("POST /api/agents/spawn — persona integration", () => {
     expect(mockGeneratePersonaPrompt).toHaveBeenCalledWith(MOCK_PERSONA);
 
     // Should have written agent file with correct args
-    expect(mockWriteAgentFile).toHaveBeenCalledWith("/test/project", "Architect", MOCK_PROMPT);
+    expect(mockWriteAgentFile).toHaveBeenCalledWith("/test/project", "Architect", MOCK_PROMPT, "System design specialist");
 
     // Persona should be deployed via --agent flag, NOT initialPrompt
     const createCall = mockBridge.createSession.mock.calls[0][0];
@@ -457,7 +457,7 @@ describe("POST /api/sessions — persona integration", () => {
     expect(mockGeneratePersonaPrompt).toHaveBeenCalledWith(MOCK_PERSONA);
 
     // Should have written agent file with correct args
-    expect(mockWriteAgentFile).toHaveBeenCalledWith("/test/project", "Architect", MOCK_PROMPT);
+    expect(mockWriteAgentFile).toHaveBeenCalledWith("/test/project", "Architect", MOCK_PROMPT, "System design specialist");
 
     // Persona should be deployed via --agent flag, NOT initialPrompt
     const createCall = mockBridge.createSession.mock.calls[0][0];

@@ -7,10 +7,10 @@
  * - adj-033.4.3: SessionStart hook for initial persona context injection
  *
  * The hook script is a bash script that:
- * 1. Reads ADJUTANT_PERSONA_ID from environment
- * 2. Calls GET /api/personas/:id/prompt on the Adjutant API
- * 3. Outputs the prompt to stdout (Claude Code injects into context)
- * 4. Exits silently when no persona is configured (non-persona agents)
+ * 1. Reads ADJUTANT_AGENT_ID from environment
+ * 2. Finds the persona agent file on disk at .claude/agents/<name>.md
+ * 3. Strips YAML frontmatter and outputs the prompt to stdout
+ * 4. Exits silently when no agent file is found (non-persona agents)
  */
 
 import { describe, it, expect } from "vitest";
@@ -38,11 +38,12 @@ describe("persona-inject.sh hook script", () => {
     expect(isExecutable).toBe(true);
   });
 
-  it("should exit silently when ADJUTANT_PERSONA_ID is not set", () => {
+  it("should exit silently when ADJUTANT_AGENT_ID is not set", () => {
     const output = execSync(`bash "${HOOK_SCRIPT}"`, {
       encoding: "utf8",
       env: {
         ...process.env,
+        ADJUTANT_AGENT_ID: "",
         ADJUTANT_PERSONA_ID: "",
       },
     });
@@ -51,45 +52,30 @@ describe("persona-inject.sh hook script", () => {
     expect(output.trim()).toBe("");
   });
 
-  it("should exit silently when API is unreachable", () => {
-    const output = execSync(`bash "${HOOK_SCRIPT}"`, {
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        ADJUTANT_PERSONA_ID: "some-persona-id",
-        // Use a port that's almost certainly not running anything
-        ADJUTANT_API_BASE: "http://localhost:59999",
-      },
-      timeout: 10000,
-    });
-
-    // Should produce no output (graceful failure)
-    expect(output.trim()).toBe("");
-  });
-
-  it("should contain proper curl command for API call", () => {
+  it("should read agent files from .claude/agents/ directory", () => {
     const content = readFileSync(HOOK_SCRIPT, "utf8");
 
-    // Should call the personas API endpoint
-    expect(content).toContain("/api/personas/");
-    expect(content).toContain("/prompt");
-    expect(content).toContain("curl");
-    expect(content).toContain("ADJUTANT_PERSONA_ID");
-    expect(content).toContain("ADJUTANT_API_BASE");
+    // Should reference the agents directory
+    expect(content).toContain("agents");
+    expect(content).toContain(".md");
+    // Should check ADJUTANT_AGENT_ID
+    expect(content).toContain("ADJUTANT_AGENT_ID");
   });
 
-  it("should use jq to extract prompt from JSON response", () => {
+  it("should strip YAML frontmatter from agent files", () => {
     const content = readFileSync(HOOK_SCRIPT, "utf8");
 
-    // Should use jq to parse the response
-    expect(content).toContain("jq");
-    expect(content).toContain(".data.prompt");
+    // Should use awk to strip frontmatter (--- delimited blocks)
+    expect(content).toContain("awk");
+    expect(content).toContain("---");
   });
 
-  it("should default API base to localhost:4201", () => {
+  it("should not call the API or use curl", () => {
     const content = readFileSync(HOOK_SCRIPT, "utf8");
 
-    expect(content).toContain("http://localhost:4201");
+    // Hook reads from disk now, not from the API
+    expect(content).not.toContain("curl");
+    expect(content).not.toContain("/api/personas/");
   });
 });
 
