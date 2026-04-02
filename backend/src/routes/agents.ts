@@ -17,6 +17,7 @@ import { getProject } from "../services/projects-service.js";
 import { getPersonaService } from "../services/persona-service.js";
 import { generatePersonaPrompt } from "../services/prompt-generator.js";
 import { writeAgentFile } from "../services/agent-file-writer.js";
+import { buildGenesisPrompt, extractLoreExcerpt } from "../services/adjutant/genesis-prompt.js";
 import { success, internalError, badRequest, notFound, conflict } from "../utils/responses.js";
 
 /**
@@ -189,9 +190,8 @@ agentsRouter.post("/spawn", async (req, res) => {
     claudeArgs = ["--agent", agentName];
   }
 
-  // Generate layer identity preamble for non-persona spawns (adj-145).
-  // Persona spawns already get identity via --agent file; non-persona spawns
-  // were starting without knowing their name, role, or reporting instructions.
+  // Generate initial prompt for non-persona spawns.
+  // Two cases: (1) callsign has no persona → genesis prompt, (2) normal Layer 3 preamble.
   let initialPrompt: string | undefined;
   if (!personaPrompt) {
     // Resolve project name for the preamble
@@ -200,7 +200,19 @@ agentsRouter.post("/spawn", async (req, res) => {
       const proj = getProject(parsed.data.projectId);
       if (proj.success && proj.data) projectName = proj.data.name;
     }
-    initialPrompt = buildAgentIdentityPrompt(name, projectName);
+
+    // Living Personas (adj-159 fix): Check if this callsign needs genesis
+    const personaService = getPersonaService();
+    const hasPersona = personaService?.getPersonaByCallsign(name);
+    if (!hasPersona && personaService) {
+      // No persona — inject genesis prompt so agent self-defines before working
+      const loreExcerpt = extractLoreExcerpt(name);
+      const identityPreamble = buildAgentIdentityPrompt(name, projectName);
+      const genesisPrompt = buildGenesisPrompt(name, loreExcerpt, identityPreamble);
+      initialPrompt = genesisPrompt;
+    } else {
+      initialPrompt = buildAgentIdentityPrompt(name, projectName);
+    }
   }
 
   const result = await bridge.createSession({
