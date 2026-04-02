@@ -201,13 +201,20 @@ final class AgentDetailViewModel: BaseViewModel {
     func loadPersona() async {
         isLoadingPersona = true
         do {
-            // Fetch all personas including self-generated callsign personas
-            let personas = try await apiClient.getPersonas(includeCallsign: true)
-            if let matched = personas.first(where: { $0.name.lowercased() == member.name.lowercased() }) {
+            if let personaId = member.personaId {
+                // Use the persona ID from the overview data (authoritative)
+                let matched = try await apiClient.getPersona(id: personaId)
                 persona = matched
-                // Also load the prompt text
                 let promptResponse = try await apiClient.getPersonaPrompt(id: matched.id)
                 personaPromptText = promptResponse.prompt
+            } else {
+                // Fallback: search by name match for agents without personaId in overview
+                let personas = try await apiClient.getPersonas(includeCallsign: true)
+                if let matched = personas.first(where: { $0.name.lowercased() == member.name.lowercased() }) {
+                    persona = matched
+                    let promptResponse = try await apiClient.getPersonaPrompt(id: matched.id)
+                    personaPromptText = promptResponse.prompt
+                }
             }
         } catch {
             // No persona found — that's fine

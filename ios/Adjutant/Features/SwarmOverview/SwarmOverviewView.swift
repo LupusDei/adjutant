@@ -709,7 +709,8 @@ struct SwarmOverviewView: View {
             unreadMail: agent.unreadCount,
             sessionId: agent.sessionId,
             cost: agent.cost,
-            contextPercent: agent.contextPercent
+            contextPercent: agent.contextPercent,
+            personaId: agent.personaId
         )
     }
 

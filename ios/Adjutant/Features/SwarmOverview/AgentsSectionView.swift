@@ -160,7 +160,8 @@ struct AgentsSectionView: View {
             status: CrewMemberStatus(rawValue: agent.status) ?? .idle,
             currentTask: agent.currentBead,
             unreadMail: agent.unreadCount,
-            sessionId: agent.sessionId
+            sessionId: agent.sessionId,
+            personaId: agent.personaId
         )
     }
 

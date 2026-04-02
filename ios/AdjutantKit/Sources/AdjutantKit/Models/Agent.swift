@@ -28,6 +28,8 @@ public struct CrewMember: Codable, Identifiable, Equatable, Hashable {
     public let cost: Double?
     /// Estimated context window usage percentage (0-100)
     public let contextPercent: Double?
+    /// Linked persona ID (nil if agent has no persona)
+    public let personaId: String?
 
     public init(
         id: String,
@@ -42,7 +44,8 @@ public struct CrewMember: Codable, Identifiable, Equatable, Hashable {
         branch: String? = nil,
         sessionId: String? = nil,
         cost: Double? = nil,
-        contextPercent: Double? = nil
+        contextPercent: Double? = nil,
+        personaId: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -57,11 +60,12 @@ public struct CrewMember: Codable, Identifiable, Equatable, Hashable {
         self.sessionId = sessionId
         self.cost = cost
         self.contextPercent = contextPercent
+        self.personaId = personaId
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, name, type, status, project, currentTask, unreadMail
-        case firstSubject, firstFrom, branch, sessionId, cost, contextPercent
+        case firstSubject, firstFrom, branch, sessionId, cost, contextPercent, personaId
     }
 }
 
