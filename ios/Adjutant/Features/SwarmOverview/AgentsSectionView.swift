@@ -16,6 +16,7 @@ struct AgentsSectionView: View {
     let agents: [AgentOverview]
     @EnvironmentObject private var coordinator: AppCoordinator
     @Environment(\.crtTheme) private var theme
+    @State private var selectedPersonaAgent: AgentOverview?
 
     var body: some View {
         VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
@@ -28,6 +29,11 @@ struct AgentsSectionView: View {
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 coordinator.navigate(to: .agentDetail(member: crewMember(from: agent)))
+                            }
+                            .onLongPressGesture {
+                                if agent.personaId != nil {
+                                    selectedPersonaAgent = agent
+                                }
                             }
                             .swipeActions(edge: .trailing) {
                                 Button {
@@ -45,6 +51,11 @@ struct AgentsSectionView: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
+            }
+        }
+        .sheet(item: $selectedPersonaAgent) { agent in
+            if let personaId = agent.personaId {
+                PersonaDetailSheet(agentName: agent.name, personaId: personaId)
             }
         }
     }
