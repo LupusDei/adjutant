@@ -70,7 +70,7 @@ struct PersonaDetailSheet: View {
     private func headerSection(_ persona: Persona) -> some View {
         VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
             HStack(spacing: CRTTheme.Spacing.sm) {
-                CRTText(persona.name.uppercased(), style: .title, glowIntensity: .medium)
+                CRTText(persona.name.uppercased(), style: .header, glowIntensity: .medium)
 
                 CRTText(
                     "SELF-GENERATED",
