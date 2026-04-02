@@ -53,6 +53,7 @@ import { getEventBus } from "./services/event-bus.js";
 import { ADJUTANT_TMUX_SESSION } from "./services/adjutant-spawner.js";
 import { registerMemoryTools } from "./services/mcp-tools/memory.js";
 import { registerCoordinationTools } from "./services/mcp-tools/coordination.js";
+import { registerPersonaTools } from "./services/mcp-tools/personas.js";
 import { createMemoryRouter } from "./routes/memory.js";
 import { CronScheduleStore } from "./services/adjutant/cron-schedule-store.js";
 
@@ -103,7 +104,7 @@ app.use("/api/events", createEventsRouter(eventStore));
 app.use("/api/memory", createMemoryRouter(memoryStore));
 app.use("/api/messages", createMessagesRouter(messageStore));
 app.use("/api/projects", createProjectsRouter(messageStore, proposalStore, autoDevelopStore));
-app.use("/api/overview", createOverviewRouter(messageStore));
+app.use("/api/overview", createOverviewRouter(messageStore, messageDb));
 app.use("/api/proposals", createProposalsRouter(proposalStore));
 
 // Initialize persona and callsign toggle services and mount routes
@@ -283,6 +284,7 @@ const server = app.listen(PORT, () => {
     registerAutoDevelopTools(server, proposalStore, autoDevelopStore, { adjutantState, stimulusEngine });
     registerMemoryTools(server, memoryStore, { getAgentBySession });
     registerCoordinationTools(server, adjutantState, messageStore, stimulusEngine, eventStore, cronScheduleStore);
+    registerPersonaTools(server);
   });
 
   // Initialize MCP server subsystem with tool registrar.

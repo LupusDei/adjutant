@@ -9,8 +9,8 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 
-import type { Persona, PersonaRow, TraitValues, CreatePersonaInput, UpdatePersonaInput } from "../types/personas.js";
-import { CreatePersonaSchema, UpdatePersonaSchema } from "../types/personas.js";
+import type { Persona, PersonaRow, TraitValues, CreatePersonaInput, UpdatePersonaInput, PersonaEvolution } from "../types/personas.js";
+import { CreatePersonaSchema, UpdatePersonaSchema, EVOLUTION_MAX_DELTA, TRAIT_MIN, TRAIT_MAX, POINT_BUDGET, sumTraits } from "../types/personas.js";
 
 // ============================================================================
 // Row Mapping
@@ -49,6 +49,21 @@ export interface PersonaService {
 
   /** Delete a persona by ID. Returns true if deleted, false if not found. */
   deletePersona(id: string): boolean;
+
+  /**
+   * Evolve a persona's traits by applying deltas.
+   * Each delta must be between -EVOLUTION_MAX_DELTA and +EVOLUTION_MAX_DELTA.
+   * After applying, each trait must remain within 0-20 and total must equal POINT_BUDGET.
+   * Returns the updated persona or null if not found.
+   * Throws on validation failure.
+   */
+  evolvePersona(id: string, adjustments: Partial<Record<string, number>>): Persona | null;
+
+  /** Log a single trait evolution event to the persona_evolution_log table. */
+  logEvolution(personaId: string, trait: string, oldValue: number, newValue: number): void;
+
+  /** Get evolution history for a persona, ordered by changed_at DESC. */
+  getEvolutionHistory(personaId: string, limit?: number): PersonaEvolution[];
 }
 
 // ============================================================================
@@ -105,6 +120,15 @@ export function createPersonaService(db: Database.Database): PersonaService {
   );
 
   const deleteStmt = db.prepare("DELETE FROM personas WHERE id = ?");
+
+  const insertEvolutionStmt = db.prepare(`
+    INSERT INTO persona_evolution_log (persona_id, trait, old_value, new_value, changed_at)
+    VALUES (?, ?, ?, ?, datetime('now'))
+  `);
+
+  const getEvolutionStmt = db.prepare(
+    "SELECT * FROM persona_evolution_log WHERE persona_id = ? ORDER BY changed_at DESC, id DESC LIMIT ?",
+  );
 
   return {
     createPersona(input: CreatePersonaInput): Persona {
@@ -194,6 +218,97 @@ export function createPersonaService(db: Database.Database): PersonaService {
     deletePersona(id: string): boolean {
       const result = deleteStmt.run(id);
       return result.changes > 0;
+    },
+
+    evolvePersona(id: string, adjustments: Partial<Record<string, number>>): Persona | null {
+      // Get the existing persona
+      const row = getByIdStmt.get(id) as PersonaRow | undefined;
+      if (row === undefined) {
+        return null;
+      }
+
+      const persona = rowToPersona(row);
+      const currentTraits = { ...persona.traits };
+
+      // Validate each delta and compute new values
+      const changes: { trait: string; oldValue: number; newValue: number }[] = [];
+
+      for (const [trait, delta] of Object.entries(adjustments)) {
+        if (delta === undefined || delta === 0) continue;
+
+        // Validate delta range
+        if (!Number.isInteger(delta) || delta < -EVOLUTION_MAX_DELTA || delta > EVOLUTION_MAX_DELTA) {
+          throw new Error(
+            `Delta for '${trait}' must be an integer between -${EVOLUTION_MAX_DELTA} and +${EVOLUTION_MAX_DELTA}, got ${delta}`,
+          );
+        }
+
+        // Validate trait key exists
+        if (!(trait in currentTraits)) {
+          throw new Error(`Unknown trait: '${trait}'`);
+        }
+
+        const oldValue = currentTraits[trait as keyof TraitValues];
+        const newValue = oldValue + delta;
+
+        // Validate new value is within trait bounds
+        if (newValue < TRAIT_MIN || newValue > TRAIT_MAX) {
+          throw new Error(
+            `Trait '${trait}' would be ${newValue} after applying delta ${delta}, but must be between ${TRAIT_MIN} and ${TRAIT_MAX}`,
+          );
+        }
+
+        changes.push({ trait, oldValue, newValue });
+        (currentTraits as Record<string, number>)[trait] = newValue;
+      }
+
+      // Validate total budget is preserved
+      const newTotal = sumTraits(currentTraits);
+      if (newTotal !== POINT_BUDGET) {
+        throw new Error(
+          `Total trait points must equal ${POINT_BUDGET} after evolution, but would be ${newTotal}`,
+        );
+      }
+
+      if (changes.length === 0) {
+        return persona; // No changes to apply
+      }
+
+      // Apply the update via the existing updatePersona path
+      const traitsJson = JSON.stringify(currentTraits);
+      db.prepare("UPDATE personas SET traits = ?, updated_at = datetime('now') WHERE id = ?").run(traitsJson, id);
+
+      // Log each change
+      for (const change of changes) {
+        insertEvolutionStmt.run(id, change.trait, change.oldValue, change.newValue);
+      }
+
+      const updated = getByIdStmt.get(id) as PersonaRow;
+      return rowToPersona(updated);
+    },
+
+    logEvolution(personaId: string, trait: string, oldValue: number, newValue: number): void {
+      insertEvolutionStmt.run(personaId, trait, oldValue, newValue);
+    },
+
+    getEvolutionHistory(personaId: string, limit?: number): PersonaEvolution[] {
+      const effectiveLimit = limit ?? 100;
+      const rows = getEvolutionStmt.all(personaId, effectiveLimit) as {
+        id: number;
+        persona_id: string;
+        trait: string;
+        old_value: number;
+        new_value: number;
+        changed_at: string;
+      }[];
+      return rows.map((r) => ({
+        id: r.id,
+        personaId: r.persona_id,
+        trait: r.trait as PersonaEvolution["trait"],
+        oldValue: r.old_value,
+        newValue: r.new_value,
+        changedAt: r.changed_at,
+      }));
     },
   };
 }

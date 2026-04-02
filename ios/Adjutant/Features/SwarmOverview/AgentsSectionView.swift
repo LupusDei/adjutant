@@ -58,9 +58,24 @@ struct AgentsSectionView: View {
                 .fill(statusColor(for: agent.status))
                 .frame(width: 8, height: 8)
 
-            // Name + current bead (left side)
+            // Name + persona badge + current bead (left side)
             VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxxs) {
-                CRTText(agent.name.uppercased(), style: .body)
+                HStack(spacing: CRTTheme.Spacing.xs) {
+                    CRTText(agent.name.uppercased(), style: .body)
+                    if agent.personaId != nil {
+                        CRTText(
+                            agent.personaSource == "self-generated" ? "PERSONA" : "CUSTOM",
+                            style: .caption,
+                            color: theme.primary
+                        )
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 3)
+                                .stroke(theme.primary.opacity(0.6), lineWidth: 0.5)
+                        )
+                    }
+                }
                 if let bead = agent.currentBead {
                     CRTText(bead, style: .caption, color: theme.dim)
                 }

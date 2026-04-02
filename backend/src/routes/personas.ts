@@ -67,6 +67,27 @@ export function createPersonasRouter(service: PersonaService): Router {
   });
 
   /**
+   * GET /api/personas/:id/evolution
+   * Returns evolution history for a persona, ordered by most recent first.
+   * Optional query param: limit (default 100).
+   */
+  router.get("/:id/evolution", (req, res) => {
+    try {
+      const persona = service.getPersona(req.params.id);
+      if (persona === null) {
+        return res.status(404).json(notFound("Persona", req.params.id));
+      }
+
+      const limit = req.query["limit"] ? parseInt(req.query["limit"] as string, 10) : undefined;
+      const history = service.getEvolutionHistory(req.params.id, limit);
+      return res.json(success(history));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to get evolution history";
+      return res.status(500).json(internalError(message));
+    }
+  });
+
+  /**
    * GET /api/personas/:id/prompt
    * Returns the generated system prompt for a persona.
    * Used by the SessionStart hook script to re-inject persona context,

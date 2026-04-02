@@ -211,6 +211,10 @@ public struct AgentOverview: Codable, Identifiable, Equatable {
     public let cost: Double?
     /// Context window usage percentage (nil if no context data)
     public let contextPercent: Double?
+    /// Linked persona ID (nil if agent has no persona)
+    public let personaId: String?
+    /// Persona source: "hand-crafted" or "self-generated" (nil if no persona)
+    public let personaSource: String?
 
     public init(
         id: String,
@@ -221,7 +225,9 @@ public struct AgentOverview: Codable, Identifiable, Equatable {
         unreadCount: Int = 0,
         sessionId: String? = nil,
         cost: Double? = nil,
-        contextPercent: Double? = nil
+        contextPercent: Double? = nil,
+        personaId: String? = nil,
+        personaSource: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -232,5 +238,7 @@ public struct AgentOverview: Codable, Identifiable, Equatable {
         self.sessionId = sessionId
         self.cost = cost
         self.contextPercent = contextPercent
+        self.personaId = personaId
+        self.personaSource = personaSource
     }
 }

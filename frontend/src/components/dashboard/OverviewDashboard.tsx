@@ -261,6 +261,11 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
                     >
                       <span className={`dashboard-crew-card-indicator dashboard-indicator-${statusIndicatorClass(agent.status)}`} />
                       <span className="dashboard-agent-name">{agent.name.toUpperCase()}</span>
+                      {agent.personaId && (
+                        <span className="dashboard-agent-persona-badge">
+                          {agent.personaSource === 'self-generated' ? 'PERSONA' : 'CUSTOM'}
+                        </span>
+                      )}
                       {agent.project && (
                         <span className="dashboard-agent-project">{agent.project}</span>
                       )}
