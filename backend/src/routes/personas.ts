@@ -29,9 +29,10 @@ export function createPersonasRouter(service: PersonaService): Router {
    * GET /api/personas
    * Returns all personas sorted by name.
    */
-  router.get("/", (_req, res) => {
+  router.get("/", (req, res) => {
     try {
-      const personas = service.listPersonas();
+      const includeCallsign = req.query["includeCallsign"] === "true";
+      const personas = service.listPersonas(includeCallsign);
       return res.json(success(personas));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to list personas";

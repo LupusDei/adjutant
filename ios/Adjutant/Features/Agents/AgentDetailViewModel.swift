@@ -15,6 +15,7 @@ final class AgentDetailViewModel: BaseViewModel {
     /// Available tabs in the agent detail view
     enum Tab: String, CaseIterable, Identifiable {
         case info = "INFO"
+        case persona = "PERSONA"
         case beads = "BEADS"
         case messages = "MESSAGES"
 
@@ -71,6 +72,17 @@ final class AgentDetailViewModel: BaseViewModel {
 
     /// Whether a message is being sent
     @Published private(set) var isSendingMessage = false
+
+    // MARK: - Persona Properties
+
+    /// The agent's linked persona (loaded from callsign lookup)
+    @Published private(set) var persona: Persona?
+
+    /// Whether persona is loading
+    @Published private(set) var isLoadingPersona = false
+
+    /// Persona prompt text
+    @Published private(set) var personaPromptText: String?
 
     // MARK: - Action Properties
 
@@ -183,6 +195,24 @@ final class AgentDetailViewModel: BaseViewModel {
         } catch {
             isLoadingMessages = false
         }
+    }
+
+    /// Loads the persona linked to this agent's callsign
+    func loadPersona() async {
+        isLoadingPersona = true
+        do {
+            // Fetch all personas including self-generated callsign personas
+            let personas = try await apiClient.getPersonas(includeCallsign: true)
+            if let matched = personas.first(where: { $0.name.lowercased() == member.name.lowercased() }) {
+                persona = matched
+                // Also load the prompt text
+                let promptResponse = try await apiClient.getPersonaPrompt(id: matched.id)
+                personaPromptText = promptResponse.prompt
+            }
+        } catch {
+            // No persona found — that's fine
+        }
+        isLoadingPersona = false
     }
 
     /// Sends a quick reply message to this agent

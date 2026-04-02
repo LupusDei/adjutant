@@ -9,8 +9,13 @@ extension APIClient {
     ///
     /// - Returns: An array of ``Persona`` items sorted by name.
     /// - Throws: ``APIClientError`` if the request fails.
-    public func getPersonas() async throws -> [Persona] {
-        try await requestWithEnvelope(.get, path: "/personas")
+    public func getPersonas(includeCallsign: Bool = false) async throws -> [Persona] {
+        if includeCallsign {
+            return try await requestWithEnvelope(.get, path: "/personas", queryItems: [
+                URLQueryItem(name: "includeCallsign", value: "true")
+            ])
+        }
+        return try await requestWithEnvelope(.get, path: "/personas")
     }
 
     /// Fetches a single persona by ID.

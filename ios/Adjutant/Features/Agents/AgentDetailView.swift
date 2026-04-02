@@ -69,6 +69,10 @@ struct AgentDetailView: View {
                 if viewModel.messages.isEmpty {
                     Task { await viewModel.loadMessages() }
                 }
+            case .persona:
+                if viewModel.persona == nil && !viewModel.isLoadingPersona {
+                    Task { await viewModel.loadPersona() }
+                }
             case .info:
                 break
             }
@@ -198,6 +202,8 @@ struct AgentDetailView: View {
         switch viewModel.selectedTab {
         case .info:
             infoTabContent
+        case .persona:
+            personaTabContent
         case .beads:
             beadsTabContent
         case .messages:
@@ -357,6 +363,134 @@ struct AgentDetailView: View {
             Task { await viewModel.loadUnassignedBeads() }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - PERSONA Tab
+
+    private var personaTabContent: some View {
+        Group {
+            if viewModel.isLoadingPersona {
+                VStack(spacing: CRTTheme.Spacing.md) {
+                    Spacer()
+                    LoadingIndicator(size: .medium)
+                    CRTText("LOADING PERSONA...", style: .caption, color: theme.dim)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+            } else if let persona = viewModel.persona {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: CRTTheme.Spacing.lg) {
+                        // Radar chart
+                        HStack {
+                            Spacer()
+                            TraitRadarChart(traits: persona.traits, size: 120)
+                            Spacer()
+                        }
+                        .padding(.top, CRTTheme.Spacing.sm)
+
+                        // Description
+                        if !persona.description.isEmpty {
+                            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
+                                CRTText("IDENTITY", style: .caption, glowIntensity: .subtle, color: theme.dim)
+                                CRTText(persona.description, style: .body, color: theme.primary.opacity(0.8))
+                            }
+                            .padding(CRTTheme.Spacing.sm)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                                    .fill(theme.dim.opacity(0.05))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                                    .stroke(theme.dim.opacity(0.15), lineWidth: 1)
+                            )
+                        }
+
+                        // Trait breakdown by category
+                        ForEach(TraitCategory.allCases) { category in
+                            VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+                                CRTText(category.rawValue, style: .caption, glowIntensity: .subtle, color: theme.dim)
+
+                                ForEach(category.traits, id: \.self) { trait in
+                                    let value = persona.traits.value(for: trait)
+                                    let info = traitDisplayInfo[trait]
+                                    let fraction = Double(value) / Double(TraitValues.traitMax)
+                                    let barColor = value >= 15 ? theme.primary : value >= 8 ? theme.primary.opacity(0.7) : value >= 1 ? theme.dim : theme.dim.opacity(0.3)
+
+                                    HStack(spacing: CRTTheme.Spacing.sm) {
+                                        CRTText(
+                                            info?.label ?? trait.snakeCaseValue.uppercased(),
+                                            style: .caption,
+                                            color: theme.dim
+                                        )
+                                        .frame(width: 110, alignment: .trailing)
+
+                                        GeometryReader { geo in
+                                            ZStack(alignment: .leading) {
+                                                RoundedRectangle(cornerRadius: 2)
+                                                    .fill(theme.dim.opacity(0.1))
+                                                RoundedRectangle(cornerRadius: 2)
+                                                    .fill(barColor)
+                                                    .frame(width: max(0, geo.size.width * fraction))
+                                                    .shadow(color: barColor.opacity(0.5), radius: 3)
+                                            }
+                                        }
+                                        .frame(height: 10)
+
+                                        CRTText(
+                                            "\(value)",
+                                            style: .caption,
+                                            glowIntensity: value >= 15 ? .medium : .subtle,
+                                            color: barColor
+                                        )
+                                        .frame(width: 24, alignment: .trailing)
+                                    }
+                                    .frame(height: 18)
+                                }
+                            }
+                        }
+
+                        // Budget summary
+                        HStack {
+                            Spacer()
+                            CRTText(
+                                "TOTAL: \(persona.traits.totalPoints)/\(TraitValues.pointBudget)",
+                                style: .caption,
+                                glowIntensity: .subtle,
+                                color: theme.dim
+                            )
+                        }
+
+                        // Prompt preview
+                        if let promptText = viewModel.personaPromptText {
+                            VStack(alignment: .leading, spacing: CRTTheme.Spacing.xs) {
+                                CRTText("GENERATED PROMPT", style: .caption, glowIntensity: .subtle, color: theme.dim)
+                                CRTText(promptText, style: .mono, color: theme.primary.opacity(0.6))
+                            }
+                            .padding(CRTTheme.Spacing.sm)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                                    .fill(theme.dim.opacity(0.03))
+                            )
+                        }
+                    }
+                    .padding(.horizontal, CRTTheme.Spacing.md)
+                    .padding(.vertical, CRTTheme.Spacing.md)
+                }
+            } else {
+                VStack(spacing: CRTTheme.Spacing.md) {
+                    Spacer()
+                    Image(systemName: "person.crop.circle.badge.questionmark")
+                        .font(.system(size: 40))
+                        .foregroundColor(theme.dim)
+                    CRTText("NO PERSONA", style: .body, color: theme.dim)
+                    CRTText("This agent has not defined a persona yet", style: .caption, color: theme.dim.opacity(0.6))
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
     }
 
     // MARK: - BEADS Tab
