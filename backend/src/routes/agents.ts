@@ -176,10 +176,11 @@ agentsRouter.post("/spawn", async (req, res) => {
     name = auto?.name || "agent";
   }
 
-  // Build env vars with persona ID
+  // Build env vars with persona ID — use persona.id (not personaId) so that
+  // callsign-linked personas also get the env var set (adj-180)
   const envVars: Record<string, string> = {};
-  if (personaId) {
-    envVars["ADJUTANT_PERSONA_ID"] = personaId;
+  if (persona) {
+    envVars["ADJUTANT_PERSONA_ID"] = persona.id;
   }
 
   // Write persona prompt as .claude/agents/<name>.md and pass --agent flag

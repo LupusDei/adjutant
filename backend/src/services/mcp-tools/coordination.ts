@@ -190,8 +190,12 @@ export function registerCoordinationTools(
 
       // Living Personas (adj-158.3.2): Check if the callsign has a linked persona.
       // If yes, write agent file with persona prompt and pass --agent flag.
+      // Also set ADJUTANT_PERSONA_ID env var so the persona-inject.sh SessionStart
+      // hook can fetch and inject the persona prompt into the agent's context.
+      // (adj-180: the --agent flag alone is insufficient for untracked/gitignored files)
       // If no, the agent-spawner-service will handle genesis prompt injection.
       let agentFile: string | undefined;
+      let spawnEnvVars: Record<string, string> | undefined;
       const personaService = getPersonaService();
       if (personaService) {
         const linkedPersona = personaService.getPersonaByCallsign(name);
@@ -199,6 +203,7 @@ export function registerCoordinationTools(
           const personaPrompt = generatePrompt(linkedPersona);
           const agentName_sanitized = await writeAgentFile(resolvedProjectPath, linkedPersona.name, personaPrompt);
           agentFile = agentName_sanitized;
+          spawnEnvVars = { ADJUTANT_PERSONA_ID: linkedPersona.id };
           logInfo("spawn_worker: using linked persona", { name, personaId: linkedPersona.id });
         }
       }
@@ -208,6 +213,7 @@ export function registerCoordinationTools(
         projectPath: resolvedProjectPath,
         initialPrompt: prompt,
         ...(agentFile ? { agentFile } : {}),
+        ...(spawnEnvVars ? { envVars: spawnEnvVars } : {}),
       });
 
       if (!result.success) {

@@ -135,7 +135,7 @@ sessionsRouter.post("/", async (req, res) => {
     return res.status(400).json(badRequest("Could not resolve project path"));
   }
 
-  // Look up persona if personaId is provided
+  // Look up persona if personaId is provided, or check callsign linkage (adj-180)
   let persona = null;
   let personaPrompt: string | undefined;
 
@@ -149,6 +149,16 @@ sessionsRouter.post("/", async (req, res) => {
       return res.status(404).json(notFound("Persona", data.personaId));
     }
     personaPrompt = generatePersonaPrompt(persona);
+  } else if (data.name) {
+    // Living Personas (adj-180): Check if the explicit name/callsign has a linked persona
+    const personaService = getPersonaService();
+    if (personaService) {
+      const linkedPersona = personaService.getPersonaByCallsign(data.name);
+      if (linkedPersona) {
+        persona = linkedPersona;
+        personaPrompt = generatePersonaPrompt(linkedPersona);
+      }
+    }
   }
 
   // If an explicit name was provided, check for conflicts with active sessions
@@ -178,10 +188,11 @@ sessionsRouter.post("/", async (req, res) => {
     claudeArgs.push("--agent", agentName);
   }
 
-  // Build env vars with persona ID
+  // Build env vars with persona ID — use persona.id so callsign-linked
+  // personas also get the env var set (adj-180)
   const envVars: Record<string, string> = {};
-  if (data.personaId) {
-    envVars["ADJUTANT_PERSONA_ID"] = data.personaId;
+  if (persona) {
+    envVars["ADJUTANT_PERSONA_ID"] = persona.id;
   }
 
   // Write persona prompt as .claude/agents/<name>.md and pass --agent flag
