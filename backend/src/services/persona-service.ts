@@ -41,8 +41,8 @@ export interface PersonaService {
   /** Find a persona by name (case-insensitive). Returns null if not found. */
   getPersonaByName(name: string): Persona | null;
 
-  /** List all personas, sorted by name ascending. */
-  listPersonas(): Persona[];
+  /** List personas, sorted by name ascending. Excludes self-generated callsign personas by default. */
+  listPersonas(includeCallsignPersonas?: boolean): Persona[];
 
   /** Update an existing persona. Returns null if ID not found. Throws on validation failure. */
   updatePersona(id: string, input: UpdatePersonaInput): Persona | null;
@@ -121,6 +121,9 @@ export function createPersonaService(db: Database.Database): PersonaService {
   const listStmt = db.prepare(
     "SELECT * FROM personas ORDER BY name COLLATE NOCASE ASC",
   );
+  const listHandCraftedStmt = db.prepare(
+    "SELECT * FROM personas WHERE source != 'self-generated' OR source IS NULL ORDER BY name COLLATE NOCASE ASC",
+  );
 
   const deleteStmt = db.prepare("DELETE FROM personas WHERE id = ?");
 
@@ -181,8 +184,10 @@ export function createPersonaService(db: Database.Database): PersonaService {
       return row !== undefined ? rowToPersona(row) : null;
     },
 
-    listPersonas(): Persona[] {
-      const rows = listStmt.all() as PersonaRow[];
+    listPersonas(includeCallsignPersonas = false): Persona[] {
+      const rows = includeCallsignPersonas
+        ? listStmt.all() as PersonaRow[]
+        : listHandCraftedStmt.all() as PersonaRow[];
       return rows.map(rowToPersona);
     },
 

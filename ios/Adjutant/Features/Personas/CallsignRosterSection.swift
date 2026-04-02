@@ -14,6 +14,7 @@ struct CallsignRosterSection: View {
     @State private var masterEnabled = true
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var selectedCallsignPersona: (name: String, personaId: String)?
 
     private let apiClient = AppState.shared.apiClient
 
@@ -63,6 +64,14 @@ struct CallsignRosterSection: View {
         }
         .task {
             await loadCallsigns()
+        }
+        .sheet(isPresented: Binding(
+            get: { selectedCallsignPersona != nil },
+            set: { if !$0 { selectedCallsignPersona = nil } }
+        )) {
+            if let info = selectedCallsignPersona {
+                PersonaDetailSheet(agentName: info.name, personaId: info.personaId)
+            }
         }
     }
 
@@ -163,6 +172,18 @@ struct CallsignRosterSection: View {
                 .fill(theme.dim.opacity(0.05))
         )
         .opacity(masterEnabled ? 1.0 : 0.5)
+        .onLongPressGesture {
+            Task<Void, Never> {
+                do {
+                    let personas = try await apiClient.getPersonas()
+                    if let persona = personas.first(where: { $0.name.lowercased() == callsign.name.lowercased() }) {
+                        selectedCallsignPersona = (name: callsign.name, personaId: persona.id)
+                    }
+                } catch {
+                    // No persona for this callsign — ignore
+                }
+            }
+        }
     }
 
     // MARK: - API Calls
