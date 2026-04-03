@@ -16,6 +16,7 @@ export type MessageType = "notification" | "task" | "scavenge" | "reply";
 
 /** Possible statuses for a crew member. */
 export type CrewMemberStatus =
+  | "booting"
   | "idle"
   | "working"
   | "blocked"

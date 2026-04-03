@@ -676,6 +676,20 @@ a:hover {
   animation: pulsate 1.5s ease-in-out infinite;
 }
 
+/* Slow blink for booting agents — grey dot fading in and out */
+@keyframes boot-blink {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.boot-blink {
+  animation: boot-blink 2s ease-in-out infinite;
+}
+
 @keyframes pulse-error {
   0%, 100% {
     opacity: 1;

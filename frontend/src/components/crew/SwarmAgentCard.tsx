@@ -24,6 +24,7 @@ const colors = {
   backgroundDark: 'var(--theme-bg-elevated)',
   panelBorder: 'var(--crt-phosphor-dim)',
   offlineBorder: '#333333',
+  booting: '#888888',
   working: 'var(--crt-phosphor-bright)',
   idle: 'var(--crt-phosphor)',
   blocked: '#FFB000',
@@ -33,6 +34,8 @@ const colors = {
 
 function getStatusColor(status: string): string {
   switch (status) {
+    case 'booting':
+      return colors.booting;
     case 'working':
     case 'active':
       return colors.working;
@@ -76,14 +79,15 @@ type AssignState = 'idle' | 'loading';
  * Supports expandable inline terminal view with WebSocket streaming + polling fallback.
  */
 export function SwarmAgentCard({ agent, onNavigateToChat }: SwarmAgentCardProps) {
-  const isOnline = agent.status !== 'offline';
+  const isBooting = agent.status === 'booting';
+  const isOnline = agent.status !== 'offline' && !isBooting;
   const isActive = agent.currentTask && agent.status === 'idle';
-  const displayStatus = isActive ? 'active' : agent.status;
+  const displayStatus = isBooting ? 'booting' : isActive ? 'active' : agent.status;
   const statusColor = getStatusColor(displayStatus);
   const isWorking = displayStatus === 'working' || displayStatus === 'active';
-  const canKill = isOnline && !agent.isCoordinator && agent.sessionId;
+  const canKill = (isOnline || isBooting) && !agent.isCoordinator && agent.sessionId;
   const canAssign = displayStatus === 'idle' && isOnline;
-  const hasSession = Boolean(agent.sessionId) && isOnline;
+  const hasSession = Boolean(agent.sessionId) && (isOnline || isBooting);
 
   // D2: Kill agent state
   const [killState, setKillState] = useState<KillState>('idle');
@@ -204,11 +208,11 @@ export function SwarmAgentCard({ agent, onNavigateToChat }: SwarmAgentCardProps)
         aria-expanded={hasSession ? expanded : undefined}
       >
         <span
-          className={isActive ? 'pulsate' : ''}
+          className={isBooting ? 'boot-blink' : isActive ? 'pulsate' : ''}
           style={{
             ...styles.statusDot,
             backgroundColor: statusColor,
-            boxShadow: isOnline ? `0 0 8px ${statusColor}` : 'none',
+            boxShadow: isOnline ? `0 0 8px ${statusColor}` : isBooting ? `0 0 4px ${statusColor}` : 'none',
           }}
         />
         <span style={styles.name}>{agent.name.toUpperCase()}</span>

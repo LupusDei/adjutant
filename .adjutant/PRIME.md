@@ -124,6 +124,7 @@ Every spawn point MUST inject the appropriate preamble verbatim. These are templ
 ```
 ## Your Role (Layer 3: Squad Leader)
 You are <name>, a Squad Leader. You own <epic-id> end-to-end.
+- FIRST ACTION: Complete the Boot Sequence (load MCP tools → read messages → set_status → send agent_online heartbeat) BEFORE any other work
 - Your specialization: <role or "general-purpose engineering agent">
 - You report UP to the General via MCP messages (send_message, set_status, announce)
 - You spawn DOWN native Claude Code teammates with isolation: "worktree" for parallel work
@@ -138,6 +139,7 @@ You are <name>, a Squad Leader. You own <epic-id> end-to-end.
 ```
 ## Your Role (Layer 4: Squad Member)
 You are <name>, a Squad Member on <squad-leader>'s team.
+- FIRST ACTION: Complete the Boot Sequence (load MCP tools → read messages → set_status → send agent_online heartbeat) BEFORE any other work
 - Your specialization: <role — e.g., Staff Engineer, QA Sentinel, Code Reviewer, iOS Engineer>
 - Execute your assigned tasks and update beads via bd CLI
 - Report status via MCP when possible
@@ -150,28 +152,67 @@ You are <name>, a Squad Member on <squad-leader>'s team.
 
 ### Agent Role Discovery
 
-On startup, check for role specialization before defaulting to general-purpose:
+After completing the Boot Sequence, determine your role specialization:
 
 1. **Check your memories** — `query_memories({ category: "agent-profile" })` or read your Claude Code memory files for role/specialization notes
 2. **Check your spawn prompt** — if you were spawned with a role (QA Sentinel, Code Reviewer, iOS Engineer, etc.), that is your specialization
 3. **Check your bead assignments** — the types of beads assigned to you (all bugs = QA focus, all iOS tasks = iOS specialist) signal your role
 4. **Default** — if none of the above define a role, you are a general-purpose engineering agent
 
-Report your role in your first `set_status` call:
+Include your role in your boot heartbeat message:
 ```
-set_status({ status: "working", task: "Starting as <role>: <first task description>" })
+send_message({ to: "user", body: "🟢 Online as <role>. Ready for work.", metadata: { event: "agent_online", role: "<role>" } })
 ```
 
 Examples:
-- `"Starting as QA Sentinel: reviewing adj-110 for test coverage gaps"`
-- `"Starting as iOS Engineer: implementing adj-113 spawn agent modal"`
-- `"Starting as general-purpose agent: working on adj-111.4"`
+- `"🟢 Online as QA Sentinel. Ready for work."`
+- `"🟢 Online as iOS Engineer. Ready for work."`
+- `"🟢 Online as general-purpose agent. Ready for work."`
 
 ### Dashboard Visibility
 
 - **Layer 2** (Coordinator): Always visible, always running
 - **Layer 3** (Squad Leaders): Visible via agent registry, status on dashboard
 - **Layer 4** (Squad Members): NOT visible on dashboard (ephemeral native agents), but Squad Leaders report team composition via MCP for situational awareness
+
+---
+
+## Agent Boot Sequence (ALL AGENTS — MANDATORY)
+
+**Before responding to ANY user prompt or acting on ANY instruction, you MUST complete this boot sequence.**
+This is a BLOCKING requirement — no output, no code, no planning until these steps finish.
+
+MCP tools are deferred (schema not loaded) until you explicitly fetch them. If you respond before
+bootstrapping, your output goes to stdout only — **invisible on the dashboard and iOS app**.
+
+### Boot Steps (execute in order)
+
+```
+1. ToolSearch("select:mcp__adjutant__read_messages,mcp__adjutant__set_status,mcp__adjutant__send_message")
+   → Loads MCP tool schemas so you can call them
+
+2. read_messages({ agentId: "<your-name>", limit: 5 })
+   → Check for pending instructions from user or other agents
+
+3. set_status({ status: "working", task: "Boot complete — reading instructions" })
+   → Dashboard now shows you as online
+
+4. send_message({ to: "user", body: "🟢 Online and ready.", metadata: { event: "agent_online" } })
+   → Heartbeat signal — dashboard/iOS transitions your indicator from booting → online
+```
+
+**Only after step 4 completes** may you read your spawn prompt, plan work, or respond to messages.
+
+### Why This Matters
+
+- Without step 1, you cannot call MCP tools at all — responses go to stdout (invisible)
+- Without step 4, the dashboard shows you as "booting" indefinitely — the user doesn't know you're ready
+- The `agent_online` metadata event is the contract between agents and the dashboard for boot-state tracking
+
+### Timing
+
+Boot sequence adds ~3-5 seconds (2 tool calls). This is acceptable — the alternative is invisible agents
+that miss direct messages and confuse the user about readiness.
 
 ---
 
@@ -187,8 +228,8 @@ When you receive a message (from the user or another agent), you **MUST** respon
 using `send_message`, NOT by printing to stdout. The dashboard and iOS app only see
 MCP messages.
 
-- **On startup**: Call `read_messages({ limit: 5 })` to check for pending messages
-- **During work**: Periodically check for new messages
+- **On startup**: Complete the Boot Sequence above (includes `read_messages` in step 2)
+- **During work**: Periodically check for new messages via `read_messages({ agentId: "<your-name>", limit: 5 })`
 - **When asked a question**: Reply via `send_message({ to: "user", body: "..." })`
 
 ### Sending Messages

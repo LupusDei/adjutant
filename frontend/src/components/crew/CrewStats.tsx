@@ -14,12 +14,13 @@ import { DeployPersonaModal } from './DeployPersonaModal';
 // Status Grouping
 // =============================================================================
 
-type StatusGroup = 'working' | 'blocked' | 'stuck' | 'idle' | 'offline';
+type StatusGroup = 'working' | 'booting' | 'blocked' | 'stuck' | 'idle' | 'offline';
 
-const STATUS_GROUP_ORDER: StatusGroup[] = ['working', 'blocked', 'stuck', 'idle', 'offline'];
+const STATUS_GROUP_ORDER: StatusGroup[] = ['working', 'booting', 'blocked', 'stuck', 'idle', 'offline'];
 
 const STATUS_GROUP_LABELS: Record<StatusGroup, string> = {
   working: 'WORKING',
+  booting: 'BOOTING',
   blocked: 'BLOCKED',
   stuck: 'STUCK',
   idle: 'IDLE',
@@ -28,6 +29,7 @@ const STATUS_GROUP_LABELS: Record<StatusGroup, string> = {
 
 function getEffectiveStatusGroup(agent: CrewMember): StatusGroup {
   if (agent.status === 'offline') return 'offline';
+  if (agent.status === 'booting') return 'booting';
   if (agent.status === 'stuck') return 'stuck';
   if (agent.status === 'blocked') return 'blocked';
   if (agent.status === 'working') return 'working';
@@ -45,6 +47,7 @@ function sortByLastActivity(a: CrewMember, b: CrewMember): number {
 function getGroupColor(group: StatusGroup): string {
   switch (group) {
     case 'working': return colors.working;
+    case 'booting': return '#888888';
     case 'blocked': return colors.blocked;
     case 'stuck': return colors.stuck;
     case 'idle': return colors.idle;
@@ -233,18 +236,19 @@ interface SwarmSummaryPanelProps {
 
 function SwarmSummaryPanel({ agents, onSpawn }: SwarmSummaryPanelProps) {
   const counts = useMemo(() => {
-    let active = 0, idle = 0, blocked = 0, offline = 0;
+    let active = 0, booting = 0, idle = 0, blocked = 0, offline = 0;
     for (const agent of agents) {
       const group = getEffectiveStatusGroup(agent);
       switch (group) {
         case 'working': active++; break;
+        case 'booting': booting++; break;
         case 'idle': idle++; break;
         case 'blocked':
         case 'stuck': blocked++; break;
         case 'offline': offline++; break;
       }
     }
-    return { active, idle, blocked, offline };
+    return { active, booting, idle, blocked, offline };
   }, [agents]);
 
   const hasIssues = counts.blocked > 0;
@@ -257,6 +261,12 @@ function SwarmSummaryPanel({ agents, onSpawn }: SwarmSummaryPanelProps) {
         <span style={{ ...styles.summaryBadge, color: colors.working }}>
           {counts.active} ACTIVE
         </span>
+        {counts.booting > 0 && (<>
+          <span style={styles.summaryDivider}>│</span>
+          <span style={{ ...styles.summaryBadge, color: '#888888' }}>
+            {counts.booting} BOOTING
+          </span>
+        </>)}
         <span style={styles.summaryDivider}>│</span>
         <span style={{ ...styles.summaryBadge, color: colors.idle }}>
           {counts.idle} IDLE
@@ -304,7 +314,7 @@ function SwarmSection({ agents, gridStyle, onNavigateToChat }: SwarmSectionProps
 
   const groups = useMemo(() => {
     const grouped: Record<StatusGroup, CrewMember[]> = {
-      working: [], blocked: [], stuck: [], idle: [], offline: [],
+      working: [], booting: [], blocked: [], stuck: [], idle: [], offline: [],
     };
     for (const agent of agents) {
       grouped[getEffectiveStatusGroup(agent)].push(agent);

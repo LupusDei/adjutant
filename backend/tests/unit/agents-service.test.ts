@@ -134,16 +134,38 @@ describe("agents-service", () => {
       expect(result.data?.[0].status).toBe("offline");
     });
 
-    it("should show working status when session status is working", async () => {
+    it("should show booting status when session exists but no MCP connection", async () => {
       vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-alice"]));
       mockManagedSessions([
         { id: "s1", name: "alice", tmuxSession: "adj-swarm-alice", status: "working" },
       ]);
+      // No MCP connection (default mock: getConnectedAgents returns [])
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      expect(result.data?.[0].status).toBe("booting");
+      expect(result.data?.[0].currentTask).toBe("Initializing — loading MCP tools...");
+    });
+
+    it("should show working status when agent has MCP connection and reports working", async () => {
+      vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-alice"]));
+      mockManagedSessions([
+        { id: "s1", name: "alice", tmuxSession: "adj-swarm-alice", status: "working" },
+      ]);
+      // Mock MCP connection
+      vi.mocked(getConnectedAgents).mockReturnValue([
+        { agentId: "alice", sessionId: "mcp-1" },
+      ] as never);
+      vi.mocked(getAgentStatuses).mockReturnValue(
+        new Map([["alice", { status: "working", task: "Building feature X" }]]) as never,
+      );
 
       const result = await getAgents();
 
       expect(result.success).toBe(true);
       expect(result.data?.[0].status).toBe("working");
+      expect(result.data?.[0].currentTask).toBe("Building feature X");
     });
 
     it("should include unmanaged tmux sessions that look like agent sessions", async () => {

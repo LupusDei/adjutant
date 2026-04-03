@@ -141,19 +141,35 @@ function emitStatusChanges(agents: CrewMember[]): void {
  * Updates status and currentTask from the in-memory agentStatuses map
  * populated by set_status MCP tool calls.
  *
- * Only enriches agents that have an active MCP connection to avoid
- * applying stale status from disconnected agents.
+ * Agents that have a tmux session but no MCP connection yet are marked
+ * as "booting" — they're alive but not ready to receive work.
+ *
+ * Only applies MCP status for agents with an active MCP connection to
+ * avoid applying stale status from disconnected agents.
  */
 function enrichWithMcpStatus(members: CrewMember[]): void {
   const statuses = getAgentStatuses();
   const connectedIds = new Set(getConnectedAgents().map((c) => c.agentId));
 
   for (const member of members) {
-    const mcpStatus = statuses.get(member.id) ?? statuses.get(member.name);
-    if (!mcpStatus) continue;
+    // Skip offline agents — they don't need MCP enrichment
+    if (member.status === "offline") continue;
 
     const isConnected = connectedIds.has(member.id) || connectedIds.has(member.name);
-    if (!isConnected) continue;
+
+    // Agent has a tmux session but hasn't connected via MCP yet → booting
+    if (!isConnected) {
+      const mcpStatus = statuses.get(member.id) ?? statuses.get(member.name);
+      // No MCP connection and no prior status → agent is still bootstrapping
+      if (!mcpStatus) {
+        member.status = "booting";
+        member.currentTask = "Initializing — loading MCP tools...";
+      }
+      continue;
+    }
+
+    const mcpStatus = statuses.get(member.id) ?? statuses.get(member.name);
+    if (!mcpStatus) continue;
 
     // Apply MCP status for ALL states
     const statusMap: Record<string, CrewMemberStatus> = {
