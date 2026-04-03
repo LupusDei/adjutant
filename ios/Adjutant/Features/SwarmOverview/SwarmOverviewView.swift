@@ -399,7 +399,7 @@ struct SwarmOverviewView: View {
         )
     }
 
-    // MARK: - Timeline Section (adj-156 — replaces Epics)
+    // MARK: - Timeline Section (adj-156 → adj-160: reuses TimelineRowView)
 
     private var timelineSection: some View {
         CRTCard(header: "TIMELINE", headerBadge: "\(viewModel.timelineEvents.count)") {
@@ -408,94 +408,27 @@ struct SwarmOverviewView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, CRTTheme.Spacing.lg)
             } else {
-                VStack(spacing: 2) {
+                VStack(spacing: 0) {
                     ForEach(viewModel.timelineEvents, id: \.id) { event in
-                        HStack(spacing: CRTTheme.Spacing.xs) {
-                            Image(systemName: timelineIcon(event.eventType))
-                                .font(.system(size: 10))
-                                .foregroundColor(timelineColor(event.eventType))
-                                .frame(width: 16)
-
-                            CRTText(
-                                timelineLabel(event.eventType),
-                                style: .caption,
-                                color: timelineColor(event.eventType)
-                            )
-                            .frame(width: 70, alignment: .leading)
-
-                            CRTText(
-                                String(event.action.prefix(60)),
-                                style: .caption,
-                                color: theme.primary
-                            )
-
-                            Spacer()
-
-                            CRTText(
-                                event.agentId,
-                                style: .caption,
-                                color: theme.dim
-                            )
-                        }
-                        .padding(.vertical, 3)
-                        .contextMenu {
-                            let actions = TimelineNavigationResolver.actions(for: event)
-                            ForEach(Array(actions.enumerated()), id: \.offset) { _, action in
-                                Button {
-                                    if action.isChatNavigation {
-                                        coordinator.pendingChatAgentId = event.agentId
-                                        coordinator.navigate(to: .chat)
-                                    } else {
-                                        coordinator.navigate(to: action.route)
-                                    }
-                                } label: {
-                                    Label(action.label, systemImage: action.icon)
+                        TimelineRowView(
+                            event: event,
+                            onNavigate: { event in
+                                if let route = TimelineNavigationResolver.resolve(event) {
+                                    coordinator.navigate(to: route)
+                                }
+                            },
+                            onAction: { action in
+                                if action.isChatNavigation {
+                                    coordinator.pendingChatAgentId = event.agentId
+                                    coordinator.navigate(to: .chat)
+                                } else {
+                                    coordinator.navigate(to: action.route)
                                 }
                             }
-                        }
+                        )
                     }
                 }
             }
-        }
-    }
-
-    private func timelineIcon(_ eventType: String) -> String {
-        switch eventType {
-        case "status_change": return "arrow.triangle.2.circlepath"
-        case "announcement": return "megaphone.fill"
-        case "bead_updated": return "circle.grid.3x3"
-        case "bead_closed": return "checkmark.circle.fill"
-        case "coordinator_action": return "terminal.fill"
-        case "auto_develop_enabled": return "play.circle.fill"
-        case "auto_develop_disabled": return "stop.circle.fill"
-        case "auto_develop_phase_changed": return "arrow.right.circle.fill"
-        case "proposal_completed": return "checkmark.seal.fill"
-        default: return "circle.fill"
-        }
-    }
-
-    private func timelineColor(_ eventType: String) -> Color {
-        switch eventType {
-        case "status_change": return theme.primary
-        case "announcement": return CRTTheme.State.warning
-        case "bead_closed": return CRTTheme.State.success
-        case "auto_develop_phase_changed": return Color(red: 0.4, green: 0.8, blue: 1.0)
-        case "proposal_completed": return CRTTheme.State.success
-        default: return theme.dim
-        }
-    }
-
-    private func timelineLabel(_ eventType: String) -> String {
-        switch eventType {
-        case "status_change": return "STATUS"
-        case "progress_report": return "PROGRESS"
-        case "announcement": return "ANNOUNCE"
-        case "message_sent": return "MESSAGE"
-        case "bead_updated": return "BEAD"
-        case "bead_closed": return "CLOSED"
-        case "coordinator_action": return "COORD"
-        case "auto_develop_phase_changed": return "PHASE"
-        default: return eventType.replacingOccurrences(of: "_", with: " ").uppercased()
         }
     }
 
