@@ -215,9 +215,15 @@ describe("isUUID", () => {
     expect(isUUID("")).toBe(false);
   });
 
-  it("should return false for short hex strings without dashes", async () => {
+  it("should return true for 8-char hex project IDs (adj-159: generateId() format)", async () => {
     const { isUUID } = await import("../../src/services/proposal-store.js");
-    expect(isUUID("a1b2c3d4")).toBe(false);
-    expect(isUUID("12345678")).toBe(false);
+    expect(isUUID("a1b2c3d4")).toBe(true);
+    expect(isUUID("0e578d15")).toBe(true);
+  });
+
+  it("should return false for non-hex 8-char strings", async () => {
+    const { isUUID } = await import("../../src/services/proposal-store.js");
+    expect(isUUID("abcdefgh")).toBe(false);
+    expect(isUUID("1234567z")).toBe(false);
   });
 });

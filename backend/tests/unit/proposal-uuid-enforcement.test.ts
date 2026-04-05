@@ -88,7 +88,9 @@ import { registerAutoDevelopTools } from "../../src/services/mcp-tools/auto-deve
 // =============================================================================
 
 const VALID_UUID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+const VALID_SHORT_ID = "0e578d15";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PROJECT_ID_RE = /^[0-9a-f]{8}(-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?$/i;
 
 function createMockServer(): McpServer {
   return new MockMcpServer() as unknown as McpServer;
@@ -214,6 +216,30 @@ describe("create_proposal UUID enforcement (adj-141.3)", () => {
     expect(parsed.id).toBe("new-proposal-uuid");
     expect(store.insertProposal).toHaveBeenCalledWith(
       expect.objectContaining({ project: VALID_UUID }),
+    );
+  });
+
+  it("should create proposal when projectContext.projectId is a truncated 8-char hex ID (adj-159)", async () => {
+    mockGetProjectContextBySession.mockReturnValue({
+      projectId: VALID_SHORT_ID,
+      projectName: "adjutant",
+      projectPath: "/code/adjutant",
+      beadsDir: "/code/adjutant/.beads",
+    });
+
+    const store = createMockStore();
+    const handler = getProposalToolHandler(store, "create_proposal");
+
+    const result = await handler(
+      { title: "Test", description: "A test", type: "engineering", project: "anything" },
+      { sessionId: SESSION_ID },
+    ) as { content: { text: string }[] };
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBeUndefined();
+    expect(parsed.id).toBe("new-proposal-uuid");
+    expect(store.insertProposal).toHaveBeenCalledWith(
+      expect.objectContaining({ project: VALID_SHORT_ID }),
     );
   });
 
