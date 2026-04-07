@@ -8,6 +8,7 @@
  * connection status indicator, voice input/playback.
  */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { MarkdownBody } from './MarkdownBody';
 import type { ConnectionStatus, ChatMessage } from '../../types';
 import { useChatMessages, type DisplayMessage } from '../../hooks/useChatMessages';
 import { api } from '../../services/api';
@@ -451,7 +452,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
                       {isUser ? 'YOU' : msg.agentId.toUpperCase()}
                     </span>
                   </div>
-                  <div className="chat-bubble-content">{msg.body}</div>
+                  <div className="chat-bubble-content"><MarkdownBody>{msg.body}</MarkdownBody></div>
                   <div className="chat-bubble-time">{formatTimestamp(msg.createdAt)}</div>
                 </div>
               );
@@ -516,7 +517,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
                   </button>
                 </div>
                 <div className="chat-bubble-content">
-                  {msg.body}
+                  <MarkdownBody>{msg.body}</MarkdownBody>
                 </div>
                 <div className="chat-bubble-time">
                   {isSending && (
@@ -543,7 +544,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
               <span className="chat-streaming-indicator">STREAMING</span>
             </div>
             <div className="chat-bubble-content">
-              {body}<span className="chat-cursor">_</span>
+              <MarkdownBody>{body}</MarkdownBody><span className="chat-cursor">_</span>
             </div>
           </div>
         ))}

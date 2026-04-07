@@ -230,8 +230,165 @@
 .chat-bubble-content {
   font-size: 1.1rem;
   line-height: 1.4;
-  white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* ---- Markdown body rendering (adj-161) ---- */
+
+.markdown-body {
+  font-size: inherit;
+  line-height: inherit;
+  word-break: break-word;
+}
+
+/* Paragraphs: compact spacing, no extra margin on first/last */
+.markdown-body p {
+  margin: 0.4em 0;
+}
+.markdown-body > :first-child { margin-top: 0; }
+.markdown-body > :last-child { margin-bottom: 0; }
+
+/* Headers: green glow, no huge sizing — keep readable in bubbles */
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  margin: 0.6em 0 0.3em;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 6px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.4));
+}
+.markdown-body h1 { font-size: 1.2em; }
+.markdown-body h2 { font-size: 1.1em; }
+.markdown-body h3 { font-size: 1.05em; }
+.markdown-body h4 { font-size: 1em; text-transform: uppercase; }
+
+/* Bold and italic */
+.markdown-body strong {
+  font-weight: bold;
+  color: var(--crt-phosphor-bright, #00ff00);
+}
+.markdown-body em {
+  font-style: italic;
+  opacity: 0.9;
+}
+
+/* Lists: compact, terminal-style markers */
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0.4em 0;
+  padding-left: 1.5em;
+}
+.markdown-body li {
+  margin: 0.15em 0;
+}
+.markdown-body ul > li {
+  list-style-type: "› ";
+}
+
+/* Inline code: highlighted with dim background */
+.markdown-body code {
+  background: var(--crt-phosphor-dim, #00aa00);
+  background: rgba(0, 170, 0, 0.15);
+  color: var(--crt-phosphor-bright, #00ff00);
+  padding: 0.1em 0.35em;
+  border-radius: 2px;
+  font-size: 0.95em;
+}
+
+/* Code blocks: panel background with border */
+.markdown-body pre {
+  background: var(--theme-bg-screen, #0a0a0a);
+  border: 1px solid var(--crt-phosphor-dim, #00aa00);
+  border-radius: 3px;
+  padding: 0.6em 0.8em;
+  margin: 0.5em 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+.markdown-body pre code {
+  background: none;
+  padding: 0;
+  color: var(--crt-phosphor, #00cc00);
+  font-size: 0.9em;
+}
+
+/* Blockquotes: left border accent */
+.markdown-body blockquote {
+  margin: 0.5em 0;
+  padding: 0.3em 0 0.3em 0.8em;
+  border-left: 2px solid var(--crt-phosphor-dim, #00aa00);
+  opacity: 0.85;
+}
+.markdown-body blockquote p {
+  margin: 0.2em 0;
+}
+
+/* Horizontal rules */
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--crt-phosphor-dim, #00aa00);
+  margin: 0.6em 0;
+  opacity: 0.4;
+}
+
+/* Links: underlined, bright */
+.markdown-body a {
+  color: var(--crt-phosphor-bright, #00ff00);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.markdown-body a:hover {
+  text-shadow: 0 0 6px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.4));
+}
+
+/* Tables: simple grid */
+.markdown-body table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  width: 100%;
+  font-size: 0.9em;
+}
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--crt-phosphor-dim, #00aa00);
+  padding: 0.3em 0.5em;
+  text-align: left;
+}
+.markdown-body th {
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(0, 170, 0, 0.08);
+}
+
+/* User bubbles: override colors for dark-on-light */
+.chat-bubble-user .markdown-body strong {
+  color: var(--theme-bg-screen, #0a0a0a);
+}
+.chat-bubble-user .markdown-body code {
+  background: rgba(0, 0, 0, 0.12);
+  color: var(--theme-bg-screen, #0a0a0a);
+}
+.chat-bubble-user .markdown-body pre {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+.chat-bubble-user .markdown-body pre code {
+  color: var(--theme-bg-screen, #0a0a0a);
+}
+.chat-bubble-user .markdown-body a {
+  color: var(--theme-bg-screen, #0a0a0a);
+}
+.chat-bubble-user .markdown-body blockquote {
+  border-left-color: rgba(0, 0, 0, 0.3);
+}
+.chat-bubble-user .markdown-body th,
+.chat-bubble-user .markdown-body td {
+  border-color: rgba(0, 0, 0, 0.2);
+}
+.chat-bubble-user .markdown-body hr {
+  border-top-color: rgba(0, 0, 0, 0.2);
 }
 
 .chat-bubble-time {

@@ -7,6 +7,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { MarkdownBody } from './MarkdownBody';
 
 
 import { useChatMessages, type DisplayMessage } from '../../hooks/useChatMessages';
@@ -239,7 +240,7 @@ export const PersistentChat: React.FC<PersistentChatProps> = ({ agentId, isActiv
                   </span>
                 </div>
                 <div className="chat-bubble-content">
-                  {msg.body}
+                  <MarkdownBody>{msg.body}</MarkdownBody>
                 </div>
                 <div className="chat-bubble-time">
                   {formatTimestamp(msg.createdAt)}
