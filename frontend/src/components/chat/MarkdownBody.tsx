@@ -1,14 +1,17 @@
 import React from 'react';
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 /**
  * Renders a chat message body as markdown with CRT-themed styling.
  *
  * Supports: headers, bold/italic, bullet/numbered lists, code blocks,
- * inline code, links, blockquotes, and horizontal rules.
+ * inline code, links, blockquotes, horizontal rules, tables (GFM),
+ * strikethrough, and task lists.
  *
- * Wraps react-markdown with custom component overrides to match
- * the retro terminal aesthetic and prevent layout-breaking elements.
+ * Wraps react-markdown with remark-gfm for GitHub Flavored Markdown
+ * (tables, strikethrough, task lists, autolinks) and custom component
+ * overrides to match the retro terminal aesthetic.
  */
 export const MarkdownBody = React.memo(function MarkdownBody({
   children,
@@ -18,6 +21,7 @@ export const MarkdownBody = React.memo(function MarkdownBody({
   return (
     <div className="markdown-body">
       <Markdown
+        remarkPlugins={[remarkGfm]}
         components={{
           // Open links in new tab
           a: ({ children: linkChildren, href, ...props }) => (

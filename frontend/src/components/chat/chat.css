@@ -342,12 +342,15 @@
   text-shadow: 0 0 6px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.4));
 }
 
-/* Tables: simple grid */
+/* Tables: simple grid with horizontal scroll for overflow */
 .markdown-body table {
   border-collapse: collapse;
   margin: 0.5em 0;
   width: 100%;
   font-size: 0.9em;
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .markdown-body th,
 .markdown-body td {
