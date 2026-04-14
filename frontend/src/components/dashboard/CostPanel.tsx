@@ -321,23 +321,28 @@ function BudgetForm({ onSubmit, onCancel }: {
 export function CostPanel() {
   const { summary, burnRate, budgets, loading, error, lastUpdated, refresh } = useCostDashboard();
   const [showBudgetForm, setShowBudgetForm] = useState(false);
+  const [budgetError, setBudgetError] = useState<string | null>(null);
 
   const handleSetBudget = useCallback(async (amount: number) => {
+    setBudgetError(null);
     try {
       await costApi.createBudget({ scope: 'session', amount });
       setShowBudgetForm(false);
       await refresh();
-    } catch {
-      // Budget creation failed silently
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to set budget';
+      setBudgetError(message);
     }
   }, [refresh]);
 
   const handleDeleteBudget = useCallback(async (id: number) => {
+    setBudgetError(null);
     try {
       await costApi.deleteBudget(id);
       await refresh();
-    } catch {
-      // Budget deletion failed silently
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete budget';
+      setBudgetError(message);
     }
   }, [refresh]);
 
@@ -401,7 +406,7 @@ export function CostPanel() {
       {!activeBudget && !showBudgetForm && (
         <button
           style={styles.setBudgetBtn}
-          onClick={() => { setShowBudgetForm(true); }}
+          onClick={() => { setBudgetError(null); setShowBudgetForm(true); }}
         >
           + SET BUDGET
         </button>
@@ -409,8 +414,15 @@ export function CostPanel() {
       {showBudgetForm && (
         <BudgetForm
           onSubmit={(amount) => { void handleSetBudget(amount); }}
-          onCancel={() => { setShowBudgetForm(false); }}
+          onCancel={() => { setBudgetError(null); setShowBudgetForm(false); }}
         />
+      )}
+
+      {/* Budget Error */}
+      {budgetError && (
+        <div style={styles.budgetError}>
+          ERR: {budgetError}
+        </div>
       )}
 
       {/* Session Breakdown */}
@@ -632,6 +644,16 @@ const styles = {
     fontSize: '0.7rem',
     padding: '6px 8px',
     cursor: 'pointer',
+  },
+  budgetError: {
+    fontSize: '0.7rem',
+    color: '#FF4444',
+    padding: '6px 10px',
+    border: '1px solid rgba(255, 68, 68, 0.3)',
+    backgroundColor: 'rgba(255, 68, 68, 0.05)',
+    borderRadius: '2px',
+    letterSpacing: '0.05em',
+    fontFamily: '"Share Tech Mono", monospace',
   },
 
   // Session Breakdown
