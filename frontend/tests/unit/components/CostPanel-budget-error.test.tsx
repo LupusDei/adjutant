@@ -56,6 +56,14 @@ vi.mock('../../../src/services/api-costs', () => ({
   costApi: {
     createBudget: (...args: unknown[]) => mockCreateBudget(...args),
     deleteBudget: (...args: unknown[]) => mockDeleteBudget(...args),
+    fetchProjections: vi.fn().mockResolvedValue({
+      currentCost: 42.50,
+      estimatedCompletionCost: null,
+      estimatedRemainingCost: null,
+      burnRatePerHour: 3.0,
+      costTrend: [],
+    }),
+    downloadCostCsv: vi.fn().mockResolvedValue(undefined),
   },
 }));
 

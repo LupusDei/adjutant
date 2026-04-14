@@ -91,6 +91,15 @@ export interface BeadCostResult {
   };
 }
 
+/** Cost projection data from GET /api/costs/projections. */
+export interface CostProjection {
+  currentCost: number;
+  estimatedCompletionCost: number | null;
+  estimatedRemainingCost: number | null;
+  burnRatePerHour: number;
+  costTrend: { timestamp: string; cost: number }[];
+}
+
 /** Reconciliation result from GET /api/costs/reconcile. */
 export interface ReconciliationResult {
   sessionId: string;
@@ -191,5 +200,52 @@ export const costApi = {
   /** Reconcile a specific session against JSONL data. */
   async fetchSessionReconciliation(sessionId: string): Promise<ReconciliationResult> {
     return costFetch<ReconciliationResult>(`/costs/reconcile/${encodeURIComponent(sessionId)}`);
+  },
+
+  /**
+   * Download cost data as CSV.
+   * Triggers a browser download of the CSV file.
+   */
+  async downloadCostCsv(filters?: {
+    agentId?: string;
+    beadId?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<void> {
+    const params = new URLSearchParams();
+    if (filters?.agentId) params.set('agentId', filters.agentId);
+    if (filters?.beadId) params.set('beadId', filters.beadId);
+    if (filters?.startDate) params.set('startDate', filters.startDate);
+    if (filters?.endDate) params.set('endDate', filters.endDate);
+
+    const qs = params.toString();
+    const url = `${API_BASE_URL}/costs/export${qs ? `?${qs}` : ''}`;
+
+    const headers: Record<string, string> = {};
+    const apiKey = getApiKey();
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      throw new Error(`Export failed: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `adjutant-costs-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(downloadUrl);
+  },
+
+  /** Fetch cost projections and trend data. */
+  async fetchProjections(percentComplete?: number): Promise<CostProjection> {
+    const params = percentComplete != null ? `?percentComplete=${percentComplete}` : '';
+    return costFetch<CostProjection>(`/costs/projections${params}`);
   },
 };

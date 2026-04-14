@@ -739,6 +739,155 @@ export function getEpicCost(epicBeadId: string, childBeadIds: string[]): BeadCos
 }
 
 // ============================================================================
+// Cost Export
+// ============================================================================
+
+/** Row shape returned by getCostExportRows for CSV generation. */
+export interface CostExportRow {
+  sessionId: string;
+  agentId: string;
+  beadId: string;
+  projectPath: string;
+  cost: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  recordedAt: string;
+}
+
+/**
+ * Get cost data rows for CSV export.
+ * Returns per-bead-segment rows from SQLite (each row = one bead assignment period).
+ * Supports optional filtering by agent, bead, and date range.
+ */
+export function getCostExportRows(filters?: {
+  agentId?: string;
+  beadId?: string;
+  startDate?: string;
+  endDate?: string;
+}): CostExportRow[] {
+  if (!db) return [];
+
+  const conditions: string[] = ["finalized_at IS NULL"];
+  const params: (string | number)[] = [];
+
+  if (filters?.agentId) {
+    conditions.push("agent_id = ?");
+    params.push(filters.agentId);
+  }
+  if (filters?.beadId) {
+    conditions.push("bead_id = ?");
+    params.push(filters.beadId);
+  }
+  if (filters?.startDate) {
+    conditions.push("recorded_at >= ?");
+    params.push(filters.startDate);
+  }
+  if (filters?.endDate) {
+    conditions.push("recorded_at <= ?");
+    params.push(filters.endDate);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const rows = db.prepare(
+    `SELECT session_id, agent_id, bead_id, project_path,
+            total_cost, input_tokens, output_tokens,
+            cache_read_tokens, cache_write_tokens, recorded_at
+     FROM agent_costs ${where}
+     ORDER BY recorded_at DESC`
+  ).all(...params) as AgentCostRow[];
+
+  return rows.map((row) => ({
+    sessionId: row.session_id,
+    agentId: row.agent_id ?? "",
+    beadId: row.bead_id ?? "",
+    projectPath: row.project_path ?? "",
+    cost: row.total_cost,
+    inputTokens: row.input_tokens,
+    outputTokens: row.output_tokens,
+    cacheReadTokens: row.cache_read_tokens,
+    cacheWriteTokens: row.cache_write_tokens,
+    recordedAt: row.recorded_at,
+  }));
+}
+
+// ============================================================================
+// Cost Projections
+// ============================================================================
+
+/** Projection result for an epic or the overall session. */
+export interface CostProjection {
+  /** Current total cost */
+  currentCost: number;
+  /** Estimated cost at completion (null if no beads/progress data) */
+  estimatedCompletionCost: number | null;
+  /** Estimated remaining cost (null if no projection possible) */
+  estimatedRemainingCost: number | null;
+  /** Burn rate per hour */
+  burnRatePerHour: number;
+  /** Cost trend data points (last 24 data points, hourly) for sparkline */
+  costTrend: { timestamp: string; cost: number }[];
+}
+
+/**
+ * Get cost projection data.
+ * Uses the in-memory cache for current costs and SQLite for trend data.
+ * If percentComplete is provided (0-100), estimates total completion cost.
+ */
+export function getCostProjection(percentComplete?: number): CostProjection {
+  const summary = getCostSummary();
+  const burnRate = getBurnRate();
+
+  // Gather hourly cost trend from SQLite (last 24 hours)
+  const costTrend = getHourlyCostTrend();
+
+  // Project completion cost if progress data available
+  let estimatedCompletionCost: number | null = null;
+  let estimatedRemainingCost: number | null = null;
+
+  if (percentComplete != null && percentComplete > 0 && percentComplete < 100) {
+    // Linear projection: if X% cost Y, then 100% costs Y * (100/X)
+    estimatedCompletionCost = summary.totalCost * (100 / percentComplete);
+    estimatedRemainingCost = estimatedCompletionCost - summary.totalCost;
+  }
+
+  return {
+    currentCost: summary.totalCost,
+    estimatedCompletionCost,
+    estimatedRemainingCost,
+    burnRatePerHour: burnRate.rate1h,
+    costTrend,
+  };
+}
+
+/**
+ * Get hourly cost trend for the last 24 hours.
+ * Returns up to 24 data points, one per hour, with cumulative cost at each hour boundary.
+ */
+function getHourlyCostTrend(): { timestamp: string; cost: number }[] {
+  if (!db) return [];
+  try {
+    const rows = db.prepare(
+      `SELECT strftime('%Y-%m-%dT%H:00:00Z', recorded_at) as hour,
+              SUM(total_cost) as hourly_cost
+       FROM agent_costs
+       WHERE recorded_at >= datetime('now', '-24 hours')
+         AND finalized_at IS NULL
+       GROUP BY hour
+       ORDER BY hour ASC`
+    ).all() as { hour: string; hourly_cost: number }[];
+
+    return rows.map((row) => ({
+      timestamp: row.hour,
+      cost: row.hourly_cost,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// ============================================================================
 // Private — SQLite persistence
 // ============================================================================
 

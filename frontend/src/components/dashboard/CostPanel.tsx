@@ -3,11 +3,11 @@
  * Shows total spend, per-agent breakdown, burn rate, and budget status.
  * Retro terminal (Pip-Boy) aesthetic.
  */
-import { useMemo, useState, useCallback, type CSSProperties } from 'react';
+import { useMemo, useState, useCallback, useEffect, type CSSProperties } from 'react';
 
 import { useCostDashboard } from '../../hooks/useCostDashboard';
 import { costApi } from '../../services/api-costs';
-import type { CostSummary, BurnRate, BudgetRecord, ReconciliationStatus } from '../../services/api-costs';
+import type { CostSummary, BurnRate, BudgetRecord, ReconciliationStatus, CostProjection } from '../../services/api-costs';
 
 // ============================================================================
 // Formatters
@@ -314,6 +314,56 @@ function BudgetForm({ onSubmit, onCancel }: {
   );
 }
 
+/** Cost projections display with sparkline trend. */
+function ProjectionsDisplay({ projection }: { projection: CostProjection }) {
+  const maxCost = Math.max(...projection.costTrend.map((p) => p.cost), 0.01);
+  const sparklineHeight = 24;
+  const sparklineWidth = 120;
+
+  return (
+    <div style={styles.projectionsSection}>
+      <div style={styles.sectionHeader}>PROJECTIONS</div>
+      <div style={styles.projectionsRow}>
+        <span style={styles.projLabel}>BURN</span>
+        <span style={styles.projValue}>{formatCost(projection.burnRatePerHour)}/hr</span>
+      </div>
+      {projection.estimatedCompletionCost != null && (
+        <>
+          <div style={styles.projectionsRow}>
+            <span style={styles.projLabel}>EST. TOTAL</span>
+            <span style={styles.projValue}>{formatCost(projection.estimatedCompletionCost)}</span>
+          </div>
+          <div style={styles.projectionsRow}>
+            <span style={styles.projLabel}>REMAINING</span>
+            <span style={styles.projValue}>
+              {projection.estimatedRemainingCost != null ? formatCost(projection.estimatedRemainingCost) : '—'}
+            </span>
+          </div>
+        </>
+      )}
+      {/* Sparkline */}
+      {projection.costTrend.length > 1 && (
+        <div style={styles.sparklineContainer} title="Cost trend (last 24h, hourly)">
+          <svg width={sparklineWidth} height={sparklineHeight} viewBox={`0 0 ${sparklineWidth} ${sparklineHeight}`}>
+            <polyline
+              fill="none"
+              stroke="var(--crt-phosphor)"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+              points={projection.costTrend.map((p, i) => {
+                const x = (i / (projection.costTrend.length - 1)) * sparklineWidth;
+                const y = sparklineHeight - (p.cost / maxCost) * (sparklineHeight - 2) - 1;
+                return `${x},${y}`;
+              }).join(' ')}
+            />
+          </svg>
+          <div style={styles.sparklineLabel}>24H TREND</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ============================================================================
 // Main Component
 // ============================================================================
@@ -322,6 +372,9 @@ export function CostPanel() {
   const { summary, burnRate, budgets, loading, error, lastUpdated, refresh } = useCostDashboard();
   const [showBudgetForm, setShowBudgetForm] = useState(false);
   const [budgetError, setBudgetError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [projection, setProjection] = useState<CostProjection | null>(null);
 
   const handleSetBudget = useCallback(async (amount: number) => {
     setBudgetError(null);
@@ -345,6 +398,31 @@ export function CostPanel() {
       setBudgetError(message);
     }
   }, [refresh]);
+
+  const handleExportCsv = useCallback(async () => {
+    setExportError(null);
+    setExporting(true);
+    try {
+      await costApi.downloadCostCsv();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Export failed';
+      setExportError(message);
+    } finally {
+      setExporting(false);
+    }
+  }, []);
+
+  // Fetch projections when summary updates
+  useEffect(() => {
+    if (!summary) return;
+    let cancelled = false;
+    void costApi.fetchProjections().then((data) => {
+      if (!cancelled) setProjection(data);
+    }).catch(() => {
+      // Projections are non-critical — silently ignore errors
+    });
+    return () => { cancelled = true; };
+  }, [summary]);
 
   // Loading state
   if (loading && !summary) {
@@ -425,8 +503,25 @@ export function CostPanel() {
         </div>
       )}
 
+      {/* Projections */}
+      {projection && <ProjectionsDisplay projection={projection} />}
+
       {/* Session Breakdown */}
       <SessionBreakdown summary={summary} />
+
+      {/* Export */}
+      <div style={styles.exportSection}>
+        <button
+          style={styles.exportBtn}
+          onClick={() => { void handleExportCsv(); }}
+          disabled={exporting}
+        >
+          {exporting ? 'EXPORTING...' : 'EXPORT CSV'}
+        </button>
+        {exportError && (
+          <div style={styles.budgetError}>ERR: {exportError}</div>
+        )}
+      </div>
 
       {/* Last Updated */}
       {lastUpdated && (
@@ -720,6 +815,59 @@ const styles = {
     marginLeft: '4px',
     fontFamily: '"Share Tech Mono", monospace',
     cursor: 'help',
+  },
+
+  // Projections
+  projectionsSection: {
+    borderTop: '1px solid rgba(0, 255, 0, 0.15)',
+    paddingTop: '10px',
+  },
+  projectionsRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '2px 0',
+  },
+  projLabel: {
+    fontSize: '0.65rem',
+    color: 'var(--crt-phosphor-dim)',
+    letterSpacing: '0.1em',
+  },
+  projValue: {
+    fontSize: '0.75rem',
+    color: 'var(--crt-phosphor)',
+    fontWeight: 'bold',
+  },
+  sparklineContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginTop: '6px',
+    padding: '4px 0',
+  },
+  sparklineLabel: {
+    fontSize: '0.55rem',
+    color: 'var(--crt-phosphor-dim)',
+    letterSpacing: '0.1em',
+  },
+
+  // Export
+  exportSection: {
+    borderTop: '1px solid rgba(0, 255, 0, 0.15)',
+    paddingTop: '10px',
+  },
+  exportBtn: {
+    background: 'none',
+    border: '1px solid var(--crt-phosphor-dim)',
+    color: 'var(--crt-phosphor)',
+    fontSize: '0.7rem',
+    padding: '6px 12px',
+    cursor: 'pointer',
+    fontFamily: '"Share Tech Mono", monospace',
+    letterSpacing: '0.1em',
+    width: '100%',
+    textAlign: 'center',
+    transition: 'border-color 0.15s ease',
   },
 
   // Last Updated

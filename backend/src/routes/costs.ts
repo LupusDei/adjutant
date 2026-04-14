@@ -12,6 +12,8 @@
  * - DELETE /api/costs/budget/:id   - Delete a budget
  * - GET    /api/costs/burn-rate    - Get current burn rate
  * - GET    /api/costs/by-bead/:id  - Get cost for a specific bead
+ * - GET    /api/costs/export       - Export cost data as CSV
+ * - GET    /api/costs/projections  - Get cost projections and trend data
  * - GET    /api/costs/reconcile    - Reconcile all active sessions
  * - GET    /api/costs/reconcile/:sessionId - Reconcile a specific session
  */
@@ -29,6 +31,8 @@ import {
   getBurnRate,
   getBeadCost,
   getEpicCost,
+  getCostExportRows,
+  getCostProjection,
 } from "../services/cost-tracker.js";
 import { reconcileSession, reconcileAllSessions } from "../services/cost-reconciler.js";
 import { success, notFound, validationError } from "../utils/index.js";
@@ -183,6 +187,79 @@ costsRouter.get("/by-bead/:id", (req, res) => {
     return res.status(404).json(notFound("Bead cost", beadId));
   }
   return res.json(success(result));
+});
+
+/**
+ * GET /api/costs/export
+ * Export cost data as CSV.
+ * Query params: agentId, beadId, startDate, endDate
+ */
+costsRouter.get("/export", (req, res) => {
+  const agentId = req.query["agentId"] as string | undefined;
+  const beadId = req.query["beadId"] as string | undefined;
+  const startDate = req.query["startDate"] as string | undefined;
+  const endDate = req.query["endDate"] as string | undefined;
+
+  const filters: Parameters<typeof getCostExportRows>[0] = {};
+  if (agentId) filters.agentId = agentId;
+  if (beadId) filters.beadId = beadId;
+  if (startDate) filters.startDate = startDate;
+  if (endDate) filters.endDate = endDate;
+
+  const rows = getCostExportRows(filters);
+
+  // CSV header
+  const header = "session_id,agent_id,bead_id,project_path,cost,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,recorded_at";
+
+  // CSV rows — escape fields that may contain commas or quotes
+  const csvRows = rows.map((row) => {
+    const fields = [
+      row.sessionId,
+      row.agentId,
+      row.beadId,
+      row.projectPath,
+      row.cost.toFixed(4),
+      String(row.inputTokens),
+      String(row.outputTokens),
+      String(row.cacheReadTokens),
+      String(row.cacheWriteTokens),
+      row.recordedAt,
+    ];
+    return fields.map((f) => {
+      // Quote fields containing commas, quotes, or newlines
+      if (f.includes(",") || f.includes('"') || f.includes("\n")) {
+        return `"${f.replace(/"/g, '""')}"`;
+      }
+      return f;
+    }).join(",");
+  });
+
+  const csv = [header, ...csvRows].join("\n");
+
+  const filename = `adjutant-costs-${new Date().toISOString().slice(0, 10)}.csv`;
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  return res.send(csv);
+});
+
+/**
+ * GET /api/costs/projections
+ * Get cost projections and trend data.
+ * Query param: percentComplete (0-100) for completion estimate.
+ */
+costsRouter.get("/projections", (req, res) => {
+  const percentStr = req.query["percentComplete"] as string | undefined;
+  let percentComplete: number | undefined;
+
+  if (percentStr) {
+    const parsed = parseFloat(percentStr);
+    if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) {
+      percentComplete = parsed;
+    }
+  }
+
+  const projection = getCostProjection(percentComplete);
+  return res.json(success(projection));
 });
 
 /**
