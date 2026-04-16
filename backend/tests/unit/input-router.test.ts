@@ -493,4 +493,66 @@ describe("InputRouter", () => {
       vi.spyOn(Date, "now").mockRestore();
     });
   });
+
+  // ==========================================================================
+  // Mutation testing: surviving mutations
+  // ==========================================================================
+
+  describe("paste-enter delay (mutation: PASTE_ENTER_DELAY_MS = 0)", () => {
+    it("should wait before sending Enter after paste-buffer (non-zero delay)", async () => {
+      const session = registry.create({
+        name: "test",
+        tmuxSession: "adj-test",
+        projectPath: "/tmp",
+      });
+      registry.updateStatus(session.id, "idle");
+
+      let delayObserved = 0;
+
+      // Spy on setTimeout to capture the delay value
+      const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout").mockImplementation(
+        (fn: (...args: unknown[]) => void, delay?: number) => {
+          delayObserved = delay ?? 0;
+          // Execute immediately for test speed, but capture the delay
+          fn();
+          return 0 as unknown as ReturnType<typeof setTimeout>;
+        }
+      );
+
+      await router.sendInput(session.id, "test text");
+
+      // The delay between paste-buffer and send-keys Enter should be > 0
+      expect(delayObserved).toBeGreaterThan(0);
+      // Specifically, it should be 150ms
+      expect(delayObserved).toBe(150);
+
+      setTimeoutSpy.mockRestore();
+    });
+  });
+
+  describe("buffer counter uniqueness (mutation: counter not incrementing)", () => {
+    it("should use unique buffer names for consecutive sends", async () => {
+      const session = registry.create({
+        name: "test",
+        tmuxSession: "adj-test",
+        projectPath: "/tmp",
+      });
+      registry.updateStatus(session.id, "idle");
+
+      await router.sendInput(session.id, "first message");
+      await router.sendInput(session.id, "second message");
+
+      // Extract buffer names from set-buffer calls
+      const setBufferCalls = mockExecFile.mock.calls.filter(
+        (call: unknown[]) => (call[1] as string[])[0] === "set-buffer"
+      );
+      expect(setBufferCalls.length).toBeGreaterThanOrEqual(2);
+
+      const bufferName1 = (setBufferCalls[0]![1] as string[])[2]; // -b flag value
+      const bufferName2 = (setBufferCalls[1]![1] as string[])[2];
+
+      // Buffer names must be different to avoid overwriting a buffer mid-use
+      expect(bufferName1).not.toBe(bufferName2);
+    });
+  });
 });
