@@ -1098,4 +1098,114 @@ describe("cost-tracker", () => {
       expect(summary.totalCost).toBeCloseTo(18.0, 10);
     });
   });
+
+  // ===========================================================================
+  // Mutation testing — tests written to kill surviving mutations
+  // ===========================================================================
+
+  describe("mutation: cost should use Math.max not direct assignment", () => {
+    it("should not decrease cost when an out-of-order lower cost update arrives", () => {
+      // Claude Code cost reports are running totals — they should only go up.
+      // If a stale/out-of-order update arrives with a lower cost, we must keep
+      // the higher value (Math.max behavior), not overwrite with the lower one.
+      recordCostUpdate("sess-oop", "/project", { cost: 1.00 });
+      recordCostUpdate("sess-oop", "/project", { cost: 0.50 }); // stale/out-of-order
+
+      const entry = getSessionCost("sess-oop");
+      expect(entry).toBeDefined();
+      // Cost must remain at the high-water mark of 1.00, not drop to 0.50
+      expect(entry!.cost).toBe(1.00);
+    });
+
+    it("should not decrease cost when update.cost is zero after real cost was recorded", () => {
+      recordCostUpdate("sess-zero", "/project", { cost: 2.50 });
+      recordCostUpdate("sess-zero", "/project", { cost: 0 });
+
+      const entry = getSessionCost("sess-zero");
+      expect(entry!.cost).toBe(2.50);
+    });
+  });
+
+  describe("mutation: getBurnRate trend thresholds", () => {
+    it("should classify trend as stable when second half is moderately higher (ratio 1.15)", () => {
+      // Insert cost entries with specific timestamps to control the ratio.
+      // We need first-half cost and second-half cost where ratio = second/first ~ 1.15
+      // which is between 0.75 and 1.25, so it should be "stable" — not "increasing".
+      const now = new Date();
+      const fortyMinAgo = new Date(now.getTime() - 40 * 60 * 1000).toISOString();
+      const tenMinAgo = new Date(now.getTime() - 10 * 60 * 1000).toISOString();
+
+      // Insert directly into DB with controlled timestamps
+      // First half: $1.00 (recorded 40 min ago)
+      testDb.prepare(
+        `INSERT INTO agent_costs (session_id, agent_id, bead_id, project_path,
+           input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+           total_cost, recorded_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run("sess-trend-a", null, null, "/project", 0, 0, 0, 0, 1.00, fortyMinAgo);
+
+      // Second half: $1.15 (recorded 10 min ago)
+      testDb.prepare(
+        `INSERT INTO agent_costs (session_id, agent_id, bead_id, project_path,
+           input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+           total_cost, recorded_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run("sess-trend-b", null, null, "/project", 0, 0, 0, 0, 1.15, tenMinAgo);
+
+      const rate = getBurnRate();
+      // Ratio = 1.15 / 1.00 = 1.15. This is < 1.25, so trend should be "stable".
+      // If the threshold is lowered to 1.0, this would wrongly classify as "increasing".
+      expect(rate.trend).toBe("stable");
+    });
+
+    it("should classify trend as increasing when second half is much higher (ratio > 1.25)", () => {
+      const now = new Date();
+      const fortyMinAgo = new Date(now.getTime() - 40 * 60 * 1000).toISOString();
+      const tenMinAgo = new Date(now.getTime() - 10 * 60 * 1000).toISOString();
+
+      // First half: $1.00
+      testDb.prepare(
+        `INSERT INTO agent_costs (session_id, agent_id, bead_id, project_path,
+           input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+           total_cost, recorded_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run("sess-inc-a", null, null, "/project", 0, 0, 0, 0, 1.00, fortyMinAgo);
+
+      // Second half: $2.00 (ratio = 2.0 > 1.25)
+      testDb.prepare(
+        `INSERT INTO agent_costs (session_id, agent_id, bead_id, project_path,
+           input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+           total_cost, recorded_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run("sess-inc-b", null, null, "/project", 0, 0, 0, 0, 2.00, tenMinAgo);
+
+      const rate = getBurnRate();
+      expect(rate.trend).toBe("increasing");
+    });
+
+    it("should classify trend as decreasing when second half is much lower (ratio < 0.75)", () => {
+      const now = new Date();
+      const fortyMinAgo = new Date(now.getTime() - 40 * 60 * 1000).toISOString();
+      const tenMinAgo = new Date(now.getTime() - 10 * 60 * 1000).toISOString();
+
+      // First half: $4.00
+      testDb.prepare(
+        `INSERT INTO agent_costs (session_id, agent_id, bead_id, project_path,
+           input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+           total_cost, recorded_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run("sess-dec-a", null, null, "/project", 0, 0, 0, 0, 4.00, fortyMinAgo);
+
+      // Second half: $1.00 (ratio = 0.25 < 0.75)
+      testDb.prepare(
+        `INSERT INTO agent_costs (session_id, agent_id, bead_id, project_path,
+           input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+           total_cost, recorded_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run("sess-dec-b", null, null, "/project", 0, 0, 0, 0, 1.00, tenMinAgo);
+
+      const rate = getBurnRate();
+      expect(rate.trend).toBe("decreasing");
+    });
+  });
 });
