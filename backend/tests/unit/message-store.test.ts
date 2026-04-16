@@ -861,4 +861,122 @@ describe("message-store", () => {
       expect(page2.some((m) => m.id === "dup-test-new")).toBe(false);
     });
   });
+
+  // ===========================================================================
+  // Mutation tests — killing surviving mutations
+  // ===========================================================================
+
+  describe("searchMessages edge cases (mutation coverage)", () => {
+    it("should return empty array when query is empty string", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      store.insertMessage({ agentId: "agent-A", role: "user", body: "Hello world" });
+
+      expect(store.searchMessages("")).toEqual([]);
+    });
+
+    it("should return empty array when query is only whitespace", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      store.insertMessage({ agentId: "agent-A", role: "user", body: "Hello world" });
+
+      expect(store.searchMessages("   ")).toEqual([]);
+      expect(store.searchMessages("\t")).toEqual([]);
+    });
+
+    it("should handle query containing double quotes via FTS5 sanitization", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      store.insertMessage({ agentId: "agent-A", role: "user", body: 'He said "hello" to me' });
+      store.insertMessage({ agentId: "agent-A", role: "user", body: "No quotes here" });
+
+      // Searching for a string with double quotes should not throw an FTS5 syntax error
+      const results = store.searchMessages('"hello"');
+      // Should find the message containing the quoted word, not crash
+      expect(results.length).toBeGreaterThanOrEqual(1);
+      expect(results.some((m) => m.body.includes('"hello"'))).toBe(true);
+    });
+  });
+
+  describe("getPendingForRecipient with since parameter (mutation coverage)", () => {
+    it("should filter pending messages by since date", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      // Insert a message that will have a created_at timestamp
+      store.insertMessage({ agentId: "user", recipient: "agent-A", role: "user", body: "old message" });
+
+      // Use a future date — no messages should match
+      const futureDate = new Date("2099-01-01T00:00:00Z");
+      const pending = store.getPendingForRecipient("agent-A", futureDate);
+      expect(pending).toHaveLength(0);
+    });
+
+    it("should return all pending messages when since is in the past", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      store.insertMessage({ agentId: "user", recipient: "agent-A", role: "user", body: "msg 1" });
+      store.insertMessage({ agentId: "user", recipient: "agent-A", role: "user", body: "msg 2" });
+
+      // Use a very old date — all messages should match
+      const pastDate = new Date("2000-01-01T00:00:00Z");
+      const pending = store.getPendingForRecipient("agent-A", pastDate);
+      expect(pending).toHaveLength(2);
+    });
+  });
+
+  describe("getUnreadSummaries (mutation coverage)", () => {
+    it("should return agent summaries with unread count and latest body using default limit", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      store.insertMessage({ agentId: "agent-A", role: "agent", body: "Agent A says hi" });
+      store.insertMessage({ agentId: "agent-A", role: "agent", body: "Agent A says bye" });
+      store.insertMessage({ agentId: "agent-B", role: "agent", body: "Agent B here" });
+
+      const summaries = store.getUnreadSummaries();
+      expect(summaries.length).toBeGreaterThanOrEqual(2);
+
+      const agentA = summaries.find((s) => s.agentId === "agent-A");
+      expect(agentA).toBeDefined();
+      expect(agentA!.unreadCount).toBe(2);
+      expect(agentA!.latestBody).toBe("Agent A says bye");
+
+      const agentB = summaries.find((s) => s.agentId === "agent-B");
+      expect(agentB).toBeDefined();
+      expect(agentB!.unreadCount).toBe(1);
+    });
+
+    it("should exclude user-role messages from unread summaries", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      // Insert a user message and an agent message from same agentId
+      store.insertMessage({ agentId: "agent-A", role: "user", body: "User msg" });
+      store.insertMessage({ agentId: "agent-A", role: "agent", body: "Agent msg" });
+
+      const summaries = store.getUnreadSummaries();
+      const agentA = summaries.find((s) => s.agentId === "agent-A");
+      expect(agentA).toBeDefined();
+      // Should only count the agent message, not the user message
+      expect(agentA!.unreadCount).toBe(1);
+    });
+
+    it("should respect explicit limit parameter", async () => {
+      const { createMessageStore } = await import("../../src/services/message-store.js");
+      const store = createMessageStore(db);
+
+      // Create messages from many agents
+      for (let i = 0; i < 5; i++) {
+        store.insertMessage({ agentId: `agent-${i}`, role: "agent", body: `Message from ${i}` });
+      }
+
+      const summaries = store.getUnreadSummaries(2);
+      expect(summaries).toHaveLength(2);
+    });
+  });
 });
