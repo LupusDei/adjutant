@@ -579,4 +579,155 @@ describe("ws-server", () => {
       expect(error).toBeDefined();
     });
   });
+
+  // ==========================================================================
+  // Mutation testing: surviving mutations
+  // ==========================================================================
+
+  describe("readyState guard (mutation: send to closed connection)", () => {
+    it("should not send messages to clients with closed WebSocket connections", async () => {
+      const store = createMockStore();
+      const { ws: ws1, mod } = await createAuthenticatedClient(store);
+
+      // Close the WebSocket (readyState becomes 3/CLOSED)
+      ws1.close();
+      expect(ws1.readyState).toBe(3);
+
+      const sentCountBefore = ws1.sentMessages.length;
+
+      // Broadcast a message — should NOT be delivered to the closed client
+      mod.wsBroadcast({ type: "chat_message", id: "after-close", body: "Should not arrive" });
+
+      // No new messages should have been sent to the closed client
+      expect(ws1.sentMessages.length).toBe(sentCountBefore);
+    });
+  });
+
+  describe("auth timeout timing (mutation: AUTH_TIMEOUT_MS = 0)", () => {
+    it("should NOT disconnect client before 10 seconds even if time advances 5 seconds", async () => {
+      const { ws } = await createClient();
+
+      // Advance 5 seconds — should NOT trigger auth timeout
+      vi.advanceTimersByTime(5_000);
+
+      // Client should still be connected
+      expect(ws.closed).toBe(false);
+
+      // No auth_timeout error yet
+      const timeoutErrors = ws.findAllSent("error").filter((e) => e.code === "auth_timeout");
+      expect(timeoutErrors).toHaveLength(0);
+    });
+  });
+
+  describe("ping keepalive timing (mutation: PING_INTERVAL_MS = 0)", () => {
+    it("should send ping after 30 seconds of connection", async () => {
+      const { ws } = await createAuthenticatedClient();
+
+      expect(ws.pings).toBe(0);
+
+      // Advance 30 seconds — should trigger first ping
+      vi.advanceTimersByTime(30_000);
+
+      expect(ws.pings).toBeGreaterThanOrEqual(1);
+
+      // Advance another 30 seconds — should trigger another ping
+      vi.advanceTimersByTime(30_000);
+
+      expect(ws.pings).toBeGreaterThanOrEqual(2);
+    });
+
+    it("should not send ping before 30 seconds", async () => {
+      const { ws } = await createAuthenticatedClient();
+
+      // Advance 29 seconds — should NOT trigger ping yet
+      vi.advanceTimersByTime(29_000);
+
+      expect(ws.pings).toBe(0);
+    });
+  });
+
+  describe("message store null guard (mutation: remove messageStore check)", () => {
+    it("should return server_error when message store is not configured", async () => {
+      // Reset all modules to get a fresh ws-server with messageStore = null
+      vi.resetModules();
+
+      // Re-register mocks that are needed by ws-server
+      vi.doMock("../../src/utils/index.js", () => ({
+        logInfo: vi.fn(),
+        logWarn: vi.fn(),
+        logError: vi.fn(),
+        logDebug: vi.fn(),
+      }));
+      vi.doMock("../../src/services/event-bus.js", () => ({
+        getEventBus: () => ({ on: vi.fn(), off: vi.fn(), emit: vi.fn() }),
+      }));
+      vi.doMock("../../src/services/api-key-service.js", () => ({
+        hasApiKeys: () => false,
+        validateApiKey: () => true,
+      }));
+      vi.doMock("../../src/services/session-bridge.js", () => ({
+        getSessionBridge: () => ({
+          registry: { findByName: () => [], getAll: () => [] },
+          connectClient: vi.fn().mockResolvedValue({ success: false }),
+          disconnectClient: vi.fn().mockResolvedValue(undefined),
+          sendInput: vi.fn().mockResolvedValue(true),
+          connector: { onOutput: vi.fn() },
+        }),
+      }));
+      vi.doMock("ws", () => {
+        class MockWebSocketServer2 {
+          // eslint-disable-next-line @typescript-eslint/no-useless-constructor
+          constructor(_options: Record<string, unknown>) {}
+          on(event: string, handler: (...args: unknown[]) => void) {
+            if (event === "connection") {
+              connectionHandler = handler as (ws: MockWs) => void;
+            }
+          }
+          close = vi.fn();
+        }
+        return {
+          WebSocketServer: MockWebSocketServer2,
+          WebSocket: { OPEN: 1 },
+        };
+      });
+
+      const freshMod = await import("../../src/services/ws-server.js");
+      const fakeServer = {} as import("http").Server;
+      // Initialize WITHOUT a store — messageStore remains null
+      freshMod.initWebSocketServer(fakeServer);
+
+      const ws = new MockWs();
+      connectionHandler!(ws);
+
+      // Authenticate (open mode)
+      ws._receiveMessage({ type: "auth_response" });
+      expect(ws.findSent("connected")).toBeDefined();
+
+      // Send a message — should fail with server_error since no store
+      ws._receiveMessage({ type: "message", id: "no-store", body: "hello", to: "agent" });
+
+      const error = ws.findAllSent("error").find((e) => e.code === "server_error");
+      expect(error).toBeDefined();
+      expect(error!.message).toContain("Message store not available");
+
+      freshMod.closeWsServer();
+    });
+  });
+
+  describe("default recipient (mutation: change 'mayor/' default)", () => {
+    it("should use 'mayor/' as default recipient when 'to' field is missing", async () => {
+      const store = createMockStore();
+      const { ws } = await createAuthenticatedClient(store);
+
+      // Send a message without specifying 'to'
+      ws._receiveMessage({ type: "message", id: "default-recipient", body: "Hello" });
+
+      // Store should have been called with "mayor/" as recipient
+      expect(store.insertMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipient: "mayor/",
+        }),
+      );
+    });
+  });
 });

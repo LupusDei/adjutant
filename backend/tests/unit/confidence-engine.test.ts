@@ -265,3 +265,35 @@ describe("getHistoricalSuccessRate", () => {
     });
   });
 });
+
+// =============================================================================
+// Mutation testing: surviving mutations
+// =============================================================================
+
+describe("computeConfidenceScore upper clamp (mutation: allow scores > 100)", () => {
+  it("should clamp scores to 100 when signals exceed 100", () => {
+    // Signals above 100 should still produce a clamped output of 100
+    const signals: ConfidenceSignals = {
+      reviewerConsensus: 200,
+      specClarity: 200,
+      codebaseAlignment: 200,
+      riskAssessment: 200,
+      historicalSuccess: 200,
+    };
+    // Without clamp: 200 * 1.0 = 200, but should be capped at 100
+    expect(computeConfidenceScore(signals)).toBe(100);
+  });
+
+  it("should clamp to 100 even with partially high signals", () => {
+    const signals: ConfidenceSignals = {
+      reviewerConsensus: 500,  // 0.30 * 500 = 150
+      specClarity: 0,
+      codebaseAlignment: 0,
+      riskAssessment: 0,
+      historicalSuccess: 0,
+    };
+    // Raw weighted sum would be 150, but must be clamped to 100
+    expect(computeConfidenceScore(signals)).toBeLessThanOrEqual(100);
+    expect(computeConfidenceScore(signals)).toBe(100);
+  });
+});
