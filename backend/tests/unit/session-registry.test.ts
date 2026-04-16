@@ -265,6 +265,22 @@ describe("SessionRegistry (SQL-backed)", () => {
     it("should return undefined when not found", () => {
       expect(registry.findByTmuxSession("nonexistent")).toBeUndefined();
     });
+
+    it("should return the first match when multiple sessions share a tmux session name", () => {
+      const first = registry.create({
+        name: "agent-first",
+        tmuxSession: "shared-tmux",
+        projectPath: "/tmp",
+      });
+      registry.create({
+        name: "agent-second",
+        tmuxSession: "shared-tmux",
+        projectPath: "/tmp",
+      });
+      const found = registry.findByTmuxSession("shared-tmux");
+      expect(found).toBe(first);
+      expect(found?.name).toBe("agent-first");
+    });
   });
 
   describe("findByName", () => {
@@ -354,6 +370,21 @@ describe("SessionRegistry (SQL-backed)", () => {
     it("should return false for unknown session", () => {
       expect(registry.addClient("unknown", "c1")).toBe(false);
       expect(registry.removeClient("unknown", "c1")).toBe(false);
+    });
+
+    it("should update lastActivity when a client is added", async () => {
+      const session = registry.create({
+        name: "test-activity",
+        tmuxSession: "adj-activity",
+        projectPath: "/tmp",
+      });
+      const beforeActivity = session.lastActivity.getTime();
+
+      // Small delay to ensure time advances
+      await new Promise((r) => setTimeout(r, 10));
+
+      registry.addClient(session.id, "client-new");
+      expect(session.lastActivity.getTime()).toBeGreaterThan(beforeActivity);
     });
   });
 

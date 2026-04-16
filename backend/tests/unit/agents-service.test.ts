@@ -24,6 +24,16 @@ vi.mock("../../src/services/mcp-tools/status.js", () => ({
   getAgentStatuses: vi.fn(() => new Map()),
 }));
 
+const mockListProjects = vi.fn();
+vi.mock("../../src/services/projects-service.js", () => ({
+  listProjects: (...args: unknown[]) => mockListProjects(...args),
+}));
+
+vi.mock("../../src/services/cost-tracker.js", () => ({
+  getSessionCost: vi.fn(() => null),
+  estimateContextPercent: vi.fn(() => 0),
+}));
+
 const mockGetPersonaByCallsign = vi.fn();
 vi.mock("../../src/services/persona-service.js", () => ({
   getPersonaService: vi.fn(() => ({
@@ -36,6 +46,7 @@ import { getSessionBridge } from "../../src/services/session-bridge.js";
 import { getAgents, resetAgentStatusCache } from "../../src/services/agents-service.js";
 import { getConnectedAgents } from "../../src/services/mcp-server.js";
 import { getAgentStatuses } from "../../src/services/mcp-tools/status.js";
+import { getSessionCost } from "../../src/services/cost-tracker.js";
 import type { AgentType } from "../../src/types/index.js";
 
 // =============================================================================
@@ -82,6 +93,7 @@ describe("agents-service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetAgentStatusCache();
+    mockListProjects.mockReturnValue({ success: true, data: [] });
   });
 
   // ===========================================================================
@@ -179,6 +191,39 @@ describe("agents-service", () => {
       expect(result.success).toBe(true);
       expect(result.data).toHaveLength(2);
       expect(result.data?.find(a => a.name === "claude-helper")).toBeDefined();
+    });
+
+    it("should resolve project name for agents in worktree paths", async () => {
+      const worktreePath = "/home/user/project/.claude/worktrees/agent-branch";
+      vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-alice"]));
+      mockManagedSessions([
+        { id: "s1", name: "alice", tmuxSession: "adj-swarm-alice", projectPath: worktreePath },
+      ]);
+      mockListProjects.mockReturnValue({
+        success: true,
+        data: [{ name: "my-project", path: "/home/user/project", id: "proj-1" }],
+      });
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      expect(result.data?.[0].project).toBe("my-project");
+    });
+
+    it("should exclude unmanaged tmux sessions that do not look like agent sessions", async () => {
+      vi.mocked(listTmuxSessions).mockResolvedValue(
+        new Set(["adj-swarm-alice", "my-random-session", "vim-editor"]),
+      );
+      mockManagedSessions([
+        { id: "s1", name: "alice", tmuxSession: "adj-swarm-alice" },
+      ]);
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      // Only alice should be present, the random sessions should be excluded
+      expect(result.data).toHaveLength(1);
+      expect(result.data?.[0].name).toBe("alice");
     });
 
     it("should handle tmux errors gracefully", async () => {
@@ -296,6 +341,25 @@ describe("agents-service", () => {
       expect(alice?.currentTask).toBeUndefined();
     });
 
+    it("should map MCP 'done' status to 'idle' on the dashboard", async () => {
+      vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-alice"]));
+      mockManagedSessions([
+        { id: "s1", name: "alice", tmuxSession: "adj-swarm-alice" },
+      ]);
+      vi.mocked(getConnectedAgents).mockReturnValue([
+        { agentId: "alice", sessionId: "mcp-1" },
+      ] as never);
+      vi.mocked(getAgentStatuses).mockReturnValue(
+        new Map([["alice", { status: "done", task: "Finished work" }]]) as never,
+      );
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      const alice = result.data?.find((a) => a.id === "alice");
+      expect(alice?.status).toBe("idle");
+    });
+
     it("should not add MCP-only agents that have no tmux session", async () => {
       vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-alice"]));
       mockManagedSessions([
@@ -318,6 +382,33 @@ describe("agents-service", () => {
       // Should only have alice, not the ghost agent
       expect(result.data).toHaveLength(1);
       expect(result.data?.[0].name).toBe("alice");
+    });
+  });
+
+  // ===========================================================================
+  // Cost Data Enrichment
+  // ===========================================================================
+
+  describe("cost data enrichment", () => {
+    it("should not enrich offline agents with cost data even if sessionId exists", async () => {
+      vi.mocked(listTmuxSessions).mockResolvedValue(new Set()); // no tmux = offline
+      mockManagedSessions([
+        { id: "s1", name: "alice", tmuxSession: "adj-swarm-alice" },
+      ]);
+      vi.mocked(getSessionCost).mockReturnValue({
+        cost: 2.50,
+        inputTokens: 1000,
+        outputTokens: 500,
+        contextPercent: 42,
+      } as never);
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      const alice = result.data?.find((a) => a.id === "alice");
+      expect(alice?.status).toBe("offline");
+      expect(alice?.cost).toBeUndefined();
+      expect(alice?.contextPercent).toBeUndefined();
     });
   });
 
