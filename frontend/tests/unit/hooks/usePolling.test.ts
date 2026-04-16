@@ -186,6 +186,43 @@ describe("usePolling", () => {
     expect(result.current.data).toEqual({ value: "success" });
   });
 
+  it("should prevent overlapping fetches when previous fetch is still in progress", async () => {
+    let resolveFirst: ((v: unknown) => void) | undefined;
+    const fetchFn = vi.fn()
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockResolvedValue({ value: "second" });
+
+    const { result } = renderHook(() => usePolling(fetchFn, { interval: 1000 }));
+
+    // Initial fetch starts but doesn't resolve
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+
+    // Trigger interval while first fetch is still in-flight
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    // The overlapping fetch should be blocked by fetchingRef guard
+    // fetchFn should still be called only once (the initial call)
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+
+    // Resolve the first fetch
+    await act(async () => {
+      resolveFirst!({ value: "first" });
+      await Promise.resolve();
+    });
+
+    expect(result.current.data).toEqual({ value: "first" });
+
+    // Now the next interval should succeed
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+    });
+
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
   it("should use default interval of 60000ms", async () => {
     const fetchFn = vi.fn().mockResolvedValue({ value: "test" });
 
