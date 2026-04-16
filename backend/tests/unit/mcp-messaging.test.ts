@@ -656,6 +656,84 @@ describe("MCP Messaging Tools", () => {
       expect(agentBMsgs[0]!.deliveryStatus).toBe("pending");
     });
   });
+
+  // ========================================================================
+  // Mutation-killing tests
+  // ========================================================================
+
+  describe("read_messages mutation tests", () => {
+    it("should only mark pending messages as delivered, not already-delivered or read messages", async () => {
+      const { registerMessagingTools } = await import("../../src/services/mcp-tools/messaging.js");
+
+      // Insert messages with different statuses
+      const msg1 = store.insertMessage({ agentId: "agent-A", role: "user", body: "Pending msg" });
+      expect(msg1.deliveryStatus).toBe("pending");
+
+      // Mark one as read before calling read_messages
+      store.markRead(msg1.id);
+      const readMsg = store.getMessage(msg1.id);
+      expect(readMsg!.deliveryStatus).toBe("read");
+
+      // Insert another pending message
+      const msg2 = store.insertMessage({ agentId: "agent-A", role: "user", body: "Also pending" });
+
+      const handlers = new Map<string, Function>();
+      const mockServer = {
+        tool: (name: string, _schema: any, handler: Function) => {
+          handlers.set(name, handler);
+        },
+      } as any;
+
+      registerMessagingTools(mockServer, store);
+
+      // Spy on markDelivered
+      const markDeliveredSpy = vi.spyOn(store, "markDelivered");
+
+      const handler = handlers.get("read_messages")!;
+      await handler({ agentId: "agent-A" }, {});
+
+      // Should only call markDelivered for the pending message, not the read one
+      expect(markDeliveredSpy).toHaveBeenCalledTimes(1);
+      expect(markDeliveredSpy).toHaveBeenCalledWith(msg2.id);
+
+      // Verify the read message is still "read" (not downgraded to "delivered")
+      const afterRead = store.getMessage(msg1.id);
+      expect(afterRead!.deliveryStatus).toBe("read");
+
+      markDeliveredSpy.mockRestore();
+    });
+
+    it("should return messages in chronological (ASC) order after reversing DB DESC", async () => {
+      const { registerMessagingTools } = await import("../../src/services/mcp-tools/messaging.js");
+
+      // Insert with sequential IDs so DB ordering is deterministic
+      // DB orders by created_at DESC, id DESC -- with same timestamp, UUID sort applies
+      const msg1 = store.insertMessage({ id: "msg-aaa-001", agentId: "agent-A", role: "user", body: "First" });
+      const msg2 = store.insertMessage({ id: "msg-aaa-002", agentId: "agent-A", role: "user", body: "Second" });
+      const msg3 = store.insertMessage({ id: "msg-aaa-003", agentId: "agent-A", role: "user", body: "Third" });
+
+      const handlers = new Map<string, Function>();
+      const mockServer = {
+        tool: (name: string, _schema: any, handler: Function) => {
+          handlers.set(name, handler);
+        },
+      } as any;
+
+      registerMessagingTools(mockServer, store);
+
+      const handler = handlers.get("read_messages")!;
+      const result = await handler({ agentId: "agent-A" }, {});
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.messages).toHaveLength(3);
+
+      // DB returns DESC (003, 002, 001), reverse() makes it ASC (001, 002, 003)
+      // Verify first message ID precedes last message ID (chronological order)
+      const ids = data.messages.map((m: any) => m.id);
+      expect(ids[0]).toBe("msg-aaa-001");
+      expect(ids[2]).toBe("msg-aaa-003");
+    });
+  });
 });
 
 // ============================================================================

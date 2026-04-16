@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   OutputParser,
+  cleanTerminalOutput,
   stripAnsi,
   type OutputEvent,
 } from "../../src/services/output-parser.js";
@@ -703,6 +704,216 @@ describe("OutputParser", () => {
       const events = parser.flush();
       expect(events).toHaveLength(0);
     });
+  });
+});
+
+// ============================================================================
+// Mutation-killing tests
+// ============================================================================
+
+describe("OutputParser mutation tests", () => {
+  let parser: OutputParser;
+
+  beforeEach(() => {
+    parser = new OutputParser();
+  });
+
+  /** Feed multiple lines and collect all events (including flush). */
+  function parseAll(lines: string[]): OutputEvent[] {
+    const events: OutputEvent[] = [];
+    for (const line of lines) {
+      events.push(...parser.parseLine(line));
+    }
+    events.push(...parser.flush());
+    return events;
+  }
+
+  // Mutation 3: SEPARATOR_LINE filter
+  it("should filter out separator lines (────────)", () => {
+    const events = parseAll(["────────────────────"]);
+    expect(events).toHaveLength(0);
+  });
+
+  it("should filter separator lines mid-conversation", () => {
+    const events = parseAll([
+      "⏺ Here is the result.",
+      "━━━━━━━━━━━━━━━━━━━━",
+      "⏺ Read(file.ts)",
+    ]);
+    // Should get message + tool_use, no message for the separator
+    expect(events).toHaveLength(2);
+    expect(events[0]).toEqual({ type: "message", content: "Here is the result." });
+    expect(events[1].type).toBe("tool_use");
+  });
+
+  // Mutation 4: SPINNER_CHARS filter
+  it("should filter out solo spinner characters during message accumulation", () => {
+    // Put parser into message mode first, then a spinner appears
+    // Without SPINNER_CHARS filter, the spinner would be accumulated as message content
+    const events = parseAll([
+      "⏺ Agent is working on something.",
+      "✳",
+      "⏺ Read(file.ts)",
+    ]);
+    // Should get: message, tool_use -- the spinner should NOT appear in message content
+    expect(events).toHaveLength(2);
+    expect(events[0]).toEqual({ type: "message", content: "Agent is working on something." });
+    expect(events[1].type).toBe("tool_use");
+  });
+
+  it("should filter all spinner character variants", () => {
+    const spinners = ["✳", "✶", "✻", "✽", "✢", "·", "⊹", "⋆", "∗"];
+    for (const s of spinners) {
+      // Test during message mode to bypass the short-line filter
+      const p = new OutputParser();
+      const evts: OutputEvent[] = [];
+      evts.push(...p.parseLine("⏺ Some message."));
+      evts.push(...p.parseLine(s));
+      evts.push(...p.parseLine("⏺ Read(file.ts)"));
+      evts.push(...p.flush());
+      // Should be message + tool_use only, no spinner in message
+      const msgs = evts.filter(e => e.type === "message");
+      expect(msgs).toHaveLength(1);
+      expect((msgs[0] as any).content).not.toContain(s);
+    }
+  });
+
+  // Mutation 5: THINKING_STATUS pattern
+  it("should emit thinking status for TUI status phrases like 'Baking...'", () => {
+    const events = parseAll(["Baking..."]);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual({ type: "status", state: "thinking" });
+  });
+
+  it("should emit thinking status for spinner + status phrase like '✳ Nucleating...'", () => {
+    const events = parseAll(["✳ Nucleating..."]);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual({ type: "status", state: "thinking" });
+  });
+
+  it("should emit thinking for all THINKING_STATUS words", () => {
+    const phrases = ["Fermenting...", "Distilling...", "Brewing...", "Crystallizing..."];
+    for (const phrase of phrases) {
+      const p = new OutputParser();
+      const evts: OutputEvent[] = [];
+      evts.push(...p.parseLine(phrase));
+      evts.push(...p.flush());
+      expect(evts).toHaveLength(1);
+      expect(evts[0]).toEqual({ type: "status", state: "thinking" });
+    }
+  });
+
+  // Mutation 6: IDLE_PATTERN early check — equivalent mutation (matchStatus also catches it)
+  // The early check is redundant with matchStatus but provides a fast path.
+  // Test verifies idle detection works during message accumulation.
+  it("should flush accumulated message when idle prompt appears", () => {
+    const events = parseAll([
+      "⏺ Working on the task.",
+      " > ",
+    ]);
+    expect(events).toHaveLength(2);
+    expect(events[0]).toEqual({ type: "message", content: "Working on the task." });
+    expect(events[1]).toEqual({ type: "status", state: "idle" });
+  });
+
+  it("should detect idle prompt with ❯ character", () => {
+    const events = parseAll([" ❯ "]);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual({ type: "status", state: "idle" });
+  });
+
+  // Mutation 7: Short line filter (< 4 chars)
+  it("should filter out very short lines (< 4 chars) in idle mode as streaming noise", () => {
+    const events = parseAll(["ab"]);
+    expect(events).toHaveLength(0);
+  });
+
+  it("should filter single-char lines in idle mode", () => {
+    const events = parseAll(["x"]);
+    expect(events).toHaveLength(0);
+  });
+
+  it("should not filter short lines that are agent bullets", () => {
+    // "⏺ " + something short is still valid
+    const events = parseAll(["⏺ Hi"]);
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe("message");
+  });
+
+  // Mutation 9: content.length > 0 check in flushCurrent — equivalent mutation
+  // The guard is defensive: through normal parsing paths, messageLines entries always
+  // have non-empty content because cleanTerminalOutput + trim checks prevent empty
+  // strings from entering messageLines. Verified via mutation analysis that removing
+  // the guard does not change observable behavior. Test below confirms non-empty
+  // messages are always emitted correctly.
+  it("should always emit non-empty message content from flushed message state", () => {
+    const events = parseAll([
+      "⏺ Real content here.",
+      "",
+      "More content.",
+    ]);
+    const messages = events.filter(e => e.type === "message");
+    expect(messages).toHaveLength(1);
+    expect((messages[0] as any).content.length).toBeGreaterThan(0);
+  });
+
+  // Mutation 12: \r to \n replacement in cleanTerminalOutput
+  it("should split carriage-return separated lines into sublines", () => {
+    // Simulates TUI redraws that use \r
+    const result = cleanTerminalOutput("line1\rline2");
+    expect(result).toContain("line1");
+    expect(result).toContain("line2");
+    // \r should become \n, so split should work
+    const lines = result.split("\n");
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("should parse tool use from \\r-separated terminal output", () => {
+    const events = parseAll(["spinner\r⏺ Bash(ls)"]);
+    const toolEvents = events.filter(e => e.type === "tool_use");
+    expect(toolEvents.length).toBeGreaterThanOrEqual(1);
+    expect(toolEvents[0]).toEqual({
+      type: "tool_use",
+      tool: "Bash",
+      input: { command: "ls" },
+    });
+  });
+
+  // Mutation 13: Cursor-forward replacement
+  it("should replace cursor-forward escape sequences with spaces", () => {
+    const result = cleanTerminalOutput("hello\x1b[5Cworld");
+    expect(result).toBe("hello world");
+  });
+
+  it("should parse tool use with cursor-forward spacing", () => {
+    // TUI might render "⏺ Read(file.ts)" with cursor-forward between tokens
+    const events = parseAll(["⏺\x1b[3CRead(file.ts)"]);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual({
+      type: "tool_use",
+      tool: "Read",
+      input: { file_path: "file.ts" },
+    });
+  });
+
+  // Mutation 14: USER_INPUT pattern detection
+  it("should recognize user input lines with arrow prompt", () => {
+    const events = parseAll(["❯ fix the bug please"]);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual({
+      type: "user_input",
+      content: "fix the bug please",
+    });
+  });
+
+  it("should flush accumulated message before user input", () => {
+    const events = parseAll([
+      "⏺ Agent message here.",
+      "❯ user typed this",
+    ]);
+    expect(events).toHaveLength(2);
+    expect(events[0]).toEqual({ type: "message", content: "Agent message here." });
+    expect(events[1]).toEqual({ type: "user_input", content: "user typed this" });
   });
 });
 
