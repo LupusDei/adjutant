@@ -177,6 +177,137 @@ describe("useProposals", () => {
     expect(callArgs.project).toBeUndefined();
   });
 
+  it("should pass status filter to API when not 'all'", async () => {
+    const { result } = renderHook(() => useProposals());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Default filter is "pending", so the first call should include status: "pending"
+    expect(mockList).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "pending" })
+    );
+  });
+
+  it("should not pass status param when filter is 'all'", async () => {
+    const { result } = renderHook(() => useProposals());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    mockList.mockClear();
+
+    act(() => {
+      result.current.setStatusFilter("all");
+    });
+
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalled();
+    });
+
+    const callArgs = mockList.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArgs.status).toBeUndefined();
+  });
+
+  it("should pass type filter to API when not 'all'", async () => {
+    const { result } = renderHook(() => useProposals());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    mockList.mockClear();
+
+    act(() => {
+      result.current.setTypeFilter("engineering");
+    });
+
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalled();
+    });
+
+    expect(mockList).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "engineering" })
+    );
+  });
+
+  it("should complete a proposal", async () => {
+    const { result } = renderHook(() => useProposals());
+
+    await waitFor(() => {
+      expect(result.current.proposals).toHaveLength(2);
+    });
+
+    await act(async () => {
+      await result.current.complete("p1");
+    });
+
+    const updated = result.current.proposals.find((p) => p.id === "p1");
+    expect(updated?.status).toBe("completed");
+  });
+
+  it("should set error when complete fails", async () => {
+    const { result } = renderHook(() => useProposals());
+
+    await waitFor(() => {
+      expect(result.current.proposals).toHaveLength(2);
+    });
+
+    mockUpdateStatus.mockRejectedValueOnce(new Error("Server error"));
+
+    await act(async () => {
+      await result.current.complete("p1");
+    });
+
+    expect(result.current.error).toBe("Server error");
+  });
+
+  it("should set error when accept fails", async () => {
+    const { result } = renderHook(() => useProposals());
+
+    await waitFor(() => {
+      expect(result.current.proposals).toHaveLength(2);
+    });
+
+    mockUpdateStatus.mockRejectedValueOnce(new Error("Accept failed"));
+
+    await act(async () => {
+      await result.current.accept("p1");
+    });
+
+    expect(result.current.error).toBe("Accept failed");
+  });
+
+  it("should set error when dismiss fails", async () => {
+    const { result } = renderHook(() => useProposals());
+
+    await waitFor(() => {
+      expect(result.current.proposals).toHaveLength(2);
+    });
+
+    mockUpdateStatus.mockRejectedValueOnce(new Error("Dismiss failed"));
+
+    await act(async () => {
+      await result.current.dismiss("p2");
+    });
+
+    expect(result.current.error).toBe("Dismiss failed");
+  });
+
+  it("should set error when fetch fails", async () => {
+    mockList.mockRejectedValueOnce(new Error("Network error"));
+
+    const { result } = renderHook(() => useProposals());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.error).toBe("Network error");
+  });
+
   it("should refetch when project changes", async () => {
     let project: string | undefined = "adjutant";
     const { result, rerender } = renderHook(() => useProposals({ project }));
