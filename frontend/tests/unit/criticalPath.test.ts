@@ -258,4 +258,50 @@ describe('computeCriticalPath', () => {
     expect(result.nodeIds.has('B')).toBe(true);
     expect(result.edgeIds.size).toBe(1);
   });
+
+  it('should produce edge IDs in dependsOnId->issueId format', () => {
+    // Linear chain: C -> B -> A (C is root, A is leaf)
+    const nodes = [makeNode('A'), makeNode('B'), makeNode('C')];
+    const edges = [
+      makeEdge('A', 'B'), // A depends on B
+      makeEdge('B', 'C'), // B depends on C
+    ];
+    const result = computeCriticalPath(nodes, edges);
+
+    // Edge format must be "dependsOnId->issueId"
+    expect(result.edgeIds.has('C->B')).toBe(true);
+    expect(result.edgeIds.has('B->A')).toBe(true);
+    // Reversed format must NOT be present
+    expect(result.edgeIds.has('B->C')).toBe(false);
+    expect(result.edgeIds.has('A->B')).toBe(false);
+  });
+
+  it('should not include nodes from a shorter parallel branch in the critical path edge set', () => {
+    // Graph: root R has two branches
+    // Branch 1: R -> A -> B -> C (length 4)
+    // Branch 2: R -> X (length 2)
+    const nodes = [
+      makeNode('R'),
+      makeNode('A'),
+      makeNode('B'),
+      makeNode('C'),
+      makeNode('X'),
+    ];
+    const edges = [
+      makeEdge('A', 'R'), // A depends on R
+      makeEdge('B', 'A'), // B depends on A
+      makeEdge('C', 'B'), // C depends on B
+      makeEdge('X', 'R'), // X depends on R
+    ];
+    const result = computeCriticalPath(nodes, edges);
+
+    // The critical path should be R -> A -> B -> C (length 4)
+    expect(result.nodeIds.size).toBe(4);
+    expect(result.nodeIds.has('X')).toBe(false);
+    expect(result.edgeIds.size).toBe(3);
+    // Verify specific edges on the critical path
+    expect(result.edgeIds.has('R->A')).toBe(true);
+    expect(result.edgeIds.has('A->B')).toBe(true);
+    expect(result.edgeIds.has('B->C')).toBe(true);
+  });
 });

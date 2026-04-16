@@ -435,6 +435,46 @@ describe('useEpicGraph', () => {
       expect(result.current.criticalPath.nodeIds.has('adj-010')).toBe(true);
     });
 
+    it('should propagate source field from API nodes to React Flow node data', async () => {
+      mockGraphForEpic.mockResolvedValue({
+        nodes: [
+          {
+            id: 'adj-010',
+            title: 'Epic with source',
+            status: 'open',
+            type: 'epic',
+            priority: 1,
+            assignee: null,
+            source: 'adjutant',
+          },
+          {
+            id: 'adj-010.1',
+            title: 'Task without source',
+            status: 'open',
+            type: 'task',
+            priority: 2,
+            assignee: null,
+            // No source field
+          },
+        ],
+        edges: [
+          { issueId: 'adj-010', dependsOnId: 'adj-010.1', type: 'depends_on' },
+        ],
+      });
+
+      const { result } = renderHook(() => useEpicGraph('adj-010'));
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const epicNode = result.current.nodes.find((n) => n.id === 'adj-010');
+      expect(epicNode?.data.source).toBe('adjutant');
+
+      const taskNode = result.current.nodes.find((n) => n.id === 'adj-010.1');
+      expect(taskNode?.data.source).toBeUndefined();
+    });
+
     it('should handle API error and then successful retry', async () => {
       mockGraphForEpic
         .mockRejectedValueOnce(new Error('Network error'))

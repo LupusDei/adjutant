@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 
 import type { BeadsGraphResponse } from "../../../src/types/beads-graph";
 
@@ -349,6 +349,196 @@ describe("useBeadsGraph", () => {
       });
 
       expect(mockGraph).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ===========================================================================
+  // Collapse / Expand
+  // ===========================================================================
+
+  describe("collapse/expand", () => {
+    it("should toggle a node ID in/out of collapsed set", async () => {
+      mockGraph.mockResolvedValue(createMockGraphResponse());
+
+      const { result } = renderHook(() => useBeadsGraph());
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Initially no nodes collapsed
+      expect(result.current.collapsedNodes.size).toBe(0);
+
+      // Toggle collapse on
+      act(() => {
+        result.current.toggleCollapse("adj-001");
+      });
+      expect(result.current.collapsedNodes.has("adj-001")).toBe(true);
+
+      // Toggle collapse off
+      act(() => {
+        result.current.toggleCollapse("adj-001");
+      });
+      expect(result.current.collapsedNodes.has("adj-001")).toBe(false);
+    });
+
+    it("should mark collapsed node data with collapsed flag", async () => {
+      mockGraph.mockResolvedValue(createMockGraphResponse());
+
+      const { result } = renderHook(() => useBeadsGraph());
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      act(() => {
+        result.current.toggleCollapse("adj-001");
+      });
+
+      const epicNode = result.current.nodes.find((n) => n.id === "adj-001");
+      expect(epicNode?.data.collapsed).toBe(true);
+    });
+
+    it("should collapseAll only epic nodes that have children, not tasks", async () => {
+      // Graph: epic-1 has children (task-a depends on epic-1)
+      //        task-b also has a child edge (task-c depends on task-b)
+      //        Only epic-1 should be collapsed (not task-b, despite having children)
+      mockGraph.mockResolvedValue({
+        nodes: [
+          { id: "epic-1", title: "Epic 1", status: "open", type: "epic", priority: 1, assignee: null },
+          { id: "task-a", title: "Task A", status: "open", type: "task", priority: 2, assignee: null },
+          { id: "task-b", title: "Task B", status: "open", type: "task", priority: 2, assignee: null },
+          { id: "task-c", title: "Task C", status: "open", type: "task", priority: 2, assignee: null },
+        ],
+        edges: [
+          { issueId: "task-a", dependsOnId: "epic-1", type: "depends_on" },
+          { issueId: "task-c", dependsOnId: "task-b", type: "depends_on" },
+        ],
+      });
+
+      const { result } = renderHook(() => useBeadsGraph());
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      act(() => {
+        result.current.collapseAll();
+      });
+
+      // epic-1 is an epic AND has children -> should be collapsed
+      expect(result.current.collapsedNodes.has("epic-1")).toBe(true);
+      // task-b has children but is NOT an epic -> should NOT be collapsed
+      expect(result.current.collapsedNodes.has("task-b")).toBe(false);
+    });
+
+    it("should expandAll by clearing the collapsed set", async () => {
+      mockGraph.mockResolvedValue(createMockGraphResponse());
+
+      const { result } = renderHook(() => useBeadsGraph());
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Manually collapse a node first
+      act(() => {
+        result.current.toggleCollapse("adj-001");
+      });
+      expect(result.current.collapsedNodes.size).toBe(1);
+
+      act(() => {
+        result.current.expandAll();
+      });
+      expect(result.current.collapsedNodes.size).toBe(0);
+    });
+  });
+
+  // ===========================================================================
+  // Epic IDs extraction
+  // ===========================================================================
+
+  describe("epicIds", () => {
+    it("should extract and sort epic IDs from graph data", async () => {
+      mockGraph.mockResolvedValue({
+        nodes: [
+          { id: "epic-z", title: "Z Epic", status: "open", type: "epic", priority: 1, assignee: null },
+          { id: "task-1", title: "Task", status: "open", type: "task", priority: 2, assignee: null },
+          { id: "epic-a", title: "A Epic", status: "open", type: "epic", priority: 1, assignee: null },
+        ],
+        edges: [],
+      });
+
+      const { result } = renderHook(() => useBeadsGraph());
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.epicIds).toEqual(["epic-a", "epic-z"]);
+    });
+
+    it("should return empty epicIds when no data", () => {
+      mockGraph.mockResolvedValue({ nodes: [], edges: [] });
+
+      const { result } = renderHook(() => useBeadsGraph());
+      // Before data loads, epicIds should be empty
+      expect(result.current.epicIds).toEqual([]);
+    });
+  });
+
+  // ===========================================================================
+  // Critical Path
+  // ===========================================================================
+
+  describe("critical path", () => {
+    it("should compute critical path from graph data", async () => {
+      mockGraph.mockResolvedValue({
+        nodes: [
+          { id: "A", title: "A", status: "open", type: "task", priority: 2, assignee: null },
+          { id: "B", title: "B", status: "open", type: "task", priority: 2, assignee: null },
+          { id: "C", title: "C", status: "open", type: "task", priority: 2, assignee: null },
+        ],
+        edges: [
+          { issueId: "A", dependsOnId: "B", type: "depends_on" },
+          { issueId: "B", dependsOnId: "C", type: "depends_on" },
+        ],
+      });
+
+      const { result } = renderHook(() => useBeadsGraph());
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.criticalPathLength).toBe(3);
+      expect(result.current.criticalPath.nodeIds.has("A")).toBe(true);
+      expect(result.current.criticalPath.nodeIds.has("B")).toBe(true);
+      expect(result.current.criticalPath.nodeIds.has("C")).toBe(true);
+    });
+
+    it("should toggle critical path display", async () => {
+      mockGraph.mockResolvedValue(createMockGraphResponse());
+
+      const { result } = renderHook(() => useBeadsGraph());
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.showCriticalPath).toBe(false);
+
+      act(() => {
+        result.current.toggleCriticalPath();
+      });
+
+      expect(result.current.showCriticalPath).toBe(true);
+
+      act(() => {
+        result.current.toggleCriticalPath();
+      });
+
+      expect(result.current.showCriticalPath).toBe(false);
     });
   });
 });
