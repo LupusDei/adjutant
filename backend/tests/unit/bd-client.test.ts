@@ -14,12 +14,16 @@ vi.mock("fs", () => ({
 }));
 
 import { spawn } from "child_process";
+import { existsSync, readFileSync } from "fs";
 import {
   execBd,
   stripBeadPrefix,
   resolveBeadsDir,
   _resetBdSemaphore,
 } from "../../src/services/bd-client.js";
+
+const mockExistsSync = vi.mocked(existsSync);
+const mockReadFileSync = vi.mocked(readFileSync);
 
 /** Yield to the microtask queue so async semaphore acquire + spawn can proceed. */
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));
@@ -352,6 +356,223 @@ describe("bd-client", () => {
         const r2 = await p2;
 
         expect(r2.success).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  // ===========================================================================
+  // Mutation testing — tests written to kill surviving mutations
+  // ===========================================================================
+
+  describe("mutation: semaphore release hands slot without decrementing running", () => {
+    it("should maintain correct concurrency count after sustained queue drain", async () => {
+      // This test catches the mutation where release() always decrements running
+      // even when handing the slot to the next waiter. Under sustained load, the
+      // running counter would drift negative, allowing more than maxConcurrency
+      // concurrent processes.
+      const processes: ReturnType<typeof createMockProcess>[] = [];
+      let currentConcurrency = 0;
+      let maxObservedConcurrency = 0;
+
+      mockSpawn.mockImplementation(() => {
+        currentConcurrency++;
+        maxObservedConcurrency = Math.max(maxObservedConcurrency, currentConcurrency);
+        const proc = createMockProcess();
+        processes.push(proc);
+        return proc;
+      });
+
+      // Launch 5 concurrent calls — enough to exercise the queue drain path repeatedly
+      const promises = [];
+      for (let i = 0; i < 5; i++) {
+        promises.push(execBd([`cmd-${i}`], { parseJson: false }));
+      }
+
+      // Drain the queue one at a time
+      for (let i = 0; i < 5; i++) {
+        await tick();
+        expect(processes.length).toBe(i + 1);
+        expect(currentConcurrency).toBe(1);
+        processes[i].simulateOutput(`result-${i}`, "", 0);
+        currentConcurrency--;
+      }
+
+      await Promise.all(promises);
+
+      // The critical invariant: at no point should more than 1 process run concurrently
+      expect(maxObservedConcurrency).toBe(1);
+    });
+  });
+
+  describe("mutation: resolveBeadsDir existsSync guard", () => {
+    it("should return default .beads dir without calling readFileSync when redirect does not exist", () => {
+      mockExistsSync.mockReturnValue(false);
+      mockReadFileSync.mockImplementation(() => {
+        throw new Error("ENOENT: no such file or directory");
+      });
+
+      const result = resolveBeadsDir("/tmp/project");
+
+      expect(result).toBe("/tmp/project/.beads");
+      // readFileSync should NOT have been called since existsSync returned false
+      expect(mockReadFileSync).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("mutation: resolveBeadsDirWithDepth boundary", () => {
+    it("should follow redirect chain and resolve to target beads dir", () => {
+      // Simulate: /tmp/project/.beads/redirect -> /tmp/other/.beads
+      mockExistsSync.mockImplementation((p: unknown) => {
+        if (p === "/tmp/project/.beads/redirect") return true;
+        return false;
+      });
+      mockReadFileSync.mockImplementation((p: unknown) => {
+        if (p === "/tmp/project/.beads/redirect") return "/tmp/other/.beads";
+        throw new Error("ENOENT");
+      });
+
+      const result = resolveBeadsDir("/tmp/project");
+      expect(result).toBe("/tmp/other/.beads");
+    });
+
+    it("should stop following redirects at depth limit instead of recursing infinitely", () => {
+      // Create an infinite redirect cycle where each level points to a unique target
+      let readCount = 0;
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockImplementation(() => {
+        readCount++;
+        // Each redirect points to a different target to avoid the self-referential guard
+        return `/tmp/level-${readCount}/.beads`;
+      });
+
+      // Should NOT throw or loop forever — depth limit should stop it
+      const result = resolveBeadsDir("/tmp/project");
+
+      // resolveBeadsDir reads 1 redirect, then calls resolveBeadsDirWithDepth(_, 3).
+      // With depth <= 0 guard: recursion stops at depth=0, so max depths 3,2,1 = 3 more reads.
+      // Total readFileSync calls: 1 (initial) + 3 (recursive) = 4.
+      // With depth < 0 guard: recursion would continue at depth=0, adding 1 extra = 5 reads.
+      expect(readCount).toBe(4);
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe("mutation: stripDoltInfoMessages filter", () => {
+    it("should strip Dolt orphan cleanup messages from stderr and treat remaining as success", async () => {
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
+
+      const doltInfoStderr = 'Info: cleaned up 3 orphaned dolt sql-server processes\n';
+
+      const resultPromise = execBd<{ id: string }>(["show", "adj-001"]);
+      await tick();
+      // Process exits 0 with valid JSON stdout but Dolt info on stderr
+      mockProcess.simulateOutput(JSON.stringify({ id: "adj-001" }), doltInfoStderr, 0);
+
+      const result = await resultPromise;
+
+      // With the filter in place, the Dolt info is stripped and stderr becomes empty,
+      // so the command should be treated as success (not failure)
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual({ id: "adj-001" });
+    });
+
+    it("should treat Dolt info-only stderr with empty stdout as success (no error)", async () => {
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
+
+      const doltInfoStderr = 'Info: cleaned up 1 orphaned dolt sql-server process\n';
+
+      const resultPromise = execBd(["update", "--status=done"], { parseJson: false });
+      await tick();
+      // Exit 0, empty stdout, only Dolt info on stderr
+      mockProcess.simulateOutput("", doltInfoStderr, 0);
+
+      const result = await resultPromise;
+
+      // After stripping the Dolt info, stderr is empty, so this should be success
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe("mutation: isGoPanic panic: detection", () => {
+    it("should detect Go panic from panic: prefix alone without other indicators", async () => {
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
+
+      // A panic message that ONLY matches the `panic:` check, not goroutine/runtime error/SIGSEGV/nil pointer
+      const panicStderr = "panic: send on closed channel";
+
+      const resultPromise = execBd(["list", "--json"]);
+      await tick();
+      mockProcess.simulateOutput("", panicStderr, 2);
+
+      const result = await resultPromise;
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe("BD_PANIC");
+      expect(result.error?.message).toContain("bd crashed:");
+      expect(result.error?.message).toContain("panic: send on closed channel");
+    });
+  });
+
+  describe("mutation: sanitizeBdError truncation", () => {
+    it("should include actual error content in non-panic error messages", async () => {
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
+
+      const errorMsg = "Error: bead adj-999 not found in database";
+
+      const resultPromise = execBd(["show", "adj-999"]);
+      await tick();
+      mockProcess.simulateOutput("", errorMsg, 1);
+
+      const result = await resultPromise;
+
+      expect(result.success).toBe(false);
+      // The error message should contain the actual stderr content, not be empty
+      expect(result.error?.message).toContain("bead adj-999 not found");
+      expect(result.error?.message!.length).toBeGreaterThan(0);
+    });
+
+    it("should truncate very long error messages to a reasonable length", async () => {
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
+
+      // Generate an error message longer than the 500-char limit
+      const longError = "E".repeat(1000);
+
+      const resultPromise = execBd(["broken"]);
+      await tick();
+      mockProcess.simulateOutput("", longError, 1);
+
+      const result = await resultPromise;
+
+      expect(result.success).toBe(false);
+      expect(result.error?.message!.length).toBeLessThanOrEqual(500);
+    });
+  });
+
+  describe("mutation: timeout should kill child process", () => {
+    it("should call kill on the child process when timeout fires", async () => {
+      vi.useFakeTimers();
+      try {
+        const mockProcess = createMockProcess();
+        mockSpawn.mockReturnValue(mockProcess);
+
+        const resultPromise = execBd(["slow-command"], { timeout: 200 });
+
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(200);
+
+        const result = await resultPromise;
+
+        expect(result.success).toBe(false);
+        expect(result.error?.code).toBe("TIMEOUT");
+        // The child process should have been killed to prevent resource leaks
+        expect(mockProcess.kill).toHaveBeenCalled();
       } finally {
         vi.useRealTimers();
       }
