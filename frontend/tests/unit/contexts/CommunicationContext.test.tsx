@@ -532,6 +532,53 @@ describe("CommunicationContext", () => {
     });
   });
 
+  describe("mutation: WebSocket reconnect behavior", () => {
+    it("should enter reconnecting state when WebSocket closes unexpectedly", async () => {
+      // Create a WS that opens, authenticates, then closes
+      let mockWs: { onclose: (() => void) | null } | null = null;
+      globalThis.WebSocket = class ReconnectWs {
+        static readonly OPEN = 1;
+        readyState = 0;
+        onmessage: WsHandler = null;
+        onclose: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        url: string;
+        constructor(url: string) {
+          this.url = url;
+          // eslint-disable-next-line @typescript-eslint/no-this-alias
+          mockWs = this;
+          queueMicrotask(() => {
+            this.readyState = 1;
+            this.onmessage?.({ data: JSON.stringify({ type: "auth_challenge" }) });
+          });
+        }
+        send(data: string) {
+          const msg = JSON.parse(data) as { type: string };
+          if (msg.type === "auth_response") {
+            queueMicrotask(() => {
+              this.onmessage?.({
+                data: JSON.stringify({ type: "connected", sessionId: "s1", lastSeq: 0, serverTime: new Date().toISOString() }),
+              });
+            });
+          }
+        }
+        close() { this.readyState = 3; }
+      } as any; // safe: test mock for WebSocket
+
+      const { result } = renderHook(() => useCommunication(), { wrapper });
+      await flushMicrotasks();
+      expect(result.current.connectionStatus).toBe("websocket");
+
+      // Now close the connection unexpectedly
+      act(() => {
+        mockWs!.onclose?.();
+      });
+
+      // Should be in reconnecting state (not staying at websocket)
+      expect(result.current.connectionStatus).toBe("reconnecting");
+    });
+  });
+
   describe("WebSocket auth error handling", () => {
     it("should fall back to SSE on auth failure", async () => {
       // Create a WebSocket that rejects auth

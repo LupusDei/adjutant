@@ -985,4 +985,144 @@ describe('useChatMessages', () => {
       expect(vi.mocked(api.messages.list).mock.calls.length).toBe(callCountBefore);
     });
   });
+
+  describe('mutation: user self-echo guard', () => {
+    it('should drop WS messages from user to prevent self-echo duplicates', async () => {
+      vi.mocked(api.messages.list).mockResolvedValue(
+        mockListResponse([])
+      );
+
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
+        subscriberCallback = cb;
+        return vi.fn();
+      });
+
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Send a user message via WS with a DIFFERENT ID than any optimistic message
+      // This tests the from === 'user' guard specifically, not just dedup
+      act(() => {
+        subscriberCallback!({
+          id: 'new-unique-user-msg',
+          from: 'user',
+          to: 'agent-1',
+          body: 'User echo from backend broadcast',
+          timestamp: '2026-02-21T10:00:00Z',
+        });
+      });
+
+      // The user self-echo guard should drop this message entirely
+      expect(result.current.messages).toHaveLength(0);
+    });
+  });
+
+  describe('mutation: WS message construction', () => {
+    it('should set role to agent for incoming WS messages', async () => {
+      vi.mocked(api.messages.list).mockResolvedValue(
+        mockListResponse([])
+      );
+
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
+        subscriberCallback = cb;
+        return vi.fn();
+      });
+
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      act(() => {
+        subscriberCallback!({
+          id: 'msg-ws-role',
+          from: 'agent-1',
+          to: 'user',
+          body: 'Agent message',
+          timestamp: '2026-02-21T10:00:00Z',
+        });
+      });
+
+      // Role should be 'agent' since the message comes from an agent
+      expect(result.current.messages[0]!.role).toBe('agent');
+    });
+
+    it('should set deliveryStatus to delivered for incoming WS messages', async () => {
+      vi.mocked(api.messages.list).mockResolvedValue(
+        mockListResponse([])
+      );
+
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
+        subscriberCallback = cb;
+        return vi.fn();
+      });
+
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      act(() => {
+        subscriberCallback!({
+          id: 'msg-ws-status',
+          from: 'agent-1',
+          to: 'user',
+          body: 'Delivered message',
+          timestamp: '2026-02-21T10:00:00Z',
+        });
+      });
+
+      // Messages arriving via WS are already delivered
+      expect(result.current.messages[0]!.deliveryStatus).toBe('delivered');
+    });
+  });
+
+  describe('mutation: optimistic message recipient', () => {
+    it('should set optimistic message recipient to the agentId', async () => {
+      vi.mocked(api.messages.send).mockResolvedValue({
+        messageId: 'new-msg',
+        timestamp: '2026-02-21T11:00:00Z',
+      });
+
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.sendMessage('Hello, agent!');
+      });
+
+      // The optimistic message recipient should be the agentId, not hardcoded 'user'
+      expect(result.current.messages[0]!.recipient).toBe('agent-1');
+    });
+
+    it('should set optimistic message recipient to user when no agentId', async () => {
+      vi.mocked(api.messages.send).mockResolvedValue({
+        messageId: 'new-msg',
+        timestamp: '2026-02-21T11:00:00Z',
+      });
+
+      const { result } = renderHook(() => useChatMessages());
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.sendMessage('Hello');
+      });
+
+      expect(result.current.messages[0]!.recipient).toBe('user');
+    });
+  });
 });
