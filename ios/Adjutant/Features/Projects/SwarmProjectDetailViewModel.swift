@@ -118,14 +118,6 @@ final class SwarmProjectDetailViewModel: BaseViewModel {
         return result?.deleted ?? false
     }
 
-    /// Activate this project
-    func activateProject() async {
-        await performAsyncAction(showLoading: false) {
-            let updated = try await self.apiClient.activateProject(id: self.project.id)
-            self.project = updated
-        }
-    }
-
     // MARK: - Auto-Develop
 
     /// Fetch the current auto-develop status for this project.

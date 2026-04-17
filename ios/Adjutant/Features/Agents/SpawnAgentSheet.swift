@@ -160,11 +160,6 @@ struct SpawnAgentSheet: View {
 
                 Spacer()
 
-                // Active indicator
-                if project.active {
-                    CRTText("ACTIVE", style: .caption, glowIntensity: .subtle, color: CRTTheme.State.success)
-                }
-
                 // Selection indicator
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
@@ -265,9 +260,10 @@ struct SpawnAgentSheet: View {
             projects = fetchedProjects
             callsigns = fetchedCallsigns
 
-            // Auto-select active project
-            if let active = projects.first(where: { $0.active }) {
-                selectedProject = active
+            // Auto-select from AppState or fallback to first project
+            if let selected = AppState.shared.selectedProject,
+               projects.contains(where: { $0.id == selected.id }) {
+                selectedProject = selected
             } else if projects.count == 1 {
                 selectedProject = projects.first
             }

@@ -117,26 +117,15 @@ final class BeadsListViewModel: BaseViewModel {
         loadSortPreference()
         setupDataSyncObserver()
         loadFromCache()
-        loadActiveProjectScope()
+        restoreSelectedProjectScope()
     }
 
-    /// Loads the active project from the API and sets it as the default source filter.
-    /// This auto-scopes beads to the active project on launch.
-    private func loadActiveProjectScope() {
-        guard let apiClient else { return }
-        Task<Void, Never> {
-            do {
-                let projects = try await apiClient.getProjects()
-                if let activeProject = projects.first(where: { $0.active }) {
-                    // Only set if user hasn't manually selected a different source
-                    if self.selectedSource == nil {
-                        self.selectedSource = activeProject.name
-                        await self.loadBeads()
-                    }
-                }
-            } catch {
-                // Non-critical — beads will show unfiltered
-            }
+    /// Restores the selected source filter from AppState's selected project.
+    /// This auto-scopes beads to the selected project on launch.
+    private func restoreSelectedProjectScope() {
+        if selectedSource == nil, let selected = AppState.shared.selectedProject {
+            selectedSource = selected.name
+            Task<Void, Never> { await self.loadBeads() }
         }
     }
 

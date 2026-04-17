@@ -115,7 +115,7 @@ final class SwarmOverviewViewModel: ObservableObject {
     /// - Parameter callsign: Optional callsign name; nil for random assignment.
     func startAgent(callsign: String? = nil) async {
         // Use the first active project path for spawning, if available
-        guard let projectPath = overview?.projects.first(where: { $0.active })?.path
+        guard let projectPath = AppState.shared.selectedProject?.path
                 ?? overview?.projects.first?.path else {
             errorMessage = "No projects available"
             return

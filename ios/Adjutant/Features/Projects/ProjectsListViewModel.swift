@@ -85,6 +85,8 @@ final class ProjectsListViewModel: BaseViewModel {
         await performAsync(showLoading: projects.isEmpty) {
             self.projects = try await self.apiClient.getProjects()
             self.applyFilters()
+            // Restore client-side project selection from persisted ID
+            AppState.shared.restoreSelectedProject(from: self.projects)
         }
     }
 
@@ -168,14 +170,6 @@ final class ProjectsListViewModel: BaseViewModel {
             _ = try await self.apiClient.deleteProject(id: project.id)
             self.projects.removeAll { $0.id == project.id }
             self.applyFilters()
-        }
-    }
-
-    /// Activate a project
-    func activateProject(_ project: Project) async {
-        await performAsyncAction(showLoading: false) {
-            _ = try await self.apiClient.activateProject(id: project.id)
-            await self.refreshProjects()
         }
     }
 
