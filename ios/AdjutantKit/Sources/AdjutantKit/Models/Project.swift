@@ -2,6 +2,7 @@ import Foundation
 
 /// A registered project tracked by the Projects service.
 /// Mirrors the backend `Project` type from `services/projects-service.ts`.
+/// adj-162: `active` field removed — project selection is client-side only.
 public struct Project: Codable, Identifiable, Equatable, Hashable {
     public let id: String
     public let name: String
