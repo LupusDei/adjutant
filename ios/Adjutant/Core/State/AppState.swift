@@ -40,6 +40,27 @@ final class AppState: ObservableObject {
     /// Communication priority level (affects polling intervals)
     @Published var communicationPriority: CommunicationPriority = .efficient
 
+    /// Currently selected project (client-side selection, persisted to UserDefaults)
+    @Published var selectedProject: Project? {
+        didSet {
+            if let project = selectedProject {
+                selectedProjectId = project.id
+            }
+        }
+    }
+
+    /// Persisted project ID for restoring selection across launches
+    private var selectedProjectId: String? {
+        get { UserDefaults.standard.string(forKey: "selectedProjectId") }
+        set {
+            if let value = newValue {
+                UserDefaults.standard.set(value, forKey: "selectedProjectId")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "selectedProjectId")
+            }
+        }
+    }
+
     // MARK: - Notification State
 
     /// Current notification permission status
@@ -229,6 +250,17 @@ final class AppState: ObservableObject {
 
     func clearKnownMailIds() {
         knownMailIds.removeAll()
+    }
+
+    /// Restores the selected project from persisted ID, or defaults to the first project.
+    /// Call after fetching the projects list from the API.
+    func restoreSelectedProject(from projects: [Project]) {
+        if let savedId = selectedProjectId,
+           let match = projects.first(where: { $0.id == savedId }) {
+            selectedProject = match
+        } else if let first = projects.first {
+            selectedProject = first
+        }
     }
 
     /// Checks if voice service is available from the API

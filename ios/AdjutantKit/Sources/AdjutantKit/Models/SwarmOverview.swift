@@ -74,17 +74,39 @@ public struct OverviewUnreadSummary: Codable, Equatable, Identifiable {
 // MARK: - Project Summary
 
 /// Lightweight project identity for the overview header.
-public struct ProjectSummary: Codable, Identifiable, Equatable {
+public struct ProjectSummary: Identifiable, Equatable {
     public let id: String
     public let name: String
     public let path: String
-    public let active: Bool
 
-    public init(id: String, name: String, path: String, active: Bool) {
+    public init(id: String, name: String, path: String) {
         self.id = id
         self.name = name
         self.path = path
-        self.active = active
+    }
+}
+
+extension ProjectSummary: Decodable {
+    enum CodingKeys: String, CodingKey {
+        case id, name, path, active
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(String.self, forKey: .id)
+        self.name = try container.decode(String.self, forKey: .name)
+        self.path = try container.decode(String.self, forKey: .path)
+        // active field removed from backend — decode and discard for compatibility
+        _ = try container.decodeIfPresent(Bool.self, forKey: .active)
+    }
+}
+
+extension ProjectSummary: Encodable {
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(path, forKey: .path)
     }
 }
 

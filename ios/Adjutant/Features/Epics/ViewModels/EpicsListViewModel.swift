@@ -72,7 +72,7 @@ final class EpicsListViewModel: BaseViewModel {
 
     override func onAppear() {
         super.onAppear()
-        loadActiveProjectScope()
+        restoreSelectedProjectScope()
         startPolling()
     }
 
@@ -84,20 +84,11 @@ final class EpicsListViewModel: BaseViewModel {
 
     // MARK: - Project Scoping
 
-    /// Loads the active project and scopes epics to it (same pattern as BeadsListViewModel).
-    private func loadActiveProjectScope() {
-        Task<Void, Never> {
-            do {
-                let projects = try await apiClient.getProjects()
-                if let active = projects.first(where: { $0.active }) {
-                    if self.activeProject == nil {
-                        self.activeProject = active.name
-                        await self.loadEpics()
-                    }
-                }
-            } catch {
-                // Non-critical — epics will show unfiltered
-            }
+    /// Restores the selected project scope from AppState (same pattern as BeadsListViewModel).
+    private func restoreSelectedProjectScope() {
+        if activeProject == nil, let selected = AppState.shared.selectedProject {
+            activeProject = selected.name
+            Task<Void, Never> { await self.loadEpics() }
         }
     }
 

@@ -214,10 +214,6 @@ struct DeployPersonaSheet: View {
 
                 Spacer()
 
-                if project.active {
-                    CRTText("ACTIVE", style: .caption, glowIntensity: .subtle, color: CRTTheme.State.success)
-                }
-
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 18))
@@ -267,9 +263,10 @@ struct DeployPersonaSheet: View {
             let fetchedProjects = try await apiClient.getProjects()
             projects = fetchedProjects
 
-            // Auto-select active project
-            if let active = projects.first(where: { $0.active }) {
-                selectedProject = active
+            // Auto-select from AppState or fallback to first project
+            if let selected = AppState.shared.selectedProject,
+               projects.contains(where: { $0.id == selected.id }) {
+                selectedProject = selected
             } else if projects.count == 1 {
                 selectedProject = projects.first
             }

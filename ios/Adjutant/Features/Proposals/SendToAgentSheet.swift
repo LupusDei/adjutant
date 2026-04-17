@@ -355,10 +355,6 @@ struct SendToAgentSheet: View {
 
                 Spacer()
 
-                if project.active {
-                    CRTText("ACTIVE", style: .caption, glowIntensity: .subtle, color: CRTTheme.State.success)
-                }
-
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 16))
@@ -456,8 +452,9 @@ struct SendToAgentSheet: View {
             projects = fetchedProjects
             callsigns = fetchedCallsigns
 
-            if let active = projects.first(where: { $0.active }) {
-                selectedProject = active
+            if let selected = AppState.shared.selectedProject,
+               projects.contains(where: { $0.id == selected.id }) {
+                selectedProject = selected
             } else if projects.count == 1 {
                 selectedProject = projects.first
             }

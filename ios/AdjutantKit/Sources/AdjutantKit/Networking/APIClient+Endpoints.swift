@@ -178,12 +178,6 @@ extension APIClient {
         try await requestWithEnvelope(.post, path: "/projects", body: request)
     }
 
-    /// Activate a project as the current project
-    public func activateProject(id: String) async throws -> Project {
-        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        return try await requestWithEnvelope(.post, path: "/projects/\(encodedId)/activate")
-    }
-
     /// Delete a project registration (does not delete files)
     public func deleteProject(id: String) async throws -> DeleteProjectResponse {
         let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id

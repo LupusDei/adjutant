@@ -22,14 +22,11 @@ final class ProposalsViewModel: BaseViewModel {
         didSet { Task { await load() } }
     }
 
-    /// Active project name used to scope proposals. Loaded automatically on appear.
-    @Published private(set) var activeProjectName: String?
-
     /// All available projects for the project picker
     @Published private(set) var projects: [Project] = []
 
     /// User-selected project ID filter. nil = all projects.
-    /// Defaults to active project on first load.
+    /// Defaults to AppState.selectedProject on first load.
     @Published var selectedProjectId: String? {
         didSet { Task { await load() } }
     }
@@ -55,7 +52,10 @@ final class ProposalsViewModel: BaseViewModel {
 
     override func onAppear() {
         loadProjects()
-        loadActiveProjectScope()
+        // Default to AppState's selected project if user hasn't chosen one yet
+        if selectedProjectId == nil, let selected = AppState.shared.selectedProject {
+            selectedProjectId = selected.id
+        }
         super.onAppear()
     }
 
@@ -88,26 +88,6 @@ final class ProposalsViewModel: BaseViewModel {
                 self.projects = try await self.apiClient.getProjects()
             } catch {
                 // Non-critical — project picker will be empty
-            }
-        }
-    }
-
-    /// Loads the active project from the API and sets it as the default project scope.
-    /// Only sets the default if the user hasn't already selected a project.
-    private func loadActiveProjectScope() {
-        Task<Void, Never> { [weak self] in
-            guard let self else { return }
-            do {
-                let projects = try await self.apiClient.getProjects()
-                if let activeProject = projects.first(where: { $0.active }) {
-                    self.activeProjectName = activeProject.name
-                    // Only set default if user hasn't already selected a project
-                    if self.selectedProjectId == nil {
-                        self.selectedProjectId = activeProject.id
-                    }
-                }
-            } catch {
-                // Non-critical — proposals will show unfiltered
             }
         }
     }

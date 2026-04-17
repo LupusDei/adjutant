@@ -10,10 +10,27 @@ public struct Project: Codable, Identifiable, Equatable, Hashable {
     public let mode: String
     public let sessions: [String]
     public let createdAt: String
-    public let active: Bool
     public let autoDevelop: Bool?
     public let visionContext: String?
     public let autoDevelopPausedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, path, gitRemote, mode, sessions, createdAt, autoDevelop, visionContext, autoDevelopPausedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(String.self, forKey: .id)
+        self.name = try container.decode(String.self, forKey: .name)
+        self.path = try container.decode(String.self, forKey: .path)
+        self.gitRemote = try container.decodeIfPresent(String.self, forKey: .gitRemote)
+        self.mode = try container.decode(String.self, forKey: .mode)
+        self.sessions = try container.decodeIfPresent([String].self, forKey: .sessions) ?? []
+        self.createdAt = try container.decode(String.self, forKey: .createdAt)
+        self.autoDevelop = try container.decodeIfPresent(Bool.self, forKey: .autoDevelop)
+        self.visionContext = try container.decodeIfPresent(String.self, forKey: .visionContext)
+        self.autoDevelopPausedAt = try container.decodeIfPresent(String.self, forKey: .autoDevelopPausedAt)
+    }
 
     public init(
         id: String,
@@ -23,7 +40,6 @@ public struct Project: Codable, Identifiable, Equatable, Hashable {
         mode: String,
         sessions: [String] = [],
         createdAt: String,
-        active: Bool = false,
         autoDevelop: Bool? = nil,
         visionContext: String? = nil,
         autoDevelopPausedAt: String? = nil
@@ -35,7 +51,6 @@ public struct Project: Codable, Identifiable, Equatable, Hashable {
         self.mode = mode
         self.sessions = sessions
         self.createdAt = createdAt
-        self.active = active
         self.autoDevelop = autoDevelop
         self.visionContext = visionContext
         self.autoDevelopPausedAt = autoDevelopPausedAt

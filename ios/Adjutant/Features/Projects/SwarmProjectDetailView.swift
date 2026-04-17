@@ -80,9 +80,9 @@ struct SwarmProjectDetailView: View {
     private var projectHeaderCard: some View {
         CRTCard(style: .standard) {
             VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
-                // Name and active status
+                // Name and selected status
                 HStack {
-                    Image(systemName: viewModel.project.active ? "folder.fill" : "folder")
+                    Image(systemName: "folder.fill")
                         .font(.system(size: 24, weight: .medium))
                         .foregroundColor(theme.primary)
 
@@ -94,8 +94,8 @@ struct SwarmProjectDetailView: View {
 
                     Spacer()
 
-                    if viewModel.project.active {
-                        BadgeView("ACTIVE", style: .status(.success))
+                    if AppState.shared.selectedProject?.id == viewModel.project.id {
+                        BadgeView("SELECTED", style: .status(.success))
                     }
                 }
 
@@ -405,14 +405,14 @@ struct SwarmProjectDetailView: View {
                     Task { _ = await viewModel.createSwarm() }
                 }
 
-                // Activate button (if not active)
-                if !viewModel.project.active {
+                // Select as current project (if not already selected)
+                if AppState.shared.selectedProject?.id != viewModel.project.id {
                     actionButton(
                         icon: "checkmark.circle",
-                        label: "SET AS ACTIVE PROJECT",
+                        label: "SELECT PROJECT",
                         isLoading: false
                     ) {
-                        Task { await viewModel.activateProject() }
+                        AppState.shared.selectedProject = viewModel.project
                     }
                 }
 
@@ -520,8 +520,7 @@ struct SwarmProjectDetailView: View {
                 gitRemote: "git@github.com:org/adjutant.git",
                 mode: "swarm",
                 sessions: ["sess-1", "sess-2"],
-                createdAt: "2025-01-15T10:00:00Z",
-                active: true
+                createdAt: "2025-01-15T10:00:00Z"
             )
         )
         .environmentObject(AppCoordinator())

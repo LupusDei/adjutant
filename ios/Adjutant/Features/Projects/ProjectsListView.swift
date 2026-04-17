@@ -6,11 +6,6 @@ struct ProjectsListView: View {
     @Environment(\.crtTheme) private var theme
     @StateObject private var viewModel: ProjectsListViewModel
 
-    /// Project selected for activation via long-press context menu
-    @State private var projectToActivate: Project?
-    /// Whether the activation confirmation alert is showing
-    @State private var showActivateConfirmation = false
-
     /// Callback when a project is selected
     var onSelectProject: ((Project) -> Void)?
 
@@ -42,21 +37,6 @@ struct ProjectsListView: View {
         }
         .sheet(isPresented: $viewModel.showingCreateSheet) {
             createProjectSheet
-        }
-        .alert("SWITCH ACTIVE PROJECT", isPresented: $showActivateConfirmation) {
-            Button("Cancel", role: .cancel) {
-                projectToActivate = nil
-            }
-            Button("Switch") {
-                if let project = projectToActivate {
-                    Task<Void, Never> {
-                        await viewModel.activateProject(project)
-                        projectToActivate = nil
-                    }
-                }
-            }
-        } message: {
-            Text("Switch active project to \(projectToActivate?.name ?? "")?")
         }
     }
 
@@ -222,12 +202,11 @@ struct ProjectsListView: View {
                         onTap: { onSelectProject?(project) }
                     )
                     .contextMenu {
-                        if !project.active {
+                        if AppState.shared.selectedProject?.id != project.id {
                             Button {
-                                projectToActivate = project
-                                showActivateConfirmation = true
+                                AppState.shared.selectedProject = project
                             } label: {
-                                Label("Set as Active Project", systemImage: "checkmark.circle")
+                                Label("Select Project", systemImage: "checkmark.circle")
                             }
                         }
 
@@ -418,13 +397,17 @@ private struct SwarmProjectRow: View {
     let project: Project
     let onTap: () -> Void
 
+    private var isSelected: Bool {
+        AppState.shared.selectedProject?.id == project.id
+    }
+
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: CRTTheme.Spacing.sm) {
                 // Project icon
-                Image(systemName: project.active ? "folder.fill" : "folder")
+                Image(systemName: isSelected ? "folder.fill" : "folder")
                     .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(project.active ? theme.primary : theme.dim)
+                    .foregroundColor(isSelected ? theme.primary : theme.dim)
                     .frame(width: 28)
 
                 // Main content
@@ -436,7 +419,7 @@ private struct SwarmProjectRow: View {
 
                 Spacer()
 
-                // Session count and active badge
+                // Session count and selected badge
                 VStack(alignment: .trailing, spacing: CRTTheme.Spacing.xxxs) {
                     if !project.sessions.isEmpty {
                         HStack(spacing: CRTTheme.Spacing.xxs) {
@@ -450,8 +433,8 @@ private struct SwarmProjectRow: View {
                         }
                     }
 
-                    if project.active {
-                        CRTText("ACTIVE", style: .caption, color: CRTTheme.State.success)
+                    if isSelected {
+                        CRTText("SELECTED", style: .caption, color: CRTTheme.State.success)
                     }
                 }
 
@@ -466,7 +449,7 @@ private struct SwarmProjectRow: View {
             .overlay(
                 RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
                     .stroke(
-                        project.active ? theme.primary.opacity(0.3) : theme.primary.opacity(0.2),
+                        isSelected ? theme.primary.opacity(0.3) : theme.primary.opacity(0.2),
                         lineWidth: 1
                     )
             )
