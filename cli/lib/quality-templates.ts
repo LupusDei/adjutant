@@ -28,9 +28,16 @@ export interface QualityFile {
 /** Manifest of all quality files managed by Adjutant. */
 export const QUALITY_FILES: QualityFile[] = [
   {
+    templateName: "constitution.md",
+    destPath: "constitution.md",
+    description: "Project constitution — unbreakable rules for all agents",
+    skipIfExists: false,
+    executable: false,
+  },
+  {
     templateName: "03-testing.md",
     destPath: ".claude/rules/03-testing.md",
-    description: "Testing constitution",
+    description: "Testing guidelines",
     skipIfExists: false,
     executable: false,
   },

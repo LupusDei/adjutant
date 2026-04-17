@@ -29,7 +29,7 @@ describe("QualityTemplates", () => {
   it("should return expected destination paths from getQualityFilePaths", () => {
     const paths = getQualityFilePaths();
     expect(paths).toEqual(QUALITY_FILES.map((f) => f.destPath));
-    expect(paths.length).toBe(5);
+    expect(paths.length).toBe(6);
   });
 
   it("should have destPaths that are valid relative paths (no leading /)", () => {

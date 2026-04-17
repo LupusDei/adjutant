@@ -27,7 +27,7 @@ describe("scaffoldQualityFiles", () => {
   it("should create all 5 quality files on fresh init", () => {
     const results = scaffoldQualityFiles(tempDir, false);
 
-    expect(results).toHaveLength(5);
+    expect(results).toHaveLength(6);
     for (const r of results) {
       expect(r.status).toBe("created");
     }
@@ -60,7 +60,7 @@ describe("scaffoldQualityFiles", () => {
     // Second run — should skip all
     const results = scaffoldQualityFiles(tempDir, false);
 
-    expect(results).toHaveLength(5);
+    expect(results).toHaveLength(6);
     for (const r of results) {
       expect(r.status).toBe("skipped");
     }
@@ -130,7 +130,7 @@ describe("scaffoldQualityFiles", () => {
     const results = scaffoldQualityFiles(tempDir, false);
 
     // All should succeed (directories created automatically)
-    expect(results).toHaveLength(5);
+    expect(results).toHaveLength(6);
     for (const r of results) {
       expect(r.status).toBe("created");
     }
