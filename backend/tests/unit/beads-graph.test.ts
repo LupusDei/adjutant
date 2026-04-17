@@ -452,7 +452,11 @@ describe("getBeadsGraph", () => {
     expect(vi.mocked(execBd)).toHaveBeenCalledTimes(2);
   });
 
-  it("should query only town database by default (project=town)", async () => {
+  it("should query all databases by default (adj-162: project defaults to 'all')", async () => {
+    vi.mocked(listAllBeadsDirs).mockResolvedValue([
+      { path: "/tmp/town/.beads", workDir: "/tmp/town", project: null },
+    ]);
+
     vi.mocked(execBd).mockResolvedValue({
       success: true,
       data: [],
@@ -461,8 +465,8 @@ describe("getBeadsGraph", () => {
 
     await getBeadsGraph();
 
-    // Should call execBd exactly once (town only)
-    expect(vi.mocked(execBd)).toHaveBeenCalledTimes(1);
+    // adj-162: defaults to "all", which queries town + all discovered project databases
+    expect(vi.mocked(execBd)).toHaveBeenCalled();
   });
 
   it("should exclude hq- beads when excludeTown=true with project=all", async () => {

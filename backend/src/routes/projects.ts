@@ -21,7 +21,6 @@ import {
   listProjects,
   getProject,
   createProject,
-  activateProject,
   deleteProject,
   discoverLocalProjects,
   checkProjectHealth,
@@ -269,7 +268,6 @@ export function createProjectsRouter(store: MessageStore, proposalStore?: Propos
           id: project.id,
           name: project.name,
           path: project.path,
-          active: project.active,
         },
         beads: beadsResult.success && beadsResult.data
           ? beadsResult.data
@@ -373,25 +371,7 @@ export function createProjectsRouter(store: MessageStore, proposalStore?: Propos
     return res.json(success(result.data));
   });
 
-  /**
-   * POST /api/projects/:id/activate
-   * Activate a project as the current project.
-   */
-  router.post("/:id/activate", (req, res) => {
-    const { id } = req.params;
-    const result = activateProject(id);
-
-    if (!result.success) {
-      if (result.error?.code === "NOT_FOUND") {
-        return res.status(404).json(notFound("Project", id));
-      }
-      return res.status(500).json(
-        internalError(result.error?.message ?? "Failed to activate project")
-      );
-    }
-
-    return res.json(success(result.data));
-  });
+  // adj-162: POST /api/projects/:id/activate removed — no active project concept
 
   /**
    * PATCH /api/projects/:id

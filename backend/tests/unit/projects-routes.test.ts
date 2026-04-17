@@ -7,7 +7,6 @@ vi.mock("../../src/services/projects-service.js", () => ({
   listProjects: vi.fn(),
   getProject: vi.fn(),
   createProject: vi.fn(),
-  activateProject: vi.fn(),
   deleteProject: vi.fn(),
   discoverLocalProjects: vi.fn(),
 }));
@@ -29,7 +28,6 @@ import {
   listProjects,
   getProject,
   createProject,
-  activateProject,
   deleteProject,
 } from "../../src/services/projects-service.js";
 import type { Project, ProjectsServiceResult } from "../../src/services/projects-service.js";
@@ -55,7 +53,6 @@ function createMockProject(overrides: Partial<Project> = {}): Project {
     mode: "swarm",
     sessions: [],
     createdAt: "2026-01-01T00:00:00.000Z",
-    active: false,
     ...overrides,
   };
 }
@@ -282,33 +279,8 @@ describe("projects routes", () => {
   });
 
   // ===========================================================================
-  // POST /api/projects/:id/activate
+  // POST /api/projects/:id/activate — REMOVED (adj-162)
   // ===========================================================================
-
-  describe("POST /api/projects/:id/activate", () => {
-    it("should activate project", async () => {
-      const project = createMockProject({ id: "p1", active: true });
-      vi.mocked(activateProject).mockReturnValue({ success: true, data: project });
-
-      const response = await request(app).post("/api/projects/p1/activate");
-
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.active).toBe(true);
-    });
-
-    it("should return 404 for unknown project", async () => {
-      vi.mocked(activateProject).mockReturnValue({
-        success: false,
-        error: { code: "NOT_FOUND", message: "Project 'xyz' not found" },
-      });
-
-      const response = await request(app).post("/api/projects/xyz/activate");
-
-      expect(response.status).toBe(404);
-      expect(response.body.success).toBe(false);
-    });
-  });
 
   // ===========================================================================
   // DELETE /api/projects/:id

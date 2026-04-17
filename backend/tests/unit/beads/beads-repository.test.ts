@@ -632,10 +632,17 @@ describe("beads-repository", () => {
         ])
       );
 
-      const result = await listRecentlyClosed(1);
+      // adj-162: must pass explicit project (no active-project fallback)
+      const result = await listRecentlyClosed(1, "town");
       expect(result.success).toBe(true);
       expect(result.data).toHaveLength(1);
       expect(result.data?.[0]?.id).toBe("hq-cls1");
+    });
+
+    it("should return empty array when no project is specified (adj-162)", async () => {
+      const result = await listRecentlyClosed(1);
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual([]);
     });
 
     it("should filter out beads closed outside the time window", async () => {
@@ -650,7 +657,8 @@ describe("beads-repository", () => {
         ])
       );
 
-      const result = await listRecentlyClosed(1);
+      // adj-162: must pass explicit project
+      const result = await listRecentlyClosed(1, "town");
       expect(result.success).toBe(true);
       expect(result.data).toHaveLength(0);
     });

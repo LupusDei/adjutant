@@ -150,7 +150,6 @@ export const ProjectInfoSchema = z.object({
   id: z.string(),
   name: z.string(),
   path: z.string(),
-  active: z.boolean(),
 });
 
 export const OverviewResponseDataSchema = z.object({
