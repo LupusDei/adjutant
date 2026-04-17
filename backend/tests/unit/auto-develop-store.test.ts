@@ -28,9 +28,10 @@ async function setupDb(): Promise<Database.Database> {
 function insertTestProject(projectDb: Database.Database, id: string): void {
   const projPath = join(testDir, `proj-${id}`);
   mkdirSync(projPath, { recursive: true });
+  // adj-162: active column removed from projects table
   projectDb.prepare(`
-    INSERT INTO projects (id, name, path, mode, created_at, active)
-    VALUES (?, ?, ?, 'swarm', datetime('now'), 0)
+    INSERT INTO projects (id, name, path, mode, created_at)
+    VALUES (?, ?, ?, 'swarm', datetime('now'))
   `).run(id, `project-${id}`, projPath);
 }
 

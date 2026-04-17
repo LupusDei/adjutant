@@ -24,14 +24,15 @@ async function setupDb(): Promise<Database.Database> {
  * Insert a test project directly into the database and return its ID.
  * Creates a temporary directory so hasBeads/path checks don't break.
  */
-function insertTestProject(projectDb: Database.Database, overrides?: { name?: string; active?: number }): string {
+function insertTestProject(projectDb: Database.Database, overrides?: { name?: string }): string {
   const id = `test-${Math.random().toString(36).slice(2, 8)}`;
   const projPath = join(testDir, `proj-${id}`);
   mkdirSync(projPath, { recursive: true });
+  // adj-162: active column removed from projects table
   projectDb.prepare(`
-    INSERT INTO projects (id, name, path, mode, created_at, active)
-    VALUES (?, ?, ?, 'swarm', datetime('now'), ?)
-  `).run(id, overrides?.name ?? "test-project", projPath, overrides?.active ?? 0);
+    INSERT INTO projects (id, name, path, mode, created_at)
+    VALUES (?, ?, ?, 'swarm', datetime('now'))
+  `).run(id, overrides?.name ?? "test-project", projPath);
   return id;
 }
 

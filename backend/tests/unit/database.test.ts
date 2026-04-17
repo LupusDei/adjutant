@@ -91,7 +91,7 @@ describe("database", () => {
         const migrations = db
           .prepare("SELECT * FROM migrations")
           .all() as { name: string }[];
-        expect(migrations).toHaveLength(30);
+        expect(migrations).toHaveLength(31);
         expect(migrations[0]?.name).toBe("001-initial.sql");
       } finally {
         db.close();
