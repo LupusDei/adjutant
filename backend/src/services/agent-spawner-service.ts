@@ -132,6 +132,26 @@ export async function spawnAgent(
         await bridge.registry.save();
         logInfo("Re-registered orphaned agent session", { name: req.name });
       }
+
+      // Re-export env vars to the existing session. Env vars (especially
+      // ADJUTANT_PERSONA_ID) are only set during initial creation — if the
+      // backend restarted, the shell env may be stale. Re-export any
+      // caller-provided vars, and resolve persona if not already provided.
+      const envVars: Record<string, string> = { ...req.envVars };
+      const personaKey = "ADJUTANT_PERSONA_ID";
+      if (!envVars[personaKey]) {
+        const personaService = getPersonaService();
+        if (personaService) {
+          const persona = personaService.getPersonaByCallsign(req.name);
+          if (persona) {
+            envVars[personaKey] = persona.id;
+          }
+        }
+      }
+      if (Object.keys(envVars).length > 0) {
+        await bridge.lifecycle.exportEnvVars(tmuxSession, envVars);
+      }
+
       logInfo("Agent session already exists, skipping spawn", {
         name: req.name,
       });

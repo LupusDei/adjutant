@@ -252,6 +252,27 @@ export class LifecycleManager {
   }
 
   /**
+   * Export environment variables into an existing tmux session.
+   * Used to re-inject env vars (e.g., ADJUTANT_PERSONA_ID) on respawn
+   * when the tmux session survived a backend restart.
+   */
+  async exportEnvVars(tmuxSession: string, envVars: Record<string, string>): Promise<void> {
+    for (const [key, value] of Object.entries(envVars)) {
+      await execTmuxCommand([
+        "send-keys",
+        "-t",
+        tmuxSession,
+        `export ${key}=${shellEscape(value)}`,
+        "Enter",
+      ]);
+    }
+    logInfo("Re-exported env vars to existing session", {
+      tmuxSession,
+      keys: Object.keys(envVars),
+    });
+  }
+
+  /**
    * Kill a tmux session and clean up (including worktree removal for
    * worktree-isolated sessions — adj-085).
    */

@@ -252,6 +252,14 @@ describe("LifecycleManager", () => {
   // ==========================================================================
 
   describe("initialPrompt delivery", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it("should wait for pane stability before delivering prompt", async () => {
       // Track capture-pane calls to verify readiness polling
       let captureCalls = 0;
@@ -285,17 +293,25 @@ describe("LifecycleManager", () => {
         }
       );
 
-      const result = await lifecycle.createSession({
+      // Run createSession with timer advancement
+      const sessionPromise = lifecycle.createSession({
         name: "test",
         projectPath: "/tmp",
         initialPrompt: "You are a Squad Leader.",
       });
 
+      // Advance timers to let readiness polling complete
+      for (let i = 0; i < 40; i++) {
+        await vi.advanceTimersByTimeAsync(500);
+      }
+
+      const result = await sessionPromise;
+
       expect(result.success).toBe(true);
       expect(stableContent).toBe(true);
       // Should have polled capture-pane multiple times for readiness
       expect(captureCalls).toBeGreaterThan(3);
-    }, 60_000);
+    }, 10_000);
 
     it("should use set-buffer + paste-buffer for prompt delivery", async () => {
       // Make all capture-pane calls return stable content immediately
@@ -324,11 +340,17 @@ describe("LifecycleManager", () => {
         }
       );
 
-      await lifecycle.createSession({
+      const sessionPromise = lifecycle.createSession({
         name: "test",
         projectPath: "/tmp",
         initialPrompt: "You are a Squad Leader.",
       });
+
+      for (let i = 0; i < 40; i++) {
+        await vi.advanceTimersByTimeAsync(500);
+      }
+
+      await sessionPromise;
 
       // Verify set-buffer was called with the prompt
       const setBufferCall = mockExecFile.mock.calls.find(
@@ -342,7 +364,7 @@ describe("LifecycleManager", () => {
         (c: unknown[]) => (c[1] as string[])[0] === "paste-buffer"
       );
       expect(pasteBufferCall).toBeDefined();
-    }, 60_000);
+    }, 10_000);
 
     it("should retry delivery when pane content doesn't change", async () => {
       let setBufferCount = 0;
@@ -377,16 +399,22 @@ describe("LifecycleManager", () => {
         }
       );
 
-      const result = await lifecycle.createSession({
+      const sessionPromise = lifecycle.createSession({
         name: "test",
         projectPath: "/tmp",
         initialPrompt: "You are a Squad Leader.",
       });
 
+      for (let i = 0; i < 60; i++) {
+        await vi.advanceTimersByTimeAsync(500);
+      }
+
+      const result = await sessionPromise;
+
       expect(result.success).toBe(true);
       // Should have called set-buffer at least twice (initial + retry)
       expect(setBufferCount).toBeGreaterThanOrEqual(2);
-    }, 60_000);
+    }, 10_000);
   });
 
   // ==========================================================================
