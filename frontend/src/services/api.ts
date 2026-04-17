@@ -434,10 +434,6 @@ export const api = {
       return apiFetch(`/projects/${encodeURIComponent(id)}/health`);
     },
 
-    async activate(id: string): Promise<ProjectInfo> {
-      return apiFetch(`/projects/${encodeURIComponent(id)}/activate`, { method: 'POST' });
-    },
-
     async getOverview(id: string): Promise<ProjectOverview> {
       return apiFetch(`/projects/${encodeURIComponent(id)}/overview`);
     },

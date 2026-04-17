@@ -75,7 +75,7 @@ describe("QA: Frontend projects API client (adj-050.4.2)", () => {
           mode: "swarm",
           sessions: [],
           createdAt: "2026-03-06T00:00:00.000Z",
-          active: false,
+          hasBeads: false,
         },
       }, 201);
 
@@ -100,7 +100,7 @@ describe("QA: Frontend projects API client (adj-050.4.2)", () => {
           mode: "swarm",
           sessions: [],
           createdAt: "2026-03-06T00:00:00.000Z",
-          active: false,
+          hasBeads: false,
         },
       }, 201);
 
@@ -125,7 +125,7 @@ describe("QA: Frontend projects API client (adj-050.4.2)", () => {
           mode: "swarm",
           sessions: [],
           createdAt: "2026-03-06T00:00:00.000Z",
-          active: false,
+          hasBeads: false,
         },
       }, 201);
 
@@ -149,7 +149,7 @@ describe("QA: Frontend projects API client (adj-050.4.2)", () => {
           mode: "swarm",
           sessions: [],
           createdAt: "2026-03-06T00:00:00.000Z",
-          active: false,
+          hasBeads: false,
         },
       }, 201);
 
@@ -173,7 +173,7 @@ describe("QA: Frontend projects API client (adj-050.4.2)", () => {
           mode: "swarm",
           sessions: [],
           createdAt: "2026-03-06T00:00:00.000Z",
-          active: false,
+          hasBeads: false,
         },
       }, 201);
 
@@ -199,7 +199,7 @@ describe("QA: Frontend projects API client (adj-050.4.2)", () => {
           mode: "swarm",
           sessions: [],
           createdAt: "2026-03-06T00:00:00.000Z",
-          active: false,
+          hasBeads: false,
         },
       }, 201);
 
@@ -289,10 +289,6 @@ describe("QA: Frontend projects API client (adj-050.4.2)", () => {
 
     it("should have health() method", () => {
       expect(typeof api.projects.health).toBe("function");
-    });
-
-    it("should have activate() method", () => {
-      expect(typeof api.projects.activate).toBe("function");
     });
 
     it("should have getOverview() method", () => {

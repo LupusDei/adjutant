@@ -4,12 +4,10 @@ import { type ReactNode } from 'react';
 
 // Mock the api module
 const mockProjectsList = vi.fn();
-const mockProjectsActivate = vi.fn();
 vi.mock('../../../src/services/api', () => ({
   default: {
     projects: {
       list: (...args: unknown[]) => mockProjectsList(...args),
-      activate: (...args: unknown[]) => mockProjectsActivate(...args),
     },
   },
 }));
@@ -21,9 +19,9 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 const MOCK_PROJECTS = [
-  { id: 'proj-1', name: 'adjutant', path: '/code/adjutant', active: true, sessions: [], createdAt: '2026-01-01T00:00:00Z' },
-  { id: 'proj-2', name: 'gastown', path: '/code/gastown', active: false, sessions: [], createdAt: '2026-01-01T00:00:00Z' },
-  { id: 'proj-3', name: 'ios-app', path: '/code/ios', active: false, sessions: [], createdAt: '2026-01-01T00:00:00Z' },
+  { id: 'proj-1', name: 'adjutant', path: '/code/adjutant', hasBeads: true, sessions: [], createdAt: '2026-01-01T00:00:00Z' },
+  { id: 'proj-2', name: 'gastown', path: '/code/gastown', hasBeads: false, sessions: [], createdAt: '2026-01-01T00:00:00Z' },
+  { id: 'proj-3', name: 'ios-app', path: '/code/ios', hasBeads: false, sessions: [], createdAt: '2026-01-01T00:00:00Z' },
 ];
 
 describe('ProjectContext', () => {
@@ -32,57 +30,9 @@ describe('ProjectContext', () => {
     localStorage.removeItem('adjutant-selected-project');
     localStorage.removeItem('beads-project-filter');
     mockProjectsList.mockResolvedValue(MOCK_PROJECTS);
-    mockProjectsActivate.mockResolvedValue({ ...MOCK_PROJECTS[1], active: true });
   });
 
-  describe('selectProject calls activate API', () => {
-    it('should call api.projects.activate when a project is selected', async () => {
-      const { result } = renderHook(() => useProject(), { wrapper });
-
-      // Wait for initial load
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      // Select a different project
-      await act(async () => {
-        result.current.selectProject('proj-2');
-      });
-
-      expect(mockProjectsActivate).toHaveBeenCalledWith('proj-2');
-    });
-
-    it('should not call activate API when deselecting (null)', async () => {
-      const { result } = renderHook(() => useProject(), { wrapper });
-
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      await act(async () => {
-        result.current.selectProject(null);
-      });
-
-      expect(mockProjectsActivate).not.toHaveBeenCalled();
-    });
-
-    it('should still update local state even if activate API fails', async () => {
-      mockProjectsActivate.mockRejectedValue(new Error('Network error'));
-
-      const { result } = renderHook(() => useProject(), { wrapper });
-
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      await act(async () => {
-        result.current.selectProject('proj-2');
-      });
-
-      // Local state should still update despite API failure
-      expect(result.current.selectedProject?.id).toBe('proj-2');
-    });
-
+  describe('selectProject (client-side only)', () => {
     it('should update localStorage when selecting a project', async () => {
       const { result } = renderHook(() => useProject(), { wrapper });
 
@@ -97,11 +47,24 @@ describe('ProjectContext', () => {
       expect(localStorage.getItem('adjutant-selected-project')).toBe('proj-2');
     });
 
-    it('should remove localStorage when deselecting (no active project to auto-select)', async () => {
-      // Use projects with no active flag so auto-select doesn't re-select
-      mockProjectsList.mockResolvedValue(
-        MOCK_PROJECTS.map(p => ({ ...p, active: false }))
-      );
+    it('should update selectedProject state when selecting', async () => {
+      const { result } = renderHook(() => useProject(), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      await act(async () => {
+        result.current.selectProject('proj-2');
+      });
+
+      expect(result.current.selectedProject?.id).toBe('proj-2');
+      expect(result.current.selectedProject?.name).toBe('gastown');
+    });
+
+    it('should remove localStorage when deselecting', async () => {
+      // Use empty projects list so auto-select doesn't re-select
+      mockProjectsList.mockResolvedValue([]);
       localStorage.setItem('adjutant-selected-project', 'proj-1');
 
       const { result } = renderHook(() => useProject(), { wrapper });
@@ -115,6 +78,48 @@ describe('ProjectContext', () => {
       });
 
       expect(localStorage.getItem('adjutant-selected-project')).toBeNull();
+    });
+  });
+
+  describe('auto-select on fresh load', () => {
+    it('should auto-select first project with beads on fresh load', async () => {
+      const { result } = renderHook(() => useProject(), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // proj-1 has hasBeads: true, so it should be auto-selected
+      expect(result.current.selectedProject?.id).toBe('proj-1');
+      expect(localStorage.getItem('adjutant-selected-project')).toBe('proj-1');
+    });
+
+    it('should auto-select first project when no project has beads', async () => {
+      mockProjectsList.mockResolvedValue(
+        MOCK_PROJECTS.map(p => ({ ...p, hasBeads: false }))
+      );
+
+      const { result } = renderHook(() => useProject(), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // No project has beads, so fallback to first project
+      expect(result.current.selectedProject?.id).toBe('proj-1');
+    });
+
+    it('should not auto-select when localStorage already has a selection', async () => {
+      localStorage.setItem('adjutant-selected-project', 'proj-3');
+
+      const { result } = renderHook(() => useProject(), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Should respect localStorage, not auto-select
+      expect(result.current.selectedProject?.id).toBe('proj-3');
     });
   });
 });

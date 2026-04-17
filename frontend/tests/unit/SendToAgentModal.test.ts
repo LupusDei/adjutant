@@ -52,7 +52,7 @@ vi.mock("../../src/services/api", () => {
       create: mockSessionsCreate,
       sendInput: mockSessionsSendInput,
     },
-    projects: { list: mockProjectsList, activate: vi.fn().mockResolvedValue({}) },
+    projects: { list: mockProjectsList },
   };
   return {
     api: apiObj,
@@ -68,7 +68,7 @@ describe("SendToAgentModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAgentList.mockResolvedValue(mockAgents);
-    mockProjectsList.mockResolvedValue([{ id: "proj-1", name: "adjutant", path: "/Users/Reason/code/ai/adjutant", mode: "swarm", active: true }]);
+    mockProjectsList.mockResolvedValue([{ id: "proj-1", name: "adjutant", path: "/Users/Reason/code/ai/adjutant", mode: "swarm", hasBeads: true }]);
     mockMessagesSend.mockResolvedValue({ messageId: "m1", timestamp: "2026-02-24T00:00:00Z" });
     mockSessionsCreate.mockResolvedValue({
       id: "s1",

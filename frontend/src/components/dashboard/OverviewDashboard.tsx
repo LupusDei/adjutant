@@ -1,6 +1,7 @@
-import React, { Suspense, useMemo, useState, useEffect, useCallback } from 'react';
+import React, { Suspense, useState, useEffect, useCallback } from 'react';
 
 import { useOverview } from '../../hooks/useProjectOverview';
+import { useProject } from '../../contexts/ProjectContext';
 import { api } from '../../services/api';
 import type { AutoDevelopStatus } from '../../types';
 import { getTimelineEvents, type TimelineEvent } from '../../services/api';
@@ -136,13 +137,9 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
   // --- Auto-Develop status ---
   const [autoDevelopStatus, setAutoDevelopStatus] = useState<AutoDevelopStatus | null>(null);
 
-  // Use the first active project as the auto-develop target
-  const projects = data?.projects;
-  const activeProjectId = useMemo(() => {
-    if (!projects) return null;
-    const active = projects.find((p) => p.active);
-    return active?.id ?? projects[0]?.id ?? null;
-  }, [projects]);
+  // Use the selected project from context as the auto-develop target
+  const { selectedProject } = useProject();
+  const activeProjectId = selectedProject?.id ?? null;
 
   const fetchAutoDevelopStatus = useCallback(async () => {
     if (!activeProjectId) return;

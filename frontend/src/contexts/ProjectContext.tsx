@@ -68,11 +68,11 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   // Auto-select active project if none selected and projects are loaded
   useEffect(() => {
     if (!selectedProjectId && projects.length > 0) {
-      const active = projects.find((p) => p.active);
-      if (active) {
-        setSelectedProjectId(active.id);
+      const defaultProject = projects.find(p => p.hasBeads) ?? projects[0];
+      if (defaultProject) {
+        setSelectedProjectId(defaultProject.id);
         try {
-          localStorage.setItem(STORAGE_KEY, active.id);
+          localStorage.setItem(STORAGE_KEY, defaultProject.id);
         } catch { /* ignore */ }
       }
     }
@@ -88,12 +88,6 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       }
     } catch { /* ignore */ }
 
-    // Activate the project on the backend so server-side state stays in sync
-    if (projectId) {
-      void api.projects.activate(projectId).catch(() => {
-        // Silent fail -- local state is already updated
-      });
-    }
   }, []);
 
   const refresh = useCallback(() => {

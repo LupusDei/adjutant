@@ -14,7 +14,6 @@ import { type ReactNode, useState, useCallback, useMemo } from 'react';
 
 // Mock the api module
 const mockProjectsList = vi.fn();
-const mockProjectsActivate = vi.fn();
 const mockBeadsList = vi.fn();
 const mockBeadsSources = vi.fn();
 
@@ -22,7 +21,6 @@ vi.mock('../../../src/services/api', () => ({
   api: {
     projects: {
       list: (...args: unknown[]) => mockProjectsList(...args),
-      activate: (...args: unknown[]) => mockProjectsActivate(...args),
     },
     beads: {
       list: (...args: unknown[]) => mockBeadsList(...args),
@@ -33,7 +31,6 @@ vi.mock('../../../src/services/api', () => ({
   default: {
     projects: {
       list: (...args: unknown[]) => mockProjectsList(...args),
-      activate: (...args: unknown[]) => mockProjectsActivate(...args),
     },
     beads: {
       list: (...args: unknown[]) => mockBeadsList(...args),
@@ -46,9 +43,9 @@ vi.mock('../../../src/services/api', () => ({
 import { ProjectProvider, useProject } from '../../../src/contexts/ProjectContext';
 
 const MOCK_PROJECTS = [
-  { id: 'proj-1', name: 'adjutant', path: '/code/adjutant', active: true, sessions: [], createdAt: '2026-01-01T00:00:00Z' },
-  { id: 'proj-2', name: 'gastown', path: '/code/gastown', active: false, sessions: [], createdAt: '2026-01-01T00:00:00Z' },
-  { id: 'proj-3', name: 'ios-app', path: '/code/ios', active: false, sessions: [], createdAt: '2026-01-01T00:00:00Z' },
+  { id: 'proj-1', name: 'adjutant', path: '/code/adjutant', hasBeads: true, sessions: [], createdAt: '2026-01-01T00:00:00Z' },
+  { id: 'proj-2', name: 'gastown', path: '/code/gastown', hasBeads: false, sessions: [], createdAt: '2026-01-01T00:00:00Z' },
+  { id: 'proj-3', name: 'ios-app', path: '/code/ios', hasBeads: false, sessions: [], createdAt: '2026-01-01T00:00:00Z' },
 ];
 
 /**
@@ -108,16 +105,13 @@ describe('BeadsView project filter integration (adj-7yhd)', () => {
     localStorage.removeItem('adjutant-selected-project');
     localStorage.removeItem('beads-project-filter');
     mockProjectsList.mockResolvedValue(MOCK_PROJECTS);
-    mockProjectsActivate.mockResolvedValue({ ...MOCK_PROJECTS[1], active: true });
     mockBeadsList.mockResolvedValue([]);
     mockBeadsSources.mockResolvedValue({ sources: [], mode: 'multi' });
   });
 
-  it('should default to ALL when no project is selected and no localStorage', async () => {
-    // Clear the active flag so no auto-select
-    mockProjectsList.mockResolvedValue(
-      MOCK_PROJECTS.map(p => ({ ...p, active: false }))
-    );
+  it('should default to ALL when no projects exist and no localStorage', async () => {
+    // No projects means no auto-select
+    mockProjectsList.mockResolvedValue([]);
 
     const { result } = renderHook(() => useBeadsProjectFilter(), { wrapper });
 
@@ -128,10 +122,10 @@ describe('BeadsView project filter integration (adj-7yhd)', () => {
     expect(result.current.apiProject).toBe('all');
   });
 
-  it('should set filter to active project name on initial load', async () => {
+  it('should set filter to project with beads on initial load', async () => {
     const { result } = renderHook(() => useBeadsProjectFilter(), { wrapper });
 
-    // ProjectContext auto-selects the active project (adjutant)
+    // ProjectContext auto-selects the first project with beads (adjutant)
     await waitFor(() => {
       expect(result.current.projectFilter).toBe('adjutant');
     });
@@ -153,7 +147,7 @@ describe('BeadsView project filter integration (adj-7yhd)', () => {
       expect(filterResult.current.project.loading).toBe(false);
     });
 
-    // Initially should be 'adjutant' (the active project)
+    // Initially should be 'adjutant' (the project with beads)
     await waitFor(() => {
       expect(filterResult.current.filter.projectFilter).toBe('adjutant');
     });
@@ -169,13 +163,11 @@ describe('BeadsView project filter integration (adj-7yhd)', () => {
     });
   });
 
-  it('should reset filter to ALL when project is deselected (no auto-select)', async () => {
-    // Use projects with no active flag so auto-select doesn't re-select
-    mockProjectsList.mockResolvedValue(
-      MOCK_PROJECTS.map(p => ({ ...p, active: false }))
-    );
+  it('should reset filter to ALL when project is deselected with no projects available', async () => {
+    // No projects means deselect stays as null (no auto-reselect)
+    mockProjectsList.mockResolvedValue([]);
 
-    // Start with proj-1 manually selected
+    // Start with a stale localStorage selection
     localStorage.setItem('adjutant-selected-project', 'proj-1');
 
     const { result: filterResult } = renderHook(
@@ -190,12 +182,7 @@ describe('BeadsView project filter integration (adj-7yhd)', () => {
       expect(filterResult.current.project.loading).toBe(false);
     });
 
-    // Initially should be 'adjutant' (proj-1's name)
-    await waitFor(() => {
-      expect(filterResult.current.filter.projectFilter).toBe('adjutant');
-    });
-
-    // Deselect
+    // Deselect — with no projects, it stays null and filter is ALL
     await act(async () => {
       filterResult.current.project.selectProject(null);
     });
