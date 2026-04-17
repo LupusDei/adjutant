@@ -13,8 +13,38 @@ on:
         default: 'New build from CI'
 
 jobs:
+  check-version:
+    name: Check for Version Change
+    runs-on: ubuntu-latest
+    # Skip version check on manual dispatch — always deploy
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    outputs:
+      changed: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.diff.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'push'
+        with:
+          fetch-depth: 2
+
+      - name: Check MARKETING_VERSION change
+        if: github.event_name == 'push'
+        id: diff
+        run: |
+          CURRENT=$(grep 'MARKETING_VERSION' ios/Adjutant.xcodeproj/project.pbxproj | head -1 | sed 's/.*= *//;s/;.*//')
+          PREVIOUS=$(git show HEAD~1:ios/Adjutant.xcodeproj/project.pbxproj 2>/dev/null | grep 'MARKETING_VERSION' | head -1 | sed 's/.*= *//;s/;.*//' || echo "")
+          echo "current=$CURRENT previous=$PREVIOUS"
+          if [ "$CURRENT" != "$PREVIOUS" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Version changed: $PREVIOUS → $CURRENT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Version unchanged ($CURRENT) — skipping TestFlight deploy"
+          fi
+
   deploy:
     name: Build and Deploy to TestFlight
+    needs: check-version
+    if: needs.check-version.outputs.changed == 'true'
     runs-on: macos-16
     defaults:
       run:

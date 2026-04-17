@@ -11,8 +11,36 @@ on:
       - 'ios/**'
 
 jobs:
+  check-version:
+    name: Check for Version Change
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ github.event_name == 'pull_request' && 'true' || steps.diff.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check MARKETING_VERSION or CURRENT_PROJECT_VERSION change
+        if: github.event_name == 'push'
+        id: diff
+        run: |
+          CURRENT=$(grep 'MARKETING_VERSION\|CURRENT_PROJECT_VERSION' ios/Adjutant.xcodeproj/project.pbxproj | head -2 | tr '\n' '|')
+          PREVIOUS=$(git show HEAD~1:ios/Adjutant.xcodeproj/project.pbxproj 2>/dev/null | grep 'MARKETING_VERSION\|CURRENT_PROJECT_VERSION' | head -2 | tr '\n' '|' || echo "")
+          echo "current=$CURRENT"
+          echo "previous=$PREVIOUS"
+          if [ "$CURRENT" != "$PREVIOUS" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Version changed — running iOS tests"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Version unchanged — skipping iOS tests to save CI credits"
+          fi
+
   test-adjutant-kit:
     name: AdjutantKit Tests
+    needs: check-version
+    if: needs.check-version.outputs.changed == 'true'
     runs-on: macos-16
     defaults:
       run:
@@ -26,6 +54,8 @@ jobs:
 
   test-adjutant-app:
     name: Adjutant App Tests
+    needs: check-version
+    if: needs.check-version.outputs.changed == 'true'
     runs-on: macos-16
     defaults:
       run:
