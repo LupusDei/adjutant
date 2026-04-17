@@ -48,7 +48,6 @@ function createMockProject(overrides: Partial<Project> = {}): Project {
     mode: "swarm",
     sessions: [],
     createdAt: "2026-01-01T00:00:00.000Z",
-    active: true,
     hasBeads: true,
     ...overrides,
   };
@@ -67,10 +66,10 @@ describe("overview routes", () => {
   // ===========================================================================
 
   describe("GET /api/overview", () => {
-    it("should return overview for the active project with beads", async () => {
+    it("should return overview for a specific project via projectId param", async () => {
       const projects = [
-        createMockProject({ id: "p1", name: "proj-a", active: true, hasBeads: true }),
-        createMockProject({ id: "p2", name: "proj-b", active: false, hasBeads: true }),
+        createMockProject({ id: "p1", name: "proj-a", hasBeads: true }),
+        createMockProject({ id: "p2", name: "proj-b", hasBeads: true }),
       ];
       vi.mocked(listProjects).mockReturnValue({ success: true, data: projects });
 
@@ -101,7 +100,7 @@ describe("overview routes", () => {
       (mockStore.getUnreadCounts as ReturnType<typeof vi.fn>).mockReturnValue([]);
       (mockStore.getUnreadSummaries as ReturnType<typeof vi.fn>).mockReturnValue([]);
 
-      const response = await request(app).get("/api/overview");
+      const response = await request(app).get("/api/overview?projectId=p1");
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
@@ -110,15 +109,15 @@ describe("overview routes", () => {
       expect(response.body.data.epics).toBeDefined();
       expect(response.body.data.agents).toBeDefined();
       expect(response.body.data.unreadMessages).toBeDefined();
-      // Only the active project should be queried (adj-109)
+      // Only the requested project should be queried
       expect(getProjectOverview).toHaveBeenCalledTimes(1);
     });
 
-    it("should only query the active project, not inactive ones (adj-109)", async () => {
+    it("should only query the requested project via projectId, not others (adj-109, adj-162)", async () => {
       const projects = [
-        createMockProject({ id: "p1", name: "active-proj", active: true, hasBeads: true }),
-        createMockProject({ id: "p2", name: "inactive-proj", active: false, hasBeads: true }),
-        createMockProject({ id: "p3", name: "no-beads", active: false, hasBeads: false }),
+        createMockProject({ id: "p1", name: "requested-proj", hasBeads: true }),
+        createMockProject({ id: "p2", name: "other-proj", hasBeads: true }),
+        createMockProject({ id: "p3", name: "no-beads", hasBeads: false }),
       ];
       vi.mocked(listProjects).mockReturnValue({ success: true, data: projects });
 
@@ -130,19 +129,17 @@ describe("overview routes", () => {
       vi.mocked(getRecentlyCompletedEpics).mockResolvedValue({ success: true, data: [] });
       vi.mocked(getAgents).mockResolvedValue({ success: true, data: [] });
 
-      const response = await request(app).get("/api/overview");
+      const response = await request(app).get("/api/overview?projectId=p1");
 
       expect(response.status).toBe(200);
-      // Only the active project with beads should trigger calls
+      // Only the requested project with beads should trigger calls
       expect(getProjectOverview).toHaveBeenCalledTimes(1);
       expect(getProjectOverview).toHaveBeenCalledWith("/Users/test/code/test-project");
-      // Inactive projects are NOT queried
-      expect(getProjectOverview).not.toHaveBeenCalledWith("/b");
     });
 
-    it("should return empty beads when no project is active", async () => {
+    it("should return empty beads when no projectId is specified", async () => {
       const projects = [
-        createMockProject({ id: "p1", name: "proj-a", active: false, hasBeads: true }),
+        createMockProject({ id: "p1", name: "proj-a", hasBeads: true }),
       ];
       vi.mocked(listProjects).mockReturnValue({ success: true, data: projects });
       vi.mocked(getAgents).mockResolvedValue({ success: true, data: [] });
@@ -151,7 +148,7 @@ describe("overview routes", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.data.beads).toEqual({ open: [], inProgress: [], recentlyClosed: [] });
-      // No beads service calls when no active project
+      // No beads service calls when no projectId param
       expect(getProjectOverview).not.toHaveBeenCalled();
     });
 

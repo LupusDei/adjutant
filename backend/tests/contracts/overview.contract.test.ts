@@ -49,7 +49,7 @@ const mockStore = {
 // Fixtures
 // ============================================================================
 
-const MOCK_PROJECT = { id: "adjutant", name: "adjutant", path: "/code/adjutant", active: true, hasBeads: true };
+const MOCK_PROJECT = { id: "adjutant", name: "adjutant", path: "/code/adjutant", hasBeads: true };
 
 const MOCK_BEAD = {
   id: "adj-042", title: "Task", description: "", status: "open",
@@ -95,7 +95,7 @@ describe("Overview API contracts", () => {
       vi.mocked(getRecentlyCompletedEpics).mockResolvedValue({ success: true, data: [] });
       vi.mocked(getAgents).mockResolvedValue({ success: true, data: [] });
 
-      const res = await request(app).get("/api/overview");
+      const res = await request(app).get("/api/overview?projectId=adjutant");
 
       expect(res.status).toBe(200);
       const parsed = OverviewResponseSchema.safeParse(res.body);

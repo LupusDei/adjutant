@@ -486,7 +486,8 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
       expect(result.data!.mode).toBe("swarm");
     });
 
-    it("should set active to false for cloned projects", () => {
+    // adj-162: active field removed from Project — no activation concept
+    it("should not include active field on cloned projects (adj-162)", () => {
       vi.mocked(existsSync).mockReturnValue(false);
       vi.mocked(execFileSync).mockReturnValue("");
 
@@ -495,7 +496,8 @@ describe("QA: Project creation edge cases (adj-050.4.1)", () => {
         targetDir: "/tmp/test",
       });
       expect(result.success).toBe(true);
-      expect(result.data!.active).toBe(false);
+      // active field should not be present on the Project object
+      expect("active" in result.data!).toBe(false);
     });
 
     it("should set empty sessions array for cloned projects", () => {

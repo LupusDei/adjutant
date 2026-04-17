@@ -7,7 +7,6 @@ vi.mock("../../src/services/projects-service.js", () => ({
   listProjects: vi.fn(),
   getProject: vi.fn(),
   createProject: vi.fn(),
-  activateProject: vi.fn(),
   deleteProject: vi.fn(),
   discoverLocalProjects: vi.fn(),
   checkProjectHealth: vi.fn(),

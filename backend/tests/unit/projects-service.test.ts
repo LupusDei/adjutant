@@ -44,11 +44,9 @@ import {
   listProjects,
   getProject,
   createProject,
-  activateProject,
   deleteProject,
   discoverLocalProjects,
   checkProjectHealth,
-  getActiveProjectName,
 } from "../../src/services/projects-service.js";
 import type { Project } from "../../src/services/projects-service.js";
 
@@ -68,7 +66,7 @@ function createTestDb(): Database.Database {
   return db;
 }
 
-function insertProject(db: Database.Database, project: Partial<Project> & { id: string; name: string; path: string }): void {
+function insertProject(db: Database.Database, project: Partial<Project> & { id: string; name: string; path: string } & { active?: boolean }): void {
   db.prepare(`
     INSERT INTO projects (id, name, path, git_remote, mode, created_at, active)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -83,7 +81,7 @@ function insertProject(db: Database.Database, project: Partial<Project> & { id: 
   );
 }
 
-function createMockProject(overrides: Partial<Project> = {}): Project {
+function createMockProject(overrides: Partial<Project & { active?: boolean }> = {}): Project & { active?: boolean } {
   return {
     id: "abcd1234",
     name: "test-project",
@@ -91,7 +89,6 @@ function createMockProject(overrides: Partial<Project> = {}): Project {
     mode: "swarm",
     sessions: [],
     createdAt: "2026-01-01T00:00:00.000Z",
-    active: false,
     ...overrides,
   };
 }
@@ -395,57 +392,12 @@ describe("projects-service", () => {
   });
 
   // ===========================================================================
-  // activateProject
+  // activateProject — REMOVED (adj-162)
   // ===========================================================================
 
-  describe("activateProject", () => {
-    it("should activate project and deactivate others", () => {
-      insertProject(testDb, createMockProject({ id: "p1", name: "proj-1", path: "/path/1", active: true }));
-      insertProject(testDb, createMockProject({ id: "p2", name: "proj-2", path: "/path/2", active: false }));
-
-      vi.mocked(existsSync).mockReturnValue(false);
-
-      const result = activateProject("p2");
-      expect(result.success).toBe(true);
-      expect(result.data!.id).toBe("p2");
-      expect(result.data!.active).toBe(true);
-
-      // Check DB state
-      const p1Row = testDb.prepare("SELECT active FROM projects WHERE id = ?").get("p1") as { active: number };
-      const p2Row = testDb.prepare("SELECT active FROM projects WHERE id = ?").get("p2") as { active: number };
-      expect(p1Row.active).toBe(0);
-      expect(p2Row.active).toBe(1);
-    });
-
-    it("should return NOT_FOUND for missing project", () => {
-      const result = activateProject("nonexistent");
-      expect(result.success).toBe(false);
-      expect(result.error!.code).toBe("NOT_FOUND");
-    });
-  });
-
   // ===========================================================================
-  // getActiveProjectName
+  // getActiveProjectName — REMOVED (adj-162)
   // ===========================================================================
-
-  describe("getActiveProjectName", () => {
-    it("should return the name of the active project", () => {
-      insertProject(testDb, createMockProject({ id: "p1", name: "adjutant", path: "/path/adj", active: true }));
-      insertProject(testDb, createMockProject({ id: "p2", name: "C4", path: "/path/c4", active: false }));
-
-      expect(getActiveProjectName()).toBe("adjutant");
-    });
-
-    it("should return 'town' when no project is active", () => {
-      insertProject(testDb, createMockProject({ id: "p1", name: "adjutant", path: "/path/adj", active: false }));
-
-      expect(getActiveProjectName()).toBe("town");
-    });
-
-    it("should return 'town' when projects table is empty", () => {
-      expect(getActiveProjectName()).toBe("town");
-    });
-  });
 
   // ===========================================================================
   // deleteProject
@@ -560,19 +512,17 @@ describe("projects-service", () => {
       expect(names).not.toContain("child-project");
     });
 
-    it("should activate CWD project when already registered but inactive", () => {
-      // Pre-insert inactive CWD and active other project
+    it("should not modify existing CWD project when already registered (adj-162: no activation)", () => {
+      // Pre-insert CWD project — discovery should not change its state
       insertProject(testDb, {
         id: "cwd-proj",
         name: basename(PROJECT_ROOT),
         path: PROJECT_ROOT,
-        active: false,
       });
       insertProject(testDb, {
         id: "other-proj",
         name: "other",
         path: "/Users/test/code/other-project",
-        active: true,
       });
 
       vi.mocked(existsSync).mockImplementation((p: unknown) => {
@@ -588,35 +538,14 @@ describe("projects-service", () => {
       const result = discoverLocalProjects();
       expect(result.success).toBe(true);
 
-      // Verify DB state: CWD active, other inactive
-      const cwdRow = testDb.prepare("SELECT active FROM projects WHERE id = ?").get("cwd-proj") as { active: number };
-      const otherRow = testDb.prepare("SELECT active FROM projects WHERE id = ?").get("other-proj") as { active: number };
-      expect(cwdRow.active).toBe(1);
-      expect(otherRow.active).toBe(0);
+      // Both projects should still exist — no activation/deactivation logic
+      const cwdRow = testDb.prepare("SELECT * FROM projects WHERE id = ?").get("cwd-proj");
+      const otherRow = testDb.prepare("SELECT * FROM projects WHERE id = ?").get("other-proj");
+      expect(cwdRow).toBeTruthy();
+      expect(otherRow).toBeTruthy();
     });
 
-    it("should persist activation even when no new projects are discovered", () => {
-      insertProject(testDb, {
-        id: "cwd-existing",
-        name: basename(PROJECT_ROOT),
-        path: PROJECT_ROOT,
-        active: false,
-      });
-
-      vi.mocked(existsSync).mockImplementation((p: unknown) => {
-        const ps = String(p);
-        if (ps === PROJECT_ROOT) return true;
-        if (ps === join(PROJECT_ROOT, ".git")) return true;
-        return false;
-      });
-      vi.mocked(readdirSync).mockReturnValue([] as unknown as ReturnType<typeof readdirSync>);
-      vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as ReturnType<typeof statSync>);
-
-      discoverLocalProjects();
-
-      const row = testDb.prepare("SELECT active FROM projects WHERE id = ?").get("cwd-existing") as { active: number };
-      expect(row.active).toBe(1);
-    });
+    // adj-162: "should persist activation" test removed — activation concept no longer exists
   });
 
   // ===========================================================================
