@@ -35,14 +35,12 @@ export function SpawnAgentModal({ onClose, onSpawned }: SpawnAgentModalProps) {
       .catch(() => { /* callsigns are optional */ });
   }, []);
 
-  // Auto-select: active project, or the only project
+  // Auto-select: first project with beads, or the only project
   useEffect(() => {
     if (selectedProjectId) return;
-    const active = projects.find(p => p.active);
-    if (active) {
-      setSelectedProjectId(active.id);
-    } else if (projects.length === 1) {
-      setSelectedProjectId(projects[0].id);
+    const defaultProject = projects.find(p => p.hasBeads) ?? projects[0];
+    if (defaultProject) {
+      setSelectedProjectId(defaultProject.id);
     }
   }, [projects, selectedProjectId]);
 
@@ -191,7 +189,7 @@ function ProjectButton({ project, selected, onSelect }: {
       {project.gitRemote && (
         <span style={styles.projectRemote}>{project.gitRemote}</span>
       )}
-      {project.active && <span style={styles.activeBadge}>ACTIVE</span>}
+      {project.hasBeads && <span style={styles.activeBadge}>HAS BEADS</span>}
       {selected && <span style={styles.checkmark}>{'\u2713'}</span>}
     </button>
   );

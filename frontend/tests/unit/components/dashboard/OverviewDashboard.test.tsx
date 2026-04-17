@@ -13,12 +13,23 @@ vi.mock('../../../../src/hooks/useDashboardBeads', () => ({
   priorityLabel: vi.fn(() => 'MED'),
 }));
 
+// Mock the ProjectContext
+vi.mock('../../../../src/contexts/ProjectContext', () => ({
+  useProject: vi.fn(() => ({
+    selectedProject: { id: 'test', name: 'test', path: '/test', hasBeads: true },
+    projects: [],
+    loading: false,
+    selectProject: vi.fn(),
+    refresh: vi.fn(),
+  })),
+}));
+
 describe('DashboardView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (useOverview as ReturnType<typeof vi.fn>).mockReturnValue({
       data: {
-        projects: [{ id: 'test', name: 'test', path: '/test', active: true }],
+        projects: [{ id: 'test', name: 'test', path: '/test' }],
         beads: { open: [], inProgress: [], recentlyClosed: [] },
         epics: { inProgress: [], recentlyCompleted: [] },
         agents: [],

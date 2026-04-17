@@ -242,7 +242,6 @@ export interface ProjectInfo {
   gitRemote?: string;
   sessions: string[];
   createdAt: string;
-  active: boolean;
   hasBeads?: boolean;
 }
 

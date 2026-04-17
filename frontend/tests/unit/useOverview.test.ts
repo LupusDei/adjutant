@@ -19,7 +19,7 @@ const mockGet = vi.mocked(api.overview.get);
 
 const MOCK_OVERVIEW: GlobalOverview = {
   projects: [
-    { id: 'proj-1', name: 'Adjutant', path: '/code/adjutant', active: true },
+    { id: 'proj-1', name: 'Adjutant', path: '/code/adjutant' },
   ],
   beads: {
     open: [
