@@ -45,7 +45,7 @@ import {
   buildGraphNodes,
   filterGraphToEpicSubtree,
 } from "./beads-dependency.js";
-import { getActiveProjectName } from "../projects-service.js";
+import { refreshPrefixMap } from "./beads-prefix-map.js";
 
 // ============================================================================
 // Single Bead
@@ -93,22 +93,21 @@ export async function getBead(
       beadsDir: db.beadsDir,
     });
 
-    // Fallback: if bead not found in the prefix-resolved database, try the
-    // active project's database. This handles stale prefix maps and beads that
-    // live in a project not yet mapped. Avoids scanning ALL databases which
-    // causes 48-60s serial timeouts with many registered projects.
+    // Fallback: if bead not found in the prefix-resolved database, refresh the
+    // prefix map (handles newly registered projects) and retry once. We do NOT
+    // scan all databases — that causes 48-60s serial timeouts with the bd
+    // semaphore (maxConcurrency=1). See adj-117. (adj-162: removed active
+    // project fallback — prefix resolution is the single source of truth.)
     if ((!result.success || !result.data || result.data.length === 0) && !options?.project) {
-      const activeProjectDbs = await buildDatabaseList(getActiveProjectName());
-      for (const fallbackDb of activeProjectDbs) {
-        if (fallbackDb.workDir === db.workDir && fallbackDb.beadsDir === db.beadsDir) continue;
-
-        const fallbackResult = await execBd<BeadsIssue[]>(["show", beadId, "--json"], {
-          cwd: fallbackDb.workDir,
-          beadsDir: fallbackDb.beadsDir,
+      await refreshPrefixMap();
+      const retryDb = await resolveBeadDatabase(beadId);
+      if (!("error" in retryDb) && (retryDb.workDir !== db.workDir || retryDb.beadsDir !== db.beadsDir)) {
+        const retryResult = await execBd<BeadsIssue[]>(["show", beadId, "--json"], {
+          cwd: retryDb.workDir,
+          beadsDir: retryDb.beadsDir,
         });
-        if (fallbackResult.success && fallbackResult.data && fallbackResult.data.length > 0) {
-          result = fallbackResult;
-          break;
+        if (retryResult.success && retryResult.data && retryResult.data.length > 0) {
+          result = retryResult;
         }
       }
     }
@@ -334,7 +333,8 @@ const RECENT_CLOSED_LIMIT = 10;
 
 /**
  * Lists beads closed within a configurable time window.
- * Defaults to the active project's database. Pass "all" to scan all databases.
+ * Requires explicit project parameter. Pass "all" to scan all databases.
+ * (adj-162: no longer defaults to active project.)
  */
 export async function listRecentlyClosed(
   hours = 1,
@@ -343,7 +343,12 @@ export async function listRecentlyClosed(
   try {
     await ensurePrefixMap();
 
-    const databasesToQuery = await buildDatabaseList(project ?? getActiveProjectName());
+    // adj-162: require explicit project — no active-project fallback.
+    // Callers should pass the project from their request context.
+    if (!project) {
+      return { success: true, data: [] };
+    }
+    const databasesToQuery = await buildDatabaseList(project);
     const cutoffMs = Date.now() - hours * 3600 * 1000;
 
     const allClosed: RecentlyClosedBead[] = [];
@@ -404,7 +409,8 @@ export async function getBeadsGraph(
   try {
     await ensurePrefixMap();
 
-    const project = options.project?.trim() || getActiveProjectName();
+    // adj-162: require explicit project — no active-project fallback.
+    const project = options.project?.trim() || "all";
     const databasesToQuery = await buildDatabaseList(project);
 
     // Fetch from all databases sequentially

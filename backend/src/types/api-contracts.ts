@@ -100,7 +100,6 @@ export const ProjectSchema = z.object({
   id: z.string(),
   name: z.string(),
   path: z.string(),
-  active: z.boolean(),
   createdAt: z.string().optional(),
   hasBeads: z.boolean().optional(),
 });

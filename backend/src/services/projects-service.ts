@@ -2,7 +2,8 @@
  * Projects service for managing project registrations.
  *
  * Persists projects to SQLite (projects table).
- * Supports create (from path, clone URL, or empty), list, activate, and delete.
+ * Supports create (from path, clone URL, or empty), list, and delete.
+ * adj-162: Removed "active project" concept — all projects are always available.
  *
  * @module services/projects-service
  */
@@ -27,7 +28,6 @@ export interface Project {
   mode: "swarm";
   sessions: string[];
   createdAt: string;
-  active: boolean;
   /** Whether this project has a .beads/ directory */
   hasBeads?: boolean | undefined;
   /** Whether auto-develop mode is enabled for this project */
@@ -85,7 +85,7 @@ interface ProjectRow {
   git_remote: string | null;
   mode: string;
   created_at: string;
-  active: number;
+  active?: number; // adj-162: deprecated, will be dropped in migration
   auto_develop: number;
   auto_develop_paused_at: string | null;
   vision_context: string | null;
@@ -137,7 +137,6 @@ function rowToProject(row: ProjectRow): Project {
     mode: "swarm",
     sessions: [],
     createdAt: row.created_at,
-    active: row.active === 1,
     hasBeads: hasBeadsCached(row.path),
     autoDevelop: row.auto_develop === 1,
     autoDevelopPausedAt: row.auto_develop_paused_at ?? undefined,
@@ -285,9 +284,10 @@ export function discoverLocalProjects(options?: DiscoverOptions): ProjectsServic
     const existingPaths = new Set(existingRows.map((r) => r.path));
     const discovered: Project[] = [];
 
+    // adj-162: removed active column from INSERT — all projects are equal
     const insertProject = db.prepare(`
-      INSERT OR IGNORE INTO projects (id, name, path, git_remote, mode, created_at, active)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT OR IGNORE INTO projects (id, name, path, git_remote, mode, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
 
     // Register the project root itself if not already registered
@@ -297,26 +297,18 @@ export function discoverLocalProjects(options?: DiscoverOptions): ProjectsServic
       const gitRemote = detectGitRemote(projectRoot);
       const createdAt = new Date().toISOString();
 
-      insertProject.run(id, name, projectRoot, gitRemote ?? null, "swarm", createdAt, 1);
+      insertProject.run(id, name, projectRoot, gitRemote ?? null, "swarm", createdAt);
       existingPaths.add(projectRoot);
 
       const rootProject: Project = {
         id, name, path: projectRoot, gitRemote, mode: "swarm",
-        sessions: [], createdAt, active: true, hasBeads: hasBeadsDb(projectRoot),
+        sessions: [], createdAt, hasBeads: hasBeadsDb(projectRoot),
         autoDevelop: false,
       };
       discovered.push(rootProject);
       logInfo("discovered project root", { id, name, path: projectRoot, hasBeads: rootProject.hasBeads });
-    } else {
-      // Mark the existing root project as active (and deactivate others)
-      const existing = db.prepare("SELECT id, active FROM projects WHERE path = ?").get(projectRoot) as { id: string; active: number } | undefined;
-      if (existing?.active === 0) {
-        db.transaction(() => {
-          db.prepare("UPDATE projects SET active = 0").run();
-          db.prepare("UPDATE projects SET active = 1 WHERE path = ?").run(projectRoot);
-        })();
-      }
     }
+    // adj-162: removed "mark root project as active" logic — no active concept
 
     // Scan child directories for projects (git repos or beads repos)
     // maxDepth 0 = root only, no child scan
@@ -333,12 +325,12 @@ export function discoverLocalProjects(options?: DiscoverOptions): ProjectsServic
           const gitRemote = detectGitRemote(childPath);
           const createdAt = new Date().toISOString();
 
-          insertProject.run(id, name, childPath, gitRemote ?? null, "swarm", createdAt, 0);
+          insertProject.run(id, name, childPath, gitRemote ?? null, "swarm", createdAt);
           existingPaths.add(childPath);
 
           const project: Project = {
             id, name, path: childPath, gitRemote, mode: "swarm",
-            sessions: [], createdAt, active: false, hasBeads: hasBeadsDb(childPath),
+            sessions: [], createdAt, hasBeads: hasBeadsDb(childPath),
             autoDevelop: false,
           };
           discovered.push(project);
@@ -461,14 +453,13 @@ function createFromPath(dirPath: string, name?: string): ProjectsServiceResult<P
     mode: "swarm",
     sessions: [],
     createdAt: new Date().toISOString(),
-    active: false,
     autoDevelop: false,
   };
 
   db.prepare(`
-    INSERT INTO projects (id, name, path, git_remote, mode, created_at, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(project.id, project.name, project.path, project.gitRemote ?? null, "swarm", project.createdAt, 0);
+    INSERT INTO projects (id, name, path, git_remote, mode, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(project.id, project.name, project.path, project.gitRemote ?? null, "swarm", project.createdAt);
 
   logInfo("project created from path", { id: project.id, name: project.name, path: project.path });
   return { success: true, data: project };
@@ -508,14 +499,13 @@ function createFromClone(cloneUrl: string, name?: string, inputTargetDir?: strin
     mode: "swarm",
     sessions: [],
     createdAt: new Date().toISOString(),
-    active: false,
     autoDevelop: false,
   };
 
   db.prepare(`
-    INSERT INTO projects (id, name, path, git_remote, mode, created_at, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(project.id, project.name, project.path, project.gitRemote ?? null, "swarm", project.createdAt, 0);
+    INSERT INTO projects (id, name, path, git_remote, mode, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(project.id, project.name, project.path, project.gitRemote ?? null, "swarm", project.createdAt);
 
   logInfo("project created from clone", { id: project.id, name: project.name, cloneUrl });
   return { success: true, data: project };
@@ -549,60 +539,20 @@ function createEmpty(name: string): ProjectsServiceResult<Project> {
     mode: "swarm",
     sessions: [],
     createdAt: new Date().toISOString(),
-    active: false,
     autoDevelop: false,
   };
 
   db.prepare(`
-    INSERT INTO projects (id, name, path, git_remote, mode, created_at, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(project.id, project.name, project.path, null, "swarm", project.createdAt, 0);
+    INSERT INTO projects (id, name, path, git_remote, mode, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(project.id, project.name, project.path, null, "swarm", project.createdAt);
 
   logInfo("empty project created", { id: project.id, name: project.name, path: targetDir });
   return { success: true, data: project };
 }
 
-/**
- * Get the name of the currently active project.
- * Returns "town" if no project is active (safe default for bead queries).
- */
-export function getActiveProjectName(): string {
-  try {
-    const db = getDatabase();
-    const row = db.prepare("SELECT name FROM projects WHERE active = 1 LIMIT 1").get() as { name: string } | undefined;
-    return row?.name ?? "town";
-  } catch {
-    return "town";
-  }
-}
-
-/**
- * Activate a project (mark it as the current active project).
- * Deactivates any previously active project.
- */
-export function activateProject(id: string): ProjectsServiceResult<Project> {
-  try {
-    const db = getDatabase();
-    const row = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow | undefined;
-
-    if (!row) {
-      return { success: false, error: { code: "NOT_FOUND", message: `Project '${id}' not found` } };
-    }
-
-    // Deactivate all, activate target (transaction)
-    db.transaction(() => {
-      db.prepare("UPDATE projects SET active = 0").run();
-      db.prepare("UPDATE projects SET active = 1 WHERE id = ?").run(id);
-    })();
-
-    logInfo("project activated", { id: row.id, name: row.name });
-    return { success: true, data: rowToProject({ ...row, active: 1 }) };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to activate project";
-    logError("activateProject failed", { error: message });
-    return { success: false, error: { code: "INTERNAL_ERROR", message } };
-  }
-}
+// adj-162: getActiveProjectName() and activateProject() removed.
+// All projects are always available. Callers use explicit projectId params.
 
 /**
  * Delete a project registration. Does NOT delete files on disk.

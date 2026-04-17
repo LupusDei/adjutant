@@ -2,11 +2,14 @@
  * Overview route for the Adjutant API.
  *
  * Endpoints:
- * - GET /api/overview - Overview scoped to the active project
+ * - GET /api/overview - Overview scoped to a specific project (via projectId param)
+ *
+ * adj-162: Removed active-project concept. Requires explicit projectId param for
+ * beads/epics data. Without projectId, returns projects + agents + messages only.
  */
 
 import { Router } from "express";
-import { listProjects } from "../services/projects-service.js";
+import { listProjects, getProject } from "../services/projects-service.js";
 import {
   getProjectOverview,
   computeEpicProgress,
@@ -26,12 +29,14 @@ export function createOverviewRouter(store: MessageStore): Router {
 
   /**
    * GET /api/overview
-   * Overview scoped to the active project: beads, epics, agents, unread messages.
+   * Overview: projects, agents, unread messages, and optionally beads/epics.
    *
-   * Only queries beads from the active project (not all registered projects).
-   * This prevents serial bd timeouts when many projects are registered (adj-109).
+   * Query params:
+   * - projectId (optional): UUID of a specific project to scope beads/epics to.
+   *   Without projectId, beads and epics arrays are empty (to avoid serial bd
+   *   timeouts when many projects are registered — see adj-109).
    */
-  router.get("/", async (_req, res) => {
+  router.get("/", async (req, res) => {
     try {
       const projectsResult = listProjects();
 
@@ -43,9 +48,23 @@ export function createOverviewRouter(store: MessageStore): Router {
 
       const allProjects = projectsResult.data;
 
-      // Scope beads queries to the active project only (adj-109).
-      // Querying all registered projects causes serial bd timeouts.
-      const activeProject = allProjects.find((p) => p.active && p.hasBeads);
+      // adj-162: Accept explicit projectId param instead of using active-project flag.
+      // This lets each client (web tab, iOS app) request their own project's data.
+      const requestedProjectId = req.query["projectId"] as string | undefined;
+      let targetProject: typeof allProjects[number] | undefined;
+
+      if (requestedProjectId) {
+        // Try to find in the already-loaded list first (fast path)
+        targetProject = allProjects.find(p => p.id === requestedProjectId);
+
+        // If not found (could be missing hasBeads flag), look up directly
+        if (!targetProject) {
+          const lookup = getProject(requestedProjectId);
+          if (lookup.success && lookup.data) {
+            targetProject = lookup.data;
+          }
+        }
+      }
 
       let openBeads: BeadInfo[] = [];
       let inProgressBeads: BeadInfo[] = [];
@@ -53,11 +72,12 @@ export function createOverviewRouter(store: MessageStore): Router {
       let inProgressEpics: EpicProgress[] = [];
       let recentlyCompletedEpics: EpicProgress[] = [];
 
-      if (activeProject) {
+      // Only query beads/epics when a specific project is requested and has beads
+      if (targetProject?.hasBeads) {
         const [beadsResult, epicResult, recentEpicsResult] = await Promise.all([
-          getProjectOverview(activeProject.path),
-          computeEpicProgress(activeProject.path),
-          getRecentlyCompletedEpics(activeProject.path, 5),
+          getProjectOverview(targetProject.path),
+          computeEpicProgress(targetProject.path),
+          getRecentlyCompletedEpics(targetProject.path, 5),
         ]);
 
         if (beadsResult.success && beadsResult.data) {
@@ -109,7 +129,6 @@ export function createOverviewRouter(store: MessageStore): Router {
           id: p.id,
           name: p.name,
           path: p.path,
-          active: p.active,
         })),
         beads: {
           open: openBeads.slice(0, 50),

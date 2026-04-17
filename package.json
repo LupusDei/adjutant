@@ -1,6 +1,6 @@
 {
   "name": "adjutant",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Retro terminal dashboard for multi-agent orchestration with iOS companion app",
   "type": "module",
   "bin": {
