@@ -108,13 +108,41 @@ async function resolveFirstPane(tmuxSession: string): Promise<string> {
 // LifecycleManager
 // ============================================================================
 
+/** Interface for the subset of CronScheduleStore used by LifecycleManager. */
+interface CronScheduleCleanup {
+  disableByAgent(agentName: string): number;
+}
+
+/** Interface for the subset of StimulusEngine used by LifecycleManager. */
+interface StimulusEngineCleanup {
+  cancelWatchesByAgent(agentName: string): number;
+}
+
 export class LifecycleManager {
   private registry: SessionRegistry;
   private maxSessions: number;
+  private cronScheduleStore?: CronScheduleCleanup;
+  private stimulusEngine?: StimulusEngineCleanup;
 
   constructor(registry: SessionRegistry, maxSessions?: number) {
     this.registry = registry;
     this.maxSessions = maxSessions ?? MAX_SESSIONS;
+  }
+
+  /**
+   * Wire the CronScheduleStore for session death cleanup (adj-163).
+   * Optional — killSession degrades gracefully without it.
+   */
+  setCronScheduleStore(store: CronScheduleCleanup): void {
+    this.cronScheduleStore = store;
+  }
+
+  /**
+   * Wire the StimulusEngine for session death cleanup (adj-163).
+   * Optional — killSession degrades gracefully without it.
+   */
+  setStimulusEngine(engine: StimulusEngineCleanup): void {
+    this.stimulusEngine = engine;
   }
 
   /**
@@ -306,6 +334,20 @@ export class LifecycleManager {
           path: session.projectPath,
           error: String(err),
         });
+      }
+    }
+
+    // adj-163: Invalidate all schedules and watches for the dead agent
+    if (this.cronScheduleStore) {
+      const disabled = this.cronScheduleStore.disableByAgent(session.name);
+      if (disabled > 0) {
+        logInfo("Disabled schedules for dead agent", { agent: session.name, count: disabled });
+      }
+    }
+    if (this.stimulusEngine) {
+      const cancelled = this.stimulusEngine.cancelWatchesByAgent(session.name);
+      if (cancelled > 0) {
+        logInfo("Cancelled watches for dead agent", { agent: session.name, count: cancelled });
       }
     }
 

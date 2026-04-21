@@ -96,6 +96,8 @@ interface EventWatch {
   reason?: string;
   registeredAt: number;
   timeoutTimer?: ReturnType<typeof setTimeout>;
+  /** The agent that registered this watch (for cleanup on session death). */
+  callerAgent?: string;
 }
 
 // ============================================================================
@@ -204,6 +206,7 @@ export class StimulusEngine {
     filter?: Record<string, unknown>,
     timeoutMs?: number,
     reason?: string,
+    callerAgent?: string,
   ): string {
     const id = randomUUID();
     const now = Date.now();
@@ -216,6 +219,7 @@ export class StimulusEngine {
     if (filter !== undefined) watch.filter = filter;
     if (timeoutMs !== undefined) watch.timeoutMs = timeoutMs;
     if (reason !== undefined) watch.reason = reason;
+    if (callerAgent !== undefined) watch.callerAgent = callerAgent;
 
     if (timeoutMs != null) {
       watch.timeoutTimer = setTimeout(() => {
@@ -244,6 +248,25 @@ export class StimulusEngine {
       }
       this.eventWatches.delete(id);
     }
+  }
+
+  /**
+   * Cancel all event watches registered by a specific agent.
+   * Used during session death cleanup to invalidate watches for dead agents.
+   * Returns the number of cancelled watches.
+   */
+  cancelWatchesByAgent(agentName: string): number {
+    let cancelled = 0;
+    for (const [id, watch] of this.eventWatches) {
+      if (watch.callerAgent === agentName) {
+        if (watch.timeoutTimer) {
+          clearTimeout(watch.timeoutTimer);
+        }
+        this.eventWatches.delete(id);
+        cancelled++;
+      }
+    }
+    return cancelled;
   }
 
   /**
