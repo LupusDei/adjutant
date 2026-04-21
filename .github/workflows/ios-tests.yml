@@ -41,7 +41,7 @@ jobs:
     name: AdjutantKit Tests
     needs: check-version
     if: needs.check-version.outputs.changed == 'true'
-    runs-on: macos-16
+    runs-on: macos-15
     defaults:
       run:
         working-directory: ios/AdjutantKit
@@ -56,7 +56,7 @@ jobs:
     name: Adjutant App Tests
     needs: check-version
     if: needs.check-version.outputs.changed == 'true'
-    runs-on: macos-16
+    runs-on: macos-15
     defaults:
       run:
         working-directory: ios
