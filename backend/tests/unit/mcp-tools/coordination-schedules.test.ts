@@ -166,14 +166,18 @@ function createMockCronScheduleStore(): CronScheduleStore {
       enabled: true,
       maxFires: null,
       fireCount: 0,
+      targetAgent: "adjutant-coordinator",
+      targetTmuxSession: "adj-swarm-adjutant-coordinator",
     } satisfies CronSchedule),
     getById: vi.fn(),
     listAll: vi.fn().mockReturnValue([]),
+    listByAgent: vi.fn().mockReturnValue([]),
     listEnabled: vi.fn().mockReturnValue([]),
     update: vi.fn().mockReturnValue(true),
     delete: vi.fn().mockReturnValue(true),
     incrementFireCount: vi.fn().mockReturnValue(true),
     disable: vi.fn().mockReturnValue(true),
+    disableByAgent: vi.fn().mockReturnValue(0),
   } as unknown as CronScheduleStore;
 }
 
@@ -285,17 +289,37 @@ describe("MCP Coordination Schedule Tools", () => {
       expect(parsed.error).toBeDefined();
     });
 
-    it("should reject non-coordinator agents", async () => {
+    it("should allow non-coordinator agents (adj-163.4: self-scheduling)", async () => {
       mockGetAgentBySession.mockReturnValue("random-agent");
-      const handler = getToolHandler("create_schedule");
+      const stimulusEngine = createMockStimulusEngine();
+      const cronScheduleStore = createMockCronScheduleStore();
+      (cronScheduleStore.create as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "sched-random-1",
+        cronExpr: "*/15 * * * *",
+        reason: "Test",
+        createdBy: "random-agent",
+        createdAt: "2026-04-21T00:00:00Z",
+        lastFiredAt: null,
+        nextFireAt: "2026-04-21T00:15:00Z",
+        enabled: true,
+        maxFires: null,
+        fireCount: 0,
+        targetAgent: "random-agent",
+        targetTmuxSession: "adj-swarm-random-agent",
+      } satisfies CronSchedule);
+
+      const handler = getToolHandler("create_schedule", {
+        stimulusEngine,
+        cronScheduleStore,
+      });
 
       const result = await handler(
         { cron: "*/15 * * * *", reason: "Test" },
         { sessionId: "session-1" },
       );
 
-      const r = result as { isError: boolean };
-      expect(r.isError).toBe(true);
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(true);
     });
 
     it("should return error when stimulus engine is not available", async () => {
@@ -335,6 +359,8 @@ describe("MCP Coordination Schedule Tools", () => {
           enabled: true,
           maxFires: null,
           fireCount: 0,
+          targetAgent: "adjutant-coordinator",
+          targetTmuxSession: "adj-swarm-adjutant-coordinator",
         },
         {
           id: "sched-2",
@@ -347,6 +373,8 @@ describe("MCP Coordination Schedule Tools", () => {
           enabled: true,
           maxFires: 5,
           fireCount: 1,
+          targetAgent: "adjutant-coordinator",
+          targetTmuxSession: "adj-swarm-adjutant-coordinator",
         },
       ];
       (cronScheduleStore.listAll as ReturnType<typeof vi.fn>).mockReturnValue(schedules);
@@ -359,13 +387,16 @@ describe("MCP Coordination Schedule Tools", () => {
       expect(parsed.schedules).toEqual(schedules);
     });
 
-    it("should reject non-coordinator agents", async () => {
+    it("should allow non-coordinator agents with scoped results (adj-163.4)", async () => {
       mockGetAgentBySession.mockReturnValue("random-agent");
-      const handler = getToolHandler("list_schedules");
+      const cronScheduleStore = createMockCronScheduleStore();
+      const handler = getToolHandler("list_schedules", { cronScheduleStore });
 
       const result = await handler({}, { sessionId: "session-1" });
-      const r = result as { isError: boolean };
-      expect(r.isError).toBe(true);
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(true);
+      // Non-coordinator should use listByAgent, not listAll
+      expect(cronScheduleStore.listByAgent).toHaveBeenCalledWith("random-agent");
     });
   });
 
@@ -441,13 +472,20 @@ describe("MCP Coordination Schedule Tools", () => {
       expect(stimulusEngine.cancelRecurringSchedule).toHaveBeenCalledWith("sched-1");
     });
 
-    it("should reject non-coordinator agents", async () => {
+    it("should allow non-coordinator agents to pause own schedule (adj-163.4)", async () => {
       mockGetAgentBySession.mockReturnValue("random-agent");
-      const handler = getToolHandler("pause_schedule");
+      const cronScheduleStore = createMockCronScheduleStore();
+      (cronScheduleStore.getById as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "sched-1",
+        targetAgent: "random-agent",
+      });
+      const stimulusEngine = createMockStimulusEngine();
+
+      const handler = getToolHandler("pause_schedule", { cronScheduleStore, stimulusEngine });
 
       const result = await handler({ id: "sched-1" }, { sessionId: "session-1" });
-      const r = result as { isError: boolean };
-      expect(r.isError).toBe(true);
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(true);
     });
   });
 
@@ -471,6 +509,8 @@ describe("MCP Coordination Schedule Tools", () => {
         enabled: false,
         maxFires: null,
         fireCount: 0,
+        targetAgent: "adjutant-coordinator",
+        targetTmuxSession: "adj-swarm-adjutant-coordinator",
       };
       (cronScheduleStore.getById as ReturnType<typeof vi.fn>).mockReturnValue(existingSchedule);
 
@@ -511,6 +551,448 @@ describe("MCP Coordination Schedule Tools", () => {
       const parsed = parseResult(result);
       expect(parsed.success).toBe(false);
       expect(parsed.error).toContain("not found");
+    });
+  });
+
+  // ==========================================================================
+  // Phase 4: Agent-scoped access control (adj-163.4)
+  // ==========================================================================
+
+  describe("adj-163.4: self-scheduling — non-coordinator agents can use scheduling tools", () => {
+    it("should allow a non-coordinator agent to create a schedule for itself", async () => {
+      mockGetAgentBySession.mockReturnValue("nova");
+      const stimulusEngine = createMockStimulusEngine();
+      const cronScheduleStore = createMockCronScheduleStore();
+      (cronScheduleStore.create as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "sched-nova-1",
+        cronExpr: "*/30 * * * *",
+        reason: "Self health check",
+        createdBy: "nova",
+        createdAt: "2026-04-21T00:00:00Z",
+        lastFiredAt: null,
+        nextFireAt: "2026-04-21T00:30:00Z",
+        enabled: true,
+        maxFires: null,
+        fireCount: 0,
+        targetAgent: "nova",
+        targetTmuxSession: "adj-swarm-nova",
+      } satisfies CronSchedule);
+
+      const handler = getToolHandler("create_schedule", {
+        stimulusEngine,
+        cronScheduleStore,
+      });
+
+      const result = await handler(
+        { cron: "*/30 * * * *", reason: "Self health check" },
+        { sessionId: "session-nova" },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(true);
+      expect(parsed.id).toBe("sched-nova-1");
+
+      // Verify store.create was called with targetAgent = caller
+      expect(cronScheduleStore.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          createdBy: "nova",
+          targetAgent: "nova",
+          targetTmuxSession: "adj-swarm-nova",
+        }),
+      );
+    });
+
+    it("should default targetAgent to caller when not provided (backwards compat for coordinator)", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant-coordinator");
+      const stimulusEngine = createMockStimulusEngine();
+      const cronScheduleStore = createMockCronScheduleStore();
+
+      const handler = getToolHandler("create_schedule", {
+        stimulusEngine,
+        cronScheduleStore,
+      });
+
+      await handler(
+        { cron: "*/15 * * * *", reason: "Check agent health" },
+        { sessionId: "session-coord" },
+      );
+
+      // Should default targetAgent to the caller (coordinator)
+      expect(cronScheduleStore.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          createdBy: "adjutant-coordinator",
+          targetAgent: "adjutant-coordinator",
+          targetTmuxSession: "adj-swarm-adjutant-coordinator",
+        }),
+      );
+    });
+  });
+
+  describe("adj-163.4: targetAgent parameter on create_schedule", () => {
+    it("should allow coordinator to create a schedule targeting another agent", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant-coordinator");
+      const stimulusEngine = createMockStimulusEngine();
+      const cronScheduleStore = createMockCronScheduleStore();
+      (cronScheduleStore.create as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "sched-targeted-1",
+        cronExpr: "0 * * * *",
+        reason: "Hourly wake for nova",
+        createdBy: "adjutant-coordinator",
+        createdAt: "2026-04-21T00:00:00Z",
+        lastFiredAt: null,
+        nextFireAt: "2026-04-21T01:00:00Z",
+        enabled: true,
+        maxFires: null,
+        fireCount: 0,
+        targetAgent: "nova",
+        targetTmuxSession: "adj-swarm-nova",
+      } satisfies CronSchedule);
+
+      const handler = getToolHandler("create_schedule", {
+        stimulusEngine,
+        cronScheduleStore,
+      });
+
+      const result = await handler(
+        { cron: "0 * * * *", reason: "Hourly wake for nova", targetAgent: "nova" },
+        { sessionId: "session-coord" },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(true);
+
+      expect(cronScheduleStore.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetAgent: "nova",
+          targetTmuxSession: "adj-swarm-nova",
+        }),
+      );
+    });
+
+    it("should reject non-coordinator agent trying to target another agent", async () => {
+      mockGetAgentBySession.mockReturnValue("nova");
+      const stimulusEngine = createMockStimulusEngine();
+      const cronScheduleStore = createMockCronScheduleStore();
+
+      const handler = getToolHandler("create_schedule", {
+        stimulusEngine,
+        cronScheduleStore,
+      });
+
+      const result = await handler(
+        { cron: "*/30 * * * *", reason: "Poke raynor", targetAgent: "raynor" },
+        { sessionId: "session-nova" },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(false);
+      expect(parsed.error).toContain("only create schedules for yourself");
+    });
+
+    it("should allow non-coordinator agent to explicitly target itself", async () => {
+      mockGetAgentBySession.mockReturnValue("nova");
+      const stimulusEngine = createMockStimulusEngine();
+      const cronScheduleStore = createMockCronScheduleStore();
+      (cronScheduleStore.create as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "sched-self-1",
+        cronExpr: "*/30 * * * *",
+        reason: "Self-reminder",
+        createdBy: "nova",
+        createdAt: "2026-04-21T00:00:00Z",
+        lastFiredAt: null,
+        nextFireAt: "2026-04-21T00:30:00Z",
+        enabled: true,
+        maxFires: null,
+        fireCount: 0,
+        targetAgent: "nova",
+        targetTmuxSession: "adj-swarm-nova",
+      } satisfies CronSchedule);
+
+      const handler = getToolHandler("create_schedule", {
+        stimulusEngine,
+        cronScheduleStore,
+      });
+
+      const result = await handler(
+        { cron: "*/30 * * * *", reason: "Self-reminder", targetAgent: "nova" },
+        { sessionId: "session-nova" },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(true);
+    });
+  });
+
+  describe("adj-163.4: ownership filtering on list_schedules", () => {
+    const allSchedules: CronSchedule[] = [
+      {
+        id: "sched-coord-1",
+        cronExpr: "*/15 * * * *",
+        reason: "Coordinator schedule",
+        createdBy: "adjutant-coordinator",
+        createdAt: "2026-04-21T00:00:00Z",
+        lastFiredAt: null,
+        nextFireAt: "2026-04-21T00:15:00Z",
+        enabled: true,
+        maxFires: null,
+        fireCount: 0,
+        targetAgent: "adjutant-coordinator",
+        targetTmuxSession: "adj-swarm-adjutant-coordinator",
+      },
+      {
+        id: "sched-nova-1",
+        cronExpr: "*/30 * * * *",
+        reason: "Nova schedule",
+        createdBy: "nova",
+        createdAt: "2026-04-21T00:00:00Z",
+        lastFiredAt: null,
+        nextFireAt: "2026-04-21T00:30:00Z",
+        enabled: true,
+        maxFires: null,
+        fireCount: 0,
+        targetAgent: "nova",
+        targetTmuxSession: "adj-swarm-nova",
+      },
+    ];
+
+    it("should return all schedules when called by coordinator", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant-coordinator");
+      const cronScheduleStore = createMockCronScheduleStore();
+      (cronScheduleStore.listAll as ReturnType<typeof vi.fn>).mockReturnValue(allSchedules);
+
+      const handler = getToolHandler("list_schedules", { cronScheduleStore });
+      const result = await handler({}, { sessionId: "session-coord" });
+
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(true);
+      expect(parsed.schedules).toEqual(allSchedules);
+      expect(cronScheduleStore.listAll).toHaveBeenCalled();
+    });
+
+    it("should return only own schedules when called by non-coordinator agent", async () => {
+      mockGetAgentBySession.mockReturnValue("nova");
+      const cronScheduleStore = createMockCronScheduleStore();
+      const novaSchedules = [allSchedules[1]];
+      (cronScheduleStore.listByAgent as ReturnType<typeof vi.fn>).mockReturnValue(novaSchedules);
+
+      const handler = getToolHandler("list_schedules", { cronScheduleStore });
+      const result = await handler({}, { sessionId: "session-nova" });
+
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(true);
+      expect(parsed.schedules).toEqual(novaSchedules);
+      expect(cronScheduleStore.listByAgent).toHaveBeenCalledWith("nova");
+    });
+  });
+
+  describe("adj-163.4: ownership enforcement on cancel_schedule", () => {
+    it("should allow an agent to cancel its own schedule", async () => {
+      mockGetAgentBySession.mockReturnValue("nova");
+      const stimulusEngine = createMockStimulusEngine();
+      const cronScheduleStore = createMockCronScheduleStore();
+      (cronScheduleStore.getById as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "sched-nova-1",
+        cronExpr: "*/30 * * * *",
+        reason: "Nova schedule",
+        createdBy: "nova",
+        createdAt: "2026-04-21T00:00:00Z",
+        lastFiredAt: null,
+        nextFireAt: "2026-04-21T00:30:00Z",
+        enabled: true,
+        maxFires: null,
+        fireCount: 0,
+        targetAgent: "nova",
+        targetTmuxSession: "adj-swarm-nova",
+      } satisfies CronSchedule);
+
+      const handler = getToolHandler("cancel_schedule", {
+        stimulusEngine,
+        cronScheduleStore,
+      });
+
+      const result = await handler(
+        { id: "sched-nova-1" },
+        { sessionId: "session-nova" },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(true);
+      expect(cronScheduleStore.delete).toHaveBeenCalledWith("sched-nova-1");
+    });
+
+    it("should reject a non-coordinator agent canceling another agent's schedule", async () => {
+      mockGetAgentBySession.mockReturnValue("nova");
+      const cronScheduleStore = createMockCronScheduleStore();
+      (cronScheduleStore.getById as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "sched-raynor-1",
+        cronExpr: "*/15 * * * *",
+        reason: "Raynor schedule",
+        createdBy: "raynor",
+        createdAt: "2026-04-21T00:00:00Z",
+        lastFiredAt: null,
+        nextFireAt: "2026-04-21T00:15:00Z",
+        enabled: true,
+        maxFires: null,
+        fireCount: 0,
+        targetAgent: "raynor",
+        targetTmuxSession: "adj-swarm-raynor",
+      } satisfies CronSchedule);
+
+      const handler = getToolHandler("cancel_schedule", { cronScheduleStore });
+
+      const result = await handler(
+        { id: "sched-raynor-1" },
+        { sessionId: "session-nova" },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(false);
+      expect(parsed.error).toContain("Access denied");
+    });
+
+    it("should allow coordinator to cancel any agent's schedule", async () => {
+      mockGetAgentBySession.mockReturnValue("adjutant-coordinator");
+      const stimulusEngine = createMockStimulusEngine();
+      const cronScheduleStore = createMockCronScheduleStore();
+      (cronScheduleStore.getById as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "sched-nova-1",
+        cronExpr: "*/30 * * * *",
+        reason: "Nova schedule",
+        createdBy: "nova",
+        createdAt: "2026-04-21T00:00:00Z",
+        lastFiredAt: null,
+        nextFireAt: "2026-04-21T00:30:00Z",
+        enabled: true,
+        maxFires: null,
+        fireCount: 0,
+        targetAgent: "nova",
+        targetTmuxSession: "adj-swarm-nova",
+      } satisfies CronSchedule);
+
+      const handler = getToolHandler("cancel_schedule", {
+        stimulusEngine,
+        cronScheduleStore,
+      });
+
+      const result = await handler(
+        { id: "sched-nova-1" },
+        { sessionId: "session-coord" },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(true);
+    });
+  });
+
+  describe("adj-163.4: ownership enforcement on pause_schedule", () => {
+    it("should allow an agent to pause its own schedule", async () => {
+      mockGetAgentBySession.mockReturnValue("nova");
+      const stimulusEngine = createMockStimulusEngine();
+      const cronScheduleStore = createMockCronScheduleStore();
+      (cronScheduleStore.getById as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "sched-nova-1",
+        targetAgent: "nova",
+      });
+
+      const handler = getToolHandler("pause_schedule", {
+        stimulusEngine,
+        cronScheduleStore,
+      });
+
+      const result = await handler(
+        { id: "sched-nova-1" },
+        { sessionId: "session-nova" },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(true);
+      expect(cronScheduleStore.disable).toHaveBeenCalledWith("sched-nova-1");
+    });
+
+    it("should reject a non-coordinator agent pausing another agent's schedule", async () => {
+      mockGetAgentBySession.mockReturnValue("nova");
+      const cronScheduleStore = createMockCronScheduleStore();
+      (cronScheduleStore.getById as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "sched-raynor-1",
+        targetAgent: "raynor",
+      });
+
+      const handler = getToolHandler("pause_schedule", { cronScheduleStore });
+
+      const result = await handler(
+        { id: "sched-raynor-1" },
+        { sessionId: "session-nova" },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(false);
+      expect(parsed.error).toContain("Access denied");
+    });
+  });
+
+  describe("adj-163.4: ownership enforcement on resume_schedule", () => {
+    it("should allow an agent to resume its own schedule", async () => {
+      mockGetAgentBySession.mockReturnValue("nova");
+      const stimulusEngine = createMockStimulusEngine();
+      const cronScheduleStore = createMockCronScheduleStore();
+      (cronScheduleStore.getById as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "sched-nova-1",
+        cronExpr: "*/30 * * * *",
+        reason: "Nova schedule",
+        createdBy: "nova",
+        createdAt: "2026-04-21T00:00:00Z",
+        lastFiredAt: null,
+        nextFireAt: "2026-04-21T00:30:00Z",
+        enabled: false,
+        maxFires: null,
+        fireCount: 0,
+        targetAgent: "nova",
+        targetTmuxSession: "adj-swarm-nova",
+      } satisfies CronSchedule);
+
+      const handler = getToolHandler("resume_schedule", {
+        stimulusEngine,
+        cronScheduleStore,
+      });
+
+      const result = await handler(
+        { id: "sched-nova-1" },
+        { sessionId: "session-nova" },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(true);
+      expect(parsed.enabled).toBe(true);
+    });
+
+    it("should reject a non-coordinator agent resuming another agent's schedule", async () => {
+      mockGetAgentBySession.mockReturnValue("nova");
+      const cronScheduleStore = createMockCronScheduleStore();
+      (cronScheduleStore.getById as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "sched-raynor-1",
+        cronExpr: "*/15 * * * *",
+        reason: "Raynor schedule",
+        createdBy: "raynor",
+        createdAt: "2026-04-21T00:00:00Z",
+        lastFiredAt: null,
+        nextFireAt: "2026-04-21T00:15:00Z",
+        enabled: false,
+        maxFires: null,
+        fireCount: 0,
+        targetAgent: "raynor",
+        targetTmuxSession: "adj-swarm-raynor",
+      } satisfies CronSchedule);
+
+      const handler = getToolHandler("resume_schedule", { cronScheduleStore });
+
+      const result = await handler(
+        { id: "sched-raynor-1" },
+        { sessionId: "session-nova" },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(false);
+      expect(parsed.error).toContain("Access denied");
     });
   });
 });
