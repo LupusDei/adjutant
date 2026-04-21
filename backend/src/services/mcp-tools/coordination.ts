@@ -69,6 +69,24 @@ function resolveCallerOrError(sessionId: string | undefined): { agentId: string;
   return { agentId };
 }
 
+/**
+ * Resolve any MCP-connected agent (not restricted to coordinator).
+ * Used by scheduling tools to allow self-scheduling by any agent.
+ * Returns the agentId on success, or null if session is unknown.
+ */
+function resolveCallerAgent(sessionId: string | undefined): string | null {
+  if (!sessionId) return null;
+  return getAgentBySession(sessionId) ?? null;
+}
+
+/**
+ * Check whether the calling agent is the coordinator (or adjutant).
+ * Used for ownership checks where coordinator has admin privileges.
+ */
+function isCoordinator(agentId: string): boolean {
+  return ALLOWED_AGENTS.has(agentId);
+}
+
 function unknownSessionResult() {
   return {
     content: [{ type: "text" as const, text: "Unknown agent: session not found" }],
@@ -622,17 +640,30 @@ export function registerCoordinationTools(
   // --------------------------------------------------------------------------
   server.tool(
     "create_schedule",
-    "Create a persistent recurring schedule that survives restarts",
+    "Create a persistent recurring schedule that survives restarts. Any MCP agent can self-schedule.",
     {
       cron: z.string().describe('5-field cron expression, e.g. "*/15 * * * *"'),
       reason: z.string().describe("Why this schedule exists"),
       maxFires: z.number().optional().describe("Maximum fires before auto-disable (null = unlimited)"),
+      targetAgent: z.string().optional().describe(
+        "Agent to receive the scheduled prompt. Defaults to the calling agent (self-scheduling). " +
+        "Only the coordinator can target other agents.",
+      ),
     },
-    async ({ cron, reason, maxFires }, extra) => {
-      const callerAgentId = checkAccess(extra.sessionId);
+    async ({ cron, reason, maxFires, targetAgent }, extra) => {
+      // adj-163.4: Any MCP agent can call scheduling tools (not just coordinator)
+      const callerAgentId = resolveCallerAgent(extra.sessionId);
       if (!callerAgentId) {
-        const resolved = resolveCallerOrError(extra.sessionId);
-        return resolved.error!;
+        return unknownSessionResult();
+      }
+
+      // adj-163.4.3: targetAgent access control
+      const resolvedTargetAgent = targetAgent ?? callerAgentId;
+      if (resolvedTargetAgent !== callerAgentId && !isCoordinator(callerAgentId)) {
+        return jsonResult({
+          success: false,
+          error: "Can only create schedules for yourself",
+        });
       }
 
       if (!stimulusEngine) {
@@ -654,17 +685,22 @@ export function registerCoordinationTools(
       }
 
       const nextFireAt = computeNextFireAt(cron);
+      const resolvedTmuxSession = `adj-swarm-${resolvedTargetAgent}`;
       const createParams: {
         cronExpr: string;
         reason: string;
         createdBy: string;
         nextFireAt: string;
         maxFires?: number;
+        targetAgent: string;
+        targetTmuxSession: string;
       } = {
         cronExpr: cron,
         reason,
         createdBy: callerAgentId,
         nextFireAt,
+        targetAgent: resolvedTargetAgent,
+        targetTmuxSession: resolvedTmuxSession,
       };
       if (maxFires !== undefined) {
         createParams.maxFires = maxFires;
@@ -682,7 +718,7 @@ export function registerCoordinationTools(
       state.logDecision(decision);
       emitCoordinatorAction(eventStore, callerAgentId, decision);
 
-      logInfo("create_schedule: schedule created", { id: schedule.id, cron, reason });
+      logInfo("create_schedule: schedule created", { id: schedule.id, cron, reason, targetAgent: resolvedTargetAgent });
 
       return jsonResult({
         success: true,
@@ -698,20 +734,23 @@ export function registerCoordinationTools(
   // --------------------------------------------------------------------------
   server.tool(
     "list_schedules",
-    "List all recurring schedules",
+    "List recurring schedules. Coordinator sees all; other agents see only their own.",
     {},
     async (_params, extra) => {
-      const callerAgentId = checkAccess(extra.sessionId);
+      // adj-163.4: Any MCP agent can list schedules (filtered by ownership)
+      const callerAgentId = resolveCallerAgent(extra.sessionId);
       if (!callerAgentId) {
-        const resolved = resolveCallerOrError(extra.sessionId);
-        return resolved.error!;
+        return unknownSessionResult();
       }
 
       if (!cronScheduleStore) {
         return jsonResult({ success: true, schedules: [] });
       }
 
-      const schedules = cronScheduleStore.listAll();
+      // adj-163.4.2: Coordinator sees all, others see only their own
+      const schedules = isCoordinator(callerAgentId)
+        ? cronScheduleStore.listAll()
+        : cronScheduleStore.listByAgent(callerAgentId);
       return jsonResult({ success: true, schedules });
     },
   );
@@ -721,19 +760,30 @@ export function registerCoordinationTools(
   // --------------------------------------------------------------------------
   server.tool(
     "cancel_schedule",
-    "Cancel and delete a recurring schedule",
+    "Cancel and delete a recurring schedule. Agents can only cancel their own schedules.",
     {
       id: z.string().describe("Schedule ID to cancel"),
     },
     async ({ id }, extra) => {
-      const callerAgentId = checkAccess(extra.sessionId);
+      // adj-163.4: Any MCP agent can call scheduling tools
+      const callerAgentId = resolveCallerAgent(extra.sessionId);
       if (!callerAgentId) {
-        const resolved = resolveCallerOrError(extra.sessionId);
-        return resolved.error!;
+        return unknownSessionResult();
       }
 
       if (!cronScheduleStore) {
         return jsonResult({ success: false, error: "Cron schedule store not available" });
+      }
+
+      // adj-163.4.2: Ownership check — non-coordinators can only cancel own schedules
+      if (!isCoordinator(callerAgentId)) {
+        const schedule = cronScheduleStore.getById(id);
+        if (!schedule) {
+          return jsonResult({ success: false, error: `Schedule not found: ${id}` });
+        }
+        if (schedule.targetAgent !== callerAgentId) {
+          return jsonResult({ success: false, error: `Access denied: cannot cancel another agent's schedule` });
+        }
       }
 
       const deleted = cronScheduleStore.delete(id);
@@ -765,19 +815,30 @@ export function registerCoordinationTools(
   // --------------------------------------------------------------------------
   server.tool(
     "pause_schedule",
-    "Pause a recurring schedule (can be resumed later)",
+    "Pause a recurring schedule (can be resumed later). Agents can only pause their own.",
     {
       id: z.string().describe("Schedule ID to pause"),
     },
     async ({ id }, extra) => {
-      const callerAgentId = checkAccess(extra.sessionId);
+      // adj-163.4: Any MCP agent can call scheduling tools
+      const callerAgentId = resolveCallerAgent(extra.sessionId);
       if (!callerAgentId) {
-        const resolved = resolveCallerOrError(extra.sessionId);
-        return resolved.error!;
+        return unknownSessionResult();
       }
 
       if (!cronScheduleStore) {
         return jsonResult({ success: false, error: "Cron schedule store not available" });
+      }
+
+      // adj-163.4.2: Ownership check — non-coordinators can only pause own schedules
+      if (!isCoordinator(callerAgentId)) {
+        const schedule = cronScheduleStore.getById(id);
+        if (!schedule) {
+          return jsonResult({ success: false, error: `Schedule not found: ${id}` });
+        }
+        if (schedule.targetAgent !== callerAgentId) {
+          return jsonResult({ success: false, error: `Access denied: cannot pause another agent's schedule` });
+        }
       }
 
       cronScheduleStore.disable(id);
@@ -806,15 +867,15 @@ export function registerCoordinationTools(
   // --------------------------------------------------------------------------
   server.tool(
     "resume_schedule",
-    "Resume a paused recurring schedule",
+    "Resume a paused recurring schedule. Agents can only resume their own.",
     {
       id: z.string().describe("Schedule ID to resume"),
     },
     async ({ id }, extra) => {
-      const callerAgentId = checkAccess(extra.sessionId);
+      // adj-163.4: Any MCP agent can call scheduling tools
+      const callerAgentId = resolveCallerAgent(extra.sessionId);
       if (!callerAgentId) {
-        const resolved = resolveCallerOrError(extra.sessionId);
-        return resolved.error!;
+        return unknownSessionResult();
       }
 
       if (!cronScheduleStore) {
@@ -824,6 +885,11 @@ export function registerCoordinationTools(
       const schedule = cronScheduleStore.getById(id);
       if (!schedule) {
         return jsonResult({ success: false, error: `Schedule not found: ${id}` });
+      }
+
+      // adj-163.4.2: Ownership check — non-coordinators can only resume own schedules
+      if (!isCoordinator(callerAgentId) && schedule.targetAgent !== callerAgentId) {
+        return jsonResult({ success: false, error: `Access denied: cannot resume another agent's schedule` });
       }
 
       const nextFireAt = computeNextFireAt(schedule.cronExpr);
