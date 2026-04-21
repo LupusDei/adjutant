@@ -314,7 +314,13 @@ const server = app.listen(PORT, () => {
   // init() loads persisted sessions, verifies tmux state, and auto-creates
   // a Claude Code session if none are alive for the project root.
   // spawnAdjutant is called AFTER setToolRegistrar to prevent race condition.
-  getSessionBridge()
+  const bridge = getSessionBridge();
+
+  // adj-163: Wire cleanup dependencies so session death invalidates schedules/watches
+  bridge.lifecycle.setCronScheduleStore(cronScheduleStore);
+  bridge.lifecycle.setStimulusEngine(stimulusEngine);
+
+  bridge
     .init()
     .then(() => spawnAdjutant(projectRoot))
     .catch((err) => {
