@@ -34,6 +34,12 @@ export interface WakeReason {
   watchEvent?: EventName;
   /** The event data that matched (for type "watch") */
   watchData?: unknown;
+  /** adj-163.2: Target agent for wake routing (from CronSchedule.targetAgent) */
+  targetAgent?: string;
+  /** adj-163.2: Target tmux session for wake routing (from CronSchedule.targetTmuxSession) */
+  targetTmuxSession?: string;
+  /** adj-163.2: Schedule ID for auto-disable on delivery failure */
+  scheduleId?: string;
 }
 
 export type WakeCallback = (reason: WakeReason) => void;
@@ -392,11 +398,20 @@ export class StimulusEngine {
       this.recurringTimers.delete(schedule.id);
 
       try {
-        // Fire the wake
+        // Fire the wake — adj-163.2: propagate agent routing fields from schedule
+        // targetAgent and targetTmuxSession come from Phase 1 (adj-163.1) columns.
+        // Access via runtime property read to stay compatible before/after Phase 1 lands.
+        // Safe cast: CronSchedule may have extra fields from Phase 1 DB migration.
+        const scheduleAny = schedule as unknown as Record<string, unknown>;
+        const targetAgent = typeof scheduleAny["targetAgent"] === "string" ? scheduleAny["targetAgent"] : undefined;
+        const targetTmuxSession = typeof scheduleAny["targetTmuxSession"] === "string" ? scheduleAny["targetTmuxSession"] : undefined;
         const wakeReason: WakeReason = {
           type: "recurring",
           reason: schedule.reason,
+          scheduleId: schedule.id,
         };
+        if (targetAgent !== undefined) wakeReason.targetAgent = targetAgent;
+        if (targetTmuxSession !== undefined) wakeReason.targetTmuxSession = targetTmuxSession;
         this.wake(wakeReason);
 
         // Increment fire count in the store — compute next from lastFiredAt to avoid drift

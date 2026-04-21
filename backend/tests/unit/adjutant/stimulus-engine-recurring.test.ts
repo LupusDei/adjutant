@@ -134,6 +134,43 @@ describe("StimulusEngine — recurring schedules", () => {
       expect(store.incrementFireCount).toHaveBeenCalled();
     });
 
+    // adj-163.2.1: targetAgent propagation from schedule to WakeReason
+    it("should pass targetAgent from schedule to WakeReason when present", () => {
+      const schedule = makeSchedule({
+        nextFireAt: new Date(Date.now() + 1000).toISOString(),
+        // These fields come from Phase 1 (adj-163.1) — cast needed until Phase 1 lands
+        ...(({ targetAgent: "nova", targetTmuxSession: "tmux-nova-123" }) as Record<string, string>),
+      });
+      const store = makeMockStore([schedule]);
+
+      engine.loadRecurringSchedules(store);
+      vi.advanceTimersByTime(1000);
+
+      expect(wakeSpy).toHaveBeenCalledOnce();
+      const reason: WakeReason = wakeSpy.mock.calls[0]![0];
+      expect(reason.type).toBe("recurring");
+      expect(reason.targetAgent).toBe("nova");
+      expect(reason.targetTmuxSession).toBe("tmux-nova-123");
+      expect(reason.scheduleId).toBe("sched-1");
+    });
+
+    it("should leave targetAgent undefined when schedule has no targetAgent", () => {
+      const schedule = makeSchedule({
+        nextFireAt: new Date(Date.now() + 1000).toISOString(),
+      });
+      const store = makeMockStore([schedule]);
+
+      engine.loadRecurringSchedules(store);
+      vi.advanceTimersByTime(1000);
+
+      expect(wakeSpy).toHaveBeenCalledOnce();
+      const reason: WakeReason = wakeSpy.mock.calls[0]![0];
+      expect(reason.targetAgent).toBeUndefined();
+      expect(reason.targetTmuxSession).toBeUndefined();
+      // scheduleId should always be present for recurring schedules
+      expect(reason.scheduleId).toBe("sched-1");
+    });
+
     it("should re-register timer after firing when maxFires not reached", () => {
       const schedule = makeSchedule({
         nextFireAt: new Date(Date.now() + 1000).toISOString(),
