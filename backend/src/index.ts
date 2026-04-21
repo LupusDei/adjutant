@@ -48,6 +48,7 @@ import { createAutoDevelopStore } from "./services/auto-develop-store.js";
 import { createMemoryStore } from "./services/adjutant/memory-store.js";
 import { SignalAggregator } from "./services/adjutant/signal-aggregator.js";
 import { StimulusEngine, buildSituationPrompt, buildBootstrapPrompt, type StateSnapshot, type DeltaItem } from "./services/adjutant/stimulus-engine.js";
+import { handleWakeRouting } from "./services/adjutant/wake-routing.js";
 import { getEventBus } from "./services/event-bus.js";
 
 import { ADJUTANT_TMUX_SESSION } from "./services/adjutant-spawner.js";
@@ -335,104 +336,106 @@ const server = app.listen(PORT, () => {
     stimulusEngine.triggerWatch(event, data);
   });
 
-  // Stimulus engine wake callback — inject prompt into adjutant tmux session
+  // Stimulus engine wake callback — adj-163.2: route to correct agent session
   stimulusEngine.onWake((reason) => {
     const bridge = getSessionBridge();
-    const session = bridge.registry.findByTmuxSession(ADJUTANT_TMUX_SESSION);
-    if (!session) {
-      logInfo("StimulusEngine: wake skipped — no adjutant session", { reason: reason.type });
-      return;
-    }
 
-    // Build state snapshot from adjutant state
-    const profiles = adjutantState.getAllAgentProfiles();
-    const stateSnapshot: StateSnapshot = {
-      activeAgents: profiles.filter(p => p.disconnectedAt === null).length,
-      workingAgents: profiles.filter(p => p.lastStatus === "working").length,
-      blockedAgents: profiles.filter(p => p.lastStatus === "blocked").length,
-      idleAgents: profiles.filter(p => p.lastStatus === "idle").length,
-      inProgressBeads: 0, // Will be populated by the adjutant via list_beads
-      readyBeads: 0,      // Will be populated by the adjutant via list_beads
-    };
+    void handleWakeRouting(reason, {
+      coordinatorTmuxSession: ADJUTANT_TMUX_SESSION,
 
-    // Compute delta since last nudge
-    const lastNudgeAt = stimulusEngine.getLastNudgeAt();
-    const delta: DeltaItem[] = [];
-    if (lastNudgeAt) {
-      const recentEvents = eventStore.getEvents({ after: lastNudgeAt, limit: 20 });
-      for (const evt of recentEvents) {
-        const detail = evt.detail;
-        switch (evt.eventType) {
-          case "status_change":
-            delta.push({
-              category: "agent",
-              summary: `${evt.agentId}: ${String(detail?.["previousStatus"] ?? "?")} → ${String(detail?.["status"] ?? "?")}`,
-              timestamp: evt.createdAt,
-            });
-            break;
-          case "announcement":
-            delta.push({
-              category: "announcement",
-              summary: `${evt.agentId}: ${evt.action}`,
-              timestamp: evt.createdAt,
-            });
-            break;
-          case "auto_develop_phase_changed":
-            delta.push({
-              category: "phase",
-              summary: `${String(detail?.["previousPhase"] ?? "?")} → ${String(detail?.["newPhase"] ?? "?")}`,
-              timestamp: evt.createdAt,
-            });
-            break;
-          case "bead_updated":
-          case "bead_closed":
-            delta.push({
-              category: "bead",
-              summary: evt.action,
-              timestamp: evt.createdAt,
-            });
-            break;
-          case "proposal_completed":
-            delta.push({
-              category: "proposal",
-              summary: `Proposal completed: ${String(detail?.["proposalId"] ?? "?")}`,
-              timestamp: evt.createdAt,
-            });
-            break;
-          default:
-            delta.push({
-              category: evt.eventType.replace(/_/g, " "),
-              summary: evt.action,
-              timestamp: evt.createdAt,
-            });
+      findByTmuxSession: (tmux) => bridge.registry.findByTmuxSession(tmux),
+
+      sendInput: (sessionId, text) => bridge.sendInput(sessionId, text),
+
+      disableSchedule: (scheduleId) => {
+        cronScheduleStore.disable(scheduleId);
+      },
+
+      // Build the full coordinator situation prompt (unchanged from pre-adj-163.2)
+      buildCoordinatorPrompt: (wakeReason) => {
+        const profiles = adjutantState.getAllAgentProfiles();
+        const stateSnapshot: StateSnapshot = {
+          activeAgents: profiles.filter(p => p.disconnectedAt === null).length,
+          workingAgents: profiles.filter(p => p.lastStatus === "working").length,
+          blockedAgents: profiles.filter(p => p.lastStatus === "blocked").length,
+          idleAgents: profiles.filter(p => p.lastStatus === "idle").length,
+          inProgressBeads: 0, // Will be populated by the adjutant via list_beads
+          readyBeads: 0,      // Will be populated by the adjutant via list_beads
+        };
+
+        const lastNudgeAt = stimulusEngine.getLastNudgeAt();
+        const delta: DeltaItem[] = [];
+        if (lastNudgeAt) {
+          const recentEvents = eventStore.getEvents({ after: lastNudgeAt, limit: 20 });
+          for (const evt of recentEvents) {
+            const detail = evt.detail;
+            switch (evt.eventType) {
+              case "status_change":
+                delta.push({
+                  category: "agent",
+                  summary: `${evt.agentId}: ${String(detail?.["previousStatus"] ?? "?")} → ${String(detail?.["status"] ?? "?")}`,
+                  timestamp: evt.createdAt,
+                });
+                break;
+              case "announcement":
+                delta.push({
+                  category: "announcement",
+                  summary: `${evt.agentId}: ${evt.action}`,
+                  timestamp: evt.createdAt,
+                });
+                break;
+              case "auto_develop_phase_changed":
+                delta.push({
+                  category: "phase",
+                  summary: `${String(detail?.["previousPhase"] ?? "?")} → ${String(detail?.["newPhase"] ?? "?")}`,
+                  timestamp: evt.createdAt,
+                });
+                break;
+              case "bead_updated":
+              case "bead_closed":
+                delta.push({
+                  category: "bead",
+                  summary: evt.action,
+                  timestamp: evt.createdAt,
+                });
+                break;
+              case "proposal_completed":
+                delta.push({
+                  category: "proposal",
+                  summary: `Proposal completed: ${String(detail?.["proposalId"] ?? "?")}`,
+                  timestamp: evt.createdAt,
+                });
+                break;
+              default:
+                delta.push({
+                  category: evt.eventType.replace(/_/g, " "),
+                  summary: evt.action,
+                  timestamp: evt.createdAt,
+                });
+            }
+          }
         }
-      }
-    }
 
-    const prompt = buildSituationPrompt({
-      wakeReason: reason.reason ?? reason.type,
-      signals: reason.signal ? [reason.signal] : [],
-      contextSnapshot: signalAggregator.drain(),
-      stateSnapshot,
-      pendingSchedule: stimulusEngine.getPendingSchedule(),
-      recentDecisions: adjutantState.getRecentDecisions(5),
-      delta,
-    });
+        return buildSituationPrompt({
+          wakeReason: wakeReason.reason ?? wakeReason.type,
+          signals: wakeReason.signal ? [wakeReason.signal] : [],
+          contextSnapshot: signalAggregator.drain(),
+          stateSnapshot,
+          pendingSchedule: stimulusEngine.getPendingSchedule(),
+          recentDecisions: adjutantState.getRecentDecisions(5),
+          delta,
+        });
+      },
 
-    bridge.sendInput(session.id, prompt).then((success) => {
-      if (success) {
+      onCoordinatorSuccess: (wakeReason) => {
         stimulusEngine.markNudgeSent();
         adjutantState.logDecision({
           behavior: "stimulus-engine",
-          action: `wake_${reason.type}`,
-          target: reason.reason ?? null,
-          reason: reason.signal ? `signal: ${reason.signal.event}` : null,
+          action: `wake_${wakeReason.type}`,
+          target: wakeReason.reason ?? null,
+          reason: wakeReason.signal ? `signal: ${wakeReason.signal.event}` : null,
         });
-      } else {
-        logInfo("StimulusEngine: prompt injection failed", { reason: reason.type });
-      }
-    }).catch(() => {
-      logInfo("StimulusEngine: prompt injection error", { reason: reason.type });
+      },
     });
   });
 
