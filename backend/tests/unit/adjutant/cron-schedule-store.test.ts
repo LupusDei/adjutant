@@ -268,6 +268,127 @@ describe("CronScheduleStore", () => {
       expect(store.disable("nonexistent")).toBe(false);
     });
   });
+
+  // ======================================================================
+  // adj-163: Agent-scoped scheduling
+  // ======================================================================
+
+  describe("create with targetAgent (adj-163)", () => {
+    it("should store targetAgent and targetTmuxSession when provided", () => {
+      const result = store.create({
+        cronExpr: "*/15 * * * *",
+        reason: "Pipeline check",
+        createdBy: "incubator-coordinator",
+        nextFireAt: "2026-04-17T12:15:00.000Z",
+        targetAgent: "incubator-coordinator",
+        targetTmuxSession: "adj-swarm-incubator-coordinator",
+      });
+
+      expect(result.targetAgent).toBe("incubator-coordinator");
+      expect(result.targetTmuxSession).toBe("adj-swarm-incubator-coordinator");
+    });
+
+    it("should default targetAgent to adjutant-coordinator when not provided", () => {
+      const result = store.create({
+        cronExpr: "*/15 * * * *",
+        reason: "Health check",
+        createdBy: "adjutant-coordinator",
+        nextFireAt: "2026-04-17T12:15:00.000Z",
+      });
+
+      expect(result.targetAgent).toBe("adjutant-coordinator");
+      expect(result.targetTmuxSession).toBe("adj-swarm-adjutant-coordinator");
+    });
+  });
+
+  describe("listByAgent (adj-163)", () => {
+    it("should return only schedules targeting the specified agent", () => {
+      store.create({
+        cronExpr: "*/15 * * * *",
+        reason: "Coordinator check",
+        createdBy: "adjutant-coordinator",
+        nextFireAt: "2026-04-17T12:15:00.000Z",
+        targetAgent: "adjutant-coordinator",
+        targetTmuxSession: "adj-swarm-adjutant-coordinator",
+      });
+      store.create({
+        cronExpr: "0 */6 * * *",
+        reason: "Discovery sweep",
+        createdBy: "incubator-coordinator",
+        nextFireAt: "2026-04-17T18:00:00.000Z",
+        targetAgent: "incubator-coordinator",
+        targetTmuxSession: "adj-swarm-incubator-coordinator",
+      });
+      store.create({
+        cronExpr: "*/30 * * * *",
+        reason: "Nova reminder",
+        createdBy: "adjutant-coordinator",
+        nextFireAt: "2026-04-17T12:30:00.000Z",
+        targetAgent: "nova",
+        targetTmuxSession: "adj-swarm-nova",
+      });
+
+      const incubatorSchedules = store.listByAgent("incubator-coordinator");
+      expect(incubatorSchedules).toHaveLength(1);
+      expect(incubatorSchedules[0]!.reason).toBe("Discovery sweep");
+
+      const novaSchedules = store.listByAgent("nova");
+      expect(novaSchedules).toHaveLength(1);
+      expect(novaSchedules[0]!.reason).toBe("Nova reminder");
+
+      const coordinatorSchedules = store.listByAgent("adjutant-coordinator");
+      expect(coordinatorSchedules).toHaveLength(1);
+      expect(coordinatorSchedules[0]!.reason).toBe("Coordinator check");
+    });
+
+    it("should return empty array when agent has no schedules", () => {
+      expect(store.listByAgent("nonexistent-agent")).toHaveLength(0);
+    });
+  });
+
+  describe("disableByAgent (adj-163)", () => {
+    it("should disable all schedules for the specified agent", () => {
+      store.create({
+        cronExpr: "*/15 * * * *",
+        reason: "Check A",
+        createdBy: "nova",
+        nextFireAt: "2026-04-17T12:15:00.000Z",
+        targetAgent: "nova",
+        targetTmuxSession: "adj-swarm-nova",
+      });
+      store.create({
+        cronExpr: "*/30 * * * *",
+        reason: "Check B",
+        createdBy: "nova",
+        nextFireAt: "2026-04-17T12:30:00.000Z",
+        targetAgent: "nova",
+        targetTmuxSession: "adj-swarm-nova",
+      });
+      store.create({
+        cronExpr: "0 * * * *",
+        reason: "Coordinator check",
+        createdBy: "adjutant-coordinator",
+        nextFireAt: "2026-04-17T13:00:00.000Z",
+        targetAgent: "adjutant-coordinator",
+        targetTmuxSession: "adj-swarm-adjutant-coordinator",
+      });
+
+      const count = store.disableByAgent("nova");
+      expect(count).toBe(2);
+
+      // Nova's schedules disabled
+      const novaSchedules = store.listByAgent("nova");
+      expect(novaSchedules.every(s => !s.enabled)).toBe(true);
+
+      // Coordinator's schedule unaffected
+      const coordSchedules = store.listByAgent("adjutant-coordinator");
+      expect(coordSchedules[0]!.enabled).toBe(true);
+    });
+
+    it("should return 0 when agent has no schedules", () => {
+      expect(store.disableByAgent("nonexistent")).toBe(0);
+    });
+  });
 });
 
 // ========================================================================

@@ -18,6 +18,10 @@ export interface CronSchedule {
   enabled: boolean;
   maxFires: number | null;
   fireCount: number;
+  /** adj-163: Agent that receives the scheduled wake prompt */
+  targetAgent: string;
+  /** adj-163: Tmux session to deliver prompt to */
+  targetTmuxSession: string;
 }
 
 interface CronScheduleRow {
@@ -31,6 +35,8 @@ interface CronScheduleRow {
   enabled: number;
   max_fires: number | null;
   fire_count: number;
+  target_agent: string;
+  target_tmux_session: string;
 }
 
 interface CreateParams {
@@ -39,6 +45,10 @@ interface CreateParams {
   createdBy: string;
   nextFireAt: string;
   maxFires?: number;
+  /** adj-163: Agent that receives the wake. Defaults to 'adjutant-coordinator'. */
+  targetAgent?: string;
+  /** adj-163: Tmux session for delivery. Defaults to 'adj-swarm-adjutant-coordinator'. */
+  targetTmuxSession?: string;
 }
 
 type UpdatableFields = Partial<{
@@ -66,6 +76,8 @@ function rowToSchedule(row: CronScheduleRow): CronSchedule {
     enabled: row.enabled === 1,
     maxFires: row.max_fires,
     fireCount: row.fire_count,
+    targetAgent: row.target_agent,
+    targetTmuxSession: row.target_tmux_session,
   };
 }
 
@@ -78,14 +90,16 @@ export class CronScheduleStore {
   private getByIdStmt: Database.Statement;
   private listAllStmt: Database.Statement;
   private listEnabledStmt: Database.Statement;
+  private listByAgentStmt: Database.Statement;
   private deleteStmt: Database.Statement;
   private incrementFireStmt: Database.Statement;
   private disableStmt: Database.Statement;
+  private disableByAgentStmt: Database.Statement;
 
   constructor(private db: Database.Database) {
     this.insertStmt = db.prepare(`
-      INSERT INTO cron_schedules (id, cron_expr, reason, created_by, next_fire_at, max_fires)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO cron_schedules (id, cron_expr, reason, created_by, next_fire_at, max_fires, target_agent, target_tmux_session)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     this.getByIdStmt = db.prepare("SELECT * FROM cron_schedules WHERE id = ?");
@@ -107,6 +121,15 @@ export class CronScheduleStore {
     this.disableStmt = db.prepare(
       "UPDATE cron_schedules SET enabled = 0 WHERE id = ?",
     );
+
+    // adj-163: agent-scoped queries
+    this.listByAgentStmt = db.prepare(
+      "SELECT * FROM cron_schedules WHERE target_agent = ? ORDER BY created_at ASC",
+    );
+
+    this.disableByAgentStmt = db.prepare(
+      "UPDATE cron_schedules SET enabled = 0 WHERE target_agent = ? AND enabled = 1",
+    );
   }
 
   /** Insert a new cron schedule. Returns the created schedule. */
@@ -119,6 +142,8 @@ export class CronScheduleStore {
     }
 
     const id = randomUUID();
+    const targetAgent = params.targetAgent ?? "adjutant-coordinator";
+    const targetTmuxSession = params.targetTmuxSession ?? "adj-swarm-adjutant-coordinator";
     this.insertStmt.run(
       id,
       params.cronExpr,
@@ -126,6 +151,8 @@ export class CronScheduleStore {
       params.createdBy,
       params.nextFireAt,
       params.maxFires ?? null,
+      targetAgent,
+      targetTmuxSession,
     );
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- we just inserted, so getById will find it
     return this.getById(id)!;
@@ -203,6 +230,25 @@ export class CronScheduleStore {
   disable(id: string): boolean {
     const result = this.disableStmt.run(id);
     return result.changes > 0;
+  }
+
+  /**
+   * adj-163: List all schedules targeting a specific agent.
+   */
+  listByAgent(agentName: string): CronSchedule[] {
+    const rows = this.listByAgentStmt.all(agentName) as CronScheduleRow[];
+    return rows.map(rowToSchedule);
+  }
+
+  /**
+   * adj-163: Disable all enabled schedules targeting a specific agent.
+   * Used for session death cleanup — when an agent's tmux session dies,
+   * all its schedules should be disabled to avoid firing into void.
+   * Returns the number of schedules disabled.
+   */
+  disableByAgent(agentName: string): number {
+    const result = this.disableByAgentStmt.run(agentName);
+    return result.changes;
   }
 }
 
