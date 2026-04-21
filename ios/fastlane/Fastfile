@@ -16,7 +16,14 @@ platform :ios do
   desc "Increment build number"
   lane :bump_build do
     # Use the latest TestFlight build number + 1
+    api_key = app_store_connect_api_key(
+      key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+      issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+      key_filepath: ENV["APP_STORE_CONNECT_API_KEY_PATH"] || "./fastlane/AuthKey.p8"
+    )
+
     latest_build = latest_testflight_build_number(
+      api_key: api_key,
       app_identifier: ENV["APP_IDENTIFIER"] || "com.jmm.adjutant"
     )
     increment_build_number(
@@ -67,7 +74,14 @@ platform :ios do
   lane :beta do
     build_beta
 
+    api_key = app_store_connect_api_key(
+      key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+      issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+      key_filepath: ENV["APP_STORE_CONNECT_API_KEY_PATH"] || "./fastlane/AuthKey.p8"
+    )
+
     upload_to_testflight(
+      api_key: api_key,
       skip_waiting_for_build_processing: true,
       distribute_external: false,
       changelog: ENV["CHANGELOG"] || "New build from CI"

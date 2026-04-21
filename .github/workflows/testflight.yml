@@ -88,16 +88,16 @@ jobs:
           MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
         run: |
-          cat > fastlane/.env << EOF
-          APP_STORE_CONNECT_API_KEY_ID=$APP_STORE_CONNECT_API_KEY_ID
-          APP_STORE_CONNECT_API_ISSUER_ID=$APP_STORE_CONNECT_API_ISSUER_ID
-          APP_STORE_CONNECT_API_KEY_PATH=./fastlane/api_key.json
-          APP_IDENTIFIER=$APP_IDENTIFIER
-          TEAM_ID=$TEAM_ID
-          MATCH_GIT_URL=$MATCH_GIT_URL
-          MATCH_PASSWORD=$MATCH_PASSWORD
-          CHANGELOG=${{ github.event.inputs.changelog || 'CI build from commit' }} ${{ github.sha }}
-          EOF
+          printf '%s\n' \
+            "APP_STORE_CONNECT_API_KEY_ID=$APP_STORE_CONNECT_API_KEY_ID" \
+            "APP_STORE_CONNECT_API_ISSUER_ID=$APP_STORE_CONNECT_API_ISSUER_ID" \
+            "APP_STORE_CONNECT_API_KEY_PATH=./fastlane/AuthKey.p8" \
+            "APP_IDENTIFIER=${{ env.APP_IDENTIFIER }}" \
+            "TEAM_ID=${{ env.TEAM_ID }}" \
+            "MATCH_GIT_URL=$MATCH_GIT_URL" \
+            "MATCH_PASSWORD=$MATCH_PASSWORD" \
+            "CHANGELOG=${{ github.event.inputs.changelog || 'CI build from commit' }} ${{ github.sha }}" \
+            > fastlane/.env
 
       - name: Setup SSH for Match
         uses: webfactory/ssh-agent@v0.9.0
