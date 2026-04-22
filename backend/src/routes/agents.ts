@@ -18,6 +18,7 @@ import { getPersonaService } from "../services/persona-service.js";
 import { generatePersonaPrompt } from "../services/prompt-generator.js";
 import { writeAgentFile } from "../services/agent-file-writer.js";
 import { buildGenesisPrompt, extractLoreExcerpt } from "../services/adjutant/genesis-prompt.js";
+import { readProjectConstitution, formatConstitutionPrompt } from "../services/agent-spawner-service.js";
 import { success, internalError, badRequest, notFound, conflict } from "../utils/responses.js";
 
 /**
@@ -214,6 +215,16 @@ agentsRouter.post("/spawn", async (req, res) => {
     } else {
       initialPrompt = buildAgentIdentityPrompt(name, projectName);
     }
+  }
+
+  // Constitution injection (adj-160): Prepend project constitution to prompt
+  // so every agent spawned via REST API receives project-specific rules.
+  const constitutionText = await readProjectConstitution(projectPath);
+  const constitutionPrompt = formatConstitutionPrompt(constitutionText);
+  if (constitutionPrompt && initialPrompt) {
+    initialPrompt = `${constitutionPrompt}\n\n---\n\n${initialPrompt}`;
+  } else if (constitutionPrompt) {
+    initialPrompt = constitutionPrompt;
   }
 
   const result = await bridge.createSession({

@@ -8,6 +8,12 @@ vi.mock("../../src/utils/index.js", () => ({
   logDebug: vi.fn(),
 }));
 
+// Mock node:fs/promises — spawnAgent now reads constitution.md (adj-160).
+// Without this mock, readFile may hang under fake timers.
+vi.mock("node:fs/promises", () => ({
+  readFile: vi.fn().mockRejectedValue(new Error("ENOENT")),
+}));
+
 // Mock session bridge
 const mockBridgeCreateSession = vi.fn();
 const mockDiscoverSessions = vi.fn();

@@ -8,6 +8,12 @@ vi.mock("../../src/utils/index.js", () => ({
   logDebug: vi.fn(),
 }));
 
+// Mock node:fs/promises for constitution reading
+const mockReadFile = vi.fn();
+vi.mock("node:fs/promises", () => ({
+  readFile: (...args: unknown[]) => mockReadFile(...args),
+}));
+
 // Mock session bridge
 const mockBridgeCreateSession = vi.fn();
 const mockDiscoverSessions = vi.fn();
@@ -48,6 +54,9 @@ import {
   spawnAgent,
   isAgentAlive,
   getAgentTmuxSession,
+  readProjectConstitution,
+  formatConstitutionPrompt,
+  CONSTITUTION_LABEL,
 } from "../../src/services/agent-spawner-service.js";
 
 import { logInfo, logWarn } from "../../src/utils/index.js";
@@ -386,6 +395,154 @@ describe("agent-spawner-service", () => {
         "Agent spawn failed",
         expect.objectContaining({ name: "test-agent", error: "limit exceeded" })
       );
+    });
+  });
+
+  // ==========================================================================
+  // readProjectConstitution
+  // ==========================================================================
+
+  describe("readProjectConstitution", () => {
+    it("should return file content when constitution.md exists", async () => {
+      mockReadFile.mockResolvedValue("# Project Constitution v1.0.0\n\n## 1. Test-First\nWrite tests first.\n");
+
+      const result = await readProjectConstitution("/tmp/project");
+
+      expect(result).toBe("# Project Constitution v1.0.0\n\n## 1. Test-First\nWrite tests first.");
+      expect(mockReadFile).toHaveBeenCalledWith(
+        "/tmp/project/constitution.md",
+        "utf-8",
+      );
+    });
+
+    it("should return undefined when constitution.md does not exist", async () => {
+      mockReadFile.mockRejectedValue(
+        Object.assign(new Error("ENOENT"), { code: "ENOENT" }),
+      );
+
+      const result = await readProjectConstitution("/tmp/project");
+
+      expect(result).toBeUndefined();
+    });
+
+    it("should return undefined when file is empty", async () => {
+      mockReadFile.mockResolvedValue("   \n  ");
+
+      const result = await readProjectConstitution("/tmp/project");
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  // ==========================================================================
+  // formatConstitutionPrompt
+  // ==========================================================================
+
+  describe("formatConstitutionPrompt", () => {
+    it("should wrap constitution text with the mandatory label", () => {
+      const result = formatConstitutionPrompt("## 1. Test-First\nWrite tests first.");
+
+      expect(result).toContain(CONSTITUTION_LABEL);
+      expect(result).toContain("## 1. Test-First\nWrite tests first.");
+      expect(result).toBe(`${CONSTITUTION_LABEL}\n\n## 1. Test-First\nWrite tests first.`);
+    });
+
+    it("should return undefined when constitution text is undefined", () => {
+      const result = formatConstitutionPrompt(undefined);
+
+      expect(result).toBeUndefined();
+    });
+
+    it("should return undefined when constitution text is empty string", () => {
+      const result = formatConstitutionPrompt("");
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  // ==========================================================================
+  // spawnAgent — constitution injection
+  // ==========================================================================
+
+  describe("spawnAgent — constitution injection", () => {
+    it("should inject constitution into spawn prompt when file exists", async () => {
+      mockReadFile.mockResolvedValue("## 1. Test-First\nWrite tests first.");
+      mockListTmuxSessions.mockResolvedValue(new Set());
+      mockBridgeCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
+      // Has a persona so genesis path is skipped
+      mockGetPersonaByCallsign.mockReturnValue({ id: "p1", name: "Test" });
+
+      await spawnAgent({
+        name: "test-agent",
+        projectPath: "/tmp/project",
+        initialPrompt: "Do the work",
+      });
+
+      const callArgs = mockBridgeCreateSession.mock.calls[0][0];
+      expect(callArgs.initialPrompt).toContain(CONSTITUTION_LABEL);
+      expect(callArgs.initialPrompt).toContain("## 1. Test-First");
+      // Constitution should come BEFORE the task prompt
+      const constitutionIdx = callArgs.initialPrompt.indexOf(CONSTITUTION_LABEL);
+      const taskIdx = callArgs.initialPrompt.indexOf("Do the work");
+      expect(constitutionIdx).toBeLessThan(taskIdx);
+    });
+
+    it("should proceed without constitution when file is missing", async () => {
+      mockReadFile.mockRejectedValue(
+        Object.assign(new Error("ENOENT"), { code: "ENOENT" }),
+      );
+      mockListTmuxSessions.mockResolvedValue(new Set());
+      mockBridgeCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
+      mockGetPersonaByCallsign.mockReturnValue({ id: "p1", name: "Test" });
+
+      const result = await spawnAgent({
+        name: "test-agent",
+        projectPath: "/tmp/project",
+        initialPrompt: "Do the work",
+      });
+
+      expect(result.success).toBe(true);
+      const callArgs = mockBridgeCreateSession.mock.calls[0][0];
+      expect(callArgs.initialPrompt).toBe("Do the work");
+      expect(callArgs.initialPrompt).not.toContain(CONSTITUTION_LABEL);
+    });
+
+    it("should use constitution as sole prompt when no initial prompt given", async () => {
+      mockReadFile.mockResolvedValue("## 1. Rules");
+      mockListTmuxSessions.mockResolvedValue(new Set());
+      mockBridgeCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
+      // Provide agent file so genesis is skipped and no initial prompt is generated
+      mockGetPersonaByCallsign.mockReturnValue({ id: "p1", name: "Test" });
+
+      await spawnAgent({
+        name: "test-agent",
+        projectPath: "/tmp/project",
+        agentFile: "myagent",
+        // No initialPrompt
+      });
+
+      const callArgs = mockBridgeCreateSession.mock.calls[0][0];
+      // With agentFile and no initialPrompt, constitution should still be injected
+      expect(callArgs.initialPrompt).toContain(CONSTITUTION_LABEL);
+      expect(callArgs.initialPrompt).toContain("## 1. Rules");
+    });
+
+    it("should place constitution before genesis prompt for persona-less agents", async () => {
+      mockReadFile.mockResolvedValue("## 1. Rules");
+      mockListTmuxSessions.mockResolvedValue(new Set());
+      mockBridgeCreateSession.mockResolvedValue({ success: true, sessionId: "s1" });
+      // No persona → genesis prompt will be generated
+      mockGetPersonaByCallsign.mockReturnValue(undefined);
+
+      await spawnAgent({
+        name: "test-agent",
+        projectPath: "/tmp/project",
+        initialPrompt: "Your task is X",
+      });
+
+      const callArgs = mockBridgeCreateSession.mock.calls[0][0];
+      // Constitution should be at the very beginning
+      expect(callArgs.initialPrompt).toMatch(new RegExp(`^${CONSTITUTION_LABEL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
     });
   });
 

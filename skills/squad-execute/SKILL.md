@@ -119,7 +119,20 @@ Launch all parallel-track engineers in the same message so they start simultaneo
 
 **Every engineer spawn prompt MUST include:**
 
-1. The Layer 4 preamble:
+1. The **project constitution** — read `constitution.md` from the project root and include its FULL TEXT in the spawn prompt. Label it:
+```
+## Project Constitution (MANDATORY — obey every rule, reject work that violates any rule)
+
+<full contents of constitution.md>
+```
+If `constitution.md` does not exist, skip this step (proceed without).
+
+Role-specific enforcement:
+- **Staff Engineers** enforce Rules 1 (Test-First) and 3 (Build Verification) — tests before code, build before commit
+- **QA Sentinel** enforces ALL rules — they are the constitution's guardian
+- **Code Reviewers** enforce Rules 2 (Type Safety), 4 (Layered Architecture), and 5 (Agent Communication)
+
+2. The Layer 4 preamble:
 ```
 ## Your Role (Layer 4: Squad Member)
 You are <name>, a Squad Member on <squad-leader>'s team.
@@ -129,13 +142,13 @@ You are <name>, a Squad Member on <squad-leader>'s team.
 - Parent epic: <epic-id>
 ```
 
-2. Read the squad member protocol file into the spawn prompt:
+3. Read the squad member protocol file into the spawn prompt:
 ```
 Read skills/squad-execute/squad-member-context.md and include its contents verbatim in the spawn prompt.
 ```
 This file contains task tracking, MCP communication, verification, and question routing — all the protocol a Layer 4 agent needs in a compact format.
 
-3. Additionally include:
+4. Additionally include:
 - The specific task descriptions from the spec/bead
 - File paths they'll be working on
 - Any dependencies they must wait for (e.g., "wait until adj-072.1 merges before starting")
@@ -146,7 +159,14 @@ Spawn after the first engineer starts merging work. Use Claude Code's native Age
 
 **QA Sentinel spawn prompt template:**
 
+Include the **full project constitution** (from `constitution.md`) at the top of the QA sentinel's spawn prompt, using the same label as engineers. QA sentinels enforce ALL constitutional rules.
+
 ```
+## Project Constitution (MANDATORY — obey every rule, reject work that violates any rule)
+<full contents of constitution.md>
+
+---
+
 You are a QA sentinel for epic <epic-id>: <title>.
 
 Your job:
@@ -173,7 +193,14 @@ Spawn all reviewers using Claude Code's native Agent tool with `isolation: "work
 
 #### Product/UIUX Reviewer
 
+Include the **full project constitution** at the top (same label). Product reviewers focus on user-facing quality.
+
 ```
+## Project Constitution (MANDATORY — obey every rule, reject work that violates any rule)
+<full contents of constitution.md>
+
+---
+
 You are a Product/UIUX reviewer for epic <epic-id>: <title>.
 
 Your job:
@@ -193,7 +220,14 @@ Your job:
 
 #### Code Reviewer
 
+Include the **full project constitution** at the top (same label). Code reviewers enforce Rules 2 (Type Safety), 4 (Layered Architecture), and 5 (Agent Communication).
+
 ```
+## Project Constitution (MANDATORY — obey every rule, reject work that violates any rule)
+<full contents of constitution.md>
+
+---
+
 You are a staff-level code reviewer for epic <epic-id>: <title>.
 
 Your job:

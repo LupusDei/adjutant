@@ -11,6 +11,9 @@
  * - `getAgentTmuxSession()`: Compute the tmux session name for an agent
  */
 
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+
 import { logInfo, logWarn } from "../utils/index.js";
 import { getEventBus } from "./event-bus.js";
 import { getSessionBridge } from "./session-bridge.js";
@@ -59,6 +62,48 @@ export function wireSpawnHealthChecks(): void {
   getEventBus().on("mcp:agent_connected", (data) => {
     cancelSpawnHealthCheck(data.agentId);
   });
+}
+
+// ============================================================================
+// Constitution Injection
+// ============================================================================
+
+/** Label prepended to constitution content when injected into agent prompts. */
+export const CONSTITUTION_LABEL =
+  "## Project Constitution (MANDATORY — obey every rule, reject work that violates any rule)";
+
+/**
+ * Read a project's constitution.md file.
+ *
+ * Returns the raw file content, or undefined if the file does not exist.
+ * Other I/O errors (permission denied, etc.) are logged and treated as missing.
+ */
+export async function readProjectConstitution(
+  projectPath: string,
+): Promise<string | undefined> {
+  try {
+    const content = await readFile(
+      join(projectPath, "constitution.md"),
+      "utf-8",
+    );
+    return content.trim() || undefined;
+  } catch {
+    // Missing file or unreadable — proceed without constitution
+    return undefined;
+  }
+}
+
+/**
+ * Format constitution content as a labeled prompt section.
+ *
+ * Returns a markdown block suitable for injection into an agent's prompt,
+ * or undefined if no constitution text is provided.
+ */
+export function formatConstitutionPrompt(
+  constitutionText: string | undefined,
+): string | undefined {
+  if (!constitutionText) return undefined;
+  return `${CONSTITUTION_LABEL}\n\n${constitutionText}`;
 }
 
 // ============================================================================
@@ -158,6 +203,11 @@ export async function spawnAgent(
       return { success: true, tmuxSession };
     }
 
+    // Constitution injection (adj-160): Read project constitution and inject
+    // into the effective prompt so every agent receives project-specific rules.
+    const constitutionText = await readProjectConstitution(req.projectPath);
+    const constitutionPrompt = formatConstitutionPrompt(constitutionText);
+
     // Living Personas (adj-158.2.3): If the callsign has no linked persona
     // and no agent file is specified, prepend a genesis prompt so the agent
     // creates its persona before starting work.
@@ -180,6 +230,14 @@ export async function spawnAgent(
           logInfo("Injecting genesis prompt for persona-less callsign", { name: req.name });
         }
       }
+    }
+
+    // Prepend constitution to the effective prompt (before persona/genesis/task content)
+    if (constitutionPrompt) {
+      effectivePrompt = effectivePrompt
+        ? `${constitutionPrompt}\n\n---\n\n${effectivePrompt}`
+        : constitutionPrompt;
+      logInfo("Injecting project constitution into spawn prompt", { name: req.name });
     }
 
     // Build claudeArgs
