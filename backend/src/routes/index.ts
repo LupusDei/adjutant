@@ -23,3 +23,4 @@ export { createPersonasRouter } from "./personas.js";
 export { createCallsignsRouter } from "./callsigns.js";
 export { createMemoryRouter } from "./memory.js";
 export { createSchedulesRouter } from "./schedules.js";
+export { createWebhooksRouter } from "./webhooks.js";
