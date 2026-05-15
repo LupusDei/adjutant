@@ -21,6 +21,14 @@ const EVENT_TYPE_CONFIG: Record<string, { icon: string; label: string; color: st
   auto_develop_disabled: { icon: '\u23F9', label: 'AUTO-DEV OFF', color: '#ff4444' },
   auto_develop_phase_changed: { icon: '\u27A1', label: 'PHASE', color: '#66ccff' },
   proposal_completed: { icon: '\u2714', label: 'PROPOSAL DONE', color: '#44ff44' },
+  deploy_status: { icon: '\u{1F680}', label: 'DEPLOY', color: '#66ccff' },
+};
+
+const DEPLOY_STATUS_COLOR: Record<string, string> = {
+  created: '#66ccff',
+  succeeded: '#44ff44',
+  error: '#ff4444',
+  canceled: '#999999',
 };
 
 export interface TimelineEventCardProps {
@@ -36,11 +44,16 @@ export function TimelineEventCard({ event, isNew }: TimelineEventCardProps) {
   }, []);
 
   const isCoordAction = event.eventType === 'coordinator_action';
-  const config = EVENT_TYPE_CONFIG[event.eventType] ?? {
+  const isDeployStatus = event.eventType === 'deploy_status';
+  const baseConfig = EVENT_TYPE_CONFIG[event.eventType] ?? {
     icon: '\u{1F50D}',
     label: event.eventType.toUpperCase(),
     color: 'var(--crt-phosphor-dim)',
   };
+  const deployStatus = isDeployStatus ? String(event.detail?.status ?? '') : '';
+  const config = isDeployStatus && DEPLOY_STATUS_COLOR[deployStatus]
+    ? { ...baseConfig, color: DEPLOY_STATUS_COLOR[deployStatus] }
+    : baseConfig;
 
   const timestamp = formatTime(event.createdAt);
   const hasDetail = event.detail && Object.keys(event.detail).length > 0;
@@ -111,11 +124,77 @@ export function TimelineEventCard({ event, isNew }: TimelineEventCardProps) {
                 </div>
               )}
             </div>
+          ) : isDeployStatus && event.detail ? (
+            <DeployStatusDetail detail={event.detail} statusColor={config.color} />
           ) : (
             <pre style={styles.detailPre}>
               {JSON.stringify(event.detail, null, 2)}
             </pre>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface DeployStatusDetailProps {
+  detail: Record<string, unknown>;
+  statusColor: string;
+}
+
+function DeployStatusDetail({ detail, statusColor }: DeployStatusDetailProps) {
+  const status = String(detail.status ?? '').toUpperCase() || 'UNKNOWN';
+  const projectName = detail.projectName ? String(detail.projectName) : null;
+  const environment = detail.environment ? String(detail.environment) : null;
+  const deployUrl = detail.deployUrl ? String(detail.deployUrl) : null;
+  const inspectorUrl = detail.inspectorUrl ? String(detail.inspectorUrl) : null;
+  const commitShaShort = detail.commitShaShort ? String(detail.commitShaShort) : null;
+  const commitUrl = detail.commitUrl ? String(detail.commitUrl) : null;
+
+  return (
+    <div style={styles.deployDetail}>
+      <div style={styles.deployRow}>
+        <span style={styles.deployLabel}>STATUS:</span>{' '}
+        <span style={{ ...styles.deployValue, color: statusColor }}>{status}</span>
+      </div>
+      {projectName && (
+        <div style={styles.deployRow}>
+          <span style={styles.deployLabel}>PROJECT:</span>{' '}
+          <span style={styles.deployValue}>{projectName}</span>
+        </div>
+      )}
+      {environment && (
+        <div style={styles.deployRow}>
+          <span style={styles.deployLabel}>ENV:</span>{' '}
+          <span style={styles.deployValue}>{environment}</span>
+        </div>
+      )}
+      {commitShaShort && (
+        <div style={styles.deployRow}>
+          <span style={styles.deployLabel}>COMMIT:</span>{' '}
+          {commitUrl ? (
+            <a href={commitUrl} target="_blank" rel="noopener noreferrer" style={styles.deployLink}>
+              {commitShaShort}
+            </a>
+          ) : (
+            <span style={styles.deployValue}>{commitShaShort}</span>
+          )}
+        </div>
+      )}
+      {deployUrl && (
+        <div style={styles.deployRow}>
+          <span style={styles.deployLabel}>URL:</span>{' '}
+          <a href={deployUrl} target="_blank" rel="noopener noreferrer" style={styles.deployLink}>
+            {deployUrl}
+          </a>
+        </div>
+      )}
+      {inspectorUrl && (
+        <div style={styles.deployRow}>
+          <span style={styles.deployLabel}>INSPECT:</span>{' '}
+          <a href={inspectorUrl} target="_blank" rel="noopener noreferrer" style={styles.deployLink}>
+            vercel
+          </a>
         </div>
       )}
     </div>
@@ -249,5 +328,40 @@ const styles = {
     color: 'var(--crt-phosphor-dim)',
     letterSpacing: '0.04em',
     fontStyle: 'italic',
+  },
+  deployDetail: {
+    fontFamily: '"Share Tech Mono", monospace',
+    fontSize: '0.7rem',
+    padding: '6px 8px',
+    backgroundColor: 'var(--theme-bg-elevated)',
+    border: '1px solid rgba(102, 204, 255, 0.15)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '3px',
+  },
+  deployRow: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'baseline',
+    flexWrap: 'wrap',
+  },
+  deployLabel: {
+    color: '#66ccff',
+    fontSize: '0.6rem',
+    letterSpacing: '0.08em',
+    flexShrink: 0,
+    fontWeight: 'bold',
+    minWidth: '60px',
+  },
+  deployValue: {
+    color: 'var(--crt-phosphor)',
+    letterSpacing: '0.04em',
+    wordBreak: 'break-all',
+  },
+  deployLink: {
+    color: '#66ccff',
+    letterSpacing: '0.04em',
+    textDecoration: 'underline',
+    wordBreak: 'break-all',
   },
 } satisfies Record<string, CSSProperties>;

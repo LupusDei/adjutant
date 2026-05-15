@@ -1,7 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, costsRouter, createCallsignsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createPersonasRouter, createProjectsRouter, createProposalsRouter, createSchedulesRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, costsRouter, createCallsignsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createPersonasRouter, createProjectsRouter, createProposalsRouter, createSchedulesRouter, createWebhooksRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { createDashboardService } from "./services/dashboard-service.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
@@ -61,8 +61,26 @@ import { CronScheduleStore } from "./services/adjutant/cron-schedule-store.js";
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
 
+// Stores must be initialized BEFORE the webhook router below — webhook routes
+// are mounted ahead of the global JSON body parser so HMAC verification can
+// read raw bytes, and they need eventStore for persisting deploy events.
+const messageDb = initDatabase();
+const messageStore = createMessageStore(messageDb);
+const proposalStore = createProposalStore(messageDb);
+migrateProposalProjectNames(messageDb);
+const eventStore = createEventStore(messageDb);
+const memoryStore = createMemoryStore(messageDb);
+const cronScheduleStore = new CronScheduleStore(messageDb);
+const autoDevelopStore = createAutoDevelopStore(messageDb);
+
 // Middleware
 app.use(cors());
+
+// External webhook receivers authenticate via cryptographic signature over
+// the raw body, NOT the dashboard API key. They MUST be mounted before
+// express.json() so signature verification sees the exact bytes Vercel signed.
+app.use("/api/webhooks", createWebhooksRouter(eventStore));
+
 app.use(express.json());
 app.use((req, res, next) => {
   const start = Date.now();
@@ -92,15 +110,7 @@ app.use("/api/swarms", swarmsRouter);
 app.use("/api/permissions", permissionsRouter);
 app.use("/api/costs", costsRouter);
 
-// Initialize message store and mount messages/projects routers
-const messageDb = initDatabase();
-const messageStore = createMessageStore(messageDb);
-const proposalStore = createProposalStore(messageDb);
-migrateProposalProjectNames(messageDb);
-const eventStore = createEventStore(messageDb);
-const memoryStore = createMemoryStore(messageDb);
-const cronScheduleStore = new CronScheduleStore(messageDb);
-const autoDevelopStore = createAutoDevelopStore(messageDb);
+// Stores were initialized above (before the webhook router); mount their routes here.
 app.use("/api/events", createEventsRouter(eventStore));
 app.use("/api/memory", createMemoryRouter(memoryStore));
 app.use("/api/messages", createMessagesRouter(messageStore));

@@ -14,6 +14,7 @@ export const EventType = z.enum([
   "proposal_completed",
   "ideate_research_complete",
   "persona_created",
+  "deploy_status",
 ]);
 export type EventType = z.infer<typeof EventType>;
 
