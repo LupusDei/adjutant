@@ -275,6 +275,70 @@ describe("CommunicationContext seq tracking", () => {
     expect(received.map((m) => m.id)).toEqual(["seq-1"]);
   });
 
+  it("should advance lastSeen when a gap seq arrives (adj-dm83r)", async () => {
+    // Regression: when the server skips a sequence number (packet loss
+    // between server and client, or the server intentionally skips reserved
+    // numbers), the client must accept the higher seq and advance the
+    // watermark. Without this, all subsequent messages would be perpetually
+    // "stale" and silently dropped.
+    mockInitialLastSeq = 2;
+    const { result } = renderHook(() => useCommunicationActions(), { wrapper });
+    await flushMicrotasks();
+
+    const received: { id: string; seq?: number }[] = [];
+    act(() => {
+      result.current.subscribe((msg) => received.push(msg));
+    });
+
+    // seq = 5 arrives after baseline seq = 2 — gap of 3,4 was skipped or
+    // lost. Client must still deliver the message and advance lastSeen → 5.
+    act(() => {
+      lastMockWs!._inject({
+        type: "chat_message",
+        id: "gap-5",
+        from: "agent-x",
+        to: "user",
+        body: "msg5",
+        timestamp: "2026-02-21T10:00:00Z",
+        seq: 5,
+      });
+    });
+
+    // Next message at seq = 6 must be delivered (proving lastSeen advanced
+    // to 5, not stuck at 2). If the gap had been treated as an error and
+    // lastSeen remained 2, seq=6 would have been delivered too — but the
+    // critical assertion is that seq=3 (which is < new watermark 5) is
+    // dropped.
+    act(() => {
+      lastMockWs!._inject({
+        type: "chat_message",
+        id: "seq-6",
+        from: "agent-x",
+        to: "user",
+        body: "msg6",
+        timestamp: "2026-02-21T10:00:01Z",
+        seq: 6,
+      });
+    });
+
+    // seq = 3 — would-be replay of an earlier message. Should be DROPPED
+    // because the watermark has advanced past 3 (it's now at 6).
+    act(() => {
+      lastMockWs!._inject({
+        type: "chat_message",
+        id: "stale-3",
+        from: "agent-x",
+        to: "user",
+        body: "msg3 (stale)",
+        timestamp: "2026-02-21T10:00:02Z",
+        seq: 3,
+      });
+    });
+
+    // gap-5 and seq-6 delivered; stale-3 dropped.
+    expect(received.map((m) => m.id)).toEqual(["gap-5", "seq-6"]);
+  });
+
   it("should send a sync frame with lastSeqSeen after the connected handshake", async () => {
     mockInitialLastSeq = 0;
     const { result } = renderHook(() => useCommunicationActions(), { wrapper });
