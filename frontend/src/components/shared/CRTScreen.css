@@ -265,8 +265,29 @@
   position: relative;
   overflow: hidden;
 
-  /* Phosphor glow effect - subtle contrast/brightness boost */
-  filter: contrast(1.05) brightness(1.05);
+  /*
+   * Phosphor glow — was `filter: contrast(1.05) brightness(1.05)` which
+   * forced a full-screen GPU recomposite of every descendant on every paint
+   * (adj-139.5.1). Replaced with a non-interactive overlay pseudo-element
+   * that paints a faint phosphor-tinted gradient ON TOP of content. The
+   * overlay itself is static, so no re-composite cost on state changes,
+   * and the underlying content paints normally without being filtered.
+   */
+}
+
+.crt-phosphor::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 7;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--crt-phosphor-rgb), 0.03) 0%,
+      rgba(var(--crt-phosphor-rgb), 0.015) 100%
+    );
+  mix-blend-mode: screen;
 }
 
 /* Specific class for elements that should have a retro glow (Headers, etc) */
@@ -666,6 +687,14 @@
 [data-theme='friendly'] .crt-phosphor,
 [data-theme='glass'] .crt-phosphor {
   filter: none;
+}
+
+/* Non-CRT themes also hide the phosphor-tint overlay introduced in adj-139.5.1 */
+.crt-no-effects .crt-phosphor::after,
+[data-theme='document'] .crt-phosphor::after,
+[data-theme='friendly'] .crt-phosphor::after,
+[data-theme='glass'] .crt-phosphor::after {
+  display: none;
 }
 
 .crt-no-effects .crt-content,
