@@ -198,6 +198,23 @@ cd frontend && npm test
 cd frontend && npm run test:watch
 ```
 
+### Performance testing
+
+Adjutant's frontend has documented performance budgets in [`frontend/perf-budgets.md`](frontend/perf-budgets.md). All budgets are measured against production builds (`npm run build && npm run preview`) — dev mode is several times slower and not budgetable.
+
+#### Running budgets locally
+
+```bash
+cd frontend
+npm run build
+npm run preview &
+PREVIEW_PID=$!
+RUN_PERF=1 npm run test:perf
+kill $PREVIEW_PID
+```
+
+The Puppeteer-based tests are gated behind `RUN_PERF=1` to avoid flakiness on shared runners. The lightweight formatter-cache benchmark runs in the default `npm test` suite without gating.
+
 ### Other commands
 
 ```bash

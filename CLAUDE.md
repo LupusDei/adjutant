@@ -21,3 +21,9 @@ A standalone verification script exists at `scripts/verify-before-push.sh`. It r
 - **Agents MUST run `./scripts/verify-before-push.sh` before every `git push`** (enforced via spawn prompts, not git hooks)
 - **WIP branches** (`wip/*`) are automatically exempt — the script detects and skips them
 - **Why a script instead of a git hook?** Beads owns the `.git/hooks/pre-push` hook via bd-shim. Installing a separate pre-push hook would conflict. The script achieves the same goal without hook conflicts
+
+## Performance Budgets
+
+Frontend perf budgets live in `frontend/perf-budgets.md`. Run with `RUN_PERF=1 npm run test:perf` against a production preview build (`npm run build && npm run preview`). Do NOT measure perf against `npm run dev` — dev mode obscures regressions.
+
+The Puppeteer-based budgets (`leak-overview.test.ts`, `keystroke-latency.test.ts`) are gated behind `RUN_PERF=1` and auto-skip in the default vitest suite. The formatter-cache benchmark always runs.
