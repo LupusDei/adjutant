@@ -1,14 +1,12 @@
-import { useState, useCallback, useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { usePolling } from '../../hooks/usePolling';
 import { fuzzyMatch } from '../../hooks/useFuzzySearch';
 import { api } from '../../services/api';
 import { costApi, type BeadCostResult } from '../../services/api-costs';
-import { AgentAssignDropdown } from '../shared/AgentAssignDropdown';
 import type { BeadInfo } from '../../types';
+import { BeadRow, type ActionType, type BeadActionState } from './BeadRow';
 
 export type BeadsStatusFilter = 'default' | 'open' | 'hooked' | 'in_progress' | 'closed' | 'all';
-
-type ActionType = 'sling' | 'delete';
 
 export interface BeadsListProps {
   statusFilter: BeadsStatusFilter;
@@ -27,124 +25,6 @@ interface BeadGroup {
   displayName: string;
   beads: BeadInfo[];
 }
-
-/**
- * Gets priority label and color.
- */
-function getPriorityInfo(priority: number): { label: string; color: string } {
-  switch (priority) {
-    case 0:
-      return { label: 'P0', color: '#FF4444' }; // Critical
-    case 1:
-      return { label: 'P1', color: '#FFB000' }; // High
-    case 2:
-      return { label: 'P2', color: 'var(--crt-phosphor)' }; // Normal
-    case 3:
-      return { label: 'P3', color: 'var(--crt-phosphor-dim)' }; // Low
-    case 4:
-      return { label: 'P4', color: '#666666' }; // Backlog
-    default:
-      return { label: `P${priority}`, color: 'var(--crt-phosphor-dim)' };
-  }
-}
-
-/**
- * Gets status display info with distinct colors for each state.
- * Valid statuses: open, hooked, in_progress, closed
- * Hooked is displayed as ACTIVE (same as in_progress).
- */
-function getStatusInfo(status: string): { label: string; color: string; bgColor?: string } {
-  const normalized = status.toLowerCase() === 'hooked' ? 'in_progress' : status.toLowerCase();
-  switch (normalized) {
-    case 'open':
-      return { label: 'OPEN', color: 'var(--crt-phosphor)' };
-    case 'hooked':
-      return { label: 'HOOKED', color: '#00FFFF', bgColor: 'rgba(0, 255, 255, 0.1)' }; // Cyan
-    case 'in_progress':
-      return { label: 'ACTIVE', color: '#00FF88', bgColor: 'rgba(0, 255, 136, 0.1)' }; // Bright cyan-green
-    case 'closed':
-      return { label: 'DONE', color: '#555555' }; // Dark gray
-    default:
-      return { label: status.toUpperCase(), color: 'var(--crt-phosphor-dim)' };
-  }
-}
-
-/**
- * Formats a timestamp for display.
- */
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) {
-    return 'TODAY';
-  } else if (diffDays === 1) {
-    return 'YESTERDAY';
-  } else if (diffDays < 7) {
-    return `${diffDays}D AGO`;
-  } else {
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  }
-}
-
-/**
- * Extracts short assignee name.
- */
-function formatAssignee(assignee: string | null): string {
-  if (!assignee) return '-';
-  // Extract name from path like "project/dag" -> "dag"
-  const parts = assignee.split('/');
-  return parts[parts.length - 1] ?? assignee;
-}
-
-/**
- * Highlights matching characters in a string based on fuzzy match.
- */
-function highlightMatches(text: string, query: string): ReactNode {
-  if (!query) {
-    return text;
-  }
-
-  const result = fuzzyMatch(query, text);
-  if (!result.matches || result.matchIndices.length === 0) {
-    return text;
-  }
-
-  const parts: ReactNode[] = [];
-  let lastIndex = 0;
-  const matchSet = new Set(result.matchIndices);
-
-  for (let i = 0; i < text.length; i++) {
-    if (matchSet.has(i)) {
-      // Add text before this match
-      if (i > lastIndex) {
-        parts.push(text.slice(lastIndex, i));
-      }
-      // Add highlighted character
-      parts.push(
-        <span key={i} style={highlightStyle}>
-          {text[i]}
-        </span>
-      );
-      lastIndex = i + 1;
-    }
-  }
-
-  // Add remaining text
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
-  }
-
-  return <>{parts}</>;
-}
-
-const highlightStyle: CSSProperties = {
-  backgroundColor: 'rgba(0, 255, 0, 0.3)',
-  color: 'var(--crt-phosphor-bright)',
-  fontWeight: 'bold',
-};
 
 /**
  * Groups beads by source database, maintaining sort order within each group.
@@ -180,12 +60,6 @@ function groupBeadsBySource(beads: BeadInfo[]): BeadGroup[] {
   }
 
   return groups;
-}
-
-/** Format a bead cost for display. */
-function formatBeadCost(cost: number): string {
-  if (cost < 0.01 && cost > 0) return '<$0.01';
-  return `$${cost.toFixed(2)}`;
 }
 
 export function BeadsList({ statusFilter, isActive = true, searchQuery = '', overseerView = false, onAssign }: BeadsListProps) {
@@ -410,6 +284,15 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
     }
   }, []);
 
+  // Stable callbacks passed to memoized BeadRow children
+  const handleToggleMenu = useCallback((beadId: string) => {
+    setOpenMenuId((prev) => (prev === beadId ? null : beadId));
+  }, []);
+
+  const handleRowAction = useCallback((bead: BeadInfo, action: ActionType) => {
+    void handleAction(bead, action);
+  }, [handleAction]);
+
   if (loading && !beads) {
     return (
       <div style={styles.loadingState}>
@@ -481,122 +364,35 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
                 </thead>
                 <tbody>
                   {group.beads.map((bead) => {
-                    const priorityInfo = getPriorityInfo(bead.priority);
-                    const statusInfo = getStatusInfo(bead.status);
-                    const isClosed = bead.status.toLowerCase() === 'closed';
-                    // Active work states where agent name should be prominently shown
-                    const isActiveWork = ['hooked', 'in_progress'].includes(bead.status.toLowerCase());
-
-                    const currentAction = actionInProgress?.id === bead.id ? actionInProgress : null;
-                    const result = actionResult?.id === bead.id ? actionResult : null;
-                    const canSling = !isClosed && !bead.assignee;
-                    const canDelete = !isClosed; // Can request delete for any non-closed bead
-                    const hasActions = canSling || canDelete;
                     const isMenuOpen = openMenuId === bead.id;
-
+                    const isThisInProgress = actionInProgress?.id === bead.id;
+                    const isThisResult = actionResult?.id === bead.id;
+                    let actionState: BeadActionState | undefined;
+                    if (isThisInProgress || isThisResult) {
+                      actionState = {};
+                      if (isThisInProgress && actionInProgress) {
+                        actionState.actionInProgress = { type: actionInProgress.type };
+                      }
+                      if (isThisResult && actionResult) {
+                        actionState.actionResult = {
+                          type: actionResult.type,
+                          success: actionResult.success,
+                        };
+                      }
+                    }
                     return (
-                      <tr
+                      <BeadRow
                         key={bead.id}
-                        style={{
-                          ...styles.row,
-                          opacity: isClosed ? 0.5 : 1,
-                          backgroundColor: statusInfo.bgColor ?? 'transparent',
-                        }}
-                      >
-                        <td style={styles.idCell}>
-                          {highlightMatches(bead.id, highlightQuery)}
-                        </td>
-                        <td style={{ ...styles.cell, color: priorityInfo.color }}>
-                          {priorityInfo.label}
-                        </td>
-                        <td style={styles.typeCell}>{bead.type.toUpperCase()}</td>
-                        <td style={styles.titleCell} title={bead.title}>
-                          {highlightMatches(bead.title, highlightQuery)}
-                        </td>
-                        <td style={{ ...styles.cell, color: statusInfo.color, fontWeight: statusInfo.bgColor ? 'bold' : 'normal' }}>
-                          {statusInfo.label}
-                        </td>
-                        <td
-                          style={{
-                            ...styles.cell,
-                            ...(isActiveWork && bead.assignee ? styles.activeAssigneeCell : {}),
-                          }}
-                          onClick={onAssign ? (e) => { e.stopPropagation(); } : undefined}
-                        >
-                          {onAssign ? (
-                            <AgentAssignDropdown
-                              beadId={bead.id}
-                              currentAssignee={bead.assignee}
-                              onAssign={(agent) => { onAssign(bead.id, agent); }}
-                              compact
-                              disabled={isClosed}
-                            />
-                          ) : (
-                            highlightMatches(formatAssignee(bead.assignee), highlightQuery)
-                          )}
-                        </td>
-                        <td style={styles.costCell}>
-                          {beadCosts[bead.id] != null
-                            ? formatBeadCost(beadCosts[bead.id])
-                            : ''}
-                        </td>
-                        <td style={styles.dateCell}>
-                          {formatDate(bead.updatedAt ?? bead.createdAt)}
-                        </td>
-                        <td style={styles.actionCell}>
-                          {hasActions && (
-                            <div
-                              style={styles.actionMenu}
-                              ref={isMenuOpen ? menuRef : null}
-                            >
-                              {/* Show result feedback or menu trigger */}
-                              {currentAction ? (
-                                <span style={styles.actionLoading}>...</span>
-                              ) : result ? (
-                                <span style={{
-                                  ...styles.actionResult,
-                                  color: result.success ? 'var(--crt-phosphor-bright)' : '#FF4444',
-                                }}>
-                                  {result.success ? '✓' : '✗'}
-                                </span>
-                              ) : (
-                                <button
-                                  style={styles.actionButton}
-                                  onClick={() => { setOpenMenuId(isMenuOpen ? null : bead.id); }}
-                                  title="Actions"
-                                >
-                                  ⋮
-                                </button>
-                              )}
-
-                              {/* Dropdown menu */}
-                              {isMenuOpen && (
-                                <div style={styles.dropdown}>
-                                  {canSling && (
-                                    <button
-                                      style={styles.dropdownItem}
-                                      onClick={() => { void handleAction(bead, 'sling'); }}
-                                    >
-                                      SLING
-                                    </button>
-                                  )}
-                                  {canDelete && (
-                                    <button
-                                      style={{
-                                        ...styles.dropdownItem,
-                                        ...styles.dropdownItemDelete,
-                                      }}
-                                      onClick={() => { void handleAction(bead, 'delete'); }}
-                                    >
-                                      DELETE
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
+                        bead={bead}
+                        cost={beadCosts[bead.id] ?? null}
+                        highlightQuery={highlightQuery}
+                        isMenuOpen={isMenuOpen}
+                        actionState={actionState}
+                        onAssign={onAssign}
+                        onToggleMenu={handleToggleMenu}
+                        onAction={handleRowAction}
+                        menuRef={isMenuOpen ? menuRef : undefined}
+                      />
                     );
                   })}
                 </tbody>
@@ -701,109 +497,5 @@ const styles = {
     fontSize: '0.7rem',
     letterSpacing: '0.1em',
     whiteSpace: 'nowrap',
-  },
-  row: {
-    borderBottom: '1px solid #222',
-    transition: 'background-color 0.1s ease',
-  },
-  cell: {
-    padding: '8px 6px',
-    color: 'var(--crt-phosphor)',
-    whiteSpace: 'nowrap',
-  },
-  activeAssigneeCell: {
-    color: 'var(--crt-phosphor-bright)',
-    fontWeight: 'bold',
-    textShadow: '0 0 4px var(--crt-phosphor-glow)',
-  },
-  idCell: {
-    padding: '8px 6px',
-    color: 'var(--crt-phosphor-bright)',
-    fontWeight: 'bold',
-    whiteSpace: 'nowrap',
-  },
-  typeCell: {
-    padding: '8px 6px',
-    color: 'var(--crt-phosphor-dim)',
-    fontSize: '0.7rem',
-    whiteSpace: 'nowrap',
-  },
-  titleCell: {
-    padding: '8px 6px',
-    color: 'var(--crt-phosphor)',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  costCell: {
-    padding: '8px 6px',
-    color: 'var(--crt-phosphor)',
-    fontSize: '0.75rem',
-    whiteSpace: 'nowrap',
-    fontWeight: 'bold',
-  },
-  dateCell: {
-    padding: '8px 6px',
-    color: 'var(--crt-phosphor-dim)',
-    fontSize: '0.7rem',
-    whiteSpace: 'nowrap',
-  },
-  actionCell: {
-    padding: '4px 6px',
-    textAlign: 'center',
-    position: 'relative',
-  },
-  actionMenu: {
-    position: 'relative',
-    display: 'inline-block',
-  },
-  actionButton: {
-    backgroundColor: 'transparent',
-    color: 'var(--crt-phosphor)',
-    border: '1px solid var(--crt-phosphor-dim)',
-    fontFamily: '"Share Tech Mono", monospace',
-    fontSize: '0.9rem',
-    padding: '2px 8px',
-    cursor: 'pointer',
-    transition: 'all 0.15s ease',
-    lineHeight: 1,
-  },
-  actionLoading: {
-    color: 'var(--crt-phosphor-dim)',
-    fontSize: '0.8rem',
-  },
-  actionResult: {
-    fontSize: '0.8rem',
-    fontWeight: 'bold',
-  },
-  dropdown: {
-    position: 'absolute',
-    right: 0,
-    top: '100%',
-    marginTop: '2px',
-    backgroundColor: 'var(--theme-bg-elevated)',
-    border: '1px solid var(--crt-phosphor-dim)',
-    borderRadius: '2px',
-    zIndex: 100,
-    minWidth: '70px',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.5)',
-  },
-  dropdownItem: {
-    display: 'block',
-    width: '100%',
-    padding: '6px 10px',
-    backgroundColor: 'transparent',
-    color: 'var(--crt-phosphor)',
-    border: 'none',
-    fontFamily: '"Share Tech Mono", monospace',
-    fontSize: '0.7rem',
-    letterSpacing: '0.05em',
-    cursor: 'pointer',
-    textAlign: 'left',
-    transition: 'background-color 0.1s ease',
-  },
-  dropdownItemDelete: {
-    color: '#FF6B35',
-    borderTop: '1px solid #333',
   },
 } satisfies Record<string, CSSProperties>;
