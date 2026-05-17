@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 import { api } from '../services/api';
-import { useCommunication, type IncomingChatMessage } from '../contexts/CommunicationContext';
+import { useCommunicationActions, type IncomingChatMessage } from '../contexts/CommunicationContext';
 
 export interface UseUnreadCountsResult {
   /** Map of agentId -> unread count */
@@ -32,7 +32,7 @@ export function useUnreadCounts(): UseUnreadCountsResult {
   const [error, setError] = useState<Error | null>(null);
 
   const mountedRef = useRef(true);
-  const { subscribe } = useCommunication();
+  const { subscribe } = useCommunicationActions();
 
   // Fetch initial unread counts from API
   useEffect(() => {

@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 
 import { api } from '../services/api';
 import type { ChatMessage } from '../types';
-import { useCommunication, type IncomingChatMessage } from '../contexts/CommunicationContext';
+import { useCommunicationActions, type IncomingChatMessage } from '../contexts/CommunicationContext';
 
 /** Delivery status used for optimistic UI on outgoing messages */
 export type OptimisticStatus = 'sending' | 'delivered' | 'failed';
@@ -47,7 +47,7 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
   const [hasMore, setHasMore] = useState(false);
 
   const mountedRef = useRef(true);
-  const { subscribe } = useCommunication();
+  const { subscribe } = useCommunicationActions();
 
   // Fetch messages from REST API
   const fetchMessages = useCallback(async () => {

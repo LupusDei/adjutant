@@ -15,11 +15,13 @@ import type { TimelineEvent } from '../../src/services/api';
 const timelineSubscribers = new Set<(e: IncomingTimelineEvent) => void>();
 
 vi.mock('../../src/contexts/CommunicationContext', () => ({
-  useCommunication: () => ({
+  useCommunicationActions: () => ({
     subscribeTimeline: (cb: (e: IncomingTimelineEvent) => void) => {
       timelineSubscribers.add(cb);
       return () => { timelineSubscribers.delete(cb); };
     },
+    subscribe: () => () => {},
+    sendMessage: async () => undefined,
   }),
 }));
 

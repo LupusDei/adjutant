@@ -15,11 +15,9 @@ vi.mock('../../../src/services/api', () => ({
 // Mock CommunicationContext
 const mockSubscribe = vi.fn(() => vi.fn());
 vi.mock('../../../src/contexts/CommunicationContext', () => ({
-  useCommunication: () => ({
+  useCommunicationActions: () => ({
     subscribe: mockSubscribe,
-    connectionStatus: 'websocket',
-    priority: 'real-time',
-    setPriority: vi.fn(),
+    subscribeTimeline: vi.fn(() => () => {}),
     sendMessage: vi.fn(),
   }),
 }));

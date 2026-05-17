@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 import { getTimelineEvents, type TimelineEvent } from '../services/api';
-import { useCommunication, type IncomingTimelineEvent } from '../contexts/CommunicationContext';
+import { useCommunicationActions, type IncomingTimelineEvent } from '../contexts/CommunicationContext';
 
 export type TimeRange = '1h' | '6h' | '24h' | '7d' | 'all';
 
@@ -60,7 +60,7 @@ export function useTimeline(): UseTimelineResult {
   const [filters, setFilters] = useState<TimelineFilters>({});
 
   const mountedRef = useRef(true);
-  const { subscribeTimeline } = useCommunication();
+  const { subscribeTimeline } = useCommunicationActions();
 
   // Fetch events from REST API
   const fetchEvents = useCallback(async () => {
