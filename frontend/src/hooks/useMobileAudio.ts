@@ -197,6 +197,10 @@ export function useMobileAudio(): UseMobileAudioReturn {
       const onEnded = () => {
         setIsPlaying(false);
         cleanup();
+        // adj-139.3.3: release the decoded audio buffer now that playback
+        // is complete. Safe here (unlike stop()) because the audio has
+        // fully ended and we're not mid-playback.
+        audio.src = '';
         resolve();
       };
 
@@ -212,6 +216,8 @@ export function useMobileAudio(): UseMobileAudioReturn {
           message: errorMessage,
           src: audioEl.src
         });
+        // adj-139.3.3: release the failed audio source.
+        audio.src = '';
         reject(new Error(`Audio playback failed: ${errorMessage} (code: ${errorCode})`));
       };
 
