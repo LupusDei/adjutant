@@ -143,6 +143,17 @@ Use the project's beads prefix throughout (e.g. `adj-` for adjutant). Shown here
 
 ## tasks.md
 
+Every non-exempt task MUST use one of the two TDD-shaped forms (see SKILL.md
+→ "TDD Task Shape (MANDATORY)"):
+
+- **Shape A** — Ta/Tb split: `T010a` writes failing tests (confirm RED) and
+  `T010b` implements until GREEN. Preferred for non-trivial work.
+- **Shape B** — single task with explicit phases: must include both a
+  test-first phrase ("write failing tests first", "confirm RED", etc.) AND a
+  GREEN phrase ("until GREEN", "confirm GREEN", etc.).
+
+Exemption markers (NO TDD shape required): `[setup]`, `[docs]`, `[scaffold]`.
+
 ```markdown
 # Tasks: [FEATURE NAME]
 
@@ -155,13 +166,16 @@ Use the project's beads prefix throughout (e.g. `adj-` for adjutant). Shown here
 - **Bead IDs** (bd-xxx.N.M): Assigned in beads-import.md after bead creation
 - **[P]**: Can run in parallel (different files, no deps)
 - **[Story]**: User story label (US1, US2, etc.)
+- **TDD-shaped**: Every non-exempt task uses Shape A (Ta/Tb split) or Shape B
+  (single task with explicit RED → GREEN phasing). Exemptions: `[setup]`,
+  `[docs]`, `[scaffold]`.
 
 ## Phase 1: Setup
 
 **Purpose**: Project initialization
 
-- [ ] T001 [Description] in [path/to/file]
-- [ ] T002 [P] [Description] in [path/to/file]
+- [ ] T001 [setup] [Description — e.g. install deps, mkdir paths] in [path/to/file]
+- [ ] T002 [P] [setup] [Description] in [path/to/file]
 
 ---
 
@@ -169,8 +183,11 @@ Use the project's beads prefix throughout (e.g. `adj-` for adjutant). Shown here
 
 **Purpose**: Core infrastructure blocking all user stories
 
-- [ ] T003 [Description] in [path/to/file]
-- [ ] T004 [P] [Description] in [path/to/file]
+- [ ] T003a [P] Write failing tests for [module] in [tests/path]. Cover happy,
+      error, and edge cases. Confirm RED.
+- [ ] T003b Implement [module] in [src/path] until T003a tests are GREEN.
+- [ ] T004 [P] Build [module] in [src/path]. Phases: write failing tests first
+      in [tests/path] → confirm RED → implement → confirm GREEN → refactor.
 
 **Checkpoint**: Foundation ready - user stories can begin
 
@@ -181,9 +198,11 @@ Use the project's beads prefix throughout (e.g. `adj-` for adjutant). Shown here
 **Goal**: [What this story delivers]
 **Independent Test**: [Verification approach]
 
-- [ ] T005 [US1] [Description] in [path/to/file]
-- [ ] T006 [P] [US1] [Description] in [path/to/file]
-- [ ] T007 [US1] [Description] in [path/to/file]
+- [ ] T005a [US1] Write failing tests for [behavior] in [tests/path] — confirm RED.
+- [ ] T005b [US1] Implement [behavior] in [src/path] until T005a tests are GREEN.
+- [ ] T006 [P] [US1] Add [feature] in [src/path]. Phases: write failing tests
+      first in [tests/path] (confirm RED), then implement until GREEN.
+- [ ] T007 [docs] [US1] Document [feature] in [docs/path].
 
 **Checkpoint**: US1 independently functional
 
@@ -193,15 +212,18 @@ Use the project's beads prefix throughout (e.g. `adj-` for adjutant). Shown here
 
 **Goal**: [What this story delivers]
 
-- [ ] T008 [US2] [Description] in [path/to/file]
-- [ ] T009 [US2] [Description] in [path/to/file]
+- [ ] T008a [US2] Write failing tests for [behavior] in [tests/path] — confirm RED.
+- [ ] T008b [US2] Implement [behavior] in [src/path] until T008a tests are GREEN.
+- [ ] T009 [US2] Build [module] in [src/path]. Write failing tests first in
+      [tests/path], confirm RED, then implement until GREEN.
 
 ---
 
 ## Phase N: Polish & Cross-Cutting
 
-- [ ] TXXX [P] [Description]
-- [ ] TXXX [Description]
+- [ ] TXXX [P] [docs] [Description — e.g. CHANGELOG, README updates]
+- [ ] TXXY Bug-fix in [src/path]. Write regression test first in [tests/path],
+      confirm RED, then fix until GREEN.
 
 ---
 
@@ -210,6 +232,7 @@ Use the project's beads prefix throughout (e.g. `adj-` for adjutant). Shown here
 - Setup (Phase 1) -> Foundational (Phase 2) -> blocks all user stories
 - US1, US2, US3 can run in parallel after Foundational
 - Polish depends on all desired user stories complete
+- For TDD-split pairs: Tb depends on Ta within the same base number
 
 ## Parallel Opportunities
 
@@ -331,20 +354,24 @@ bd-xxx         (root epic, type=epic)
   bd-xxx.3     (task, type=task)
 ```
 
-**Simplified tasks.md** — no phases, no [US] markers:
+**Simplified tasks.md** — no phases, no [US] markers. TDD-shape rule still applies.
+
 ```markdown
 # Tasks: [FEATURE NAME]
 
 **Epic**: `bd-xxx`
 
-- [ ] T001 [Description] in [path/to/file]
-- [ ] T002 [P] [Description] in [path/to/file]
-- [ ] T003 [Description] in [path/to/file]
+- [ ] T001a Write failing tests for [module] in [tests/path]. Confirm RED.
+- [ ] T001b Implement [module] in [src/path] until T001a tests are GREEN.
+- [ ] T002 [P] Build [module] in [src/path]. Phases: write failing tests first
+      in [tests/path] (confirm RED), implement until GREEN, refactor.
+- [ ] T003 [docs] Update [doc path] with [section name].
 
 ## Dependencies
 
-- T002 depends on T001
-- T003 depends on T001
+- T001b depends on T001a
+- T002 depends on T001b
+- T003 depends on T002
 ```
 
 **Simplified beads-import.md** — no Epics section:

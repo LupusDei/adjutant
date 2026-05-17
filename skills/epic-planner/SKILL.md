@@ -54,7 +54,7 @@ Generate four files in order. Use the templates in `references/templates.md` as 
 
 1. **spec.md** - What to build (user stories with acceptance criteria, requirements, success criteria)
 2. **plan.md** - How to build (architecture decisions, file paths, phases, parallel opportunities)
-3. **tasks.md** - Executable task checklist (T001 format with [P] and [US] markers, exact file paths)
+3. **tasks.md** - Executable task checklist (T001 format with [P] and [US] markers, exact file paths). **Every non-exempt task MUST use one of the two TDD-shaped forms — see "TDD Task Shape (MANDATORY)" below.**
 4. **beads-import.md** - Bead hierarchy mapping (root epic, sub-epics per phase, task tables)
 
 Write all four files to `specs/###-feature-name/`.
@@ -118,6 +118,68 @@ Create them as children of the affected task. Example: while implementing `bd-01
 
 Do NOT pre-plan improvements in the spec artifacts — they emerge organically.
 
+## TDD Task Shape (MANDATORY)
+
+Every implementation task in `specs/<###-feature>/tasks.md` MUST be authored in a
+test-first shape. A task that says "Create file X with tests" expresses the same
+step twice and erases the RED → GREEN cadence — that is not TDD. Use one of the
+two shapes below for every non-exempt task. The audit script `scripts/audit-tasks-md.ts`
+walks `specs/*/tasks.md` and flags any line that violates this rule.
+
+### Shape A — Split task (preferred for non-trivial work)
+
+The Ta-tests / Tb-impl pair share a base number and a clear ordering: Ta must be
+RED before Tb begins.
+
+```markdown
+- [ ] T010a [P] [US1] Write failing tests for foo-service.ts in
+      backend/tests/unit/foo-service.test.ts. Cover happy path, error path,
+      edge case. Confirm RED.
+- [ ] T010b [US1] Implement foo-service.ts in backend/src/services/foo-service.ts.
+      Run tests until GREEN. No new code paths beyond what tests require.
+```
+
+### Shape B — Single task with explicit phases (for small atomic tasks)
+
+The verbiage MUST include BOTH a write-failing-tests-first phrase (e.g. "failing
+tests first", "write tests first", "RED first", "tests before impl", "confirm
+RED") AND a confirm-GREEN phrase (e.g. "until GREEN", "confirm GREEN", "make
+tests pass"). A single-line task that only mentions "with tests" or "+ tests"
+does NOT satisfy this rule.
+
+```markdown
+- [ ] T010 [P] [US1] Build foo-service.ts in backend/src/services/foo-service.ts.
+      Phases: write failing tests first in backend/tests/unit/foo-service.test.ts
+      → confirm RED → implement → confirm GREEN → refactor.
+```
+
+### Exemptions
+
+The following inline markers exempt a task from the TDD-shape rule. Use sparingly:
+
+- `[setup]` — Scaffolding tasks with no behavior (npm install, mkdir, config init).
+- `[docs]` — Documentation-only tasks (CHANGELOG, README, ADR).
+- `[scaffold]` — Empty file or directory creation that another task will fill.
+
+Bug-fix tasks are NOT exempt — the regression test IS the test-first phase. The
+task wording must still include "regression test first" or equivalent.
+
+### Audit
+
+Run the warn-only auditor locally before considering tasks.md complete:
+
+```bash
+npx tsx scripts/audit-tasks-md.ts            # full report
+npx tsx scripts/audit-tasks-md.ts --quiet    # exit code only
+npx tsx scripts/audit-tasks-md.ts --json     # machine-readable
+```
+
+The script exits 0 always (warn-only — does NOT fail CI). It exists so reviewers
+can spot non-TDD task shapes quickly. New tasks.md files authored after this rule
+landed MUST pass the audit clean. See `.claude/rules/03-testing.md` →
+"Task Structure in tasks.md (TDD-shaped)" for the canonical rule and reference
+examples.
+
 ## Question Routing (MANDATORY)
 
 **All questions about the epic MUST be sent to the user via Adjutant MCP messages.** This is non-negotiable.
@@ -144,8 +206,11 @@ When spawning team agents to work on the epic, include this same instruction in 
 - **Sequential IDs** within each level (`.1`, `.2`, `.3`, not random)
 - **Phase numbers = sub-epic numbers** — keep them in sync
 - **Skip sub-epics** for tiny features (< 5 tasks) — put tasks directly under root
+- **TDD-shaped tasks** — every non-exempt task uses Shape A (Ta/Tb split) or Shape B (single task with explicit RED → GREEN phasing). Exemptions: `[setup]`, `[docs]`, `[scaffold]`.
 
 ## References
 
 - [templates.md](references/templates.md) - Speckit-compatible templates for all four artifacts
 - [beads-workflow.md](references/beads-workflow.md) - `bd` CLI commands, dependency wiring, and ID conventions
+- `.claude/rules/03-testing.md` - Canonical testing rules, including the TDD-shaped tasks.md rule
+- `scripts/audit-tasks-md.ts` - Warn-only auditor that flags non-TDD task shapes

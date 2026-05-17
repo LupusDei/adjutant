@@ -170,6 +170,77 @@ WIP branches are exempt from coverage thresholds but MUST still pass build + tes
 - Third-party library behavior (test YOUR code, not theirs)
 - Trivial getters/setters with no logic
 
+## Task Structure in `tasks.md` (TDD-shaped)
+
+Every implementation task in `specs/<###-feature>/tasks.md` MUST be authored
+in a test-first shape. A task that says "Create file X with tests" expresses
+the same step twice and erases the RED → GREEN cadence — that is not TDD.
+The template enforces a split that makes the cadence reviewable.
+
+### Two acceptable shapes
+
+**Shape A — Split task (preferred for non-trivial work):**
+
+```markdown
+- [ ] T012a [US1] Write failing tests for ChatPanel.tsx open/close behavior
+      in frontend/tests/unit/chat-panel.test.tsx — confirm RED
+- [ ] T012b [US1] Implement ChatPanel.tsx in src/components/chat/chat-panel.tsx
+      until T012a tests are GREEN
+```
+
+The Ta-tests / Tb-impl pair share a base number and a clear ordering:
+Ta must be RED before Tb begins.
+
+**Shape B — Single task with explicit phases (for small atomic tasks):**
+
+```markdown
+- [ ] T012 [US1] Add ChatPanel.tsx open/close behavior — write failing tests
+      first in frontend/tests/unit/chat-panel.test.tsx (confirm RED), then
+      implement in src/components/chat/chat-panel.tsx until GREEN.
+```
+
+The verbiage MUST include both a write-failing-tests-first phrase
+("failing tests first", "write tests first", "RED first", "tests before
+impl") AND a confirm-GREEN phrase. A single-line task that only mentions
+"with tests" or "+ tests" does NOT satisfy this rule.
+
+### What this rule does NOT require
+
+- **Setup / scaffolding** tasks that have no behavior (e.g. "Add a new npm
+  dependency", "Create empty directory structure") are exempt. Mark them
+  with the inline tag `[setup]` so the audit script ignores them.
+- **Documentation-only** tasks (e.g. "Write CHANGELOG.md entry") are
+  exempt. Mark them `[docs]`.
+- **Bug-fix** tasks already covered by the "Bug Fix" minimum above — the
+  regression test IS the test-first phase. The task wording must still
+  include "regression test first" or equivalent.
+
+The auditor also recognizes `[scaffold]` for empty-file/directory creation
+that a later task will fill.
+
+### Audit
+
+A warn-only lint script (`scripts/audit-tasks-md.ts`) walks
+`specs/*/tasks.md` and flags tasks lacking the test-first phrasing. It
+does NOT fail CI yet — existing tasks predate this rule and would
+generate noise. Adopt this rule for ALL new tasks.md authored after
+this rule lands; backfill is out of scope.
+
+Run locally:
+
+```bash
+npx tsx scripts/audit-tasks-md.ts          # full report
+npx tsx scripts/audit-tasks-md.ts --quiet  # exit code only
+npx tsx scripts/audit-tasks-md.ts --json   # machine-readable
+```
+
+`tsx` lives in `backend/node_modules` — invoke via the backend prefix if
+not installed at the repo root: `npx --prefix backend tsx ../scripts/audit-tasks-md.ts`.
+
+The epic-planner skill (`skills/epic-planner/SKILL.md`) generates tasks.md
+files that comply with this rule by default. Hand-authored tasks.md files
+must follow the same shape.
+
 ## Testing Tools
 
 - **Framework**: Vitest
