@@ -109,6 +109,13 @@ const INITIAL_RECONNECT_DELAY_MS = 1_000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
 const MAX_WS_RETRIES = 5;
 const MAX_SSE_RETRIES = 3;
+/**
+ * Dev-mode threshold for the subscriber-Set leak diagnostic. If either
+ * subscribersRef or timelineSubscribersRef grows past this many entries,
+ * `subscribe()` / `subscribeTimeline()` emit a console.warn pointing at
+ * a likely missing unsubscribe call. No effect in production builds.
+ */
+const SUBSCRIBER_LEAK_THRESHOLD = 50;
 
 // ============================================================================
 // Contexts
@@ -183,11 +190,25 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
 
   const subscribe = useCallback((callback: MessageHandler) => {
     subscribersRef.current.add(callback);
+    if (import.meta.env.DEV && subscribersRef.current.size > SUBSCRIBER_LEAK_THRESHOLD) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[CommunicationContext] subscriber Set has grown to ${String(subscribersRef.current.size)} ` +
+        "subscribers — possible leak; check for missing unsubscribe calls in hooks/components.",
+      );
+    }
     return () => { subscribersRef.current.delete(callback); };
   }, []);
 
   const subscribeTimeline = useCallback((callback: TimelineEventHandler) => {
     timelineSubscribersRef.current.add(callback);
+    if (import.meta.env.DEV && timelineSubscribersRef.current.size > SUBSCRIBER_LEAK_THRESHOLD) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[CommunicationContext] timeline subscriber Set has grown to ${String(timelineSubscribersRef.current.size)} ` +
+        "subscribers — possible leak; check for missing unsubscribe calls in hooks/components.",
+      );
+    }
     return () => { timelineSubscribersRef.current.delete(callback); };
   }, []);
 
