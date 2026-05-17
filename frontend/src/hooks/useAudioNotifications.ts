@@ -83,6 +83,10 @@ export function useAudioNotifications(): UseAudioNotificationsReturn {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentIdRef = useRef<string | null>(null);
   const seenIdsRef = useRef(new Set<string>());
+  // adj-139.3.1: cleanup fn for the currently-playing audio (removes listeners,
+  // pauses, clears src). Set when an audio starts playing, called on
+  // unmount/skip/mute/disable so we never leak Audio decoders.
+  const cleanupCurrentAudioRef = useRef<(() => void) | null>(null);
 
   /**
    * Insert item in priority order
@@ -130,22 +134,46 @@ export function useAudioNotifications(): UseAudioNotificationsReturn {
       audioRef.current = audio;
       currentIdRef.current = item.id;
 
-      audio.addEventListener('ended', () => {
-        setIsPlaying(false);
+      // adj-139.3.1: named handlers so we can remove them on completion.
+      // The previous anonymous-listener pattern left listeners + decoded audio
+      // pinned to memory for every notification, causing ~150KB/notification leak.
+      const handleEnded = () => {
+        audio.pause();
+        audio.removeEventListener('ended', handleEnded);
+        audio.removeEventListener('error', handleError);
+        audio.src = '';
+        if (audioRef.current === audio) {
+          audioRef.current = null;
+        }
         currentIdRef.current = null;
-        audioRef.current = null;
-
-        // Remove from queue
+        setIsPlaying(false);
         setQueue((prev) => prev.filter((q) => q.id !== item.id));
-      });
+      };
 
-      audio.addEventListener('error', () => {
+      const handleError = () => {
+        audio.pause();
+        audio.removeEventListener('ended', handleEnded);
+        audio.removeEventListener('error', handleError);
+        audio.src = '';
+        if (audioRef.current === audio) {
+          audioRef.current = null;
+        }
+        currentIdRef.current = null;
         setError('Audio playback failed');
         setIsPlaying(false);
-        currentIdRef.current = null;
-        audioRef.current = null;
         setQueue((prev) => prev.filter((q) => q.id !== item.id));
-      });
+      };
+
+      audio.addEventListener('ended', handleEnded);
+      audio.addEventListener('error', handleError);
+
+      // Store cleanup so unmount/skip/mute paths can also fully release the audio.
+      cleanupCurrentAudioRef.current = () => {
+        audio.pause();
+        audio.removeEventListener('ended', handleEnded);
+        audio.removeEventListener('error', handleError);
+        audio.src = '';
+      };
 
       setIsPlaying(true);
       await audio.play();
@@ -215,10 +243,12 @@ export function useAudioNotifications(): UseAudioNotificationsReturn {
    * Skip current notification
    */
   const skip = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
+    // adj-139.3.1: full cleanup (listeners + src) rather than just pause().
+    if (cleanupCurrentAudioRef.current) {
+      cleanupCurrentAudioRef.current();
+      cleanupCurrentAudioRef.current = null;
     }
+    audioRef.current = null;
     setIsPlaying(false);
 
     if (currentIdRef.current) {
@@ -303,13 +333,14 @@ export function useAudioNotifications(): UseAudioNotificationsReturn {
     }
   }, [isPlaying, isMuted, queue.length, playNext]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount (adj-139.3.1): fully release any in-flight audio.
   useEffect(() => {
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
+      if (cleanupCurrentAudioRef.current) {
+        cleanupCurrentAudioRef.current();
+        cleanupCurrentAudioRef.current = null;
       }
+      audioRef.current = null;
     };
   }, []);
 
