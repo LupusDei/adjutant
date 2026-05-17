@@ -228,15 +228,38 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     }
   }, [voiceInput.transcript, voiceInput.clearTranscript]);
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom when messages change.
+  //
+  // Wrapped in requestAnimationFrame so bursts (e.g. a rapid streaming
+  // token sequence that grows the message list by one per ~50ms) collapse
+  // into one scrollIntoView call per paint instead of one per state flip.
+  const scrollRafRef = useRef<number | null>(null);
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (scrollRafRef.current != null) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    });
   }, []);
 
-  // Scroll to bottom when messages or streaming update
+  // Scroll to bottom only when the message count or streaming count
+  // actually changes — NOT on every render. Reference deps were the bug:
+  // `streamingMessages` is a Map created fresh by `new Map(prev)` in each
+  // onStreamToken handler, so the effect refired on every token even when
+  // the visible state was identical, defeating React batching.
   useEffect(() => {
     scrollToBottom();
-  }, [messages, streamingMessages, scrollToBottom]);
+  }, [messages.length, streamingMessages.size, scrollToBottom]);
+
+  // Cancel any pending RAF on unmount to prevent leaks.
+  useEffect(() => {
+    return () => {
+      if (scrollRafRef.current != null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+    };
+  }, []);
 
   // Cleanup typing timer
   useEffect(() => {
