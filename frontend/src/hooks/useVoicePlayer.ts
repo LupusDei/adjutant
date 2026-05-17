@@ -154,8 +154,20 @@ export function useVoicePlayer(): UseVoicePlayerReturn {
         audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       };
 
-      // Start playback
-      await audio.play();
+      // Start playback. adj-139.3.2: any rejection from play() (e.g.
+      // NotAllowedError, decode failure) MUST run the cleanup ref so the
+      // 6 listeners + src reference do not leak.
+      try {
+        await audio.play();
+      } catch (playErr) {
+        cleanupRef.current?.();
+        cleanupRef.current = null;
+        if (audioRef.current === audio) {
+          audio.src = '';
+          audioRef.current = null;
+        }
+        throw playErr;
+      }
     } catch (err) {
       setState('error');
       setError(err instanceof Error ? err.message : 'Failed to play audio');
