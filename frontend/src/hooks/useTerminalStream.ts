@@ -127,7 +127,10 @@ export function useTerminalStream({ sessionId, enabled }: UseTerminalStreamOptio
       try {
         const result = await api.agents.getSessionTerminal(sessionId);
         if (mountedRef.current) {
-          setContent(stripAnsi(result.content));
+          // adj-bjoia: polling path must also honor the 100KB cap.
+          // Using appendWithRingBuffer(null, ...) treats the fetch as a full
+          // refresh and drops oldest lines past the cap.
+          setContent(appendWithRingBuffer(null, stripAnsi(result.content)));
           setError(null);
           setMode('polling');
           setConnected(true);
@@ -178,7 +181,10 @@ export function useTerminalStream({ sessionId, enabled }: UseTerminalStreamOptio
           switch (msgType) {
             case 'subscribed': {
               const initialContent = msg['content'] as string | undefined;
-              setContent(initialContent ? stripAnsi(initialContent) : '');
+              // adj-bjoia: cap initial WS payload at MAX_TERMINAL_BYTES.
+              // A server with hundreds of KB of buffered scrollback would
+              // otherwise overflow the in-memory content unbounded.
+              setContent(initialContent ? appendWithRingBuffer(null, stripAnsi(initialContent)) : '');
               setConnected(true);
               setMode('ws');
               setLoading(false);
@@ -197,10 +203,13 @@ export function useTerminalStream({ sessionId, enabled }: UseTerminalStreamOptio
               break;
             }
             case 'snapshot': {
-              // Full refresh — replace content entirely
+              // Full refresh — replace content entirely.
+              // adj-bjoia: cap at MAX_TERMINAL_BYTES like the 'subscribed'
+              // and polling paths. A huge snapshot would otherwise blow
+              // through the ring buffer the 'output' path protects.
               const snapshot = msg['content'] as string | undefined;
               if (snapshot) {
-                setContent(stripAnsi(snapshot));
+                setContent(appendWithRingBuffer(null, stripAnsi(snapshot)));
               }
               break;
             }
