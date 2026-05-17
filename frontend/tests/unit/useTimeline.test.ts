@@ -131,4 +131,37 @@ describe('useTimeline - cap at 1000 (adj-139.3.4)', () => {
 
     expect(result.current.events.length).toBeLessThanOrEqual(1000);
   });
+
+  it('should flip hasMore to false once the events array is already at cap (adj-o5pez)', async () => {
+    // adj-o5pez: when prev.length === MAX_TIMELINE_EVENTS, slice() truncates
+    // any newly-fetched older events back to 1000 — the loadMore call
+    // produces zero new visible events. Decision: explicitly turn hasMore
+    // off so the UI button hides rather than firing useless requests.
+    //
+    // Setup: initial fetch returns exactly 1000 events with hasMore=true
+    // (simulating a server that still has older data to serve).
+    mockFetch.mockResolvedValueOnce({
+      events: Array.from({ length: 1000 }, (_, i) => makeEvent(i)),
+      hasMore: true,
+    });
+
+    const { result } = renderHook(() => useTimeline());
+    await waitFor(() => { expect(result.current.loading).toBe(false); });
+    expect(result.current.events.length).toBe(1000);
+    expect(result.current.hasMore).toBe(true); // sanity
+
+    // loadMore SHOULD NOT fire a request at this point. The hook should
+    // detect that the cap is reached and either:
+    //   - early-return without setting state (no-op), AND
+    //   - flip hasMore to false so the UI hides the load-more button.
+    const callsBefore = mockFetch.mock.calls.length;
+    await act(async () => { await result.current.loadMore(); });
+
+    // No new request should have been made (we're at cap)
+    expect(mockFetch.mock.calls.length).toBe(callsBefore);
+    // Events stay capped at 1000
+    expect(result.current.events.length).toBe(1000);
+    // hasMore is now false — UI should hide the load-more button
+    expect(result.current.hasMore).toBe(false);
+  });
 });
