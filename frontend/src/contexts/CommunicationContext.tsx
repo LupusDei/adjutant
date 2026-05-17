@@ -51,6 +51,8 @@ interface WsServerMsg {
   sessionId?: string;
   lastSeq?: number;
   serverTime?: string;
+  // sync_response carries an array of missed chat_messages
+  missed?: WsServerMsg[];
   // Timeline event fields
   eventType?: string;
   agentId?: string;
@@ -62,15 +64,12 @@ interface WsServerMsg {
 }
 
 /**
- * Communication state and actions.
+ * Stable actions for sending messages and subscribing to incoming streams.
+ *
+ * Consumers of this context will NOT re-render on connection status changes,
+ * because all members are stable callbacks defined once on mount.
  */
-export interface CommunicationContextValue {
-  /** Current communication priority */
-  priority: CommunicationPriority;
-  /** Set the communication priority */
-  setPriority: (priority: CommunicationPriority) => void;
-  /** Current connection status */
-  connectionStatus: ConnectionStatus;
+export interface CommunicationActionsContextValue {
   /** Send a chat message via WebSocket (falls back to HTTP POST /api/messages) */
   sendMessage: (opts: SendMessageOptions) => Promise<void>;
   /** Subscribe to incoming chat messages. Returns an unsubscribe function. */
@@ -78,6 +77,28 @@ export interface CommunicationContextValue {
   /** Subscribe to incoming timeline events. Returns an unsubscribe function. */
   subscribeTimeline: (callback: TimelineEventHandler) => () => void;
 }
+
+/**
+ * Volatile connection-status and priority state.
+ *
+ * Consumers of this context re-render on every status flip — keep usage
+ * narrow (e.g. the status indicator and the priority selector only).
+ */
+export interface CommunicationStatusContextValue {
+  /** Current communication priority */
+  priority: CommunicationPriority;
+  /** Set the communication priority */
+  setPriority: (priority: CommunicationPriority) => void;
+  /** Current connection status */
+  connectionStatus: ConnectionStatus;
+}
+
+/**
+ * Combined value, retained for backward compatibility with `useCommunication()`.
+ */
+export interface CommunicationContextValue
+  extends CommunicationActionsContextValue,
+    CommunicationStatusContextValue {}
 
 // ============================================================================
 // Constants
@@ -90,10 +111,11 @@ const MAX_WS_RETRIES = 5;
 const MAX_SSE_RETRIES = 3;
 
 // ============================================================================
-// Context
+// Contexts
 // ============================================================================
 
-const CommunicationContext = createContext<CommunicationContextValue | null>(null);
+const CommunicationActionsContext = createContext<CommunicationActionsContextValue | null>(null);
+const CommunicationStatusContext = createContext<CommunicationStatusContextValue | null>(null);
 
 /**
  * Provider component for communication state.
@@ -103,6 +125,10 @@ const CommunicationContext = createContext<CommunicationContextValue | null>(nul
  *   real-time  → WebSocket /ws/chat (falls back to SSE after retries)
  *   efficient  → EventSource /api/events (falls back to polling after retries)
  *   polling    → No persistent connection
+ *
+ * Exposes two contexts:
+ *   - CommunicationActionsContext (stable callbacks)
+ *   - CommunicationStatusContext (volatile status/priority)
  */
 export function CommunicationProvider({ children }: { children: ReactNode }) {
   // ---------------------------------------------------------------------------
@@ -195,6 +221,13 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
     function startSSE() {
       if (!mounted) return;
 
+      // Mutual exclusion: close any open WebSocket before opening SSE
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+
       // Close any prior SSE
       if (sseRef.current) {
         sseRef.current.close();
@@ -212,14 +245,17 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
       sseRef.current = es;
       let sseRetries = 0;
 
-      es.addEventListener('connected', () => {
+      // Named handler so we can remove it before close (prevents leak)
+      const handleConnected = () => {
         sseRetries = 0;
         if (mounted) setConnectionStatus('sse');
-      });
+      };
+      es.addEventListener('connected', handleConnected);
 
       es.onerror = () => {
         sseRetries++;
         if (sseRetries > MAX_SSE_RETRIES && mounted) {
+          es.removeEventListener('connected', handleConnected);
           es.close();
           sseRef.current = null;
           setConnectionStatus('polling');
@@ -231,6 +267,12 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
     // -- WebSocket connection --
     function startWebSocket() {
       if (!mounted) return;
+
+      // Mutual exclusion: close any open SSE before opening WebSocket
+      if (sseRef.current) {
+        sseRef.current.close();
+        sseRef.current = null;
+      }
 
       setConnectionStatus('reconnecting');
 
@@ -318,12 +360,14 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // Exponential backoff
+        // Exponential backoff. Always clear any previous reconnect timer first
+        // to avoid stacking timers on rapid disconnects.
         const delay = Math.min(
           INITIAL_RECONNECT_DELAY_MS * Math.pow(2, reconnectAttemptsRef.current - 1),
           MAX_RECONNECT_DELAY_MS,
         );
         setConnectionStatus('reconnecting');
+        clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = setTimeout(startWebSocket, delay);
       };
 
@@ -371,33 +415,70 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Context value
+  // Context values — actions are stable; status is volatile
   // ---------------------------------------------------------------------------
-  const value = useMemo(() => ({
-    priority,
-    setPriority,
-    connectionStatus,
-    sendMessage,
-    subscribe,
-    subscribeTimeline,
-  }), [priority, setPriority, connectionStatus, sendMessage, subscribe, subscribeTimeline]);
+  const actionsValue = useMemo<CommunicationActionsContextValue>(
+    () => ({ sendMessage, subscribe, subscribeTimeline }),
+    [sendMessage, subscribe, subscribeTimeline],
+  );
+
+  const statusValue = useMemo<CommunicationStatusContextValue>(
+    () => ({ priority, setPriority, connectionStatus }),
+    [priority, setPriority, connectionStatus],
+  );
 
   return (
-    <CommunicationContext.Provider value={value}>
-      {children}
-    </CommunicationContext.Provider>
+    <CommunicationActionsContext.Provider value={actionsValue}>
+      <CommunicationStatusContext.Provider value={statusValue}>
+        {children}
+      </CommunicationStatusContext.Provider>
+    </CommunicationActionsContext.Provider>
   );
 }
 
 /**
- * Hook to access communication context.
+ * Hook to access stable communication actions.
+ *
+ * Consumers will not re-render when connectionStatus or priority change.
  */
-export function useCommunication(): CommunicationContextValue {
-  const context = useContext(CommunicationContext);
+export function useCommunicationActions(): CommunicationActionsContextValue {
+  const context = useContext(CommunicationActionsContext);
   if (!context) {
-    throw new Error('useCommunication must be used within a CommunicationProvider');
+    throw new Error('useCommunicationActions must be used within a CommunicationProvider');
   }
   return context;
 }
 
-export default CommunicationContext;
+/**
+ * Hook to access volatile communication status (connectionStatus + priority).
+ *
+ * Consumers re-render every time the connection status flips — keep usage
+ * scoped to status indicators / priority selectors only.
+ */
+export function useCommunicationStatus(): CommunicationStatusContextValue {
+  const context = useContext(CommunicationStatusContext);
+  if (!context) {
+    throw new Error('useCommunicationStatus must be used within a CommunicationProvider');
+  }
+  return context;
+}
+
+/**
+ * Legacy combined hook — returns both actions and status.
+ *
+ * Prefer `useCommunicationActions()` or `useCommunicationStatus()` for new
+ * code. This hook re-renders consumers on every status change.
+ */
+export function useCommunication(): CommunicationContextValue {
+  const actions = useContext(CommunicationActionsContext);
+  const status = useContext(CommunicationStatusContext);
+  if (!actions || !status) {
+    throw new Error('useCommunication must be used within a CommunicationProvider');
+  }
+  return {
+    ...actions,
+    ...status,
+  };
+}
+
+export default CommunicationActionsContext;
