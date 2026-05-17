@@ -120,6 +120,15 @@ export function useVoicePlayer(): UseVoicePlayerReturn {
       };
 
       const handleEnded = () => {
+        // adj-topfa: natural completion must run the same full cleanup as
+        // the rejected-play branch — otherwise every fully-played voice
+        // message leaks 6 listeners + decoded src until the next play.
+        cleanupRef.current?.();
+        cleanupRef.current = null;
+        if (audioRef.current === audio) {
+          audio.src = '';
+          audioRef.current = null;
+        }
         setState('idle');
         setProgress(0);
         setCurrentTime(0);

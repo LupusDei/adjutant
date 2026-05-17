@@ -28,6 +28,8 @@ interface AudioDouble {
   addEventListener: Mock;
   removeEventListener: Mock;
   load: Mock;
+  /** Fire all listeners for an event (mimics a real DOM event). */
+  fire: (event: string) => void;
 }
 
 const createdAudios: AudioDouble[] = [];
@@ -51,6 +53,15 @@ function createAudioDouble(): AudioDouble {
     removeEventListener: vi.fn((event: string, listener: EventListener) => {
       listeners.get(event)?.delete(listener);
     }),
+    fire: (event: string) => {
+      const set = listeners.get(event);
+      if (!set) return;
+      const evt = new Event(event);
+      Object.defineProperty(evt, 'target', { value: audio, writable: false });
+      for (const fn of [...set]) {
+        fn(evt);
+      }
+    },
   };
   return audio;
 }
@@ -151,6 +162,65 @@ describe('useVoicePlayer - error-path cleanup (adj-139.3.2)', () => {
       for (const evt of eventNames) {
         expect(audio.listeners.get(evt)?.size ?? 0).toBe(0);
       }
+    }
+  });
+
+  // adj-topfa: natural-completion ('ended' event) must invoke the same
+  // cleanup path as the rejected-play branch — otherwise every completed
+  // voice message leaks 6 listeners + decoded src until the next play.
+  it('should remove all 6 listeners and clear src on natural ended event', async () => {
+    const { result } = renderHook(() => useVoicePlayer());
+
+    await act(async () => {
+      await result.current.play('hello');
+    });
+
+    // After successful start, audio is created and listeners are attached.
+    expect(createdAudios.length).toBe(1);
+    const audio = createdAudios[0]!;
+    const eventNames = ['play', 'pause', 'timeupdate', 'ended', 'error', 'loadedmetadata'] as const;
+
+    // Sanity: listeners were attached.
+    for (const evt of eventNames) {
+      expect(audio.listeners.get(evt)?.size ?? 0).toBeGreaterThanOrEqual(1);
+    }
+
+    // Fire the natural 'ended' event.
+    act(() => {
+      audio.fire('ended');
+    });
+
+    await waitFor(() => {
+      // All 6 listeners must be removed.
+      for (const evt of eventNames) {
+        expect(audio.listeners.get(evt)?.size ?? 0).toBe(0);
+      }
+    });
+    // And the audio source must be released so the decoded buffer can be GC'd.
+    expect(audio.src).toBe('');
+  });
+
+  it('should not retain listeners after multiple successful plays that end naturally', async () => {
+    const { result } = renderHook(() => useVoicePlayer());
+
+    for (let i = 0; i < 10; i++) {
+      await act(async () => {
+        await result.current.play(`text-${i}`);
+      });
+
+      const audio = createdAudios[i]!;
+      act(() => {
+        audio.fire('ended');
+      });
+    }
+
+    // Every audio must have zero residual listeners after natural completion.
+    const eventNames = ['play', 'pause', 'timeupdate', 'ended', 'error', 'loadedmetadata'] as const;
+    for (const audio of createdAudios) {
+      for (const evt of eventNames) {
+        expect(audio.listeners.get(evt)?.size ?? 0).toBe(0);
+      }
+      expect(audio.src).toBe('');
     }
   });
 });
