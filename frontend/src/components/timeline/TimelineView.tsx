@@ -13,6 +13,8 @@ import { TimelineFilters } from './TimelineFilters';
 import { TimelineEventCard } from './TimelineEventCard';
 import type { TimelineEvent } from '../../services/api';
 
+import './timeline.css';
+
 export interface TimelineViewProps {
   isActive?: boolean;
 }
@@ -162,13 +164,7 @@ export function TimelineView({ isActive = true }: TimelineViewProps) {
         )}
       </div>
 
-      {/* Inline keyframes for new event glow animation */}
-      <style>{`
-        @keyframes timeline-glow {
-          0% { background-color: rgba(0, 255, 0, 0.15); }
-          100% { background-color: transparent; }
-        }
-      `}</style>
+      {/* timeline-glow keyframes live in ./timeline.css (adj-139.5.3) */}
     </div>
   );
 }
