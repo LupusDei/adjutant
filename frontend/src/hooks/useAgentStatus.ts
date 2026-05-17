@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-import { useCommunication, type IncomingChatMessage } from '../contexts/CommunicationContext';
+import { useCommunicationActions, type IncomingChatMessage } from '../contexts/CommunicationContext';
 
 export interface AgentStatusInfo {
   status: string;
@@ -32,7 +32,7 @@ interface IncomingWithMetadata extends IncomingChatMessage {
 
 export function useAgentStatus(): UseAgentStatusResult {
   const [statuses, setStatuses] = useState<Map<string, AgentStatusInfo>>(new Map());
-  const { subscribe } = useCommunication();
+  const { subscribe } = useCommunicationActions();
 
   const handleMessage = useCallback((incoming: IncomingWithMetadata) => {
     const meta = incoming.metadata;

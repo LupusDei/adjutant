@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 
-import { useCommunication, type IncomingChatMessage } from '../../contexts/CommunicationContext';
+import { useCommunicationActions, type IncomingChatMessage } from '../../contexts/CommunicationContext';
 
 interface Announcement {
   id: string;
@@ -40,7 +40,7 @@ const TYPE_CLASSES: Record<string, string> = {
 export const AnnouncementBanner: React.FC = () => {
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { subscribe } = useCommunication();
+  const { subscribe } = useCommunicationActions();
 
   const dismiss = useCallback(() => {
     setAnnouncement(null);
