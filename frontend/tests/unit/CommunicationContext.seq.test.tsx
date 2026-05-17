@@ -309,6 +309,7 @@ describe("CommunicationContext seq tracking", () => {
     expect(typeof first.lastSeqSeen).toBe("number");
 
     // Touch result to satisfy unused-var lint
-    void result.current.subscribe(() => {})();
+    const unsub = result.current.subscribe(() => {});
+    unsub();
   });
 });

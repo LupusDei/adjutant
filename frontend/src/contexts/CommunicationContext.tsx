@@ -224,7 +224,10 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
     function closeSse(es: EventSource) {
       const handler = sseConnectedHandlers.get(es);
       if (handler) {
-        es.removeEventListener('connected', handler);
+        // Some test mocks may lack removeEventListener — guard defensively.
+        if (typeof es.removeEventListener === 'function') {
+          es.removeEventListener('connected', handler);
+        }
         sseConnectedHandlers.delete(es);
       }
       es.close();
@@ -249,7 +252,9 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
     function startSSE() {
       if (!mounted) return;
 
-      // Mutual exclusion: close any open WebSocket before opening SSE
+      // Mutual exclusion: close any open WebSocket before opening SSE.
+      // Defends against future code paths that fall back to SSE without
+      // first nulling wsRef (e.g. error handlers, race conditions).
       if (wsRef.current) {
         wsRef.current.onclose = null;
         wsRef.current.close();
@@ -297,7 +302,9 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
 
       // Mutual exclusion: close any open SSE before opening WebSocket
-      // (uses closeSse so the SSE 'connected' listener is removed first)
+      // (uses closeSse so the SSE 'connected' listener is removed first).
+      // Defends against startWebSocket being invoked from a reconnect path
+      // while an SSE is still alive (defensive belt-and-suspenders).
       if (sseRef.current) {
         closeSse(sseRef.current);
         sseRef.current = null;
@@ -376,7 +383,7 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
             // already delivered and for duplicates within the payload itself.
             const missed = msg.missed ?? [];
             for (const entry of missed) {
-              if (!entry || entry.type !== 'chat_message') continue;
+              if (entry.type !== 'chat_message') continue;
               if (!entry.id || !entry.from || !entry.to || !entry.body || !entry.timestamp) continue;
               if (entry.seq != null && entry.seq <= lastProcessedSeqRef.current) continue;
               if (entry.seq != null) {

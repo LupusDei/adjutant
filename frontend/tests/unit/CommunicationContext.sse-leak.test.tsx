@@ -47,7 +47,7 @@ class TrackingEventSource {
   url: string;
   closed = false;
   /** Map from event-type → array of listeners (still attached). */
-  listeners: Map<string, Set<(e: { data: string }) => void>> = new Map();
+  listeners = new Map<string, Set<(e: { data: string }) => void>>();
 
   constructor(url: string) {
     this.url = url;
