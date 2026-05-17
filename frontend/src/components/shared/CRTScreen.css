@@ -340,13 +340,21 @@
     rgba(0, 0, 0, 0.15) 2px
   );
 
-  /* Slight movement */
-  animation: scanline-drift 0.05s steps(2) infinite;
-}
-
-@keyframes scanline-drift {
-  0% { transform: translateY(0); }
-  100% { transform: translateY(2px); }
+  /*
+   * Static scanlines (adj-139.5.2).
+   *
+   * Previously: `animation: scanline-drift 0.05s steps(2) infinite` — a
+   * 20fps repaint of a full-screen overlay that drifted just 2px between
+   * two frames. The motion was effectively imperceptible to the eye (a
+   * micro-flicker at the same period as CRT phosphor decay) yet forced
+   * a continuous repaint of an `inset: 0` layer on top of the entire UI.
+   *
+   * Real CRTs display scanlines as a static spatial pattern at typical
+   * viewing distances. The dynamic refresh feel is already carried by
+   * the rolling `.crt-scan-bar` (scan-roll 6s linear) and the crt-flicker
+   * opacity wobble. Removing this animation drops the dashboard's
+   * idle paint cost without touching the retro aesthetic.
+   */
 }
 
 /* Rolling scan bar (like old CRT refresh) */
