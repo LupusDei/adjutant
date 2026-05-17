@@ -265,8 +265,29 @@
   position: relative;
   overflow: hidden;
 
-  /* Phosphor glow effect - subtle contrast/brightness boost */
-  filter: contrast(1.05) brightness(1.05);
+  /*
+   * Phosphor glow — was `filter: contrast(1.05) brightness(1.05)` which
+   * forced a full-screen GPU recomposite of every descendant on every paint
+   * (adj-139.5.1). Replaced with a non-interactive overlay pseudo-element
+   * that paints a faint phosphor-tinted gradient ON TOP of content. The
+   * overlay itself is static, so no re-composite cost on state changes,
+   * and the underlying content paints normally without being filtered.
+   */
+}
+
+.crt-phosphor::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 7;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--crt-phosphor-rgb), 0.03) 0%,
+      rgba(var(--crt-phosphor-rgb), 0.015) 100%
+    );
+  mix-blend-mode: screen;
 }
 
 /* Specific class for elements that should have a retro glow (Headers, etc) */
@@ -319,13 +340,21 @@
     rgba(0, 0, 0, 0.15) 2px
   );
 
-  /* Slight movement */
-  animation: scanline-drift 0.05s steps(2) infinite;
-}
-
-@keyframes scanline-drift {
-  0% { transform: translateY(0); }
-  100% { transform: translateY(2px); }
+  /*
+   * Static scanlines (adj-139.5.2).
+   *
+   * Previously: `animation: scanline-drift 0.05s steps(2) infinite` — a
+   * 20fps repaint of a full-screen overlay that drifted just 2px between
+   * two frames. The motion was effectively imperceptible to the eye (a
+   * micro-flicker at the same period as CRT phosphor decay) yet forced
+   * a continuous repaint of an `inset: 0` layer on top of the entire UI.
+   *
+   * Real CRTs display scanlines as a static spatial pattern at typical
+   * viewing distances. The dynamic refresh feel is already carried by
+   * the rolling `.crt-scan-bar` (scan-roll 6s linear) and the crt-flicker
+   * opacity wobble. Removing this animation drops the dashboard's
+   * idle paint cost without touching the retro aesthetic.
+   */
 }
 
 /* Rolling scan bar (like old CRT refresh) */
@@ -666,6 +695,14 @@
 [data-theme='friendly'] .crt-phosphor,
 [data-theme='glass'] .crt-phosphor {
   filter: none;
+}
+
+/* Non-CRT themes also hide the phosphor-tint overlay introduced in adj-139.5.1 */
+.crt-no-effects .crt-phosphor::after,
+[data-theme='document'] .crt-phosphor::after,
+[data-theme='friendly'] .crt-phosphor::after,
+[data-theme='glass'] .crt-phosphor::after {
+  display: none;
 }
 
 .crt-no-effects .crt-content,

@@ -1,0 +1,16 @@
+/*
+ * Timeline animation keyframes.
+ *
+ * Extracted from TimelineView.tsx (was an inline <style> tag) so the
+ * CSS is parsed once at module-load time instead of on every parent
+ * re-render. See adj-139.5.3.
+ */
+
+@keyframes timeline-glow {
+  0% {
+    background-color: rgba(0, 255, 0, 0.15);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
