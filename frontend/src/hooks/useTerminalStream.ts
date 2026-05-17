@@ -48,6 +48,52 @@ function eventsToText(events: { type: string; content?: string; tool?: string; o
 const POLL_INTERVAL_MS = 3000;
 const WS_RECONNECT_DELAY_MS = 5000;
 
+/**
+ * adj-139.3.5: Maximum number of characters the terminal content holds in memory.
+ *
+ * The terminal stream is append-only and was unbounded — long-running sessions
+ * grew to hundreds of MB and crashed the page. 100KB is enough scrollback for
+ * typical debugging while keeping memory pressure tiny.
+ *
+ * (Note: we use string length as a byte proxy. For ASCII terminal output that
+ * matches actual bytes; for multi-byte content it's a slight under-count, which
+ * is the safer direction.)
+ */
+export const MAX_TERMINAL_BYTES = 100_000;
+
+/**
+ * Append new text to existing terminal content, capping at MAX_TERMINAL_BYTES.
+ * Drops the OLDEST content first, always at a line boundary — never truncates
+ * mid-line, so the terminal display never shows corrupt partial lines.
+ *
+ * Exported for unit testing.
+ */
+export function appendWithRingBuffer(prev: string | null, newText: string): string {
+  if (!newText) return prev ?? '';
+  const combined = prev ? `${prev}\n${newText}` : newText;
+  if (combined.length <= MAX_TERMINAL_BYTES) return combined;
+
+  // Need to drop content from the front. Find the earliest newline such that
+  // the resulting tail fits in MAX_TERMINAL_BYTES. If no newline exists in the
+  // overflow region (single huge line), fall back to dropping the entire prev
+  // content and keeping only newText (or the tail of newText that fits).
+  const overflow = combined.length - MAX_TERMINAL_BYTES;
+  // The "cut" must be at or after `overflow` so the remainder is ≤ MAX.
+  const newlineIdx = combined.indexOf('\n', overflow);
+  if (newlineIdx === -1) {
+    // No safe line boundary found in the overflow region — drop everything
+    // before the start of the newest line in the tail.
+    const lastNewline = combined.lastIndexOf('\n');
+    if (lastNewline === -1 || combined.length - (lastNewline + 1) > MAX_TERMINAL_BYTES) {
+      // Single-line content longer than the cap: keep the last MAX bytes.
+      return combined.slice(combined.length - MAX_TERMINAL_BYTES);
+    }
+    return combined.slice(lastNewline + 1);
+  }
+  // Skip past the newline so we don't start with a blank line.
+  return combined.slice(newlineIdx + 1);
+}
+
 interface UseTerminalStreamOptions {
   sessionId: string | undefined;
   enabled: boolean;
@@ -144,7 +190,8 @@ export function useTerminalStream({ sessionId, enabled }: UseTerminalStreamOptio
               if (events.length > 0) {
                 const newText = eventsToText(events);
                 if (newText) {
-                  setContent(prev => prev ? `${prev}\n${newText}` : newText);
+                  // adj-139.3.5: ring-buffer cap so long sessions can't OOM.
+                  setContent(prev => appendWithRingBuffer(prev, newText));
                 }
               }
               break;
