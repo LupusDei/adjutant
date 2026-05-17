@@ -142,6 +142,16 @@ export function useTimeline(): UseTimelineResult {
   const loadMore = useCallback(async () => {
     if (!hasMore || events.length === 0) return;
 
+    // adj-o5pez: once we hit the in-memory cap, the slice() truncation
+    // would silently discard every newly-fetched older event. Stop firing
+    // load-more requests at this point and flip hasMore=false so the UI
+    // can hide the button. Older history is still on the server; users
+    // who need it can apply a tighter time-range filter to swap context.
+    if (events.length >= MAX_TIMELINE_EVENTS) {
+      setHasMore(false);
+      return;
+    }
+
     const oldestEvent = events[events.length - 1];
 
     try {
