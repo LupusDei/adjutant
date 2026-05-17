@@ -185,18 +185,30 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
 
   // --- Timeline events ---
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
+  // adj-pvp0x: guard against setState-after-unmount. The 15s timeline poll
+  // can have an in-flight request when the dashboard unmounts (route change,
+  // project switch); the late-arriving response would otherwise call
+  // setTimelineEvents on an unmounted component, logging a React warning
+  // and pinning the component graph until the promise resolves.
+  const timelineMountedRef = useRef(true);
   useEffect(() => {
+    timelineMountedRef.current = true;
     void getTimelineEvents({ limit: 20 }).then((res) => {
+      if (!timelineMountedRef.current) return;
       setTimelineEvents(res.events);
     }).catch(() => { /* silently fail */ });
     const intervalId = setInterval(() => {
       if (!document.hidden) {
         void getTimelineEvents({ limit: 20 }).then((res) => {
+          if (!timelineMountedRef.current) return;
           setTimelineEvents(res.events);
         }).catch(() => { /* ignore */ });
       }
     }, 15_000);
-    return () => { clearInterval(intervalId); };
+    return () => {
+      timelineMountedRef.current = false;
+      clearInterval(intervalId);
+    };
   }, []);
 
   const showEscalation = autoDevelopStatus?.paused && autoDevelopStatus?.enabled && activeProjectId;
