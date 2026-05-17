@@ -8,6 +8,8 @@
  * connection status indicator, voice input/playback.
  */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
+
 import { MarkdownBody } from './MarkdownBody';
 import { MessageBubble } from './MessageBubble';
 import type { ConnectionStatus, ChatMessage } from '../../types';
@@ -148,6 +150,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -296,24 +299,15 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     };
   }, []);
 
-  // IntersectionObserver for infinite scroll — loads older messages when sentinel is visible
-  useEffect(() => {
-    const sentinel = loadMoreSentinelRef.current;
-    if (!sentinel || !hasMore) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !loadingMore) {
-          setLoadingMore(true);
-          void loadMore().finally(() => { setLoadingMore(false); });
-        }
-      },
-      { threshold: 0.1 }
-    );
-
-    observer.observe(sentinel);
-    return () => { observer.disconnect(); };
+  // adj-139.4.2: Virtuoso's startReached drives load-more when the user
+  // scrolls to the top. Replaces the IntersectionObserver-on-sentinel
+  // pattern from the pre-virtualized version.
+  const handleStartReached = useCallback(() => {
+    if (!hasMore || loadingMore) return;
+    setLoadingMore(true);
+    void loadMore().finally(() => { setLoadingMore(false); });
   }, [hasMore, loadMore, loadingMore]);
+
 
   // Handle sending a message — always via HTTP (hookSendMessage).
   // The backend stores the message and broadcasts it via WebSocket.
@@ -422,6 +416,36 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     void handlePlayMessage(msg);
   }, [handlePlayMessage]);
 
+  // adj-139.4.2: Render callback for Virtuoso. Returns the bubble/system
+  // message DOM for a single message. Kept stable via useCallback so that
+  // Virtuoso's internal memoization isn't invalidated on parent re-renders.
+  const renderMessage = useCallback((msg: DisplayMessage) => {
+    const isUser = isUserMessage(msg);
+    const isSystem = msg.role === 'system' || msg.role === 'announcement';
+
+    if (isSystem) {
+      return (
+        <div className="chat-system-message">
+          <span className="chat-system-body">{msg.body}</span>
+          <span className="chat-system-time">{formatTimestamp(msg.createdAt)}</span>
+        </div>
+      );
+    }
+
+    const isPlayingThis = playingMessageId === msg.id;
+    const isLoadingThis = isPlayingThis && voicePlayer.isLoading;
+    return (
+      <MessageBubble
+        msg={msg}
+        isUser={isUser}
+        isPlaying={isPlayingThis}
+        isLoadingPlay={isLoadingThis}
+        onPlay={onPlayMessage}
+        formatTimestamp={formatTimestamp}
+      />
+    );
+  }, [playingMessageId, voicePlayer.isLoading, onPlayMessage]);
+
   // Track when voice player stops
   useEffect(() => {
     if (!voicePlayer.isPlaying && !voicePlayer.isLoading) {
@@ -520,80 +544,84 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
               );
             })
           )
-        ) : (
-        <>
-        {/* Infinite scroll sentinel for loading older messages */}
-        {hasMore && (
-          <div ref={loadMoreSentinelRef} className="chat-load-more">
-            {loadingMore ? 'LOADING...' : 'SCROLL UP FOR MORE'}
-          </div>
-        )}
-
-        {messages.length === 0 ? (
-          <div className="chat-empty">
-            <p>NO MESSAGES YET</p>
-            <p className="chat-empty-hint">
-              {agentId
-                ? `Send a message to ${coordinatorName} below`
-                : `Send a message to ${coordinatorName} below`}
-            </p>
-          </div>
-        ) : (
-          messages.map((msg) => {
-            const isUser = isUserMessage(msg);
-            const isSystem = msg.role === 'system' || msg.role === 'announcement';
-
-            // System/announcement messages: centered, no bubble
-            if (isSystem) {
-              return (
-                <div key={msg.id} className="chat-system-message">
-                  <span className="chat-system-body">{msg.body}</span>
-                  <span className="chat-system-time">{formatTimestamp(msg.createdAt)}</span>
+        ) : messages.length === 0 ? (
+          <>
+            <div className="chat-empty">
+              <p>NO MESSAGES YET</p>
+              <p className="chat-empty-hint">
+                {agentId
+                  ? `Send a message to ${coordinatorName} below`
+                  : `Send a message to ${coordinatorName} below`}
+              </p>
+            </div>
+            {/* Streaming messages (rendered outside virtuoso when message list empty) */}
+            {streamingEntries.map(([streamId, body]) => (
+              <div key={`stream-${streamId}`} className="chat-bubble chat-bubble-command chat-bubble-streaming">
+                <div className="chat-bubble-header">
+                  <span className="chat-bubble-sender">{coordinatorName}</span>
+                  <span className="chat-streaming-indicator">STREAMING</span>
                 </div>
-              );
-            }
-
-            const isPlayingThis = playingMessageId === msg.id;
-            const isLoadingThis = isPlayingThis && voicePlayer.isLoading;
-            return (
-              <MessageBubble
-                key={msg.id}
-                msg={msg}
-                isUser={isUser}
-                isPlaying={isPlayingThis}
-                isLoadingPlay={isLoadingThis}
-                onPlay={onPlayMessage}
-                formatTimestamp={formatTimestamp}
-              />
-            );
-          })
-        )}
-
-        {/* Streaming messages */}
-        {streamingEntries.map(([streamId, body]) => (
-          <div key={`stream-${streamId}`} className="chat-bubble chat-bubble-command chat-bubble-streaming">
-            <div className="chat-bubble-header">
-              <span className="chat-bubble-sender">{coordinatorName}</span>
-              <span className="chat-streaming-indicator">STREAMING</span>
-            </div>
-            <div className="chat-bubble-content">
-              <MarkdownBody>{body}</MarkdownBody><span className="chat-cursor">_</span>
-            </div>
-          </div>
-        ))}
-
-        {/* Typing indicator */}
-        {typingFrom && streamingEntries.length === 0 && (
-          <div className="chat-typing-indicator">
-            <span className="chat-typing-dots">
-              <span>.</span><span>.</span><span>.</span>
-            </span>
-            {' '}{coordinatorName} is typing
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
-        </>
+                <div className="chat-bubble-content">
+                  <MarkdownBody>{body}</MarkdownBody><span className="chat-cursor">_</span>
+                </div>
+              </div>
+            ))}
+            {typingFrom && streamingEntries.length === 0 && (
+              <div className="chat-typing-indicator">
+                <span className="chat-typing-dots">
+                  <span>.</span><span>.</span><span>.</span>
+                </span>
+                {' '}{coordinatorName} is typing
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </>
+        ) : (
+          <Virtuoso
+            ref={virtuosoRef}
+            data={messages}
+            // Stable, no-key prop here — Virtuoso uses the index. We use msg.id
+            // inside itemContent for child stability.
+            computeItemKey={(_index, msg) => msg.id}
+            itemContent={(_index, msg) => renderMessage(msg)}
+            followOutput="smooth"
+            startReached={hasMore ? handleStartReached : undefined}
+            alignToBottom
+            style={{ height: '100%' }}
+            components={{
+              Header: hasMore
+                ? () => (
+                    <div ref={loadMoreSentinelRef} className="chat-load-more">
+                      {loadingMore ? 'LOADING...' : 'SCROLL UP FOR MORE'}
+                    </div>
+                  )
+                : undefined,
+              Footer: () => (
+                <>
+                  {streamingEntries.map(([streamId, body]) => (
+                    <div key={`stream-${streamId}`} className="chat-bubble chat-bubble-command chat-bubble-streaming">
+                      <div className="chat-bubble-header">
+                        <span className="chat-bubble-sender">{coordinatorName}</span>
+                        <span className="chat-streaming-indicator">STREAMING</span>
+                      </div>
+                      <div className="chat-bubble-content">
+                        <MarkdownBody>{body}</MarkdownBody><span className="chat-cursor">_</span>
+                      </div>
+                    </div>
+                  ))}
+                  {typingFrom && streamingEntries.length === 0 && (
+                    <div className="chat-typing-indicator">
+                      <span className="chat-typing-dots">
+                        <span>.</span><span>.</span><span>.</span>
+                      </span>
+                      {' '}{coordinatorName} is typing
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </>
+              ),
+            }}
+          />
         )}
       </div>
 
