@@ -349,6 +349,30 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
               notify(incoming);
             }
             break;
+          case 'sync_response': {
+            // Server replays messages we missed while disconnected.
+            // Dedup by seq against the watermark — both for stale messages
+            // already delivered and for duplicates within the payload itself.
+            const missed = msg.missed ?? [];
+            for (const entry of missed) {
+              if (!entry || entry.type !== 'chat_message') continue;
+              if (!entry.id || !entry.from || !entry.to || !entry.body || !entry.timestamp) continue;
+              if (entry.seq != null && entry.seq <= lastProcessedSeqRef.current) continue;
+              if (entry.seq != null) {
+                lastProcessedSeqRef.current = entry.seq;
+              }
+              const incoming: IncomingChatMessage = {
+                id: entry.id,
+                from: entry.from,
+                to: entry.to,
+                body: entry.body,
+                timestamp: entry.timestamp,
+              };
+              if (entry.seq != null) incoming.seq = entry.seq;
+              notify(incoming);
+            }
+            break;
+          }
           case 'timeline_event':
             if (msg.id && msg.eventType && msg.agentId && msg.action && msg.createdAt) {
               notifyTimeline({
