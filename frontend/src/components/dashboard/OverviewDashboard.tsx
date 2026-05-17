@@ -1,4 +1,4 @@
-import React, { Suspense, useState, useEffect, useCallback } from 'react';
+import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 
 import { useOverview } from '../../hooks/useProjectOverview';
 import { useProject } from '../../contexts/ProjectContext';
@@ -152,14 +152,26 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
     }
   }, [activeProjectId]);
 
-  // Poll auto-develop status every 15s for live phase updates
+  // adj-139.3.6: Stabilize the 15s polling interval by reading the latest
+  // fetch callback from a ref inside the closure. Without this, every change
+  // to `activeProjectId` (and therefore `fetchAutoDevelopStatus`) tore down
+  // and re-created the interval, contributing to the unbounded growth that
+  // crashed the overview page.
+  const fetchAutoDevelopStatusRef = useRef(fetchAutoDevelopStatus);
   useEffect(() => {
-    void fetchAutoDevelopStatus();
+    fetchAutoDevelopStatusRef.current = fetchAutoDevelopStatus;
+  }, [fetchAutoDevelopStatus]);
+
+  useEffect(() => {
+    void fetchAutoDevelopStatusRef.current();
     const intervalId = setInterval(() => {
-      if (!document.hidden) { void fetchAutoDevelopStatus(); }
+      if (!document.hidden) { void fetchAutoDevelopStatusRef.current(); }
     }, 15_000);
     return () => { clearInterval(intervalId); };
-  }, [fetchAutoDevelopStatus]);
+    // Intentionally empty deps: the interval lives for the lifetime of this
+    // component. The ref above keeps the callback fresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAutoDevelopToggled = useCallback(() => {
     void fetchAutoDevelopStatus();
