@@ -15,7 +15,7 @@ import { ProposalsView } from "./components/proposals/ProposalsView";
 import { PersonasView } from "./components/personas/PersonasView";
 import { TimelineView } from "./components/timeline/TimelineView";
 import { EpicGraphPage } from "./components/beads/EpicGraphPage";
-import { useUnreadCounts } from "./hooks/useUnreadCounts";
+import { ChatBadge } from "./components/chat/ChatBadge";
 
 export type ThemeId = 'pipboy' | 'document' | 'starcraft' | 'friendly' | 'glass';
 
@@ -92,7 +92,6 @@ function AppContent() {
   );
   const themeConfig = THEME_CONFIGS[theme];
   const isSmallScreen = useIsSmallScreen();
-  const { totalUnread } = useUnreadCounts();
 
   // Apply theme to document element (html) globally for proper CSS variable cascade
   useEffect(() => {
@@ -122,9 +121,7 @@ function AppContent() {
               title={tab.label}
             >
               {isSmallScreen && tab.id === "settings" ? tab.icon : tab.label}
-              {tab.id === "chat" && totalUnread > 0 && (
-                <span className="nav-tab-badge">{totalUnread > 99 ? '99+' : totalUnread}</span>
-              )}
+              {tab.id === "chat" && <ChatBadge />}
             </button>
           ))}
         </nav>
