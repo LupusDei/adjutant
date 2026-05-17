@@ -5,7 +5,7 @@
  * and an expandable detail section for the raw JSON payload.
  */
 
-import { useState, useCallback, type CSSProperties } from 'react';
+import { memo, useState, useCallback, type CSSProperties } from 'react';
 
 import type { TimelineEvent } from '../../services/api';
 
@@ -36,7 +36,7 @@ export interface TimelineEventCardProps {
   isNew?: boolean;
 }
 
-export function TimelineEventCard({ event, isNew }: TimelineEventCardProps) {
+function TimelineEventCardImpl({ event, isNew }: TimelineEventCardProps) {
   const [expanded, setExpanded] = useState(false);
 
   const toggleExpand = useCallback(() => {
@@ -200,6 +200,22 @@ function DeployStatusDetail({ detail, statusColor }: DeployStatusDetailProps) {
     </div>
   );
 }
+
+/**
+ * adj-139.4.3: Equality function for React.memo.
+ *
+ * Cards are immutable once mounted — `event.id` uniquely identifies the
+ * event, and `isNew` is the only prop that flips after mount (when the
+ * fresh-event glow expires). Skip re-render when both are unchanged.
+ */
+function arePropsEqual(
+  prev: TimelineEventCardProps,
+  next: TimelineEventCardProps,
+): boolean {
+  return prev.event.id === next.event.id && prev.isNew === next.isNew;
+}
+
+export const TimelineEventCard = memo(TimelineEventCardImpl, arePropsEqual);
 
 function formatTime(isoString: string): string {
   try {
