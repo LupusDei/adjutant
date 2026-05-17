@@ -210,6 +210,26 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
     let mounted = true;
     reconnectAttemptsRef.current = 0;
 
+    /**
+     * Map each EventSource to the handler it registered for 'connected' so
+     * we can remove the listener before `close()`. Without this, anonymous
+     * handlers would leak across priority toggles — see closeSse().
+     */
+    const sseConnectedHandlers = new WeakMap<EventSource, () => void>();
+
+    /**
+     * Close an EventSource cleanly. Removes any registered 'connected'
+     * listener before close() to prevent listener leaks across reconnects.
+     */
+    function closeSse(es: EventSource) {
+      const handler = sseConnectedHandlers.get(es);
+      if (handler) {
+        es.removeEventListener('connected', handler);
+        sseConnectedHandlers.delete(es);
+      }
+      es.close();
+    }
+
     // -- Cleanup helper --
     function teardown() {
       mounted = false;
@@ -220,7 +240,7 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
         wsRef.current = null;
       }
       if (sseRef.current) {
-        sseRef.current.close();
+        closeSse(sseRef.current);
         sseRef.current = null;
       }
     }
@@ -236,9 +256,9 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
         wsRef.current = null;
       }
 
-      // Close any prior SSE
+      // Close any prior SSE (removes its 'connected' listener first)
       if (sseRef.current) {
-        sseRef.current.close();
+        closeSse(sseRef.current);
         sseRef.current = null;
       }
 
@@ -259,12 +279,12 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
         if (mounted) setConnectionStatus('sse');
       };
       es.addEventListener('connected', handleConnected);
+      sseConnectedHandlers.set(es, handleConnected);
 
       es.onerror = () => {
         sseRetries++;
         if (sseRetries > MAX_SSE_RETRIES && mounted) {
-          es.removeEventListener('connected', handleConnected);
-          es.close();
+          closeSse(es);
           sseRef.current = null;
           setConnectionStatus('polling');
         }
@@ -277,8 +297,9 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
 
       // Mutual exclusion: close any open SSE before opening WebSocket
+      // (uses closeSse so the SSE 'connected' listener is removed first)
       if (sseRef.current) {
-        sseRef.current.close();
+        closeSse(sseRef.current);
         sseRef.current = null;
       }
 
