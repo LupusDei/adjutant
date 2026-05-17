@@ -304,7 +304,14 @@ function getCellStyle(color: string, fontWeight?: 'bold' | 'normal'): CSSPropert
 // Component
 // ---------------------------------------------------------------------------
 
-function BeadRowImpl({
+/**
+ * Render just the <td> cells of a bead row, with no surrounding <tr>.
+ *
+ * Used by TableVirtuoso (which wraps its own <tr>) and by BeadRow (which
+ * wraps with its own styled <tr>). Keeps cell content DRY across both
+ * code paths.
+ */
+function BeadRowCellsImpl({
   bead,
   cost,
   highlightQuery,
@@ -327,13 +334,12 @@ function BeadRowImpl({
   const currentAction = actionState?.actionInProgress ?? null;
   const result = actionState?.actionResult ?? null;
 
-  const rowStyleFinal = getRowStyle(statusInfo.label, isClosed, statusInfo.bgColor);
   const priorityCellStyle = getCellStyle(priorityInfo.color);
   const statusCellStyle = getCellStyle(statusInfo.color, statusInfo.bgColor ? 'bold' : 'normal');
   const assigneeCellStyle = isActiveWork && bead.assignee ? activeAssigneeStyle : cellStyle;
 
   return (
-    <tr style={rowStyleFinal}>
+    <>
       <td style={idCellStyle}>{highlightMatches(bead.id, highlightQuery)}</td>
       <td style={priorityCellStyle}>{priorityInfo.label}</td>
       <td style={typeCellStyle}>{bead.type.toUpperCase()}</td>
@@ -408,6 +414,20 @@ function BeadRowImpl({
           </div>
         )}
       </td>
+    </>
+  );
+}
+
+/**
+ * <tr>-wrapping bead row. Used in the plain-table render path.
+ */
+function BeadRowImpl(props: BeadRowProps) {
+  const statusInfo = getStatusInfo(props.bead.status);
+  const isClosed = props.bead.status.toLowerCase() === 'closed';
+  const rowStyleFinal = getRowStyle(statusInfo.label, isClosed, statusInfo.bgColor);
+  return (
+    <tr style={rowStyleFinal}>
+      <BeadRowCellsImpl {...props} />
     </tr>
   );
 }
@@ -442,6 +462,13 @@ function arePropsEqual(prev: BeadRowProps, next: BeadRowProps): boolean {
 }
 
 export const BeadRow = memo(BeadRowImpl, arePropsEqual);
+
+/**
+ * Cells-only variant exported for TableVirtuoso integration.
+ * TableVirtuoso provides its own <tr> wrapper, so BeadRowCells returns
+ * only the <td> children.
+ */
+export const BeadRowCells = memo(BeadRowCellsImpl, arePropsEqual);
 
 // Re-export the shared status info for parents that need it (e.g. row grouping)
 export { getStatusInfo, getPriorityInfo, formatBeadCost };

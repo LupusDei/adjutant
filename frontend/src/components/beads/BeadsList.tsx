@@ -1,10 +1,26 @@
-import { useState, useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react';
+import { TableVirtuoso } from 'react-virtuoso';
+
 import { usePolling } from '../../hooks/usePolling';
 import { fuzzyMatch } from '../../hooks/useFuzzySearch';
 import { api } from '../../services/api';
 import { costApi, type BeadCostResult } from '../../services/api-costs';
 import type { BeadInfo } from '../../types';
-import { BeadRow, type ActionType, type BeadActionState } from './BeadRow';
+import { BeadRow, BeadRowCells, type ActionType, type BeadActionState } from './BeadRow';
+
+/**
+ * adj-139.4.5: Groups smaller than this threshold render as plain tables
+ * (no virtual scroll viewport). Above this, switch to TableVirtuoso so the
+ * Beads tab doesn't choke at 500+ rows per group.
+ */
+const VIRTUALIZE_THRESHOLD = 30;
+
+/**
+ * adj-139.4.5: Height of each per-group virtual scroll viewport. Big
+ * enough to feel substantial; small enough that adjacent groups remain
+ * accessible by page scroll.
+ */
+const VIRTUAL_GROUP_HEIGHT_PX = 600;
 
 export type BeadsStatusFilter = 'default' | 'open' | 'hooked' | 'in_progress' | 'closed' | 'all';
 
@@ -293,6 +309,94 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
     void handleAction(bead, action);
   }, [handleAction]);
 
+  // adj-139.4.5: Build the action-state for a single bead row.
+  const buildActionState = useCallback((beadId: string): BeadActionState | undefined => {
+    const isThisInProgress = actionInProgress?.id === beadId;
+    const isThisResult = actionResult?.id === beadId;
+    if (!isThisInProgress && !isThisResult) return undefined;
+    const state: BeadActionState = {};
+    if (isThisInProgress && actionInProgress) {
+      state.actionInProgress = { type: actionInProgress.type };
+    }
+    if (isThisResult && actionResult) {
+      state.actionResult = {
+        type: actionResult.type,
+        success: actionResult.success,
+      };
+    }
+    return state;
+  }, [actionInProgress, actionResult]);
+
+  // adj-139.4.5: Render the column header row. Used in both the plain
+  // table and the TableVirtuoso `fixedHeaderContent` slot.
+  const renderHeaderRow = useCallback((): ReactNode => (
+    <tr style={styles.headerRow}>
+      <th style={thIdStyle}>ID</th>
+      <th style={thPriStyle}>PRI</th>
+      <th style={thTypeStyle}>TYPE</th>
+      <th style={styles.th}>TITLE</th>
+      <th style={thStatusStyle}>STATUS</th>
+      <th style={thAssigneeStyle}>ASSIGNEE</th>
+      <th style={thCostStyle}>COST</th>
+      <th style={thUpdatedStyle}>UPDATED</th>
+      <th style={thActionStyle}>ACTION</th>
+    </tr>
+  ), []);
+
+  // Plain table renderer for small groups
+  const renderPlainGroup = useCallback((beads: BeadInfo[]) => (
+    <table style={styles.table}>
+      <thead>{renderHeaderRow()}</thead>
+      <tbody>
+        {beads.map((bead) => {
+          const isMenuOpen = openMenuId === bead.id;
+          return (
+            <BeadRow
+              key={bead.id}
+              bead={bead}
+              cost={beadCosts[bead.id] ?? null}
+              highlightQuery={highlightQuery}
+              isMenuOpen={isMenuOpen}
+              actionState={buildActionState(bead.id)}
+              onAssign={onAssign}
+              onToggleMenu={handleToggleMenu}
+              onAction={handleRowAction}
+              menuRef={isMenuOpen ? menuRef : undefined}
+            />
+          );
+        })}
+      </tbody>
+    </table>
+  ), [openMenuId, beadCosts, highlightQuery, buildActionState, onAssign, handleToggleMenu, handleRowAction, renderHeaderRow]);
+
+  // TableVirtuoso renderer for large groups.
+  // Important: TableVirtuoso owns the scroll container — we constrain its
+  // height so it doesn't try to consume the entire page.
+  const renderVirtualGroup = useCallback((beads: BeadInfo[]) => (
+    <TableVirtuoso
+      data={beads}
+      style={virtualTableStyle}
+      computeItemKey={(_index, bead) => bead.id}
+      fixedHeaderContent={renderHeaderRow}
+      itemContent={(_index, bead) => {
+        const isMenuOpen = openMenuId === bead.id;
+        return (
+          <BeadRowCells
+            bead={bead}
+            cost={beadCosts[bead.id] ?? null}
+            highlightQuery={highlightQuery}
+            isMenuOpen={isMenuOpen}
+            actionState={buildActionState(bead.id)}
+            onAssign={onAssign}
+            onToggleMenu={handleToggleMenu}
+            onAction={handleRowAction}
+            menuRef={isMenuOpen ? menuRef : undefined}
+          />
+        );
+      }}
+    />
+  ), [openMenuId, beadCosts, highlightQuery, buildActionState, onAssign, handleToggleMenu, handleRowAction, renderHeaderRow]);
+
   if (loading && !beads) {
     return (
       <div style={styles.loadingState}>
@@ -346,57 +450,11 @@ export function BeadsList({ statusFilter, isActive = true, searchQuery = '', ove
               <span style={styles.groupCount}>[{group.beads.length}]</span>
             </button>
 
-            {/* Group Content */}
+            {/* Group Content — virtualize when many rows */}
             {!isCollapsed && (
-              <table style={styles.table}>
-                <thead>
-                  <tr style={styles.headerRow}>
-                    <th style={{ ...styles.th, width: '80px' }}>ID</th>
-                    <th style={{ ...styles.th, width: '40px' }}>PRI</th>
-                    <th style={{ ...styles.th, width: '60px' }}>TYPE</th>
-                    <th style={styles.th}>TITLE</th>
-                    <th style={{ ...styles.th, width: '70px' }}>STATUS</th>
-                    <th style={{ ...styles.th, width: '80px' }}>ASSIGNEE</th>
-                    <th style={{ ...styles.th, width: '60px' }}>COST</th>
-                    <th style={{ ...styles.th, width: '70px' }}>UPDATED</th>
-                    <th style={{ ...styles.th, width: '60px' }}>ACTION</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {group.beads.map((bead) => {
-                    const isMenuOpen = openMenuId === bead.id;
-                    const isThisInProgress = actionInProgress?.id === bead.id;
-                    const isThisResult = actionResult?.id === bead.id;
-                    let actionState: BeadActionState | undefined;
-                    if (isThisInProgress || isThisResult) {
-                      actionState = {};
-                      if (isThisInProgress && actionInProgress) {
-                        actionState.actionInProgress = { type: actionInProgress.type };
-                      }
-                      if (isThisResult && actionResult) {
-                        actionState.actionResult = {
-                          type: actionResult.type,
-                          success: actionResult.success,
-                        };
-                      }
-                    }
-                    return (
-                      <BeadRow
-                        key={bead.id}
-                        bead={bead}
-                        cost={beadCosts[bead.id] ?? null}
-                        highlightQuery={highlightQuery}
-                        isMenuOpen={isMenuOpen}
-                        actionState={actionState}
-                        onAssign={onAssign}
-                        onToggleMenu={handleToggleMenu}
-                        onAction={handleRowAction}
-                        menuRef={isMenuOpen ? menuRef : undefined}
-                      />
-                    );
-                  })}
-                </tbody>
-              </table>
+              group.beads.length > VIRTUALIZE_THRESHOLD
+                ? renderVirtualGroup(group.beads)
+                : renderPlainGroup(group.beads)
             )}
           </div>
         );
@@ -499,3 +557,22 @@ const styles = {
     whiteSpace: 'nowrap',
   },
 } satisfies Record<string, CSSProperties>;
+
+// adj-139.4.5: Per-column th styles hoisted out of the JSX hot path so
+// each render reuses the same object reference. Width column values come
+// from the original inline {...styles.th, width: 'Xpx'} spreads.
+const thIdStyle: CSSProperties = { ...styles.th, width: '80px' };
+const thPriStyle: CSSProperties = { ...styles.th, width: '40px' };
+const thTypeStyle: CSSProperties = { ...styles.th, width: '60px' };
+const thStatusStyle: CSSProperties = { ...styles.th, width: '70px' };
+const thAssigneeStyle: CSSProperties = { ...styles.th, width: '80px' };
+const thCostStyle: CSSProperties = { ...styles.th, width: '60px' };
+const thUpdatedStyle: CSSProperties = { ...styles.th, width: '70px' };
+const thActionStyle: CSSProperties = { ...styles.th, width: '60px' };
+
+// adj-139.4.5: TableVirtuoso outer style — fixed height so the virtual
+// scroll viewport doesn't try to consume the full page.
+const virtualTableStyle: CSSProperties = {
+  height: VIRTUAL_GROUP_HEIGHT_PX,
+  width: '100%',
+};
