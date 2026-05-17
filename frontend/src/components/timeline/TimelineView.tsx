@@ -6,7 +6,8 @@
  * with date separators, filters, and load-more pagination.
  */
 
-import { useMemo, useRef, useEffect, type CSSProperties } from 'react';
+import { useMemo, useRef, useEffect, useCallback, type CSSProperties } from 'react';
+import { Virtuoso } from 'react-virtuoso';
 
 import { useTimeline } from '../../hooks/useTimeline';
 import { TimelineFilters } from './TimelineFilters';
@@ -19,21 +20,27 @@ export interface TimelineViewProps {
   isActive?: boolean;
 }
 
-/** Group events by date for date separators. */
-function groupByDate(events: TimelineEvent[]): { date: string; events: TimelineEvent[] }[] {
-  const groups = new Map<string, TimelineEvent[]>();
+/**
+ * adj-139.4.4: Flatten events + date separators into a single list of
+ * "rows" for Virtuoso. Each row is either a date separator or an event.
+ * Virtuoso renders rows in a fixed window — only the visible ones mount.
+ */
+type TimelineRow =
+  | { kind: 'separator'; date: string }
+  | { kind: 'event'; event: TimelineEvent };
 
+function flattenEvents(events: TimelineEvent[]): TimelineRow[] {
+  const rows: TimelineRow[] = [];
+  let lastDate: string | null = null;
   for (const event of events) {
     const date = formatDate(event.createdAt);
-    const existing = groups.get(date);
-    if (existing) {
-      existing.push(event);
-    } else {
-      groups.set(date, [event]);
+    if (date !== lastDate) {
+      rows.push({ kind: 'separator', date });
+      lastDate = date;
     }
+    rows.push({ kind: 'event', event });
   }
-
-  return Array.from(groups.entries()).map(([date, evts]) => ({ date, events: evts }));
+  return rows;
 }
 
 function formatDate(isoString: string): string {
@@ -67,7 +74,6 @@ export function TimelineView({ isActive = true }: TimelineViewProps) {
     loadMore,
   } = useTimeline();
 
-  const scrollRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
 
   // Track new events for animation (events prepended at top)
@@ -83,7 +89,27 @@ export function TimelineView({ isActive = true }: TimelineViewProps) {
     prevCountRef.current = events.length;
   }, [events.length]);
 
-  const dateGroups = useMemo(() => groupByDate(events), [events]);
+  const rows = useMemo(() => flattenEvents(events), [events]);
+
+  // Stable per-row renderer — Virtuoso wants this stable for memoization.
+  const renderRow = useCallback((_index: number, row: TimelineRow) => {
+    if (row.kind === 'separator') {
+      return (
+        <div style={styles.dateSeparator}>
+          <span style={styles.dateLine} />
+          <span style={styles.dateLabel}>{row.date}</span>
+          <span style={styles.dateLine} />
+        </div>
+      );
+    }
+    return (
+      <TimelineEventCard event={row.event} isNew={newEventIds.has(row.event.id)} />
+    );
+  }, [newEventIds]);
+
+  const computeRowKey = useCallback((_index: number, row: TimelineRow) => {
+    return row.kind === 'separator' ? `sep-${row.date}` : `evt-${row.event.id}`;
+  }, []);
 
   if (!isActive) return null;
 
@@ -125,7 +151,7 @@ export function TimelineView({ isActive = true }: TimelineViewProps) {
         />
       </header>
 
-      <div style={styles.eventList} ref={scrollRef}>
+      <div style={styles.eventList}>
         {events.length === 0 ? (
           <div style={styles.emptyState}>
             <div style={styles.emptyIcon}>&gt;_</div>
@@ -133,34 +159,25 @@ export function TimelineView({ isActive = true }: TimelineViewProps) {
             <div style={styles.emptyHint}>AGENT ACTIVITY WILL APPEAR HERE</div>
           </div>
         ) : (
-          <>
-            {dateGroups.map((group) => (
-              <div key={group.date}>
-                <div style={styles.dateSeparator}>
-                  <span style={styles.dateLine} />
-                  <span style={styles.dateLabel}>{group.date}</span>
-                  <span style={styles.dateLine} />
-                </div>
-                {group.events.map((event) => (
-                  <TimelineEventCard
-                    key={event.id}
-                    event={event}
-                    isNew={newEventIds.has(event.id)}
-                  />
-                ))}
-              </div>
-            ))}
-
-            {hasMore && (
-              <button
-                style={styles.loadMoreButton}
-                onClick={() => { void loadMore(); }}
-                disabled={loading}
-              >
-                {loading ? 'LOADING...' : '[ LOAD MORE ]'}
-              </button>
-            )}
-          </>
+          <Virtuoso
+            data={rows}
+            computeItemKey={computeRowKey}
+            itemContent={renderRow}
+            style={{ height: '100%' }}
+            components={{
+              Footer: hasMore
+                ? () => (
+                    <button
+                      style={styles.loadMoreButton}
+                      onClick={() => { void loadMore(); }}
+                      disabled={loading}
+                    >
+                      {loading ? 'LOADING...' : '[ LOAD MORE ]'}
+                    </button>
+                  )
+                : undefined,
+            }}
+          />
         )}
       </div>
 
