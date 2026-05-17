@@ -391,15 +391,24 @@
   z-index: 8;
   opacity: 0.03;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-  animation: noise-shift 0.1s steps(5) infinite;
-}
 
-@keyframes noise-shift {
-  0% { transform: translate(0, 0); }
-  25% { transform: translate(-1%, 1%); }
-  50% { transform: translate(1%, -1%); }
-  75% { transform: translate(-1%, -1%); }
-  100% { transform: translate(1%, 1%); }
+  /*
+   * Static noise (adj-2o14f).
+   *
+   * Previously: `animation: noise-shift 0.1s steps(5) infinite` — a 50fps
+   * full-screen transform that recomposited an inset:0, z-index:8 overlay
+   * above the entire CRT area on every step.
+   *
+   * The underlying SVG fractal-noise texture is already static; only the
+   * 1% translation was animating, which is below the perceptual threshold
+   * at typical viewing distances. The static SVG noise alone reads as
+   * authentic CRT phosphor grain. Removing the animation drops the
+   * dashboard's idle paint cost (matches Track E's treatment of the
+   * static scanlines overlay) while preserving the retro CRT aesthetic.
+   *
+   * The `crt-flicker-active` opacity wobble + the rolling `crt-scan-bar`
+   * still carry all the dynamic CRT motion.
+   */
 }
 
 /* ============================================
