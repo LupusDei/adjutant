@@ -12,6 +12,15 @@ import { useCommunication, type IncomingTimelineEvent } from '../contexts/Commun
 
 export type TimeRange = '1h' | '6h' | '24h' | '7d' | 'all';
 
+/**
+ * adj-139.3.4: Maximum number of events held in memory.
+ *
+ * Before this cap, the overview page's timeline grew without bound — every
+ * real-time event prepended forever, eventually OOM-crashing the browser.
+ * FIFO from the tail: oldest events are dropped when new ones arrive.
+ */
+export const MAX_TIMELINE_EVENTS = 1000;
+
 export interface TimelineFilters {
   agentId?: string;
   eventType?: string;
@@ -71,7 +80,8 @@ export function useTimeline(): UseTimelineResult {
       const response = await getTimelineEvents(params);
 
       if (mountedRef.current) {
-        setEvents(response.events);
+        // adj-139.3.4: cap initial fetch too in case server returns >1000.
+        setEvents(response.events.slice(0, MAX_TIMELINE_EVENTS));
         setHasMore(response.hasMore);
         setLoading(false);
       }
@@ -120,7 +130,8 @@ export function useTimeline(): UseTimelineResult {
       setEvents((prev) => {
         // Deduplicate
         if (prev.some((e) => e.id === data.id)) return prev;
-        return [data, ...prev];
+        // adj-139.3.4: prepend then truncate the tail (oldest entries).
+        return [data, ...prev].slice(0, MAX_TIMELINE_EVENTS);
       });
     });
 
@@ -150,7 +161,8 @@ export function useTimeline(): UseTimelineResult {
         setEvents((prev) => {
           const existingIds = new Set(prev.map((e) => e.id));
           const newEvents = response.events.filter((e) => !existingIds.has(e.id));
-          return [...prev, ...newEvents];
+          // adj-139.3.4: loadMore appends older events to the tail; cap total.
+          return [...prev, ...newEvents].slice(0, MAX_TIMELINE_EVENTS);
         });
         setHasMore(response.hasMore);
       }
