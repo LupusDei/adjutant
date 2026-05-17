@@ -257,4 +257,64 @@ describe('useAudioNotifications - cleanup (adj-139.3.1)', () => {
     expect(audio.listeners.get('error')?.size ?? 0).toBe(0);
     expect(audio.src).toBe('');
   });
+
+  // adj-rrvbk + adj-139.3.1.P: mute() and disable() previously called only
+  // audio.pause(), leaking the 'ended' + 'error' listeners and the decoded
+  // audio src. They must invoke the same releaseCurrentAudio() helper that
+  // skip()/unmount use.
+  it('should remove listeners and clear src when mute() is called mid-playback', async () => {
+    const { result } = renderHook(() => useAudioNotifications());
+
+    await act(async () => {
+      await result.current.enqueue({
+        id: 'notif-mute',
+        text: 'mute test',
+        priority: 'normal',
+      });
+    });
+
+    await waitFor(() => {
+      expect(createdAudios.length).toBe(1);
+    });
+    const audio = createdAudios[0]!;
+    audio.pause.mockClear();
+
+    // Mute mid-playback.
+    act(() => {
+      result.current.mute();
+    });
+
+    // Must fully release the in-flight audio, not just pause it.
+    expect(audio.pause).toHaveBeenCalled();
+    expect(audio.listeners.get('ended')?.size ?? 0).toBe(0);
+    expect(audio.listeners.get('error')?.size ?? 0).toBe(0);
+    expect(audio.src).toBe('');
+  });
+
+  it('should remove listeners and clear src when disable() is called mid-playback', async () => {
+    const { result } = renderHook(() => useAudioNotifications());
+
+    await act(async () => {
+      await result.current.enqueue({
+        id: 'notif-disable',
+        text: 'disable test',
+        priority: 'normal',
+      });
+    });
+
+    await waitFor(() => {
+      expect(createdAudios.length).toBe(1);
+    });
+    const audio = createdAudios[0]!;
+    audio.pause.mockClear();
+
+    act(() => {
+      result.current.disable();
+    });
+
+    expect(audio.pause).toHaveBeenCalled();
+    expect(audio.listeners.get('ended')?.size ?? 0).toBe(0);
+    expect(audio.listeners.get('error')?.size ?? 0).toBe(0);
+    expect(audio.src).toBe('');
+  });
 });

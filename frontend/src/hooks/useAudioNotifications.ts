@@ -89,6 +89,23 @@ export function useAudioNotifications(): UseAudioNotificationsReturn {
   const cleanupCurrentAudioRef = useRef<(() => void) | null>(null);
 
   /**
+   * Fully release the currently-playing audio: invoke the per-audio cleanup
+   * (pause + remove listeners + clear src) and null the refs. Safe to call
+   * even when no audio is playing.
+   *
+   * adj-139.3.1.P / adj-rrvbk: extracted from skip/unmount so mute(),
+   * disable(), and any future caller go through the same path. Previously
+   * mute()/disable() called only audio.pause() — leaking listeners and src.
+   */
+  const releaseCurrentAudio = useCallback(() => {
+    if (cleanupCurrentAudioRef.current) {
+      cleanupCurrentAudioRef.current();
+      cleanupCurrentAudioRef.current = null;
+    }
+    audioRef.current = null;
+  }, []);
+
+  /**
    * Insert item in priority order
    */
   const insertSorted = useCallback((items: QueueEntry[], entry: QueueEntry): QueueEntry[] => {
@@ -244,29 +261,26 @@ export function useAudioNotifications(): UseAudioNotificationsReturn {
    */
   const skip = useCallback(() => {
     // adj-139.3.1: full cleanup (listeners + src) rather than just pause().
-    if (cleanupCurrentAudioRef.current) {
-      cleanupCurrentAudioRef.current();
-      cleanupCurrentAudioRef.current = null;
-    }
-    audioRef.current = null;
+    releaseCurrentAudio();
     setIsPlaying(false);
 
     if (currentIdRef.current) {
       setQueue((prev) => prev.filter((q) => q.id !== currentIdRef.current));
       currentIdRef.current = null;
     }
-  }, []);
+  }, [releaseCurrentAudio]);
 
   /**
    * Mute notifications
+   *
+   * adj-rrvbk: must fully release the in-flight audio, not just pause it,
+   * otherwise the 'ended'/'error' listeners + decoded buffer remain pinned.
    */
   const mute = useCallback(() => {
     setIsMuted(true);
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
+    releaseCurrentAudio();
     setIsPlaying(false);
-  }, []);
+  }, [releaseCurrentAudio]);
 
   /**
    * Unmute notifications
@@ -295,17 +309,18 @@ export function useAudioNotifications(): UseAudioNotificationsReturn {
 
   /**
    * Disable notification system
+   *
+   * adj-rrvbk: must fully release the in-flight audio (listeners + src)
+   * rather than just pause + null the ref — otherwise the underlying
+   * Audio object stays pinned to memory via its still-attached listeners.
    */
   const disable = useCallback(() => {
     setIsEnabled(false);
     setQueue([]);
     seenIdsRef.current.clear();
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
+    releaseCurrentAudio();
     setIsPlaying(false);
-  }, []);
+  }, [releaseCurrentAudio]);
 
   /**
    * Set volume (0-1)
@@ -336,13 +351,9 @@ export function useAudioNotifications(): UseAudioNotificationsReturn {
   // Cleanup on unmount (adj-139.3.1): fully release any in-flight audio.
   useEffect(() => {
     return () => {
-      if (cleanupCurrentAudioRef.current) {
-        cleanupCurrentAudioRef.current();
-        cleanupCurrentAudioRef.current = null;
-      }
-      audioRef.current = null;
+      releaseCurrentAudio();
     };
-  }, []);
+  }, [releaseCurrentAudio]);
 
   return {
     queueSize: queue.length,
