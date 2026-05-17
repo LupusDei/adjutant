@@ -418,6 +418,9 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
           MAX_RECONNECT_DELAY_MS,
         );
         setConnectionStatus('reconnecting');
+        // Always clear any outstanding reconnect timer before scheduling a new
+        // one — otherwise rapid onclose firings stack timers and produce a
+        // burst of concurrent reconnect attempts.
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = setTimeout(startWebSocket, delay);
       };
