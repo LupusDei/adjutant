@@ -9,6 +9,7 @@
  */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { MarkdownBody } from './MarkdownBody';
+import { MessageBubble } from './MessageBubble';
 import type { ConnectionStatus, ChatMessage } from '../../types';
 import { useChatMessages, type DisplayMessage } from '../../hooks/useChatMessages';
 import { api } from '../../services/api';
@@ -345,8 +346,12 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     }
   };
 
-  // Handle playing a message
-  const handlePlayMessage = async (msg: DisplayMessage) => {
+  // Handle playing a message.
+  //
+  // Wrapped in useCallback so MessageBubble's memo equality can hold —
+  // an unstable callback would force every bubble to re-render on every
+  // parent state flip.
+  const handlePlayMessage = useCallback(async (msg: DisplayMessage) => {
     if (voicePlayer.isPlaying && playingMessageId === msg.id) {
       voicePlayer.stop();
       setPlayingMessageId(null);
@@ -358,7 +363,13 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
         setPlayingMessageId(null);
       }
     }
-  };
+  }, [voicePlayer, playingMessageId]);
+
+  // Bridge to MessageBubble's onPlay (synchronous wrapper — the bubble
+  // doesn't await; React fires-and-forgets the async play.).
+  const onPlayMessage = useCallback((msg: DisplayMessage) => {
+    void handlePlayMessage(msg);
+  }, [handlePlayMessage]);
 
   // Track when voice player stops
   useEffect(() => {
@@ -493,45 +504,16 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
 
             const isPlayingThis = playingMessageId === msg.id;
             const isLoadingThis = isPlayingThis && voicePlayer.isLoading;
-            const isSending = msg.optimisticStatus === 'sending';
-            const isDelivered = msg.optimisticStatus === 'delivered';
-            const isFailed = msg.optimisticStatus === 'failed';
             return (
-              <div
+              <MessageBubble
                 key={msg.id}
-                className={`chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-command'} ${isSending ? 'chat-bubble-sending' : ''} ${isFailed ? 'chat-bubble-failed' : ''}`}
-              >
-                <div className="chat-bubble-header">
-                  <span className="chat-bubble-sender">
-                    {isUser ? 'YOU' : msg.agentId.toUpperCase()}
-                  </span>
-                  <button
-                    type="button"
-                    className={`chat-play-btn ${isPlayingThis ? 'chat-play-btn-active' : ''}`}
-                    onClick={() => void handlePlayMessage(msg)}
-                    disabled={isLoadingThis}
-                    aria-label={isPlayingThis ? 'Stop' : 'Play message'}
-                    title={isPlayingThis ? 'Stop' : 'Play message'}
-                  >
-                    {isLoadingThis ? '?' : isPlayingThis ? '||' : '>'}
-                  </button>
-                </div>
-                <div className="chat-bubble-content">
-                  <MarkdownBody>{msg.body}</MarkdownBody>
-                </div>
-                <div className="chat-bubble-time">
-                  {isSending && (
-                    <span className="chat-delivery-status">SENDING </span>
-                  )}
-                  {isDelivered && msg.clientId && (
-                    <span className="chat-delivery-status chat-delivery-confirmed">DELIVERED </span>
-                  )}
-                  {isFailed && (
-                    <span className="chat-delivery-status chat-delivery-failed">FAILED </span>
-                  )}
-                  {formatTimestamp(msg.createdAt)}
-                </div>
-              </div>
+                msg={msg}
+                isUser={isUser}
+                isPlaying={isPlayingThis}
+                isLoadingPlay={isLoadingThis}
+                onPlay={onPlayMessage}
+                formatTimestamp={formatTimestamp}
+              />
             );
           })
         )}
