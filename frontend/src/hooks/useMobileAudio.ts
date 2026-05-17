@@ -242,6 +242,10 @@ export function useMobileAudio(): UseMobileAudioReturn {
         })
         .catch((err: unknown) => {
           cleanup();
+          // adj-fwywd / adj-139.3.3.P: clear src on play()-rejection too.
+          // The singleton audio element would otherwise keep the failed URL
+          // bound, so subsequent reads of audioElement.src return the bad URL.
+          audio.src = '';
           reject(err instanceof Error ? err : new Error(String(err)));
         });
     });

@@ -130,4 +130,27 @@ describe('useMobileAudio - src clearing (adj-139.3.3)', () => {
     expect(result.current.isPlaying).toBe(false);
     expect(mockAudio.src).toBe('');
   });
+
+  // adj-fwywd + adj-139.3.3.P: when audio.play() rejects (before any
+  // 'error' DOM event), the catch handler removes listeners but used to
+  // leave audio.src set. Because the audio element is a singleton, the
+  // failed URL stayed bound. Must also clear src on play()-rejection.
+  it('should clear audio.src when play() rejects before any event fires', async () => {
+    mockAudio.play.mockClear();
+    mockAudio.play.mockRejectedValueOnce(new Error('NotAllowedError'));
+
+    const { result } = renderHook(() => useMobileAudio());
+
+    let caught: unknown = null;
+    await act(async () => {
+      try {
+        await result.current.play('/api/voice/audio/blocked.mp3');
+      } catch (err) {
+        caught = err;
+      }
+    });
+
+    expect(caught).toBeInstanceOf(Error);
+    expect(mockAudio.src).toBe('');
+  });
 });
