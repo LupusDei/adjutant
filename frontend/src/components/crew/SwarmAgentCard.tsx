@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import { memo, useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { api, ApiError } from '../../services/api';
 import { useTerminalStream } from '../../hooks/useTerminalStream';
 import type { CrewMember } from '../../types';
@@ -78,7 +78,7 @@ type AssignState = 'idle' | 'loading';
  * Includes kill (D2) and assign (D3) controls.
  * Supports expandable inline terminal view with WebSocket streaming + polling fallback.
  */
-export function SwarmAgentCard({ agent, onNavigateToChat }: SwarmAgentCardProps) {
+function SwarmAgentCardImpl({ agent, onNavigateToChat }: SwarmAgentCardProps) {
   const isBooting = agent.status === 'booting';
   const isOnline = agent.status !== 'offline' && !isBooting;
   const isActive = agent.currentTask && agent.status === 'idle';
@@ -396,6 +396,46 @@ export function SwarmAgentCard({ agent, onNavigateToChat }: SwarmAgentCardProps)
     </div>
   );
 }
+
+/**
+ * adj-139.4.6: Equality function for React.memo.
+ *
+ * The Crew Stats poll produces a fresh `CrewMember` object every 5 seconds.
+ * Without memo, every card re-renders even when nothing changed. Compare the
+ * fields that actually affect render output:
+ *   - id, name, status — identity + status dot/label
+ *   - currentTask, branch, worktreePath, sessionId — primary text rows
+ *   - lastActivity — relative-time footer
+ *   - progress.completed/total — task counter
+ *   - cost, contextPercent — stacked indicators
+ *   - isCoordinator, project — badges
+ *
+ * Skips the `onNavigateToChat` reference check; callers should pass a
+ * stable callback (the parent wraps it in useCallback).
+ */
+function arePropsEqual(prev: SwarmAgentCardProps, next: SwarmAgentCardProps): boolean {
+  const a = prev.agent;
+  const b = next.agent;
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    a.status === b.status &&
+    a.currentTask === b.currentTask &&
+    a.branch === b.branch &&
+    a.worktreePath === b.worktreePath &&
+    a.sessionId === b.sessionId &&
+    a.lastActivity === b.lastActivity &&
+    a.cost === b.cost &&
+    a.contextPercent === b.contextPercent &&
+    a.isCoordinator === b.isCoordinator &&
+    a.project === b.project &&
+    a.progress?.completed === b.progress?.completed &&
+    a.progress?.total === b.progress?.total &&
+    prev.onNavigateToChat === next.onNavigateToChat
+  );
+}
+
+export const SwarmAgentCard = memo(SwarmAgentCardImpl, arePropsEqual);
 
 const styles = {
   card: {
