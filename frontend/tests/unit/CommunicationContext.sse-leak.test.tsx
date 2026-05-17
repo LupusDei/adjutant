@@ -132,7 +132,10 @@ describe("CommunicationContext SSE 'connected' listener cleanup", () => {
     // Each return to 'efficient' creates a NEW EventSource. Each leaves
     // the previous one closed; previously the 'connected' listener was
     // anonymous and not removable.
-    const toggleCount = 10;
+    //
+    // adj-torcd: bumped from 10 to 50 to match spec US2 #2 acceptance
+    // criterion which requires the leak guard to hold across 50 toggles.
+    const toggleCount = 50;
     for (let i = 0; i < toggleCount; i++) {
       await act(async () => { result.current.setPriority("polling-only"); });
       await act(async () => { result.current.setPriority("efficient"); });
