@@ -157,6 +157,14 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
   const timelineSubscribersRef = useRef<Set<TimelineEventHandler>>(new Set());
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const reconnectAttemptsRef = useRef(0);
+  /**
+   * Highest `seq` we've already dispatched to subscribers. Updated when:
+   *   - the server's `connected` frame announces its current `lastSeq`
+   *   - we deliver a `chat_message` with a higher `seq`
+   * Messages with `seq <= lastProcessedSeqRef.current` are dropped to
+   * eliminate duplicates from replay buffer / reconnect storms.
+   */
+  const lastProcessedSeqRef = useRef<number>(0);
 
   // ---------------------------------------------------------------------------
   // Subscriber management
@@ -307,10 +315,29 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
           }
           case 'connected':
             reconnectAttemptsRef.current = 0;
+            // Record the server's current sequence number as our baseline so
+            // that older replayed messages can be deduped on reconnect.
+            lastProcessedSeqRef.current = msg.lastSeq ?? 0;
+            // Send a sync request carrying the highest seq we've processed,
+            // so the server can replay only what we missed (see handleSync
+            // in ws-server.ts).
+            try {
+              ws.send(JSON.stringify({
+                type: 'sync',
+                lastSeqSeen: lastProcessedSeqRef.current,
+              }));
+            } catch { /* socket may have closed mid-frame */ }
             if (mounted) setConnectionStatus('websocket');
             break;
           case 'chat_message':
             if (msg.id && msg.from && msg.to && msg.body && msg.timestamp) {
+              // Dedup: drop any message at or below our watermark.
+              if (msg.seq != null && msg.seq <= lastProcessedSeqRef.current) {
+                break;
+              }
+              if (msg.seq != null) {
+                lastProcessedSeqRef.current = msg.seq;
+              }
               const incoming: IncomingChatMessage = {
                 id: msg.id,
                 from: msg.from,
