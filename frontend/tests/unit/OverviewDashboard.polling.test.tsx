@@ -29,7 +29,8 @@ vi.mock('../../src/contexts/ProjectContext', () => ({
 }));
 
 // We control resolution of getTimelineEvents in each test.
-let pendingResolvers: Array<(value: { events: unknown[]; hasMore: boolean }) => void> = [];
+type TimelineResolver = (value: { events: unknown[]; hasMore: boolean }) => void;
+let pendingResolvers: TimelineResolver[] = [];
 vi.mock('../../src/services/api', () => ({
   api: {
     projects: {
