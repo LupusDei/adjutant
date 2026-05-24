@@ -168,4 +168,49 @@ describe("agent status stream", () => {
     ws1.close();
     ws2.close();
   });
+
+  /**
+   * adj-zm2fh regression: ws.on("close") was the ONLY cleanup hook.
+   * On abrupt termination (network drop, terminate() call) the close event
+   * still fires eventually, but we want defense in depth: both close AND
+   * error should trigger cleanup. This test forces an abrupt RST via
+   * ws.terminate() and verifies cleanup still happens — guarding against
+   * any future change that delays close beyond the listener-leak window.
+   */
+  it("should unsubscribe from events on abrupt termination", async () => {
+    const ws = new WebSocket(`ws://localhost:${port}/api/agents/stream`);
+    await waitForOpen(ws);
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(handlers.get("agent:status_changed")!).toHaveLength(1);
+
+    // Abrupt termination — sends TCP RST instead of clean WS close frame.
+    // Server-side ws will fire 'error' and/or 'close'.
+    ws.terminate();
+    await new Promise((r) => setTimeout(r, 200));
+
+    // After cleanup, the listener must be removed regardless of which
+    // event (close or error) fired first.
+    expect(handlers.get("agent:status_changed")!).toHaveLength(0);
+    expect(mockOff).toHaveBeenCalledWith(
+      "agent:status_changed",
+      expect.any(Function)
+    );
+  });
+
+  it("should not leak listeners across 50 connect/disconnect cycles", async () => {
+    // adj-zm2fh bounded-growth regression: hammer the WS endpoint and
+    // verify listener count returns to baseline.
+    const baseline = (handlers.get("agent:status_changed") ?? []).length;
+    for (let i = 0; i < 50; i++) {
+      const ws = new WebSocket(`ws://localhost:${port}/api/agents/stream`);
+      await waitForOpen(ws);
+      await new Promise((r) => setTimeout(r, 10));
+      ws.close();
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    // After all cycles, listener count must be == baseline
+    const final = (handlers.get("agent:status_changed") ?? []).length;
+    expect(final).toBe(baseline);
+  });
 });

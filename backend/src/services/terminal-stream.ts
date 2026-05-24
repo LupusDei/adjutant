@@ -19,6 +19,13 @@ import type { Server as HttpServer } from "http";
 import { getEventBus } from "./event-bus.js";
 import { logInfo, logWarn } from "../utils/index.js";
 import type { OutputEvent } from "./output-parser.js";
+// adj-zm2fh: static imports replace 2 dynamic `import("./...")` calls inside
+// handleSubscribe and the 10s snapshot setInterval. Per-call dynamic imports
+// allocated Promise + .then closures + V8 Context per invocation, contributing
+// to closure pressure in the snapshot polling loop. Static imports are safe
+// here: no circular deps (terminal-stream is a leaf consumer).
+import { getSessionBridge } from "./session-bridge.js";
+import { captureTmuxPane } from "./tmux.js";
 
 /** How often to send a full terminal snapshot (ms). */
 const SNAPSHOT_INTERVAL_MS = 10_000;
@@ -108,7 +115,6 @@ async function handleSubscribe(client: StreamClient, sessionId: string): Promise
 
   try {
     // Get initial terminal content via capture-pane
-    const { getSessionBridge } = await import("./session-bridge.js");
     const bridge = getSessionBridge();
     const session = bridge.getSession(sessionId);
 
@@ -153,10 +159,10 @@ async function handleSubscribe(client: StreamClient, sessionId: string): Promise
     client.eventHandler = handler;
 
     // Periodic full snapshot for sync recovery
+    // adj-zm2fh: captureTmuxPane imported statically above.
     client.snapshotTimer = setInterval(() => void (async () => {
       if (client.ws.readyState !== WebSocket.OPEN) return;
       try {
-        const { captureTmuxPane } = await import("./tmux.js");
         const snapshot = await captureTmuxPane(session.tmuxSession);
         sendToClient(client, {
           type: "snapshot",

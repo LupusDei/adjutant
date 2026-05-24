@@ -17,6 +17,13 @@ import { getEventBus } from "./event-bus.js";
 import { hasApiKeys, validateApiKey } from "./api-key-service.js";
 import { logInfo, logWarn } from "../utils/index.js";
 import type { MessageStore } from "./message-store.js";
+// adj-zm2fh: static import replaces 7 hot-path dynamic `import("./session-bridge.js")`
+// calls. Each dynamic import allocated a Promise + .then/.catch closures + V8 Context
+// per invocation; on per-keystroke handlers (session_input) this was a major source
+// of the closure-pressure leak. ESM handles the transitive cycle (ws-server →
+// session-bridge → mcp-tools/status → ws-server) because the cycle is on function
+// CALL, not module-init constants — wsBroadcast is invoked lazily.
+import { getSessionBridge } from "./session-bridge.js";
 
 // ============================================================================
 // Types
@@ -265,18 +272,19 @@ function handleMessage(client: WsClient, msg: WsClientMessage): void {
   });
 
   // Deliver to agent's tmux pane if they have an active session
-  import("./session-bridge.js")
-    .then(({ getSessionBridge }) => {
-      const bridge = getSessionBridge();
-      const sessions = bridge.registry.findByName(recipient);
-      for (const session of sessions) {
-        if (session.status !== "offline") {
-          logInfo("Delivering WS message to agent tmux pane", { to: recipient, sessionId: session.id });
-          bridge.sendInput(session.id, msg.body ?? "").catch(() => {});
-        }
+  // adj-zm2fh: was dynamic import; now static. Bridge lookup is sync.
+  try {
+    const bridge = getSessionBridge();
+    const sessions = bridge.registry.findByName(recipient);
+    for (const session of sessions) {
+      if (session.status !== "offline") {
+        logInfo("Delivering WS message to agent tmux pane", { to: recipient, sessionId: session.id });
+        bridge.sendInput(session.id, msg.body ?? "").catch(() => {});
       }
-    })
-    .catch(() => {});
+    }
+  } catch (err) {
+    logWarn("Failed to route WS message to session bridge", { error: String(err) });
+  }
 }
 
 function handleTyping(client: WsClient, msg: WsClientMessage): void {
@@ -330,7 +338,6 @@ async function handleSessionConnect(client: WsClient, msg: WsClientMessage): Pro
   }
 
   try {
-    const { getSessionBridge } = await import("./session-bridge.js");
     const bridge = getSessionBridge();
     logInfo("session_connect: calling connectClient", { sessionId, sessions: bridge.listSessions().map(s => s.id) });
     const result = await bridge.connectClient(sessionId, client.sessionId, replay ?? false);
@@ -395,7 +402,6 @@ async function handleSessionDisconnect(client: WsClient, msg: WsClientMessage): 
   }
 
   try {
-    const { getSessionBridge } = await import("./session-bridge.js");
     const bridge = getSessionBridge();
     await bridge.disconnectClient(sessionId, client.sessionId);
     send(client, { type: "session_disconnected", sessionId });
@@ -417,7 +423,6 @@ async function handleSessionInput(client: WsClient, msg: WsClientMessage): Promi
   }
 
   try {
-    const { getSessionBridge } = await import("./session-bridge.js");
     const bridge = getSessionBridge();
     const sent = await bridge.sendInput(sessionId, text);
     if (!sent) {
@@ -446,7 +451,6 @@ async function handleSessionInterrupt(client: WsClient, msg: WsClientMessage): P
   }
 
   try {
-    const { getSessionBridge } = await import("./session-bridge.js");
     const bridge = getSessionBridge();
     const sent = await bridge.sendInterrupt(sessionId);
     if (!sent) {
@@ -475,7 +479,6 @@ async function handleSessionPermissionResponse(client: WsClient, msg: WsClientMe
   }
 
   try {
-    const { getSessionBridge } = await import("./session-bridge.js");
     const bridge = getSessionBridge();
     const sent = await bridge.sendPermissionResponse(sessionId, approved);
     if (!sent) {
@@ -622,21 +625,21 @@ export function initWebSocketServer(_server: HttpServer, store?: MessageStore): 
       clients.delete(sessionId);
       logInfo("ws client disconnected", { sessionId });
 
-      // Clean up any session bridge connections for this client
-      import("./session-bridge.js")
-        .then(({ getSessionBridge }) => {
-          const bridge = getSessionBridge();
-          // Clean up output listener
-          if (client.outputHandler) {
-            bridge.connector.offOutput(client.outputHandler);
+      // adj-zm2fh: was dynamic import; now static. Cleanup is sync.
+      try {
+        const bridge = getSessionBridge();
+        // Clean up output listener
+        if (client.outputHandler) {
+          bridge.connector.offOutput(client.outputHandler);
+        }
+        for (const s of bridge.registry.getAll()) {
+          if (s.connectedClients.has(client.sessionId)) {
+            bridge.disconnectClient(s.id, client.sessionId).catch(() => {});
           }
-          for (const s of bridge.registry.getAll()) {
-            if (s.connectedClients.has(client.sessionId)) {
-              bridge.disconnectClient(s.id, client.sessionId).catch(() => {});
-            }
-          }
-        })
-        .catch(() => {});
+        }
+      } catch (err) {
+        logWarn("WS close cleanup failed", { error: String(err) });
+      }
     });
 
     ws.on("error", (err) => {

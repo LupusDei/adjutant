@@ -47,9 +47,19 @@ export function initAgentStatusStream(server: HttpServer): WebSocketServer {
 
     eventBus.on("agent:status_changed", handler);
 
-    ws.on("close", () => {
+    // adj-zm2fh: cleanup MUST run on both close AND error. The ws library's
+    // 'close' event normally fires after 'error', but in production we observed
+    // network-drop races where 'error' fires but 'close' is delayed enough
+    // that listeners can leak under sustained churn. Guard with a single-shot
+    // flag so we never double-off.
+    let cleaned = false;
+    const cleanup = (): void => {
+      if (cleaned) return;
+      cleaned = true;
       eventBus.off("agent:status_changed", handler);
-    });
+    };
+    ws.on("close", cleanup);
+    ws.on("error", cleanup);
   });
 
   return wss;
