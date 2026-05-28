@@ -104,6 +104,61 @@ describe("cost-tracker", () => {
       );
     });
 
+    // adj-zm2fh round 2: the unconditional emit per poll was a major closure-leak
+    // amplifier. Backend was calling recordCostUpdate ~5/sec/session × 7 sessions =
+    // 35 emits/sec; each emit cascaded through AdjutantCore.onAny → behavior.act()
+    // → .catch() chains, accumulating millions of closures over 50h.
+    // Fix: only emit when cost/tokens/contextPercent actually changed.
+    it("should NOT emit session:cost when called with identical values (no-op suppression)", () => {
+      // First call: emit fires
+      recordCostUpdate("sess-1", "/project", {
+        cost: 0.05,
+        tokens: { input: 1000, output: 500, cacheRead: 0, cacheWrite: 0 },
+        contextPercent: 12,
+      });
+      const firstEmits = mockEmit.mock.calls.filter((c) => c[0] === "session:cost").length;
+      expect(firstEmits).toBe(1);
+
+      // Second call with IDENTICAL values: emit MUST NOT fire
+      recordCostUpdate("sess-1", "/project", {
+        cost: 0.05,
+        tokens: { input: 1000, output: 500, cacheRead: 0, cacheWrite: 0 },
+        contextPercent: 12,
+      });
+      const secondEmits = mockEmit.mock.calls.filter((c) => c[0] === "session:cost").length;
+      expect(secondEmits).toBe(1); // still 1, no new emit
+    });
+
+    it("should emit when cost increases", () => {
+      recordCostUpdate("sess-1", "/project", { cost: 0.05 });
+      vi.clearAllMocks();
+      recordCostUpdate("sess-1", "/project", { cost: 0.10 });
+      expect(mockEmit).toHaveBeenCalledWith(
+        "session:cost",
+        expect.objectContaining({ cost: 0.10 }),
+      );
+    });
+
+    it("should emit when tokens increase", () => {
+      recordCostUpdate("sess-1", "/project", { tokens: { input: 100, output: 50 } });
+      vi.clearAllMocks();
+      recordCostUpdate("sess-1", "/project", { tokens: { input: 200, output: 50 } });
+      expect(mockEmit).toHaveBeenCalledWith(
+        "session:cost",
+        expect.objectContaining({ sessionId: "sess-1" }),
+      );
+    });
+
+    it("should emit when contextPercent changes", () => {
+      recordCostUpdate("sess-1", "/project", { cost: 0.05, contextPercent: 10 });
+      vi.clearAllMocks();
+      recordCostUpdate("sess-1", "/project", { cost: 0.05, contextPercent: 15 });
+      expect(mockEmit).toHaveBeenCalledWith(
+        "session:cost",
+        expect.objectContaining({ sessionId: "sess-1" }),
+      );
+    });
+
     it("should emit cost alert when threshold exceeded", () => {
       setCostAlertThreshold(0.10);
       recordCostUpdate("sess-1", "/project", { cost: 0.15 });

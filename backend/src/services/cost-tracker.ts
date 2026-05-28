@@ -227,7 +227,8 @@ export function recordCostUpdate(
     sessionCache.set(sessionId, entry);
   }
 
-  // Capture snapshots before update (needed for bead-switch delta calculation)
+  // Capture snapshots before update (needed for bead-switch delta calculation
+  // AND for adj-zm2fh emit-suppression below).
   const previousCost = entry.cost;
   const previousTokens = {
     input: entry.tokens.input,
@@ -235,6 +236,7 @@ export function recordCostUpdate(
     cacheRead: entry.tokens.cacheRead,
     cacheWrite: entry.tokens.cacheWrite,
   };
+  const previousContextPercent = entry.contextPercent;
 
   // Update tokens (these are running totals from Claude Code, so take the max)
   if (update.tokens) {
@@ -272,12 +274,33 @@ export function recordCostUpdate(
   // Persist to SQLite
   upsertSessionCost(sessionId, entry, update.agentId, update.beadId, previousCost, previousTokens);
 
-  // Emit via EventBus
-  getEventBus().emit("session:cost", {
-    sessionId,
-    cost: entry.cost,
-    tokens: entry.tokens,
-  });
+  // adj-zm2fh round 2: emit-suppression on no-op updates.
+  // Pre-fix, this fired on every tmux capture-pane poll (~5/sec/session × N sessions
+  // = up to 35 emits/sec sustained), and every emit cascaded through
+  // EventBus.emit → AdjutantCore.onAny → behavior.act() → .catch(), accumulating
+  // millions of Promise+closure scopes over multi-day uptime. The
+  // forensic snapshot at 50h uptime showed 13.9M anonymous closures (741 MB),
+  // 376K (object properties) arrays (935 MB), and 2.16M system/Context entries
+  // — all hallmarks of per-event async dispatch retention.
+  // The vast majority of polls observe NO change (agent idle / between turns),
+  // so suppressing emit when cost/tokens/contextPercent are all identical
+  // collapses the steady-state emit rate to near-zero while preserving the
+  // ALL behavior on real changes.
+  const tokensChanged =
+    entry.tokens.input !== previousTokens.input ||
+    entry.tokens.output !== previousTokens.output ||
+    entry.tokens.cacheRead !== previousTokens.cacheRead ||
+    entry.tokens.cacheWrite !== previousTokens.cacheWrite;
+  const costChanged = entry.cost !== previousCost;
+  const contextChanged = entry.contextPercent !== previousContextPercent;
+
+  if (costChanged || tokensChanged || contextChanged) {
+    getEventBus().emit("session:cost", {
+      sessionId,
+      cost: entry.cost,
+      tokens: entry.tokens,
+    });
+  }
 
   // Check alert threshold
   if (entry.cost >= alertThreshold && !alertedSessions.has(sessionId)) {
