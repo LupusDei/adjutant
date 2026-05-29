@@ -26,6 +26,7 @@ import { createProposalStore, migrateProposalProjectNames } from "./services/pro
 import { backfillConversations } from "./services/conversation-backfill.js";
 import { createConversationStore } from "./services/conversation-store.js";
 import { createConversationsRouter } from "./routes/conversations.js";
+import { createChannelsRouter } from "./routes/channels.js";
 import { createEventStore } from "./services/event-store.js";
 import { createPersonaService, initPersonaService } from "./services/persona-service.js";
 import { createCallsignToggleService } from "./services/callsign-toggle-service.js";
@@ -126,6 +127,7 @@ app.use("/api/events", createEventsRouter(eventStore));
 app.use("/api/memory", createMemoryRouter(memoryStore));
 app.use("/api/messages", createMessagesRouter(messageStore));
 app.use("/api/conversations", createConversationsRouter(conversationStore, messageStore));
+app.use("/api/channels", createChannelsRouter(conversationStore));
 app.use("/api/projects", createProjectsRouter(messageStore, proposalStore, autoDevelopStore));
 app.use("/api/overview", createOverviewRouter(messageStore));
 app.use("/api/proposals", createProposalsRouter(proposalStore));
