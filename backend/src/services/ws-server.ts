@@ -17,6 +17,7 @@ import { getEventBus } from "./event-bus.js";
 import { hasApiKeys, validateApiKey } from "./api-key-service.js";
 import { logInfo, logWarn } from "../utils/index.js";
 import type { MessageStore } from "./message-store.js";
+import type { ConversationStore } from "./conversation-store.js";
 // adj-zm2fh: static import replaces 7 hot-path dynamic `import("./session-bridge.js")`
 // calls. Each dynamic import allocated a Promise + .then/.catch closures + V8 Context
 // per invocation; on per-keystroke handlers (session_input) this was a major source
@@ -32,9 +33,14 @@ import { getSessionBridge } from "./session-bridge.js";
 /** Client → Server message types */
 interface WsClientMessage {
   type: "auth" | "auth_response" | "message" | "typing" | "stream_request" | "stream_cancel" | "ack" | "sync"
+    | "subscribe" | "unsubscribe"
     | "session_connect" | "session_disconnect" | "session_input" | "session_interrupt" | "session_permission_response";
   id?: string;
   to?: string;
+  /** Authenticated member identity (defaults to "user" for the dashboard operator). */
+  identity?: string;
+  /** Conversation id for subscribe/unsubscribe (room-scoped fan-out). */
+  conversationId?: string;
   body?: string;
   subject?: string;
   replyTo?: string;
@@ -66,6 +72,8 @@ interface WsServerMessage {
   body?: string | undefined;
   timestamp?: string | undefined;
   threadId?: string | undefined;
+  /** Conversation/channel id for room-scoped chat messages (adj-164.4). */
+  conversationId?: string | undefined;
   replyTo?: string | undefined;
   metadata?: Record<string, unknown> | undefined;
   streamId?: string | undefined;
@@ -99,6 +107,17 @@ interface WsClient {
   ws: WebSocket;
   sessionId: string;
   authenticated: boolean;
+  /**
+   * Authenticated member identity used for room-scoped fan-out. The dashboard
+   * operator is "user"; this is the id matched against conversation membership.
+   */
+  identity: string;
+  /**
+   * Conversations this client is actively subscribed to. Room-scoped broadcasts
+   * (`wsBroadcastToConversation`) deliver only to clients subscribed here AND
+   * whose `identity` is a member of the conversation.
+   */
+  subscriptions: Set<string>;
   lastSeqSeen: number;
   /** Rate limiting: message timestamps */
   messageTimestamps: number[];
@@ -132,6 +151,7 @@ const RATE_WINDOW_MS = 60_000;
 
 let wss: WebSocketServer | null = null;
 let messageStore: MessageStore | null = null;
+let conversationStore: ConversationStore | null = null;
 const clients = new Map<string, WsClient>();
 const replayBuffer: ReplayEntry[] = [];
 let globalSeq = 0;
@@ -185,6 +205,13 @@ function isRateLimited(timestamps: number[], limit: number): boolean {
 // ============================================================================
 
 function handleAuth(client: WsClient, msg: WsClientMessage): void {
+  // Capture the authenticated identity used for room-scoped fan-out. The
+  // dashboard operator authenticates as "user" (the default); a client may
+  // declare an alternate member identity here.
+  if (msg.identity) {
+    client.identity = msg.identity;
+  }
+
   // If no API keys configured, allow all (open mode for development)
   if (!hasApiKeys()) {
     client.authenticated = true;
@@ -323,6 +350,20 @@ function handleAck(client: WsClient, msg: WsClientMessage): void {
   if (msg.seq !== undefined) {
     client.lastSeqSeen = msg.seq;
   }
+}
+
+/** Add a conversation to the client's room subscriptions (room-scoped fan-out). */
+function handleSubscribe(client: WsClient, msg: WsClientMessage): void {
+  if (!msg.conversationId) return; // silently ignore malformed subscribe
+  client.subscriptions.add(msg.conversationId);
+  logInfo("ws subscribe", { sessionId: client.sessionId, conversationId: msg.conversationId });
+}
+
+/** Remove a conversation from the client's room subscriptions. */
+function handleUnsubscribe(client: WsClient, msg: WsClientMessage): void {
+  if (!msg.conversationId) return;
+  client.subscriptions.delete(msg.conversationId);
+  logInfo("ws unsubscribe", { sessionId: client.sessionId, conversationId: msg.conversationId });
 }
 
 // ============================================================================
@@ -518,6 +559,8 @@ export function initWebSocketServer(_server: HttpServer, store?: MessageStore): 
       ws,
       sessionId,
       authenticated: false,
+      identity: "user",
+      subscriptions: new Set<string>(),
       lastSeqSeen: 0,
       messageTimestamps: [],
       typingTimestamps: [],
@@ -575,6 +618,12 @@ export function initWebSocketServer(_server: HttpServer, store?: MessageStore): 
           break;
         case "ack":
           handleAck(client, msg);
+          break;
+        case "subscribe":
+          handleSubscribe(client, msg);
+          break;
+        case "unsubscribe":
+          handleUnsubscribe(client, msg);
           break;
         case "stream_request":
           // Stream requests will be handled by the streaming bridge (task 5)
@@ -699,6 +748,50 @@ export function wsBroadcast(msg: WsServerMessage): void {
 }
 
 /**
+ * Inject the conversation store used to resolve membership for room-scoped
+ * fan-out. Called once at startup, mirroring how the message store is wired.
+ */
+export function setConversationStore(store: ConversationStore): void {
+  conversationStore = store;
+}
+
+/**
+ * Room-scoped fan-out (adj-164.4.3).
+ *
+ * Unlike {@link wsBroadcast} (which blasts every authenticated client), this
+ * delivers ONLY to clients that are BOTH (a) a member of the conversation and
+ * (b) actively subscribed to it. Non-members receive nothing — this is the
+ * authorization boundary for channel real-time delivery.
+ *
+ * The message is still sequenced and buffered for replay so subscribed clients
+ * can recover gaps via `sync`.
+ */
+export function wsBroadcastToConversation(conversationId: string, msg: WsServerMessage): void {
+  // Without a conversation store we cannot resolve membership, so a fan-out
+  // would either leak to everyone or to no one. Fail closed: deliver to no one.
+  if (!conversationStore) {
+    logWarn("wsBroadcastToConversation: no conversation store configured, dropping", {
+      conversationId,
+    });
+    return;
+  }
+
+  const memberIds = new Set(conversationStore.getMembers(conversationId).map((m) => m.memberId));
+
+  const seq = nextSeq();
+  msg.seq = seq;
+  // Buffer for replay so a reconnecting subscribed member can recover this message.
+  addToReplay(msg);
+
+  for (const client of clients.values()) {
+    if (!client.authenticated) continue;
+    if (!memberIds.has(client.identity)) continue;
+    if (!client.subscriptions.has(conversationId)) continue;
+    send(client, msg);
+  }
+}
+
+/**
  * Shut down the WebSocket server.
  */
 export function closeWsServer(): void {
@@ -708,6 +801,7 @@ export function closeWsServer(): void {
       client.ws.close(1001, "Server shutting down");
     }
     clients.clear();
+    conversationStore = null;
     wss.close();
     wss = null;
     logInfo("WebSocket server closed");

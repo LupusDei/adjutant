@@ -7,7 +7,7 @@ import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
 import { startPrefixMapRefreshScheduler } from "./services/beads/index.js";
-import { initWebSocketServer } from "./services/ws-server.js";
+import { initWebSocketServer, setConversationStore } from "./services/ws-server.js";
 import { initAgentStatusStream } from "./services/agent-status-stream.js";
 import { initTerminalStream } from "./services/terminal-stream.js";
 import { initStreamingBridge } from "./services/streaming-bridge.js";
@@ -16,6 +16,7 @@ import { initMcpServer, setToolRegistrar, getAgentBySession } from "./services/m
 import { initDatabase } from "./services/database.js";
 import { createMessageStore } from "./services/message-store.js";
 import { registerMessagingTools } from "./services/mcp-tools/messaging.js";
+import { registerChannelTools } from "./services/mcp-tools/channels.js";
 import { registerStatusTools } from "./services/mcp-tools/status.js";
 import { registerBeadTools } from "./services/mcp-tools/beads.js";
 import { registerQueryTools } from "./services/mcp-tools/queries.js";
@@ -25,6 +26,7 @@ import { createProposalStore, migrateProposalProjectNames } from "./services/pro
 import { backfillConversations } from "./services/conversation-backfill.js";
 import { createConversationStore } from "./services/conversation-store.js";
 import { createConversationsRouter } from "./routes/conversations.js";
+import { createChannelsRouter } from "./routes/channels.js";
 import { createEventStore } from "./services/event-store.js";
 import { createPersonaService, initPersonaService } from "./services/persona-service.js";
 import { createCallsignToggleService } from "./services/callsign-toggle-service.js";
@@ -72,7 +74,7 @@ const PORT = process.env["PORT"] ?? 4201;
 const messageDb = initDatabase();
 const messageStore = createMessageStore(messageDb);
 const proposalStore = createProposalStore(messageDb);
-const conversationStore = createConversationStore(messageDb);
+const conversationStore = createConversationStore(messageDb, messageStore);
 migrateProposalProjectNames(messageDb);
 // adj-164.1.4 — backfill legacy messages into DM conversations. Idempotent:
 // messages already carrying a conversation_id are skipped, so this is a no-op
@@ -125,6 +127,7 @@ app.use("/api/events", createEventsRouter(eventStore));
 app.use("/api/memory", createMemoryRouter(memoryStore));
 app.use("/api/messages", createMessagesRouter(messageStore));
 app.use("/api/conversations", createConversationsRouter(conversationStore, messageStore));
+app.use("/api/channels", createChannelsRouter(conversationStore));
 app.use("/api/projects", createProjectsRouter(messageStore, proposalStore, autoDevelopStore));
 app.use("/api/overview", createOverviewRouter(messageStore));
 app.use("/api/proposals", createProposalsRouter(proposalStore));
@@ -240,6 +243,9 @@ const server = app.listen(PORT, () => {
 
   // Initialize WebSocket servers (all use noServer: true)
   const chatWss = initWebSocketServer(server, messageStore);
+  // Wire the conversation store so room-scoped channel fan-out can resolve
+  // membership (adj-164.4.3).
+  setConversationStore(conversationStore);
   const agentWss = initAgentStatusStream(server);
   const terminalWss = initTerminalStream(server);
 
@@ -331,7 +337,8 @@ const server = app.listen(PORT, () => {
   // connecting agent gets a fully-tooled MCP server.
   // (adj-083 Bug 1: fixes race where agent gets zero tools)
   setToolRegistrar((server) => {
-    registerMessagingTools(server, messageStore, eventStore);
+    registerMessagingTools(server, messageStore, eventStore, conversationStore);
+    registerChannelTools(server, conversationStore);
     registerStatusTools(server, messageStore, eventStore);
     registerBeadTools(server, eventStore, proposalStore, messageDb);
     registerQueryTools(server, messageStore);
