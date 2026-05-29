@@ -49,6 +49,7 @@ function createTestDb(): Database.Database {
       delivery_status TEXT DEFAULT 'pending' CHECK(delivery_status IN ('pending','sent','delivered','read','failed')),
       event_type TEXT,
       thread_id TEXT,
+      conversation_id TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
