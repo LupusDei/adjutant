@@ -12,6 +12,7 @@ import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 
 import { MarkdownBody } from './MarkdownBody';
 import { MessageBubble } from './MessageBubble';
+import { computeMessageGroups } from './messageGrouping';
 import type { ConnectionStatus, ChatMessage } from '../../types';
 import { useChatMessages, type DisplayMessage } from '../../hooks/useChatMessages';
 import { api } from '../../services/api';
@@ -163,6 +164,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     isLoading,
     error: fetchError,
     hasMore,
+    conversationId,
     sendMessage: hookSendMessage,
     confirmDelivery,
     loadMore,
@@ -244,8 +246,13 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     },
   }), [confirmDelivery]);
 
-  // WebSocket connection for streaming and typing
-  const { connected: wsConnected, connectionStatus: wsConnectionStatus, sendTyping } = useChatWebSocket(wsEnabled, wsCallbacks);
+  // WebSocket connection for streaming and typing. The resolved conversation
+  // id scopes real-time chat_message delivery to the open DM (adj-164.2.4).
+  const { connected: wsConnected, connectionStatus: wsConnectionStatus, sendTyping } = useChatWebSocket(
+    wsEnabled,
+    wsCallbacks,
+    conversationId ?? undefined,
+  );
 
   // Effective connection status: WS status when enabled, otherwise from context
   const effectiveStatus: ConnectionStatus = wsEnabled ? wsConnectionStatus : commContextStatus;
@@ -259,7 +266,22 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     }
   }, [voiceInput.transcript, voiceInput.clearTranscript]);
 
-  // Scroll to bottom when messages change.
+  // followOutput is the auto-scroll-only-when-at-bottom policy for the
+  // virtualized timeline (adj-164.2.2): Virtuoso calls it with the live
+  // at-bottom state on every new item. Returning false when the user has
+  // scrolled up to read history suppresses the scroll-jump; returning 'smooth'
+  // keeps them pinned to the newest message when they're already at the bottom.
+  const followOutput = useCallback(
+    (isAtBottom: boolean): 'smooth' | false => (isAtBottom ? 'smooth' : false),
+    [],
+  );
+
+  // Scroll to bottom when messages change. This drives the non-virtualized
+  // empty/streaming-footer path (`messagesEndRef`). The virtualized message
+  // list's "only scroll when at bottom" behavior is owned by `followOutput`
+  // above — that callback is evaluated by Virtuoso against real layout, where
+  // at-bottom detection is reliable (jsdom has no layout, so duplicating the
+  // guard here would suppress legitimate scrolls in tests and on first paint).
   //
   // Wrapped in requestAnimationFrame so bursts (e.g. a rapid streaming
   // token sequence that grows the message list by one per ~50ms) collapse
@@ -416,6 +438,13 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     void handlePlayMessage(msg);
   }, [handlePlayMessage]);
 
+  // adj-164.2.2: same-sender run grouping. Computed once per message list
+  // (O(n)) and read inside renderMessage via a ref so the Virtuoso render
+  // callback stays referentially stable across parent re-renders.
+  const groupFlags = useMemo(() => computeMessageGroups(messages), [messages]);
+  const groupFlagsRef = useRef(groupFlags);
+  groupFlagsRef.current = groupFlags;
+
   // adj-139.4.2: Render callback for Virtuoso. Returns the bubble/system
   // message DOM for a single message. Kept stable via useCallback so that
   // Virtuoso's internal memoization isn't invalidated on parent re-renders.
@@ -432,6 +461,10 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
       );
     }
 
+    const flags = groupFlagsRef.current.get(msg.id);
+    const showSender = flags?.isFirstInGroup ?? true;
+    const showTime = flags?.isLastInGroup ?? true;
+
     const isPlayingThis = playingMessageId === msg.id;
     const isLoadingThis = isPlayingThis && voicePlayer.isLoading;
     return (
@@ -442,6 +475,8 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
         isLoadingPlay={isLoadingThis}
         onPlay={onPlayMessage}
         formatTimestamp={formatTimestamp}
+        showSender={showSender}
+        showTime={showTime}
       />
     );
   }, [playingMessageId, voicePlayer.isLoading, onPlayMessage]);
@@ -584,7 +619,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
             // inside itemContent for child stability.
             computeItemKey={(_index, msg) => msg.id}
             itemContent={(_index, msg) => renderMessage(msg)}
-            followOutput="smooth"
+            followOutput={followOutput}
             startReached={hasMore ? handleStartReached : undefined}
             alignToBottom
             style={{ height: '100%' }}

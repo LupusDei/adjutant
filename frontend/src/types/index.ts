@@ -178,6 +178,22 @@ export interface ChatMessage {
   deliveryStatus: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
   eventType: string | null;
   threadId: string | null;
+  /**
+   * Stable conversation id (adj-164). Every message belongs to exactly one
+   * conversation; the frontend scopes 1:1 chat strictly by this field, which
+   * is the root-cause fix for wrong-thread message bleed.
+   */
+  conversationId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A conversation (DM or channel) as returned by /api/conversations. */
+export interface Conversation {
+  id: string;
+  kind: 'dm' | 'channel';
+  title: string | null;
+  archived: boolean;
   createdAt: string;
   updatedAt: string;
 }

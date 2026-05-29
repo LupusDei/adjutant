@@ -12,6 +12,7 @@ import type {
   EpicWithProgressResponse,
   ChatMessage,
   ChatThread,
+  Conversation,
   UnreadCount,
   Proposal,
   SessionInfo,
@@ -535,6 +536,47 @@ export const api = {
       if (params.limit) searchParams.set('limit', params.limit.toString());
 
       return apiFetch(`/messages/search?${searchParams}`);
+    },
+  },
+
+  /**
+   * Conversations (adj-164) — the unified DM/channel model.
+   *
+   * Clients scope a 1:1 chat by its conversation id rather than by the legacy
+   * agent/recipient widening. The DM id is resolved through `getDm` so the
+   * deterministic-hash detail stays owned by the backend store layer.
+   */
+  conversations: {
+    /** List the conversations the user belongs to. */
+    async list(): Promise<{ conversations: Conversation[]; total: number }> {
+      return apiFetch('/conversations');
+    },
+
+    /**
+     * Resolve (lookup-or-create) the deterministic DM conversation between the
+     * user and the given agent. Idempotent on the backend.
+     */
+    async getDm(agentId: string): Promise<Conversation> {
+      const res = await apiFetch<{ conversation: Conversation }>(
+        `/conversations/dm/${encodeURIComponent(agentId)}`,
+      );
+      return res.conversation;
+    },
+
+    /** Fetch a single conversation's messages (scoped, paginated). */
+    async listMessages(
+      conversationId: string,
+      params?: { before?: string; beforeId?: string; limit?: number },
+    ): Promise<PaginatedResponse<ChatMessage>> {
+      const searchParams = new URLSearchParams();
+      if (params?.before) searchParams.set('before', params.before);
+      if (params?.beforeId) searchParams.set('beforeId', params.beforeId);
+      if (params?.limit) searchParams.set('limit', params.limit.toString());
+
+      const query = searchParams.toString();
+      return apiFetch(
+        `/conversations/${encodeURIComponent(conversationId)}/messages${query ? `?${query}` : ''}`,
+      );
     },
   },
 

@@ -243,6 +243,7 @@ describe('useChatWebSocket', () => {
           to: 'overseer',
           body: 'Hello from mayor',
           timestamp: '2026-01-01T00:00:00Z',
+          conversationId: 'dm_overseer',
           seq: 1,
         });
       });
@@ -253,6 +254,7 @@ describe('useChatWebSocket', () => {
         to: 'overseer',
         body: 'Hello from mayor',
         timestamp: '2026-01-01T00:00:00Z',
+        conversationId: 'dm_overseer',
         replyTo: undefined,
       });
     });
@@ -375,6 +377,101 @@ describe('useChatWebSocket', () => {
         from: 'mayor/',
         state: 'started',
       });
+    });
+  });
+
+  describe('conversation-scoped delivery (adj-164.2.4)', () => {
+    async function connect(callbacks: ChatWebSocketCallbacks, conversationId?: string) {
+      const hook = renderHook(() => useChatWebSocket(true, callbacks, conversationId));
+      await vi.waitFor(() => { expect(mockWs).not.toBeNull(); });
+      await vi.waitFor(() => { expect(mockWs!.readyState).toBe(MockWebSocket.OPEN); });
+      act(() => {
+        mockWs!.simulateMessage({ type: 'auth_challenge' });
+        mockWs!.simulateMessage({ type: 'connected', sessionId: 's', lastSeq: 0 });
+      });
+      return hook;
+    }
+
+    it('invokes onMessage when the message conversationId matches the open one', async () => {
+      const onMessage = vi.fn();
+      await connect({ onMessage }, 'dm_open');
+
+      act(() => {
+        mockWs!.simulateMessage({
+          type: 'chat_message',
+          id: 'm-1',
+          from: 'raynor',
+          to: 'user',
+          body: 'in scope',
+          timestamp: '2026-01-01T00:00:00Z',
+          conversationId: 'dm_open',
+          seq: 1,
+        });
+      });
+
+      expect(onMessage).toHaveBeenCalledTimes(1);
+      expect(onMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'm-1', conversationId: 'dm_open' }),
+      );
+    });
+
+    it('drops onMessage when the conversationId belongs to a different conversation', async () => {
+      const onMessage = vi.fn();
+      await connect({ onMessage }, 'dm_open');
+
+      act(() => {
+        mockWs!.simulateMessage({
+          type: 'chat_message',
+          id: 'm-2',
+          from: 'kerrigan',
+          to: 'user',
+          body: 'other conversation',
+          timestamp: '2026-01-01T00:00:00Z',
+          conversationId: 'dm_other',
+          seq: 2,
+        });
+      });
+
+      expect(onMessage).not.toHaveBeenCalled();
+    });
+
+    it('drops onMessage for a message with no conversationId when scoped', async () => {
+      const onMessage = vi.fn();
+      await connect({ onMessage }, 'dm_open');
+
+      act(() => {
+        mockWs!.simulateMessage({
+          type: 'chat_message',
+          id: 'm-3',
+          from: 'raynor',
+          to: 'user',
+          body: 'unscoped',
+          timestamp: '2026-01-01T00:00:00Z',
+          seq: 3,
+        });
+      });
+
+      expect(onMessage).not.toHaveBeenCalled();
+    });
+
+    it('delivers all messages when no conversationId scope is given (legacy)', async () => {
+      const onMessage = vi.fn();
+      await connect({ onMessage });
+
+      act(() => {
+        mockWs!.simulateMessage({
+          type: 'chat_message',
+          id: 'm-4',
+          from: 'raynor',
+          to: 'user',
+          body: 'any',
+          timestamp: '2026-01-01T00:00:00Z',
+          conversationId: 'dm_anything',
+          seq: 4,
+        });
+      });
+
+      expect(onMessage).toHaveBeenCalledTimes(1);
     });
   });
 

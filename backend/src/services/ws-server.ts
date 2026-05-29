@@ -17,7 +17,7 @@ import { getEventBus } from "./event-bus.js";
 import { hasApiKeys, validateApiKey } from "./api-key-service.js";
 import { logInfo, logWarn } from "../utils/index.js";
 import type { MessageStore } from "./message-store.js";
-import type { ConversationStore } from "./conversation-store.js";
+import { dmConversationId, type ConversationStore } from "./conversation-store.js";
 // adj-zm2fh: static import replaces 7 hot-path dynamic `import("./session-bridge.js")`
 // calls. Each dynamic import allocated a Promise + .then/.catch closures + V8 Context
 // per invocation; on per-keystroke handlers (session_input) this was a major source
@@ -72,7 +72,11 @@ interface WsServerMessage {
   body?: string | undefined;
   timestamp?: string | undefined;
   threadId?: string | undefined;
-  /** Conversation/channel id for room-scoped chat messages (adj-164.4). */
+  /**
+   * Conversation/channel id. Used for room-scoped channel fan-out (adj-164.4)
+   * AND so clients can scope real-time DM delivery to the open conversation
+   * (adj-164.2 — the WS-side half of the bleed fix).
+   */
   conversationId?: string | undefined;
   replyTo?: string | undefined;
   metadata?: Record<string, unknown> | undefined;
@@ -273,11 +277,15 @@ function handleMessage(client: WsClient, msg: WsClientMessage): void {
 
   // Persist to SQLite via message store
   const recipient = msg.to ?? "mayor/";
+  // adj-164.2: tag the user send with the deterministic DM conversation id so
+  // conversation-scoped reads/delivery work for messages sent over the socket.
+  const conversationId = dmConversationId("user", recipient);
   const message = messageStore.insertMessage({
     agentId: "user",
     recipient,
     role: "user",
     body: msg.body ?? "",
+    conversationId,
   });
 
   // Send delivery confirmation to sender
@@ -296,6 +304,7 @@ function handleMessage(client: WsClient, msg: WsClientMessage): void {
     to: recipient,
     body: message.body,
     timestamp: message.createdAt,
+    conversationId: message.conversationId ?? undefined,
   });
 
   // Deliver to agent's tmux pane if they have an active session
