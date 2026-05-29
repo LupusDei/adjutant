@@ -366,8 +366,15 @@ describe("LifecycleManager", () => {
       expect(pasteBufferCall).toBeDefined();
     }, 10_000);
 
-    it("should retry delivery when pane content doesn't change", async () => {
+    it("should re-send Enter (NOT re-paste) when the first submit doesn't take — soft-stall recovery (adj-y2vq)", async () => {
+      // Models the adj-y2vq soft-stall: the paste lands but the first Enter is
+      // dropped (text sits unsubmitted, pane static). The second Enter submits
+      // and Claude starts processing (pane begins changing). The fix must
+      // re-send Enter ONLY — re-pasting would duplicate the prompt.
       let setBufferCount = 0;
+      let pasteBufferCount = 0;
+      let enterCount = 0;
+      let captureSeq = 0;
 
       mockExecFile.mockImplementation(
         (
@@ -381,15 +388,21 @@ describe("LifecycleManager", () => {
           } else if (args[0] === "list-panes") {
             cb(null, "adj-swarm-test:1.1\n", "");
           } else if (args[0] === "capture-pane") {
-            // Content never changes on first attempt (simulates failed delivery)
-            // Changes on second attempt
-            if (setBufferCount < 2) {
-              cb(null, "Ready > ", "");
+            // Static input box until the SECOND Enter; then Claude is working
+            // and the pane changes on every sample.
+            if (enterCount >= 2) {
+              cb(null, `WORKING ${captureSeq++}`, "");
             } else {
-              cb(null, "Processing...", "");
+              cb(null, "READY > prompt text sitting in box", "");
             }
           } else if (args[0] === "set-buffer") {
             setBufferCount++;
+            cb(null, "", "");
+          } else if (args[0] === "paste-buffer") {
+            pasteBufferCount++;
+            cb(null, "", "");
+          } else if (args[0] === "send-keys") {
+            if (args.includes("Enter")) enterCount++;
             cb(null, "", "");
           } else if (args[0] === "display-message") {
             cb(null, "", "");
@@ -405,16 +418,29 @@ describe("LifecycleManager", () => {
         initialPrompt: "You are a Squad Leader.",
       });
 
-      for (let i = 0; i < 60; i++) {
+      for (let i = 0; i < 80; i++) {
         await vi.advanceTimersByTimeAsync(500);
       }
 
       const result = await sessionPromise;
 
       expect(result.success).toBe(true);
-      // Should have called set-buffer at least twice (initial + retry)
-      expect(setBufferCount).toBeGreaterThanOrEqual(2);
-    }, 10_000);
+      // The prompt is pasted exactly ONCE — no duplication on retry.
+      expect(setBufferCount).toBe(1);
+      expect(pasteBufferCount).toBe(1);
+      // But Enter is re-sent until the submit takes.
+      expect(enterCount).toBeGreaterThanOrEqual(2);
+    }, 15_000);
+
+    it("should scale the paste→Enter settle delay with prompt size (adj-y2vq)", () => {
+      // Large prompts render slower, so Enter must wait longer before firing.
+      // Access the private helper via an index signature for this white-box check.
+      const lm = lifecycle as unknown as { settleDelayFor(p: string): number };
+      const small = lm.settleDelayFor("hi");
+      const large = lm.settleDelayFor("x".repeat(8 * 1024)); // ~8KB spawn brief
+      expect(large).toBeGreaterThan(small);
+      expect(large).toBeLessThanOrEqual(2_000); // capped
+    });
   });
 
   // ==========================================================================

@@ -46,11 +46,27 @@ const READINESS_STABLE_MS = 2_000;
 /** Maximum time to wait for Claude Code to become ready for input. */
 const READINESS_TIMEOUT_MS = 30_000;
 
-/** Delay between pasting spawn prompt text and pressing Enter. */
-const PASTE_ENTER_DELAY_MS = 150;
+/**
+ * Settle delay between pasting the spawn prompt and pressing Enter (adj-y2vq).
+ * A large paste takes time to finish rendering in Claude Code's input box; if
+ * Enter fires before rendering completes it gets absorbed/dropped and the text
+ * sits UNSUBMITTED — the soft-stall. The settle delay scales with prompt size.
+ */
+const PASTE_SETTLE_BASE_MS = 250;
+const PASTE_SETTLE_PER_KB_MS = 250;
+const PASTE_SETTLE_MAX_MS = 2_000;
 
-/** Max retries for spawn prompt delivery. */
-const PROMPT_DELIVERY_RETRIES = 2;
+/**
+ * Submission confirmation (adj-y2vq): after Enter, sample the pane over a short
+ * window. A submitted prompt makes Claude start working (status/spinner ticks,
+ * output streams) so the pane CHANGES; an unsubmitted input box is static. This
+ * is deliberately not coupled to specific Claude UI strings (version-proof).
+ */
+const SUBMIT_CONFIRM_POLL_MS = 700;
+const SUBMIT_CONFIRM_SAMPLES = 3;
+
+/** Max Enter RE-SENDS (not re-pastes) when submission isn't confirmed. */
+const SUBMIT_RETRIES = 3;
 
 /** Escape a string for safe use in a shell command sent via tmux send-keys. */
 function shellEscape(s: string): string {
@@ -534,61 +550,89 @@ export class LifecycleManager {
     });
   }
 
+  /** Settle delay before pressing Enter, scaled by prompt size (adj-y2vq). */
+  private settleDelayFor(prompt: string): number {
+    const kb = prompt.length / 1024;
+    return Math.min(
+      PASTE_SETTLE_BASE_MS + Math.floor(kb * PASTE_SETTLE_PER_KB_MS),
+      PASTE_SETTLE_MAX_MS,
+    );
+  }
+
   /**
-   * Deliver a spawn prompt to a tmux session with retry logic (adj-132).
+   * Detect whether Claude is actively processing in the pane (adj-y2vq).
    *
-   * After pasting, checks if the pane content changes (indicating Claude
-   * accepted the input). If no change detected, retries delivery.
+   * Samples the pane over a short window and returns true on the FIRST change.
+   * When Claude accepts a submitted prompt it starts working — its status line
+   * ticks and output streams — so the pane changes. A static pane means the
+   * input box is still sitting unsubmitted. Intentionally not matching specific
+   * Claude UI strings so it survives Claude Code version changes.
+   */
+  private async isProcessing(pane: string): Promise<boolean> {
+    let prev: string | null = null;
+    for (let i = 0; i < SUBMIT_CONFIRM_SAMPLES; i++) {
+      let content: string;
+      try {
+        content = await execTmuxCommand(["capture-pane", "-t", pane, "-p"]);
+      } catch {
+        return false;
+      }
+      if (prev !== null && content !== prev) {
+        return true;
+      }
+      prev = content;
+      await new Promise((r) => setTimeout(r, SUBMIT_CONFIRM_POLL_MS));
+    }
+    return false;
+  }
+
+  /**
+   * Deliver a spawn prompt to a tmux session (adj-132, hardened in adj-y2vq).
+   *
+   * Phase 1 — paste the text into the input box exactly ONCE. The old code
+   * re-pasted the whole prompt on a failed attempt, which DUPLICATED the prompt
+   * because the real failure is almost always a dropped Enter, not a dropped
+   * paste.
+   *
+   * Phase 2 — submit. A large paste needs time to finish rendering before Enter,
+   * or Enter races the paste and the text sits unsubmitted (the adj-y2vq
+   * soft-stall: tmux session alive, Claude loop never processes the input).
+   * After Enter we confirm Claude actually started processing; if not, we
+   * RE-SEND ENTER ONLY (never re-paste) up to SUBMIT_RETRIES times.
    */
   private async deliverSpawnPrompt(
     tmuxSession: string,
     pane: string,
     prompt: string,
   ): Promise<void> {
-    for (let attempt = 0; attempt <= PROMPT_DELIVERY_RETRIES; attempt++) {
-      // Capture pane content before delivery for change detection
-      let contentBefore = "";
-      try {
-        contentBefore = await execTmuxCommand(["capture-pane", "-t", pane, "-p"]);
-      } catch {
-        // Ignore — we'll try delivery anyway
-      }
+    // Phase 1: paste once.
+    const bufferName = `adj-spawn-${Date.now()}`;
+    await execTmuxCommand(["set-buffer", "-b", bufferName, prompt]);
+    await execTmuxCommand([
+      "paste-buffer", "-t", tmuxSession, "-b", bufferName, "-d",
+    ]);
 
-      // Two-phase delivery: paste text, then send Enter
-      const bufferName = `adj-spawn-${Date.now()}`;
-      await execTmuxCommand(["set-buffer", "-b", bufferName, prompt]);
-      await execTmuxCommand([
-        "paste-buffer", "-t", tmuxSession, "-b", bufferName, "-d",
-      ]);
-      await new Promise((r) => setTimeout(r, PASTE_ENTER_DELAY_MS));
+    // Phase 2: submit, confirm, and re-send Enter only if not processing.
+    const settle = this.settleDelayFor(prompt);
+    for (let attempt = 0; attempt <= SUBMIT_RETRIES; attempt++) {
+      await new Promise((r) => setTimeout(r, settle));
       await execTmuxCommand(["send-keys", "-t", tmuxSession, "Enter"]);
 
-      // Wait briefly, then check if pane content changed (prompt was accepted)
-      await new Promise((r) => setTimeout(r, 2_000));
-      let contentAfter = "";
-      try {
-        contentAfter = await execTmuxCommand(["capture-pane", "-t", pane, "-p"]);
-      } catch {
-        // Can't verify — assume success
-        break;
-      }
-
-      if (contentAfter !== contentBefore) {
-        logInfo("Spawn prompt delivered", { pane, attempt });
+      if (await this.isProcessing(pane)) {
+        logInfo("Spawn prompt submitted — agent is processing", { pane, attempt });
         return;
       }
 
-      if (attempt < PROMPT_DELIVERY_RETRIES) {
-        logWarn("Spawn prompt may not have landed, retrying", {
-          pane,
-          attempt,
-        });
-        // Wait before retry — Claude may still be processing
-        await new Promise((r) => setTimeout(r, 3_000));
-      }
+      logWarn("Spawn prompt not processing yet — re-sending Enter", {
+        pane,
+        attempt,
+      });
     }
 
-    logWarn("Spawn prompt delivery — exhausted retries", { pane });
+    logWarn(
+      "Spawn prompt delivery — agent still not processing after submit retries (possible soft-stall)",
+      { pane },
+    );
   }
 
   private generateTmuxName(name: string, _mode?: SessionMode): string {
