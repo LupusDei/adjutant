@@ -22,17 +22,24 @@ const PROJECT_ID_RE = /^[0-9a-f]{8}(-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 
 /**
  * Cross-project validation helper. Returns an error response if the proposal
- * belongs to a different project than the agent's session context.
- * Requires project context — agents without it are rejected.
+ * belongs to a different project than the caller's resolved project context.
+ *
+ * Resolution honors an explicit `projectId` override (adj-154/adj-146): when a
+ * caller supplies a projectId, access is checked against THAT project, enabling
+ * cross-project operations (e.g. Duke reading a bloomfolio proposal from an
+ * adjutant-scoped session). When omitted, falls back to the session's project
+ * context — identical to the prior behavior, so existing callers are unaffected.
+ * Requires project context — callers without it are rejected.
  */
 function validateProjectAccess(
   proposal: { project: string },
   extra: { sessionId?: string },
+  explicitProjectId?: string,
 ): { error: string } | null {
   if (!extra.sessionId) {
     return { error: "Unknown session — not connected via MCP" };
   }
-  const projectContext = getProjectContextBySession(extra.sessionId);
+  const projectContext = resolveToolProjectContext(explicitProjectId, extra.sessionId);
   if (!projectContext) {
     return { error: "No project context — cannot access proposals across projects" };
   }
@@ -122,8 +129,9 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
     "get_proposal",
     {
       id: z.string().describe("Proposal UUID to fetch"),
+      projectId: z.string().optional().describe("Project UUID for cross-project operations (defaults to session project)"),
     },
-    async ({ id }, extra) => {
+    async ({ id, projectId }, extra) => {
       const proposal = store.getProposal(id);
       if (!proposal) {
         return {
@@ -131,8 +139,8 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
         };
       }
 
-      // Cross-project validation (adj-072.5.3)
-      const accessError = validateProjectAccess(proposal, extra);
+      // Cross-project validation (adj-072.5.3) — honors explicit projectId (adj-154)
+      const accessError = validateProjectAccess(proposal, extra, projectId);
       if (accessError) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify(accessError) }],

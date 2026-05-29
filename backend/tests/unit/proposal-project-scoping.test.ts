@@ -1088,4 +1088,156 @@ describe("Proposal project scoping", () => {
       expect(store.insertComment).toHaveBeenCalled();
     });
   });
+
+  // ===========================================================================
+  // adj-154: cross-project access via explicit projectId override
+  // (same pattern adj-146 applied to score_proposal / auto-develop tools).
+  // Running multiple projects (bloomfolio + adjutant) against one backend means
+  // Duke must read proposal bodies in another project, and the coordinator must
+  // create proposals for another project.
+  // ===========================================================================
+  describe("cross-project access via projectId override (adj-154)", () => {
+    const OTHER_PROJECT = {
+      projectId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      projectName: "bloomfolio",
+      projectPath: "/path/to/bloomfolio",
+      beadsDir: "/path/to/bloomfolio/.beads",
+    };
+
+    // resolveToolProjectContext returns the TARGET project when an explicit
+    // projectId is supplied, else falls back to the session project.
+    function wireCrossProject() {
+      mockResolveToolProjectContext.mockImplementation(
+        (explicitProjectId: string | undefined, sessionId: string | undefined) => {
+          if (explicitProjectId === OTHER_PROJECT.projectId) return OTHER_PROJECT;
+          if (sessionId) return mockGetProjectContextBySession(sessionId);
+          return undefined;
+        },
+      );
+    }
+
+    it("get_proposal should allow a cross-project read when projectId matches the proposal's project", async () => {
+      const store = createMockStore();
+      // Proposal lives in bloomfolio; the caller's session is scoped to adjutant.
+      (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "bloom-uuid",
+        author: "duke",
+        title: "Bloomfolio Proposal",
+        description: "Lives in another project",
+        type: "engineering",
+        project: OTHER_PROJECT.projectId,
+        status: "pending",
+        createdAt: "2026-03-11T00:00:00Z",
+        updatedAt: "2026-03-11T00:00:00Z",
+      });
+      mockGetAgentBySession.mockReturnValue("duke");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT); // adjutant session
+      wireCrossProject();
+
+      const handler = getToolHandler(store, "get_proposal");
+      const result = await handler(
+        { id: "bloom-uuid", projectId: OTHER_PROJECT.projectId },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed).not.toHaveProperty("error");
+      expect((parsed as { project: string }).project).toBe(OTHER_PROJECT.projectId);
+    });
+
+    it("get_proposal should still reject when the explicit projectId does NOT match the proposal's project", async () => {
+      const store = createMockStore();
+      (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "bloom-uuid",
+        author: "duke",
+        title: "Bloomfolio Proposal",
+        description: "Lives in another project",
+        type: "engineering",
+        project: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", // a THIRD project
+        status: "pending",
+        createdAt: "2026-03-11T00:00:00Z",
+        updatedAt: "2026-03-11T00:00:00Z",
+      });
+      mockGetAgentBySession.mockReturnValue("duke");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+      wireCrossProject();
+
+      const handler = getToolHandler(store, "get_proposal");
+      const result = await handler(
+        { id: "bloom-uuid", projectId: OTHER_PROJECT.projectId },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed).toHaveProperty("error");
+      expect((parsed as { error: string }).error).toContain("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+    });
+
+    it("get_proposal without projectId still defaults to session scoping (no regression)", async () => {
+      const store = createMockStore();
+      (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue({
+        id: "bloom-uuid",
+        author: "duke",
+        title: "Bloomfolio Proposal",
+        description: "Lives in another project",
+        type: "engineering",
+        project: OTHER_PROJECT.projectId,
+        status: "pending",
+        createdAt: "2026-03-11T00:00:00Z",
+        updatedAt: "2026-03-11T00:00:00Z",
+      });
+      mockGetAgentBySession.mockReturnValue("duke");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+      wireCrossProject();
+
+      const handler = getToolHandler(store, "get_proposal");
+      const result = await handler(
+        { id: "bloom-uuid" }, // no projectId → session (adjutant) scoping
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed).toHaveProperty("error");
+      expect((parsed as { error: string }).error).toContain(OTHER_PROJECT.projectId);
+    });
+
+    it("create_proposal should create in the target project when an explicit projectId is provided", async () => {
+      const store = createMockStore();
+      (store.insertProposal as ReturnType<typeof vi.fn>).mockImplementation(
+        (input: { project: string }) => ({
+          id: "new-bloom-uuid",
+          author: "adjutant-coordinator",
+          title: "Cross-project proposal",
+          description: "Created for another project",
+          type: "engineering",
+          project: input.project,
+          status: "pending",
+          createdAt: "2026-03-11T00:00:00Z",
+          updatedAt: "2026-03-11T00:00:00Z",
+        }),
+      );
+      mockGetAgentBySession.mockReturnValue("adjutant-coordinator");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT); // adjutant session
+      wireCrossProject();
+
+      const handler = getToolHandler(store, "create_proposal");
+      const result = await handler(
+        {
+          title: "Cross-project proposal",
+          description: "Created for another project",
+          type: "engineering",
+          project: "ignored",
+          projectId: OTHER_PROJECT.projectId,
+        },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      // Proposal must be scoped to the TARGET project, not the session project.
+      expect(store.insertProposal).toHaveBeenCalledWith(
+        expect.objectContaining({ project: OTHER_PROJECT.projectId }),
+      );
+      const parsed = parseResult(result) as { project: string };
+      expect(parsed.project).toBe(OTHER_PROJECT.projectId);
+    });
+  });
 });
