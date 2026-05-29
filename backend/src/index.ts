@@ -22,6 +22,7 @@ import { registerQueryTools } from "./services/mcp-tools/queries.js";
 import { registerProposalTools } from "./services/mcp-tools/proposals.js";
 import { registerAutoDevelopTools } from "./services/mcp-tools/auto-develop.js";
 import { createProposalStore, migrateProposalProjectNames } from "./services/proposal-store.js";
+import { backfillConversations } from "./services/conversation-backfill.js";
 import { createEventStore } from "./services/event-store.js";
 import { createPersonaService, initPersonaService } from "./services/persona-service.js";
 import { createCallsignToggleService } from "./services/callsign-toggle-service.js";
@@ -70,6 +71,10 @@ const messageDb = initDatabase();
 const messageStore = createMessageStore(messageDb);
 const proposalStore = createProposalStore(messageDb);
 migrateProposalProjectNames(messageDb);
+// adj-164.1.4 — backfill legacy messages into DM conversations. Idempotent:
+// messages already carrying a conversation_id are skipped, so this is a no-op
+// on every startup after the first.
+backfillConversations(messageDb);
 const eventStore = createEventStore(messageDb);
 const memoryStore = createMemoryStore(messageDb);
 const cronScheduleStore = new CronScheduleStore(messageDb);

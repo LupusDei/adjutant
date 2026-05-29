@@ -34,3 +34,13 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id
 CREATE INDEX IF NOT EXISTS idx_conversation_members_member ON conversation_members(member_id);
 CREATE INDEX IF NOT EXISTS idx_conversation_members_conversation ON conversation_members(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_kind ON conversations(kind);
+
+-- Backfill audit log — records exactly which messages the backfill scoped and
+-- which conversations it created, so the operation is precisely reversible
+-- without disturbing conversations/messages that existed independently.
+CREATE TABLE IF NOT EXISTS conversation_backfill_log (
+  message_id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL,
+  conversation_created INTEGER NOT NULL DEFAULT 0,
+  backfilled_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
