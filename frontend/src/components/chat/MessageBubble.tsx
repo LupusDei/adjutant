@@ -35,6 +35,16 @@ export interface MessageBubbleProps {
   onPlay: (msg: DisplayMessage) => void;
   /** Format an ISO timestamp string for display. Should be a stable reference. */
   formatTimestamp: (timestamp: string) => string;
+  /**
+   * Whether to render the sender callsign header. False for a continued
+   * message in a same-sender run (adj-164.2.2 grouping). Defaults to true.
+   */
+  showSender?: boolean;
+  /**
+   * Whether to render the timestamp / delivery status footer. False for a
+   * non-final message in a run. Defaults to true.
+   */
+  showTime?: boolean;
 }
 
 function MessageBubbleImpl({
@@ -44,26 +54,48 @@ function MessageBubbleImpl({
   isLoadingPlay,
   onPlay,
   formatTimestamp,
+  showSender = true,
+  showTime = true,
 }: MessageBubbleProps) {
   const isSending = msg.optimisticStatus === "sending";
   const isDelivered = msg.optimisticStatus === "delivered";
   const isFailed = msg.optimisticStatus === "failed";
 
+  // A continued message in a same-sender run (no header) draws closer to the
+  // bubble above it. The play button still needs a home when the header is
+  // hidden, so it floats top-right via the grouped variant.
+  const isGrouped = !showSender;
+
   return (
     <div
       className={
         `chat-bubble ${isUser ? "chat-bubble-user" : "chat-bubble-command"}` +
+        (isGrouped ? " chat-bubble-grouped" : "") +
+        (showTime ? "" : " chat-bubble-run") +
         (isSending ? " chat-bubble-sending" : "") +
         (isFailed ? " chat-bubble-failed" : "")
       }
     >
-      <div className="chat-bubble-header">
-        <span className="chat-bubble-sender">
-          {isUser ? "YOU" : msg.agentId.toUpperCase()}
-        </span>
+      {showSender ? (
+        <div className="chat-bubble-header">
+          <span className="chat-bubble-sender">
+            {isUser ? "YOU" : msg.agentId.toUpperCase()}
+          </span>
+          <button
+            type="button"
+            className={`chat-play-btn ${isPlaying ? "chat-play-btn-active" : ""}`}
+            onClick={() => { onPlay(msg); }}
+            disabled={isLoadingPlay}
+            aria-label={isPlaying ? "Stop" : "Play message"}
+            title={isPlaying ? "Stop" : "Play message"}
+          >
+            {isLoadingPlay ? "?" : isPlaying ? "||" : ">"}
+          </button>
+        </div>
+      ) : (
         <button
           type="button"
-          className={`chat-play-btn ${isPlaying ? "chat-play-btn-active" : ""}`}
+          className={`chat-play-btn chat-play-btn-float ${isPlaying ? "chat-play-btn-active" : ""}`}
           onClick={() => { onPlay(msg); }}
           disabled={isLoadingPlay}
           aria-label={isPlaying ? "Stop" : "Play message"}
@@ -71,20 +103,22 @@ function MessageBubbleImpl({
         >
           {isLoadingPlay ? "?" : isPlaying ? "||" : ">"}
         </button>
-      </div>
+      )}
       <div className="chat-bubble-content">
         <MarkdownBody>{msg.body}</MarkdownBody>
       </div>
-      <div className="chat-bubble-time">
-        {isSending && <span className="chat-delivery-status">SENDING </span>}
-        {isDelivered && msg.clientId && (
-          <span className="chat-delivery-status chat-delivery-confirmed">DELIVERED </span>
-        )}
-        {isFailed && (
-          <span className="chat-delivery-status chat-delivery-failed">FAILED </span>
-        )}
-        {formatTimestamp(msg.createdAt)}
-      </div>
+      {showTime && (
+        <div className="chat-bubble-time">
+          {isSending && <span className="chat-delivery-status">SENDING </span>}
+          {isDelivered && msg.clientId && (
+            <span className="chat-delivery-status chat-delivery-confirmed">DELIVERED </span>
+          )}
+          {isFailed && (
+            <span className="chat-delivery-status chat-delivery-failed">FAILED </span>
+          )}
+          {formatTimestamp(msg.createdAt)}
+        </div>
+      )}
     </div>
   );
 }
@@ -109,6 +143,8 @@ function arePropsEqual(prev: MessageBubbleProps, next: MessageBubbleProps): bool
     prev.isUser === next.isUser &&
     prev.isPlaying === next.isPlaying &&
     prev.isLoadingPlay === next.isLoadingPlay &&
+    prev.showSender === next.showSender &&
+    prev.showTime === next.showTime &&
     prev.onPlay === next.onPlay &&
     prev.formatTimestamp === next.formatTimestamp
   );

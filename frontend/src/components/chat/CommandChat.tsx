@@ -12,6 +12,7 @@ import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 
 import { MarkdownBody } from './MarkdownBody';
 import { MessageBubble } from './MessageBubble';
+import { computeMessageGroups } from './messageGrouping';
 import type { ConnectionStatus, ChatMessage } from '../../types';
 import { useChatMessages, type DisplayMessage } from '../../hooks/useChatMessages';
 import { api } from '../../services/api';
@@ -259,13 +260,33 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     }
   }, [voiceInput.transcript, voiceInput.clearTranscript]);
 
-  // Scroll to bottom when messages change.
+  // Whether the user is currently pinned to the bottom of the timeline.
+  // Updated by Virtuoso's atBottomStateChange. New messages auto-scroll ONLY
+  // when this is true — if the user has scrolled up to read history, an
+  // incoming message must NOT yank them back down (adj-164.2.2). Start true
+  // so the initial load lands at the newest message.
+  const atBottomRef = useRef(true);
+  const handleAtBottomStateChange = useCallback((atBottom: boolean) => {
+    atBottomRef.current = atBottom;
+  }, []);
+
+  // followOutput drives Virtuoso's auto-scroll on new items. Returning false
+  // when the user is NOT at the bottom is what suppresses the scroll-jump.
+  const followOutput = useCallback(
+    (isAtBottom: boolean): 'smooth' | false => (isAtBottom ? 'smooth' : false),
+    [],
+  );
+
+  // Scroll to bottom when messages change — but ONLY if the user is already
+  // at the bottom. Used by the non-virtualized empty/streaming path; the
+  // virtualized list relies on followOutput above.
   //
   // Wrapped in requestAnimationFrame so bursts (e.g. a rapid streaming
   // token sequence that grows the message list by one per ~50ms) collapse
   // into one scrollIntoView call per paint instead of one per state flip.
   const scrollRafRef = useRef<number | null>(null);
   const scrollToBottom = useCallback(() => {
+    if (!atBottomRef.current) return;
     if (scrollRafRef.current != null) return;
     scrollRafRef.current = requestAnimationFrame(() => {
       scrollRafRef.current = null;
@@ -416,6 +437,13 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     void handlePlayMessage(msg);
   }, [handlePlayMessage]);
 
+  // adj-164.2.2: same-sender run grouping. Computed once per message list
+  // (O(n)) and read inside renderMessage via a ref so the Virtuoso render
+  // callback stays referentially stable across parent re-renders.
+  const groupFlags = useMemo(() => computeMessageGroups(messages), [messages]);
+  const groupFlagsRef = useRef(groupFlags);
+  groupFlagsRef.current = groupFlags;
+
   // adj-139.4.2: Render callback for Virtuoso. Returns the bubble/system
   // message DOM for a single message. Kept stable via useCallback so that
   // Virtuoso's internal memoization isn't invalidated on parent re-renders.
@@ -432,6 +460,10 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
       );
     }
 
+    const flags = groupFlagsRef.current.get(msg.id);
+    const showSender = flags?.isFirstInGroup ?? true;
+    const showTime = flags?.isLastInGroup ?? true;
+
     const isPlayingThis = playingMessageId === msg.id;
     const isLoadingThis = isPlayingThis && voicePlayer.isLoading;
     return (
@@ -442,6 +474,8 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
         isLoadingPlay={isLoadingThis}
         onPlay={onPlayMessage}
         formatTimestamp={formatTimestamp}
+        showSender={showSender}
+        showTime={showTime}
       />
     );
   }, [playingMessageId, voicePlayer.isLoading, onPlayMessage]);
@@ -584,7 +618,8 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
             // inside itemContent for child stability.
             computeItemKey={(_index, msg) => msg.id}
             itemContent={(_index, msg) => renderMessage(msg)}
-            followOutput="smooth"
+            followOutput={followOutput}
+            atBottomStateChange={handleAtBottomStateChange}
             startReached={hasMore ? handleStartReached : undefined}
             alignToBottom
             style={{ height: '100%' }}
