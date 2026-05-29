@@ -18,6 +18,7 @@ import { Router } from "express";
 import { z } from "zod";
 import type { MessageStore } from "../services/message-store.js";
 import { wsBroadcast } from "../services/ws-server.js";
+import { dmConversationId } from "../services/conversation-store.js";
 import { getSessionBridge } from "../services/session-bridge.js";
 
 import { getAgents } from "../services/agents-service.js";
@@ -127,11 +128,18 @@ export function createMessagesRouter(store: MessageStore): Router {
 
     const { to, body, threadId, metadata } = parseResult.data;
 
+    // adj-164.2: every user→agent send is tagged with the deterministic DM
+    // conversation id for the (user, recipient) pair. This is the root-cause
+    // fix for wrong-thread bleed — conversation-scoped reads and WS delivery
+    // both key off conversation_id, retiring the agent/recipient widening.
+    const conversationId = dmConversationId("user", to);
+
     const insertInput: Parameters<typeof store.insertMessage>[0] = {
       agentId: "user",
       recipient: to,
       role: "user",
       body,
+      conversationId,
     };
     if (threadId !== undefined) insertInput.threadId = threadId;
     if (metadata !== undefined) insertInput.metadata = metadata;
@@ -146,6 +154,7 @@ export function createMessagesRouter(store: MessageStore): Router {
       body: message.body,
       timestamp: message.createdAt,
       threadId: message.threadId ?? undefined,
+      conversationId: message.conversationId ?? undefined,
       metadata: message.metadata ?? undefined,
     });
 
@@ -188,11 +197,13 @@ export function createMessagesRouter(store: MessageStore): Router {
     const sent: string[] = [];
 
     for (const agent of activeAgents) {
+      const broadcastConversationId = dmConversationId("user", agent.name);
       const message = store.insertMessage({
         agentId: "user",
         recipient: agent.name,
         role: "user",
         body,
+        conversationId: broadcastConversationId,
       });
 
       wsBroadcast({
@@ -202,6 +213,7 @@ export function createMessagesRouter(store: MessageStore): Router {
         to: agent.name,
         body: message.body,
         timestamp: message.createdAt,
+        conversationId: message.conversationId ?? undefined,
       });
 
       // Deliver to agent's tmux pane

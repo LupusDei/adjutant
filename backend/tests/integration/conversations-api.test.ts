@@ -85,6 +85,40 @@ describe("GET /api/conversations", () => {
   });
 });
 
+describe("GET /api/conversations/dm/:agentId", () => {
+  it("should return the deterministic DM conversation for a user↔agent pair", async () => {
+    const res = await agent().get("/api/conversations/dm/raynor");
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    const conv = res.body.data.conversation as { id: string; kind: string };
+    expect(conv.kind).toBe("dm");
+    // The id must match the store's deterministic derivation for ("user","raynor").
+    const expected = convStore.getOrCreateDm("user", "raynor");
+    expect(conv.id).toBe(expected.id);
+  });
+
+  it("should be idempotent — repeated calls return the same conversation id", async () => {
+    const first = await agent().get("/api/conversations/dm/kerrigan");
+    const second = await agent().get("/api/conversations/dm/kerrigan");
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(first.body.data.conversation.id).toBe(second.body.data.conversation.id);
+  });
+
+  it("should create the DM (and its membership) on first access", async () => {
+    const res = await agent().get("/api/conversations/dm/zeratul");
+    expect(res.status).toBe(200);
+
+    const convId = res.body.data.conversation.id as string;
+    // The user must be a member so the conversation shows in their list.
+    const listed = await agent().get("/api/conversations");
+    const ids = (listed.body.data.conversations as { id: string }[]).map((c) => c.id);
+    expect(ids).toContain(convId);
+  });
+});
+
 describe("GET /api/conversations/:id/messages", () => {
   it("should return only that conversation's messages, chronologically", async () => {
     const a = convStore.getOrCreateDm("user", "raynor");

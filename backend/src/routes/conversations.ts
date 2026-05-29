@@ -36,6 +36,19 @@ export function createConversationsRouter(
     return res.json(success({ conversations, total: conversations.length }));
   });
 
+  // GET /api/conversations/dm/:agentId — resolve (lookup-or-create) the
+  // deterministic DM conversation between the user and an agent. This is the
+  // single contract the clients use to scope a 1:1 chat: they never derive the
+  // id themselves, keeping the hashing detail owned by the store layer. The
+  // operation is idempotent — the deterministic id means repeated calls return
+  // the same conversation with no duplicates. Registered before `/:id/messages`
+  // so the literal `dm` segment is never shadowed by the `:id` param.
+  router.get("/dm/:agentId", (req, res) => {
+    const { agentId } = req.params;
+    const conversation = conversationStore.getOrCreateDm(USER_MEMBER_ID, agentId);
+    return res.json(success({ conversation }));
+  });
+
   // GET /api/conversations/:id/messages — scoped, paginated message history.
   router.get("/:id/messages", (req, res) => {
     const { id } = req.params;

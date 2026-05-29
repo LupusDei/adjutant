@@ -14,6 +14,11 @@ export interface IncomingChatMessage {
   body: string;
   timestamp: string;
   seq?: number;
+  /**
+   * Stable conversation id (adj-164). Consumers scope real-time delivery by
+   * this field so a message never bleeds into the wrong open conversation.
+   */
+  conversationId?: string;
 }
 
 /** An incoming timeline event received via WebSocket. */
@@ -47,6 +52,7 @@ interface WsServerMsg {
   body?: string;
   timestamp?: string;
   seq?: number;
+  conversationId?: string;
   code?: string;
   sessionId?: string;
   lastSeq?: number;
@@ -395,6 +401,7 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
                 timestamp: msg.timestamp,
               };
               if (msg.seq != null) incoming.seq = msg.seq;
+              if (msg.conversationId != null) incoming.conversationId = msg.conversationId;
               notify(incoming);
             }
             break;
@@ -418,6 +425,7 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
                 timestamp: entry.timestamp,
               };
               if (entry.seq != null) incoming.seq = entry.seq;
+              if (entry.conversationId != null) incoming.conversationId = entry.conversationId;
               notify(incoming);
             }
             break;

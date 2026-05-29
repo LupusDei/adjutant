@@ -17,6 +17,7 @@ import { getEventBus } from "./event-bus.js";
 import { hasApiKeys, validateApiKey } from "./api-key-service.js";
 import { logInfo, logWarn } from "../utils/index.js";
 import type { MessageStore } from "./message-store.js";
+import { dmConversationId } from "./conversation-store.js";
 // adj-zm2fh: static import replaces 7 hot-path dynamic `import("./session-bridge.js")`
 // calls. Each dynamic import allocated a Promise + .then/.catch closures + V8 Context
 // per invocation; on per-keystroke handlers (session_input) this was a major source
@@ -66,6 +67,9 @@ interface WsServerMessage {
   body?: string | undefined;
   timestamp?: string | undefined;
   threadId?: string | undefined;
+  // adj-164.2: stable conversation id so clients can scope real-time delivery
+  // to the open conversation (the WS-side half of the bleed fix).
+  conversationId?: string | undefined;
   replyTo?: string | undefined;
   metadata?: Record<string, unknown> | undefined;
   streamId?: string | undefined;
@@ -246,11 +250,15 @@ function handleMessage(client: WsClient, msg: WsClientMessage): void {
 
   // Persist to SQLite via message store
   const recipient = msg.to ?? "mayor/";
+  // adj-164.2: tag the user send with the deterministic DM conversation id so
+  // conversation-scoped reads/delivery work for messages sent over the socket.
+  const conversationId = dmConversationId("user", recipient);
   const message = messageStore.insertMessage({
     agentId: "user",
     recipient,
     role: "user",
     body: msg.body ?? "",
+    conversationId,
   });
 
   // Send delivery confirmation to sender
@@ -269,6 +277,7 @@ function handleMessage(client: WsClient, msg: WsClientMessage): void {
     to: recipient,
     body: message.body,
     timestamp: message.createdAt,
+    conversationId: message.conversationId ?? undefined,
   });
 
   // Deliver to agent's tmux pane if they have an active session

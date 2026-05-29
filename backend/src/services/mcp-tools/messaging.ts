@@ -9,6 +9,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { MessageStore } from "../message-store.js";
 import { wsBroadcast } from "../ws-server.js";
+import { dmConversationId } from "../conversation-store.js";
 import { getAgentBySession } from "../mcp-server.js";
 import { isAPNsConfigured, sendNotificationToAll } from "../apns-service.js";
 import { logInfo, logWarn } from "../../utils/index.js";
@@ -37,12 +38,21 @@ export function registerMessagingTools(server: McpServer, store: MessageStore, e
         };
       }
 
+      // adj-164.2: tag the message with the deterministic DM conversation id.
+      // The user-facing DM is keyed on the canonical "user" member, so both
+      // "user" and the legacy "mayor/" alias normalize to "user" — that way an
+      // agent's reply lands in the SAME conversation the user has open for that
+      // agent (dmConversationId is order-independent over the member pair).
+      const dmPeer = to === "mayor/" ? "user" : to;
+      const conversationId = dmConversationId(agentId, dmPeer);
+
       // 1. Store the message
       const insertInput: Parameters<typeof store.insertMessage>[0] = {
         agentId,
         recipient: to,
         role: "agent",
         body,
+        conversationId,
       };
       if (threadId !== undefined) insertInput.threadId = threadId;
       if (metadata !== undefined) insertInput.metadata = metadata;
@@ -59,6 +69,7 @@ export function registerMessagingTools(server: McpServer, store: MessageStore, e
         body: message.body,
         timestamp: message.createdAt,
         threadId: message.threadId ?? undefined,
+        conversationId: message.conversationId ?? undefined,
         metadata: message.metadata ?? undefined,
       });
 

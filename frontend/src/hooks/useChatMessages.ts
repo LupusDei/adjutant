@@ -45,24 +45,52 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  // The resolved DM conversation id for the open agent. This is the single key
+  // every read/write/real-time path scopes on — the root-cause bleed fix.
+  const [conversationId, setConversationId] = useState<string | null>(null);
 
   const mountedRef = useRef(true);
+  // Mirror the resolved conversation id into a ref so the WS subscription can
+  // read the current value without re-subscribing (and without staleness).
+  const conversationIdRef = useRef<string | null>(null);
+  conversationIdRef.current = conversationId;
   const { subscribe } = useCommunicationActions();
 
-  // Fetch messages from REST API
+  // Resolve the DM conversation for the agent, then fetch ONLY that
+  // conversation's messages. There is no agent/recipient widening here — the
+  // legacy fragile path is retired (adj-164.2).
   const fetchMessages = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const params: Parameters<typeof api.messages.list>[0] = {};
-      if (agentId) params.agentId = agentId;
-      const response = await api.messages.list(params);
+      if (!agentId) {
+        // No agent selected → nothing to scope to. Clear and idle.
+        if (mountedRef.current) {
+          setConversationId(null);
+          setMessages([]);
+          setHasMore(false);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      const conversation = await api.conversations.getDm(agentId);
+      if (!mountedRef.current) return;
+      setConversationId(conversation.id);
+
+      const response = await api.conversations.listMessages(conversation.id, {});
 
       if (mountedRef.current) {
         setMessages((prev) => {
           // Preserve any optimistic messages that haven't been confirmed yet
-          const optimistic = prev.filter((m) => m.optimisticStatus === 'sending');
+          // AND belong to this conversation (so a stale optimistic from a
+          // previous agent never bleeds across a switch).
+          const optimistic = prev.filter(
+            (m) =>
+              m.optimisticStatus === 'sending' &&
+              m.conversationId === conversation.id,
+          );
           const serverIds = new Set(response.items.map((m) => m.id));
           const unresolvedOptimistic = optimistic.filter(
             (m) => !serverIds.has(m.id) && !(m.clientId && response.items.some((s) => s.id === m.clientId))
@@ -80,20 +108,27 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
     }
   }, [agentId]);
 
-  // Initial fetch and refetch when agentId changes
+  // Initial fetch and refetch when agentId changes. Clear stale state up front
+  // so a switch never momentarily shows the previous agent's messages.
   useEffect(() => {
     mountedRef.current = true;
+    setMessages([]);
+    setConversationId(null);
     void fetchMessages();
     return () => {
       mountedRef.current = false;
     };
   }, [fetchMessages]);
 
-  // Subscribe to real-time messages, filtered by agent scope
+  // Subscribe to real-time messages, scoped strictly by conversation id.
+  // An incoming message is applied ONLY when its conversationId matches the
+  // open conversation — this is the WS half of the bleed fix.
   useEffect(() => {
     const unsubscribe = subscribe((incoming: IncomingChatMessage) => {
-      // Filter by agent scope: only accept messages to/from the selected agent
-      if (agentId && incoming.from !== agentId && incoming.to !== agentId) return;
+      const openConversationId = conversationIdRef.current;
+      // No open conversation, or the message belongs to a different one → drop.
+      if (!openConversationId) return;
+      if (incoming.conversationId !== openConversationId) return;
 
       // Skip user's own messages — they are already in state as optimistic entries.
       // The backend broadcasts all messages via WebSocket (including ones the user
@@ -115,6 +150,7 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
           deliveryStatus: 'delivered',
           eventType: null,
           threadId: null,
+          conversationId: incoming.conversationId ?? openConversationId,
           createdAt: incoming.timestamp,
           updatedAt: incoming.timestamp,
         };
@@ -124,7 +160,7 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
     });
 
     return unsubscribe;
-  }, [subscribe, agentId]);
+  }, [subscribe]);
 
   // Send a message with optimistic UI
   const sendMessage = useCallback(
@@ -132,7 +168,8 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
       const clientId = crypto.randomUUID();
       const now = new Date().toISOString();
 
-      // Add optimistic message immediately
+      // Add optimistic message immediately, tagged with the open conversation
+      // so it is preserved across re-fetches and never bleeds into another DM.
       const optimisticMsg: DisplayMessage = {
         id: `optimistic-${clientId}`,
         clientId,
@@ -146,6 +183,7 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
         optimisticStatus: 'sending',
         eventType: null,
         threadId: threadId ?? null,
+        conversationId: conversationIdRef.current,
         createdAt: now,
         updatedAt: now,
       };
@@ -210,6 +248,7 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
         optimisticStatus: 'sending',
         eventType: null,
         threadId: null,
+        conversationId: conversationIdRef.current,
         createdAt: now,
         updatedAt: now,
       };
@@ -245,9 +284,10 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
     await api.messages.markRead(messageId);
   }, []);
 
-  // Load older messages (pagination)
+  // Load older messages (pagination) — scoped to the open conversation.
   const loadMore = useCallback(async () => {
-    if (!hasMore || messages.length === 0) return;
+    const currentConversationId = conversationIdRef.current;
+    if (!hasMore || messages.length === 0 || !currentConversationId) return;
 
     // Find the oldest message by createdAt for correct cursor pagination
     const oldestMessage = messages.reduce((oldest, m) =>
@@ -255,12 +295,10 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
     );
 
     try {
-      const params: Parameters<typeof api.messages.list>[0] = {
+      const response = await api.conversations.listMessages(currentConversationId, {
         before: oldestMessage.createdAt,
         beforeId: oldestMessage.id,
-      };
-      if (agentId) params.agentId = agentId;
-      const response = await api.messages.list(params);
+      });
 
       if (mountedRef.current) {
         setMessages((prev) => {
@@ -276,7 +314,7 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
         setError(err instanceof Error ? err : new Error(String(err)));
       }
     }
-  }, [agentId, hasMore, messages]);
+  }, [hasMore, messages]);
 
   return {
     messages,

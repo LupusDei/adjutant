@@ -58,6 +58,23 @@ describe("REST API Integration", () => {
         expect(getRes.body.data.role).toBe("user");
       });
 
+      it("should persist the deterministic DM conversationId on a user send", async () => {
+        // adj-164.2: a user→agent send MUST be tagged with the DM conversation
+        // id so conversation-scoped reads (the bleed fix) can find it. Without
+        // this, new messages would be invisible to /api/conversations/:id/messages.
+        const { dmConversationId } = await import(
+          "../../src/services/conversation-store.js"
+        );
+        const expected = dmConversationId("user", "convo-agent");
+
+        const sendRes = await harness.sendMessage("convo-agent", "scoped hello");
+        const messageId = sendRes.body.data.messageId as string;
+
+        const getRes = await harness.getMessage(messageId);
+        expect(getRes.status).toBe(200);
+        expect(getRes.body.data.conversationId).toBe(expected);
+      });
+
       it("should return 400 for missing required fields", async () => {
         const res = await harness.request().post("/api/messages").send({});
         expect(res.status).toBe(400);
