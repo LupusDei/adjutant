@@ -51,4 +51,37 @@ describe("squad-execute worktree resume-hazard rule (adj-c2bbv)", () => {
       expect(MEMBER).toMatch(/git status/i);
     });
   });
+
+  // adj-laz97: a worktree agent that runs `git checkout -b` while its cwd has
+  // leaked to the main repo moves MAIN's HEAD onto a stray branch (corrupting
+  // the squad's merge target). A worktree agent is ALREADY on its branch and
+  // never needs to create/switch one — forbid it, and assert worktree residence
+  // before any git write.
+  describe("git branch-op guard (adj-laz97)", () => {
+    it("squad-member-context references the adj-laz97 hazard", () => {
+      expect(MEMBER).toContain("adj-laz97");
+    });
+
+    it("squad-member-context forbids creating/switching branches in a worktree agent", () => {
+      expect(MEMBER).toMatch(/never .*(checkout -b|create .*branch|switch .*branch)/i);
+      expect(MEMBER).toMatch(/git checkout -b/i);
+      // Already on its own branch — should push the current branch / HEAD.
+      expect(MEMBER).toMatch(/already on .*branch/i);
+    });
+
+    it("squad-member-context requires a worktree-residence assertion before git writes", () => {
+      expect(MEMBER).toMatch(/\.claude\/worktrees/i);
+      expect(MEMBER).toMatch(/show-toplevel|--git-dir|git-common-dir/i);
+    });
+
+    it("SKILL.md references adj-laz97 and forbids worktree agents from checkout -b", () => {
+      expect(SKILL).toContain("adj-laz97");
+      expect(SKILL).toMatch(/git checkout -b/i);
+    });
+
+    it("SKILL.md requires the coordinator to verify it is on main before merge/push", () => {
+      expect(SKILL).toMatch(/branch --show-current/i);
+      expect(SKILL).toMatch(/before .*(merge|push)/i);
+    });
+  });
 });

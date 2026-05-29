@@ -297,11 +297,15 @@ When all engineer tasks are closed and reviewer findings are either fixed or doc
    # For each engineer's branch:
    git fetch origin
    git checkout main && git pull origin main
+   test "$(git branch --show-current)" = main || { echo "ABORT: not on main (adj-laz97)"; exit 1; }  # verify BEFORE merge
    git merge origin/<engineer-branch>
    npm run build && npm test              # Verify after each merge
+   test "$(git branch --show-current)" = main || { echo "ABORT: not on main (adj-laz97)"; exit 1; }  # verify BEFORE push
    git push origin main
    ```
    Use `git branch -r --no-merged main` to confirm no agent branches are left unmerged.
+
+   **Why the `--show-current` guards (adj-laz97):** a worktree agent whose cwd leaked to the main repo can run `git checkout -b` and silently move main's HEAD onto a stray branch. Then your `git merge` lands on the stray branch and `git push origin main` reports "up-to-date" while main is wrong. The guards catch it before the merge/push.
 
 2. Close the root epic if all children are done:
    ```bash
@@ -323,6 +327,8 @@ When all engineer tasks are closed and reviewer findings are either fixed or doc
 - **Use Claude Code native Agent tool** for ALL spawning — NEVER use `spawn_worker` (Adjutant MCP)
 - **ALWAYS use `isolation: "worktree"`** for every agent that edits files — no exceptions
 - **NEVER SendMessage-resume a COMPLETED worktree agent to edit files (adj-c2bbv)** — a resumed background worktree agent runs in the **main repo** cwd, so its file edits silently leak out of the worktree (data loss). Spawn a fresh worktree agent for follow-up work instead. Only message agents still mid-task. If a resume is unavoidable, the message MUST tell the agent to `cd <its-worktree> &&` before every Bash call and verify the main-repo `git status` stays clean.
+- **Worktree agents must NEVER `git checkout -b` or switch branches (adj-laz97)** — they are ALREADY on their worktree branch; they commit and `git push -u origin HEAD`. If an agent's cwd has leaked to the main repo (non-isolated spawn or a resumed turn), a stray `git checkout -b` moves the **main repo's HEAD** onto a new branch, so your later `git merge` lands on the stray branch and `git push origin main` reports "up-to-date" while main is silently wrong. Put "never create/switch branches; push HEAD" in EVERY engineer spawn prompt.
+- **Coordinator: verify you are on main BEFORE every merge and push (adj-laz97)** — run `git branch --show-current` (must print `main`) and confirm `git rev-parse HEAD` is the commit you expect. This catches a silent HEAD move before it corrupts the merge target. (This is how the adj-laz97 incident was caught and recovered with zero loss.)
 - **NEVER do implementation work as coordinator** — delegate everything
 - **Assign beads BEFORE spawning** — agents must know their work upfront
 - **All communication via Adjutant MCP** — not stdout, not AskUserQuestion

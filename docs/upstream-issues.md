@@ -63,6 +63,22 @@ Adjutant this produced real incidents (adj-iqyqw): an agent's work committed to
 the wrong tree, later destroyed by a `git reset --hard` during recovery (~1–2
 engineer-days lost per incident).
 
+Worse, the leaked cwd is not limited to file writes: a leaked `git checkout -b`
+moves the **main repo's HEAD** onto a stray branch (adj-laz97). Subsequent
+coordinator merges then land on the stray branch and `git push origin main`
+reports "up-to-date" while main is silently wrong — a whole-squad corruption
+vector, not just one agent's lost edits. (Caught and recovered with zero loss in
+the adj-164 squad via a branch-verify-before-merge guard.)
+
+Note: we verified the FRESH-spawn path still isolates correctly on Claude Code
+v2.1.156 (probes: a fresh background worktree agent — both `general-purpose` and a
+custom `subagent_type` — reports `git-dir` under `.claude/worktrees/…` on its
+first turn). So a leak from a "fresh" spawn means either the spawn did not
+actually carry `isolation: "worktree"`, or the agent was resumed (this bug). Our
+in-repo mitigation now forbids worktree agents from running `git checkout -b` at
+all and asserts worktree residence before any git write, so the vector is closed
+regardless of which sub-case occurs.
+
 ### Suggested fix (upstream)
 On resume of a worktree-isolated agent, restore the agent's cwd to its worktree
 before executing the turn (persist the worktree path with the agent's session
