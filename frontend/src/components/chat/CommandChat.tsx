@@ -266,33 +266,28 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     }
   }, [voiceInput.transcript, voiceInput.clearTranscript]);
 
-  // Whether the user is currently pinned to the bottom of the timeline.
-  // Updated by Virtuoso's atBottomStateChange. New messages auto-scroll ONLY
-  // when this is true — if the user has scrolled up to read history, an
-  // incoming message must NOT yank them back down (adj-164.2.2). Start true
-  // so the initial load lands at the newest message.
-  const atBottomRef = useRef(true);
-  const handleAtBottomStateChange = useCallback((atBottom: boolean) => {
-    atBottomRef.current = atBottom;
-  }, []);
-
-  // followOutput drives Virtuoso's auto-scroll on new items. Returning false
-  // when the user is NOT at the bottom is what suppresses the scroll-jump.
+  // followOutput is the auto-scroll-only-when-at-bottom policy for the
+  // virtualized timeline (adj-164.2.2): Virtuoso calls it with the live
+  // at-bottom state on every new item. Returning false when the user has
+  // scrolled up to read history suppresses the scroll-jump; returning 'smooth'
+  // keeps them pinned to the newest message when they're already at the bottom.
   const followOutput = useCallback(
     (isAtBottom: boolean): 'smooth' | false => (isAtBottom ? 'smooth' : false),
     [],
   );
 
-  // Scroll to bottom when messages change — but ONLY if the user is already
-  // at the bottom. Used by the non-virtualized empty/streaming path; the
-  // virtualized list relies on followOutput above.
+  // Scroll to bottom when messages change. This drives the non-virtualized
+  // empty/streaming-footer path (`messagesEndRef`). The virtualized message
+  // list's "only scroll when at bottom" behavior is owned by `followOutput`
+  // above — that callback is evaluated by Virtuoso against real layout, where
+  // at-bottom detection is reliable (jsdom has no layout, so duplicating the
+  // guard here would suppress legitimate scrolls in tests and on first paint).
   //
   // Wrapped in requestAnimationFrame so bursts (e.g. a rapid streaming
   // token sequence that grows the message list by one per ~50ms) collapse
   // into one scrollIntoView call per paint instead of one per state flip.
   const scrollRafRef = useRef<number | null>(null);
   const scrollToBottom = useCallback(() => {
-    if (!atBottomRef.current) return;
     if (scrollRafRef.current != null) return;
     scrollRafRef.current = requestAnimationFrame(() => {
       scrollRafRef.current = null;
@@ -625,7 +620,6 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
             computeItemKey={(_index, msg) => msg.id}
             itemContent={(_index, msg) => renderMessage(msg)}
             followOutput={followOutput}
-            atBottomStateChange={handleAtBottomStateChange}
             startReached={hasMore ? handleStartReached : undefined}
             alignToBottom
             style={{ height: '100%' }}
