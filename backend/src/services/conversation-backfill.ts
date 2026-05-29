@@ -6,10 +6,15 @@
  * `(agent_id, recipient, role)`. This backfill assigns every existing DM-shaped
  * message a stable `conversation_id`:
  *
- *  - Messages sharing a `thread_id` are grouped into one conversation keyed by
- *    that thread_id (we honor the operator's existing grouping).
- *  - Otherwise messages are grouped by their agent↔user pair, using the
- *    deterministic DM id from {@link dmConversationId}.
+ *  - DM-shaped messages are grouped by their agent↔user pair, using the
+ *    deterministic DM id from {@link dmConversationId}. This is the SAME id the
+ *    live send path and the DM view resolve on, so backfilled history is
+ *    reachable from the conversation it belongs to.
+ *  - `thread_id`, when present, is left untouched on the message row for
+ *    intra-conversation grouping. It is deliberately NOT used as the
+ *    conversation id: doing so (adj-hq8p4) stranded pre-existing threaded DM
+ *    history in an orphan conversation the DM view never queried, silently
+ *    losing it from the UI.
  *
  * Every scoped message and every conversation the backfill creates is recorded
  * in `conversation_backfill_log`, which makes {@link reverseBackfill} exact:
@@ -88,30 +93,21 @@ export function backfillConversations(db: Database.Database): BackfillResult {
         continue; // not a DM-shaped message — leave unscoped.
       }
 
-      let conversationId: string;
       let createdThisRow = false;
 
-      if (row.thread_id) {
-        // Honor the existing thread grouping: the conversation id IS the thread id.
-        conversationId = row.thread_id;
-        const existing = convStore.getConversation(conversationId);
-        if (existing === null) {
-          convStore.createConversation({ kind: "dm", id: conversationId });
-          convStore.addMember(conversationId, { memberId: "user", memberKind: "user" });
-          convStore.addMember(conversationId, { memberId: counterpart, memberKind: "agent" });
-          conversationsCreated += 1;
-          createdThisRow = true;
-        }
-      } else {
-        // Pair-derived deterministic DM. getOrCreateDm only creates on first use.
-        const deterministicId = dmConversationId("user", counterpart);
-        const preExisting = convStore.getConversation(deterministicId);
-        const conv = convStore.getOrCreateDm("user", counterpart);
-        conversationId = conv.id;
-        if (preExisting === null) {
-          conversationsCreated += 1;
-          createdThisRow = true;
-        }
+      // Key EVERY DM-shaped message (threaded or not) on the deterministic
+      // pair-derived DM id — the same id live sends and the DM view use. The
+      // message's thread_id is preserved untouched for intra-conversation
+      // grouping; it is never used as the conversation id (adj-hq8p4).
+      // getOrCreateDm only creates the conversation on first use, so threaded
+      // and non-threaded history for the same pair collapse into one DM.
+      const deterministicId = dmConversationId("user", counterpart);
+      const preExisting = convStore.getConversation(deterministicId);
+      const conv = convStore.getOrCreateDm("user", counterpart);
+      const conversationId = conv.id;
+      if (preExisting === null) {
+        conversationsCreated += 1;
+        createdThisRow = true;
       }
 
       setConversationStmt.run(conversationId, row.id);
