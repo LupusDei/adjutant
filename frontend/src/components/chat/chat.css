@@ -1663,3 +1663,43 @@
   color: var(--crt-phosphor, #00ff00);
   border-color: var(--crt-phosphor, #00ff00);
 }
+
+/* Chat mode switch — DIRECT / CHANNELS segmented control (adj-164.5.5) */
+.chat-mode-switch {
+  display: flex;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--crt-phosphor-dim, #00aa00);
+  background-color: var(--theme-bg-elevated, #050505);
+}
+
+.chat-mode-tab {
+  flex: 1;
+  padding: 9px 12px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--crt-phosphor-dim, #00aa00);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+
+.chat-mode-tab:hover {
+  color: var(--crt-phosphor, #00ff00);
+  background-color: rgba(0, 255, 0, 0.05);
+}
+
+.chat-mode-tab-active {
+  color: var(--crt-phosphor, #00ff00);
+  border-bottom-color: var(--crt-phosphor, #00ff00);
+  text-shadow: 0 0 8px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.4));
+}
+
+.chat-agent-selector-bar {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--crt-phosphor-dim, #00aa00);
+  background: var(--theme-bg-elevated, #050505);
+  flex-shrink: 0;
+}
