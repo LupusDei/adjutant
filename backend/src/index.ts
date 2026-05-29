@@ -7,7 +7,7 @@ import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
 import { startPrefixMapRefreshScheduler } from "./services/beads/index.js";
-import { initWebSocketServer } from "./services/ws-server.js";
+import { initWebSocketServer, setConversationStore } from "./services/ws-server.js";
 import { initAgentStatusStream } from "./services/agent-status-stream.js";
 import { initTerminalStream } from "./services/terminal-stream.js";
 import { initStreamingBridge } from "./services/streaming-bridge.js";
@@ -240,6 +240,9 @@ const server = app.listen(PORT, () => {
 
   // Initialize WebSocket servers (all use noServer: true)
   const chatWss = initWebSocketServer(server, messageStore);
+  // Wire the conversation store so room-scoped channel fan-out can resolve
+  // membership (adj-164.4.3).
+  setConversationStore(conversationStore);
   const agentWss = initAgentStatusStream(server);
   const terminalWss = initTerminalStream(server);
 
