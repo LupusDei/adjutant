@@ -150,6 +150,7 @@ final class ChatWebSocketService: ObservableObject {
             body: body,
             deliveryStatus: .delivered,
             threadId: msg.threadId,
+            conversationId: msg.conversationId,
             createdAt: msg.timestamp ?? now,
             updatedAt: msg.timestamp ?? now
         )
