@@ -29,7 +29,7 @@ function ChannelListImpl({ channels, unread, selectedId, onSelect, onCreate }: C
   const [name, setName] = useState('');
 
   const handleSubmit = useCallback(
-    (e: React.FormEvent) => {
+    (e: React.SyntheticEvent) => {
       e.preventDefault();
       const trimmed = name.trim();
       if (trimmed.length === 0) return;

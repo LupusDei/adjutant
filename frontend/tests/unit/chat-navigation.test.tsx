@@ -17,8 +17,10 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import type { ChannelSummary } from '../../src/types';
 
 // --- Mock data hooks ---------------------------------------------------------
+// useUnreadCounts.counts is a Map (real shape); ChatView converts it for the
+// agent selector. Mocking a Map here keeps the test honest about the contract.
 vi.mock('../../src/hooks/useUnreadCounts', () => ({
-  useUnreadCounts: () => ({ counts: {}, totalUnread: 0, markRead: vi.fn() }),
+  useUnreadCounts: () => ({ counts: new Map<string, number>(), totalUnread: 0, markRead: vi.fn() }),
 }));
 
 function channel(id: string, title: string): ChannelSummary {

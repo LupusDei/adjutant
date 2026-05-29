@@ -10,7 +10,7 @@
  * rendering test; real-time wiring is covered by channel-realtime.test.ts.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 
 import type { DisplayMessage } from '../../src/hooks/useChatMessages';
 

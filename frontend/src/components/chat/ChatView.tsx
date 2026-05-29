@@ -53,6 +53,11 @@ export function ChatView({ isActive = true, initialAgent, onInitialAgentConsumed
     [channels, selectedChannelId],
   );
 
+  // useUnreadCounts exposes a Map; ChatAgentSelector reads it as a Record
+  // (index access). Convert at the boundary so the badge lookups actually
+  // resolve instead of silently returning undefined.
+  const agentUnread = useMemo(() => Object.fromEntries(counts), [counts]);
+
   const handleCreateChannel = useCallback(
     (title: string) => {
       void createChannel(title)
@@ -92,7 +97,7 @@ export function ChatView({ isActive = true, initialAgent, onInitialAgentConsumed
             <ChatAgentSelector
               value={selectedAgent}
               onChange={setSelectedAgent}
-              unreadCounts={counts}
+              unreadCounts={agentUnread}
             />
           </div>
           <div style={{ flex: 1, minHeight: 0 }}>

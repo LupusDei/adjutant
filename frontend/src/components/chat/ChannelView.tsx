@@ -67,6 +67,24 @@ function ChannelViewImpl({ channelId, title }: ChannelViewProps) {
     void loadMore().finally(() => { setLoadingMore(false); });
   }, [hasMore, loadMore, loadingMore]);
 
+  // Build the Virtuoso components object so `Header` is OMITTED (not set to
+  // `undefined`) when there's nothing more to load — `exactOptionalPropertyTypes`
+  // rejects an explicit `undefined`, and an empty object is the correct "no
+  // header" signal.
+  const virtuosoComponents = useMemo(
+    () =>
+      hasMore
+        ? {
+            Header: () => (
+              <div className="chat-load-more">
+                {loadingMore ? 'LOADING...' : 'SCROLL UP FOR MORE'}
+              </div>
+            ),
+          }
+        : {},
+    [hasMore, loadingMore],
+  );
+
   const handleSend = useCallback(async () => {
     const text = inputValue.trim();
     if (!text || sending) return;
@@ -158,18 +176,10 @@ function ChannelViewImpl({ channelId, title }: ChannelViewProps) {
             computeItemKey={(_index, msg) => msg.id}
             itemContent={(_index, msg) => renderMessage(msg)}
             followOutput={followOutput}
-            startReached={hasMore ? handleStartReached : undefined}
+            {...(hasMore ? { startReached: handleStartReached } : {})}
             alignToBottom
             style={{ height: '100%' }}
-            components={{
-              Header: hasMore
-                ? () => (
-                    <div className="chat-load-more">
-                      {loadingMore ? 'LOADING...' : 'SCROLL UP FOR MORE'}
-                    </div>
-                  )
-                : undefined,
-            }}
+            components={virtuosoComponents}
           />
         )}
       </div>
