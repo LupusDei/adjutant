@@ -179,10 +179,12 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     }
   }, [agentId, isActive, markRead]);
 
-  // Determine coordinator name based on agentId
+  // Display label for the open conversation. With no explicit agent selected
+  // the default view is the coordinator DM (adj-ropat) — label it COORDINATOR
+  // rather than the old "AGENTS", which named a now-dead aggregate surface.
   const coordinatorName = agentId
     ? agentId.toUpperCase()
-    : 'AGENTS';
+    : 'COORDINATOR';
   // Voice input hook for recording
   const voiceInput = useVoiceInput();
 
@@ -584,9 +586,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
             <div className="chat-empty">
               <p>NO MESSAGES YET</p>
               <p className="chat-empty-hint">
-                {agentId
-                  ? `Send a message to ${coordinatorName} below`
-                  : `Send a message to ${coordinatorName} below`}
+                {`Send a message to ${coordinatorName} below`}
               </p>
             </div>
             {/* Streaming messages (rendered outside virtuoso when message list empty) */}

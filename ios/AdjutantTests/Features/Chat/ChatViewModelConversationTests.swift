@@ -135,6 +135,68 @@ final class ChatViewModelConversationTests: XCTestCase {
         XCTAssertTrue(vm.messages.contains(where: { $0.id == "ws-legacy" }))
     }
 
+    // MARK: - DM unread badge scoping (adj-164.7.2)
+
+    func testChannelBroadcastDoesNotBumpDmUnreadBadge() async {
+        // adj-164.7.2: the per-agent DM unread badge must not count channel
+        // traffic. A channel broadcast arrives with recipient = <channelId>
+        // (never "user"); its unread is owned by ChannelViewModel keyed by
+        // conversationId. Counting it here would double-surface the same
+        // message as both a DM badge and a channel badge.
+        let wsService = ChatWebSocketService()
+        let vm = ChatViewModel(apiClient: mockAPIClient, wsService: wsService)
+
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: [])
+        await vm.setRecipient("raynor")
+
+        let now = ISO8601DateFormatter().string(from: Date())
+        let channelMsg = PersistentMessage(
+            id: "ch-1",
+            agentId: "kerrigan",
+            recipient: "channel-abc",
+            role: .agent,
+            body: "channel broadcast",
+            deliveryStatus: .delivered,
+            conversationId: "channel-abc",
+            createdAt: now,
+            updatedAt: now
+        )
+        wsService.incomingMessage.send(channelMsg)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        // Not added to the open raynor DM, and NOT counted as kerrigan DM unread.
+        XCTAssertFalse(vm.messages.contains(where: { $0.id == "ch-1" }))
+        XCTAssertEqual(vm.unreadCounts["kerrigan"] ?? 0, 0)
+    }
+
+    func testDirectMessageForOtherAgentBumpsDmUnreadBadge() async {
+        // A genuine DM to the user from a non-open agent SHOULD bump that
+        // agent's DM badge (recipient == "user").
+        let wsService = ChatWebSocketService()
+        let vm = ChatViewModel(apiClient: mockAPIClient, wsService: wsService)
+
+        MockURLProtocol.mockHandler = mockMessagesResponse(messages: [])
+        await vm.setRecipient("raynor")
+
+        let otherConvId = ChatViewModel.dmConversationId(memberA: "user", memberB: "kerrigan")
+        let now = ISO8601DateFormatter().string(from: Date())
+        let dmMsg = PersistentMessage(
+            id: "dm-other-1",
+            agentId: "kerrigan",
+            recipient: "user",
+            role: .agent,
+            body: "direct hello",
+            deliveryStatus: .delivered,
+            conversationId: otherConvId,
+            createdAt: now,
+            updatedAt: now
+        )
+        wsService.incomingMessage.send(dmMsg)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(vm.unreadCounts["kerrigan"] ?? 0, 1)
+    }
+
     // MARK: - Refresh dedup/merge scoped by conversation
 
     func testRefreshDropsForeignConversationMessages_BleedRegression() async {

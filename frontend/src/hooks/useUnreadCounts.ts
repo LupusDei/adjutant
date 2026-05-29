@@ -71,6 +71,13 @@ export function useUnreadCounts(): UseUnreadCountsResult {
       // Only count messages from agents (not from user)
       if (incoming.from === 'user') return;
 
+      // adj-164.7.2: this badge is the per-agent DM unread count. Channel
+      // broadcasts arrive with `to: <channelId>` (never 'user'), and their
+      // unread is owned separately by useChannels (keyed by conversationId).
+      // Counting them here would double-surface the same message as both a
+      // DM badge and a channel badge. Scope strictly to direct messages.
+      if (incoming.to !== 'user') return;
+
       setCounts((prev) => {
         const next = new Map(prev);
         const agentId = incoming.from;

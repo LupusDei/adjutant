@@ -165,6 +165,77 @@ describe('useUnreadCounts', () => {
       expect(result.current.totalUnread).toBe(1);
     });
 
+    it('should NOT increment the DM badge for a channel message (to is a channel id, not user)', async () => {
+      // adj-164.7.2: per-conversation unread consistency. A channel broadcast
+      // has from: <agent> and to: <channelId> (never 'user'). The DM unread
+      // badge — keyed by agent — must NOT count channel traffic; channel
+      // unread is owned separately by useChannels. Counting it here would
+      // double-surface the same message as both a DM and a channel badge.
+      vi.mocked(api.messages.getUnread).mockResolvedValue({
+        counts: [],
+      });
+
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
+        subscriberCallback = cb;
+        return vi.fn();
+      });
+
+      const { result } = renderHook(() => useUnreadCounts());
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      act(() => {
+        subscriberCallback!({
+          id: 'msg-channel',
+          from: 'agent-1',
+          to: 'channel-abc',
+          body: 'Channel broadcast',
+          timestamp: '2026-02-21T10:05:00Z',
+          conversationId: 'channel-abc',
+        });
+      });
+
+      expect(result.current.counts.has('agent-1')).toBe(false);
+      expect(result.current.totalUnread).toBe(0);
+    });
+
+    it('should increment the DM badge for a direct message addressed to user', async () => {
+      // A genuine DM from an agent: to: 'user'. This is the one case the
+      // agent-keyed DM badge should count.
+      vi.mocked(api.messages.getUnread).mockResolvedValue({
+        counts: [],
+      });
+
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: (msg: unknown) => void) => {
+        subscriberCallback = cb;
+        return vi.fn();
+      });
+
+      const { result } = renderHook(() => useUnreadCounts());
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      act(() => {
+        subscriberCallback!({
+          id: 'msg-dm',
+          from: 'agent-1',
+          to: 'user',
+          body: 'Direct message',
+          timestamp: '2026-02-21T10:05:00Z',
+          conversationId: 'dm_agent1',
+        });
+      });
+
+      expect(result.current.counts.get('agent-1')).toBe(1);
+      expect(result.current.totalUnread).toBe(1);
+    });
+
     it('should NOT increment count for messages from user', async () => {
       vi.mocked(api.messages.getUnread).mockResolvedValue({
         counts: [],

@@ -1,7 +1,9 @@
 import Foundation
 import Combine
 import CryptoKit
+#if canImport(UIKit)
 import UIKit
+#endif
 import AdjutantKit
 
 /// ViewModel for the Chat feature.
@@ -590,7 +592,15 @@ final class ChatViewModel: BaseViewModel {
         // Conversation-scoped delivery (root-cause bleed fix): a message only
         // enters the open thread when it belongs to the open conversation.
         guard belongsToCurrentConversation(message) else {
-            // Message is for a different conversation -- increment unread count
+            // Message is for a different conversation -- increment unread count.
+            //
+            // adj-164.7.2: this badge is the per-AGENT DM unread count. Channel
+            // broadcasts arrive with recipient = <channelId> (never "user"), and
+            // their unread is owned by ChannelViewModel keyed by conversationId.
+            // Counting them here would double-surface the same message as both a
+            // DM badge and a channel badge, so scope strictly to direct messages
+            // addressed to the user.
+            guard message.recipient == "user" else { return }
             let agentKey = message.role == .user ? (message.recipient ?? message.agentId) : message.agentId
             if agentKey != selectedRecipient {
                 unreadCounts[agentKey, default: 0] += 1
@@ -976,6 +986,12 @@ final class ChatViewModel: BaseViewModel {
     /// (e.g., from onAppear or a recent tab switch) to avoid saturating the main actor
     /// with redundant API calls.
     private func observeForegroundTransitions() {
+        // adj-164.7.7: foreground-refresh is a UIKit-only concern (it hangs off
+        // UIApplication.didBecomeActiveNotification). Guarded with
+        // `#if canImport(UIKit)` so the view model still compiles for SPM
+        // `swift test` on macOS, where there is no UIApplication. On macOS this
+        // is a no-op; the iOS app keeps the live foreground refresh.
+        #if canImport(UIKit)
         NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -989,6 +1005,7 @@ final class ChatViewModel: BaseViewModel {
                 }
             }
             .store(in: &cancellables)
+        #endif
     }
 
     /// Observe network changes to update connection state
