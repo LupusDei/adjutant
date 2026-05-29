@@ -115,6 +115,72 @@ describe("ConversationStore.getUnreadCount", () => {
   });
 });
 
+// ============================================================================
+// adj-hknkj (P2): timestamp-format regression.
+//
+// These tests deliberately use the REAL insert path (postToChannel →
+// store.insertMessage → datetime('now') → 'YYYY-MM-DD HH:MM:SS', space
+// separator) AND the REAL default watermark (markConversationRead with no
+// timestamp → previously toISOString() → 'YYYY-MM-DDTHH:MM:SS.sssZ'). String
+// comparison of those two formats is invalid: ' ' (0x20) < 'T' (0x54), so a
+// real message was never `> last_read_at` and unread collapsed to 0.
+//
+// The masked-bug tests above pass only because postAt injects ISO-shaped
+// created_at that happens to match the ISO watermark. Real inserts do not.
+// ============================================================================
+describe("ConversationStore.getUnreadCount — real insert path (adj-hknkj)", () => {
+  it("should count messages posted after a default-now read watermark", async () => {
+    const channel = store.createChannel({ title: "team", createdBy: "user" });
+    store.joinChannel(channel.id, { memberId: "raynor", memberKind: "agent" });
+
+    // Real insert path (datetime('now') created_at).
+    store.postToChannel({ channelId: channel.id, senderId: "raynor", body: "before read" });
+
+    // Default watermark (no explicit timestamp) — the exact production call.
+    store.markConversationRead(channel.id, "user");
+
+    // Ensure a strictly-later second so the post-read message is unambiguously newer.
+    await new Promise((r) => setTimeout(r, 1100));
+    store.postToChannel({ channelId: channel.id, senderId: "raynor", body: "after read 1" });
+    store.postToChannel({ channelId: channel.id, senderId: "raynor", body: "after read 2" });
+
+    // Two messages were posted after the read watermark.
+    expect(store.getUnreadCount(channel.id, "user")).toBe(2);
+  });
+
+  it("should report zero unread immediately after a default-now read of real messages", async () => {
+    const channel = store.createChannel({ title: "team", createdBy: "user" });
+    store.joinChannel(channel.id, { memberId: "raynor", memberKind: "agent" });
+
+    store.postToChannel({ channelId: channel.id, senderId: "raynor", body: "m1" });
+    store.postToChannel({ channelId: channel.id, senderId: "raynor", body: "m2" });
+
+    // Before reading: both are unread.
+    expect(store.getUnreadCount(channel.id, "user")).toBe(2);
+
+    // Read at a strictly-later instant than the inserts.
+    await new Promise((r) => setTimeout(r, 1100));
+    store.markConversationRead(channel.id, "user");
+
+    // After a default read, nothing posted earlier remains unread.
+    expect(store.getUnreadCount(channel.id, "user")).toBe(0);
+  });
+
+  it("should reflect real inserts in getUnreadCountsForMember after a default read", async () => {
+    const channel = store.createChannel({ title: "team", createdBy: "user" });
+    store.joinChannel(channel.id, { memberId: "raynor", memberKind: "agent" });
+
+    store.postToChannel({ channelId: channel.id, senderId: "raynor", body: "old" });
+    store.markConversationRead(channel.id, "user");
+    await new Promise((r) => setTimeout(r, 1100));
+    store.postToChannel({ channelId: channel.id, senderId: "raynor", body: "new" });
+
+    const counts = store.getUnreadCountsForMember("user");
+    const byId = Object.fromEntries(counts.map((u) => [u.conversationId, u.unreadCount]));
+    expect(byId[channel.id]).toBe(1);
+  });
+});
+
 describe("ConversationStore.getUnreadCountsForMember", () => {
   it("should report unread per conversation the member belongs to", () => {
     const c1 = store.createChannel({ title: "c1", createdBy: "user" });
