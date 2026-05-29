@@ -106,6 +106,17 @@ final class ChatWebSocketService: ObservableObject {
         wsClient?.sendMessage(to: recipient, body: body, clientId: clientId)
     }
 
+    /// Subscribe to a channel's room-scoped fan-out (adj-164.6.4). The server
+    /// only delivers a channel post to clients subscribed to its conversation id.
+    func subscribeToChannel(_ conversationId: String) {
+        wsClient?.subscribeToChannel(conversationId)
+    }
+
+    /// Unsubscribe from a channel's room-scoped fan-out.
+    func unsubscribeFromChannel(_ conversationId: String) {
+        wsClient?.unsubscribeFromChannel(conversationId)
+    }
+
     func sendTypingStarted() {
         wsClient?.sendTyping(state: "started")
     }

@@ -15,6 +15,12 @@ struct ChatBubble: View {
     /// Last message in a same-sender run — show the timestamp / delivery status.
     var isLastInGroup: Bool = true
 
+    /// Whether to attribute the operator's own (outgoing) bubbles with a sender
+    /// label. DMs leave this false (only one "other" party, so the user's
+    /// bubbles need no header); multi-party channels set it true so every turn
+    /// is attributable. See `ChannelBubbleAttribution`.
+    var showOutgoingSenderLabel: Bool = false
+
     /// Whether this message is currently playing audio
     var isPlaying: Bool = false
 
@@ -92,9 +98,11 @@ struct ChatBubble: View {
             }
 
             VStack(alignment: alignment, spacing: CRTTheme.Spacing.xxs) {
-                // Sender label for incoming messages — only on the first message
-                // of a same-sender run (parity with web grouping).
-                if !isOutgoing && isFirstInGroup {
+                // Sender label on the first message of a same-sender run. DMs
+                // attribute only incoming runs; channels (showOutgoingSenderLabel)
+                // attribute the operator's own runs too, so multi-party turns are
+                // always identifiable.
+                if isFirstInGroup && (!isOutgoing || showOutgoingSenderLabel) {
                     CRTText(message.senderName.uppercased(), style: .caption, glowIntensity: .subtle)
                         .foregroundColor(senderColor)
                 }

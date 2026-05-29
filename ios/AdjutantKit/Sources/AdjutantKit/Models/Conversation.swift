@@ -37,6 +37,13 @@ public enum ConversationKind: String, Codable, Sendable, CaseIterable {
     case channel
 }
 
+/// Whether a conversation member is the dashboard operator or an agent.
+/// Mirrors the backend `member_kind` column (`conversation-store.ts`).
+public enum MemberKind: String, Codable, Sendable, CaseIterable {
+    case user
+    case agent
+}
+
 /// Response envelope payload for `GET /api/conversations`.
 /// Mirrors the backend success-envelope `data` shape:
 /// `{ conversations: Conversation[], total }`.
@@ -46,6 +53,79 @@ public struct ConversationsListResponse: Codable, Sendable {
 
     public init(conversations: [Conversation], total: Int) {
         self.conversations = conversations
+        self.total = total
+    }
+}
+
+/// A Slack-style channel as surfaced by the channels REST API (adj-164.6).
+///
+/// A channel IS a conversation with `kind == .channel`; this type adds the
+/// denormalized `memberCount` the backend emits in `ChannelSummary`
+/// (`conversation-store.ts`). The same struct decodes both list rows
+/// (`GET /api/channels` → has `memberCount`) and a freshly-created channel
+/// (`POST /api/channels` → a bare Conversation with no `memberCount`); when the
+/// field is absent it defaults to `0`.
+public struct Channel: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let kind: ConversationKind
+    public let title: String?
+    public let archived: Bool
+    /// Denormalized member count for list rendering. Defaults to `0` when the
+    /// payload omits it (e.g. the create response, which is a bare Conversation).
+    public let memberCount: Int
+    public let createdAt: String
+    public let updatedAt: String
+
+    public init(
+        id: String,
+        kind: ConversationKind = .channel,
+        title: String? = nil,
+        archived: Bool = false,
+        memberCount: Int = 0,
+        createdAt: String,
+        updatedAt: String
+    ) {
+        self.id = id
+        self.kind = kind
+        self.title = title
+        self.archived = archived
+        self.memberCount = memberCount
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, title, archived, memberCount, createdAt, updatedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        kind = try c.decodeIfPresent(ConversationKind.self, forKey: .kind) ?? .channel
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        archived = try c.decodeIfPresent(Bool.self, forKey: .archived) ?? false
+        // memberCount is absent on the create response (bare Conversation).
+        memberCount = try c.decodeIfPresent(Int.self, forKey: .memberCount) ?? 0
+        createdAt = try c.decode(String.self, forKey: .createdAt)
+        updatedAt = try c.decode(String.self, forKey: .updatedAt)
+    }
+
+    /// The channel's display name, falling back to the id when untitled.
+    public var displayTitle: String {
+        if let title, !title.isEmpty { return title }
+        return id
+    }
+}
+
+/// Response envelope payload for `GET /api/channels`.
+/// Mirrors the backend success-envelope `data` shape:
+/// `{ channels: ChannelSummary[], total }`.
+public struct ChannelsListResponse: Codable, Sendable {
+    public let channels: [Channel]
+    public let total: Int
+
+    public init(channels: [Channel], total: Int) {
+        self.channels = channels
         self.total = total
     }
 }

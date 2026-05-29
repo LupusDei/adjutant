@@ -16,6 +16,9 @@ public struct WsClientMessage: Encodable {
     public var seq: Int?
     public var apiKey: String?
     public var lastSeqSeen: Int?
+    /// Conversation id for `subscribe`/`unsubscribe` room-scoped fan-out
+    /// (adj-164.6). Matches the server's `handleSubscribe`/`handleUnsubscribe`.
+    public var conversationId: String?
     // Session v2 fields
     public var sessionId: String?
     public var text: String?
@@ -34,6 +37,7 @@ public struct WsClientMessage: Encodable {
         seq: Int? = nil,
         apiKey: String? = nil,
         lastSeqSeen: Int? = nil,
+        conversationId: String? = nil,
         sessionId: String? = nil,
         text: String? = nil,
         approved: Bool? = nil,
@@ -50,6 +54,7 @@ public struct WsClientMessage: Encodable {
         self.seq = seq
         self.apiKey = apiKey
         self.lastSeqSeen = lastSeqSeen
+        self.conversationId = conversationId
         self.sessionId = sessionId
         self.text = text
         self.approved = approved
@@ -323,7 +328,34 @@ public final class WebSocketClient: NSObject, Sendable {
         return message.from == activeRecipient || message.to == activeRecipient
     }
 
+    /// Decide whether an incoming server message should route to the channel
+    /// room currently open as `openChannelId` (adj-164.6.4).
+    ///
+    /// Channels are STRICTLY conversation-id scoped — unlike DMs there is no
+    /// from/to legacy fallback. A `chat_message` routes IFF its `conversationId`
+    /// equals the open channel id, so a post for another room can never bleed in.
+    /// Non-`chat_message` types (control plane) always route.
+    nonisolated public static func shouldRouteChannel(
+        message: WsServerMessage,
+        openChannelId: String
+    ) -> Bool {
+        guard message.type == "chat_message" else { return true }
+        guard let convId = message.conversationId, !convId.isEmpty else { return false }
+        return convId == openChannelId
+    }
+
     // MARK: - Public API
+
+    /// Subscribe to a channel's room-scoped fan-out. The server only delivers a
+    /// channel post to clients that have subscribed to its conversation id.
+    public func subscribeToChannel(_ conversationId: String) {
+        send(WsClientMessage(type: "subscribe", conversationId: conversationId))
+    }
+
+    /// Unsubscribe from a channel's room-scoped fan-out.
+    public func unsubscribeFromChannel(_ conversationId: String) {
+        send(WsClientMessage(type: "unsubscribe", conversationId: conversationId))
+    }
 
     /// Connect to the WebSocket server.
     public func connect() {
