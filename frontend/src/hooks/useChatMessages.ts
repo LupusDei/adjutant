@@ -28,6 +28,12 @@ export interface UseChatMessagesResult {
   isLoading: boolean;
   error: Error | null;
   hasMore: boolean;
+  /**
+   * The resolved DM conversation id for the open agent (null until resolved or
+   * when no agent is selected). Consumers pass this to `useChatWebSocket` to
+   * scope real-time delivery to this conversation.
+   */
+  conversationId: string | null;
   /** Send a message via HTTP. Adds it optimistically and confirms on API response. */
   sendMessage: (body: string, threadId?: string) => Promise<void>;
   /** Add an optimistic message without sending via HTTP (for WebSocket sends). */
@@ -321,6 +327,7 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
     isLoading,
     error,
     hasMore,
+    conversationId,
     sendMessage,
     addOptimistic,
     confirmDelivery,

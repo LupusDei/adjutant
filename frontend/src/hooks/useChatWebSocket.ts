@@ -28,6 +28,7 @@ interface WsServerMessage {
   body?: string;
   timestamp?: string;
   threadId?: string;
+  conversationId?: string;
   replyTo?: string;
   metadata?: Record<string, unknown>;
   streamId?: string;
@@ -50,6 +51,8 @@ export interface WsChatMessage {
   to: string;
   body: string;
   timestamp: string;
+  /** Stable conversation id (adj-164) used to scope real-time delivery. */
+  conversationId?: string | undefined;
   replyTo?: string | undefined;
 }
 
@@ -112,10 +115,14 @@ const RECONNECT_MULTIPLIER = 2;
  *
  * @param enabled - Whether to connect (based on communication priority)
  * @param callbacks - Event handlers for incoming messages
+ * @param conversationId - When provided, `onMessage` fires ONLY for chat
+ *   messages whose conversationId matches (adj-164.2.4). Omit for the legacy
+ *   unscoped behavior where every chat message is delivered.
  */
 export function useChatWebSocket(
   enabled: boolean,
   callbacks: ChatWebSocketCallbacks,
+  conversationId?: string,
 ): ChatWebSocketResult {
   const [connected, setConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
@@ -125,11 +132,15 @@ export function useChatWebSocket(
   const reconnectDelay = useRef(RECONNECT_BASE_MS);
   const callbacksRef = useRef(callbacks);
   const enabledRef = useRef(enabled);
+  // Mirror the open conversation id so the message handler scopes delivery
+  // without re-subscribing the socket on every conversation switch.
+  const conversationIdRef = useRef(conversationId);
   const seqRef = useRef(0);
 
   // Keep callbacks ref current without triggering reconnects
   callbacksRef.current = callbacks;
   enabledRef.current = enabled;
+  conversationIdRef.current = conversationId;
 
   const cleanup = useCallback(() => {
     if (reconnectTimer.current) {
@@ -194,14 +205,21 @@ export function useChatWebSocket(
         case 'chat_message':
           if (msg.id && msg.from && msg.to && msg.body !== undefined) {
             if (msg.seq) seqRef.current = msg.seq;
-            callbacksRef.current.onMessage?.({
-              id: msg.id,
-              from: msg.from,
-              to: msg.to,
-              body: msg.body,
-              timestamp: msg.timestamp ?? new Date().toISOString(),
-              replyTo: msg.replyTo,
-            });
+            // adj-164.2.4: when a conversation is open, deliver ONLY messages
+            // belonging to it. A message for another conversation (or with no
+            // conversationId) is dropped so it can never bleed into the view.
+            const scope = conversationIdRef.current;
+            if (scope === undefined || msg.conversationId === scope) {
+              callbacksRef.current.onMessage?.({
+                id: msg.id,
+                from: msg.from,
+                to: msg.to,
+                body: msg.body,
+                timestamp: msg.timestamp ?? new Date().toISOString(),
+                conversationId: msg.conversationId,
+                replyTo: msg.replyTo,
+              });
+            }
           }
           break;
 

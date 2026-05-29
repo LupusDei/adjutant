@@ -164,6 +164,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     isLoading,
     error: fetchError,
     hasMore,
+    conversationId,
     sendMessage: hookSendMessage,
     confirmDelivery,
     loadMore,
@@ -245,8 +246,13 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     },
   }), [confirmDelivery]);
 
-  // WebSocket connection for streaming and typing
-  const { connected: wsConnected, connectionStatus: wsConnectionStatus, sendTyping } = useChatWebSocket(wsEnabled, wsCallbacks);
+  // WebSocket connection for streaming and typing. The resolved conversation
+  // id scopes real-time chat_message delivery to the open DM (adj-164.2.4).
+  const { connected: wsConnected, connectionStatus: wsConnectionStatus, sendTyping } = useChatWebSocket(
+    wsEnabled,
+    wsCallbacks,
+    conversationId ?? undefined,
+  );
 
   // Effective connection status: WS status when enabled, otherwise from context
   const effectiveStatus: ConnectionStatus = wsEnabled ? wsConnectionStatus : commContextStatus;
