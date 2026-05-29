@@ -72,6 +72,8 @@ interface WsServerMessage {
   body?: string | undefined;
   timestamp?: string | undefined;
   threadId?: string | undefined;
+  /** Conversation/channel id for room-scoped chat messages (adj-164.4). */
+  conversationId?: string | undefined;
   replyTo?: string | undefined;
   metadata?: Record<string, unknown> | undefined;
   streamId?: string | undefined;
