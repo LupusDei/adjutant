@@ -72,7 +72,7 @@ const PORT = process.env["PORT"] ?? 4201;
 const messageDb = initDatabase();
 const messageStore = createMessageStore(messageDb);
 const proposalStore = createProposalStore(messageDb);
-const conversationStore = createConversationStore(messageDb);
+const conversationStore = createConversationStore(messageDb, messageStore);
 migrateProposalProjectNames(messageDb);
 // adj-164.1.4 — backfill legacy messages into DM conversations. Idempotent:
 // messages already carrying a conversation_id are skipped, so this is a no-op
