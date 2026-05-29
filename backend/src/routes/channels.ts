@@ -50,6 +50,16 @@ export function createChannelsRouter(conversationStore: ConversationStore): Rout
     return res.json(success({ channels, total: channels.length }));
   });
 
+  // GET /api/channels/unread — per-conversation unread counts for the operator
+  // (adj-164.5). Registered before any `/:id` route would be — there is no
+  // `/:id` GET here, but keeping it above the param-bearing routes documents the
+  // intent that `unread` is a literal segment, never a channel id.
+  router.get("/unread", (req, res) => {
+    const memberId = typeof req.query["memberId"] === "string" ? req.query["memberId"] : USER_MEMBER_ID;
+    const counts = conversationStore.getUnreadCountsForMember(memberId);
+    return res.json(success({ counts }));
+  });
+
   // POST /api/channels/:id/join — add a member.
   router.post("/:id/join", (req, res) => {
     const { id } = req.params;

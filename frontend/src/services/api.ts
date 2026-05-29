@@ -13,6 +13,8 @@ import type {
   ChatMessage,
   ChatThread,
   Conversation,
+  ChannelSummary,
+  ConversationUnread,
   UnreadCount,
   Proposal,
   SessionInfo,
@@ -577,6 +579,68 @@ export const api = {
       return apiFetch(
         `/conversations/${encodeURIComponent(conversationId)}/messages${query ? `?${query}` : ''}`,
       );
+    },
+  },
+
+  /**
+   * Channels (adj-164.5) — the multi-party rooms surface of the unified
+   * conversation model. Channel message *history* is read through
+   * `conversations.listMessages` (any conversation kind), so this namespace
+   * only covers the channel-specific roster + membership + post operations.
+   *
+   * The operator (the General) is always the `user` member; the backend
+   * defaults membership/sender to `user` when not specified, so the web client
+   * does not pass an explicit member id.
+   */
+  channels: {
+    /** List all channels with denormalized member counts. */
+    async list(): Promise<{ channels: ChannelSummary[]; total: number }> {
+      return apiFetch('/channels');
+    },
+
+    /** Create a channel; the operator becomes its owner. */
+    async create(title: string): Promise<ChannelSummary> {
+      const conversation = await apiFetch<Conversation>('/channels', {
+        method: 'POST',
+        body: { title },
+      });
+      // The create endpoint returns the base conversation; surface it as a
+      // single-member channel summary (the owner) so callers get a uniform
+      // ChannelSummary shape without a second round-trip. The next list()
+      // reconciles the true member count.
+      return { ...conversation, kind: 'channel', memberCount: 1 };
+    },
+
+    /** Join a channel as the operator. Idempotent on the backend. */
+    async join(channelId: string): Promise<void> {
+      await apiFetch(`/channels/${encodeURIComponent(channelId)}/join`, {
+        method: 'POST',
+        body: { memberId: 'user', memberKind: 'user' },
+      });
+    },
+
+    /** Leave a channel as the operator. */
+    async leave(channelId: string): Promise<void> {
+      await apiFetch(`/channels/${encodeURIComponent(channelId)}/leave`, {
+        method: 'POST',
+        body: { memberId: 'user' },
+      });
+    },
+
+    /** Post a message to a channel as the operator. */
+    async postMessage(
+      channelId: string,
+      params: { body: string; metadata?: Record<string, unknown> },
+    ): Promise<{ messageId: string; timestamp: string }> {
+      return apiFetch(`/channels/${encodeURIComponent(channelId)}/messages`, {
+        method: 'POST',
+        body: { ...params, senderId: 'user' },
+      });
+    },
+
+    /** Per-channel unread counts for the operator. */
+    async unread(): Promise<{ counts: ConversationUnread[] }> {
+      return apiFetch('/channels/unread');
     },
   },
 

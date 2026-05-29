@@ -96,6 +96,15 @@ export interface ChatWebSocketResult {
   sendMessage: (body: string, to?: string, clientId?: string) => string | null;
   /** Send a typing indicator */
   sendTyping: (state: 'started' | 'stopped') => void;
+  /**
+   * Subscribe this client to a conversation's room-scoped fan-out (adj-164.5.4).
+   * The backend only delivers `wsBroadcastToConversation` messages to clients
+   * that have subscribed AND are members. Returns true if the subscribe frame
+   * was sent (socket open), false otherwise.
+   */
+  subscribeConversation: (conversationId: string) => boolean;
+  /** Remove a conversation subscription. */
+  unsubscribeConversation: (conversationId: string) => boolean;
 }
 
 // ============================================================================
@@ -330,10 +339,26 @@ export function useChatWebSocket(
     ws.send(JSON.stringify({ type: 'typing', state }));
   }, []);
 
+  const subscribeConversation = useCallback((conversationId: string): boolean => {
+    const ws = wsRef.current;
+    if (ws?.readyState !== WebSocket.OPEN) return false;
+    ws.send(JSON.stringify({ type: 'subscribe', conversationId }));
+    return true;
+  }, []);
+
+  const unsubscribeConversation = useCallback((conversationId: string): boolean => {
+    const ws = wsRef.current;
+    if (ws?.readyState !== WebSocket.OPEN) return false;
+    ws.send(JSON.stringify({ type: 'unsubscribe', conversationId }));
+    return true;
+  }, []);
+
   return {
     connected,
     connectionStatus,
     sendMessage,
     sendTyping,
+    subscribeConversation,
+    unsubscribeConversation,
   };
 }
