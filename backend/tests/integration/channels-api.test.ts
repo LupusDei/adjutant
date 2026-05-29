@@ -214,3 +214,28 @@ describe("POST /api/channels/:id/messages", () => {
     expect(res.body.success).toBe(false);
   });
 });
+
+describe("GET /api/channels/unread", () => {
+  it("should return per-conversation unread counts for the operator", async () => {
+    const channel = convStore.createChannel({ title: "alerts", createdBy: "user" });
+    convStore.joinChannel(channel.id, { memberId: "raynor", memberKind: "agent" });
+    // An agent message the operator hasn't read yet.
+    convStore.postToChannel({ channelId: channel.id, senderId: "raynor", body: "ping" });
+
+    const res = await api().get("/api/channels/unread");
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    const entry = res.body.data.counts.find(
+      (c: { conversationId: string }) => c.conversationId === channel.id,
+    );
+    expect(entry.unreadCount).toBe(1);
+  });
+
+  it("should return an empty counts array when the operator has no conversations", async () => {
+    const res = await api().get("/api/channels/unread");
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.counts).toEqual([]);
+  });
+});

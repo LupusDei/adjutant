@@ -198,6 +198,21 @@ export interface Conversation {
   updatedAt: string;
 }
 
+/**
+ * A channel as surfaced by GET /api/channels — a `kind='channel'` conversation
+ * plus a denormalized member count for list rendering (adj-164.5).
+ */
+export interface ChannelSummary extends Conversation {
+  kind: 'channel';
+  memberCount: number;
+}
+
+/** Per-conversation unread count for the operator (adj-164.5). */
+export interface ConversationUnread {
+  conversationId: string;
+  unreadCount: number;
+}
+
 /** Thread summary from the messages API. */
 export interface ChatThread {
   threadId: string;
