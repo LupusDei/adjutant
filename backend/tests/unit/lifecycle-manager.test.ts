@@ -470,6 +470,54 @@ describe("LifecycleManager", () => {
       expect(tmuxName).not.toContain(" ");
       expect(tmuxName).not.toContain("/");
     });
+
+    // ========================================================================
+    // Worktree isolation — cwd must point at the worktree, not the main repo
+    // (adj-iqyqw). If tmux new-session omits `-c <worktree>` (or points it at
+    // the main repo), every Bash the agent runs starts a fresh shell in the
+    // main repo and file edits silently leak out of the worktree.
+    // ========================================================================
+    it("should set tmux new-session cwd (-c) to the exact projectPath so a worktree agent does not leak to main repo (adj-iqyqw)", async () => {
+      mockTmuxForCreate("adj-swarm-iso-agent");
+
+      const worktreePath = "/repo/worktrees/iso-agent";
+      await lifecycle.createSession({
+        name: "iso-agent",
+        projectPath: worktreePath,
+        mode: "swarm",
+        workspaceType: "worktree",
+      });
+
+      const newSessionCall = mockExecFile.mock.calls.find(
+        (call: unknown[]) => (call[1] as string[])[0] === "new-session"
+      );
+      expect(newSessionCall).toBeDefined();
+      const args = newSessionCall![1] as string[];
+      const cIdx = args.indexOf("-c");
+      // The cwd flag must be present...
+      expect(cIdx).toBeGreaterThan(-1);
+      // ...and must carry the worktree path exactly (not the main repo root).
+      expect(args[cIdx + 1]).toBe(worktreePath);
+    });
+
+    it("should honor a different worktree path as cwd (guards against a hardcoded root) (adj-iqyqw)", async () => {
+      mockTmuxForCreate("adj-swarm-other");
+
+      const otherWorktree = "/some/project/worktrees/other";
+      await lifecycle.createSession({
+        name: "other",
+        projectPath: otherWorktree,
+        workspaceType: "worktree",
+      });
+
+      const newSessionCall = mockExecFile.mock.calls.find(
+        (call: unknown[]) => (call[1] as string[])[0] === "new-session"
+      );
+      const args = newSessionCall![1] as string[];
+      const cIdx = args.indexOf("-c");
+      expect(cIdx).toBeGreaterThan(-1);
+      expect(args[cIdx + 1]).toBe(otherWorktree);
+    });
   });
 
   // ==========================================================================

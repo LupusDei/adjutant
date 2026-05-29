@@ -121,6 +121,58 @@ describe("swarm-service", () => {
       expect(result.swarm!.coordinator).toBe("sess-c");
     });
 
+    // ========================================================================
+    // Worktree isolation (adj-iqyqw): each worktree agent's session must be
+    // rooted at ITS worktree, never the main repo. If the session cwd is the
+    // main repo, the agent's file edits leak out of the worktree and can clobber
+    // the shared tree (the silent data-loss incidents in adj-iqyqw).
+    // ========================================================================
+    it("should root each worktree agent's session at its own worktree, not the main repo (adj-iqyqw)", async () => {
+      mockBridge.createSession.mockResolvedValue({
+        success: true,
+        sessionId: "sess-w",
+      });
+
+      const root = "/tmp/project";
+      const result = await createSwarm({
+        projectPath: root,
+        agentCount: 3,
+        baseName: "worker",
+        coordinatorIndex: 0,
+        workspaceType: "worktree",
+      });
+      expect(result.success).toBe(true);
+
+      const calls = mockBridge.createSession.mock.calls.map((c) => c[0]);
+      const byName = (n: string) => calls.find((a) => a.name === n)!;
+
+      // Coordinator (index 0) stays in the main repo as the primary workspace.
+      expect(byName("worker-1").projectPath).toBe(root);
+      expect(byName("worker-1").workspaceType).toBe("primary");
+
+      // Worktree agents (index > 0) are rooted at their OWN worktree dir.
+      expect(byName("worker-2").projectPath).toBe(`${root}/worktrees/worker-2`);
+      expect(byName("worker-2").workspaceType).toBe("worktree");
+      expect(byName("worker-3").projectPath).toBe(`${root}/worktrees/worker-3`);
+      expect(byName("worker-3").workspaceType).toBe("worktree");
+
+      // None of the worktree agents may be pointed at the bare main repo root.
+      expect(byName("worker-2").projectPath).not.toBe(root);
+      expect(byName("worker-3").projectPath).not.toBe(root);
+
+      // And a git worktree was actually created for each worktree agent.
+      const wtAdds = (execFile as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(
+        (c: unknown[]) => {
+          const a = c[1] as string[];
+          return a[0] === "worktree" && a[1] === "add";
+        }
+      );
+      const wtPaths = wtAdds.map((c: unknown[]) => (c[1] as string[]).at(-1));
+      expect(wtPaths).toContain("worktrees/worker-2");
+      expect(wtPaths).toContain("worktrees/worker-3");
+      expect(wtPaths).not.toContain("worktrees/worker-1");
+    });
+
     it("should handle partial failures gracefully", async () => {
       let callCount = 0;
       mockBridge.createSession.mockImplementation(async () => {
