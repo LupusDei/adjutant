@@ -276,4 +276,108 @@ describe("ws-server room-scoped fan-out", () => {
       expect(ws.findAllSent("chat_message")).toHaveLength(0);
     });
   });
+
+  // ==========================================================================
+  // adj-2jy4u (P1 SECURITY): sync replay must be membership-scoped.
+  //
+  // Channel posts are buffered in the SAME global replay buffer used by `sync`.
+  // The live `wsBroadcastToConversation` path is membership-scoped, but a
+  // non-member who issues `{type:"sync", lastSeqSeen:N}` previously received the
+  // buffered channel bodies because handleSync filtered ONLY by seq. That is a
+  // cross-conversation information leak. Sync must re-apply the same membership
+  // authorization boundary as live fan-out, and fail closed.
+  // ==========================================================================
+  describe("sync replay membership scoping (adj-2jy4u)", () => {
+    it("should NOT replay a channel message to a non-member via sync", async () => {
+      const mod = await loadModule();
+      mod.initWebSocketServer({} as import("http").Server);
+      // chan-secret has only raynor as a member; "user" is NOT a member.
+      mod.setConversationStore(makeConversationStore({ "chan-secret": ["raynor"] }) as never);
+
+      // A member subscribes and triggers a channel post so it lands in the
+      // replay buffer with a known seq.
+      const member = connectAuthed("raynor");
+      member._receiveMessage({ type: "subscribe", conversationId: "chan-secret" });
+      mod.wsBroadcastToConversation("chan-secret", {
+        type: "chat_message",
+        id: "secret-body",
+        body: "members only",
+        conversationId: "chan-secret",
+      });
+
+      // A DIFFERENT client (the non-member "user") connects fresh and asks to
+      // sync from the beginning. It must not receive the channel body.
+      const nonMember = connectAuthed("user");
+      nonMember._receiveMessage({ type: "sync", lastSeqSeen: 0 });
+
+      const syncResp = nonMember.findSent("sync_response");
+      expect(syncResp).toBeDefined();
+      const missed = (syncResp!.missed ?? []) as Record<string, unknown>[];
+      expect(missed.some((m) => m.id === "secret-body")).toBe(false);
+    });
+
+    it("should still replay a channel message to a member via sync", async () => {
+      const mod = await loadModule();
+      mod.initWebSocketServer({} as import("http").Server);
+      mod.setConversationStore(makeConversationStore({ "chan-secret": ["raynor"] }) as never);
+
+      // First client posts to the channel (populates replay buffer).
+      const poster = connectAuthed("raynor");
+      poster._receiveMessage({ type: "subscribe", conversationId: "chan-secret" });
+      mod.wsBroadcastToConversation("chan-secret", {
+        type: "chat_message",
+        id: "for-member",
+        body: "members only",
+        conversationId: "chan-secret",
+      });
+
+      // A second member client reconnects and syncs — it SHOULD recover the body.
+      const reconnecting = connectAuthed("raynor");
+      reconnecting._receiveMessage({ type: "sync", lastSeqSeen: 0 });
+
+      const syncResp = reconnecting.findSent("sync_response");
+      expect(syncResp).toBeDefined();
+      const missed = (syncResp!.missed ?? []) as Record<string, unknown>[];
+      expect(missed.some((m) => m.id === "for-member")).toBe(true);
+    });
+
+    it("should still replay non-conversation messages (e.g. DM broadcasts) to any client via sync", async () => {
+      const mod = await loadModule();
+      mod.initWebSocketServer({} as import("http").Server);
+      mod.setConversationStore(makeConversationStore({}) as never);
+
+      // A global (non-conversation-scoped) broadcast — has no conversationId,
+      // so it carries no membership requirement and must remain replayable.
+      mod.wsBroadcast({ type: "chat_message", id: "global-1", body: "hello all" });
+
+      const anyClient = connectAuthed("user");
+      anyClient._receiveMessage({ type: "sync", lastSeqSeen: 0 });
+
+      const syncResp = anyClient.findSent("sync_response");
+      expect(syncResp).toBeDefined();
+      const missed = (syncResp!.missed ?? []) as Record<string, unknown>[];
+      expect(missed.some((m) => m.id === "global-1")).toBe(true);
+    });
+
+    it("should fail closed: drop conversation-scoped replay when no conversation store is configured", async () => {
+      const mod = await loadModule();
+      mod.initWebSocketServer({} as import("http").Server);
+      // No conversation store set, but a conversation-scoped message somehow sits
+      // in the buffer (defense in depth). Sync must not leak it.
+      mod.wsBroadcast({
+        type: "chat_message",
+        id: "orphan-conv",
+        body: "x",
+        conversationId: "chan-secret",
+      });
+
+      const client = connectAuthed("user");
+      client._receiveMessage({ type: "sync", lastSeqSeen: 0 });
+
+      const syncResp = client.findSent("sync_response");
+      expect(syncResp).toBeDefined();
+      const missed = (syncResp!.missed ?? []) as Record<string, unknown>[];
+      expect(missed.some((m) => m.id === "orphan-conv")).toBe(false);
+    });
+  });
 });
