@@ -50,6 +50,27 @@ green() { printf "\033[32m%s\033[0m\n" "$1"; }
 yellow() { printf "\033[33m%s\033[0m\n" "$1"; }
 red() { printf "\033[31m%s\033[0m\n" "$1"; }
 
+# initial_bd_ok: does `bd` actually work right now, BEFORE we touch anything?
+# bd can serve requests via embedded mode even when no dolt sql-server process
+# is running, so server-process discovery alone gives false "unhealthy" verdicts.
+# This is the doctor's real health gate. Test seam: BD_DOCTOR_INITIAL_BD_OK=1
+# forces healthy, =0 forces broken; unset → real probe.
+initial_bd_ok() {
+  case "${BD_DOCTOR_INITIAL_BD_OK:-}" in
+    1) return 0 ;;
+    0) return 1 ;;
+    *) bd list --limit 1 --status open >/dev/null 2>&1 ;;
+  esac
+}
+
+# bd_ok: post-repair health probe. The BD_DOCTOR_SKIP_BD_VERIFY test seam bypasses
+# the real `bd` CLI (an external dependency) so the repair logic can be exercised
+# in isolation. Unset in production — real runs always probe bd.
+bd_ok() {
+  [ -n "${BD_DOCTOR_SKIP_BD_VERIFY:-}" ] && return 0
+  bd list --limit 1 --status open >/dev/null 2>&1
+}
+
 # ── Phase 1: gather facts ─────────────────────────────────────────────────────
 PORT_FILE_VAL=""
 PID_FILE_VAL=""
@@ -60,33 +81,56 @@ echo "bd-doctor: repo=$REPO_ROOT"
 echo "  port file: ${PORT_FILE_VAL:-<missing>}"
 echo "  pid  file: ${PID_FILE_VAL:-<missing>}"
 
-# Find ALL dolt sql-server processes
-ALL_DOLTS=$(ps -axo pid,command 2>/dev/null | grep -E "dolt sql-server" | grep -v grep | awk '{print $1}' | head -10)
-if [ -z "$ALL_DOLTS" ]; then
-  red "FAIL: no dolt sql-server process running anywhere"
-  echo "  Recovery: re-init bd (bd init) or restart your dev environment."
-  exit 1
+# ── Phase 1.5: if bd already works, the system is healthy regardless of dolt
+# server topology (bd may be using embedded mode). The doctor only intervenes
+# when bd is actually broken — otherwise it would cry wolf and prompt needless
+# restarts. This makes the verdict match what the user actually experiences.
+if initial_bd_ok; then
+  green "bd CLI is healthy — nothing to do."
+  exit 0
 fi
+yellow "bd CLI is NOT responding — investigating dolt server state..."
 
-# For each dolt process, figure out its data directory (--data-dir flag or CWD)
-# and the port it's listening on.
-echo "  found dolt processes:"
 ADJUTANT_DOLT_PID=""
 ADJUTANT_DOLT_PORT=""
-for pid in $ALL_DOLTS; do
-  # Listening port — `-a` is REQUIRED so `-p` ANDs with `-iTCP -sTCP:LISTEN`.
-  # Without `-a`, lsof ORs the selectors and returns ALL processes' ports too.
-  # Also filter by $2 == pid as belt-and-braces.
-  port="$(lsof -anP -p "$pid" -iTCP -sTCP:LISTEN 2>/dev/null | awk -v p="$pid" '$2 == p {split($9, a, ":"); print a[length(a)]; exit}')"
-  # CWD as a proxy for which project this dolt belongs to (dolt typically chdirs to data-dir)
-  pwdir="$(lsof -p "$pid" 2>/dev/null | awk -v p="$pid" '$2 == p && $4 == "cwd" {print $NF; exit}')"
-  echo "    pid=$pid port=${port:-?} cwd=${pwdir:-?}"
-  # Heuristic: dolt for THIS project should have cwd containing .beads/dolt or be the .beads dir
-  if [ -n "$pwdir" ] && [[ "$pwdir" == "$BD_DIR"* ]]; then
-    ADJUTANT_DOLT_PID="$pid"
-    ADJUTANT_DOLT_PORT="$port"
+
+# Test seam: BD_DOCTOR_DOLT_OVERRIDE="<pid> <port> <cwd>" injects the discovered
+# dolt server, bypassing the ps/lsof scan (external deps). Unset in production.
+if [ -n "${BD_DOCTOR_DOLT_OVERRIDE:-}" ]; then
+  read -r _ovr_pid _ovr_port _ovr_cwd <<< "$BD_DOCTOR_DOLT_OVERRIDE"
+  echo "  found dolt processes (override):"
+  echo "    pid=${_ovr_pid:-?} port=${_ovr_port:-?} cwd=${_ovr_cwd:-?}"
+  if [ -n "${_ovr_cwd:-}" ] && [[ "$_ovr_cwd" == "$BD_DIR"* ]]; then
+    ADJUTANT_DOLT_PID="$_ovr_pid"
+    ADJUTANT_DOLT_PORT="$_ovr_port"
   fi
-done
+else
+  # Find ALL dolt sql-server processes
+  ALL_DOLTS=$(ps -axo pid,command 2>/dev/null | grep -E "dolt sql-server" | grep -v grep | awk '{print $1}' | head -10)
+  if [ -z "$ALL_DOLTS" ]; then
+    red "FAIL: no dolt sql-server process running anywhere"
+    echo "  Recovery: re-init bd (bd init) or restart your dev environment."
+    exit 1
+  fi
+
+  # For each dolt process, figure out its data directory (--data-dir flag or CWD)
+  # and the port it's listening on.
+  echo "  found dolt processes:"
+  for pid in $ALL_DOLTS; do
+    # Listening port — `-a` is REQUIRED so `-p` ANDs with `-iTCP -sTCP:LISTEN`.
+    # Without `-a`, lsof ORs the selectors and returns ALL processes' ports too.
+    # Also filter by $2 == pid as belt-and-braces.
+    port="$(lsof -anP -p "$pid" -iTCP -sTCP:LISTEN 2>/dev/null | awk -v p="$pid" '$2 == p {split($9, a, ":"); print a[length(a)]; exit}')"
+    # CWD as a proxy for which project this dolt belongs to (dolt typically chdirs to data-dir)
+    pwdir="$(lsof -p "$pid" 2>/dev/null | awk -v p="$pid" '$2 == p && $4 == "cwd" {print $NF; exit}')"
+    echo "    pid=$pid port=${port:-?} cwd=${pwdir:-?}"
+    # Heuristic: dolt for THIS project should have cwd containing .beads/dolt or be the .beads dir
+    if [ -n "$pwdir" ] && [[ "$pwdir" == "$BD_DIR"* ]]; then
+      ADJUTANT_DOLT_PID="$pid"
+      ADJUTANT_DOLT_PORT="$port"
+    fi
+  done
+fi
 
 # ── Phase 2: diagnose ─────────────────────────────────────────────────────────
 if [ -z "$ADJUTANT_DOLT_PID" ]; then
@@ -113,7 +157,7 @@ NEED_FIX=0
 if [ "$NEED_FIX" -eq 0 ]; then
   green "Port/pid files match reality — nothing to fix."
   # Final verification: does bd actually work?
-  if bd list --limit 1 --status open >/dev/null 2>&1; then
+  if bd_ok; then
     green "bd CLI works — system is healthy."
     exit 0
   fi
@@ -133,7 +177,7 @@ green "  wrote .beads/dolt-server.port = $ADJUTANT_DOLT_PORT"
 green "  wrote .beads/dolt-server.pid  = $ADJUTANT_DOLT_PID"
 
 # Verify bd works now
-if bd list --limit 1 --status open >/dev/null 2>&1; then
+if bd_ok; then
   green "bd CLI works — recovery successful."
   exit 0
 fi
