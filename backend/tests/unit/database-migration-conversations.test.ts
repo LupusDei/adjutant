@@ -146,7 +146,9 @@ describe("conversations migration", () => {
   it("should be idempotent when migrations run a second time", async () => {
     const { runMigrations } = await import("../../src/services/database.js");
     // Re-running must not throw and must leave the schema intact.
-    expect(() => runMigrations(db)).not.toThrow();
+    expect(() => {
+      runMigrations(db);
+    }).not.toThrow();
 
     expect(tableExists(db, "conversations")).toBe(true);
     expect(tableExists(db, "conversation_members")).toBe(true);
