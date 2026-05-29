@@ -270,12 +270,23 @@ When QA, Product, or Code Review agents create bug/task beads:
 
 1. The reviewer creates the bead under the epic with proper parent wiring
 2. You (coordinator) decide: assign to an existing engineer who is finishing up, or note it for a follow-up pass
-3. If engineers are still active, assign the fix:
+3. If an engineer is **still actively running** in its worktree, assign the fix:
    ```bash
    bd update <bug-id> --assignee=<engineer-name>
    ```
    Then notify the engineer via `send_message({ to: "<engineer-name>", body: "New fix assigned: <bug-id> — <description>" })`
-4. If all engineers are done, the bugs remain open for a follow-up squad or manual fix
+
+   ⚠️ **WORKTREE RESUME HAZARD (adj-c2bbv)** — do NOT `send_message`/SendMessage a
+   worktree agent that has **already completed/reported done** to make it edit
+   more files. Resuming a finished background worktree agent wakes it in the
+   **main repo** cwd (NOT its worktree), so its Bash file ops silently leak into
+   the shared tree — the adj-iqyqw data-loss mode. Instead, **spawn a fresh
+   worktree agent** for the follow-up fix (`isolation: "worktree"`). Only message
+   agents that are still mid-task (never reported done). If you absolutely must
+   resume a finished agent, instruct it in the message to `cd <its-worktree> &&`
+   before EVERY Bash command and to verify `git status` in the main repo stays
+   clean.
+4. If all engineers are done, spawn a **fresh** worktree agent for the fix, or leave the bugs open for a follow-up squad / manual fix. Do NOT resume a done agent to edit files (see the hazard above).
 
 ### Step 10: Wrap Up
 
@@ -311,6 +322,7 @@ When all engineer tasks are closed and reviewer findings are either fixed or doc
 
 - **Use Claude Code native Agent tool** for ALL spawning — NEVER use `spawn_worker` (Adjutant MCP)
 - **ALWAYS use `isolation: "worktree"`** for every agent that edits files — no exceptions
+- **NEVER SendMessage-resume a COMPLETED worktree agent to edit files (adj-c2bbv)** — a resumed background worktree agent runs in the **main repo** cwd, so its file edits silently leak out of the worktree (data loss). Spawn a fresh worktree agent for follow-up work instead. Only message agents still mid-task. If a resume is unavoidable, the message MUST tell the agent to `cd <its-worktree> &&` before every Bash call and verify the main-repo `git status` stays clean.
 - **NEVER do implementation work as coordinator** — delegate everything
 - **Assign beads BEFORE spawning** — agents must know their work upfront
 - **All communication via Adjutant MCP** — not stdout, not AskUserQuestion
