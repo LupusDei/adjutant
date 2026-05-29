@@ -173,6 +173,57 @@ describe("swarm-service", () => {
       expect(wtPaths).not.toContain("worktrees/worker-1");
     });
 
+    it("should provision node_modules (symlink) into each worktree after creation (adj-pd49t)", async () => {
+      mockBridge.createSession.mockResolvedValue({ success: true, sessionId: "sess-p" });
+
+      const root = "/tmp/project";
+      await createSwarm({
+        projectPath: root,
+        agentCount: 3,
+        baseName: "worker",
+        coordinatorIndex: 0,
+        workspaceType: "worktree",
+      });
+
+      const execMock = execFile as unknown as ReturnType<typeof vi.fn>;
+      const provisioned = execMock.mock.calls
+        .filter((c: unknown[]) => {
+          const a = c[1] as string[];
+          return c[0] === "bash" && a[0] === "scripts/provision-worktree.sh";
+        })
+        .map((c: unknown[]) => (c[1] as string[])[1]);
+
+      // Worktree agents (index > 0) get provisioned; the primary coordinator does not.
+      expect(provisioned).toContain(`${root}/worktrees/worker-2`);
+      expect(provisioned).toContain(`${root}/worktrees/worker-3`);
+      expect(provisioned).not.toContain(`${root}/worktrees/worker-1`);
+    });
+
+    it("should not fail the spawn when worktree provisioning errors (best-effort)", async () => {
+      mockBridge.createSession.mockResolvedValue({ success: true, sessionId: "sess-q" });
+      // Make ONLY the provision script fail; git worktree add still succeeds.
+      (execFile as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+        (cmd: string, args: string[], _opts: unknown, cb: Function) => {
+          if (cmd === "bash" && args[0] === "scripts/provision-worktree.sh") {
+            cb(new Error("provision failed"), "", "boom");
+          } else {
+            cb(null, "", "");
+          }
+        },
+      );
+
+      const result = await createSwarm({
+        projectPath: "/tmp/project",
+        agentCount: 2,
+        baseName: "worker",
+        workspaceType: "worktree",
+      });
+
+      // Provisioning is best-effort — the swarm still succeeds.
+      expect(result.success).toBe(true);
+      expect(result.swarm!.agents).toHaveLength(2);
+    });
+
     it("should handle partial failures gracefully", async () => {
       let callCount = 0;
       mockBridge.createSession.mockImplementation(async () => {

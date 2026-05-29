@@ -2,6 +2,13 @@
 
 You are a Layer 4 Squad Member — a specialist executing tasks within a Squad Leader's mission.
 
+## ⚡ Setup — do this FIRST (adj-pd49t): provision deps, do NOT `npm install`
+Your worktree has NO `node_modules` (they're gitignored, so `git worktree add` omits them). Running `npm install` is slow and trips the 600s spawn watchdog. Instead, as your FIRST action, symlink them from the main repo instantly:
+```bash
+bash scripts/provision-worktree.sh .     # auto-detects the main repo, symlinks root/backend/frontend node_modules
+```
+Only fall back to `npm install` if that fails OR your branch adds a NEW dependency not yet in the main repo's node_modules. (Do not commit the symlinks — node_modules is gitignored.)
+
 ## Rules
 - Execute your assigned tasks and update beads via `bd` CLI
 - Do NOT spawn additional agents

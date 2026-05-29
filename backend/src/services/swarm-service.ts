@@ -68,6 +68,27 @@ function execCommand(
   });
 }
 
+/**
+ * Symlink node_modules from the main repo into a fresh worktree (adj-pd49t) so
+ * the spawned engineer doesn't stall on `npm install` — which trips the 600s
+ * spawn watchdog. Best-effort: a provisioning failure must NOT block the spawn
+ * (the agent can still fall back to `npm install`).
+ */
+async function provisionWorktreeDeps(worktreePath: string, projectPath: string): Promise<void> {
+  try {
+    await execCommand(
+      "bash",
+      ["scripts/provision-worktree.sh", worktreePath, projectPath],
+      projectPath,
+    );
+  } catch (err) {
+    logWarn("Worktree node_modules provisioning failed (agent may need npm install)", {
+      worktreePath,
+      error: String(err),
+    });
+  }
+}
+
 // ============================================================================
 // SwarmService
 // ============================================================================
@@ -132,6 +153,7 @@ export async function createSwarm(config: SwarmConfig): Promise<CreateSwarmResul
     if (workspaceType === "worktree" && i > 0) {
       try {
         await execCommand("git", ["worktree", "add", "-b", branch, `worktrees/${name}`], projectPath);
+        await provisionWorktreeDeps(`${projectPath}/worktrees/${name}`, projectPath);
       } catch (err) {
         errors.push(`Failed to create worktree for ${name}: ${String(err)}`);
         continue;
@@ -209,6 +231,7 @@ export async function addAgentToSwarm(
       ["worktree", "add", "-b", branch, `worktrees/${agentName}`],
       swarm.projectPath
     );
+    await provisionWorktreeDeps(`${swarm.projectPath}/worktrees/${agentName}`, swarm.projectPath);
   } catch (err) {
     return { success: false, error: `Failed to create worktree: ${String(err)}` };
   }
