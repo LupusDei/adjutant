@@ -65,6 +65,26 @@ export function createMessagesRouter(store: MessageStore): Router {
     return res.json(success({ read: true }));
   });
 
+  // GET /api/messages/search — FTS search (must come before /:id).
+  // Scopes by conversationId (preferred, bleed-free) or agentId.
+  router.get("/search", (req, res) => {
+    const q = req.query["q"] as string | undefined;
+    if (!q || q.trim().length === 0) {
+      return res.json(success({ items: [], total: 0 }));
+    }
+    const agentId = req.query["agentId"] as string | undefined;
+    const conversationId = req.query["conversationId"] as string | undefined;
+    const limitStr = req.query["limit"] as string | undefined;
+    const limit = limitStr ? Math.min(Math.max(parseInt(limitStr, 10) || 50, 1), 200) : undefined;
+
+    const opts: Parameters<typeof store.searchMessages>[1] = {};
+    if (conversationId !== undefined) opts.conversationId = conversationId;
+    else if (agentId !== undefined) opts.agentId = agentId;
+    if (limit !== undefined) opts.limit = limit;
+    const items = store.searchMessages(q, opts);
+    return res.json(success({ items, total: items.length }));
+  });
+
   // GET /api/messages
   router.get("/", (req, res) => {
     const agentId = req.query["agentId"] as string | undefined;

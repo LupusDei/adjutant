@@ -19,6 +19,8 @@ import { Router } from "express";
 
 import type { ConversationStore } from "../services/conversation-store.js";
 import { wsBroadcastToConversation } from "../services/ws-server.js";
+import { isAPNsConfigured, sendNotificationToAll } from "../services/apns-service.js";
+import { logWarn } from "../utils/index.js";
 import { success, badRequest, notFound, forbidden } from "../utils/responses.js";
 
 /** The canonical member id for the dashboard operator (the General). */
@@ -114,7 +116,8 @@ export function createChannelsRouter(conversationStore: ConversationStore): Rout
     const senderId = typeof body.senderId === "string" ? body.senderId : USER_MEMBER_ID;
 
     // Enforce membership: non-members get 403, not a generic 500.
-    const isMember = conversationStore.getMembers(id).some((m) => m.memberId === senderId);
+    const members = conversationStore.getMembers(id);
+    const isMember = members.some((m) => m.memberId === senderId);
     if (!isMember) {
       return res.status(403).json(forbidden(`${senderId} is not a member of this channel`));
     }
@@ -139,6 +142,32 @@ export function createChannelsRouter(conversationStore: ConversationStore): Rout
       conversationId: id,
       metadata: message.metadata ?? undefined,
     });
+
+    // adj-164.7.3: notify the operator of channel posts they did not author.
+    // View-time suppression is handled client-side (iOS NotificationService).
+    if (
+      senderId !== USER_MEMBER_ID &&
+      members.some((m) => m.memberId === USER_MEMBER_ID) &&
+      isAPNsConfigured()
+    ) {
+      const truncated = text.length > 200 ? text.slice(0, 197) + "..." : text;
+      sendNotificationToAll({
+        title: conv.title ? `#${conv.title}` : "Channel message",
+        body: `${senderId}: ${truncated}`,
+        sound: "default",
+        category: "CHANNEL_MESSAGE",
+        threadId: id,
+        data: {
+          type: "channel_message",
+          conversationId: id,
+          channelTitle: conv.title ?? undefined,
+          senderId,
+          body: truncated,
+        },
+      }).catch((err) => {
+        logWarn("Failed to send APNS for channel post", { error: String(err), channelId: id });
+      });
+    }
 
     return res.status(201).json(success({ messageId: message.id, timestamp: message.createdAt }));
   });

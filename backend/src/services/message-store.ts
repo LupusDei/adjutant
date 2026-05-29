@@ -53,6 +53,8 @@ interface GetMessagesOptions {
 
 interface SearchOptions {
   agentId?: string | undefined;
+  /** Scope FTS results strictly to one conversation (takes precedence over agentId). */
+  conversationId?: string | undefined;
   limit?: number | undefined;
 }
 
@@ -301,7 +303,12 @@ export function createMessageStore(db: Database.Database): MessageStore {
       const conditions: string[] = ["m.rowid IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)"];
       const params: unknown[] = [sanitized];
 
-      if (opts?.agentId !== undefined) {
+      // conversationId takes precedence: scope strictly to that conversation
+      // (no agent/recipient widening — the same bleed-free contract as getMessages).
+      if (opts?.conversationId !== undefined) {
+        conditions.push("m.conversation_id = ?");
+        params.push(opts.conversationId);
+      } else if (opts?.agentId !== undefined) {
         conditions.push("(m.agent_id = ? OR (m.role = 'user' AND m.recipient = ?))");
         params.push(opts.agentId, opts.agentId);
       }
