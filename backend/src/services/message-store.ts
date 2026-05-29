@@ -12,6 +12,7 @@ export interface Message {
   deliveryStatus: "pending" | "sent" | "delivered" | "read" | "failed";
   eventType: string | null;
   threadId: string | null;
+  conversationId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -33,6 +34,7 @@ interface InsertMessageInput {
   metadata?: Record<string, unknown>;
   sessionId?: string;
   threadId?: string;
+  conversationId?: string;
   eventType?: string;
 }
 
@@ -40,6 +42,7 @@ interface GetMessagesOptions {
   agentId?: string;
   recipient?: string;
   threadId?: string;
+  conversationId?: string;
   sessionId?: string;
   before?: string;
   beforeId?: string;
@@ -77,6 +80,7 @@ interface MessageRow {
   delivery_status: string;
   event_type: string | null;
   thread_id: string | null;
+  conversation_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -101,6 +105,7 @@ function rowToMessage(row: MessageRow): Message {
     deliveryStatus: row.delivery_status as Message["deliveryStatus"],
     eventType: row.event_type,
     threadId: row.thread_id,
+    conversationId: row.conversation_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -132,8 +137,8 @@ export interface MessageStore {
 
 export function createMessageStore(db: Database.Database): MessageStore {
   const insertStmt = db.prepare(`
-    INSERT INTO messages (id, session_id, agent_id, recipient, role, body, metadata, delivery_status, event_type, thread_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, datetime('now'), datetime('now'))
+    INSERT INTO messages (id, session_id, agent_id, recipient, role, body, metadata, delivery_status, event_type, thread_id, conversation_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, datetime('now'), datetime('now'))
   `);
 
   const getByIdStmt = db.prepare("SELECT * FROM messages WHERE id = ?");
@@ -184,6 +189,7 @@ export function createMessageStore(db: Database.Database): MessageStore {
         metadataJson,
         input.eventType ?? null,
         input.threadId ?? null,
+        input.conversationId ?? null,
       );
 
       const row = getByIdStmt.get(id) as MessageRow;
@@ -199,7 +205,14 @@ export function createMessageStore(db: Database.Database): MessageStore {
       const conditions: string[] = [];
       const params: unknown[] = [];
 
-      if (opts.agentId !== undefined) {
+      // conversationId takes precedence: when present, scope strictly to that
+      // conversation and skip the legacy agent/recipient widening that caused
+      // wrong-thread bleed (adj-164). The agentId widening only applies in the
+      // backwards-compatible path where no conversationId is supplied.
+      if (opts.conversationId !== undefined) {
+        conditions.push("conversation_id = ?");
+        params.push(opts.conversationId);
+      } else if (opts.agentId !== undefined) {
         conditions.push("(agent_id = ? OR (role = 'user' AND recipient = ?))");
         params.push(opts.agentId, opts.agentId);
       }
