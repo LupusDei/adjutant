@@ -365,24 +365,39 @@ function handleSync(client: WsClient, msg: WsClientMessage): void {
 /**
  * Authorization check for replaying a buffered message to a client (adj-2jy4u).
  *
- * - Messages with no `conversationId` are unrestricted (DM broadcasts, status,
- *   typing, etc.) and replay to any authenticated client.
- * - Messages scoped to a conversation replay ONLY to members of that
- *   conversation. Membership is resolved via the conversation store; if the
- *   store is unavailable we cannot verify membership, so we fail closed and drop
- *   the conversation-scoped message rather than risk a leak.
+ * The replay buffer is global and mixes three kinds of messages:
+ *  1. No `conversationId` — DM broadcasts (legacy), status, typing, etc.
+ *     Unrestricted; replay to any authenticated client.
+ *  2. DM conversations — also unrestricted at the transport level. DMs are
+ *     intentionally broadcast to ALL authenticated clients (`wsBroadcast`); the
+ *     dashboard scopes them to the open conversation client-side (adj-164.2).
+ *     Gating DM replay on membership would silently drop legitimate DM history.
+ *  3. Channel conversations — the authorization boundary. A channel post may
+ *     ONLY replay to a member of that channel. This is the leak adj-2jy4u
+ *     closes: a non-member previously recovered channel bodies via `sync`.
+ *
+ * Only channel-kind conversations are membership-gated. If a conversation can't
+ * be classified as a channel (DM, or not store-resolvable) we do NOT restrict —
+ * that preserves DM replay and never drops legit history. The channel leak stays
+ * closed because channels are always store-resolvable in production; a storeless
+ * deployment carries only DM traffic, so failing OPEN there cannot leak a channel.
  */
 function clientMayReceive(client: WsClient, msg: WsServerMessage): boolean {
   const conversationId = msg.conversationId;
-  if (conversationId === undefined) return true; // unrestricted
+  if (conversationId === undefined) return true; // unrestricted (no conversation)
 
-  // Fail closed: without a store we cannot prove membership.
-  if (!conversationStore) return false;
+  // Without a store we cannot classify the conversation. DMs (the only
+  // conversation-scoped traffic in a storeless deploy) must still replay.
+  if (!conversationStore) return true;
 
-  const isMember = conversationStore
+  const conversation = conversationStore.getConversation(conversationId);
+
+  // Only channels are membership-gated; DMs and unresolved ids replay freely.
+  if (conversation === null || conversation.kind !== "channel") return true;
+
+  return conversationStore
     .getMembers(conversationId)
     .some((m) => m.memberId === client.identity);
-  return isMember;
 }
 
 function handleAck(client: WsClient, msg: WsClientMessage): void {

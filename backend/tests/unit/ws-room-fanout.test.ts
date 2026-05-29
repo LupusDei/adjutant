@@ -101,12 +101,39 @@ vi.mock("../../src/services/session-bridge.js", () => ({
 }));
 
 // ============================================================================
-// Conversation store stub — returns members per conversation id.
-// Shape matches ConversationStore.getMembers (real row shape, camelCased).
+// Conversation store stub — returns members per conversation id and classifies
+// conversations by kind. Shape matches ConversationStore.getMembers /
+// getConversation (real row shape, camelCased).
+//
+// Kind classification (adj-2jy4u refinement): only channel-kind conversations
+// are membership-gated for sync replay. DMs replay freely (they are broadcast
+// to all authenticated clients and scoped client-side, adj-164.2). The stub
+// derives kind from the id prefix so tests can exercise both branches:
+//   - ids beginning with "dm_" (or any explicit `dmIds` entry) → kind: "dm"
+//   - everything else with a membership entry → kind: "channel"
+//   - ids with no membership entry → not found (getConversation returns null)
 // ============================================================================
 
-function makeConversationStore(membership: Record<string, string[]>) {
+function makeConversationStore(
+  membership: Record<string, string[]>,
+  dmIds: string[] = [],
+) {
+  const isDm = (id: string) => id.startsWith("dm_") || dmIds.includes(id);
   return {
+    getConversation: vi.fn((conversationId: string) => {
+      // Unknown id (no membership entry and not a declared DM) → not found.
+      if (!(conversationId in membership) && !dmIds.includes(conversationId)) {
+        return null;
+      }
+      return {
+        id: conversationId,
+        kind: isDm(conversationId) ? "dm" : "channel",
+        title: null,
+        archived: false,
+        createdAt: "2026-05-29T00:00:00Z",
+        updatedAt: "2026-05-29T00:00:00Z",
+      };
+    }),
     getMembers: vi.fn((conversationId: string) =>
       (membership[conversationId] ?? []).map((memberId) => ({
         conversationId,
@@ -359,16 +386,45 @@ describe("ws-server room-scoped fan-out", () => {
       expect(missed.some((m) => m.id === "global-1")).toBe(true);
     });
 
-    it("should fail closed: drop conversation-scoped replay when no conversation store is configured", async () => {
+    it("should still replay a DM message to the user via sync even when conversation-scoped", async () => {
       const mod = await loadModule();
       mod.initWebSocketServer({} as import("http").Server);
-      // No conversation store set, but a conversation-scoped message somehow sits
-      // in the buffer (defense in depth). Sync must not leak it.
+      // A DM conversation (kind="dm") between "user" and "raynor". DMs are NOT
+      // membership-gated for replay — they are broadcast to all authenticated
+      // clients and scoped client-side (adj-164.2). The refinement must let the
+      // DM body replay even though it carries a conversationId.
+      const dmId = "dm_userraynor";
+      mod.setConversationStore(makeConversationStore({}, [dmId]) as never);
+
       mod.wsBroadcast({
         type: "chat_message",
-        id: "orphan-conv",
+        id: "dm-body",
+        body: "private hello",
+        conversationId: dmId,
+      });
+
+      const user = connectAuthed("user");
+      user._receiveMessage({ type: "sync", lastSeqSeen: 0 });
+
+      const syncResp = user.findSent("sync_response");
+      expect(syncResp).toBeDefined();
+      const missed = (syncResp!.missed ?? []) as Record<string, unknown>[];
+      expect(missed.some((m) => m.id === "dm-body")).toBe(true);
+    });
+
+    it("should still replay a conversation-scoped DM via sync when no conversation store is configured", async () => {
+      const mod = await loadModule();
+      mod.initWebSocketServer({} as import("http").Server);
+      // No conversation store wired (storeless deploy). The only
+      // conversation-scoped traffic in that mode is DMs, which must still
+      // replay — channels are always store-resolvable in production, so failing
+      // OPEN here cannot leak a channel body while it preserves DM history
+      // (adj-2jy4u refinement; the prior fail-closed behavior dropped legit DMs).
+      mod.wsBroadcast({
+        type: "chat_message",
+        id: "storeless-dm",
         body: "x",
-        conversationId: "chan-secret",
+        conversationId: "dm_userraynor",
       });
 
       const client = connectAuthed("user");
@@ -377,7 +433,7 @@ describe("ws-server room-scoped fan-out", () => {
       const syncResp = client.findSent("sync_response");
       expect(syncResp).toBeDefined();
       const missed = (syncResp!.missed ?? []) as Record<string, unknown>[];
-      expect(missed.some((m) => m.id === "orphan-conv")).toBe(false);
+      expect(missed.some((m) => m.id === "storeless-dm")).toBe(true);
     });
   });
 });
