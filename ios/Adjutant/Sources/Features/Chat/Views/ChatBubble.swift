@@ -8,6 +8,13 @@ struct ChatBubble: View {
     let message: PersistentMessage
     let isOutgoing: Bool
 
+    /// First message in a same-sender run — show the sender callsign header
+    /// (incoming) and add extra top spacing to separate runs.
+    var isFirstInGroup: Bool = true
+
+    /// Last message in a same-sender run — show the timestamp / delivery status.
+    var isLastInGroup: Bool = true
+
     /// Whether this message is currently playing audio
     var isPlaying: Bool = false
 
@@ -75,7 +82,8 @@ struct ChatBubble: View {
                     if isOutgoing {
                         deliveryStatusView
                     }
-                    if let date = message.date {
+                    // Only the last message in a same-sender run shows the timestamp.
+                    if isLastInGroup, let date = message.date {
                         Text(formatTimestamp(date))
                             .font(CRTTheme.Typography.font(size: 12))
                             .foregroundColor(theme.dim)
@@ -84,8 +92,9 @@ struct ChatBubble: View {
             }
 
             VStack(alignment: alignment, spacing: CRTTheme.Spacing.xxs) {
-                // Sender label for incoming messages
-                if !isOutgoing {
+                // Sender label for incoming messages — only on the first message
+                // of a same-sender run (parity with web grouping).
+                if !isOutgoing && isFirstInGroup {
                     CRTText(message.senderName.uppercased(), style: .caption, glowIntensity: .subtle)
                         .foregroundColor(senderColor)
                 }
@@ -145,8 +154,9 @@ struct ChatBubble: View {
             }
 
             if !isOutgoing {
-                // Timestamp to the right of incoming bubbles
-                if let date = message.date {
+                // Timestamp to the right of incoming bubbles — only on the last
+                // message of a same-sender run.
+                if isLastInGroup, let date = message.date {
                     Text(formatTimestamp(date))
                         .font(CRTTheme.Typography.font(size: 12))
                         .foregroundColor(theme.dim)
@@ -155,6 +165,8 @@ struct ChatBubble: View {
             }
         }
         .padding(.horizontal, CRTTheme.Spacing.sm)
+        // Extra separation only between runs; within a run bubbles sit closer.
+        .padding(.top, isFirstInGroup ? CRTTheme.Spacing.xs : 0)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(isOutgoing ? "You" : message.senderName): \(message.body)")
     }
