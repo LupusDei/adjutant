@@ -55,19 +55,6 @@ let db: Database.Database;
 let messageStore: MessageStore;
 let conversationStore: ConversationStore;
 
-/** Register channel tools against a stub server, capturing handlers by name. */
-function registerCaptured(): Map<string, Function> {
-  const handlers = new Map<string, Function>();
-  const mockServer = {
-    tool: (name: string, _schema: unknown, handler: Function) => {
-      handlers.set(name, handler);
-    },
-  } as never;
-  // Imported lazily inside tests after mocks are in place.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  return handlers;
-}
-
 beforeEach(() => {
   db = new Database(":memory:");
   db.pragma("foreign_keys = ON");
@@ -84,7 +71,7 @@ afterEach(() => {
 
 async function getHandlers(): Promise<Map<string, Function>> {
   const { registerChannelTools } = await import("../../src/services/mcp-tools/channels.js");
-  const handlers = registerCaptured();
+  const handlers = new Map<string, Function>();
   const mockServer = {
     tool: (name: string, _schema: unknown, handler: Function) => {
       handlers.set(name, handler);

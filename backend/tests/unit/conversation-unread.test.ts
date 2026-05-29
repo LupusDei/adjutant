@@ -66,7 +66,9 @@ describe("ConversationStore.markConversationRead", () => {
 
   it("should be a no-op for a member not in the conversation", () => {
     const channel = store.createChannel({ title: "team", createdBy: "user" });
-    expect(() => store.markConversationRead(channel.id, "ghost", "2026-05-29T12:00:00Z")).not.toThrow();
+    expect(() => {
+      store.markConversationRead(channel.id, "ghost", "2026-05-29T12:00:00Z");
+    }).not.toThrow();
     const ghost = store.getMembers(channel.id).find((m) => m.memberId === "ghost");
     expect(ghost).toBeUndefined();
   });

@@ -118,16 +118,16 @@ describe("ConversationStore.joinChannel", () => {
   });
 
   it("should throw when the channel does not exist", () => {
-    expect(() =>
-      store.joinChannel("no-such-channel", { memberId: "raynor", memberKind: "agent" }),
-    ).toThrow();
+    expect(() => {
+      store.joinChannel("no-such-channel", { memberId: "raynor", memberKind: "agent" });
+    }).toThrow();
   });
 
   it("should throw when the target conversation is a DM, not a channel", () => {
     const dm = store.getOrCreateDm("user", "raynor");
-    expect(() =>
-      store.joinChannel(dm.id, { memberId: "kerrigan", memberKind: "agent" }),
-    ).toThrow();
+    expect(() => {
+      store.joinChannel(dm.id, { memberId: "kerrigan", memberKind: "agent" });
+    }).toThrow();
   });
 });
 
@@ -143,12 +143,16 @@ describe("ConversationStore.leaveChannel", () => {
 
   it("should be a no-op when removing a non-member", () => {
     const channel = store.createChannel({ title: "team", createdBy: "user" });
-    expect(() => store.leaveChannel(channel.id, "ghost")).not.toThrow();
+    expect(() => {
+      store.leaveChannel(channel.id, "ghost");
+    }).not.toThrow();
     expect(store.getMembers(channel.id)).toHaveLength(1);
   });
 
   it("should throw when the channel does not exist", () => {
-    expect(() => store.leaveChannel("no-such-channel", "raynor")).toThrow();
+    expect(() => {
+      store.leaveChannel("no-such-channel", "raynor");
+    }).toThrow();
   });
 });
 

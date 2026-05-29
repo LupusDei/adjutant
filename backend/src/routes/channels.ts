@@ -54,7 +54,7 @@ export function createChannelsRouter(conversationStore: ConversationStore): Rout
   router.post("/:id/join", (req, res) => {
     const { id } = req.params;
     const conv = conversationStore.getConversation(id);
-    if (conv === null || conv.kind !== "channel") {
+    if (conv?.kind !== "channel") {
       return res.status(404).json(notFound("Channel", id));
     }
 
@@ -74,7 +74,7 @@ export function createChannelsRouter(conversationStore: ConversationStore): Rout
   router.post("/:id/leave", (req, res) => {
     const { id } = req.params;
     const conv = conversationStore.getConversation(id);
-    if (conv === null || conv.kind !== "channel") {
+    if (conv?.kind !== "channel") {
       return res.status(404).json(notFound("Channel", id));
     }
 
@@ -92,7 +92,7 @@ export function createChannelsRouter(conversationStore: ConversationStore): Rout
   router.post("/:id/messages", (req, res) => {
     const { id } = req.params;
     const conv = conversationStore.getConversation(id);
-    if (conv === null || conv.kind !== "channel") {
+    if (conv?.kind !== "channel") {
       return res.status(404).json(notFound("Channel", id));
     }
 

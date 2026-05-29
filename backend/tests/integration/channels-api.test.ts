@@ -14,31 +14,24 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// Mock the room-scoped broadcast so the post endpoint can be asserted without a
-// live WebSocket server.
-const mockWsBroadcastToConversation = vi.fn();
-vi.mock("../../src/services/ws-server.js", () => ({
-  wsBroadcastToConversation: (...args: unknown[]) => mockWsBroadcastToConversation(...args),
-}));
-
-// eslint-disable-next-line import/first
 import express, { type Express } from "express";
-// eslint-disable-next-line import/first
 import Database from "better-sqlite3";
-// eslint-disable-next-line import/first
 import supertest from "supertest";
 
-// eslint-disable-next-line import/first
 import { runMigrations } from "../../src/services/database.js";
-// eslint-disable-next-line import/first
 import { createMessageStore, type MessageStore } from "../../src/services/message-store.js";
-// eslint-disable-next-line import/first
 import {
   createConversationStore,
   type ConversationStore,
 } from "../../src/services/conversation-store.js";
-// eslint-disable-next-line import/first
 import { createChannelsRouter } from "../../src/routes/channels.js";
+
+// Mock the room-scoped broadcast so the post endpoint can be asserted without a
+// live WebSocket server. `vi.mock` is hoisted above the imports by vitest.
+const mockWsBroadcastToConversation = vi.fn();
+vi.mock("../../src/services/ws-server.js", () => ({
+  wsBroadcastToConversation: (...args: unknown[]) => mockWsBroadcastToConversation(...args),
+}));
 
 let app: Express;
 let db: Database.Database;

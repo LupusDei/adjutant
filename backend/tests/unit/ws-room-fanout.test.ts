@@ -184,7 +184,9 @@ describe("ws-server room-scoped fan-out", () => {
       mod.setConversationStore(makeConversationStore({}) as never);
 
       const ws = connectAuthed("user");
-      expect(() => ws._receiveMessage({ type: "subscribe" })).not.toThrow();
+      expect(() => {
+        ws._receiveMessage({ type: "subscribe" });
+      }).not.toThrow();
     });
   });
 
@@ -268,9 +270,9 @@ describe("ws-server room-scoped fan-out", () => {
       const ws = connectAuthed("user");
       ws._receiveMessage({ type: "subscribe", conversationId: "chan-1" });
 
-      expect(() =>
-        mod.wsBroadcastToConversation("chan-1", { type: "chat_message", id: "x", body: "y" }),
-      ).not.toThrow();
+      expect(() => {
+        mod.wsBroadcastToConversation("chan-1", { type: "chat_message", id: "x", body: "y" });
+      }).not.toThrow();
       expect(ws.findAllSent("chat_message")).toHaveLength(0);
     });
   });
