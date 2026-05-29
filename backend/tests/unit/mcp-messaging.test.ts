@@ -13,10 +13,12 @@ vi.mock("../../src/utils/index.js", () => ({
   logDebug: vi.fn(),
 }));
 
-// Mock wsBroadcast
+// Mock wsBroadcast + wsBroadcastToConversation (channel room-scoped fan-out)
 const mockWsBroadcast = vi.fn();
+const mockWsBroadcastToConversation = vi.fn();
 vi.mock("../../src/services/ws-server.js", () => ({
   wsBroadcast: mockWsBroadcast,
+  wsBroadcastToConversation: mockWsBroadcastToConversation,
 }));
 
 // Mock APNS
@@ -426,6 +428,151 @@ describe("MCP Messaging Tools", () => {
 
       const data = JSON.parse(result.content[0].text);
       expect(data.error).toBe("Unknown session");
+    });
+  });
+
+  // ========================================================================
+  // send_message channel-post branch (adj-wp9lx)
+  //
+  // When a `conversationId` is supplied AND a conversation store is wired,
+  // send_message takes the channel-post path: it persists via
+  // conversationStore.postToChannel (which enforces membership at the data
+  // layer) and fans out room-scoped via wsBroadcastToConversation — NOT the
+  // global wsBroadcast. A non-member must be rejected with a structured error
+  // and trigger no broadcast at all.
+  //
+  // We wire a REAL ConversationStore over the same in-memory DB so membership
+  // enforcement is genuinely exercised (no hand-mocked authorization).
+  // ========================================================================
+  describe("send_message channel-post branch", () => {
+    async function makeConversationStore() {
+      const { createConversationStore } = await import("../../src/services/conversation-store.js");
+      return createConversationStore(db, store);
+    }
+
+    function registerWithChannel(conversationStore: unknown) {
+      const handlers = new Map<string, Function>();
+      const mockServer = {
+        tool: (name: string, _schema: unknown, handler: Function) => {
+          handlers.set(name, handler);
+        },
+      } as never;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test wiring of optional store param
+      return { handlers, mockServer, conversationStore: conversationStore as any };
+    }
+
+    it("should post to the channel and fan out room-scoped when sender is a member", async () => {
+      const { registerMessagingTools } = await import("../../src/services/mcp-tools/messaging.js");
+      const convStore = await makeConversationStore();
+
+      // raynor creates a channel (becomes owner/member).
+      mockGetAgentBySession.mockReturnValue("raynor");
+      const channel = convStore.createChannel({ title: "war-room", createdBy: "raynor" });
+
+      const { handlers, mockServer } = registerWithChannel(convStore);
+      registerMessagingTools(mockServer, store, undefined, convStore);
+
+      const handler = handlers.get("send_message")!;
+      const result = await handler(
+        { to: "channel", body: "status: green", conversationId: channel.id },
+        { sessionId: "mcp-session-1" },
+      );
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.messageId).toBeTruthy();
+      expect(data.conversationId).toBe(channel.id);
+
+      // Persisted into the channel conversation, reachable by conversationId.
+      const stored = store.getMessages({ conversationId: channel.id });
+      expect(stored.some((m) => m.body === "status: green" && m.agentId === "raynor")).toBe(true);
+
+      // Fan-out is room-scoped, NOT global.
+      expect(mockWsBroadcastToConversation).toHaveBeenCalledTimes(1);
+      const [convId, msg] = mockWsBroadcastToConversation.mock.calls[0];
+      expect(convId).toBe(channel.id);
+      expect(msg.type).toBe("chat_message");
+      expect(msg.body).toBe("status: green");
+      expect(msg.from).toBe("raynor");
+      expect(msg.conversationId).toBe(channel.id);
+      expect(mockWsBroadcast).not.toHaveBeenCalled();
+    });
+
+    it("should return a structured error and NOT broadcast when sender is not a member", async () => {
+      const { registerMessagingTools } = await import("../../src/services/mcp-tools/messaging.js");
+      const convStore = await makeConversationStore();
+
+      // Channel owned by raynor; the sender "intruder" is NOT a member.
+      const channel = convStore.createChannel({ title: "secret", createdBy: "raynor" });
+      mockGetAgentBySession.mockReturnValue("intruder");
+
+      const { handlers, mockServer } = registerWithChannel(convStore);
+      registerMessagingTools(mockServer, store, undefined, convStore);
+
+      const handler = handlers.get("send_message")!;
+      const result = await handler(
+        { to: "channel", body: "let me in", conversationId: channel.id },
+        { sessionId: "mcp-session-2" },
+      );
+
+      const data = JSON.parse(result.content[0].text);
+      // Structured error surfaced (postToChannel throws on non-member).
+      expect(data.error).toBeTruthy();
+      expect(typeof data.error).toBe("string");
+      expect(data.error).toContain("intruder");
+      expect(data.messageId).toBeUndefined();
+
+      // No persistence, no fan-out of any kind.
+      const stored = store.getMessages({ conversationId: channel.id });
+      expect(stored.some((m) => m.body === "let me in")).toBe(false);
+      expect(mockWsBroadcastToConversation).not.toHaveBeenCalled();
+      expect(mockWsBroadcast).not.toHaveBeenCalled();
+    });
+
+    it("should return a structured error for a non-existent channel id", async () => {
+      const { registerMessagingTools } = await import("../../src/services/mcp-tools/messaging.js");
+      const convStore = await makeConversationStore();
+      mockGetAgentBySession.mockReturnValue("raynor");
+
+      const { handlers, mockServer } = registerWithChannel(convStore);
+      registerMessagingTools(mockServer, store, undefined, convStore);
+
+      const handler = handlers.get("send_message")!;
+      const result = await handler(
+        { to: "channel", body: "ghost post", conversationId: "does-not-exist" },
+        { sessionId: "mcp-session-1" },
+      );
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBeTruthy();
+      expect(data.messageId).toBeUndefined();
+      expect(mockWsBroadcastToConversation).not.toHaveBeenCalled();
+      expect(mockWsBroadcast).not.toHaveBeenCalled();
+    });
+
+    it("should fall back to the DM path (global broadcast) when no conversation store is wired", async () => {
+      const { registerMessagingTools } = await import("../../src/services/mcp-tools/messaging.js");
+      mockGetAgentBySession.mockReturnValue("raynor");
+
+      const handlers = new Map<string, Function>();
+      const mockServer = {
+        tool: (name: string, _schema: unknown, handler: Function) => {
+          handlers.set(name, handler);
+        },
+      } as never;
+
+      // No conversation store passed (4th arg omitted): even with a
+      // conversationId, the channel branch is skipped and the legacy DM path
+      // runs (global broadcast). This guards the branch condition.
+      registerMessagingTools(mockServer, store);
+
+      const handler = handlers.get("send_message")!;
+      await handler(
+        { to: "user", body: "dm fallback", conversationId: "chan-x" },
+        { sessionId: "mcp-session-1" },
+      );
+
+      expect(mockWsBroadcastToConversation).not.toHaveBeenCalled();
+      expect(mockWsBroadcast).toHaveBeenCalledTimes(1);
     });
   });
 
