@@ -16,6 +16,7 @@ import { initMcpServer, setToolRegistrar, getAgentBySession } from "./services/m
 import { initDatabase } from "./services/database.js";
 import { createMessageStore } from "./services/message-store.js";
 import { registerMessagingTools } from "./services/mcp-tools/messaging.js";
+import { registerChannelTools } from "./services/mcp-tools/channels.js";
 import { registerStatusTools } from "./services/mcp-tools/status.js";
 import { registerBeadTools } from "./services/mcp-tools/beads.js";
 import { registerQueryTools } from "./services/mcp-tools/queries.js";
@@ -334,7 +335,8 @@ const server = app.listen(PORT, () => {
   // connecting agent gets a fully-tooled MCP server.
   // (adj-083 Bug 1: fixes race where agent gets zero tools)
   setToolRegistrar((server) => {
-    registerMessagingTools(server, messageStore, eventStore);
+    registerMessagingTools(server, messageStore, eventStore, conversationStore);
+    registerChannelTools(server, conversationStore);
     registerStatusTools(server, messageStore, eventStore);
     registerBeadTools(server, eventStore, proposalStore, messageDb);
     registerQueryTools(server, messageStore);

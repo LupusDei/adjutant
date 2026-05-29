@@ -8,33 +8,102 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { MessageStore } from "../message-store.js";
-import { wsBroadcast } from "../ws-server.js";
+import { wsBroadcast, wsBroadcastToConversation } from "../ws-server.js";
 import { getAgentBySession } from "../mcp-server.js";
 import { isAPNsConfigured, sendNotificationToAll } from "../apns-service.js";
 import { logInfo, logWarn } from "../../utils/index.js";
 import type { EventStore } from "../event-store.js";
+import type { ConversationStore } from "../conversation-store.js";
 
 /**
  * Register all messaging MCP tools on the given server.
+ *
+ * @param conversationStore - when provided, `send_message` with a `conversationId`
+ *   routes the message into that conversation (channel post) with room-scoped
+ *   fan-out instead of the legacy global broadcast.
  */
-export function registerMessagingTools(server: McpServer, store: MessageStore, eventStore?: EventStore): void {
+export function registerMessagingTools(
+  server: McpServer,
+  store: MessageStore,
+  eventStore?: EventStore,
+  conversationStore?: ConversationStore,
+): void {
   // ========================================================================
   // send_message
   // ========================================================================
   server.tool(
     "send_message",
     {
-      to: z.string().describe("Recipient: 'user', 'mayor/', or agent name"),
+      to: z.string().describe("Recipient: 'user', 'mayor/', agent name, or channel/conversation id"),
       body: z.string().describe("Message body"),
       threadId: z.string().optional().describe("Thread ID for conversation grouping"),
+      conversationId: z.string().optional().describe("Target conversation/channel id (channel post)"),
       metadata: z.record(z.string(), z.unknown()).optional().describe("Optional metadata"),
     },
-    async ({ to, body, threadId, metadata }, extra) => {
+    async ({ to, body, threadId, conversationId, metadata }, extra) => {
       const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
       if (!agentId) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: "Unknown session" }) }],
         };
+      }
+
+      // Channel post path: when a conversationId is supplied and a conversation
+      // store is wired, persist + fan out room-scoped. Membership is enforced in
+      // postToChannel, so non-members are rejected here rather than leaking.
+      if (conversationId !== undefined && conversationStore !== undefined) {
+        try {
+          const postInput: Parameters<typeof conversationStore.postToChannel>[0] = {
+            channelId: conversationId,
+            senderId: agentId,
+            body,
+          };
+          if (metadata !== undefined) postInput.metadata = metadata;
+          const channelMessage = conversationStore.postToChannel(postInput);
+
+          logInfo("MCP send_message (channel)", { agentId, conversationId, messageId: channelMessage.id });
+
+          wsBroadcastToConversation(conversationId, {
+            type: "chat_message",
+            id: channelMessage.id,
+            from: agentId,
+            to,
+            body: channelMessage.body,
+            timestamp: channelMessage.createdAt,
+            conversationId,
+            metadata: channelMessage.metadata ?? undefined,
+          });
+
+          eventStore?.insertEvent({
+            eventType: "message_sent",
+            agentId,
+            action: `Channel post to ${conversationId}`,
+            detail: { conversationId },
+            messageId: channelMessage.id,
+          });
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  messageId: channelMessage.id,
+                  timestamp: channelMessage.createdAt,
+                  conversationId,
+                }),
+              },
+            ],
+          };
+        } catch (err) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
+              },
+            ],
+          };
+        }
       }
 
       // 1. Store the message
