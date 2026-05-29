@@ -13,7 +13,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useChatMessages } from '../../../src/hooks/useChatMessages';
+import { useChatMessages, DEFAULT_COORDINATOR_AGENT_ID } from '../../../src/hooks/useChatMessages';
 
 // Mock the api module — conversation contract + send/markRead.
 vi.mock('../../../src/services/api', () => {
@@ -47,6 +47,8 @@ import type { ChatMessage, Conversation, PaginatedResponse } from '../../../src/
 const DM_ID: Record<string, string> = {
   'agent-1': 'dm_agent1',
   'agent-2': 'dm_agent2',
+  // adj-ropat: the no-agent default view resolves to the coordinator DM.
+  [DEFAULT_COORDINATOR_AGENT_ID]: 'dm_coordinator',
 };
 
 function dmFor(agentId: string): Conversation {
@@ -313,7 +315,10 @@ describe('useChatMessages', () => {
       expect(result.current.messages).toHaveLength(0);
     });
 
-    it('should drop all WS messages when no agentId is set (no open conversation)', async () => {
+    it('should scope WS delivery to the coordinator DM when no agentId is set', async () => {
+      // adj-ropat: the default (no-agent) view now resolves to the coordinator
+      // DM, so WS messages on that conversation are delivered — and messages
+      // on an unrelated conversation are still dropped.
       let subscriberCallback: ((msg: unknown) => void) | undefined;
       mockSubscribe.mockImplementation((cb: unknown) => {
         subscriberCallback = cb as (msg: unknown) => void;
@@ -326,9 +331,10 @@ describe('useChatMessages', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
+      // A message on a different conversation is dropped.
       act(() => {
         subscriberCallback!({
-          id: 'msg-any',
+          id: 'msg-other',
           from: 'agent-1',
           to: 'user',
           body: 'From agent 1',
@@ -336,9 +342,81 @@ describe('useChatMessages', () => {
           conversationId: 'dm_agent1',
         });
       });
-
-      // With no agent selected there is no conversation to scope to.
       expect(result.current.messages).toHaveLength(0);
+
+      // A message on the coordinator DM is delivered.
+      act(() => {
+        subscriberCallback!({
+          id: 'msg-coord',
+          from: DEFAULT_COORDINATOR_AGENT_ID,
+          to: 'user',
+          body: 'From coordinator',
+          timestamp: '2026-02-21T10:06:00Z',
+          conversationId: 'dm_coordinator',
+        });
+      });
+      expect(result.current.messages).toHaveLength(1);
+      expect(result.current.messages[0]!.body).toBe('From coordinator');
+    });
+  });
+
+  describe('default view (no agentId) → coordinator DM (adj-ropat)', () => {
+    it('should resolve the coordinator DM when no agentId is provided', async () => {
+      const { result } = renderHook(() => useChatMessages());
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Resolves a real DM with the coordinator — never the empty user↔user view.
+      expect(getDm()).toHaveBeenCalledWith(DEFAULT_COORDINATOR_AGENT_ID);
+      expect(result.current.conversationId).toBe('dm_coordinator');
+    });
+
+    it('should load the coordinator DM history when no agentId is provided', async () => {
+      const coordMsg = makeChatMessage({
+        agentId: DEFAULT_COORDINATOR_AGENT_ID,
+        conversationId: 'dm_coordinator',
+        body: 'Coordinator history',
+      });
+      listMessages().mockImplementation((conversationId: string) =>
+        Promise.resolve(
+          mockListResponse(conversationId === 'dm_coordinator' ? [coordMsg] : []),
+        ),
+      );
+
+      const { result } = renderHook(() => useChatMessages());
+
+      await waitFor(() => {
+        expect(result.current.messages).toHaveLength(1);
+      });
+      expect(result.current.messages[0]!.body).toBe('Coordinator history');
+      expect(listMessages()).toHaveBeenCalledWith('dm_coordinator', expect.anything());
+    });
+
+    it('should route a send to the coordinator DM when no agentId is provided', async () => {
+      vi.mocked(api.messages.send).mockResolvedValue({
+        messageId: 'srv-coord-1',
+        timestamp: '2026-02-21T10:07:00Z',
+      });
+
+      const { result } = renderHook(() => useChatMessages());
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.sendMessage('Hello coordinator');
+      });
+
+      // The send targets the coordinator, NOT the dead user↔user default.
+      expect(api.messages.send).toHaveBeenCalledWith(
+        expect.objectContaining({ to: DEFAULT_COORDINATOR_AGENT_ID, body: 'Hello coordinator' }),
+      );
+      const sent = result.current.messages.find((m) => m.body === 'Hello coordinator');
+      expect(sent).toBeDefined();
+      expect(sent!.recipient).toBe(DEFAULT_COORDINATOR_AGENT_ID);
     });
   });
 
@@ -610,17 +688,19 @@ describe('useChatMessages', () => {
   });
 
   describe('no agentId', () => {
-    it('should be empty and idle when no agentId provided', async () => {
+    it('should resolve and fetch the coordinator DM when no agentId provided (adj-ropat)', async () => {
       const { result } = renderHook(() => useChatMessages());
 
       await waitFor(() => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      // No agent → no conversation to scope to → no resolution or fetch.
-      expect(getDm()).not.toHaveBeenCalled();
-      expect(listMessages()).not.toHaveBeenCalled();
-      expect(result.current.messages).toHaveLength(0);
+      // No explicit agent → the default view maps to the coordinator DM, a
+      // real conversation that is resolved and fetched (never the empty
+      // user↔user surface that swallowed sends pre-fix).
+      expect(getDm()).toHaveBeenCalledWith(DEFAULT_COORDINATOR_AGENT_ID);
+      expect(listMessages()).toHaveBeenCalledWith('dm_coordinator', expect.anything());
+      expect(result.current.conversationId).toBe('dm_coordinator');
     });
   });
 

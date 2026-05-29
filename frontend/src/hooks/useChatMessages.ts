@@ -12,6 +12,18 @@ import { api } from '../services/api';
 import type { ChatMessage } from '../types';
 import { useCommunicationActions, type IncomingChatMessage } from '../contexts/CommunicationContext';
 
+/**
+ * The agent the default (no-agent-selected) chat view maps to (adj-ropat).
+ *
+ * Pre-overhaul, the "AGENTS" view aggregated coordinator messages. The
+ * conversation model retired that aggregation, which left the default view
+ * resolving to a dead `user↔user` conversation: permanently empty, with sends
+ * routed nowhere visible. Mapping the default to a real DM with the coordinator
+ * restores a live surface — the view is never empty and sends reach the
+ * coordinator.
+ */
+export const DEFAULT_COORDINATOR_AGENT_ID = 'adjutant-coordinator';
+
 /** Delivery status used for optimistic UI on outgoing messages */
 export type OptimisticStatus = 'sending' | 'delivered' | 'failed';
 
@@ -47,6 +59,12 @@ export interface UseChatMessagesResult {
 }
 
 export function useChatMessages(agentId?: string): UseChatMessagesResult {
+  // adj-ropat: an undefined agentId is the default view. Map it to the
+  // coordinator so the conversation is a real, live DM rather than an empty
+  // user↔user surface. Every read/write/real-time path below scopes on this
+  // single resolved id.
+  const effectiveAgentId = agentId ?? DEFAULT_COORDINATOR_AGENT_ID;
+
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -70,18 +88,7 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
     setError(null);
 
     try {
-      if (!agentId) {
-        // No agent selected → nothing to scope to. Clear and idle.
-        if (mountedRef.current) {
-          setConversationId(null);
-          setMessages([]);
-          setHasMore(false);
-          setIsLoading(false);
-        }
-        return;
-      }
-
-      const conversation = await api.conversations.getDm(agentId);
+      const conversation = await api.conversations.getDm(effectiveAgentId);
       if (!mountedRef.current) return;
       setConversationId(conversation.id);
 
@@ -112,7 +119,7 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
         setIsLoading(false);
       }
     }
-  }, [agentId]);
+  }, [effectiveAgentId]);
 
   // Initial fetch and refetch when agentId changes. Clear stale state up front
   // so a switch never momentarily shows the previous agent's messages.
@@ -181,7 +188,7 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
         clientId,
         sessionId: null,
         agentId: 'user',
-        recipient: agentId ?? 'user',
+        recipient: effectiveAgentId,
         role: 'user',
         body,
         metadata: null,
@@ -198,7 +205,7 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
 
       try {
         const params: Parameters<typeof api.messages.send>[0] = {
-          to: agentId ?? 'user',
+          to: effectiveAgentId,
           body,
         };
         if (threadId) params.threadId = threadId;
@@ -234,7 +241,7 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
         throw err;
       }
     },
-    [agentId],
+    [effectiveAgentId],
   );
 
   // Add an optimistic message without sending via HTTP (for WebSocket sends)
@@ -246,7 +253,7 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
         clientId,
         sessionId: null,
         agentId: 'user',
-        recipient: agentId ?? 'user',
+        recipient: effectiveAgentId,
         role: 'user',
         body,
         metadata: null,
@@ -260,7 +267,7 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
       };
       setMessages((prev) => [...prev, optimisticMsg]);
     },
-    [agentId],
+    [effectiveAgentId],
   );
 
   // Confirm delivery of a message sent via WebSocket

@@ -393,7 +393,7 @@ function clientMayReceive(client: WsClient, msg: WsServerMessage): boolean {
   const conversation = conversationStore.getConversation(conversationId);
 
   // Only channels are membership-gated; DMs and unresolved ids replay freely.
-  if (conversation === null || conversation.kind !== "channel") return true;
+  if (conversation?.kind !== "channel") return true;
 
   return conversationStore
     .getMembers(conversationId)
