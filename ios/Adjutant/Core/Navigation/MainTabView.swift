@@ -98,7 +98,7 @@ private struct TabContent: View {
         case .overview:
             SwarmOverviewView()
         case .chat:
-            ChatView(apiClient: AppState.shared.apiClient)
+            ChatShellView(apiClient: AppState.shared.apiClient)
         case .crew:
             AgentListView(apiClient: AppState.shared.apiClient) { member in
                 coordinator.navigateReplacingPath(to: .agentDetail(member: member))
