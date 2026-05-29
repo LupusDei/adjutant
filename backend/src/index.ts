@@ -44,6 +44,8 @@ import { createMemoryReviewer } from "./services/adjutant/behaviors/memory-revie
 import { createSelfImprover } from "./services/adjutant/behaviors/self-improver.js";
 import { createIdleProposalNudge } from "./services/adjutant/behaviors/idle-proposal-nudge.js";
 import { createAutoDevelopLoop } from "./services/adjutant/behaviors/auto-develop-loop.js";
+import { createSoftStallDetector } from "./services/adjutant/behaviors/soft-stall-detector.js";
+import { execFile as execFileForStallDetector } from "child_process";
 import { createAutoDevelopStore } from "./services/auto-develop-store.js";
 import { createMemoryStore } from "./services/adjutant/memory-store.js";
 import { SignalAggregator } from "./services/adjutant/signal-aggregator.js";
@@ -268,6 +270,31 @@ const server = app.listen(PORT, () => {
 
   behaviorRegistry.register(agentLifecycleBehavior);
   behaviorRegistry.register(createHealthMonitorBehavior(projectRoot));
+  // adj-y2vq PART B: detect + auto-recover mid-session soft-stalls.
+  const tmuxForStall = (args: string[]): Promise<string> =>
+    new Promise((resolve) => {
+      execFileForStallDetector("tmux", args, { encoding: "utf8" }, (err, stdout) => {
+        resolve(err ? "" : stdout);
+      });
+    });
+  behaviorRegistry.register(
+    createSoftStallDetector({
+      listSessions: () =>
+        getSessionBridge()
+          .listSessions()
+          .map((s) => ({
+            id: s.id,
+            name: s.name,
+            status: s.status,
+            tmuxPane: s.tmuxPane,
+            lastActivity: new Date(s.lastActivity),
+          })),
+      capturePane: (pane) => tmuxForStall(["capture-pane", "-t", pane, "-p"]),
+      sendEnter: async (pane) => {
+        await tmuxForStall(["send-keys", "-t", pane, "Enter"]);
+      },
+    }),
+  );
   behaviorRegistry.register(createMemoryCollector(memoryStore));
   behaviorRegistry.register(createSessionRetrospective(memoryStore));
   behaviorRegistry.register(createMemoryReviewer(memoryStore));
