@@ -139,4 +139,27 @@ describe('bd-doctor.sh', () => {
     expect(r.status).toBe(1);
     expect(r.stdout + r.stderr).toMatch(/no dolt server is serving the adjutant database/i);
   });
+
+  it('should auto-restart and report success when --restart recovers bd', () => {
+    writePortPid('11111', '99999');
+    const r = run(['--restart'], {
+      BD_DOCTOR_INITIAL_BD_OK: '0', // bd broken initially
+      BD_DOCTOR_DOLT_OVERRIDE: `54321 22222 /some/other/project/.beads`, // no adjutant dolt
+      BD_DOCTOR_RESTART_CMD: 'true', // stub the restart so no real dolt is spawned
+      BD_DOCTOR_SKIP_BD_VERIFY: '1', // post-restart probe succeeds
+    });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/restart succeeded/i);
+  });
+
+  it('should exit 1 when the --restart command itself fails', () => {
+    writePortPid('11111', '99999');
+    const r = run(['--restart'], {
+      BD_DOCTOR_INITIAL_BD_OK: '0',
+      BD_DOCTOR_DOLT_OVERRIDE: `54321 22222 /some/other/project/.beads`,
+      BD_DOCTOR_RESTART_CMD: 'false', // simulate a failing restart
+    });
+    expect(r.status).toBe(1);
+    expect(r.stdout + r.stderr).toMatch(/restart command failed/i);
+  });
 });

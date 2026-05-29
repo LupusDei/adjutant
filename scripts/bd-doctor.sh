@@ -140,10 +140,29 @@ if [ -z "$ADJUTANT_DOLT_PID" ]; then
     echo "  Stale port file still says: $PORT_FILE_VAL (points at $(nc -z 127.0.0.1 "$PORT_FILE_VAL" 2>&1 >/dev/null && echo "a live but wrong-project dolt" || echo "nothing"))"
   fi
   echo ""
+
+  if [ "$RESTART" -eq 1 ]; then
+    # Auto-restart path (adj-zrr1c AC). Test seam: BD_DOCTOR_RESTART_CMD overrides
+    # the restart command so tests don't spawn a real dolt server.
+    restart_cmd="${BD_DOCTOR_RESTART_CMD:-bd dolt start}"
+    yellow "--restart: attempting recovery via: $restart_cmd"
+    if eval "$restart_cmd"; then
+      if bd_ok; then
+        green "Restart succeeded — bd CLI is healthy again."
+        exit 0
+      fi
+      red "Restart ran but bd still fails. Re-run this script to diagnose further."
+      exit 1
+    fi
+    red "Restart command failed: $restart_cmd"
+    exit 1
+  fi
+
   yellow "RECOVERY OPTIONS:"
   echo "  1) Restart full dev stack:   ./scripts/dev.sh"
   echo "  2) Or just bd dolt:          (from $REPO_ROOT) bd dolt start"
-  echo "  3) After bd dolt is running, re-run this script to verify."
+  echo "  3) Or re-run with --restart to do (2) automatically."
+  echo "  4) After bd dolt is running, re-run this script to verify."
   exit 1
 fi
 
