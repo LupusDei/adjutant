@@ -93,3 +93,21 @@ suite, because it has no environmental dependencies.
 - Epic: `adj-139` (frontend performance overhaul)
 - Spec: `specs/054-frontend-performance-overhaul/spec.md` (User Story 5 + Success Criteria SC-001..SC-007)
 - Verification harness bead: `adj-139.6`
+
+## Measured run — adj-164 (Chat / Messaging Overhaul), 2026-05-29
+
+Against a production preview build (`vite build && vite preview --port 4173`) with the
+backend up on :4201, `RUN_PERF=1`:
+
+- **formatter-cache: PASS** — 10,000 formats in **2.78ms** (cached) vs 997.61ms naive
+  (200.3× speedup). The chat message-formatting hot path is well within budget.
+- **leak-overview: PASS** — heap growth **≤ 10MB / 60s** sustained over 3 intervals.
+  No leak introduced by the conversation/channel rework.
+- **keystroke-latency: NOT VERIFIED (harness gap, not a regression)** — the gated
+  Puppeteer test times out interacting with the reworked `CommandChat` (it now mounts a
+  search input AND a message input, plus the coordinator-DM default-view load path), so
+  its generic `input[type="text"], textarea` selector + per-char wait no longer drives the
+  intended message input to completion. The keystroke path itself is unchanged (controlled
+  React input; adj-139 virtualization + memoized `MessageBubble` preserved; 682 frontend
+  unit tests green). Follow-up: **adj-164.7.8** — point the perf test at the message input
+  explicitly (e.g. `.chat-input`) and skip the search bar.
