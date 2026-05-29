@@ -12,7 +12,27 @@ Adjutant is a standalone multi-agent dashboard backed by beads (issue tracking) 
 - **Beads**: Issue tracking via `bd` CLI — epics, tasks, bugs with hierarchical dependencies
 - **Agents**: Connect via MCP SSE, use tools for messaging, status reporting, and bead management
 - **Messages**: Persistent SQLite-backed chat between agents and user, with WebSocket real-time delivery
+- **Conversations**: The unified chat model (adj-164). Every message belongs to one
+  first-class `conversation` with a `kind` discriminator — `dm` (1:1, exactly two
+  members) or `channel` (Slack-style multi-party room). DMs and channels are the SAME
+  entity + a `conversation_members` table, NOT two systems. See "Conversation Model" in
+  `.claude/rules/04-architecture.md` and `specs/055-chat-messaging-overhaul/`.
 - **Dashboard**: Retro terminal themed web UI showing agents, beads, chat, and system state
+
+### Conversation Model (chat — adj-164)
+- **Why**: a stable `messages.conversation_id` is the single scoping key. It replaced the
+  fragile `(agent_id OR (role='user' AND recipient=…))` reconstruction that caused
+  wrong-thread bleed. DMs resolve to a deterministic id (`dmConversationId`/`getOrCreateDm`),
+  so the same pair always maps to the same conversation across REST/WS/MCP.
+- **DMs**: broadcast to all authenticated clients and scoped client-side (per-conversation).
+- **Channels**: room-scoped. `wsBroadcastToConversation` delivers ONLY to member +
+  subscribed clients; the WS sync/replay path is membership-gated for channel kinds
+  (DMs replay freely). MCP tools: `create_channel`, `list_channels`, `join_channel`,
+  `leave_channel`; `send_message` accepts a `conversationId` to post to a channel.
+- **Search**: `searchMessages` accepts `conversationId` for bleed-free FTS scoping
+  (`GET /api/messages/search?q=&conversationId=`).
+- **Platforms**: web (React `CommandChat`/`ChannelView`) and iOS (SwiftUI `ChatView`/
+  `ChannelView`) both scope all reads/writes/real-time by `conversationId`.
 
 ## Pre-Push Verification
 

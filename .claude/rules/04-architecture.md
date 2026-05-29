@@ -65,6 +65,44 @@ Frontend  ←  WebSocket broadcast  ←  wsBroadcast  ←  chat_message event
 User → POST /api/messages → Message Store (SQLite) → wsBroadcast → WebSocket clients
 ```
 
+### Conversation Model & Channels (adj-164)
+
+The unified chat model. One first-class `conversation` entity backs BOTH 1:1 DMs and
+multi-party channels — never build them as two systems (Rule 9).
+
+**Schema** (migration `033-conversations.sql`):
+- `conversations(id, kind['dm'|'channel'], title, archived, created_at, updated_at)`
+- `conversation_members(conversation_id, member_id, member_kind['user'|'agent'], role, joined_at, last_read_at)` — PK `(conversation_id, member_id)`
+- `messages.conversation_id` — every new message sets it; the single scoping key.
+
+**Service**: `backend/src/services/conversation-store.ts`
+- `getOrCreateDm(a, b)` / `dmConversationId(a, b)` — deterministic `dm_<sha1(sorted pair)>`
+  id (order-independent), so a pair maps to the same conversation across REST/WS/MCP.
+- Channel methods: `createChannel`, `listChannels`, `joinChannel`, `leaveChannel`,
+  `postToChannel` (enforces membership), unread via `last_read_at` watermark.
+
+**Routes**: `routes/conversations.ts` (`GET /api/conversations`, `/dm/:agentId`,
+`/:id/messages`) and `routes/channels.ts` (`POST /api/channels`, `GET /api/channels`,
+`/:id/join`, `/:id/leave`, `/:id/messages`).
+
+**MCP tools**: `mcp-tools/channels.ts` (`create_channel`, `list_channels`, `join_channel`,
+`leave_channel`); `send_message` accepts `conversationId` to post to a channel.
+
+**Real-time fan-out** (`ws-server.ts`):
+```
+DM:      wsBroadcast → ALL authenticated clients (scoped client-side by conversationId)
+Channel: wsBroadcastToConversation(id) → ONLY members who are subscribed (fail-closed)
+```
+- WS sync/replay (`clientMayReceive`) gates ONLY channel-kind conversations on membership;
+  DMs replay freely (they are broadcast + client-scoped). This closes the channel
+  sync-replay leak (adj-2jy4u) without dropping DM history.
+- `wsBroadcastToConversation` resolves membership via the conversation store and delivers
+  only to member + subscribed clients. Non-members never receive channel traffic.
+
+**Bleed-free contract**: `getMessages({conversationId})` and `searchMessages({conversationId})`
+scope STRICTLY to one conversation — no agent/recipient widening. Both web and iOS scope
+all reads/writes/real-time by `conversationId`.
+
 ## Key Decisions
 
 1. **MCP for Agent Communication**: Agents connect via MCP SSE and use tools for messaging, status, and beads
