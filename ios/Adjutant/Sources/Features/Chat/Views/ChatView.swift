@@ -9,6 +9,10 @@ struct ChatView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
     @StateObject private var viewModel: ChatViewModel
     @State private var scrollProxy: ScrollViewProxy?
+    /// Whether the bottom sentinel is currently visible — i.e. the user is at
+    /// the newest message. Drives auto-scroll-only-when-at-bottom (web parity).
+    /// Defaults to true so the first paint pins to the latest message.
+    @State private var isAtBottom = true
     @StateObject private var keyboardObserver = KeyboardObserver()
     @State private var showRecipientSelector = false
     @State private var showConnectionDetails = false
@@ -92,6 +96,9 @@ struct ChatView: View {
                 isRecordingVoice: viewModel.isRecordingVoice,
                 canSend: viewModel.canSend,
                 onSend: {
+                    // Sending is an explicit intent to follow the conversation:
+                    // always pin to the bottom regardless of prior scroll state.
+                    isAtBottom = true
                     Task {
                         await viewModel.sendMessage()
                         scrollToBottom()
@@ -125,7 +132,11 @@ struct ChatView: View {
             NotificationService.shared.activeViewingAgentId = nil
         }
         .onChange(of: viewModel.scrollToBottomTrigger) { _, _ in
-            scrollToBottom()
+            // Auto-scroll on new messages only when already at the bottom, so the
+            // timeline never jumps while the user reads history (web parity).
+            if MessageGrouping.shouldAutoScroll(isAtBottom: isAtBottom) {
+                scrollToBottom()
+            }
         }
         .sheet(isPresented: $showConnectionDetails) {
             ConnectionDetailsSheet(
@@ -151,10 +162,14 @@ struct ChatView: View {
         .onChange(of: viewModel.selectedRecipient) { _, newRecipient in
             coordinator.activeViewingAgentId = newRecipient
             NotificationService.shared.activeViewingAgentId = newRecipient
+            // New conversation: pin to its newest message.
+            isAtBottom = true
             scrollToBottom(animated: false)
         }
         .onChange(of: viewModel.streamingText) { _, _ in
-            scrollToBottom()
+            if MessageGrouping.shouldAutoScroll(isAtBottom: isAtBottom) {
+                scrollToBottom()
+            }
         }
         .onChange(of: viewModel.inputText) { _, _ in
             viewModel.userDidType()
@@ -325,11 +340,14 @@ struct ChatView: View {
                         loadMoreButton
                     }
 
-                    // Messages
+                    // Messages — group flags drive same-sender run rendering.
+                    let groupFlags = MessageGrouping.computeGroups(for: viewModel.messages)
                     ForEach(viewModel.messages) { message in
                         ChatBubble(
                             message: message,
                             isOutgoing: viewModel.isOutgoing(message),
+                            isFirstInGroup: groupFlags[message.id]?.isFirstInGroup ?? true,
+                            isLastInGroup: groupFlags[message.id]?.isLastInGroup ?? true,
                             isPlaying: viewModel.isPlaying(message: message),
                             isSynthesizing: viewModel.isSynthesizing(message: message),
                             onPlay: {
@@ -367,10 +385,13 @@ struct ChatView: View {
                         .padding(.horizontal)
                     }
 
-                    // Bottom anchor for scrolling
+                    // Bottom anchor for scrolling. Its visibility tracks whether
+                    // the user is at the newest message, which gates auto-scroll.
                     Color.clear
                         .frame(height: 1)
                         .id("bottom")
+                        .onAppear { isAtBottom = true }
+                        .onDisappear { isAtBottom = false }
                 }
                 .padding(.vertical, CRTTheme.Spacing.sm)
             }

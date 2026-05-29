@@ -30,6 +30,11 @@ public struct PersistentMessage: Codable, Identifiable, Hashable, Sendable {
     public let deliveryStatus: DeliveryStatus
     public let eventType: String?
     public let threadId: String?
+    /// Stable conversation identity (DM or channel). Maps to the backend
+    /// `conversation_id` column (emitted as camelCase `conversationId`).
+    /// Optional for backward compatibility with pre-conversation messages
+    /// and locally-constructed optimistic messages.
+    public let conversationId: String?
     public let createdAt: String
     public let updatedAt: String
 
@@ -44,6 +49,7 @@ public struct PersistentMessage: Codable, Identifiable, Hashable, Sendable {
         deliveryStatus: DeliveryStatus = .pending,
         eventType: String? = nil,
         threadId: String? = nil,
+        conversationId: String? = nil,
         createdAt: String,
         updatedAt: String
     ) {
@@ -57,6 +63,7 @@ public struct PersistentMessage: Codable, Identifiable, Hashable, Sendable {
         self.deliveryStatus = deliveryStatus
         self.eventType = eventType
         self.threadId = threadId
+        self.conversationId = conversationId
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

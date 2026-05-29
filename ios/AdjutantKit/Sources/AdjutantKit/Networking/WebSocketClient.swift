@@ -68,6 +68,10 @@ public struct WsServerMessage: Decodable, Equatable {
     public let body: String?
     public let timestamp: String?
     public let threadId: String?
+    /// Stable conversation id for `chat_message` events. Decoded when the
+    /// backend stamps it; nil for legacy broadcasts (routing then falls back to
+    /// from/to matching). Forward-compatible with the unified conversation model.
+    public let conversationId: String?
     public let replyTo: String?
     public let streamId: String?
     public let token: String?
@@ -100,6 +104,7 @@ public struct WsServerMessage: Decodable, Equatable {
         body: String? = nil,
         timestamp: String? = nil,
         threadId: String? = nil,
+        conversationId: String? = nil,
         replyTo: String? = nil,
         streamId: String? = nil,
         token: String? = nil,
@@ -130,6 +135,7 @@ public struct WsServerMessage: Decodable, Equatable {
         self.body = body
         self.timestamp = timestamp
         self.threadId = threadId
+        self.conversationId = conversationId
         self.replyTo = replyTo
         self.streamId = streamId
         self.token = token
@@ -284,6 +290,37 @@ public final class WebSocketClient: NSObject, Sendable {
         // Inline cleanup since deinit is nonisolated and can't call @MainActor methods
         webSocketTask?.cancel(with: .goingAway, reason: nil)
         session?.invalidateAndCancel()
+    }
+
+    // MARK: - Conversation Routing (adj-164.3.4)
+
+    /// Decide whether an incoming server message should route to the chat that
+    /// currently has `openConversationId` open with `activeRecipient`.
+    ///
+    /// Only `chat_message` events are conversation-scoped; all other types
+    /// (control plane: delivered, typing, stream_*, errors, session_*) always
+    /// route so connection state and confirmations are never dropped.
+    ///
+    /// For `chat_message`:
+    ///  - If the message carries a `conversationId`, route IFF it equals the open
+    ///    conversation id — strict, so a message stamped for another DM cannot
+    ///    bleed in (root-cause fix).
+    ///  - If it has none (legacy broadcasts), fall back to from/to matching the
+    ///    active recipient so the client keeps working before the backend stamps
+    ///    conversation ids on every broadcast.
+    nonisolated public static func shouldRoute(
+        message: WsServerMessage,
+        openConversationId: String,
+        activeRecipient: String
+    ) -> Bool {
+        guard message.type == "chat_message" else { return true }
+
+        if let convId = message.conversationId, !convId.isEmpty {
+            return convId == openConversationId
+        }
+
+        // Legacy fallback: route when either endpoint is the active recipient.
+        return message.from == activeRecipient || message.to == activeRecipient
     }
 
     // MARK: - Public API
