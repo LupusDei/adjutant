@@ -20,6 +20,7 @@ import Database from "better-sqlite3";
 import { runMigrations } from "../../src/services/database.js";
 import { createMessageStore, type MessageStore } from "../../src/services/message-store.js";
 import { backfillConversations, reverseBackfill } from "../../src/services/conversation-backfill.js";
+import { dmConversationId } from "../../src/services/conversation-store.js";
 
 let db: Database.Database;
 let store: MessageStore;
@@ -73,20 +74,66 @@ describe("backfillConversations", () => {
     expect(c1).toBe(c2);
   });
 
-  it("should reuse thread_id as the conversation grouping where present", () => {
+  // adj-hq8p4 (P2 DATA LOSS): threaded DM messages must be keyed on the
+  // deterministic DM conversation id — NOT on thread_id. Live sends and the DM
+  // view resolve on dmConversationId("user", agent); keying backfill on
+  // thread_id stranded pre-existing threaded history in an orphan conversation
+  // the DM view never queries, so it silently vanished. The thread_id is kept on
+  // the message row for intra-conversation grouping, but it is not the
+  // conversation id.
+  it("should key threaded DM messages on the deterministic DM id, not thread_id", () => {
     const threaded1 = store.insertMessage({ agentId: "raynor", recipient: "user", role: "agent", body: "t1", threadId: "thread-xyz" });
     const threaded2 = store.insertMessage({ agentId: "user", recipient: "raynor", role: "user", body: "t2", threadId: "thread-xyz" });
 
     backfillConversations(db);
 
+    const expectedDmId = dmConversationId("user", "raynor");
     const c1 = store.getMessage(threaded1.id)?.conversationId;
     const c2 = store.getMessage(threaded2.id)?.conversationId;
-    expect(c1).toBe("thread-xyz");
-    expect(c2).toBe("thread-xyz");
+    expect(c1).toBe(expectedDmId);
+    expect(c2).toBe(expectedDmId);
 
-    // The thread_id conversation row exists.
-    const conv = db.prepare("SELECT id FROM conversations WHERE id = ?").get("thread-xyz");
-    expect(conv).toBeDefined();
+    // thread_id is preserved on the message row (intra-conversation grouping).
+    expect(store.getMessage(threaded1.id)?.threadId).toBe("thread-xyz");
+
+    // No orphan conversation was created keyed on the raw thread_id.
+    const orphan = db.prepare("SELECT id FROM conversations WHERE id = ?").get("thread-xyz");
+    expect(orphan).toBeUndefined();
+  });
+
+  it("should make backfilled threaded DM history reachable via the DM view (getMessages by conversationId)", () => {
+    // Pre-existing threaded DM history (the exact shape that vanished).
+    store.insertMessage({ agentId: "raynor", recipient: "user", role: "agent", body: "old threaded reply", threadId: "legacy-thread" });
+    store.insertMessage({ agentId: "user", recipient: "raynor", role: "user", body: "old threaded question", threadId: "legacy-thread" });
+
+    backfillConversations(db);
+
+    // The DM view resolves on the deterministic pair id — backfilled history
+    // must be visible there, not stranded under the thread id.
+    const dmId = dmConversationId("user", "raynor");
+    const visible = store.getMessages({ conversationId: dmId });
+    const bodies = visible.map((m) => m.body);
+    expect(bodies).toContain("old threaded reply");
+    expect(bodies).toContain("old threaded question");
+
+    // And nothing is reachable under the raw thread_id as a conversation id.
+    const underThread = store.getMessages({ conversationId: "legacy-thread" });
+    expect(underThread).toHaveLength(0);
+  });
+
+  it("should group threaded and non-threaded DMs for the same pair into ONE conversation", () => {
+    // A threaded message and a plain message between the same pair must land in
+    // the same DM conversation (both keyed on the deterministic pair id).
+    const threaded = store.insertMessage({ agentId: "raynor", recipient: "user", role: "agent", body: "threaded", threadId: "t-1" });
+    const plain = store.insertMessage({ agentId: "user", recipient: "raynor", role: "user", body: "plain" });
+
+    backfillConversations(db);
+
+    const expectedDmId = dmConversationId("user", "raynor");
+    expect(store.getMessage(threaded.id)?.conversationId).toBe(expectedDmId);
+    expect(store.getMessage(plain.id)?.conversationId).toBe(expectedDmId);
+    // Exactly one conversation for the pair.
+    expect(countConversations()).toBe(1);
   });
 
   it("should be idempotent — re-running creates no duplicate conversations", () => {

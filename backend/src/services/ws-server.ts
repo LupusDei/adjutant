@@ -345,6 +345,13 @@ function handleSync(client: WsClient, msg: WsClientMessage): void {
   const lastSeen = msg.lastSeqSeen ?? 0;
   const missed = replayBuffer
     .filter((entry) => (entry.message.seq ?? 0) > lastSeen)
+    // adj-2jy4u (P1 SECURITY): the replay buffer is global, but channel posts
+    // sit in it alongside unrestricted broadcasts. Sync must re-apply the same
+    // membership authorization boundary as live room-scoped fan-out, otherwise a
+    // non-member can read channel bodies simply by issuing a `sync`. A buffered
+    // message that carries a `conversationId` is only replayed when the
+    // requesting client's identity is a member of that conversation; fail closed.
+    .filter((entry) => clientMayReceive(client, entry.message))
     .map((entry) => entry.message);
 
   send(client, {
@@ -353,6 +360,29 @@ function handleSync(client: WsClient, msg: WsClientMessage): void {
   });
 
   logInfo("ws sync", { sessionId: client.sessionId, lastSeen, missedCount: missed.length });
+}
+
+/**
+ * Authorization check for replaying a buffered message to a client (adj-2jy4u).
+ *
+ * - Messages with no `conversationId` are unrestricted (DM broadcasts, status,
+ *   typing, etc.) and replay to any authenticated client.
+ * - Messages scoped to a conversation replay ONLY to members of that
+ *   conversation. Membership is resolved via the conversation store; if the
+ *   store is unavailable we cannot verify membership, so we fail closed and drop
+ *   the conversation-scoped message rather than risk a leak.
+ */
+function clientMayReceive(client: WsClient, msg: WsServerMessage): boolean {
+  const conversationId = msg.conversationId;
+  if (conversationId === undefined) return true; // unrestricted
+
+  // Fail closed: without a store we cannot prove membership.
+  if (!conversationStore) return false;
+
+  const isMember = conversationStore
+    .getMembers(conversationId)
+    .some((m) => m.memberId === client.identity);
+  return isMember;
 }
 
 function handleAck(client: WsClient, msg: WsClientMessage): void {
