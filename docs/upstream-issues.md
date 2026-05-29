@@ -99,3 +99,53 @@ lifecycle — not just its first run.
 - Note: Adjutant's own tmux-based spawn path (`createSwarm` / `LifecycleManager`)
   is unaffected — it sets `tmux new-session -c <worktree>`, so the shell stays in
   the worktree across the agent's lifetime (locked by tests in adj-iqyqw).
+
+---
+
+## UI-2 — Claude Code Task tool: a fresh worktree agent's FIRST command can run in the main repo (first-command cwd race)
+
+- **Adjutant bead:** adj-laz97
+- **Component:** Claude Code — Agent/Task tool with `isolation: "worktree"`, `run_in_background: true`, under heavy concurrent spawn load
+- **Observed version:** Claude Code v2.1.156
+- **Severity:** High — silent data loss / shared-state corruption (a leaked `git checkout -b` moves the main repo's HEAD)
+- **Confidence:** Medium — reconstructed from git reflogs of a live incident; NOT yet deterministically reproduced (a single-agent probe under light load did not trigger it — it appears load/timing dependent)
+
+### Summary
+Distinct from UI-1 (resume). Here a FRESH background worktree agent's worktree IS
+created correctly, but the agent's **first** `Bash` command runs with cwd = the
+**main repo** (the worktree `chdir` had not yet taken effect for the first shell);
+subsequent commands run correctly in the worktree. If that first command is the
+agent's customary "create my feature branch" step (`git checkout -b <branch>`), it
+executes against the main working tree and moves **main's HEAD** onto the new
+branch.
+
+### Evidence (adj-laz97, reconstructed from reflogs)
+A squad iOS agent (worktree `agent-a94c22cccecd72776`):
+- worktree `logs/HEAD`: created at `t0`, then three task commits at `t0+5m…`, all
+  on its harness branch `worktree-agent-a94c22cccecd72776` (correct, in-worktree).
+- main `.git/logs/HEAD`: `checkout: moving from main to feat/adj-164.3-dm-ios` at
+  `t0+94s` — i.e. between worktree creation and the agent's first in-worktree
+  commit. The agent's later commits ran in the worktree; only the first git
+  command leaked to main.
+- Net effect: main HEAD moved to a stray branch; a coordinator merge then landed
+  on the stray branch and `git push origin main` reported "up-to-date" while main
+  was wrong. Recovered with zero loss via a branch-verify-before-merge guard.
+
+### Expected behavior
+A worktree-isolated agent's cwd must be its worktree for its **first** command, not
+just subsequent ones — establish the worktree chdir before the agent runs anything.
+
+### Suggested fix (upstream)
+Ensure the worktree `chdir` is applied before the agent's first tool call executes
+(await worktree setup completion before the first turn), so there is no window in
+which the first command inherits the parent (main repo) cwd — especially under
+concurrent multi-agent spawn load.
+
+### Our mitigation (in-repo)
+Same as the adj-laz97 in-repo fix: worktree agents are forbidden from running
+`git checkout -b` / switching branches (they commit on their harness branch and
+`git push -u origin HEAD`), and must assert `git-dir` is under `.claude/worktrees`
+before any git write (else abort + report). The coordinator verifies
+`git branch --show-current` == `main` before every merge/push. These close the
+vector regardless of whether the leak came from a resume (UI-1) or this
+first-command race (UI-2).
