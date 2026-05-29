@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CryptoKit
 import UIKit
 import AdjutantKit
 
@@ -28,6 +29,14 @@ final class ChatViewModel: BaseViewModel {
         }
         return ""
     }()
+
+    /// Stable conversation id for the current DM (user ↔ selectedRecipient).
+    /// Derived deterministically (mirrors backend `dmConversationId`) so the
+    /// client can scope reads/real-time without a round-trip. This is the
+    /// root-cause fix for wrong-thread bleed: every scoping decision keys off
+    /// this id rather than the fragile agent/recipient reconstruction.
+    /// Empty while no recipient is selected.
+    @Published private(set) var currentConversationId: String = ""
 
     /// All available recipients (agents)
     @Published private(set) var availableRecipients: [CrewMember] = []
@@ -150,6 +159,7 @@ final class ChatViewModel: BaseViewModel {
         if ttsService != nil { setupPlaybackObservers() }
         setupWebSocketBindings()
         loadFromCache()
+        updateCurrentConversationId()
     }
 
     // MARK: - Lazy Service Accessors
@@ -365,13 +375,17 @@ final class ChatViewModel: BaseViewModel {
             let capturedConfirmedIds = self.confirmedClientIds
             let capturedPending = self.pendingLocalMessages
             let capturedExisting = self.messages
+            let capturedConversationId = self.currentConversationId
+            let capturedRecipient = self.selectedRecipient
 
             let result = await Task.detached(priority: .userInitiated) {
                 ChatViewModel.processMessages(
                     serverItems: response.items,
                     confirmedClientIds: capturedConfirmedIds,
                     pendingLocalMessages: capturedPending,
-                    existingMessages: capturedExisting
+                    existingMessages: capturedExisting,
+                    conversationId: capturedConversationId,
+                    selectedRecipient: capturedRecipient
                 )
             }.value
 
@@ -391,9 +405,20 @@ final class ChatViewModel: BaseViewModel {
         serverItems: [PersistentMessage],
         confirmedClientIds: Set<String>,
         pendingLocalMessages: [String: PersistentMessage],
-        existingMessages: [PersistentMessage]
+        existingMessages: [PersistentMessage],
+        conversationId: String,
+        selectedRecipient: String
     ) -> (messages: [PersistentMessage], updatedPending: [String: PersistentMessage]) {
-        var msgs = serverItems.sorted { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
+        // Conversation-scoped filtering (root-cause bleed fix). A server item is
+        // kept IFF it belongs to the open conversation: matches by conversationId
+        // when present, else falls back to agent/recipient for legacy rows.
+        let scopedServerItems = serverItems.filter { msg in
+            if let convId = msg.conversationId, !convId.isEmpty {
+                return convId == conversationId
+            }
+            return msg.agentId == selectedRecipient || msg.recipient == selectedRecipient
+        }
+        var msgs = scopedServerItems.sorted { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
 
         // Remove pending local messages confirmed by server
         var updatedPending = pendingLocalMessages
@@ -443,6 +468,7 @@ final class ChatViewModel: BaseViewModel {
                 if let first = agents.first {
                     self.selectedRecipient = first.id
                     UserDefaults.standard.set(first.id, forKey: "lastChatRecipient")
+                    self.updateCurrentConversationId()
                 }
             }
         }
@@ -466,6 +492,7 @@ final class ChatViewModel: BaseViewModel {
         guard recipient != selectedRecipient else { return }
         selectedRecipient = recipient
         UserDefaults.standard.set(recipient, forKey: "lastChatRecipient")
+        updateCurrentConversationId()
         messages = []
         pendingLocalMessages = [:]
         confirmedClientIds = []
@@ -560,9 +587,10 @@ final class ChatViewModel: BaseViewModel {
         // Only show chat messages and announcements, not system events
         guard message.role == .user || message.role == .agent || message.role == .announcement else { return }
 
-        // Only show messages for the current agent conversation
-        guard message.agentId == selectedRecipient || message.recipient == selectedRecipient else {
-            // Message is for a different agent -- increment unread count
+        // Conversation-scoped delivery (root-cause bleed fix): a message only
+        // enters the open thread when it belongs to the open conversation.
+        guard belongsToCurrentConversation(message) else {
+            // Message is for a different conversation -- increment unread count
             let agentKey = message.role == .user ? (message.recipient ?? message.agentId) : message.agentId
             if agentKey != selectedRecipient {
                 unreadCounts[agentKey, default: 0] += 1
@@ -824,6 +852,52 @@ final class ChatViewModel: BaseViewModel {
     }
 
     // MARK: - Private Methods
+
+    /// The canonical member id for the dashboard operator (the General),
+    /// matching the backend `USER_MEMBER_ID`.
+    static let userMemberId = "user"
+
+    /// Derive the stable, deterministic DM conversation id for an unordered
+    /// member pair. This MUST stay byte-for-byte compatible with the backend
+    /// `dmConversationId` (`conversation-store.ts`): sort the pair, join with a
+    /// single space, SHA-1 hex, take the first 24 chars, prefix with `dm_`.
+    /// Sorting before hashing guarantees order-independence.
+    static func dmConversationId(memberA: String, memberB: String) -> String {
+        let pair = [memberA, memberB].sorted()
+        let input = "\(pair[0]) \(pair[1])"
+        let digest = Insecure.SHA1.hash(data: Data(input.utf8))
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        return "dm_\(hex.prefix(24))"
+    }
+
+    /// Recompute `currentConversationId` from the selected recipient. Empty
+    /// recipient yields an empty id (no conversation scoping yet).
+    private func updateCurrentConversationId() {
+        if selectedRecipient.isEmpty {
+            currentConversationId = ""
+        } else {
+            currentConversationId = Self.dmConversationId(
+                memberA: Self.userMemberId,
+                memberB: selectedRecipient
+            )
+        }
+    }
+
+    /// Whether a message belongs to the currently-open conversation.
+    ///
+    /// Scoping precedence (root-cause bleed fix):
+    ///  1. If the message carries a `conversationId`, it belongs IFF that id
+    ///     equals the open conversation's id — no agent widening, so a message
+    ///     stamped for another DM can never bleed in.
+    ///  2. If the message has no `conversationId` (legacy rows, optimistic local
+    ///     messages), fall back to the agent/recipient match so the client keeps
+    ///     working until the backend stamps every message.
+    func belongsToCurrentConversation(_ message: PersistentMessage) -> Bool {
+        if let convId = message.conversationId, !convId.isEmpty {
+            return convId == currentConversationId
+        }
+        return message.agentId == selectedRecipient || message.recipient == selectedRecipient
+    }
 
     /// Generate a subject line from the message body
     static func generateSubject(from body: String) -> String {
