@@ -20,6 +20,7 @@ import { Router } from "express";
 import type { ConversationStore } from "../services/conversation-store.js";
 import { wsBroadcastToConversation } from "../services/ws-server.js";
 import { isAPNsConfigured, sendNotificationToAll } from "../services/apns-service.js";
+import { deliverChannelPostToAgents } from "../services/channel-delivery.js";
 import { logWarn } from "../utils/index.js";
 import { success, badRequest, notFound, forbidden } from "../utils/responses.js";
 
@@ -154,6 +155,9 @@ export function createChannelsRouter(conversationStore: ConversationStore): Rout
       conversationId: id,
       metadata: message.metadata ?? undefined,
     });
+
+    // Inject into each agent member's CLI (like DMs), tagged as a channel message.
+    deliverChannelPostToAgents(conversationStore, { channelId: id, senderId, body: text });
 
     // adj-164.7.3: notify the operator of channel posts they did not author.
     // View-time suppression is handled client-side (iOS NotificationService).

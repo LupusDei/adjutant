@@ -10,6 +10,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { MessageStore } from "../message-store.js";
 import { wsBroadcast, wsBroadcastToConversation } from "../ws-server.js";
 import { dmConversationId } from "../conversation-store.js";
+import { deliverChannelPostToAgents } from "../channel-delivery.js";
 import { getAgentBySession } from "../mcp-server.js";
 import { isAPNsConfigured, sendNotificationToAll } from "../apns-service.js";
 import { logInfo, logWarn } from "../../utils/index.js";
@@ -74,6 +75,9 @@ export function registerMessagingTools(
             conversationId,
             metadata: channelMessage.metadata ?? undefined,
           });
+
+          // Inject into each OTHER agent member's CLI, tagged as a channel message.
+          deliverChannelPostToAgents(conversationStore, { channelId: conversationId, senderId: agentId, body });
 
           eventStore?.insertEvent({
             eventType: "message_sent",
