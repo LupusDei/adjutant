@@ -41,6 +41,12 @@ final class ChatViewModelConversationTests: XCTestCase {
         // Distinct pairs map to distinct conversations.
         let c = ChatViewModel.dmConversationId(memberA: "user", memberB: "kerrigan")
         XCTAssertNotEqual(a, c)
+        // adj-pgwa4 regression: pin against the EXACT ids the backend produces
+        // (`sha1(sorted.joined("\u{0}")).hex.prefix(24)`). The old test only
+        // checked order-independence, so the space-separator bug — which made
+        // every server-stamped message invisible on iOS — slipped through.
+        XCTAssertEqual(a, "dm_3bdb35a91aa350baaa2013dc")
+        XCTAssertEqual(c, "dm_b969fd57b68889cacef67083")
     }
 
     func testCurrentConversationIdTracksSelectedRecipient() async {

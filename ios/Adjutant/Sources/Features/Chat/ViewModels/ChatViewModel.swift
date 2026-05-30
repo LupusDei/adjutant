@@ -870,11 +870,15 @@ final class ChatViewModel: BaseViewModel {
     /// Derive the stable, deterministic DM conversation id for an unordered
     /// member pair. This MUST stay byte-for-byte compatible with the backend
     /// `dmConversationId` (`conversation-store.ts`): sort the pair, join with a
-    /// single space, SHA-1 hex, take the first 24 chars, prefix with `dm_`.
-    /// Sorting before hashing guarantees order-independence.
+    /// single NUL byte (U+0000) separator, SHA-1 hex, take the first 24 chars,
+    /// prefix with `dm_`. Sorting before hashing guarantees order-independence.
+    ///
+    /// NOTE: the separator is a NUL byte, NOT a space. Using a space here was the
+    /// adj-pgwa4 bug — every backend-stamped message was filtered out of the iOS
+    /// view because the locally-derived id never matched the server's.
     static func dmConversationId(memberA: String, memberB: String) -> String {
         let pair = [memberA, memberB].sorted()
-        let input = "\(pair[0]) \(pair[1])"
+        let input = "\(pair[0])\u{0}\(pair[1])"
         let digest = Insecure.SHA1.hash(data: Data(input.utf8))
         let hex = digest.map { String(format: "%02x", $0) }.joined()
         return "dm_\(hex.prefix(24))"
