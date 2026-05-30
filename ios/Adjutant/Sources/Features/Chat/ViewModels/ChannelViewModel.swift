@@ -168,6 +168,16 @@ final class ChannelViewModel: BaseViewModel {
             let fetched = try await self.apiClient.getChannelMembers(channelId: channelId)
             guard self.selectedChannelId == channelId else { return }
             self.members = fetched
+            // Hydrate the operator's membership from the SERVER (source of truth),
+            // not just the in-memory create/join history. Without this,
+            // `joinedChannelIds` is empty after an app restart or for channels
+            // created elsewhere (web/agent), so `canSend` — which gates the send
+            // button on `isMember` — stayed false forever (dead-send-button bug).
+            if fetched.contains(where: { $0.memberId == Self.userMemberId }) {
+                self.joinedChannelIds.insert(channelId)
+            } else {
+                self.joinedChannelIds.remove(channelId)
+            }
         }
     }
 

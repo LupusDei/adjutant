@@ -43,6 +43,11 @@ struct ChannelView: View {
         }
         .task {
             await viewModel.loadMessages()
+            // Hydrate membership from the server on open so the send button
+            // (gated on `canSend` → `isMember`) is correct even after an app
+            // restart or for channels created elsewhere — not only after the
+            // members sheet is opened.
+            await viewModel.loadMembers()
         }
         .onAppear { connectRealtime() }
         .onDisappear { disconnectRealtime() }

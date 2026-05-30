@@ -210,6 +210,37 @@ final class ChannelViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.errorMessage)
     }
 
+    // Regression (dead send button): membership was only tracked in-memory
+    // (create/join), never hydrated from the server — so canSend stayed false
+    // after an app restart or for channels created elsewhere. loadMembers()
+    // must hydrate membership from the roster.
+    func testLoadMembersHydratesMembershipEnablingCanSend() async {
+        viewModel.selectChannel("chan-ops")
+        viewModel.inputText = "rally point"
+        XCTAssertFalse(viewModel.canSend) // not yet known to be a member
+
+        MockURLProtocol.mockHandler = mockMembersList([
+            memberJSON(memberId: "user", kind: "user", role: "owner"),
+            memberJSON(memberId: "raynor", kind: "agent", role: "member"),
+        ], channelId: "chan-ops")
+        await viewModel.loadMembers()
+
+        XCTAssertTrue(viewModel.isMember("chan-ops"))
+        XCTAssertTrue(viewModel.canSend)
+    }
+
+    func testLoadMembersWithoutOperatorLeavesCanSendFalse() async {
+        viewModel.selectChannel("chan-ops")
+        viewModel.inputText = "hello"
+        MockURLProtocol.mockHandler = mockMembersList([
+            memberJSON(memberId: "raynor", kind: "agent", role: "member"),
+        ], channelId: "chan-ops")
+        await viewModel.loadMembers()
+
+        XCTAssertFalse(viewModel.isMember("chan-ops"))
+        XCTAssertFalse(viewModel.canSend)
+    }
+
     func testLoadMembersNoOpWhenNoChannelSelected() async {
         // No open channel → nothing to load, no network call, roster stays empty.
         await viewModel.loadMembers()
