@@ -79,6 +79,35 @@ export function registerMessagingTools(
           // Inject into each OTHER agent member's CLI, tagged as a channel message.
           deliverChannelPostToAgents(conversationStore, { channelId: conversationId, senderId: agentId, body });
 
+          // Push to the iOS operator when they're a channel member and not the
+          // sender. The DM APNS block below only covers to:"user"/"mayor/"; a
+          // channel post never has those recipients, so without this an agent's
+          // channel post would never notify the user. View-time suppression is
+          // handled client-side (NotificationService).
+          if (isAPNsConfigured() && agentId !== "user") {
+            const channelMembers = conversationStore.getMembers(conversationId);
+            if (channelMembers.some((m) => m.memberId === "user")) {
+              const channel = conversationStore.getConversation(conversationId);
+              const truncated = body.length > 200 ? body.slice(0, 197) + "..." : body;
+              sendNotificationToAll({
+                title: channel?.title ? `#${channel.title}` : "Channel message",
+                body: `${agentId}: ${truncated}`,
+                sound: "default",
+                category: "CHANNEL_MESSAGE",
+                threadId: conversationId,
+                data: {
+                  type: "channel_message",
+                  conversationId,
+                  channelTitle: channel?.title ?? undefined,
+                  senderId: agentId,
+                  body: truncated,
+                },
+              }).catch((err) => {
+                logWarn("Failed to send APNS for channel post", { error: String(err), conversationId });
+              });
+            }
+          }
+
           eventStore?.insertEvent({
             eventType: "message_sent",
             agentId,
