@@ -41,6 +41,26 @@ extension APIClient {
         try await requestWithEnvelope(.get, path: "/channels")
     }
 
+    /// List the current members of a channel (adj-4wrro).
+    ///
+    /// Maps to `GET /api/channels/:id/members` →
+    /// `{ members: ConversationMember[], total }` inside the success envelope.
+    /// Used by the roster sheet and to filter the add-agent picker down to
+    /// agents who are not already members.
+    ///
+    /// - Parameter channelId: The channel whose membership to fetch.
+    /// - Returns: The channel's members (may be empty).
+    /// - Throws: ``APIClientError`` on 404 (unknown channel).
+    public func getChannelMembers(channelId: String) async throws -> [ChannelMember] {
+        let encodedId = channelId
+            .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? channelId
+        let response: ChannelMembersResponse = try await requestWithEnvelope(
+            .get,
+            path: "/channels/\(encodedId)/members"
+        )
+        return response.members
+    }
+
     /// Create a new channel. The backend adds the creator (`createdBy`, default
     /// the dashboard operator `"user"`) as the channel owner.
     ///

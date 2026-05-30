@@ -105,4 +105,27 @@ extension MockURLProtocol {
             throw URLError(error)
         }
     }
+
+    /// Read a request's body data, handling the `URLProtocol` quirk where the
+    /// body is delivered via `httpBodyStream` (not `httpBody`). Returns nil for
+    /// bodyless requests. Mirrors the AdjutantKit test helper so body-shape
+    /// assertions (e.g. `memberKind == "agent"`) work in app-target tests too.
+    static func getBodyData(from request: URLRequest) -> Data? {
+        if let body = request.httpBody {
+            return body
+        }
+        guard let stream = request.httpBodyStream else { return nil }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        let bufferSize = 4096
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        defer { buffer.deallocate() }
+        while stream.hasBytesAvailable {
+            let read = stream.read(buffer, maxLength: bufferSize)
+            if read <= 0 { break }
+            data.append(buffer, count: read)
+        }
+        return data
+    }
 }

@@ -16,11 +16,16 @@ struct ChannelView: View {
     /// The channel being shown.
     let channel: Channel
 
+    /// Drives the in-header DM ↔ Channels toggle (adj-gw7ol). Optional so the
+    /// view still renders standalone (e.g. previews/tests) without the shell.
+    var modeController: ChatModeController?
+
     /// Back action — returns to the channel list.
     var onBack: () -> Void = {}
 
     @State private var scrollProxy: ScrollViewProxy?
     @State private var isAtBottom = true
+    @State private var showMembersSheet = false
     @StateObject private var wsService = ChatWebSocketService()
     @State private var incomingCancellable: AnyCancellable?
 
@@ -41,6 +46,9 @@ struct ChannelView: View {
         }
         .onAppear { connectRealtime() }
         .onDisappear { disconnectRealtime() }
+        .sheet(isPresented: $showMembersSheet) {
+            ChannelMembersSheet(viewModel: viewModel, channel: channel)
+        }
     }
 
     // MARK: - Real-time (room-scoped fan-out)
@@ -87,6 +95,22 @@ struct ChannelView: View {
                 )
             }
             Spacer()
+
+            // Members roster + add-agent picker (adj-4wrro).
+            Button {
+                showMembersSheet = true
+            } label: {
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(theme.primary)
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Channel members")
+
+            if let modeController {
+                ChatModeToggle(controller: modeController)
+            }
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
         .padding(.vertical, CRTTheme.Spacing.sm)
