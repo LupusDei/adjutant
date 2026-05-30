@@ -62,6 +62,25 @@ describe("backfillConversations", () => {
     expect(nullConversationIdCount()).toBe(0);
   });
 
+  // adj-164 "disappearing messages" regression: announcements and system
+  // messages from an agent to the user were SKIPPED by the backfill and left
+  // with conversation_id = NULL, so the strict conversation read dropped them.
+  // They must be recovered into the sending agent's DM.
+  it("should recover announcement + system messages into the sending agent's DM", () => {
+    store.insertMessage({ agentId: "raynor", recipient: "user", role: "announcement", body: "[COMPLETION] shipped the epic" });
+    store.insertMessage({ agentId: "kerrigan", recipient: "user", role: "system", body: "system notice" });
+    // Born unscoped (NULL conversation_id) via the legacy insert shape.
+    expect(nullConversationIdCount()).toBe(2);
+
+    backfillConversations(db);
+
+    expect(nullConversationIdCount()).toBe(0);
+    const raynorDm = store.getMessages({ conversationId: dmConversationId("user", "raynor") });
+    const kerriganDm = store.getMessages({ conversationId: dmConversationId("user", "kerrigan") });
+    expect(raynorDm.some((m) => m.body.includes("shipped the epic"))).toBe(true);
+    expect(kerriganDm.some((m) => m.body.includes("system notice"))).toBe(true);
+  });
+
   it("should assign both directions of a pair to the SAME conversation", () => {
     const m1 = store.insertMessage({ agentId: "raynor", recipient: "user", role: "agent", body: "a" });
     const m2 = store.insertMessage({ agentId: "user", recipient: "raynor", role: "user", body: "b" });

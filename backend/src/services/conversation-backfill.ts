@@ -54,14 +54,18 @@ function resolveAgentCounterpart(row: LegacyMessageRow): string | null {
     if (row.recipient && row.recipient !== "user") return row.recipient;
     return null;
   }
-  if (row.role === "agent") {
-    // agent → user : counterpart is the sending agent, and it must target the user.
+  // agent / announcement / system originating FROM an agent and targeting the
+  // user belong in that agent's DM. Announcements (agent completions/blockers)
+  // and system notices were previously surfaced via the legacy agent-id match;
+  // scoping them to dm(agent, user) preserves that visibility. Without this they
+  // keep conversation_id = NULL and vanish under the strict conversation read
+  // (the "disappearing messages" regression).
+  if (row.role === "agent" || row.role === "announcement" || row.role === "system") {
     if (row.agent_id && row.agent_id !== "user" && (row.recipient === "user" || row.recipient === "mayor/")) {
       return row.agent_id;
     }
     return null;
   }
-  // system / announcement → not a DM.
   return null;
 }
 

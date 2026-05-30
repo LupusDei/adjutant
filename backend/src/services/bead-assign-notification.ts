@@ -10,6 +10,7 @@ import { getEventBus } from "./event-bus.js";
 import { getSessionBridge } from "./session-bridge.js";
 import { wsBroadcast } from "./ws-server.js";
 import type { MessageStore } from "./message-store.js";
+import { dmConversationId } from "./conversation-store.js";
 import { logInfo } from "../utils/index.js";
 
 /**
@@ -29,6 +30,7 @@ export function initBeadAssignNotification(store: MessageStore): void {
       recipient: data.assignee,
       role: "user",
       body,
+      conversationId: dmConversationId("user", data.assignee),
     });
 
     // Broadcast via WebSocket so frontend sees the message in real-time

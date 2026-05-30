@@ -1,6 +1,7 @@
 import type { MessageStore } from "../message-store.js";
 import { wsBroadcast } from "../ws-server.js";
 import { isAPNsConfigured, sendNotificationToAll } from "../apns-service.js";
+import { dmConversationId } from "../conversation-store.js";
 
 /** The system agent identity used for adjutant-originated messages. */
 export const ADJUTANT_AGENT_ID = "adjutant-core";
@@ -34,6 +35,7 @@ export function createCommunicationManager(store: MessageStore): CommunicationMa
         recipient: "user",
         role: "agent",
         body: message,
+        conversationId: dmConversationId(ADJUTANT_AGENT_ID, "user"),
       });
       wsBroadcast({
         type: "chat_message",
@@ -51,6 +53,7 @@ export function createCommunicationManager(store: MessageStore): CommunicationMa
         recipient: "user",
         role: "agent",
         body: message,
+        conversationId: dmConversationId(ADJUTANT_AGENT_ID, "user"),
       });
       wsBroadcast({
         type: "chat_message",
@@ -80,6 +83,7 @@ export function createCommunicationManager(store: MessageStore): CommunicationMa
         recipient: agentId,
         role: "agent",
         body: message,
+        conversationId: dmConversationId(ADJUTANT_AGENT_ID, agentId),
       });
       wsBroadcast({
         type: "chat_message",

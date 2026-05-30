@@ -15,6 +15,7 @@ import { isAPNsConfigured, sendNotificationToAll } from "../apns-service.js";
 import { logWarn } from "../../utils/index.js";
 import type { MessageStore } from "../message-store.js";
 import type { EventStore } from "../event-store.js";
+import { dmConversationId } from "../conversation-store.js";
 import { getEventBus } from "../event-bus.js";
 
 // ============================================================================
@@ -243,6 +244,9 @@ export function registerStatusTools(server: McpServer, store: MessageStore, even
         role: "announcement",
         body: formattedBody,
         eventType: "announcement",
+        // Scope announcements to the announcing agent's DM so they remain
+        // visible under the strict conversation read (adj-164 regression fix).
+        conversationId: dmConversationId(agentId, "user"),
         metadata: { announcementType: type, beadId, projectId },
       });
 

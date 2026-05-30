@@ -15,6 +15,7 @@ import { getSessionBridge } from "../session-bridge.js";
 import { getEventBus } from "../event-bus.js";
 import type { EventName } from "../event-bus.js";
 import { execBd } from "../bd-client.js";
+import { dmConversationId } from "../conversation-store.js";
 import { logInfo, logWarn } from "../../utils/index.js";
 import { getPersonaService } from "../persona-service.js";
 import { generatePrompt } from "../prompt-generator.js";
@@ -432,6 +433,7 @@ export function registerCoordinationTools(
         recipient: agentId,
         role: "agent",
         body: `Shutdown requested: ${reason}. Please finish your work and shut down gracefully.`,
+        conversationId: dmConversationId(callerAgentId, agentId),
       });
 
       // Mark spawn as decommissioned if applicable
