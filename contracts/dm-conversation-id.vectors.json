@@ -1,0 +1,25 @@
+{
+  "$comment": "CROSS-PLATFORM CONTRACT — adj-pgwa4. The DM conversation id MUST be derived identically on every platform (backend conversation-store.ts, iOS ChatViewModel.swift; the web uses server-provided ids and does NOT derive). Any divergence strands messages from the view (the adj-pgwa4 incident: iOS used a SPACE separator vs the backend's NUL byte). These vectors pin the derivation byte-for-byte. The first four are anchored to real live conversation ids.",
+  "spec": "dm_<first 24 hex chars of SHA1( sortedPair[0] + NUL + sortedPair[1] )>",
+  "separator": "U+0000 NUL byte — NOT a space. The NUL renders as whitespace in most editors; do not 'clean it up'.",
+  "sort": "lexicographic on the raw UTF-8 member id strings, then join with the NUL byte",
+  "prefix": "dm_",
+  "hashHexLength": 24,
+  "orderIndependent": true,
+  "vectors": [
+    { "memberA": "user", "memberB": "raynor", "expected": "dm_3bdb35a91aa350baaa2013dc", "liveAnchored": true },
+    { "memberA": "user", "memberB": "kerrigan", "expected": "dm_b969fd57b68889cacef67083", "liveAnchored": true },
+    { "memberA": "user", "memberB": "tassadar", "expected": "dm_30a90cfd3038071870ff8da6", "liveAnchored": true },
+    { "memberA": "user", "memberB": "adjutant-coordinator", "expected": "dm_678fb0099e491810b0fafd3a", "liveAnchored": true },
+    { "memberA": "raynor", "memberB": "kerrigan", "expected": "dm_afe1df3768fba3455c3cc68b", "liveAnchored": false },
+    { "memberA": "user", "memberB": "agent-with space", "expected": "dm_7df041e6333dc80701f76aec", "liveAnchored": false },
+    { "memberA": "user", "memberB": "Zücker", "expected": "dm_4d5f9412b397566f50fbb596", "liveAnchored": false }
+  ],
+  "orderIndependenceCheck": { "memberA": "kerrigan", "memberB": "raynor", "expected": "dm_afe1df3768fba3455c3cc68b" },
+  "negativeGuard": {
+    "$comment": "If the separator were a SPACE (the adj-pgwa4 bug) instead of NUL, user+raynor would derive this WRONG id. The contract test asserts the real derivation does NOT equal it.",
+    "memberA": "user",
+    "memberB": "raynor",
+    "spaceSeparatedWrongId": "dm_41192971f203f03d6e8bf3c5"
+  }
+}
