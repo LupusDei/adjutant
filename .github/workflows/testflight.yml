@@ -45,7 +45,10 @@ jobs:
     name: Build and Deploy to TestFlight
     needs: check-version
     if: needs.check-version.outputs.changed == 'true'
-    runs-on: macos-15
+    # macos-26 ships Xcode 26 / iOS 26 SDK — required by App Store Connect since
+    # 2026 (uploads built with the iOS 18.x SDK are rejected with a 409). macos-15
+    # only had Xcode 16.x / iOS 18.5 SDK.
+    runs-on: macos-26
     defaults:
       run:
         working-directory: ios
