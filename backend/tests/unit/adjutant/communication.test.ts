@@ -16,6 +16,7 @@ import {
   sendNotificationToAll,
 } from "../../../src/services/apns-service.js";
 import { createCommunicationManager } from "../../../src/services/adjutant/communication.js";
+import { dmConversationId } from "../../../src/services/conversation-store.js";
 
 function createMockStore(): MessageStore {
   return {
@@ -109,6 +110,7 @@ describe("CommunicationManager", () => {
         recipient: "user",
         role: "agent",
         body: "important update",
+        conversationId: dmConversationId("adjutant-core", "user"),
       });
     });
 
@@ -138,6 +140,7 @@ describe("CommunicationManager", () => {
         recipient: "user",
         role: "agent",
         body: "urgent issue",
+        conversationId: dmConversationId("adjutant-core", "user"),
       });
     });
 
@@ -204,6 +207,7 @@ describe("CommunicationManager", () => {
         recipient: "user",
         role: "agent",
         body: longMessage,
+        conversationId: dmConversationId("adjutant-core", "user"),
       });
 
       // APNS notification body should be truncated to exactly 200 chars
@@ -237,6 +241,7 @@ describe("CommunicationManager", () => {
         recipient: "agent-007",
         role: "agent",
         body: "hello agent",
+        conversationId: dmConversationId("adjutant-core", "agent-007"),
       });
     });
 
