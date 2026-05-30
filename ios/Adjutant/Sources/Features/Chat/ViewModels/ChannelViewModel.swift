@@ -27,6 +27,11 @@ final class ChannelViewModel: BaseViewModel {
     /// channel is open or the room has no messages.
     @Published private(set) var messages: [PersistentMessage] = []
 
+    /// Members of the currently-open channel (adj-4wrro). Drives the roster
+    /// sheet and lets the add-agent picker filter out existing members. Empty
+    /// when no channel is open or the roster hasn't loaded yet.
+    @Published private(set) var members: [ChannelMember] = []
+
     /// Draft text for the open channel's composer.
     @Published var inputText: String = ""
 
@@ -125,12 +130,16 @@ final class ChannelViewModel: BaseViewModel {
         selectedChannelId = channelId
         unreadCounts[channelId] = 0
         messages = []
+        // Drop the previous room's roster so the members sheet never flashes
+        // stale members before `loadMembers()` repopulates it.
+        members = []
     }
 
     /// Close the room view and return to the channel list.
     func clearSelection() {
         selectedChannelId = nil
         messages = []
+        members = []
     }
 
     // MARK: - Channel timeline
@@ -144,6 +153,48 @@ final class ChannelViewModel: BaseViewModel {
             guard self.selectedChannelId == channelId else { return }
             self.messages = response.items
                 .sorted { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
+        }
+    }
+
+    // MARK: - Members (adj-4wrro)
+
+    /// Load the open channel's membership roster, scoped strictly by the open
+    /// channel id. A no-op when no channel is open. Guards against the
+    /// switch-mid-flight race the same way ``loadMessages()`` does so a late
+    /// payload for a closed room never lands.
+    func loadMembers() async {
+        guard let channelId = selectedChannelId else { return }
+        await performAsyncAction(showLoading: false) {
+            let fetched = try await self.apiClient.getChannelMembers(channelId: channelId)
+            guard self.selectedChannelId == channelId else { return }
+            self.members = fetched
+        }
+    }
+
+    /// Add an agent to the open channel, then refresh the roster (adj-4wrro).
+    ///
+    /// The agent joins with ``MemberKind/agent`` — never as the operator. A
+    /// no-op when no channel is open. On join failure the roster is left intact
+    /// and the error surfaces via `errorMessage`; the reload only runs after a
+    /// successful join.
+    func addMember(agentId: String) async {
+        guard let channelId = selectedChannelId else { return }
+        let trimmed = agentId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            errorMessage = "Agent id cannot be empty."
+            return
+        }
+        await performAsyncAction(showLoading: false) {
+            try await self.apiClient.joinChannel(
+                channelId: channelId,
+                memberId: trimmed,
+                memberKind: .agent
+            )
+            // Reload only the open channel's roster; bail if the user navigated away.
+            guard self.selectedChannelId == channelId else { return }
+            let fetched = try await self.apiClient.getChannelMembers(channelId: channelId)
+            guard self.selectedChannelId == channelId else { return }
+            self.members = fetched
         }
     }
 

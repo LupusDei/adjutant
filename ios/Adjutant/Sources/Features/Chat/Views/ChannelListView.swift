@@ -7,6 +7,10 @@ struct ChannelListView: View {
     @Environment(\.crtTheme) private var theme
     @ObservedObject var viewModel: ChannelViewModel
 
+    /// Drives the in-header DM ↔ Channels toggle (adj-gw7ol). Optional so the
+    /// view still renders standalone (e.g. previews/tests) without the shell.
+    var modeController: ChatModeController?
+
     /// Invoked when a channel row is tapped; the container opens its room view.
     var onSelect: (Channel) -> Void = { _ in }
 
@@ -35,6 +39,9 @@ struct ChannelListView: View {
                 CRTText("MULTI-PARTY ROOMS", style: .caption, glowIntensity: .subtle, color: theme.dim)
             }
             Spacer()
+            if let modeController {
+                ChatModeToggle(controller: modeController)
+            }
             Button {
                 showCreateSheet = true
             } label: {

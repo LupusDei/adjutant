@@ -188,7 +188,140 @@ final class ChannelViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.messages.filter { $0.id == "dup" }.count, 1)
     }
 
+    // MARK: - Members roster (adj-4wrro)
+
+    func testInitialMembersEmpty() {
+        XCTAssertTrue(viewModel.members.isEmpty)
+    }
+
+    func testLoadMembersPopulatesRoster() async {
+        viewModel.selectChannel("chan-ops")
+        MockURLProtocol.mockHandler = mockMembersList([
+            memberJSON(memberId: "user", kind: "user", role: "owner"),
+            memberJSON(memberId: "raynor", kind: "agent", role: "member"),
+        ], channelId: "chan-ops")
+
+        await viewModel.loadMembers()
+
+        XCTAssertEqual(viewModel.members.count, 2)
+        XCTAssertEqual(viewModel.members.first?.memberId, "user")
+        XCTAssertEqual(viewModel.members.first?.memberKind, .user)
+        XCTAssertEqual(viewModel.members.last?.memberId, "raynor")
+        XCTAssertNil(viewModel.errorMessage)
+    }
+
+    func testLoadMembersNoOpWhenNoChannelSelected() async {
+        // No open channel → nothing to load, no network call, roster stays empty.
+        await viewModel.loadMembers()
+        XCTAssertTrue(viewModel.members.isEmpty)
+        XCTAssertNil(viewModel.errorMessage)
+    }
+
+    func testLoadMembersSetsErrorOnFailure() async {
+        viewModel.selectChannel("chan-ops")
+        MockURLProtocol.mockHandler = MockURLProtocol.mockError(
+            statusCode: 404, code: "NOT_FOUND", message: "no channel"
+        )
+        await viewModel.loadMembers()
+        XCTAssertNotNil(viewModel.errorMessage)
+        XCTAssertTrue(viewModel.members.isEmpty)
+    }
+
+    func testLoadMembersIgnoresStaleResponseAfterChannelSwitch() async {
+        // Guard the same race loadMessages guards: if the user switches channels
+        // mid-flight, a late members payload for the old room must not land.
+        viewModel.selectChannel("chan-ops")
+        MockURLProtocol.mockHandler = { [weak viewModel] request in
+            // Simulate the user navigating away before the response returns.
+            Task { @MainActor in viewModel?.selectChannel("chan-dev") }
+            return try self.mockMembersList([
+                self.memberJSON(memberId: "raynor", kind: "agent", role: "member")
+            ], channelId: "chan-ops")(request)
+        }
+        await viewModel.loadMembers()
+        // The roster must not show chan-ops members now that chan-dev is open.
+        XCTAssertTrue(viewModel.members.isEmpty)
+    }
+
+    // MARK: - addMember (adj-4wrro)
+
+    func testAddMemberJoinsAgentAndReloadsRoster() async {
+        viewModel.selectChannel("chan-ops")
+        // Route both calls addMember makes: the join POST, then the members GET.
+        MockURLProtocol.mockHandler = { request in
+            let path = request.url?.path ?? ""
+            if request.httpMethod == "POST", path.hasSuffix("/join") {
+                return try self.mockActionAck()(request)
+            }
+            return try self.mockMembersList([
+                self.memberJSON(memberId: "user", kind: "user", role: "owner"),
+                self.memberJSON(memberId: "raynor", kind: "agent", role: "member"),
+            ], channelId: "chan-ops")(request)
+        }
+
+        await viewModel.addMember(agentId: "raynor")
+
+        XCTAssertTrue(viewModel.members.contains(where: { $0.memberId == "raynor" }))
+        XCTAssertNil(viewModel.errorMessage)
+    }
+
+    func testAddMemberSendsAgentMemberKindInJoinBody() async {
+        viewModel.selectChannel("chan-ops")
+        var capturedJoinBody: Data?
+        MockURLProtocol.mockHandler = { request in
+            let path = request.url?.path ?? ""
+            if request.httpMethod == "POST", path.hasSuffix("/join") {
+                capturedJoinBody = MockURLProtocol.getBodyData(from: request)
+                return try self.mockActionAck()(request)
+            }
+            return try self.mockMembersList([], channelId: "chan-ops")(request)
+        }
+
+        await viewModel.addMember(agentId: "kerrigan")
+
+        let body = try? XCTUnwrap(capturedJoinBody)
+        let obj = body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? nil
+        XCTAssertEqual(obj?["memberId"] as? String, "kerrigan")
+        // An added agent MUST join as an agent, never as the user.
+        XCTAssertEqual(obj?["memberKind"] as? String, "agent")
+    }
+
+    func testAddMemberNoOpWhenNoChannelSelected() async {
+        await viewModel.addMember(agentId: "raynor")
+        XCTAssertTrue(viewModel.members.isEmpty)
+        XCTAssertNil(viewModel.errorMessage)
+    }
+
+    func testAddMemberSetsErrorOnJoinFailure() async {
+        viewModel.selectChannel("chan-ops")
+        MockURLProtocol.mockHandler = MockURLProtocol.mockError(
+            statusCode: 404, code: "NOT_FOUND", message: "no channel"
+        )
+        await viewModel.addMember(agentId: "raynor")
+        XCTAssertNotNil(viewModel.errorMessage)
+        XCTAssertFalse(viewModel.members.contains(where: { $0.memberId == "raynor" }))
+    }
+
     // MARK: - Helpers
+
+    private func memberJSON(memberId: String, kind: String, role: String) -> [String: Any] {
+        [
+            "conversationId": "chan-ops",
+            "memberId": memberId,
+            "memberKind": kind,
+            "role": role,
+            "joinedAt": "2026-05-29 12:00:00",
+            "lastReadAt": NSNull(),
+        ]
+    }
+
+    private func mockMembersList(_ members: [[String: Any]], channelId: String) -> MockURLProtocol.MockHandler {
+        MockURLProtocol.mockResponse(json: [
+            "success": true,
+            "data": ["members": members, "total": members.count],
+            "timestamp": "2026-05-29T12:00:00.000Z"
+        ])
+    }
 
     private func channelMessage(id: String, channelId: String) -> PersistentMessage {
         let now = ISO8601DateFormatter().string(from: Date())

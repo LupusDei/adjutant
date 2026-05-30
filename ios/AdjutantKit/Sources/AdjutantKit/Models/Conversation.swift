@@ -129,3 +129,56 @@ public struct ChannelsListResponse: Codable, Sendable {
         self.total = total
     }
 }
+
+/// A single channel member as surfaced by `GET /api/channels/:id/members`
+/// (adj-4wrro).
+///
+/// Mirrors the backend `ConversationMember` exactly — the serialized
+/// `rowToMember(...)` output in `conversation-store.ts`:
+/// `{ conversationId, memberId, memberKind, role, joinedAt, lastReadAt }`.
+/// `lastReadAt` is `null` for a member who has never opened the room, so it is
+/// optional here. `Identifiable` keys on `memberId` (the per-conversation PK
+/// half) so roster lists can `ForEach` over members directly.
+public struct ChannelMember: Codable, Identifiable, Hashable, Sendable {
+    public let conversationId: String
+    public let memberId: String
+    public let memberKind: MemberKind
+    /// `"member"` or `"owner"`. Kept as a string (not an enum) so an unknown
+    /// future role from the backend decodes instead of throwing.
+    public let role: String
+    public let joinedAt: String
+    public let lastReadAt: String?
+
+    /// Stable identity for list rendering — the member id is unique within a
+    /// conversation (composite PK `(conversation_id, member_id)`).
+    public var id: String { memberId }
+
+    public init(
+        conversationId: String,
+        memberId: String,
+        memberKind: MemberKind,
+        role: String,
+        joinedAt: String,
+        lastReadAt: String? = nil
+    ) {
+        self.conversationId = conversationId
+        self.memberId = memberId
+        self.memberKind = memberKind
+        self.role = role
+        self.joinedAt = joinedAt
+        self.lastReadAt = lastReadAt
+    }
+}
+
+/// Response envelope payload for `GET /api/channels/:id/members`.
+/// Mirrors the backend success-envelope `data` shape:
+/// `{ members: ConversationMember[], total }`.
+public struct ChannelMembersResponse: Codable, Sendable {
+    public let members: [ChannelMember]
+    public let total: Int
+
+    public init(members: [ChannelMember], total: Int) {
+        self.members = members
+        self.total = total
+    }
+}

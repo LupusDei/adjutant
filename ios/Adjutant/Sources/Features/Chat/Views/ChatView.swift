@@ -19,10 +19,19 @@ struct ChatView: View {
     @State private var showSearch = false
     @State private var selectedSession: ManagedSession?
 
-    init(apiClient: APIClient, speechService: (any SpeechRecognitionServiceProtocol)? = nil) {
+    /// Drives the in-header DM ↔ Channels toggle (adj-gw7ol). Optional so the
+    /// view still renders standalone (e.g. previews/tests) without the shell.
+    private let modeController: ChatModeController?
+
+    init(
+        apiClient: APIClient,
+        modeController: ChatModeController? = nil,
+        speechService: (any SpeechRecognitionServiceProtocol)? = nil
+    ) {
         // Do NOT create SpeechRecognitionService here — SFSpeechRecognizer(locale:) blocks the
         // main thread for 3-5 seconds. Pass nil and let ChatViewModel create it lazily on first use.
         _viewModel = StateObject(wrappedValue: ChatViewModel(apiClient: apiClient, speechService: speechService))
+        self.modeController = modeController
     }
 
     var body: some View {
@@ -257,6 +266,11 @@ struct ChatView: View {
                     .frame(width: 32, height: 32)
             }
             .buttonStyle(.plain)
+
+            // DM ↔ Channels toggle (adj-gw7ol) — compact in-header switch.
+            if let modeController {
+                ChatModeToggle(controller: modeController)
+            }
 
             // Session switcher button
             SessionSwitcherButton(onSessionSelected: { session in
