@@ -3,12 +3,34 @@
 
 .mayor-chat,
 .command-chat {
+  position: relative; /* anchors the absolutely-positioned members overlay */
   display: flex;
   flex-direction: column;
   height: 100%;
   background-color: var(--theme-bg-screen, #0a0a0a);
   font-family: var(--theme-font, "Share Tech Mono", "Courier New", monospace);
   color: var(--theme-text-primary, var(--crt-phosphor, #00ff00));
+}
+
+/* Members affordance in the channel header (adj-bqdte). */
+.chat-members-btn {
+  background: none;
+  border: 1px solid var(--crt-phosphor-dim, #00aa00);
+  color: var(--crt-phosphor-dim, #00aa00);
+  font-family: inherit;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.chat-members-btn:hover,
+.chat-members-btn:focus-visible {
+  color: var(--crt-phosphor, #00ff00);
+  border-color: var(--crt-phosphor, #00ff00);
+  box-shadow: 0 0 8px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.4));
+  outline: none;
 }
 
 /* Header */

@@ -13,6 +13,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 
 import { MessageBubble } from './MessageBubble';
+import { ChannelMembersPanel } from './ChannelMembersPanel';
 import { computeMessageGroups } from './messageGrouping';
 import { useChannelMessages } from '../../hooks/useChannelMessages';
 import type { DisplayMessage } from '../../hooks/useChatMessages';
@@ -50,6 +51,7 @@ function ChannelViewImpl({ channelId, title }: ChannelViewProps) {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const groupFlags = useMemo(() => computeMessageGroups(messages), [messages]);
@@ -109,6 +111,9 @@ function ChannelViewImpl({ channelId, title }: ChannelViewProps) {
     }
   }, [handleSend]);
 
+  const openMembers = useCallback(() => { setMembersOpen(true); }, []);
+  const closeMembers = useCallback(() => { setMembersOpen(false); }, []);
+
   const renderMessage = useCallback((msg: DisplayMessage) => {
     const isUser = msg.role === 'user';
     const isSystem = msg.role === 'system' || msg.role === 'announcement';
@@ -153,6 +158,16 @@ function ChannelViewImpl({ channelId, title }: ChannelViewProps) {
       <header className="chat-header">
         <h2 className="chat-title"># {title.toUpperCase()}</h2>
         <div className="chat-header-right">
+          <button
+            type="button"
+            className="chat-members-btn"
+            onClick={openMembers}
+            aria-haspopup="dialog"
+            aria-expanded={membersOpen}
+            title="View channel members"
+          >
+            MEMBERS
+          </button>
           <span className="chat-status">{messages.length} MESSAGES</span>
         </div>
       </header>
@@ -204,6 +219,10 @@ function ChannelViewImpl({ channelId, title }: ChannelViewProps) {
           {sending ? '...' : 'SEND'}
         </button>
       </div>
+
+      {membersOpen && (
+        <ChannelMembersPanel channelId={channelId} onClose={closeMembers} />
+      )}
     </div>
   );
 }

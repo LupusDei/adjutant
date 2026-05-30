@@ -1,0 +1,252 @@
+/* Channel Members Panel (adj-bqdte) — Pip-Boy CRT roster overlay.
+ *
+ * A diagnostic-readout aesthetic: the panel reads like a system roster dump
+ * with sectioned rules, monospace alignment, and ">"/"+" prefix glyphs. All
+ * motion is transform/opacity only (GPU-friendly, 60fps); no layout animation.
+ */
+
+.channel-members-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background-color: rgba(0, 0, 0, 0.72);
+  /* Faint scanline wash so the backdrop stays in-world rather than a flat dim. */
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(0, 255, 0, 0.03) 0,
+    rgba(0, 255, 0, 0.03) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  animation: channel-members-fade 120ms ease-out;
+}
+
+.channel-members-panel {
+  width: 100%;
+  max-width: 360px;
+  max-height: 80%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--theme-bg-screen, #0a0a0a);
+  border: 1px solid var(--crt-phosphor, #00ff00);
+  box-shadow:
+    0 0 18px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.4)),
+    inset 0 0 30px rgba(0, 255, 0, 0.04);
+  color: var(--crt-phosphor, #00ff00);
+  font-family: var(--theme-font, "Share Tech Mono", "Courier New", monospace);
+  animation: channel-members-rise 140ms ease-out;
+  outline: none;
+}
+
+/* Header */
+.channel-members-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--crt-phosphor-dim, #00aa00);
+  background-color: var(--theme-bg-elevated, #050505);
+  flex-shrink: 0;
+}
+
+.channel-members-title {
+  margin: 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.18em;
+  text-shadow: 0 0 8px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.4));
+}
+
+.channel-members-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+  color: var(--crt-phosphor-dim, #00aa00);
+  transition: color 120ms ease, text-shadow 120ms ease;
+}
+
+.channel-members-close:hover,
+.channel-members-close:focus-visible {
+  color: var(--crt-phosphor, #00ff00);
+  text-shadow: 0 0 8px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.4));
+  outline: none;
+}
+
+/* Error banner (roster fetch / add failure) */
+.channel-members-error {
+  padding: 6px 14px;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  color: #ff4444;
+  background-color: rgba(255, 68, 68, 0.1);
+  border-bottom: 1px solid #ff4444;
+}
+
+/* Scrollable body holds both sections */
+.channel-members-section {
+  padding: 6px 0 10px;
+  overflow-y: auto;
+}
+
+.channel-members-section + .channel-members-section {
+  border-top: 1px solid rgba(0, 170, 0, 0.35);
+}
+
+/* Section rule — a labelled divider reading like a readout header. */
+.channel-members-rule {
+  display: flex;
+  align-items: center;
+  padding: 8px 14px 4px;
+}
+
+.channel-members-rule-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  color: var(--crt-phosphor-dim, #00aa00);
+  white-space: nowrap;
+}
+
+.channel-members-rule::after {
+  content: "";
+  flex: 1;
+  margin-left: 10px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    var(--crt-phosphor-dim, #00aa00),
+    transparent
+  );
+}
+
+/* Lists */
+.channel-members-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.channel-members-row,
+.channel-members-add-row {
+  display: flex;
+  align-items: center;
+}
+
+.channel-members-row {
+  gap: 8px;
+  padding: 5px 14px;
+}
+
+.channel-members-glyph {
+  width: 1ch;
+  flex-shrink: 0;
+  color: var(--crt-phosphor-dim, #00aa00);
+}
+
+.channel-members-name {
+  flex: 1;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Role badge */
+.channel-members-badge {
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  color: var(--crt-phosphor-dim, #00aa00);
+}
+
+.channel-members-badge-owner {
+  color: var(--crt-phosphor, #00ff00);
+  text-shadow: 0 0 6px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.4));
+}
+
+/* Add-agent rows are full-width buttons */
+.channel-members-add-row {
+  padding: 0;
+}
+
+.channel-members-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  color: var(--crt-phosphor, #00ff00);
+  transition: background-color 120ms ease, text-shadow 120ms ease;
+}
+
+.channel-members-add-btn:hover:not(:disabled),
+.channel-members-add-btn:focus-visible:not(:disabled) {
+  background-color: rgba(0, 255, 0, 0.08);
+  text-shadow: 0 0 8px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.4));
+  outline: none;
+}
+
+.channel-members-add-btn:hover:not(:disabled) .channel-members-glyph,
+.channel-members-add-btn:focus-visible:not(:disabled) .channel-members-glyph {
+  color: var(--crt-phosphor, #00ff00);
+}
+
+.channel-members-add-btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.channel-members-add-cue {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  color: var(--crt-phosphor-dim, #00aa00);
+}
+
+/* Hints / empty / loading text */
+.channel-members-hint {
+  margin: 0;
+  padding: 6px 14px 4px;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  color: var(--crt-phosphor-dim, #00aa00);
+}
+
+/* Motion — transform/opacity only. */
+@keyframes channel-members-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes channel-members-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .channel-members-overlay,
+  .channel-members-panel {
+    animation: none;
+  }
+}

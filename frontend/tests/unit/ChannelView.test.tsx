@@ -28,6 +28,25 @@ vi.mock('../../src/hooks/useChannelMessages', () => ({
   }),
 }));
 
+// The members panel is opened from the header. Mock its data layers so the
+// panel can mount without real network calls when the affordance is clicked.
+vi.mock('../../src/hooks/useChannelMembers', () => ({
+  useChannelMembers: () => ({
+    members: [
+      { memberId: 'user', memberKind: 'user', role: 'owner' },
+      { memberId: 'raynor', memberKind: 'agent', role: 'member' },
+    ],
+    isLoading: false,
+    error: null,
+    addMember: vi.fn().mockResolvedValue(undefined),
+    refresh: vi.fn(),
+  }),
+}));
+
+vi.mock('../../src/services/api', () => ({
+  api: { agents: { list: vi.fn().mockResolvedValue([]) } },
+}));
+
 // Render Virtuoso's items eagerly so jsdom (which has no layout) still mounts
 // the bubbles we assert on — same approach the CommandChat virtualized test
 // relies on via the real library's fallback.
@@ -115,5 +134,34 @@ describe('ChannelView', () => {
     fireEvent.change(input, { target: { value: 'all units advance' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(mockSend).toHaveBeenCalledWith('all units advance');
+  });
+
+  it('should expose a members affordance in the header showing the member count', () => {
+    render(<ChannelView channelId="c1" title="ops-room" />);
+    expect(screen.getByRole('button', { name: /members/i })).toBeInTheDocument();
+  });
+
+  it('should open the members panel when the members affordance is clicked', async () => {
+    render(<ChannelView channelId="c1" title="ops-room" />);
+    const { fireEvent } = await import('@testing-library/react');
+
+    // The roster dialog is not present until the affordance is activated.
+    expect(screen.queryByRole('dialog', { name: /members/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /members/i }));
+
+    expect(screen.getByRole('dialog', { name: /members/i })).toBeInTheDocument();
+    expect(screen.getByText('MEMBER ROSTER')).toBeInTheDocument();
+  });
+
+  it('should close the members panel via its close control', async () => {
+    render(<ChannelView channelId="c1" title="ops-room" />);
+    const { fireEvent } = await import('@testing-library/react');
+
+    fireEvent.click(screen.getByRole('button', { name: /members/i }));
+    expect(screen.getByRole('dialog', { name: /members/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /close members panel/i }));
+    expect(screen.queryByRole('dialog', { name: /members/i })).not.toBeInTheDocument();
   });
 });

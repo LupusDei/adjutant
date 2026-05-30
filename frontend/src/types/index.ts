@@ -207,6 +207,22 @@ export interface ChannelSummary extends Conversation {
   memberCount: number;
 }
 
+/** Whether a channel member is the operator or an agent. */
+export type ChannelMemberKind = 'user' | 'agent';
+
+/** A member's role within a channel. */
+export type ChannelMemberRole = 'member' | 'owner';
+
+/**
+ * A channel member as surfaced by GET /api/channels/:id/members (adj-bqdte).
+ * Mirrors the subset of the backend ConversationMember the roster UI consumes.
+ */
+export interface ChannelMember {
+  memberId: string;
+  memberKind: ChannelMemberKind;
+  role: ChannelMemberRole;
+}
+
 /** Per-conversation unread count for the operator (adj-164.5). */
 export interface ConversationUnread {
   conversationId: string;
