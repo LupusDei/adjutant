@@ -14,6 +14,7 @@ import type {
   ChatThread,
   Conversation,
   ChannelSummary,
+  ChannelMember,
   ConversationUnread,
   UnreadCount,
   Proposal,
@@ -624,6 +625,29 @@ export const api = {
       await apiFetch(`/channels/${encodeURIComponent(channelId)}/leave`, {
         method: 'POST',
         body: { memberId: 'user' },
+      });
+    },
+
+    /** Current membership of a channel (for the roster UI + picker filtering). */
+    async members(
+      channelId: string,
+    ): Promise<{ members: ChannelMember[]; total: number }> {
+      return apiFetch(`/channels/${encodeURIComponent(channelId)}/members`);
+    },
+
+    /**
+     * Add an arbitrary member (default: an agent) to a channel. Reuses the
+     * `/:id/join` endpoint with an explicit member id — distinct from `join`,
+     * which always adds the operator. Idempotent on the backend.
+     */
+    async addMember(
+      channelId: string,
+      memberId: string,
+      memberKind: ChannelMember['memberKind'] = 'agent',
+    ): Promise<void> {
+      await apiFetch(`/channels/${encodeURIComponent(channelId)}/join`, {
+        method: 'POST',
+        body: { memberId, memberKind },
       });
     },
 
