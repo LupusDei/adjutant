@@ -62,6 +62,18 @@ export function createChannelsRouter(conversationStore: ConversationStore): Rout
     return res.json(success({ counts }));
   });
 
+  // GET /api/channels/:id/members — current membership (for the roster UI +
+  // filtering the add-agent picker to non-members).
+  router.get("/:id/members", (req, res) => {
+    const { id } = req.params;
+    const conv = conversationStore.getConversation(id);
+    if (conv?.kind !== "channel") {
+      return res.status(404).json(notFound("Channel", id));
+    }
+    const members = conversationStore.getMembers(id);
+    return res.json(success({ members, total: members.length }));
+  });
+
   // POST /api/channels/:id/join — add a member.
   router.post("/:id/join", (req, res) => {
     const { id } = req.params;

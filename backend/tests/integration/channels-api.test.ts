@@ -239,3 +239,23 @@ describe("GET /api/channels/unread", () => {
     expect(res.body.data.counts).toEqual([]);
   });
 });
+
+describe("GET /api/channels/:id/members", () => {
+  it("should return the channel's current members", async () => {
+    const channel = convStore.createChannel({ title: "ops", createdBy: "user" });
+    convStore.joinChannel(channel.id, { memberId: "raynor", memberKind: "agent" });
+
+    const res = await api().get(`/api/channels/${channel.id}/members`);
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    const ids = (res.body.data.members as { memberId: string }[]).map((m) => m.memberId).sort();
+    expect(ids).toEqual(["raynor", "user"]);
+    expect(res.body.data.total).toBe(2);
+  });
+
+  it("should 404 for an unknown channel id", async () => {
+    const res = await api().get("/api/channels/does-not-exist/members");
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+  });
+});
