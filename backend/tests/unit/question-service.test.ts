@@ -58,6 +58,7 @@ function makeQuestionStore(overrides: Partial<QuestionStore> = {}): QuestionStor
     getQuestion: vi.fn().mockReturnValue(makeQuestion()),
     answerQuestion: vi.fn().mockReturnValue(makeQuestion({ status: "answered" })),
     dismissQuestion: vi.fn().mockReturnValue(makeQuestion({ status: "dismissed" })),
+    setConversationId: vi.fn(),
     listQuestions: vi.fn().mockReturnValue([makeQuestion()]),
     ...overrides,
   } as QuestionStore;
@@ -189,6 +190,35 @@ describe("QuestionService.fileQuestion", () => {
     );
   });
 
+  // adj-i8epe regression: after DM is created, conversationId must be persisted back
+  // to the question row via questionStore.setConversationId. Previously the id was
+  // captured but never written back, leaving agent_questions.conversation_id = NULL.
+
+  it("adj-i8epe: should persist conversationId back to the question row after DM creation", async () => {
+    // The DM gives us conversation id "dm_conv_abc123"
+    const setConversationId = vi.fn();
+    const storeWithSetConversationId = {
+      ...questionStore,
+      setConversationId,
+    };
+
+    const service = createQuestionService({
+      questionStore: storeWithSetConversationId as unknown as typeof questionStore,
+      conversationStore,
+      messageStore,
+      wsBroadcast,
+    });
+
+    await service.fileQuestion({
+      projectId: "proj-uuid-001",
+      agentId: "agent-raynor",
+      body: "Should we pivot the architecture?",
+    });
+
+    // setConversationId must have been called with the question id and the DM conv id
+    expect(setConversationId).toHaveBeenCalledWith("q-uuid-001", "dm_conv_abc123");
+  });
+
   it("should broadcast a question:new WS event after filing", async () => {
     const service = createQuestionService({
       questionStore,
@@ -300,6 +330,56 @@ describe("QuestionService.fileQuestion", () => {
       urgency: "normal",
     });
 
+    expect(sendNotificationToAll).not.toHaveBeenCalled();
+  });
+
+  // adj-96rtr regression: normal/low must NOT push even when APNS IS configured.
+  // The dead-code ternary `isAlways ? isAPNsConfigured() : isAPNsConfigured()` makes
+  // both branches identical — normal/low urgency pushes when it should be suppressed.
+
+  it("adj-96rtr: should NOT push for normal urgency even when APNS is configured", async () => {
+    vi.mocked(isAPNsConfigured).mockReturnValue(true); // APNS IS configured
+    const normalQuestion = makeQuestion({ urgency: "normal" });
+    vi.mocked(questionStore.fileQuestion).mockReturnValue(normalQuestion);
+
+    const service = createQuestionService({
+      questionStore,
+      conversationStore,
+      messageStore,
+      wsBroadcast,
+    });
+
+    await service.fileQuestion({
+      projectId: "proj-uuid-001",
+      agentId: "agent-raynor",
+      body: "A normal urgency question — should not push",
+      urgency: "normal",
+    });
+
+    // normal urgency: no push even when APNS is available (no pref API yet)
+    expect(sendNotificationToAll).not.toHaveBeenCalled();
+  });
+
+  it("adj-96rtr: should NOT push for low urgency even when APNS is configured", async () => {
+    vi.mocked(isAPNsConfigured).mockReturnValue(true); // APNS IS configured
+    const lowQuestion = makeQuestion({ urgency: "low" });
+    vi.mocked(questionStore.fileQuestion).mockReturnValue(lowQuestion);
+
+    const service = createQuestionService({
+      questionStore,
+      conversationStore,
+      messageStore,
+      wsBroadcast,
+    });
+
+    await service.fileQuestion({
+      projectId: "proj-uuid-001",
+      agentId: "agent-raynor",
+      body: "A low urgency question — should not push",
+      urgency: "low",
+    });
+
+    // low urgency: no push even when APNS is available (no pref API yet)
     expect(sendNotificationToAll).not.toHaveBeenCalled();
   });
 });

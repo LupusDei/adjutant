@@ -112,13 +112,13 @@ export interface QuestionServiceDeps {
 }
 
 // ============================================================================
-// Push urgency policy
+// Push urgency policy (adj-96rtr fix)
 //
 // blocking/high are "always-push urgencies" — they push whenever APNS is
-// configured. normal/low also push when configured (the spec says "respect
-// prefs" for normal/low, but there is no user-pref API yet; we treat "not
-// configured" as the proxy gate). Both paths check isAPNsConfigured() so the
-// APNS service handles the "not configured" case gracefully.
+// configured. normal/low do NOT push regardless of APNS configuration.
+// The spec says "respect user prefs" for normal/low, but there is no user-pref
+// API yet. Until one exists the correct placeholder behaviour is to suppress
+// pushes for normal/low entirely rather than always-push them.
 // ============================================================================
 
 const ALWAYS_PUSH_URGENCIES: ReadonlySet<string> = new Set(["blocking", "high"]);
@@ -177,8 +177,13 @@ export function createQuestionService({
             category: question.category ?? null,
           },
         });
+
+        // adj-i8epe fix: persist conversationId back to the question row so agents
+        // can correlate their DM thread with the question. Best-effort — a failure
+        // here must not abort the question filing.
+        questionStore.setConversationId(question.id, dm.id);
       } catch (err) {
-        // DM mirroring is best-effort — don't fail the question filing
+        // DM mirroring + conversationId back-fill are best-effort — don't fail the question filing
         logWarn("question-service: failed to mirror question into DM", {
           questionId: question.id,
           error: String(err),
@@ -200,11 +205,11 @@ export function createQuestionService({
       });
 
       // 4. APNS push
-      //    blocking/high always push when APNS is configured; normal/low also push
-      //    when configured (the spec says "respect prefs" for normal/low, but there
-      //    is no user-pref API yet — we treat "not configured" as the proxy gate).
+      //    blocking/high always push when APNS is configured.
+      //    normal/low do NOT push — the spec says "respect user prefs" for these tiers
+      //    but there is no pref API yet; suppress entirely until one exists (adj-96rtr).
       const isAlways = urgencyAlwaysPushes(question.urgency);
-      const pushEnabled = isAlways ? isAPNsConfigured() : isAPNsConfigured();
+      const pushEnabled = isAlways && isAPNsConfigured();
 
       if (pushEnabled) {
         const truncatedBody = truncate(question.body);
