@@ -82,6 +82,17 @@ export interface CommunicationActionsContextValue {
   subscribe: (callback: MessageHandler) => () => void;
   /** Subscribe to incoming timeline events. Returns an unsubscribe function. */
   subscribeTimeline: (callback: TimelineEventHandler) => () => void;
+  /**
+   * Join a conversation's room-scoped fan-out on the SHARED connection
+   * (adj-83hau). Sends `{type:'subscribe',conversationId}` and remembers the
+   * intent so it is RE-SENT on every reconnect (the backend tracks room
+   * subscriptions per-connection, so a reconnect would otherwise silently drop
+   * them). Channels need this to receive `wsBroadcastToConversation` posts; DMs
+   * are broadcast to all clients and do not.
+   */
+  subscribeConversation: (conversationId: string) => void;
+  /** Leave a conversation's room-scoped fan-out and stop re-subscribing it. */
+  unsubscribeConversation: (conversationId: string) => void;
 }
 
 /**
@@ -168,6 +179,13 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
   const sseRef = useRef<EventSource | null>(null);
   const subscribersRef = useRef<Set<MessageHandler>>(new Set());
   const timelineSubscribersRef = useRef<Set<TimelineEventHandler>>(new Set());
+  /**
+   * Conversations this client wants room-scoped fan-out for (channels). Held in
+   * a ref so it survives reconnects: on every `connected` frame we re-send a
+   * subscribe for each id, because the server tracks subscriptions per
+   * connection and drops them when the socket closes (adj-83hau).
+   */
+  const desiredConversationsRef = useRef<Set<string>>(new Set());
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const reconnectAttemptsRef = useRef(0);
   /**
@@ -382,6 +400,14 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
                 lastSeqSeen: lastProcessedSeqRef.current,
               }));
             } catch { /* socket may have closed mid-frame */ }
+            // Re-establish room subscriptions for channels (adj-83hau). The
+            // server tracks them per-connection, so a reconnect drops them —
+            // re-send the desired set every time we (re)connect.
+            for (const conversationId of desiredConversationsRef.current) {
+              try {
+                ws.send(JSON.stringify({ type: 'subscribe', conversationId }));
+              } catch { /* socket may have closed mid-frame */ }
+            }
             if (mounted) setConnectionStatus('websocket');
             break;
           case 'chat_message':
@@ -526,11 +552,34 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ---------------------------------------------------------------------------
+  // Room-scoped conversation subscriptions (channels — adj-83hau)
+  // ---------------------------------------------------------------------------
+  const subscribeConversation = useCallback((conversationId: string) => {
+    desiredConversationsRef.current.add(conversationId);
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({ type: 'subscribe', conversationId }));
+      } catch { /* socket may have closed mid-frame */ }
+    }
+  }, []);
+
+  const unsubscribeConversation = useCallback((conversationId: string) => {
+    desiredConversationsRef.current.delete(conversationId);
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({ type: 'unsubscribe', conversationId }));
+      } catch { /* socket may have closed mid-frame */ }
+    }
+  }, []);
+
+  // ---------------------------------------------------------------------------
   // Context values — actions are stable; status is volatile
   // ---------------------------------------------------------------------------
   const actionsValue = useMemo<CommunicationActionsContextValue>(
-    () => ({ sendMessage, subscribe, subscribeTimeline }),
-    [sendMessage, subscribe, subscribeTimeline],
+    () => ({ sendMessage, subscribe, subscribeTimeline, subscribeConversation, unsubscribeConversation }),
+    [sendMessage, subscribe, subscribeTimeline, subscribeConversation, unsubscribeConversation],
   );
 
   const statusValue = useMemo<CommunicationStatusContextValue>(

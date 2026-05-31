@@ -1,17 +1,19 @@
 /**
- * Channel real-time delivery (adj-164.5.4).
+ * Channel real-time delivery (adj-164.5.4 / adj-83hau).
  *
- * Opening a channel must (a) subscribe the WS client to the channel's
- * room-scoped fan-out, and (b) render incoming channel messages live. The
- * backend `wsBroadcastToConversation` only delivers to clients that explicitly
- * subscribed AND are members — so the subscribe frame is load-bearing, not
- * optional. These tests pin both halves.
+ * Opening a channel must (a) join the channel's room-scoped fan-out and (b)
+ * render incoming channel messages live. As of adj-83hau this rides the SHARED
+ * CommunicationContext connection (the same pipe DMs use) rather than a separate
+ * WS-only socket: the hook calls `subscribeConversation(channelId)` to opt into
+ * the backend's `wsBroadcastToConversation` fan-out, and `subscribe()` to
+ * receive messages (scoped client-side by conversationId). These tests pin both
+ * halves plus teardown.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 import { useChannelMessages } from '../../src/hooks/useChannelMessages';
-import type { WsChatMessage, ChatWebSocketCallbacks } from '../../src/hooks/useChatWebSocket';
+import type { IncomingChatMessage } from '../../src/contexts/CommunicationContext';
 import type { ChatMessage } from '../../src/types';
 
 const { mockListMessages } = vi.hoisted(() => ({ mockListMessages: vi.fn() }));
@@ -24,35 +26,24 @@ vi.mock('../../src/services/api', () => {
   return { api: apiObj, default: apiObj };
 });
 
-// Communication priority is what gates WS in the hook.
+// Capture the message callback the hook registers via subscribe(), and record
+// the room subscribe/unsubscribe calls so we can assert the room-join behavior.
+let capturedOnMessage: ((m: IncomingChatMessage) => void) | undefined;
+const mockSubscribeConversation = vi.fn();
+const mockUnsubscribeConversation = vi.fn();
+const mockUnsub = vi.fn();
+
 vi.mock('../../src/contexts/CommunicationContext', () => ({
-  useCommunication: () => ({ priority: 'real-time', connectionStatus: 'websocket' }),
-}));
-
-// Capture the callbacks + scope the hook passes to useChatWebSocket, and record
-// subscribe/unsubscribe calls so we can assert the room-subscription behavior.
-let capturedOnMessage: ((m: WsChatMessage) => void) | undefined;
-let capturedScope: string | undefined;
-const mockSubscribe = vi.fn(() => true);
-const mockUnsubscribe = vi.fn(() => true);
-
-vi.mock('../../src/hooks/useChatWebSocket', () => ({
-  useChatWebSocket: (
-    _enabled: boolean,
-    callbacks: ChatWebSocketCallbacks,
-    conversationId?: string,
-  ) => {
-    capturedOnMessage = callbacks.onMessage;
-    capturedScope = conversationId;
-    return {
-      connected: true,
-      connectionStatus: 'websocket',
-      sendMessage: vi.fn(),
-      sendTyping: vi.fn(),
-      subscribeConversation: mockSubscribe,
-      unsubscribeConversation: mockUnsubscribe,
-    };
-  },
+  useCommunicationActions: () => ({
+    sendMessage: vi.fn(),
+    subscribe: (cb: (m: IncomingChatMessage) => void) => {
+      capturedOnMessage = cb;
+      return mockUnsub;
+    },
+    subscribeTimeline: vi.fn(() => () => undefined),
+    subscribeConversation: mockSubscribeConversation,
+    unsubscribeConversation: mockUnsubscribeConversation,
+  }),
 }));
 
 function serverMsg(id: string, from: string, conversationId: string, body: string): ChatMessage {
@@ -73,25 +64,21 @@ function serverMsg(id: string, from: string, conversationId: string, body: strin
   };
 }
 
-describe('channel real-time delivery', () => {
+describe('channel real-time delivery (adj-83hau)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedOnMessage = undefined;
-    capturedScope = undefined;
     mockListMessages.mockResolvedValue({ items: [], total: 0, hasMore: false });
   });
 
-  it('should subscribe to the channel room when the channel opens and WS is connected', async () => {
+  it('joins the channel room (subscribeConversation) when the channel opens', async () => {
     renderHook(() => useChannelMessages('chan-1'));
-    await waitFor(() => { expect(mockSubscribe).toHaveBeenCalledWith('chan-1'); });
+    await waitFor(() => {
+      expect(mockSubscribeConversation).toHaveBeenCalledWith('chan-1');
+    });
   });
 
-  it('should pass the channel id as the WS delivery scope', async () => {
-    renderHook(() => useChannelMessages('chan-1'));
-    await waitFor(() => { expect(capturedScope).toBe('chan-1'); });
-  });
-
-  it('should append an incoming channel message live', async () => {
+  it('appends an incoming channel message live', async () => {
     const { result } = renderHook(() => useChannelMessages('chan-1'));
     await waitFor(() => { expect(result.current.isLoading).toBe(false); });
 
@@ -114,7 +101,7 @@ describe('channel real-time delivery', () => {
     expect(live?.body).toBe('sector clear');
   });
 
-  it('should NOT append a message belonging to a different channel', async () => {
+  it('does NOT append a message belonging to a different channel', async () => {
     const { result } = renderHook(() => useChannelMessages('chan-1'));
     await waitFor(() => { expect(result.current.isLoading).toBe(false); });
 
@@ -129,19 +116,39 @@ describe('channel real-time delivery', () => {
       });
     });
 
-    // Give state a tick; the message must be dropped.
     await new Promise((r) => setTimeout(r, 20));
     expect(result.current.messages.some((m) => m.id === 'other')).toBe(false);
   });
 
-  it('should unsubscribe from the room on unmount', async () => {
-    const { unmount } = renderHook(() => useChannelMessages('chan-1'));
-    await waitFor(() => { expect(mockSubscribe).toHaveBeenCalled(); });
-    unmount();
-    expect(mockUnsubscribe).toHaveBeenCalledWith('chan-1');
+  it('does NOT append the operator\'s own echoed message (already optimistic)', async () => {
+    const { result } = renderHook(() => useChannelMessages('chan-1'));
+    await waitFor(() => { expect(result.current.isLoading).toBe(false); });
+
+    act(() => {
+      capturedOnMessage?.({
+        id: 'mine',
+        from: 'user',
+        to: 'chan-1',
+        body: 'echo of my own post',
+        timestamp: '2026-05-29T12:07:00Z',
+        conversationId: 'chan-1',
+      });
+    });
+
+    await new Promise((r) => setTimeout(r, 20));
+    expect(result.current.messages.some((m) => m.id === 'mine')).toBe(false);
   });
 
-  it('should load existing channel history on open', async () => {
+  it('leaves the room (unsubscribeConversation) on unmount', async () => {
+    const { unmount } = renderHook(() => useChannelMessages('chan-1'));
+    await waitFor(() => { expect(mockSubscribeConversation).toHaveBeenCalled(); });
+    unmount();
+    expect(mockUnsubscribeConversation).toHaveBeenCalledWith('chan-1');
+    // The message subscription is also torn down.
+    expect(mockUnsub).toHaveBeenCalled();
+  });
+
+  it('loads existing channel history on open', async () => {
     mockListMessages.mockResolvedValue({
       items: [serverMsg('h1', 'raynor', 'chan-1', 'earlier')],
       total: 1,

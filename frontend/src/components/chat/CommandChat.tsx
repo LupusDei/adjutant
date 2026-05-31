@@ -13,6 +13,7 @@ import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { MarkdownBody } from './MarkdownBody';
 import { MessageBubble } from './MessageBubble';
 import { computeMessageGroups } from './messageGrouping';
+import { messageRowClass } from './messageRow';
 import type { ConnectionStatus, ChatMessage } from '../../types';
 import { useChatMessages, type DisplayMessage } from '../../hooks/useChatMessages';
 import { api } from '../../services/api';
@@ -454,11 +455,16 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     const isUser = isUserMessage(msg);
     const isSystem = msg.role === 'system' || msg.role === 'announcement';
 
+    // Each item is wrapped in a flex-column alignment row so the bubble's
+    // alignment resolves inside react-virtuoso's (non-flex) item wrapper
+    // (adj-mw7lc). Without this, user + agent bubbles both render left-aligned.
     if (isSystem) {
       return (
-        <div className="chat-system-message">
-          <span className="chat-system-body">{msg.body}</span>
-          <span className="chat-system-time">{formatTimestamp(msg.createdAt)}</span>
+        <div className={messageRowClass(msg)}>
+          <div className="chat-system-message">
+            <span className="chat-system-body">{msg.body}</span>
+            <span className="chat-system-time">{formatTimestamp(msg.createdAt)}</span>
+          </div>
         </div>
       );
     }
@@ -470,16 +476,18 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     const isPlayingThis = playingMessageId === msg.id;
     const isLoadingThis = isPlayingThis && voicePlayer.isLoading;
     return (
-      <MessageBubble
-        msg={msg}
-        isUser={isUser}
-        isPlaying={isPlayingThis}
-        isLoadingPlay={isLoadingThis}
-        onPlay={onPlayMessage}
-        formatTimestamp={formatTimestamp}
-        showSender={showSender}
-        showTime={showTime}
-      />
+      <div className={messageRowClass(msg)}>
+        <MessageBubble
+          msg={msg}
+          isUser={isUser}
+          isPlaying={isPlayingThis}
+          isLoadingPlay={isLoadingThis}
+          onPlay={onPlayMessage}
+          formatTimestamp={formatTimestamp}
+          showSender={showSender}
+          showTime={showTime}
+        />
+      </div>
     );
   }, [playingMessageId, voicePlayer.isLoading, onPlayMessage]);
 
@@ -634,13 +642,18 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
               Footer: () => (
                 <>
                   {streamingEntries.map(([streamId, body]) => (
-                    <div key={`stream-${streamId}`} className="chat-bubble chat-bubble-command chat-bubble-streaming">
-                      <div className="chat-bubble-header">
-                        <span className="chat-bubble-sender">{coordinatorName}</span>
-                        <span className="chat-streaming-indicator">STREAMING</span>
-                      </div>
-                      <div className="chat-bubble-content">
-                        <MarkdownBody>{body}</MarkdownBody><span className="chat-cursor">_</span>
+                    // Footer renders inside Virtuoso's (non-flex) wrapper, so the
+                    // streaming bubble needs the same agent alignment row as the
+                    // virtualized items (adj-mw7lc).
+                    <div key={`stream-${streamId}`} className="chat-msg-row chat-msg-row-agent">
+                      <div className="chat-bubble chat-bubble-command chat-bubble-streaming">
+                        <div className="chat-bubble-header">
+                          <span className="chat-bubble-sender">{coordinatorName}</span>
+                          <span className="chat-streaming-indicator">STREAMING</span>
+                        </div>
+                        <div className="chat-bubble-content">
+                          <MarkdownBody>{body}</MarkdownBody><span className="chat-cursor">_</span>
+                        </div>
                       </div>
                     </div>
                   ))}

@@ -15,6 +15,7 @@ import { Virtuoso } from 'react-virtuoso';
 import { MessageBubble } from './MessageBubble';
 import { ChannelMembersPanel } from './ChannelMembersPanel';
 import { computeMessageGroups } from './messageGrouping';
+import { messageRowClass } from './messageRow';
 import { useChannelMessages } from '../../hooks/useChannelMessages';
 import type { DisplayMessage } from '../../hooks/useChatMessages';
 import { getTimeFormatter, formatDateCached } from '../../utils/dateFormatter';
@@ -117,26 +118,32 @@ function ChannelViewImpl({ channelId, title }: ChannelViewProps) {
   const renderMessage = useCallback((msg: DisplayMessage) => {
     const isUser = msg.role === 'user';
     const isSystem = msg.role === 'system' || msg.role === 'announcement';
+    // Wrap each item in a flex-column alignment row so the bubble's alignment
+    // resolves inside react-virtuoso's (non-flex) item wrapper (adj-mw7lc).
     if (isSystem) {
       return (
-        <div className="chat-system-message">
-          <span className="chat-system-body">{msg.body}</span>
-          <span className="chat-system-time">{formatTimestamp(msg.createdAt)}</span>
+        <div className={messageRowClass(msg)}>
+          <div className="chat-system-message">
+            <span className="chat-system-body">{msg.body}</span>
+            <span className="chat-system-time">{formatTimestamp(msg.createdAt)}</span>
+          </div>
         </div>
       );
     }
     const flags = groupFlagsRef.current.get(msg.id);
     return (
-      <MessageBubble
-        msg={msg}
-        isUser={isUser}
-        isPlaying={false}
-        isLoadingPlay={false}
-        onPlay={NOOP_PLAY}
-        formatTimestamp={formatTimestamp}
-        showSender={flags?.isFirstInGroup ?? true}
-        showTime={flags?.isLastInGroup ?? true}
-      />
+      <div className={messageRowClass(msg)}>
+        <MessageBubble
+          msg={msg}
+          isUser={isUser}
+          isPlaying={false}
+          isLoadingPlay={false}
+          onPlay={NOOP_PLAY}
+          formatTimestamp={formatTimestamp}
+          showSender={flags?.isFirstInGroup ?? true}
+          showTime={flags?.isLastInGroup ?? true}
+        />
+      </div>
     );
   }, []);
 

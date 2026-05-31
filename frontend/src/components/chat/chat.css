@@ -172,6 +172,27 @@
   opacity: 0.7;
 }
 
+/* Per-message alignment row (adj-mw7lc).
+   react-virtuoso wraps every item in a plain (non-flex) div, so a bubble's own
+   `align-self` never resolves inside the virtualized list — leaving user and
+   agent bubbles both left-aligned. This flex-column row restores SMS-style
+   alignment: the operator's own messages on the right, agents on the left,
+   system notices centred. The row spans the full content width; each bubble
+   keeps its own max-width. */
+.chat-msg-row {
+  display: flex;
+  flex-direction: column;
+}
+.chat-msg-row-user {
+  align-items: flex-end;
+}
+.chat-msg-row-agent {
+  align-items: flex-start;
+}
+.chat-msg-row-system {
+  align-items: center;
+}
+
 /* Chat bubbles */
 .chat-bubble {
   max-width: 75%;
