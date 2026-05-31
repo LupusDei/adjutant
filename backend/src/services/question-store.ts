@@ -124,6 +124,13 @@ export interface QuestionStore {
   dismissQuestion(id: string): AgentQuestion;
 
   /**
+   * Persist the DM conversation id back to the question row (adj-i8epe fix).
+   * Called best-effort by the service layer after the DM is created.
+   * Throws if the question is not found.
+   */
+  setConversationId(id: string, conversationId: string): void;
+
+  /**
    * List questions matching the given filter. Defaults status to 'open'.
    * Sorted: blocking → high → normal → low, then created_at ASC within each tier.
    */
@@ -277,6 +284,27 @@ export function createQuestionStore(db: Database.Database): QuestionStore {
       return rowToQuestion(
         db.prepare("SELECT * FROM agent_questions WHERE id = ?").get(id) as AgentQuestionRow,
       );
+    },
+
+    setConversationId(id: string, conversationId: string): void {
+      // Verify the question exists before updating — provides a clear error rather
+      // than a silent no-op when the id is wrong.
+      const existing = db
+        .prepare("SELECT id FROM agent_questions WHERE id = ?")
+        .get(id) as { id: string } | undefined;
+
+      if (!existing) {
+        throw new Error(`Question not found: ${id}`);
+      }
+
+      const now = new Date().toISOString();
+
+      db.prepare(`
+        UPDATE agent_questions
+        SET conversation_id = ?,
+            updated_at = ?
+        WHERE id = ?
+      `).run(conversationId, now, id);
     },
 
     listQuestions(filter: ListQuestionsFilter = {}): AgentQuestion[] {

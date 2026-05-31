@@ -384,3 +384,45 @@ describe("QuestionStore.listQuestions", () => {
     expect(list[0].suggestedOptions).toEqual(options);
   });
 });
+
+// ============================================================================
+// setConversationId (adj-i8epe)
+// ============================================================================
+
+describe("QuestionStore.setConversationId", () => {
+  it("should persist the conversationId back to the question row (happy path)", () => {
+    const q = store.fileQuestion({
+      projectId: "proj-conv-1",
+      agentId: "agent-raynor",
+      body: "Which database?",
+    });
+
+    // Before: conversationId is undefined
+    expect(q.conversationId).toBeUndefined();
+
+    store.setConversationId(q.id, "dm_conv_xyz789");
+
+    const updated = store.getQuestion(q.id);
+    expect(updated?.conversationId).toBe("dm_conv_xyz789");
+  });
+
+  it("should throw when the question id is not found (error path)", () => {
+    expect(() => {
+      store.setConversationId("q-does-not-exist", "dm_conv_abc");
+    }).toThrow("Question not found: q-does-not-exist");
+  });
+
+  it("should allow overwriting an existing conversationId (edge case)", () => {
+    const q = store.fileQuestion({
+      projectId: "proj-conv-2",
+      agentId: "agent-kerrigan",
+      body: "Edge case question",
+    });
+
+    store.setConversationId(q.id, "dm_conv_first");
+    store.setConversationId(q.id, "dm_conv_second"); // overwrite
+
+    const updated = store.getQuestion(q.id);
+    expect(updated?.conversationId).toBe("dm_conv_second");
+  });
+});
