@@ -27,6 +27,11 @@ import type {
   CallsignListResponse,
   AutoDevelopStatus,
 } from '../types';
+import type {
+  AgentQuestion,
+  AnswerQuestionParams,
+  ListQuestionsParams,
+} from '../types/questions';
 import type { DashboardResponse } from '../types/dashboard';
 import type { ProjectOverview, GlobalOverview } from '../types/overview';
 import type {
@@ -730,6 +735,47 @@ export const api = {
     /** Get the generated prompt text for a persona. */
     async getPrompt(id: string): Promise<{ prompt: string; persona: Persona }> {
       return apiFetch(`/personas/${encodeURIComponent(id)}/prompt`);
+    },
+  },
+
+  /**
+   * Agent question triage operations (adj-181).
+   */
+  questions: {
+    /**
+     * List questions with optional filters.
+     * Default status is 'open'. Sorted: blocking → high → normal → low, then oldest-first.
+     */
+    async list(params?: ListQuestionsParams): Promise<AgentQuestion[]> {
+      const searchParams = new URLSearchParams();
+      if (params?.status) searchParams.set('status', params.status);
+      if (params?.projectId) searchParams.set('projectId', params.projectId);
+      if (params?.category) searchParams.set('category', params.category);
+      if (params?.agentId) searchParams.set('agentId', params.agentId);
+      if (params?.urgency) searchParams.set('urgency', params.urgency);
+
+      const query = searchParams.toString();
+      return apiFetch<AgentQuestion[]>(`/questions${query ? `?${query}` : ''}`);
+    },
+
+    /**
+     * Answer a question. At least one of answerBody or chosenOption is required.
+     * chosenOption must be one of the question's suggestedOptions if provided.
+     */
+    async answer(id: string, params: AnswerQuestionParams): Promise<void> {
+      await apiFetch<Record<string, never>>(`/questions/${encodeURIComponent(id)}/answer`, {
+        method: 'POST',
+        body: params,
+      });
+    },
+
+    /**
+     * Dismiss a question (marks it as dismissed without answering).
+     */
+    async dismiss(id: string): Promise<void> {
+      await apiFetch<Record<string, never>>(`/questions/${encodeURIComponent(id)}/dismiss`, {
+        method: 'POST',
+      });
     },
   },
 
