@@ -63,7 +63,9 @@ interface WsClientMessage {
 interface WsServerMessage {
   type: "auth_challenge" | "connected" | "message" | "chat_message" | "stream_token" | "stream_end" | "typing" | "delivered" | "error" | "sync_response" | "pong"
     | "session_connected" | "session_disconnected" | "session_output" | "session_raw" | "session_status"
-    | "timeline_event";
+    | "timeline_event"
+    // adj-181.3.5 — agent question triage real-time events
+    | "question:new" | "question:answered" | "question:dismissed";
   id?: string | undefined;
   clientId?: string | undefined;
   seq?: number | undefined;
@@ -105,6 +107,15 @@ interface WsServerMessage {
   detail?: Record<string, unknown> | null | undefined;
   beadId?: string | null | undefined;
   createdAt?: string | undefined;
+  // adj-181.3.5 — question triage event fields
+  questionId?: string | undefined;
+  urgency?: string | undefined;
+  answeredBy?: string | null | undefined;
+  answerBody?: string | null | undefined;
+  chosenOption?: string | null | undefined;
+  answeredAt?: string | null | undefined;
+  projectId?: string | undefined;
+  category?: string | null | undefined;
 }
 
 interface WsClient {
