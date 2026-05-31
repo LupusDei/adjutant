@@ -9,10 +9,11 @@ Root epic: **adj-181** (type=epic, P2)
 | adj-181 | Agent Question Triage | epic | 2 | — |
 | adj-181.1 | Foundational: data model + question-store | epic | 2 | — |
 | adj-181.2 | US1: MCP question tools (file/answer/list) | epic | 2 | adj-181.1 |
-| adj-181.3 | US2: REST API + WS real-time | epic | 2 | adj-181.1 |
+| adj-181.3 | US2: REST API + WS real-time + APNS push | epic | 2 | adj-181.1 |
 | adj-181.4 | US3: Web "Open Questions" triage view | epic | 2 | adj-181.3 |
 | adj-181.5 | US4: iOS "Open Questions" screen | epic | 2 | adj-181.3 |
 | adj-181.6 | Polish: acceptance + docs | epic | 3 | adj-181.4, adj-181.5 |
+| adj-181.7 | Adoption: mandate queue in agent startup instructions | epic | 1 | adj-181.2, adj-181.3 |
 
 ## Tasks
 
@@ -32,6 +33,8 @@ Root epic: **adj-181** (type=epic, P2)
 | T021  | adj-181.3.3 | Register questions router (TDD) | task | adj-181.3.2 |
 | T022a | adj-181.3.4 | Failing WS broadcast tests | task | adj-181.1.4 |
 | T022b | adj-181.3.5 | Wire WS question broadcasts | task | adj-181.3.4 |
+| T023a | adj-181.3.6 | Failing APNS push test (question:new) | task | adj-181.1.4 |
+| T023b | adj-181.3.7 | Wire APNS push on new question | task | adj-181.3.6 |
 | T030a | adj-181.4.1 | Failing useOpenQuestions hook tests | task | adj-181.3.2 |
 | T030b | adj-181.4.2 | Implement hook + api.ts methods | task | adj-181.4.1 |
 | T031  | adj-181.4.3 | Build OpenQuestionsView.tsx (TDD) | task | adj-181.4.2 |
@@ -43,5 +46,16 @@ Root epic: **adj-181** (type=epic, P2)
 | T042  | adj-181.5.5 | Build OpenQuestionsView.swift (TDD) | task | adj-181.5.4 |
 | T050  | adj-181.6.1 | E2E acceptance test (file→triage→answer) | task | adj-181.4.4, adj-181.5.5 |
 | T051  | adj-181.6.2 | Docs: architecture + CLAUDE.md | task | adj-181.6.1 |
+| T060a | adj-181.7.1 | Failing prime-mandate test | task | adj-181.2.3, adj-181.3.2 |
+| T060b | adj-181.7.2 | Update prime.ts generator + regenerate | task | adj-181.7.1 |
+| T061  | adj-181.7.3 | Amend constitution Rule 5 (+ propagation) | task | adj-181.7.2 |
+| T062  | adj-181.7.4 | Update spawn-prompt templates (squad/epic-planner) | task | adj-181.7.2 |
 
-Total: 1 root + 6 sub-epics + 25 tasks = **32 beads**.
+Total: 1 root + 7 sub-epics + 31 tasks = **39 beads**.
+
+> Augmented 2026-05-31: (1) added rich-context (`context`/`category`) and
+> agent-suggested-options (`suggested_options`/`chosen_option`) data-model fields to the
+> existing foundational/MCP/REST/view tasks; (2) two new tasks (`adj-181.3.6`/`.3.7`) for
+> the APNS push on `question:new`; (3) a new adoption sub-epic `adj-181.7` (4 tasks)
+> mandating the queue in agent startup instructions — prime generator (`cli/lib/prime.ts`),
+> constitution Rule 5, and spawn-prompt templates. Affected existing beads updated in place.
