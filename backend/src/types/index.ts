@@ -323,19 +323,22 @@ export interface AgentQuestion {
   projectId: string;
   agentId: string;
   body: string;
-  context?: string;
-  category?: string;
+  // `| undefined` (not just `?:`) so the rowToQuestion mapper can assign
+  // `row.x ?? undefined` under exactOptionalPropertyTypes (codebase convention,
+  // matches WsServerMessage). Unblocks the adj-181 main build break.
+  context?: string | undefined;
+  category?: string | undefined;
   /** Parsed from the JSON array column; undefined when no options were filed. */
-  suggestedOptions?: string[];
+  suggestedOptions?: string[] | undefined;
   urgency: AgentQuestionUrgency;
   status: AgentQuestionStatus;
-  answerBody?: string;
-  chosenOption?: string;
-  answeredBy?: string;
-  beadId?: string;
-  conversationId?: string;
+  answerBody?: string | undefined;
+  chosenOption?: string | undefined;
+  answeredBy?: string | undefined;
+  beadId?: string | undefined;
+  conversationId?: string | undefined;
   createdAt: string;
-  answeredAt?: string;
+  answeredAt?: string | undefined;
   updatedAt: string;
 }
 
