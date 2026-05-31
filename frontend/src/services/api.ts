@@ -755,7 +755,14 @@ export const api = {
       if (params?.urgency) searchParams.set('urgency', params.urgency);
 
       const query = searchParams.toString();
-      return apiFetch<AgentQuestion[]>(`/questions${query ? `?${query}` : ''}`);
+      // The backend wraps the list as `{ questions, total }` (after apiFetch
+      // unwraps the `{success,data}` envelope). Extract the array — returning
+      // the object straight made `questions.map` throw and blanked the whole
+      // app (no ErrorBoundary). `Array.isArray` guards any future shape drift.
+      const res = await apiFetch<{ questions: AgentQuestion[]; total: number }>(
+        `/questions${query ? `?${query}` : ''}`,
+      );
+      return Array.isArray(res) ? res : (res?.questions ?? []);
     },
 
     /**
