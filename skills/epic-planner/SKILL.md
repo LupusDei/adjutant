@@ -182,20 +182,36 @@ examples.
 
 ## Question Routing (MANDATORY)
 
-**All questions about the epic MUST be sent to the user via Adjutant MCP messages.** This is non-negotiable.
+**Anything you need from the General MUST be filed via `file_question` — both questions/decisions
+AND user-blocking actions (key/secret, access, approval). This is non-negotiable.**
 
 ```
-send_message({ to: "user", body: "Question about epic '<title>': <your question>" })
+// Question or decision
+file_question({
+  body: "Question about epic '<title>': <your question>",
+  context: "<what you're doing, what you tried, what you need>",
+  urgency: "normal",
+  suggestedOptions: ["option A", "option B"]   // optional
+})
+
+// Blocking action (General must DO something, not just answer)
+file_question({
+  body: "Need <resource> to proceed with epic '<title>'",
+  context: "<what you're building, why you need it, what's blocked>",
+  urgency: "blocking",
+  category: "action_required"
+})
 ```
 
 **Rules:**
 - Do NOT use `AskUserQuestion` — it blocks execution and the user may not be at the terminal
 - Do NOT print questions to stdout — the user monitors agents via the Adjutant dashboard, not terminal output
-- Do NOT block waiting for answers — send the question via MCP, note your assumption, and continue
-- If you make assumptions, state them clearly in the MCP message so the user can correct you later
-- If ambiguous on multiple points, send ONE message with all questions numbered, then proceed with reasonable defaults
+- Do NOT bury questions in `send_message` — they miss the triage queue and the General cannot act on them
+- Do NOT block waiting for answers — file via `file_question`, state your assumption, and continue
+- If ambiguous on multiple points, file ONE `file_question` with all questions in the body, then proceed with reasonable defaults
 
-When spawning team agents to work on the epic, include this same instruction in their spawn prompts — they must also route questions through MCP, not stdout.
+When spawning team agents to work on the epic, include this same instruction in their spawn prompts —
+they must also use `file_question` for questions and blocking actions, not `send_message` or stdout.
 
 ## Key Rules
 

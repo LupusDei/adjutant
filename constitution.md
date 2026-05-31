@@ -1,4 +1,4 @@
-# Project Constitution v1.0.0
+# Project Constitution v1.1.0
 
 > MANDATORY — Every agent MUST obey every rule. Reject work that violates any rule.
 
@@ -42,8 +42,12 @@ Routes handle HTTP. Services hold business logic. Stores manage data.
 All agent communication goes through Adjutant MCP tools. Text output alone is invisible.
 
 - `set_status()` when starting AND completing every task (always include `task` field)
-- `send_message()` for all inter-agent and agent-to-user communication
-- Route questions via MCP — never use `AskUserQuestion` or block on stdin
+- `send_message()` for general inter-agent and agent-to-user communication
+- **`file_question()` is the MANDATORY channel for anything an agent needs from the General**:
+  questions/decisions AND user-blocking tasks/actions (key/secret, access, approval — use
+  `category: "action_required"` for the latter). `send_message` is NOT a substitute.
+  `set_status({blocked})` signals blockage but does NOT replace filing the item.
+- Never use `AskUserQuestion` or block on stdin
 - Agents MUST complete the Boot Sequence before any work
 
 ## 6. Bead Discipline
@@ -91,4 +95,18 @@ Start with the simplest implementation. Add abstractions only after 3+ duplicati
 Amendments require: written rationale, version increment, propagation to templates.
 Memory corrections that recur 3+ times MUST be promoted to constitutional rules.
 
-**Ratified**: 2026-04-17 | **Version**: 1.0.0
+**Ratified**: 2026-04-17 | **Version**: 1.1.0
+
+## Amendment Log
+
+### v1.1.0 (2026-05-31) — Rule 5: file_question mandate
+**Rationale**: The `file_question` MCP tool (adj-181) gives agents a first-class,
+triageable queue for everything they need from the General. Without a constitutional
+mandate, agents continue routing questions through `send_message` where they are
+invisible in the aggregate triage view. This amendment names `file_question` as the
+required channel for both questions/decisions and user-blocking actions
+(`action_required`), preserves `send_message` for general comms, and clarifies
+that `set_status({blocked})` signals blockage but does not file the item.
+**Propagated to**: `cli/lib/prime.ts`, `.adjutant/PRIME.md`, `backend/.adjutant/PRIME.md`,
+`.claude/skills/squad-execute/SKILL.md`, `skills/squad-execute/SKILL.md`,
+`skills/epic-planner/SKILL.md`.
