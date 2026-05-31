@@ -12,12 +12,17 @@ if [[ "$BRANCH" == wip/* ]]; then
 fi
 
 echo "=== Step 1/3: Lint ==="
-npm run lint || { echo "FAILED: Lint errors found"; exit 1; }
+# nice the lint step too — eslint (with type-aware rules) is a heavy multi-core
+# consumer, and concurrent agent lint runs are a top cause of CPU saturation.
+nice -n 10 npm run lint || { echo "FAILED: Lint errors found"; exit 1; }
 
+# Run tests at lowered priority (nice) so concurrent agent test runs yield to
+# interactive work and don't grind the machine to a halt. The worker pool is
+# also capped in the vitest configs (VITEST_MAX_WORKERS) to bound total CPU.
 echo "=== Step 2/3: Backend tests ==="
-cd backend && (npx vitest run --changed HEAD~1 || npx vitest run) || { echo "FAILED: Backend tests"; exit 1; }
+cd backend && (nice -n 10 npx vitest run --changed HEAD~1 || nice -n 10 npx vitest run) || { echo "FAILED: Backend tests"; exit 1; }
 
 echo "=== Step 3/3: Frontend tests ==="
-cd ../frontend && (npx vitest run --changed HEAD~1 || npx vitest run) || { echo "FAILED: Frontend tests"; exit 1; }
+cd ../frontend && (nice -n 10 npx vitest run --changed HEAD~1 || nice -n 10 npx vitest run) || { echo "FAILED: Frontend tests"; exit 1; }
 
 echo "=== All checks passed ==="

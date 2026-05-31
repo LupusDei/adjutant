@@ -62,6 +62,18 @@ describe('verify-before-push.sh', () => {
     expect(scriptContent).toContain('cd ../frontend');
   });
 
+  it('should run the heavy steps (lint + tests) at lowered priority (nice) so concurrent agent runs do not grind the machine', () => {
+    scriptContent = readFileSync(SCRIPT_PATH, 'utf-8');
+    // Lint (eslint with type-aware rules) is niced.
+    expect(scriptContent).toMatch(/nice -n \d+ npm run lint/);
+    // Every vitest invocation is niced.
+    const vitestCalls = scriptContent.match(/(\S+ )*npx vitest run/g) ?? [];
+    expect(vitestCalls.length).toBeGreaterThan(0);
+    for (const call of vitestCalls) {
+      expect(call).toMatch(/nice -n \d+ npx vitest run/);
+    }
+  });
+
   it('should have numbered step labels for clear failure reporting', () => {
     scriptContent = readFileSync(SCRIPT_PATH, 'utf-8');
     expect(scriptContent).toContain('Step 1/3');
