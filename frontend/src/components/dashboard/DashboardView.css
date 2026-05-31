@@ -420,6 +420,13 @@
   background-color: #666;
 }
 
+/* booting: alive but its MCP connection is (re)initializing — amber, NOT the
+   grey offline dot, so a live reconnecting agent doesn't read as dead. */
+.dashboard-indicator-booting {
+  background-color: #ffaa00;
+  box-shadow: 0 0 8px rgba(255, 170, 0, 0.5);
+}
+
 .dashboard-crew-card-status-text {
   font-size: 0.7rem;
   font-weight: bold;
@@ -440,6 +447,10 @@
 
 .dashboard-text-offline {
   color: #666;
+}
+
+.dashboard-text-booting {
+  color: #ffaa00;
 }
 
 .dashboard-crew-card-task {

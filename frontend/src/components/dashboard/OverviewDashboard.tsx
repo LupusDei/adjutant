@@ -6,6 +6,7 @@ import { api } from '../../services/api';
 import type { AutoDevelopStatus } from '../../types';
 import { getTimelineEvents, type TimelineEvent } from '../../services/api';
 import { timelineEventProject, timelineActionText } from './timelineRow';
+import { statusIndicatorClass, statusLabel } from './agentStatusDisplay';
 import type { AgentOverview, OverviewUnreadSummary } from '../../types/overview';
 import { AutoDevelopToggle } from './AutoDevelopToggle';
 import { AutoDevelopPanel } from './AutoDevelopPanel';
@@ -83,25 +84,8 @@ function formatChatTimestamp(timestamp: string): string {
   }
 }
 
-/** Get the CSS class suffix for an agent status */
-function statusIndicatorClass(status: string): string {
-  switch (status) {
-    case 'working': return 'working';
-    case 'idle': return 'idle';
-    case 'blocked': return 'stuck';
-    default: return 'offline';
-  }
-}
-
-/** Get the display label for an agent status */
-function statusLabel(status: string): string {
-  switch (status) {
-    case 'working': return 'WORKING';
-    case 'idle': return 'IDLE';
-    case 'blocked': return 'BLOCKED';
-    default: return 'OFFLINE';
-  }
-}
+// statusIndicatorClass / statusLabel live in ./agentStatusDisplay (handles the
+// `booting` live-but-reconnecting state so it doesn't render as OFFLINE).
 
 /** Map timeline event type to short label */
 function timelineEventLabel(eventType: string): string {
