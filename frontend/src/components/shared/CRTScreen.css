@@ -40,7 +40,9 @@
   --theme-bg-screen: #020502;
   --theme-bg-panel: #040A04;
   --theme-bg-elevated: #060F06;
-  --theme-font: 'VT323', 'Share Tech Mono', 'Courier New', monospace;
+  /* Default (pre-data-theme paint): legible IBM Plex Mono, not the VT323 pixel
+     font. Display stays Orbitron. */
+  --theme-font: 'IBM Plex Mono', 'Share Tech Mono', 'Courier New', monospace;
   --theme-font-display: 'Orbitron', 'Share Tech Mono', monospace;
   --theme-text-transform: uppercase;
   --theme-letter-spacing: 0.15em;
@@ -133,7 +135,11 @@
   --theme-bg-screen: #06041E;
   --theme-bg-panel: #100828;
   --theme-bg-elevated: #1C1040;
-  --theme-font: 'VT323', 'Share Tech Mono', 'Courier New', monospace;
+  /* Body font: IBM Plex Mono (legible technical mono) replaces the VT323 pixel
+     font, which was hard to read. Orbitron stays for display/headers to keep
+     the sci-fi identity. This block is the authoritative per-theme font source
+     (overrides main.css). */
+  --theme-font: 'IBM Plex Mono', 'Share Tech Mono', 'Courier New', monospace;
   --theme-font-display: 'Orbitron', 'Share Tech Mono', monospace;
   --theme-text-transform: uppercase;
   --theme-letter-spacing: 0.15em;

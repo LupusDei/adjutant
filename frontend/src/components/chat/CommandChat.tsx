@@ -623,6 +623,12 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
           <Virtuoso
             ref={virtuosoRef}
             data={messages}
+            // Open pinned to the LATEST message, not the top of history. Without
+            // this, Virtuoso mounts at index 0 (oldest) and the user had to
+            // scroll all the way down. `followOutput` only handles NEW appends,
+            // not the initial position — so set the initial topmost item to the
+            // last message, aligned to the bottom edge.
+            initialTopMostItemIndex={{ index: Math.max(0, messages.length - 1), align: 'end' }}
             // Stable, no-key prop here — Virtuoso uses the index. We use msg.id
             // inside itemContent for child stability.
             computeItemKey={(_index, msg) => msg.id}
