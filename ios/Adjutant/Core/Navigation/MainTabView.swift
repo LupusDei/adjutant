@@ -138,6 +138,10 @@ private struct TabContent: View {
             SwarmProjectDetailView(project: project)
         case .themeSettings, .voiceSettings:
             SettingsView()
+        case .openQuestions:
+            // Open Questions triage screen (adj-181.5 / US4).
+            // Accessible via deep-link `adjutant://questions` (question:new APNS push).
+            OpenQuestionsView(viewModel: OpenQuestionsViewModel(apiClient: AppState.shared.apiClient))
         default:
             EmptyView()
         }

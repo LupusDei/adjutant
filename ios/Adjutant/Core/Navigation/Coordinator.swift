@@ -53,6 +53,10 @@ enum AppRoute: Hashable {
     // Settings sub-routes
     case themeSettings
     case voiceSettings
+
+    // Questions triage screen (adj-181.5) — navigated via APNS deep-link
+    // (`adjutant://questions`) and from the Overview tab.
+    case openQuestions
 }
 
 // MARK: - Tab Definition
