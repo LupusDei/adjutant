@@ -243,6 +243,25 @@ describe("POST /api/questions/:id/answer", () => {
       expect.objectContaining({ answeredBy: "user" }),
     );
   });
+
+  // adj-kvenl regression: the describe header claims "400 bad chosenOption" coverage
+  // but no such test existed. A chosenOption that is NOT in suggestedOptions must return
+  // 400 (not 500) — the store-thrown validation error must be mapped to a client error.
+
+  it("adj-kvenl: should return 400 when chosenOption is not in the question's suggestedOptions", async () => {
+    vi.mocked(service.answerQuestion).mockRejectedValue(
+      new Error('chosenOption "invalid-option" is not one of the suggested options: Redis, SQLite'),
+    );
+
+    const res = await request(app)
+      .post("/api/questions/q-uuid-001/answer")
+      .send({ chosenOption: "invalid-option" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    // Must contain a meaningful error message
+    expect(res.body).toMatchObject({ success: false });
+  });
 });
 
 // ---------------------------------------------------------------------------
