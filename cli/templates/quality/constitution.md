@@ -1,4 +1,4 @@
-# Project Constitution v1.0.0
+# Project Constitution v1.1.0
 
 > MANDATORY — Every agent MUST obey every rule. Reject work that violates any rule.
 
@@ -41,8 +41,11 @@ Separate concerns: handlers, business logic, and data access.
 All agent communication goes through Adjutant MCP tools.
 
 - `set_status()` when starting AND completing every task
-- `send_message()` for all inter-agent communication
-- Route questions via MCP — never block on stdin
+- `send_message()` for general inter-agent communication
+- **`file_question()` is MANDATORY for anything an agent needs from the General**: questions/decisions AND
+  user-blocking actions (key/secret, access, approval — use `category: "action_required"`). `send_message`
+  is NOT a substitute. `set_status({blocked})` signals blockage but does NOT replace filing the item.
+- Never use `AskUserQuestion` or block on stdin
 
 ## 6. Bead Discipline
 
@@ -76,4 +79,4 @@ Start with the simplest implementation. Add abstractions only after 3+ duplicati
 
 Amendments require: written rationale, version increment, propagation to templates.
 
-**Ratified**: 2026-04-17 | **Version**: 1.0.0
+**Ratified**: 2026-04-17 | **Version**: 1.1.0

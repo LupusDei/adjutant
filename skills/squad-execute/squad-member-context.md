@@ -31,7 +31,7 @@ Report status via MCP tools connected through `.mcp.json`:
 ```
 set_status({ status: "working", task: "<what you're doing>", beadId: "<id>" })
 set_status({ status: "done", task: "Completed <id>: <what>" })
-send_message({ to: "user", body: "..." })   // For questions only
+send_message({ to: "user", body: "..." })   // General comms only — use file_question for questions
 ```
 
 ## Task Tracking
@@ -77,9 +77,20 @@ esac
 ```
 If that ABORTs, do NOT commit/branch/push — `send_message` your Squad Leader that you are in the main repo and need a fresh worktree spawn.
 
-## Questions
-All questions via MCP: `send_message({ to: "user", body: "..." })`
-Do NOT use AskUserQuestion. State your assumption and continue.
+## Filing Questions and Blocking Actions (MANDATORY)
+Anything you need from the General MUST be filed via `file_question` — both questions/decisions
+AND user-blocking actions (key/secret, access, approval — `category: "action_required"`).
+Do NOT bury these in `send_message`. Do NOT use AskUserQuestion. Do NOT block on stdin.
+
+```
+// Question or decision
+file_question({ body: "...", context: "...", urgency: "normal", suggestedOptions: ["opt-a", "opt-b"] })
+// Blocking action (General must DO something)
+file_question({ body: "...", context: "...", urgency: "blocking", category: "action_required" })
+```
+
+After filing: `set_status({ status: "blocked", task: "Waiting for: <summary>" })`, state your
+assumption, and continue on unblocked work. `send_message` stays for general comms only.
 
 ## Before Shutting Down
 ```

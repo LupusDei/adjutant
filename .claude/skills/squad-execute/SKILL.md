@@ -144,9 +144,17 @@ Before shutting down:
   set_status({ status: "idle", task: "Finished work, shutting down" })
 
 ## Question Routing (MANDATORY)
-All questions MUST go through Adjutant MCP: send_message({ to: "user", body: "..." })
-Do NOT use AskUserQuestion. Do NOT print questions to stdout.
-Send the question, state your assumption, and continue without blocking.
+Anything you need from the General MUST be filed via file_question — both questions/decisions
+AND user-blocking actions (key/secret, access, approval). Do NOT bury these in send_message.
+Do NOT use AskUserQuestion. Do NOT block on stdin.
+
+  // Question or decision
+  file_question({ body: "...", context: "...", urgency: "normal", suggestedOptions: ["..."] })
+  // Blocking action (General must DO something)
+  file_question({ body: "...", context: "...", urgency: "blocking", category: "action_required" })
+
+After filing: set_status({ status: "blocked", task: "Waiting for: <summary>" }), state your
+assumption, and continue on unblocked work. send_message stays for general comms only.
 ```
 
 Additionally include:
