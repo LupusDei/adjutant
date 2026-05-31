@@ -201,20 +201,25 @@
   position: relative;
   /* adj-164.2.2: Virtuoso renders each message in its own virtualized row, so
      the flex `gap` on .chat-messages never applies between bubbles. Spacing
-     must live on the bubble itself. This is the between-runs gap. */
-  margin-bottom: 12px;
+     must live on the bubble itself. This is the between-runs gap (different
+     sender / new run) — kept clearly larger than the within-run gap so sender
+     grouping still reads as distinct blocks. */
+  margin-bottom: 14px;
 }
 
-/* Continued message in a same-sender run: sits closer to the bubble above and
-   has no callsign header, reading as one continuous transmission. */
+/* Continued message in a same-sender run: no callsign header, reading as one
+   continuous transmission — but still visibly separated from the bubble above
+   so a burst of consecutive messages doesn't crowd together (was -4px, which
+   pulled same-sender bubbles nearly on top of each other). */
 .chat-bubble-grouped {
-  margin-top: -4px;
+  margin-top: 2px;
 }
 
-/* Non-final message in a run drops the timestamp footer, so tighten the gap
-   below it toward the next bubble in the same run. */
+/* Non-final message in a run drops the timestamp footer; paired with the
+   grouped margin-top above this yields a comfortable ~8px within-run gap
+   (vs the 14px between-runs gap). */
 .chat-bubble-run {
-  margin-bottom: 3px;
+  margin-bottom: 6px;
 }
 
 /* When the header is hidden, the play control floats in the top-right corner
