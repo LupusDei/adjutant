@@ -144,6 +144,20 @@ const questionService = createQuestionService({
   conversationStore,
   messageStore,
   wsBroadcast,
+  // adj-181.19: inject the answer into the asking agent's live tmux session so it
+  // acts immediately instead of waiting to read its DM. Mirrors the proven
+  // bead-assign-notification pattern; no-ops gracefully when no live session.
+  notifyAgentSession: (agentId, text) => {
+    try {
+      const bridge = getSessionBridge();
+      for (const session of bridge.registry.findByName(agentId)) {
+        if (session.status === "offline") continue;
+        void bridge.sendInput(session.id, text).catch(() => {});
+      }
+    } catch {
+      // Session bridge not ready — agent will pull the answer from its DM.
+    }
+  },
 });
 app.use("/api/questions", createQuestionsRouter(questionService));
 

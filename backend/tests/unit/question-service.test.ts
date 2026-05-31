@@ -465,6 +465,64 @@ describe("QuestionService.answerQuestion", () => {
     );
   });
 
+  it("should notify the asking agent's live session with the answer (adj-181.19)", async () => {
+    vi.mocked(questionStore.getQuestion).mockReturnValue(
+      makeQuestion({ agentId: "agent-raynor", body: "Which cache should I use?" }),
+    );
+    const notifyAgentSession = vi.fn();
+    const service = createQuestionService({
+      questionStore,
+      conversationStore,
+      messageStore,
+      wsBroadcast,
+      notifyAgentSession,
+    });
+
+    await service.answerQuestion("q-uuid-001", {
+      answerBody: "Use Redis.",
+      answeredBy: "user",
+    });
+
+    expect(notifyAgentSession).toHaveBeenCalledTimes(1);
+    const [agentArg, textArg] = notifyAgentSession.mock.calls[0]!;
+    expect(agentArg).toBe("agent-raynor");
+    expect(textArg).toContain("Use Redis.");
+    // Single-line for safe tmux injection
+    expect(textArg).not.toContain("\n");
+  });
+
+  it("should prefer chosenOption over answerBody in the agent notification", async () => {
+    vi.mocked(questionStore.getQuestion).mockReturnValue(makeQuestion({ agentId: "agent-nova" }));
+    const notifyAgentSession = vi.fn();
+    const service = createQuestionService({
+      questionStore,
+      conversationStore,
+      messageStore,
+      wsBroadcast,
+      notifyAgentSession,
+    });
+
+    await service.answerQuestion("q-uuid-001", {
+      chosenOption: "Option B",
+      answeredBy: "user",
+    });
+
+    expect(notifyAgentSession.mock.calls[0]![1]).toContain("Option B");
+  });
+
+  it("should not throw when notifyAgentSession dependency is omitted (optional)", async () => {
+    const service = createQuestionService({
+      questionStore,
+      conversationStore,
+      messageStore,
+      wsBroadcast,
+    });
+
+    await expect(
+      service.answerQuestion("q-uuid-001", { answerBody: "ok" }),
+    ).resolves.toBeDefined();
+  });
+
   it("should NOT send an APNS push on answer", async () => {
     vi.mocked(isAPNsConfigured).mockReturnValue(true);
 

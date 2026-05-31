@@ -109,6 +109,14 @@ export interface QuestionServiceDeps {
   conversationStore: ConversationStore;
   messageStore: MessageStore;
   wsBroadcast: WsBroadcastFn;
+  /**
+   * Optional: deliver a one-line notification into the asking agent's LIVE
+   * session (tmux injection) when its question is answered, so the agent acts
+   * on the answer immediately instead of waiting to read its DM (adj-181.19).
+   * Injected for testability; the production impl (index.ts) resolves the
+   * agent's session via the session bridge and no-ops when there is none.
+   */
+  notifyAgentSession?: (agentId: string, text: string) => void;
 }
 
 // ============================================================================
@@ -150,6 +158,7 @@ export function createQuestionService({
   conversationStore,
   messageStore,
   wsBroadcast,
+  notifyAgentSession,
 }: QuestionServiceDeps): QuestionService {
   return {
     async fileQuestion(input: FileQuestionInput): Promise<AgentQuestion> {
@@ -273,7 +282,26 @@ export function createQuestionService({
         });
       }
 
-      // 3. Broadcast question:answered
+      // 3. Notify the asking agent's LIVE session immediately (tmux injection),
+      //    so it acts on the answer without waiting to read its DM (adj-181.19).
+      //    Best-effort + single-line; the impl (index.ts) no-ops when the agent
+      //    has no live session.
+      try {
+        const answerSummary = (input.chosenOption ?? input.answerBody ?? "")
+          .replace(/\n+/g, " ")
+          .trim();
+        notifyAgentSession?.(
+          existing.agentId,
+          `[ANSWER from the General] Your question "${truncate(existing.body)}" was answered: ${answerSummary}`,
+        );
+      } catch (err) {
+        logWarn("question-service: failed to notify agent session of answer", {
+          questionId: id,
+          error: String(err),
+        });
+      }
+
+      // 4. Broadcast question:answered
       wsBroadcast({
         type: "question:answered",
         questionId: answered.id,
