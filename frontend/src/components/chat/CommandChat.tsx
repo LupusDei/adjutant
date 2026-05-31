@@ -307,6 +307,30 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     scrollToBottom();
   }, [messages.length, streamingMessages.size, scrollToBottom]);
 
+  // Open a conversation pinned to the LATEST message (not the top of history).
+  // Done imperatively, ONCE per conversation, after the first page loads — this
+  // is post-mount and cannot break Virtuoso's render path (unlike a changing
+  // `initialTopMostItemIndex` prop, which blanked the app). rAF lets the list
+  // lay out before we scroll.
+  const didInitialScrollRef = useRef(false);
+  useEffect(() => {
+    // Re-arm whenever the open conversation changes.
+    didInitialScrollRef.current = false;
+  }, [conversationId, agentId]);
+  useEffect(() => {
+    if (didInitialScrollRef.current) return;
+    if (!isActive || messages.length === 0) return;
+    didInitialScrollRef.current = true;
+    const id = requestAnimationFrame(() => {
+      try {
+        virtuosoRef.current?.scrollToIndex({ index: messages.length - 1, align: 'end' });
+      } catch {
+        /* best-effort: never let a scroll failure affect rendering */
+      }
+    });
+    return () => { cancelAnimationFrame(id); };
+  }, [messages.length, isActive, conversationId, agentId]);
+
   // Cancel any pending RAF on unmount to prevent leaks.
   useEffect(() => {
     return () => {
@@ -623,12 +647,11 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
           <Virtuoso
             ref={virtuosoRef}
             data={messages}
-            // Open pinned to the LATEST message, not the top of history. Without
-            // this, Virtuoso mounts at index 0 (oldest) and the user had to
-            // scroll all the way down. `followOutput` only handles NEW appends,
-            // not the initial position — so set the initial topmost item to the
-            // last message, aligned to the bottom edge.
-            initialTopMostItemIndex={{ index: Math.max(0, messages.length - 1), align: 'end' }}
+            // NOTE: do NOT add `initialTopMostItemIndex` derived from the
+            // changing `messages.length` — a fresh value each render crashed
+            // react-virtuoso and blanked the app (no ErrorBoundary). Open-at-
+            // latest is handled imperatively via scrollToIndex on first load
+            // (see the effect above), which cannot break the render path.
             // Stable, no-key prop here — Virtuoso uses the index. We use msg.id
             // inside itemContent for child stability.
             computeItemKey={(_index, msg) => msg.id}

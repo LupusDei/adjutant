@@ -11,5 +11,7 @@
     "declaration": false,
     "sourceMap": false
   },
-  "include": ["cli/**/*.ts"]
+  "include": ["cli/**/*.ts"],
+  "//": "Test files (vitest) are not part of the production CLI build.",
+  "exclude": ["cli/**/*.test.ts", "cli/tests/**"]
 }
