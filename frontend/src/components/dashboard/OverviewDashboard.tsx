@@ -5,6 +5,7 @@ import { useProject } from '../../contexts/ProjectContext';
 import { api } from '../../services/api';
 import type { AutoDevelopStatus } from '../../types';
 import { getTimelineEvents, type TimelineEvent } from '../../services/api';
+import { timelineEventProject, timelineActionText } from './timelineRow';
 import type { AgentOverview, OverviewUnreadSummary } from '../../types/overview';
 import { AutoDevelopToggle } from './AutoDevelopToggle';
 import { AutoDevelopPanel } from './AutoDevelopPanel';
@@ -337,16 +338,24 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
         >
           {timelineEvents.length > 0 ? (
             <div className="dashboard-timeline-list">
-              {timelineEvents.map((evt) => (
-                <div key={evt.id} className="dashboard-timeline-row">
-                  <span className={`dashboard-timeline-type dashboard-timeline-type-${evt.eventType.replace(/_/g, '-')}`}>
-                    {timelineEventLabel(evt.eventType)}
-                  </span>
-                  <span className="dashboard-timeline-action">{truncateBody(evt.action, 70)}</span>
-                  <span className="dashboard-timeline-agent">{evt.agentId}</span>
-                  <span className="dashboard-timeline-time">{formatChatTimestamp(evt.createdAt)}</span>
-                </div>
-              ))}
+              {timelineEvents.map((evt) => {
+                const project = timelineEventProject(evt);
+                return (
+                  <div key={evt.id} className="dashboard-timeline-row">
+                    <span className="dashboard-timeline-agent" title={evt.agentId}>{evt.agentId}</span>
+                    <span className={`dashboard-timeline-type dashboard-timeline-type-${evt.eventType.replace(/_/g, '-')}`}>
+                      {timelineEventLabel(evt.eventType)}
+                    </span>
+                    <span className="dashboard-timeline-action" title={timelineActionText(evt.action)}>
+                      {timelineActionText(evt.action)}
+                    </span>
+                    {project && (
+                      <span className="dashboard-timeline-project" title={`project: ${project}`}>{project}</span>
+                    )}
+                    <span className="dashboard-timeline-time">{formatChatTimestamp(evt.createdAt)}</span>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <p className="dashboard-empty-text">No timeline events</p>

@@ -1655,11 +1655,25 @@
 
 .dashboard-timeline-row {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: baseline;
+  gap: 12px;
   padding: 4px 0;
   font-size: 0.75rem;
   border-bottom: 1px solid rgba(0, 255, 0, 0.05);
+}
+
+/* Agent name — far left, the column the eye tracks down. Brighter than the
+   metadata so it reads as the row's anchor; fixed width keeps the badges and
+   text aligned across rows. */
+.dashboard-timeline-agent {
+  flex-shrink: 0;
+  width: 150px;
+  color: var(--crt-phosphor);
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dashboard-timeline-type {
@@ -1669,27 +1683,48 @@
   border: 1px solid var(--crt-phosphor-dim);
   color: var(--crt-phosphor-dim);
   flex-shrink: 0;
-  min-width: 60px;
+  min-width: 78px;
   text-align: center;
+  border-radius: 2px;
 }
 
+/* Event-type colorization (mirrors timeline/TimelineEventCard palette). */
 .dashboard-timeline-type-status-change { color: var(--crt-phosphor); border-color: var(--crt-phosphor); }
-.dashboard-timeline-type-announcement { color: #FFAA00; border-color: #FFAA00; }
-.dashboard-timeline-type-bead-closed { color: #00FF00; border-color: #00FF00; }
-.dashboard-timeline-type-auto-develop-phase-changed { color: #66CCFF; border-color: #66CCFF; }
+.dashboard-timeline-type-progress-report { color: #66ccff; border-color: #66ccff; }
+.dashboard-timeline-type-message-sent { color: #7f9cff; border-color: #4a5e99; }
+.dashboard-timeline-type-announcement { color: #ffaa00; border-color: #ffaa00; }
+.dashboard-timeline-type-bead-updated { color: #66ccff; border-color: #66ccff; }
+.dashboard-timeline-type-bead-closed { color: #44ff44; border-color: #44ff44; }
+.dashboard-timeline-type-coordinator-action { color: #cc88ff; border-color: #cc88ff; }
+.dashboard-timeline-type-schedule-check { color: #cc88ff; border-color: #8a6ab0; }
+.dashboard-timeline-type-auto-develop-enabled { color: #44ff44; border-color: #44ff44; }
+.dashboard-timeline-type-auto-develop-disabled { color: #ff4444; border-color: #ff4444; }
+.dashboard-timeline-type-auto-develop-phase-changed { color: #66ccff; border-color: #66ccff; }
+.dashboard-timeline-type-proposal-completed { color: #44ff44; border-color: #44ff44; }
+.dashboard-timeline-type-deploy-status { color: #66ccff; border-color: #66ccff; }
 
+/* Action text — flex:1 so it expands to fill nearly all the row width on wide
+   screens; min-width:0 lets ellipsis kick in only on true overflow. */
 .dashboard-timeline-action {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
   color: var(--crt-phosphor);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.dashboard-timeline-agent {
-  color: var(--crt-phosphor-dim);
-  font-size: 0.65rem;
+/* Project tag — right side, just left of the timestamp. */
+.dashboard-timeline-project {
   flex-shrink: 0;
+  max-width: 120px;
+  color: #66cc99;
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dashboard-timeline-time {
