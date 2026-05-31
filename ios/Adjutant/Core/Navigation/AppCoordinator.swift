@@ -162,6 +162,11 @@ final class AppCoordinator: Coordinator, ObservableObject {
 
         case .themeSettings, .voiceSettings:
             appendToCurrentPath(route)
+
+        case .openQuestions:
+            // Push Open Questions onto the current tab's nav stack.
+            // Deep-link path: selectTab(.overview) → navigateReplacingPath(.openQuestions).
+            appendToCurrentPath(route)
         }
     }
 
@@ -255,6 +260,12 @@ final class AppCoordinator: Coordinator, ObservableObject {
 
         case "settings":
             selectTab(.settings)
+            return true
+
+        // Open Questions triage screen — linked from question:new APNS push (adj-181.5)
+        case "questions":
+            selectTab(.overview)
+            navigateReplacingPath(to: .openQuestions)
             return true
 
         // Legacy deep links redirect to overview
