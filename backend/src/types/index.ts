@@ -296,3 +296,122 @@ export const ProjectContextSchema = z.object({
   projectPath: z.string(),
   beadsDir: z.string(),
 });
+
+// ============================================================================
+// AgentQuestion Types (adj-181 — Agent Question Triage)
+// ============================================================================
+
+/**
+ * Urgency level for a filed question. Controls triage sort order.
+ * blocking → high → normal → low (highest to lowest priority).
+ */
+export const AgentQuestionUrgencySchema = z.enum(["low", "normal", "high", "blocking"]);
+export type AgentQuestionUrgency = z.infer<typeof AgentQuestionUrgencySchema>;
+
+/**
+ * Lifecycle status of a filed question.
+ */
+export const AgentQuestionStatusSchema = z.enum(["open", "answered", "dismissed"]);
+export type AgentQuestionStatus = z.infer<typeof AgentQuestionStatusSchema>;
+
+/**
+ * A filed agent question as stored and returned by the question store.
+ * Maps from the snake_case DB row to camelCase TypeScript.
+ */
+export interface AgentQuestion {
+  id: string;
+  projectId: string;
+  agentId: string;
+  body: string;
+  context?: string;
+  category?: string;
+  /** Parsed from the JSON array column; undefined when no options were filed. */
+  suggestedOptions?: string[];
+  urgency: AgentQuestionUrgency;
+  status: AgentQuestionStatus;
+  answerBody?: string;
+  chosenOption?: string;
+  answeredBy?: string;
+  beadId?: string;
+  conversationId?: string;
+  createdAt: string;
+  answeredAt?: string;
+  updatedAt: string;
+}
+
+/**
+ * Zod schema for a full AgentQuestion record (for parse/validation of API
+ * responses and type-level checks).
+ */
+export const AgentQuestionSchema = z.object({
+  id: z.string().min(1),
+  projectId: z.string().min(1),
+  agentId: z.string().min(1),
+  body: z.string().min(1),
+  context: z.string().optional(),
+  category: z.string().optional(),
+  /** Each option must be a non-empty string. */
+  suggestedOptions: z.array(z.string().min(1)).optional(),
+  urgency: AgentQuestionUrgencySchema,
+  status: AgentQuestionStatusSchema,
+  answerBody: z.string().nullable().optional(),
+  chosenOption: z.string().nullable().optional(),
+  answeredBy: z.string().nullable().optional(),
+  beadId: z.string().optional(),
+  conversationId: z.string().optional(),
+  createdAt: z.string().min(1),
+  answeredAt: z.string().nullable().optional(),
+  updatedAt: z.string().min(1),
+});
+
+/**
+ * Input schema for filing a new question (MCP tool + store layer).
+ * projectId and agentId are resolved server-side in the MCP layer but
+ * are passed explicitly at the store layer.
+ */
+export const FileQuestionSchema = z.object({
+  projectId: z.string().min(1),
+  agentId: z.string().min(1),
+  body: z.string().min(1, "Question body is required"),
+  context: z.string().optional(),
+  category: z.string().optional(),
+  urgency: AgentQuestionUrgencySchema.default("normal"),
+  suggestedOptions: z.array(z.string().min(1)).optional(),
+  beadId: z.string().optional(),
+  conversationId: z.string().optional(),
+});
+export type FileQuestionInput = z.infer<typeof FileQuestionSchema>;
+
+/**
+ * Input schema for answering a question.
+ * Refinement: at least one of answerBody or chosenOption must be present and non-empty.
+ */
+export const AnswerQuestionSchema = z
+  .object({
+    answerBody: z.string().min(1).optional(),
+    chosenOption: z.string().min(1).optional(),
+    answeredBy: z.string().optional(),
+  })
+  .refine(
+    (data) =>
+      (data.answerBody !== undefined && data.answerBody.length > 0) ||
+      (data.chosenOption !== undefined && data.chosenOption.length > 0),
+    {
+      message: "At least one of answerBody or chosenOption is required",
+      path: ["answerBody"],
+    },
+  );
+export type AnswerQuestionInput = z.infer<typeof AnswerQuestionSchema>;
+
+/**
+ * Filter/query schema for listing questions.
+ * All fields optional; the store defaults status to 'open'.
+ */
+export const ListQuestionsSchema = z.object({
+  status: AgentQuestionStatusSchema.optional(),
+  projectId: z.string().optional(),
+  category: z.string().optional(),
+  agentId: z.string().optional(),
+  urgency: AgentQuestionUrgencySchema.optional(),
+});
+export type ListQuestionsFilter = z.infer<typeof ListQuestionsSchema>;
