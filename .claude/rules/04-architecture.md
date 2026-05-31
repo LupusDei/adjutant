@@ -103,6 +103,81 @@ Channel: wsBroadcastToConversation(id) → ONLY members who are subscribed (fail
 scope STRICTLY to one conversation — no agent/recipient widening. Both web and iOS scope
 all reads/writes/real-time by `conversationId`.
 
+### Question Triage (adj-181)
+
+A first-class, triageable agent question/answer system. Agents file anything they need
+from the General — both questions that require a decision/answer AND blocking
+tasks/actions only the General can complete — via `file_question` (Rule 5 mandate).
+
+**Data model** (migration `034-agent-questions.sql`):
+- `agent_questions(id, project_id, agent_id, body, context, category, suggested_options,
+  urgency, status, answer_body, chosen_option, answered_by, bead_id, conversation_id,
+  created_at, answered_at, updated_at)`
+- `category`: `decision|clarification|approval|action_required|other`
+  — `action_required` marks a blocking task the General must DO (not just answer).
+- `urgency`: `blocking|high|normal|low` — sort order for the triage view.
+- `suggested_options`: JSON string array of agent-proposed answer choices (nullable).
+- `conversation_id`: set after DM mirror (adj-i8epe fix); links the question row to the
+  asker's existing DM conversation so nothing about today's flow is lost.
+
+**Service**: `backend/src/services/question-service.ts` — the single orchestration point
+so BOTH REST (Phase 3) and MCP (Phase 2) trigger identical broadcast + push behaviour.
+Routes and MCP tools NEVER call the store, ws-server, or apns-service directly.
+
+**Orchestration per operation**:
+```
+fileQuestion:
+  1. questionStore.fileQuestion — persist the record
+  2. conversationStore.getOrCreateDm(asker, "user") — reuse existing DM (Rule 9)
+  3. messageStore.insertMessage — mirror question into the DM conversation
+  4. questionStore.setConversationId — persist conversationId back to the row (adj-i8epe)
+  5. wsBroadcast({ type: "question:new", ... })
+  6. sendNotificationToAll — APNS push (blocking/high always; normal/low suppressed, adj-96rtr)
+
+answerQuestion:
+  1. questionStore.answerQuestion — persist answer (chosenOption XOR/AND answerBody, ≥1 required)
+  2. messageStore.insertMessage — mirror answer into asker's DM
+  3. wsBroadcast({ type: "question:answered", ... })
+  (no APNS push on answer)
+
+dismissQuestion:
+  1. questionStore.dismissQuestion — update status
+  2. wsBroadcast({ type: "question:dismissed", ... })
+  (no APNS push on dismiss)
+```
+
+**Key design decisions**:
+- **Reuse DM delivery** (Rule 9): filing a question also writes a normal message into
+  the existing DM conversation — the triage system adds structure without replacing chat.
+- **single orchestration point**: `question-service.ts` is the only caller of the store,
+  WS broadcast, and APNS. This ensures REST and MCP paths are always identical.
+- **projectId scoping**: every row stores `project_id` (UUID). All queries, events, and
+  API filters use `projectId` — never `projectName` or `projectPath`.
+- **Server-side asker identity**: `file_question` resolves the calling agent from the MCP
+  session via `getAgentBySession` — never client-supplied.
+- **answer-contract**: at least one of `answerBody` or `chosenOption` required. When
+  `chosenOption` is present and `suggested_options` are stored, the option MUST be in
+  the stored list (validated at the store layer).
+- **APNS urgency gating** (adj-96rtr): `blocking` and `high` always push when APNS is
+  configured; `normal` and `low` do NOT push (suppressed until a user-pref API exists).
+- **file_question mandate** (Constitution Rule 5): `file_question` is the REQUIRED channel
+  for ANYTHING an agent needs from the General — both questions AND blocking actions.
+  `send_message` is for general comms; it is NOT a substitute for the question queue.
+
+**Routes**: `GET /api/questions` (list with `status|projectId|category|agentId|urgency` filters,
+default `status=open`), `POST /api/questions/:id/answer`, `POST /api/questions/:id/dismiss`.
+Sort: blocking → high → normal → low, then oldest-first within each tier.
+
+**MCP tools** (`mcp-tools/questions.ts`): `file_question`, `answer_question`, `list_questions`.
+Cross-project override via the adj-146 `resolveToolProjectContext` pattern.
+
+**WS events**: `question:new`, `question:answered`, `question:dismissed` — part of the
+`WsServerMessage` union in `ws-server.ts`. Broadcast to ALL authenticated clients (same
+pattern as DM broadcasts).
+
+**APNS push payload** on `question:new`: title `[URGENCY] Question from <agentId>`,
+truncated body, `data.screen = "open_questions"` for iOS deep-link.
+
 ## Key Decisions
 
 1. **MCP for Agent Communication**: Agents connect via MCP SSE and use tools for messaging, status, and beads

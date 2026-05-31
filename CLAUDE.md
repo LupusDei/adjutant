@@ -17,6 +17,11 @@ Adjutant is a standalone multi-agent dashboard backed by beads (issue tracking) 
   members) or `channel` (Slack-style multi-party room). DMs and channels are the SAME
   entity + a `conversation_members` table, NOT two systems. See "Conversation Model" in
   `.claude/rules/04-architecture.md` and `specs/055-chat-messaging-overhaul/`.
+- **Question Triage**: First-class agent question/answer system (adj-181). Agents MUST use
+  `file_question` MCP tool for ANYTHING they need from the General — both questions and
+  blocking tasks/actions (Constitution Rule 5). A triage view (web + iOS) aggregates open
+  questions sorted blocking → high → normal → low; answering notifies the asker via DM;
+  new blocking/high questions push APNS. See "Question Triage" in `.claude/rules/04-architecture.md`.
 - **Dashboard**: Retro terminal themed web UI showing agents, beads, chat, and system state
 
 ### Conversation Model (chat — adj-164)
