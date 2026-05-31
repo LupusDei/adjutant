@@ -1,13 +1,13 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, costsRouter, createCallsignsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createPersonasRouter, createProjectsRouter, createProposalsRouter, createSchedulesRouter, createWebhooksRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, costsRouter, createCallsignsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createPersonasRouter, createProjectsRouter, createProposalsRouter, createQuestionsRouter, createSchedulesRouter, createWebhooksRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { createDashboardService } from "./services/dashboard-service.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
 import { startPrefixMapRefreshScheduler } from "./services/beads/index.js";
-import { initWebSocketServer, setConversationStore } from "./services/ws-server.js";
+import { initWebSocketServer, setConversationStore, wsBroadcast } from "./services/ws-server.js";
 import { initAgentStatusStream } from "./services/agent-status-stream.js";
 import { initTerminalStream } from "./services/terminal-stream.js";
 import { initStreamingBridge } from "./services/streaming-bridge.js";
@@ -28,6 +28,8 @@ import { createConversationStore } from "./services/conversation-store.js";
 import { createConversationsRouter } from "./routes/conversations.js";
 import { createChannelsRouter } from "./routes/channels.js";
 import { createEventStore } from "./services/event-store.js";
+import { createQuestionStore } from "./services/question-store.js";
+import { createQuestionService } from "./services/question-service.js";
 import { createPersonaService, initPersonaService } from "./services/persona-service.js";
 import { createCallsignToggleService } from "./services/callsign-toggle-service.js";
 import { initMessageDelivery } from "./services/message-delivery.js";
@@ -131,6 +133,18 @@ app.use("/api/channels", createChannelsRouter(conversationStore));
 app.use("/api/projects", createProjectsRouter(messageStore, proposalStore, autoDevelopStore));
 app.use("/api/overview", createOverviewRouter(messageStore));
 app.use("/api/proposals", createProposalsRouter(proposalStore));
+
+// adj-181.3 — agent question triage: REST API + WS broadcast + APNS push
+{
+  const questionStore = createQuestionStore(messageDb);
+  const questionService = createQuestionService({
+    questionStore,
+    conversationStore,
+    messageStore,
+    wsBroadcast,
+  });
+  app.use("/api/questions", createQuestionsRouter(questionService));
+}
 
 // Initialize persona and callsign toggle services and mount routes
 const personaService = createPersonaService(messageDb);
