@@ -36,6 +36,11 @@ import { isAPNsConfigured, sendNotificationToAll } from "./apns-service.js";
 import type { QuestionStore } from "./question-store.js";
 import type { ConversationStore } from "./conversation-store.js";
 import type { MessageStore } from "./message-store.js";
+// Type-only import: erased at compile time, so it introduces NO runtime
+// circular dependency (ws-server imports conversation-store at runtime; this
+// is purely a compile-time type reference). Using the real union keeps the
+// injected wsBroadcast assignable (avoids the TS2322 contravariance break).
+import type { WsServerMessage } from "./ws-server.js";
 import type {
   AgentQuestion,
   FileQuestionInput,
@@ -56,17 +61,15 @@ import type {
 // ============================================================================
 
 /**
- * Minimal shape of the wsBroadcast function accepted by createQuestionService.
+ * Shape of the wsBroadcast function accepted by createQuestionService.
  *
- * We use a structural duck type rather than importing from ws-server directly
- * to avoid a circular dependency (ws-server imports conversation-store; this
- * service imports conversation-store). The question event types are defined in
- * ws-server's WsServerMessage union so the real wsBroadcast satisfies this type.
+ * This MUST match the real `wsBroadcast(msg: WsServerMessage)` exported by
+ * ws-server — the question:new/answered/dismissed variants are part of that
+ * union (adj-181.3.5). A looser duck type ({ type: string; ... }) is NOT
+ * assignable from the real strict function (parameter contravariance → TS2322),
+ * so we reference the real union via a type-only import.
  */
-export type WsBroadcastFn = (msg: {
-  type: string;
-  [key: string]: unknown;
-}) => void;
+export type WsBroadcastFn = (msg: WsServerMessage) => void;
 
 // ============================================================================
 // QuestionService interface
@@ -192,7 +195,7 @@ export function createQuestionService({
         status: question.status,
         body: question.body,
         category: question.category ?? null,
-        conversationId: conversationId ?? null,
+        conversationId: conversationId ?? undefined,
         createdAt: question.createdAt,
       });
 

@@ -60,7 +60,7 @@ interface WsClientMessage {
 }
 
 /** Server → Client message types */
-interface WsServerMessage {
+export interface WsServerMessage {
   type: "auth_challenge" | "connected" | "message" | "chat_message" | "stream_token" | "stream_end" | "typing" | "delivered" | "error" | "sync_response" | "pong"
     | "session_connected" | "session_disconnected" | "session_output" | "session_raw" | "session_status"
     | "timeline_event"
@@ -116,6 +116,7 @@ interface WsServerMessage {
   answeredAt?: string | null | undefined;
   projectId?: string | undefined;
   category?: string | null | undefined;
+  updatedAt?: string | undefined;
 }
 
 interface WsClient {
