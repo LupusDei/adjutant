@@ -16,6 +16,7 @@ import { PersonasView } from "./components/personas/PersonasView";
 import { TimelineView } from "./components/timeline/TimelineView";
 import { EpicGraphPage } from "./components/beads/EpicGraphPage";
 import { ChatBadge } from "./components/chat/ChatBadge";
+import { OpenQuestionsView } from "./components/questions/OpenQuestionsView";
 
 export type ThemeId = 'pipboy' | 'document' | 'starcraft' | 'friendly' | 'glass';
 
@@ -47,7 +48,7 @@ function migrateTheme(stored: string | null): ThemeId {
   return legacyMap[stored] ?? 'starcraft';
 }
 
-type TabId = "dashboard" | "chat" | "epics" | "crew" | "beads" | "personas" | "timeline" | "proposals" | "settings";
+type TabId = "dashboard" | "chat" | "epics" | "crew" | "beads" | "personas" | "timeline" | "proposals" | "questions" | "settings";
 
 interface Tab {
   id: TabId;
@@ -64,6 +65,7 @@ const TABS: Tab[] = [
   { id: "personas", label: "PERSONAS", icon: "🎭" },
   { id: "timeline", label: "TIMELINE", icon: "⏱" },
   { id: "proposals", label: "PROPOSALS", icon: "💡" },
+  { id: "questions", label: "QUESTIONS", icon: "?" },
   { id: "settings", label: "SETTINGS", icon: "⚙️" },
 ];
 
@@ -182,6 +184,13 @@ function AppContent() {
             aria-hidden={activeTab !== "proposals"}
           >
             <ProposalsView isActive={activeTab === "proposals"} />
+          </section>
+          <section
+            className="tab-view"
+            hidden={activeTab !== "questions"}
+            aria-hidden={activeTab !== "questions"}
+          >
+            <OpenQuestionsView isActive={activeTab === "questions"} />
           </section>
           <section
             className="tab-view"
