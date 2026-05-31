@@ -17,6 +17,7 @@ import { TimelineView } from "./components/timeline/TimelineView";
 import { EpicGraphPage } from "./components/beads/EpicGraphPage";
 import { ChatBadge } from "./components/chat/ChatBadge";
 import { OpenQuestionsView } from "./components/questions/OpenQuestionsView";
+import { QuestionsBadge } from "./components/questions/QuestionsBadge";
 
 export type ThemeId = 'pipboy' | 'document' | 'starcraft' | 'friendly' | 'glass';
 
@@ -124,6 +125,7 @@ function AppContent() {
             >
               {isSmallScreen && tab.id === "settings" ? tab.icon : tab.label}
               {tab.id === "chat" && <ChatBadge />}
+              {tab.id === "questions" && <QuestionsBadge />}
             </button>
           ))}
         </nav>

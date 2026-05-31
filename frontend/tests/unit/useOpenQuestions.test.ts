@@ -419,4 +419,299 @@ describe('useOpenQuestions', () => {
       expect(result.current.categoryFilter).toBe('approval');
     });
   });
+
+  // ── adj-181.9: WS question:new respects active filters ─────────────────────
+
+  describe('WS question:new respects active filters (adj-181.9)', () => {
+    it('should NOT add a question:new event that does not match the active category filter', async () => {
+      listFn().mockResolvedValue([]);
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: unknown) => {
+        subscriberCallback = cb as (msg: unknown) => void;
+        return vi.fn();
+      });
+
+      const { result } = renderHook(() => useOpenQuestions());
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Apply category filter: only 'decision' questions
+      act(() => {
+        result.current.setCategoryFilter('decision');
+      });
+
+      await waitFor(() => {
+        expect(result.current.categoryFilter).toBe('decision');
+      });
+
+      // Incoming WS event with 'clarification' category — should be filtered out
+      act(() => {
+        subscriberCallback?.({
+          type: 'question:new',
+          questionId: 'q-ws-filtered',
+          urgency: 'normal',
+          status: 'open',
+          body: 'Clarification question',
+          category: 'clarification',
+          agentId: 'agent-1',
+          conversationId: null,
+          createdAt: '2026-05-31T10:00:00Z',
+          projectId: 'proj-uuid-123',
+          context: null,
+          suggestedOptions: null,
+          answerBody: null,
+          chosenOption: null,
+          answeredBy: null,
+          beadId: null,
+          answeredAt: null,
+          updatedAt: '2026-05-31T10:00:00Z',
+        });
+      });
+
+      // Should NOT be added since category filter is 'decision'
+      expect(result.current.questions).toHaveLength(0);
+    });
+
+    it('should NOT add a question:new event that does not match the active urgency filter', async () => {
+      listFn().mockResolvedValue([]);
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: unknown) => {
+        subscriberCallback = cb as (msg: unknown) => void;
+        return vi.fn();
+      });
+
+      const { result } = renderHook(() => useOpenQuestions());
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Apply urgency filter: only 'blocking'
+      act(() => {
+        result.current.setUrgencyFilter('blocking');
+      });
+
+      await waitFor(() => {
+        expect(result.current.urgencyFilter).toBe('blocking');
+      });
+
+      // Incoming WS event with 'normal' urgency — should be filtered out
+      act(() => {
+        subscriberCallback?.({
+          type: 'question:new',
+          questionId: 'q-ws-urg-filtered',
+          urgency: 'normal',
+          status: 'open',
+          body: 'Normal urgency question',
+          category: 'decision',
+          agentId: 'agent-1',
+          conversationId: null,
+          createdAt: '2026-05-31T10:00:00Z',
+          projectId: 'proj-uuid-123',
+          context: null,
+          suggestedOptions: null,
+          answerBody: null,
+          chosenOption: null,
+          answeredBy: null,
+          beadId: null,
+          answeredAt: null,
+          updatedAt: '2026-05-31T10:00:00Z',
+        });
+      });
+
+      // Should NOT be added since urgency filter is 'blocking'
+      expect(result.current.questions).toHaveLength(0);
+    });
+
+    it('should NOT add a question:new event that does not match the active agent filter', async () => {
+      listFn().mockResolvedValue([]);
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: unknown) => {
+        subscriberCallback = cb as (msg: unknown) => void;
+        return vi.fn();
+      });
+
+      const { result } = renderHook(() => useOpenQuestions());
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Apply agent filter: only 'agent-alpha'
+      act(() => {
+        result.current.setAgentFilter('agent-alpha');
+      });
+
+      await waitFor(() => {
+        expect(result.current.agentFilter).toBe('agent-alpha');
+      });
+
+      // Incoming WS event from 'agent-beta' — should be filtered out
+      act(() => {
+        subscriberCallback?.({
+          type: 'question:new',
+          questionId: 'q-ws-agent-filtered',
+          urgency: 'normal',
+          status: 'open',
+          body: 'Question from wrong agent',
+          category: 'decision',
+          agentId: 'agent-beta',
+          conversationId: null,
+          createdAt: '2026-05-31T10:00:00Z',
+          projectId: 'proj-uuid-123',
+          context: null,
+          suggestedOptions: null,
+          answerBody: null,
+          chosenOption: null,
+          answeredBy: null,
+          beadId: null,
+          answeredAt: null,
+          updatedAt: '2026-05-31T10:00:00Z',
+        });
+      });
+
+      // Should NOT be added since agent filter is 'agent-alpha'
+      expect(result.current.questions).toHaveLength(0);
+    });
+
+    it('should add a question:new event that matches all active filters', async () => {
+      listFn().mockResolvedValue([]);
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: unknown) => {
+        subscriberCallback = cb as (msg: unknown) => void;
+        return vi.fn();
+      });
+
+      const { result } = renderHook(() => useOpenQuestions());
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Apply category filter
+      act(() => {
+        result.current.setCategoryFilter('decision');
+      });
+
+      await waitFor(() => {
+        expect(result.current.categoryFilter).toBe('decision');
+      });
+
+      // Incoming WS event matching the filter
+      act(() => {
+        subscriberCallback?.({
+          type: 'question:new',
+          questionId: 'q-ws-match',
+          urgency: 'normal',
+          status: 'open',
+          body: 'Matching question',
+          category: 'decision',
+          agentId: 'agent-1',
+          conversationId: null,
+          createdAt: '2026-05-31T10:00:00Z',
+          projectId: 'proj-uuid-123',
+          context: null,
+          suggestedOptions: null,
+          answerBody: null,
+          chosenOption: null,
+          answeredBy: null,
+          beadId: null,
+          answeredAt: null,
+          updatedAt: '2026-05-31T10:00:00Z',
+        });
+      });
+
+      // Should be added since it matches the category filter
+      expect(result.current.questions).toHaveLength(1);
+      expect(result.current.questions[0]!.id).toBe('q-ws-match');
+    });
+  });
+
+  // ── adj-181.11: per-row error state ────────────────────────────────────────
+
+  describe('per-row error state (adj-181.11)', () => {
+    it('should rethrow answer error so the row can display it', async () => {
+      const q = makeQuestion({ id: 'q-row-err' });
+      listFn().mockResolvedValue([q]);
+      answerFn().mockRejectedValue(new Error('Row answer failed'));
+
+      const { result } = renderHook(() => useOpenQuestions());
+
+      await waitFor(() => {
+        expect(result.current.questions).toHaveLength(1);
+      });
+
+      let caughtError: Error | undefined;
+      await act(async () => {
+        try {
+          await result.current.answer('q-row-err', { answerBody: 'text' });
+        } catch (e) {
+          caughtError = e as Error;
+        }
+      });
+
+      // The hook rethrows so the row can display its own error
+      expect(caughtError?.message).toBe('Row answer failed');
+      // Question stays in list on error
+      expect(result.current.questions).toHaveLength(1);
+    });
+
+    it('should rethrow dismiss error so the row can display it', async () => {
+      const q = makeQuestion({ id: 'q-row-dis-err' });
+      listFn().mockResolvedValue([q]);
+      dismissFn().mockRejectedValue(new Error('Row dismiss failed'));
+
+      const { result } = renderHook(() => useOpenQuestions());
+
+      await waitFor(() => {
+        expect(result.current.questions).toHaveLength(1);
+      });
+
+      let caughtError: Error | undefined;
+      await act(async () => {
+        try {
+          await result.current.dismiss('q-row-dis-err');
+        } catch (e) {
+          caughtError = e as Error;
+        }
+      });
+
+      // The hook rethrows so the row can display its own error
+      expect(caughtError?.message).toBe('Row dismiss failed');
+      // Question stays in list on error
+      expect(result.current.questions).toHaveLength(1);
+    });
+  });
+
+  // ── adj-181.13: open question count for badge ──────────────────────────────
+
+  describe('open question count (adj-181.13)', () => {
+    it('should expose openCount equal to the number of questions in the list', async () => {
+      const q1 = makeQuestion({ id: 'q-cnt-1' });
+      const q2 = makeQuestion({ id: 'q-cnt-2' });
+      listFn().mockResolvedValue([q1, q2]);
+
+      const { result } = renderHook(() => useOpenQuestions());
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(result.current.openCount).toBe(2);
+    });
+
+    it('should expose openCount of 0 when no questions exist', async () => {
+      listFn().mockResolvedValue([]);
+
+      const { result } = renderHook(() => useOpenQuestions());
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(result.current.openCount).toBe(0);
+    });
+  });
 });
