@@ -21,6 +21,7 @@ import { registerStatusTools } from "./services/mcp-tools/status.js";
 import { registerBeadTools } from "./services/mcp-tools/beads.js";
 import { registerQueryTools } from "./services/mcp-tools/queries.js";
 import { registerProposalTools } from "./services/mcp-tools/proposals.js";
+import { registerQuestionTools } from "./services/mcp-tools/questions.js";
 import { registerAutoDevelopTools } from "./services/mcp-tools/auto-develop.js";
 import { createProposalStore, migrateProposalProjectNames } from "./services/proposal-store.js";
 import { backfillConversations } from "./services/conversation-backfill.js";
@@ -135,16 +136,16 @@ app.use("/api/overview", createOverviewRouter(messageStore));
 app.use("/api/proposals", createProposalsRouter(proposalStore));
 
 // adj-181.3 — agent question triage: REST API + WS broadcast + APNS push
-{
-  const questionStore = createQuestionStore(messageDb);
-  const questionService = createQuestionService({
-    questionStore,
-    conversationStore,
-    messageStore,
-    wsBroadcast,
-  });
-  app.use("/api/questions", createQuestionsRouter(questionService));
-}
+// adj-181.2 — question service is also needed by registerQuestionTools (MCP tools)
+//             so it must be top-level (accessible in the setToolRegistrar callback)
+const questionStore = createQuestionStore(messageDb);
+const questionService = createQuestionService({
+  questionStore,
+  conversationStore,
+  messageStore,
+  wsBroadcast,
+});
+app.use("/api/questions", createQuestionsRouter(questionService));
 
 // Initialize persona and callsign toggle services and mount routes
 const personaService = createPersonaService(messageDb);
@@ -361,6 +362,7 @@ const server = app.listen(PORT, () => {
     registerMemoryTools(server, memoryStore, { getAgentBySession });
     registerCoordinationTools(server, adjutantState, messageStore, stimulusEngine, eventStore, cronScheduleStore);
     registerPersonaTools(server, personaService);
+    registerQuestionTools(server, questionService);
   });
 
   // Initialize MCP server subsystem with tool registrar.
