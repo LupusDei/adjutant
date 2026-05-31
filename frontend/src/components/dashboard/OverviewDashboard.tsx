@@ -295,7 +295,9 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
                         {statusLabel(agent.status)}
                       </span>
                       {agent.currentBead && (
-                        <span className="dashboard-agent-task">{truncateBody(agent.currentBead, 60)}</span>
+                        <span className="dashboard-agent-task" title={timelineActionText(agent.currentBead)}>
+                          {timelineActionText(agent.currentBead)}
+                        </span>
                       )}
                       {(agent.contextPercent != null || agent.cost != null) && (
                         <span className="dashboard-agent-cost-context">
