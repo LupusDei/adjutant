@@ -6,8 +6,26 @@
  *
  * Design: Pip-Boy retro terminal. Urgency levels treated as threat levels.
  * Interaction model: decisive — one-tap option buttons or free-text submission.
+ *
+ * adj-181.8  — AGENT filter exposed in the filter bar
+ * adj-181.9  — WS filter gate enforced in hook (not in this component)
+ * adj-181.10 — action_required chip is visually distinct (solid fill + [!] prefix)
+ * adj-181.11 — per-row error display; errors surface in the row, not only globally
+ * adj-181.12 — blocking rows have persistent left border anchor (not hover-only)
+ * adj-181.14 — project field shown on each row
+ * adj-181.15 — context auto-expands for high/blocking urgency
+ * adj-181.16 — timeAgo/dismiss contrast fixed (#888 minimum)
+ * adj-181.17 — category chip on-palette green (no cyan)
+ * adj-181.18 — keyboard navigation: ArrowDown/j = next row, ArrowUp/k = prev row
  */
-import { type CSSProperties, useState, useCallback, useRef, type SyntheticEvent } from 'react';
+import {
+  type CSSProperties,
+  useState,
+  useCallback,
+  useRef,
+  type SyntheticEvent,
+  type KeyboardEvent,
+} from 'react';
 
 import { useOpenQuestions } from '../../hooks/useOpenQuestions';
 import type { AgentQuestion, QuestionCategory, QuestionUrgency } from '../../types/questions';
@@ -32,9 +50,13 @@ const CATEGORY_LABELS: Record<QuestionCategory, string> = {
   decision: 'DECISION',
   clarification: 'CLARIFY',
   approval: 'APPROVAL',
+  // adj-181.10: action_required is a "DO THIS" task, distinguished by [!] prefix
   action_required: 'ACTION_REQ',
   other: 'OTHER',
 };
+
+// Categories that are "do-action" tasks vs "answer questions" (adj-181.10)
+const ACTION_CATEGORY = new Set<QuestionCategory>(['action_required']);
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -58,23 +80,34 @@ interface QuestionRowProps {
   question: AgentQuestion;
   onAnswer: (id: string, params: { answerBody?: string; chosenOption?: string }) => Promise<void>;
   onDismiss: (id: string) => Promise<void>;
+  /** Called when ArrowDown/j is pressed on this row (adj-181.18) */
+  onFocusNext: () => void;
+  /** Called when ArrowUp/k is pressed on this row (adj-181.18) */
+  onFocusPrev: () => void;
 }
 
-function QuestionRow({ question, onAnswer, onDismiss }: QuestionRowProps) {
-  const [contextExpanded, setContextExpanded] = useState(false);
+function QuestionRow({ question, onAnswer, onDismiss, onFocusNext, onFocusPrev }: QuestionRowProps) {
+  // adj-181.15: auto-expand context for high/blocking urgency rows
+  const autoExpand = question.urgency === 'blocking' || question.urgency === 'high';
+  const [contextExpanded, setContextExpanded] = useState(autoExpand);
   const [freeText, setFreeText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // adj-181.11: per-row error state (not global banner only)
+  const [rowError, setRowError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const urgencyColor = URGENCY_COLORS[question.urgency];
   const isBlocking = question.urgency === 'blocking';
+  const isActionRequired = question.category !== null && question.category !== undefined && ACTION_CATEGORY.has(question.category);
 
   const handleOptionClick = useCallback(async (option: string) => {
     setSubmitting(true);
+    setRowError(null);
     try {
       await onAnswer(question.id, { chosenOption: option });
-    } catch {
-      // error handled in hook
+    } catch (err) {
+      // adj-181.11: surface error in this row, not just in global banner
+      setRowError(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
     }
@@ -85,11 +118,13 @@ function QuestionRow({ question, onAnswer, onDismiss }: QuestionRowProps) {
     const text = freeText.trim();
     if (!text) return;
     setSubmitting(true);
+    setRowError(null);
     try {
       await onAnswer(question.id, { answerBody: text });
       setFreeText('');
-    } catch {
-      // error handled in hook
+    } catch (err) {
+      // adj-181.11: surface error in this row
+      setRowError(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
     }
@@ -97,35 +132,73 @@ function QuestionRow({ question, onAnswer, onDismiss }: QuestionRowProps) {
 
   const handleDismiss = useCallback(async () => {
     setSubmitting(true);
+    setRowError(null);
     try {
       await onDismiss(question.id);
-    } catch {
-      // error handled in hook
+    } catch (err) {
+      // adj-181.11: surface error in this row
+      setRowError(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
     }
   }, [question.id, onDismiss]);
 
+  // adj-181.18: keyboard nav handler for the row container
+  const handleRowKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'ArrowDown' || e.key === 'j') {
+      e.preventDefault();
+      onFocusNext();
+    } else if (e.key === 'ArrowUp' || e.key === 'k') {
+      e.preventDefault();
+      onFocusPrev();
+    }
+  }, [onFocusNext, onFocusPrev]);
+
   return (
-    <div style={{
-      ...styles.row,
-      borderLeftColor: urgencyColor,
-      ...(isBlocking ? styles.rowBlocking : {}),
-    }}>
-      {/* Header: agent + urgency + age + category */}
+    <div
+      style={{
+        ...styles.row,
+        borderLeftColor: urgencyColor,
+        // adj-181.12: persistent visual anchor for blocking rows
+        ...(isBlocking ? styles.rowBlocking : {}),
+      }}
+      // adj-181.18: keyboard navigation — tabIndex makes the row focusable
+      tabIndex={0}
+      data-question-row
+      data-question-id={question.id}
+      onKeyDown={handleRowKeyDown}
+      role="article"
+      aria-label={`Question from ${question.agentId}: ${question.body}`}
+    >
+      {/* Header: agent + project + urgency + age + category */}
       <div style={styles.rowHeader}>
         <div style={styles.rowMeta}>
           <span style={styles.agentId}>{question.agentId.toUpperCase()}</span>
+
+          {/* adj-181.14: project field */}
+          <span style={styles.projectId} title={question.projectId}>
+            {question.projectId}
+          </span>
+
           <span style={{ ...styles.urgencyBadge, color: urgencyColor, borderColor: urgencyColor }}>
             {URGENCY_LABELS[question.urgency]}
           </span>
+
+          {/* adj-181.10: action_required uses filled chip + [!] prefix; others use hollow border */}
           {question.category && (
-            <span style={styles.categoryChip}>
-              {CATEGORY_LABELS[question.category]}
+            <span
+              style={isActionRequired ? styles.categoryChipAction : styles.categoryChip}
+              data-category={question.category}
+              title={isActionRequired ? 'Action required — you must DO this' : 'Question category'}
+            >
+              {isActionRequired ? `[!] ${CATEGORY_LABELS[question.category]}` : CATEGORY_LABELS[question.category]}
             </span>
           )}
+
+          {/* adj-181.16: timeAgo color raised to #888 from #555 */}
           <span style={styles.timeAgo}>{timeAgo(question.createdAt)}</span>
         </div>
+        {/* adj-181.16: dismiss button color raised to #888 */}
         <button
           style={{ ...styles.dismissBtn, opacity: submitting ? 0.5 : 1 }}
           onClick={() => { void handleDismiss(); }}
@@ -139,7 +212,12 @@ function QuestionRow({ question, onAnswer, onDismiss }: QuestionRowProps) {
       {/* Question body */}
       <div style={styles.body}>{question.body}</div>
 
-      {/* Context block — collapsible */}
+      {/* adj-181.11: per-row inline error */}
+      {rowError !== null && (
+        <div style={styles.rowError} role="alert">{rowError}</div>
+      )}
+
+      {/* Context block — adj-181.15: auto-expanded for high/blocking */}
       {question.context && (
         <div style={styles.contextSection}>
           <button
@@ -233,11 +311,26 @@ export function OpenQuestionsView({ isActive: _isActive }: OpenQuestionsViewProp
     error,
     urgencyFilter,
     categoryFilter,
+    agentFilter,
     setUrgencyFilter,
     setCategoryFilter,
+    setAgentFilter,
     answer,
     dismiss,
   } = useOpenQuestions();
+
+  // adj-181.18: ref to the list container so we can query row elements for focus
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const focusRow = useCallback((index: number) => {
+    if (!listRef.current) return;
+    const rows = listRef.current.querySelectorAll<HTMLElement>('[data-question-row]');
+    const el = rows[index];
+    if (el) el.focus();
+  }, []);
+
+  // adj-181.8: derive unique agent IDs from the current question list for the agent filter
+  const uniqueAgents = Array.from(new Set(questions.map((q) => q.agentId))).sort();
 
   return (
     <div style={styles.container}>
@@ -247,7 +340,7 @@ export function OpenQuestionsView({ isActive: _isActive }: OpenQuestionsViewProp
         <span style={styles.viewCount}>{questions.length} PENDING</span>
       </div>
 
-      {/* Filter bar */}
+      {/* Filter bar — urgency, category, and agent (adj-181.8) */}
       <div style={styles.filterBar}>
         <div style={styles.filterGroup}>
           <span style={styles.filterLabel}>URGENCY:</span>
@@ -279,6 +372,31 @@ export function OpenQuestionsView({ isActive: _isActive }: OpenQuestionsViewProp
             </button>
           ))}
         </div>
+        {/* adj-181.8: agent filter row */}
+        <div style={styles.filterGroup}>
+          <span style={styles.filterLabel}>AGENT:</span>
+          <button
+            style={{
+              ...styles.filterBtn,
+              ...(agentFilter === 'all' ? styles.filterBtnActive : {}),
+            }}
+            onClick={() => { setAgentFilter('all'); }}
+          >
+            AGENT: ALL
+          </button>
+          {uniqueAgents.map((agentId) => (
+            <button
+              key={agentId}
+              style={{
+                ...styles.filterBtn,
+                ...(agentFilter === agentId ? styles.filterBtnActive : {}),
+              }}
+              onClick={() => { setAgentFilter(agentId); }}
+            >
+              {agentId.toUpperCase()}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* States */}
@@ -295,13 +413,15 @@ export function OpenQuestionsView({ isActive: _isActive }: OpenQuestionsViewProp
         <div style={styles.emptyState}>NO OPEN QUESTIONS</div>
       )}
 
-      <div style={styles.list}>
-        {questions.map((q) => (
+      <div style={styles.list} ref={listRef}>
+        {questions.map((q, idx) => (
           <QuestionRow
             key={q.id}
             question={q}
             onAnswer={answer}
             onDismiss={dismiss}
+            onFocusNext={() => { focusRow(idx + 1); }}
+            onFocusPrev={() => { focusRow(idx - 1); }}
           />
         ))}
       </div>
@@ -412,10 +532,15 @@ const styles: Record<string, CSSProperties> = {
     padding: '10px 14px',
     marginBottom: '6px',
     background: BG_PANEL,
-    transition: 'box-shadow 0.15s ease',
+    // adj-181.18: visible focus ring for keyboard nav (60fps safe — outline, not layout)
+    outline: 'none',
   },
   rowBlocking: {
-    boxShadow: '0 0 8px rgba(255, 34, 34, 0.2)',
+    // adj-181.12: PERSISTENT visual anchor for blocking rows — always-on, not hover-dependent.
+    // Background tint + strong inset left shadow create an unmissable anchoring effect.
+    // Uses opacity-based approach (no layout thrash) for 60fps compliance.
+    background: 'rgba(255, 34, 34, 0.04)',
+    boxShadow: 'inset 4px 0 0 rgba(255, 34, 34, 0.7)',
   },
   rowHeader: {
     display: 'flex',
@@ -435,6 +560,18 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 'bold',
     letterSpacing: '1px',
   },
+  // adj-181.14: project field — dimmer than agent, readable contrast
+  projectId: {
+    // adj-181.16: #888 provides readable contrast on #0a0a0a / #111111 dark bg
+    color: '#888',
+    fontSize: '9px',
+    fontFamily: MONO,
+    letterSpacing: '0.5px',
+    maxWidth: '140px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  },
   urgencyBadge: {
     fontSize: '10px',
     padding: '1px 5px',
@@ -443,23 +580,38 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: '0.5px',
     fontFamily: MONO,
   },
+  // adj-181.17: on-palette green (replaced off-palette #00ccff cyan)
   categoryChip: {
-    color: '#00ccff',
-    border: '1px solid #00ccff',
+    color: GREEN_DIM,
+    border: `1px solid ${GREEN_DIM}`,
     fontSize: '9px',
     padding: '1px 4px',
     letterSpacing: '0.5px',
     fontFamily: MONO,
   },
+  // adj-181.10: action_required gets solid filled chip to visually signal "DO THIS, not answer"
+  // Amber/orange fill makes it unmissable vs the hollow green question chips
+  categoryChipAction: {
+    color: '#0a0a0a',
+    background: '#cc8800',
+    border: '1px solid #cc8800',
+    fontSize: '9px',
+    padding: '1px 4px',
+    letterSpacing: '0.5px',
+    fontFamily: MONO,
+    fontWeight: 'bold',
+  },
+  // adj-181.16: raised from #555 (near-invisible) to #888 (readable on dark bg)
   timeAgo: {
-    color: '#555',
+    color: '#888',
     fontSize: '10px',
     fontFamily: MONO,
   },
+  // adj-181.16: raised from #555 to #888 for dismiss button
   dismissBtn: {
     background: 'transparent',
-    border: '1px solid #555',
-    color: '#555',
+    border: '1px solid #888',
+    color: '#888',
     padding: '2px 8px',
     fontSize: '10px',
     fontFamily: MONO,
@@ -467,6 +619,14 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: '0.5px',
     textTransform: 'uppercase' as const,
     flexShrink: 0,
+  },
+  // adj-181.11: per-row inline error display
+  rowError: {
+    color: '#ff4444',
+    fontSize: '10px',
+    fontFamily: MONO,
+    marginBottom: '6px',
+    letterSpacing: '0.5px',
   },
   body: {
     color: GREEN,

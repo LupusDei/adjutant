@@ -8,11 +8,18 @@
  *   - Filter state: category / agentId / urgency — each triggers a re-fetch
  *
  * WS events consumed:
- *   question:new      → add to open list (if it passes current filters in view)
+ *   question:new      → add to open list ONLY if it passes current filters (adj-181.9)
  *   question:answered → remove from open list
  *   question:dismissed → remove from open list
+ *
+ * adj-181.9: WS question:new events are gated against active filters so a filtered
+ *   view never receives a row that wouldn't appear if the user refreshed.
+ * adj-181.11: answer() and dismiss() rethrow errors so callers (rows) can surface
+ *   per-row error state rather than relying only on the global error banner.
+ * adj-181.13: openCount is derived from questions.length so the QUESTIONS tab
+ *   badge can render without a separate fetch.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 import { api } from '../services/api';
 import { useCommunicationActions } from '../contexts/CommunicationContext';
@@ -30,6 +37,8 @@ type UrgencyFilter = QuestionUrgency | 'all';
 
 export interface UseOpenQuestionsResult {
   questions: AgentQuestion[];
+  /** Number of open questions — drives the QUESTIONS tab badge (adj-181.13). */
+  openCount: number;
   loading: boolean;
   error: string | null;
   /** Current category filter value. 'all' means no filter. */
@@ -41,9 +50,11 @@ export interface UseOpenQuestionsResult {
   setCategoryFilter: (value: CategoryFilter) => void;
   setAgentFilter: (value: string) => void;
   setUrgencyFilter: (value: UrgencyFilter) => void;
-  /** Answer a question — at least one of answerBody/chosenOption must be provided. */
+  /** Answer a question — at least one of answerBody/chosenOption must be provided.
+   *  Rethrows on failure so the calling row can display a per-row error (adj-181.11). */
   answer: (id: string, params: AnswerQuestionParams) => Promise<void>;
-  /** Dismiss a question without answering it. */
+  /** Dismiss a question without answering it.
+   *  Rethrows on failure so the calling row can display a per-row error (adj-181.11). */
   dismiss: (id: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -87,6 +98,12 @@ export function useOpenQuestions(): UseOpenQuestionsResult {
   const [agentFilter, setAgentFilterState] = useState<string>('all');
   const [urgencyFilter, setUrgencyFilterState] = useState<UrgencyFilter>('all');
 
+  // Refs to expose current filter values to the WS callback without stale closure
+  // (adj-181.9: the WS handler must see the latest filter state)
+  const categoryFilterRef = useRef<CategoryFilter>('all');
+  const agentFilterRef = useRef<string>('all');
+  const urgencyFilterRef = useRef<UrgencyFilter>('all');
+
   const { subscribe } = useCommunicationActions();
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
@@ -126,45 +143,48 @@ export function useOpenQuestions(): UseOpenQuestionsResult {
 
   const setCategoryFilter = useCallback((value: CategoryFilter) => {
     setCategoryFilterState(value);
+    categoryFilterRef.current = value;
     setLoading(true);
     setError(null);
     const params: Parameters<typeof api.questions.list>[0] = { status: 'open' };
     if (value !== 'all') params.category = value;
-    if (agentFilter !== 'all') params.agentId = agentFilter;
-    if (urgencyFilter !== 'all') params.urgency = urgencyFilter;
+    if (agentFilterRef.current !== 'all') params.agentId = agentFilterRef.current;
+    if (urgencyFilterRef.current !== 'all') params.urgency = urgencyFilterRef.current;
     void api.questions.list(params)
       .then((data) => { setQuestions(data); })
       .catch((err: unknown) => { setError(err instanceof Error ? err.message : String(err)); })
       .finally(() => { setLoading(false); });
-  }, [agentFilter, urgencyFilter]);
+  }, []);
 
   const setAgentFilter = useCallback((value: string) => {
     setAgentFilterState(value);
+    agentFilterRef.current = value;
     setLoading(true);
     setError(null);
     const params: Parameters<typeof api.questions.list>[0] = { status: 'open' };
-    if (categoryFilter !== 'all') params.category = categoryFilter;
+    if (categoryFilterRef.current !== 'all') params.category = categoryFilterRef.current;
     if (value !== 'all') params.agentId = value;
-    if (urgencyFilter !== 'all') params.urgency = urgencyFilter;
+    if (urgencyFilterRef.current !== 'all') params.urgency = urgencyFilterRef.current;
     void api.questions.list(params)
       .then((data) => { setQuestions(data); })
       .catch((err: unknown) => { setError(err instanceof Error ? err.message : String(err)); })
       .finally(() => { setLoading(false); });
-  }, [categoryFilter, urgencyFilter]);
+  }, []);
 
   const setUrgencyFilter = useCallback((value: UrgencyFilter) => {
     setUrgencyFilterState(value);
+    urgencyFilterRef.current = value;
     setLoading(true);
     setError(null);
     const params: Parameters<typeof api.questions.list>[0] = { status: 'open' };
-    if (categoryFilter !== 'all') params.category = categoryFilter;
-    if (agentFilter !== 'all') params.agentId = agentFilter;
+    if (categoryFilterRef.current !== 'all') params.category = categoryFilterRef.current;
+    if (agentFilterRef.current !== 'all') params.agentId = agentFilterRef.current;
     if (value !== 'all') params.urgency = value;
     void api.questions.list(params)
       .then((data) => { setQuestions(data); })
       .catch((err: unknown) => { setError(err instanceof Error ? err.message : String(err)); })
       .finally(() => { setLoading(false); });
-  }, [categoryFilter, agentFilter]);
+  }, []);
 
   // ── WS subscription ─────────────────────────────────────────────────────────
 
@@ -176,6 +196,18 @@ export function useOpenQuestions(): UseOpenQuestionsResult {
 
       if (type === 'question:new') {
         const ev = wsMsg as unknown as WsQuestionNew;
+
+        // adj-181.9: Gate incoming WS events against active filters.
+        // A question:new event that doesn't match the current filters must NOT be
+        // inserted — it would pollute the filtered view and vanish on refresh.
+        const catFilter = categoryFilterRef.current;
+        const agFilter = agentFilterRef.current;
+        const urgFilter = urgencyFilterRef.current;
+
+        if (catFilter !== 'all' && ev.category !== catFilter) return;
+        if (agFilter !== 'all' && ev.agentId !== agFilter) return;
+        if (urgFilter !== 'all' && ev.urgency !== urgFilter) return;
+
         const newQ: AgentQuestion = {
           id: ev.questionId,
           projectId: ev.projectId,
@@ -207,6 +239,10 @@ export function useOpenQuestions(): UseOpenQuestionsResult {
 
   // ── Mutations ───────────────────────────────────────────────────────────────
 
+  // adj-181.11: Both answer and dismiss rethrow so each row can display its own
+  // error state. The global error banner is set as well for visibility, but the
+  // throw gives the row a chance to show inline feedback.
+
   const answer = useCallback(async (id: string, params: AnswerQuestionParams) => {
     try {
       await api.questions.answer(id, params);
@@ -229,6 +265,8 @@ export function useOpenQuestions(): UseOpenQuestionsResult {
 
   return {
     questions,
+    // adj-181.13: derived from questions list — no separate fetch needed
+    openCount: questions.length,
     loading,
     error,
     categoryFilter,

@@ -97,8 +97,9 @@ describe('OpenQuestionsView', () => {
 
       render(<OpenQuestionsView />);
 
-      // Component renders agent id in uppercase
-      expect(screen.getByText('ENGINEER-WEB')).toBeInTheDocument();
+      // Component renders agent id in uppercase (may appear in both row and agent filter)
+      const agentEls = screen.getAllByText('ENGINEER-WEB');
+      expect(agentEls.length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText('Should we use Redis or SQLite for caching?')).toBeInTheDocument();
     });
 
@@ -291,6 +292,176 @@ describe('OpenQuestionsView', () => {
       fireEvent.click(decisionBtn);
 
       expect(mockSetCategoryFilter).toHaveBeenCalledWith('decision');
+    });
+
+    // adj-181.8: AGENT filter in view filter bar
+    it('should render an AGENT filter label in the filter bar (adj-181.8)', () => {
+      render(<OpenQuestionsView />);
+      // The AGENT: label span and AGENT: ALL button both match /agent:/i — use getAllByText
+      const agentEls = screen.getAllByText(/agent:/i);
+      expect(agentEls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should call setAgentFilter when agent ALL filter is clicked (adj-181.8)', () => {
+      render(<OpenQuestionsView />);
+      const allAgentBtn = screen.getByRole('button', { name: /agent: all/i });
+      fireEvent.click(allAgentBtn);
+      expect(mockSetAgentFilter).toHaveBeenCalledWith('all');
+    });
+  });
+
+  // adj-181.10: action_required visually distinct from other categories
+  describe('action_required distinct treatment (adj-181.10)', () => {
+    it('should render a distinct data-category attribute for action_required', () => {
+      const q = makeQuestion({ category: 'action_required', body: 'Go do this thing' });
+      setHookResult({ questions: [q] });
+
+      const { container } = render(<OpenQuestionsView />);
+
+      const actionEl = container.querySelector('[data-category="action_required"]');
+      expect(actionEl).toBeInTheDocument();
+    });
+
+    it('should NOT apply action_required marker to other categories', () => {
+      const q = makeQuestion({ category: 'decision', body: 'Make a decision' });
+      setHookResult({ questions: [q] });
+
+      const { container } = render(<OpenQuestionsView />);
+
+      const actionEl = container.querySelector('[data-category="action_required"]');
+      expect(actionEl).not.toBeInTheDocument();
+    });
+  });
+
+  // adj-181.11: per-row error surface
+  describe('per-row error display (adj-181.11)', () => {
+    it('should show a row-level error when answer fails', async () => {
+      const q = makeQuestion({ id: 'q-row-err', suggestedOptions: ['Yes'] });
+      setHookResult({ questions: [q] });
+      mockAnswer.mockRejectedValue(new Error('Network error'));
+
+      render(<OpenQuestionsView />);
+
+      fireEvent.click(screen.getByRole('button', { name: /yes/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/network error/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should show a row-level error when dismiss fails', async () => {
+      const q = makeQuestion({ id: 'q-dis-err' });
+      setHookResult({ questions: [q] });
+      mockDismiss.mockRejectedValue(new Error('Dismiss failed'));
+
+      render(<OpenQuestionsView />);
+
+      fireEvent.click(screen.getByRole('button', { name: /dismiss/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/dismiss failed/i)).toBeInTheDocument();
+      });
+    });
+  });
+
+  // adj-181.14: project field on each row
+  describe('project field on row (adj-181.14)', () => {
+    it('should render the projectId on each question row', () => {
+      const q = makeQuestion({ projectId: 'proj-uuid-123' });
+      setHookResult({ questions: [q] });
+
+      render(<OpenQuestionsView />);
+
+      expect(screen.getByText(/proj-uuid-123/i)).toBeInTheDocument();
+    });
+  });
+
+  // adj-181.15: context expanded by default for high/blocking urgency
+  describe('context auto-expand for high/blocking urgency (adj-181.15)', () => {
+    it('should auto-expand context for blocking urgency questions', () => {
+      const q = makeQuestion({
+        urgency: 'blocking',
+        context: 'This is critical context that must be visible',
+      });
+      setHookResult({ questions: [q] });
+
+      render(<OpenQuestionsView />);
+
+      expect(screen.getByText('This is critical context that must be visible')).toBeInTheDocument();
+    });
+
+    it('should auto-expand context for high urgency questions', () => {
+      const q = makeQuestion({
+        urgency: 'high',
+        context: 'High urgency context auto-shown',
+      });
+      setHookResult({ questions: [q] });
+
+      render(<OpenQuestionsView />);
+
+      expect(screen.getByText('High urgency context auto-shown')).toBeInTheDocument();
+    });
+
+    it('should keep context collapsed for normal urgency questions', () => {
+      const q = makeQuestion({
+        urgency: 'normal',
+        context: 'Normal context stays hidden initially',
+      });
+      setHookResult({ questions: [q] });
+
+      render(<OpenQuestionsView />);
+
+      expect(screen.queryByText('Normal context stays hidden initially')).not.toBeInTheDocument();
+    });
+  });
+
+  // adj-181.18: keyboard navigation between rows
+  describe('keyboard navigation between rows (adj-181.18)', () => {
+    it('should render question rows with data-question-row attribute for keyboard focus', () => {
+      const q1 = makeQuestion({ id: 'q-kb-1', body: 'First question' });
+      const q2 = makeQuestion({ id: 'q-kb-2', body: 'Second question' });
+      setHookResult({ questions: [q1, q2] });
+
+      const { container } = render(<OpenQuestionsView />);
+
+      const rows = container.querySelectorAll('[data-question-row]');
+      expect(rows.length).toBe(2);
+    });
+
+    it('should move focus to next row on ArrowDown key press', async () => {
+      const q1 = makeQuestion({ id: 'q-nav-1', body: 'First question nav' });
+      const q2 = makeQuestion({ id: 'q-nav-2', body: 'Second question nav' });
+      setHookResult({ questions: [q1, q2] });
+
+      const { container } = render(<OpenQuestionsView />);
+
+      const rows = container.querySelectorAll('[data-question-row]');
+      expect(rows.length).toBe(2);
+
+      const firstRow = rows[0] as HTMLElement;
+      firstRow.focus();
+      fireEvent.keyDown(firstRow, { key: 'ArrowDown' });
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(rows[1]);
+      });
+    });
+
+    it('should move focus to previous row on ArrowUp key press', async () => {
+      const q1 = makeQuestion({ id: 'q-nav-u1', body: 'First question up nav' });
+      const q2 = makeQuestion({ id: 'q-nav-u2', body: 'Second question up nav' });
+      setHookResult({ questions: [q1, q2] });
+
+      const { container } = render(<OpenQuestionsView />);
+
+      const rows = container.querySelectorAll('[data-question-row]');
+      const secondRow = rows[1] as HTMLElement;
+      secondRow.focus();
+      fireEvent.keyDown(secondRow, { key: 'ArrowUp' });
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(rows[0]);
+      });
     });
   });
 });
