@@ -7,6 +7,7 @@ import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 
 import { api } from '../../services/api';
 import type { Proposal } from '../../types';
+import { MarkdownBody } from '../chat/MarkdownBody';
 import { getConfidenceColor, getConfidenceLabel } from './ProposalCard';
 
 /** Signal display configuration with labels and weights. */
@@ -56,27 +57,39 @@ export function ProposalDetailView({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch proposal when ID changes
-  useEffect(() => {
+  // Fetch proposal (extracted so the error state can offer a Retry).
+  const loadProposal = useCallback(() => {
     if (!proposalId) {
       setProposal(null);
       return;
     }
-
     setLoading(true);
     setError(null);
-
     api.proposals.get(proposalId)
       .then((data) => {
         setProposal(data);
         setLoading(false);
       })
       .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : 'Failed to load proposal';
-        setError(message);
+        const raw = err instanceof Error ? err.message : 'Failed to load proposal';
+        // A non-JSON response (e.g. "Unexpected token '<', \"<!DOCTYPE\"") means
+        // the API didn't answer with JSON — almost always the backend briefly
+        // restarting (the proxy returns the SPA shell). Show a clear, actionable
+        // message instead of a raw parser error.
+        const transient = /Unexpected token|<!DOCTYPE|not valid JSON|Failed to fetch|NetworkError/i.test(raw);
+        setError(
+          transient
+            ? 'Could not reach the server (it may be restarting). Retry in a moment.'
+            : raw,
+        );
         setLoading(false);
       });
   }, [proposalId]);
+
+  // Fetch proposal when ID changes
+  useEffect(() => {
+    loadProposal();
+  }, [loadProposal]);
 
   // Close on escape key
   useEffect(() => {
@@ -140,7 +153,10 @@ export function ProposalDetailView({
 
           {error && (
             <div style={styles.errorState}>
-              ERROR: {error}
+              <div>{error}</div>
+              <button type="button" style={styles.retryButton} onClick={loadProposal}>
+                RETRY
+              </button>
             </div>
           )}
 
@@ -243,11 +259,11 @@ export function ProposalDetailView({
                 </div>
               )}
 
-              {/* Description */}
+              {/* Description — proposals are long-form markdown reads. */}
               <div style={styles.section}>
                 <h4 style={styles.sectionTitle}>DESCRIPTION</h4>
                 <div style={styles.description}>
-                  {proposal.description}
+                  <MarkdownBody>{proposal.description}</MarkdownBody>
                 </div>
               </div>
 
@@ -300,8 +316,9 @@ const styles = {
     top: 0,
     right: 0,
     bottom: 0,
-    width: '400px',
-    maxWidth: '90vw',
+    // Proposals are long-form reads — use the screen. Wide panel, capped so it
+    // never fully covers the list on large displays.
+    width: 'min(960px, 92vw)',
     backgroundColor: 'var(--theme-bg-screen)',
     border: '1px solid var(--crt-phosphor-dim)',
     borderRight: 'none',
@@ -364,6 +381,19 @@ const styles = {
     padding: '24px',
     color: '#FF4444',
     textAlign: 'center',
+    letterSpacing: '0.1em',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '12px',
+  },
+  retryButton: {
+    padding: '6px 18px',
+    background: 'transparent',
+    color: 'var(--crt-phosphor)',
+    border: '1px solid var(--crt-phosphor-dim)',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
     letterSpacing: '0.1em',
   },
   title: {
@@ -503,11 +533,13 @@ const styles = {
     marginTop: '4px',
   },
   description: {
-    fontSize: '0.85rem',
+    fontSize: '0.9rem',
     color: 'var(--crt-phosphor)',
-    lineHeight: 1.6,
-    whiteSpace: 'pre-wrap',
+    lineHeight: 1.65,
+    // MarkdownBody renders structured blocks — no pre-wrap (it would double the
+    // spacing of markdown paragraphs). Let long tokens/URLs wrap.
     wordBreak: 'break-word',
+    overflowWrap: 'anywhere',
   },
   actions: {
     display: 'flex',

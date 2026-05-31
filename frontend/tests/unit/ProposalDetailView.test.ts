@@ -97,12 +97,24 @@ describe("ProposalDetailView", () => {
     expect(screen.getByText("LOADING...")).toBeTruthy();
   });
 
-  it("shows error when fetch fails", async () => {
+  it("shows error + a retry button when fetch fails", async () => {
     mockGet.mockRejectedValue(new Error("Network error"));
     renderDetail("p1");
 
     await waitFor(() => {
-      expect(screen.getByText(/ERROR: Network error/)).toBeTruthy();
+      expect(screen.getByText(/Network error/)).toBeTruthy();
+    });
+    // The error state offers a Retry (re-fetches the proposal).
+    expect(screen.getByText(/RETRY/)).toBeTruthy();
+  });
+
+  it("shows a friendly message when the API returns non-JSON (backend restarting)", async () => {
+    // The transient "<!DOCTYPE ... not valid JSON" parse error must not leak raw.
+    mockGet.mockRejectedValue(new Error('Unexpected token \'<\', "<!DOCTYPE "... is not valid JSON'));
+    renderDetail("p1");
+
+    await waitFor(() => {
+      expect(screen.getByText(/may be restarting/i)).toBeTruthy();
     });
   });
 
