@@ -247,9 +247,20 @@ export function registerQuestionTools(
       // cross-project coordinators who need explicit scoping.
       resolveToolProjectContext(explicitProjectId, extra.sessionId);
 
-      // ---- 3. Delegate to QuestionService ----
+      // ---- 3. Resolve answering agent server-side (adj-baauf fix) ----
+      // Identity is NEVER trusted from client-supplied params (Constitution Rule 4).
+      // Fall back to "user" when no session agent is found, mirroring REST route intent.
+      const answeredByAgent = extra.sessionId
+        ? getAgentBySession(extra.sessionId)
+        : undefined;
+      const answeredBy = answeredByAgent ?? "user";
+
+      // ---- 4. Delegate to QuestionService ----
       try {
-        const answered = await questionService.answerQuestion(id, parsed.data);
+        const answered = await questionService.answerQuestion(id, {
+          ...parsed.data,
+          answeredBy,
+        });
 
         logInfo("MCP answer_question", {
           questionId: id,

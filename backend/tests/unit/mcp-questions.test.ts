@@ -366,6 +366,43 @@ describe("answer_question tool", () => {
     expect(mockResolveToolProjectContext).toHaveBeenCalledWith("proj-uuid-bbb", "session-001");
     expect(svc.answerQuestion).toHaveBeenCalled();
   });
+
+  // adj-baauf regression: answeredBy must be injected server-side via getAgentBySession.
+  // Passing parsed.data straight through leaves answeredBy undefined → NULL in DB.
+
+  it("adj-baauf: should inject answeredBy from session identity (not leave it undefined)", async () => {
+    mockGetAgentBySession.mockReturnValue("agent-raynor");
+    const svc = makeService();
+    const handlers = await getHandlers(svc);
+
+    await handlers.get("answer_question")!(
+      { id: "q-mcp-001", answerBody: "Use Redis." },
+      { sessionId: "session-001" },
+    );
+
+    // answeredBy must be "agent-raynor" (resolved from session), not undefined or null
+    expect(svc.answerQuestion).toHaveBeenCalledWith(
+      "q-mcp-001",
+      expect.objectContaining({ answeredBy: "agent-raynor" }),
+    );
+  });
+
+  it("adj-baauf: should fall back answeredBy to 'user' when no session agent is found", async () => {
+    mockGetAgentBySession.mockReturnValue(undefined); // no agent for this session
+    const svc = makeService();
+    const handlers = await getHandlers(svc);
+
+    await handlers.get("answer_question")!(
+      { id: "q-mcp-001", answerBody: "Use Redis." },
+      { sessionId: "session-nobody" },
+    );
+
+    // Fall back to "user" when no session agent — mirrors REST route behaviour
+    expect(svc.answerQuestion).toHaveBeenCalledWith(
+      "q-mcp-001",
+      expect.objectContaining({ answeredBy: "user" }),
+    );
+  });
 });
 
 // ============================================================================
