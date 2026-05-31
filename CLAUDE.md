@@ -41,7 +41,10 @@ Adjutant is a standalone multi-agent dashboard backed by beads (issue tracking) 
 
 ## Pre-Push Verification
 
-A standalone verification script exists at `scripts/verify-before-push.sh`. It runs lint and tests (using `vitest run --changed` for speed, falling back to full suite) before pushing.
+A standalone verification script exists at `scripts/verify-before-push.sh`. It runs lint, **typecheck (`tsc --noEmit`)**, and tests (using `vitest run --changed` for speed, falling back to full suite) before pushing. The typecheck step exists because `vitest` does not typecheck and `vite build` strips types via esbuild, so without it a type error passes lint+tests yet breaks `npm run build` at merge time (see adj-181.3.8).
+
+- **Backend typecheck is blocking** (backend is clean).
+- **Frontend typecheck is a ratchet**: the frontend was never typechecked before and carries a baseline of pre-existing errors in `frontend/.tsc-baseline`. The gate blocks only on a *regression above the baseline*, so new type errors are caught without freezing the team on legacy debt. Burn the baseline down to 0 (adj-70idj), then drop the ratchet and make it plain-blocking like the backend.
 
 - **Agents MUST run `./scripts/verify-before-push.sh` before every `git push`** (enforced via spawn prompts, not git hooks)
 - **WIP branches** (`wip/*`) are automatically exempt — the script detects and skips them
