@@ -162,4 +162,104 @@ describe('bd-doctor.sh', () => {
     expect(r.status).toBe(1);
     expect(r.stdout + r.stderr).toMatch(/restart command failed/i);
   });
+
+  // ── adj-182.1.5: externally-managed kickstart restart + rogue-dolt kill ─────
+  //
+  // Under externally-managed mode (`.beads/metadata.json` carries `dolt_server_port`),
+  // beads connects to a launchd-supervised server and NEVER spawns/kills it. So the
+  // doctor's `--restart` must NOT run `bd dolt start` (which would race the supervisor
+  // and risk a second server on one data-dir). Instead it must kickstart the launchd
+  // agent: `launchctl kickstart -k gui/<uid>/com.adjutant.dolt.<projectId>`.
+  //
+  // New test seams (production-inert; unset in the field):
+  //   - BD_DOCTOR_LAUNCHCTL    → substitutes the `launchctl` binary (tests use `echo`)
+  //   - BD_DOCTOR_KILL         → substitutes the `kill` binary (tests use `echo`)
+  //   - BD_DOCTOR_SUPERVISED_PID → the legitimate launchd-supervised dolt PID; any
+  //                                cwd-under-.beads dolt with a different PID is rogue
+  //   - BD_DOCTOR_DOLT_OVERRIDE now accepts MULTIPLE `;`-separated "<pid> <port> <cwd>"
+  //                                entries so a supervised + a rogue dolt can coexist
+  const writeMetadata = (obj: Record<string, unknown>) => {
+    writeFileSync(join(beadsDir, 'metadata.json'), JSON.stringify(obj, null, 2));
+  };
+
+  it('should kickstart the launchd agent (NOT bd dolt start) under externally-managed --restart', () => {
+    // Externally-managed: metadata.json carries dolt_server_port + project_id.
+    writeMetadata({ project_id: 'proj-uuid-abc', dolt_server_port: 17042 });
+    writePortPid('11111', '99999');
+    const r = run(['--restart'], {
+      BD_DOCTOR_INITIAL_BD_OK: '0', // bd broken initially
+      BD_DOCTOR_DOLT_OVERRIDE: `54321 22222 /some/other/project/.beads`, // no adjutant dolt found
+      BD_DOCTOR_LAUNCHCTL: 'echo LAUNCHCTL', // capture instead of executing
+      BD_DOCTOR_SKIP_BD_VERIFY: '1', // post-restart probe succeeds
+    });
+    expect(r.status).toBe(0);
+    // The chosen restart command is a launchctl kickstart -k against the project label,
+    // NOT `bd dolt start`.
+    expect(r.stdout).toMatch(/LAUNCHCTL kickstart -k gui\/\d+\/com\.adjutant\.dolt\.proj-uuid-abc/);
+    expect(r.stdout).not.toMatch(/bd dolt start/);
+    expect(r.stdout).toMatch(/restart succeeded/i);
+  });
+
+  it('should fall back to bd dolt start when NOT externally-managed (no dolt_server_port)', () => {
+    // metadata.json absent (or lacking dolt_server_port) → legacy self-managed mode.
+    // No RESTART_CMD override here: this proves the script COMPUTES `bd dolt start`
+    // (via the BD_DOCTOR_BD binary seam) rather than the launchctl kickstart path.
+    writePortPid('11111', '99999');
+    const r = run(['--restart'], {
+      BD_DOCTOR_INITIAL_BD_OK: '0',
+      BD_DOCTOR_DOLT_OVERRIDE: `54321 22222 /some/other/project/.beads`,
+      BD_DOCTOR_LAUNCHCTL: 'echo LAUNCHCTL', // must NOT be invoked
+      BD_DOCTOR_BD: 'echo BD_BIN', // substitute the `bd` binary so no real dolt spawns
+      BD_DOCTOR_SKIP_BD_VERIFY: '1',
+    });
+    expect(r.status).toBe(0);
+    // The chosen recovery command is `bd dolt start`, not a launchctl kickstart.
+    expect(r.stdout).toMatch(/BD_BIN dolt start/);
+    expect(r.stdout).not.toMatch(/LAUNCHCTL kickstart/);
+  });
+
+  it('should detect and kill a rogue dolt whose cwd is under .beads but is not the supervised PID', () => {
+    // Externally-managed. Supervised PID is 54321 (the launchd instance). A SECOND dolt
+    // (pid 88888) has cwd under THIS .beads data-dir — a rogue orphan holding breaker-open
+    // state and risking data-dir double-open corruption → must be killed.
+    writeMetadata({ project_id: 'proj-uuid-abc', dolt_server_port: 17042 });
+    writePortPid('11111', '99999');
+    const r = run([], {
+      ...BROKEN,
+      // Two cwd-under-.beads dolts: 54321 (supervised) and 88888 (rogue).
+      BD_DOCTOR_DOLT_OVERRIDE: `54321 22222 ${beadsDir};88888 33333 ${beadsDir}`,
+      BD_DOCTOR_SUPERVISED_PID: '54321',
+      BD_DOCTOR_KILL: 'echo KILLED', // capture the kill target instead of signalling
+    });
+    // The rogue PID (88888) is targeted for kill; the supervised PID (54321) is NOT.
+    expect(r.stdout).toMatch(/KILLED 88888/);
+    expect(r.stdout).not.toMatch(/KILLED 54321/);
+    expect(r.stdout).toMatch(/rogue/i);
+  });
+
+  it('should NOT kill any dolt when the only cwd-under-.beads dolt is the supervised PID', () => {
+    // Single supervised dolt under .beads, matching the supervised PID → no rogue, no kill.
+    writeMetadata({ project_id: 'proj-uuid-abc', dolt_server_port: 17042 });
+    writePortPid('22222', '54321');
+    const r = run([], {
+      ...BROKEN,
+      BD_DOCTOR_DOLT_OVERRIDE: `54321 22222 ${beadsDir}`,
+      BD_DOCTOR_SUPERVISED_PID: '54321',
+      BD_DOCTOR_KILL: 'echo KILLED', // must NOT fire
+    });
+    expect(r.stdout).not.toMatch(/KILLED/);
+  });
+
+  it('should not treat a cwd-under-.beads dolt as rogue when no supervised PID is known', () => {
+    // Without a known supervised PID (e.g. not externally-managed / launchd not loaded),
+    // the doctor must NOT guess and kill — killing the wrong process is worse than a stale
+    // file. Only an explicitly-identified non-supervised PID is a kill target.
+    writePortPid('22222', '54321');
+    const r = run([], {
+      ...BROKEN,
+      BD_DOCTOR_DOLT_OVERRIDE: `54321 22222 ${beadsDir}`,
+      BD_DOCTOR_KILL: 'echo KILLED', // must NOT fire (no supervised PID seam set)
+    });
+    expect(r.stdout).not.toMatch(/KILLED/);
+  });
 });
