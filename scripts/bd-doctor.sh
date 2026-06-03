@@ -77,9 +77,37 @@ PID_FILE_VAL=""
 [ -f "$BD_DIR/dolt-server.port" ] && PORT_FILE_VAL="$(cat "$BD_DIR/dolt-server.port" 2>/dev/null | tr -d '[:space:]')"
 [ -f "$BD_DIR/dolt-server.pid" ]  && PID_FILE_VAL="$(cat "$BD_DIR/dolt-server.pid" 2>/dev/null | tr -d '[:space:]')"
 
+# Externally-managed mode (adj-182): when .beads/metadata.json carries a
+# `dolt_server_port`, a launchd/systemd supervisor owns the one server and bd merely
+# connects — it must never spawn or kill it. We detect that mode here and read the
+# `project_id` to derive the supervisor label `com.adjutant.dolt.<projectId>`.
+META_FILE="$BD_DIR/metadata.json"
+EXTERNALLY_MANAGED=0
+PROJECT_ID=""
+# Minimal, dependency-free JSON scalar extraction (no jq): grab "key": <value>,
+# tolerating string or numeric values and surrounding whitespace.
+meta_value() {
+  # $1 = key name. Echoes the scalar value (unquoted) or empty.
+  [ -f "$META_FILE" ] || return 0
+  sed -n -E "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"?([^\",}]+)\"?.*/\1/p" "$META_FILE" \
+    | head -1 | tr -d '[:space:]'
+}
+if [ -f "$META_FILE" ]; then
+  _meta_port="$(meta_value 'dolt_server_port')"
+  if [ -n "$_meta_port" ]; then
+    EXTERNALLY_MANAGED=1
+    PROJECT_ID="$(meta_value 'project_id')"
+  fi
+fi
+
 echo "bd-doctor: repo=$REPO_ROOT"
 echo "  port file: ${PORT_FILE_VAL:-<missing>}"
 echo "  pid  file: ${PID_FILE_VAL:-<missing>}"
+if [ "$EXTERNALLY_MANAGED" -eq 1 ]; then
+  echo "  mode:      externally-managed (project_id=${PROJECT_ID:-?})"
+else
+  echo "  mode:      self-managed (no dolt_server_port in metadata.json)"
+fi
 
 # ── Phase 1.5: if bd already works, the system is healthy regardless of dolt
 # server topology (bd may be using embedded mode). The doctor only intervenes
@@ -93,17 +121,53 @@ yellow "bd CLI is NOT responding — investigating dolt server state..."
 
 ADJUTANT_DOLT_PID=""
 ADJUTANT_DOLT_PORT=""
+# Rogue orphans: dolt sql-servers whose cwd is under THIS project's .beads data-dir
+# but whose PID is NOT the supervised instance. They hold breaker-open state and risk
+# data-dir double-open corruption, so they must be killed (adj-182).
+ROGUE_PIDS=""
 
-# Test seam: BD_DOCTOR_DOLT_OVERRIDE="<pid> <port> <cwd>" injects the discovered
-# dolt server, bypassing the ps/lsof scan (external deps). Unset in production.
-if [ -n "${BD_DOCTOR_DOLT_OVERRIDE:-}" ]; then
-  read -r _ovr_pid _ovr_port _ovr_cwd <<< "$BD_DOCTOR_DOLT_OVERRIDE"
-  echo "  found dolt processes (override):"
-  echo "    pid=${_ovr_pid:-?} port=${_ovr_port:-?} cwd=${_ovr_cwd:-?}"
-  if [ -n "${_ovr_cwd:-}" ] && [[ "$_ovr_cwd" == "$BD_DIR"* ]]; then
-    ADJUTANT_DOLT_PID="$_ovr_pid"
-    ADJUTANT_DOLT_PORT="$_ovr_port"
+# Supervised PID seam: under externally-managed mode the launchd/systemd agent owns the
+# one legitimate server; the doctor must know its PID so it can tell rogues apart. The
+# pid file is the supervised instance's PID in this mode. Test seam:
+# BD_DOCTOR_SUPERVISED_PID overrides it directly. When EMPTY (mode unknown / agent not
+# loaded) the doctor refuses to guess and kills nothing — killing the wrong process is
+# worse than a stale file.
+SUPERVISED_PID="${BD_DOCTOR_SUPERVISED_PID:-}"
+if [ -z "$SUPERVISED_PID" ] && [ "$EXTERNALLY_MANAGED" -eq 1 ]; then
+  SUPERVISED_PID="$PID_FILE_VAL"
+fi
+
+# classify_dolt <pid> <port> <cwd>: given one discovered dolt, record it as the adjutant
+# server (cwd under .beads) and flag it rogue if it is NOT the supervised PID.
+classify_dolt() {
+  local _pid="$1" _port="$2" _cwd="$3"
+  echo "    pid=${_pid:-?} port=${_port:-?} cwd=${_cwd:-?}"
+  if [ -n "$_cwd" ] && [[ "$_cwd" == "$BD_DIR"* ]]; then
+    if [ -n "$SUPERVISED_PID" ] && [ "$_pid" != "$SUPERVISED_PID" ]; then
+      # cwd under our data-dir but not the supervised instance → rogue orphan.
+      ROGUE_PIDS="${ROGUE_PIDS:+$ROGUE_PIDS }$_pid"
+    else
+      ADJUTANT_DOLT_PID="$_pid"
+      ADJUTANT_DOLT_PORT="$_port"
+    fi
   fi
+}
+
+# Test seam: BD_DOCTOR_DOLT_OVERRIDE injects discovered dolt servers, bypassing the
+# ps/lsof scan (external deps). Multiple servers are `;`-separated, each "<pid> <port>
+# <cwd>". Unset in production.
+if [ -n "${BD_DOCTOR_DOLT_OVERRIDE:-}" ]; then
+  echo "  found dolt processes (override):"
+  _ovr_rest="$BD_DOCTOR_DOLT_OVERRIDE"
+  while [ -n "$_ovr_rest" ]; do
+    case "$_ovr_rest" in
+      *";"*) _ovr_entry="${_ovr_rest%%;*}"; _ovr_rest="${_ovr_rest#*;}" ;;
+      *)     _ovr_entry="$_ovr_rest";       _ovr_rest="" ;;
+    esac
+    [ -z "$_ovr_entry" ] && continue
+    read -r _ovr_pid _ovr_port _ovr_cwd <<< "$_ovr_entry"
+    classify_dolt "$_ovr_pid" "$_ovr_port" "$_ovr_cwd"
+  done
 else
   # Find ALL dolt sql-server processes
   ALL_DOLTS=$(ps -axo pid,command 2>/dev/null | grep -E "dolt sql-server" | grep -v grep | awk '{print $1}' | head -10)
@@ -123,12 +187,20 @@ else
     port="$(lsof -anP -p "$pid" -iTCP -sTCP:LISTEN 2>/dev/null | awk -v p="$pid" '$2 == p {split($9, a, ":"); print a[length(a)]; exit}')"
     # CWD as a proxy for which project this dolt belongs to (dolt typically chdirs to data-dir)
     pwdir="$(lsof -p "$pid" 2>/dev/null | awk -v p="$pid" '$2 == p && $4 == "cwd" {print $NF; exit}')"
-    echo "    pid=$pid port=${port:-?} cwd=${pwdir:-?}"
-    # Heuristic: dolt for THIS project should have cwd containing .beads/dolt or be the .beads dir
-    if [ -n "$pwdir" ] && [[ "$pwdir" == "$BD_DIR"* ]]; then
-      ADJUTANT_DOLT_PID="$pid"
-      ADJUTANT_DOLT_PORT="$port"
-    fi
+    classify_dolt "$pid" "$port" "$pwdir"
+  done
+fi
+
+# ── Rogue kill (adj-182) ──────────────────────────────────────────────────────
+# A rogue dolt on our data-dir double-opens the database and pins the circuit breaker
+# open. Kill it BEFORE any diagnosis/repair so the supervised server (or restart) owns
+# the data-dir cleanly. Test seam: BD_DOCTOR_KILL substitutes `kill` (tests use `echo`).
+if [ -n "$ROGUE_PIDS" ]; then
+  kill_cmd="${BD_DOCTOR_KILL:-kill}"
+  for _rogue in $ROGUE_PIDS; do
+    red "ROGUE dolt detected: pid=$_rogue has cwd under $BD_DIR but is not the supervised server (pid=${SUPERVISED_PID:-?})"
+    yellow "  killing rogue orphan: $kill_cmd $_rogue"
+    $kill_cmd "$_rogue" 2>/dev/null || red "  WARN: failed to kill rogue pid=$_rogue"
   done
 fi
 
@@ -142,9 +214,27 @@ if [ -z "$ADJUTANT_DOLT_PID" ]; then
   echo ""
 
   if [ "$RESTART" -eq 1 ]; then
-    # Auto-restart path (adj-zrr1c AC). Test seam: BD_DOCTOR_RESTART_CMD overrides
-    # the restart command so tests don't spawn a real dolt server.
-    restart_cmd="${BD_DOCTOR_RESTART_CMD:-bd dolt start}"
+    # Auto-restart path (adj-zrr1c AC).
+    #
+    # Under externally-managed mode (adj-182) the launchd agent owns the one server, so
+    # `bd dolt start` would CONFLICT — race the supervisor and risk two servers on one
+    # data-dir. Instead we kickstart the launchd agent: `launchctl kickstart -k
+    # gui/<uid>/com.adjutant.dolt.<projectId>` (-k = kill-then-restart the job).
+    #
+    # Test seams: BD_DOCTOR_RESTART_CMD (explicit override, highest precedence — used to
+    # stub the whole command) and BD_DOCTOR_LAUNCHCTL (substitutes the `launchctl`
+    # binary so tests capture the chosen kickstart command without executing it).
+    if [ -n "${BD_DOCTOR_RESTART_CMD:-}" ]; then
+      restart_cmd="$BD_DOCTOR_RESTART_CMD"
+    elif [ "$EXTERNALLY_MANAGED" -eq 1 ]; then
+      launchctl_bin="${BD_DOCTOR_LAUNCHCTL:-launchctl}"
+      restart_cmd="$launchctl_bin kickstart -k gui/$(id -u)/com.adjutant.dolt.${PROJECT_ID}"
+    else
+      # Self-managed fallback. BD_DOCTOR_BD substitutes the `bd` binary so tests can
+      # assert this branch is chosen without spawning a real dolt server.
+      bd_bin="${BD_DOCTOR_BD:-bd}"
+      restart_cmd="$bd_bin dolt start"
+    fi
     yellow "--restart: attempting recovery via: $restart_cmd"
     if eval "$restart_cmd"; then
       if bd_ok; then
