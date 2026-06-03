@@ -48,12 +48,20 @@ function pinMetadata(metadataPath: string, port: number): void {
   if (!existsSync(metadataPath)) {
     throw new Error(`Dolt pin: metadata.json not found at ${metadataPath}`);
   }
-  let meta: Record<string, unknown>;
+  let parsed: unknown;
   try {
-    meta = JSON.parse(readFileSync(metadataPath, "utf-8")) as Record<string, unknown>;
+    parsed = JSON.parse(readFileSync(metadataPath, "utf-8"));
   } catch (err) {
     throw new Error(`Dolt pin: failed to parse ${metadataPath}: ${(err as Error).message}`);
   }
+  // adj-182.1.review.1: assert a PLAIN object. A JSON array would silently drop the
+  // port assignment via JSON.stringify (leaving beads self-managed — the churn this
+  // epic fixes); a JSON scalar (null/number) would throw a raw TypeError on the index
+  // write. Reject both with the module's clean wrapped error.
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`Dolt pin: malformed metadata.json at ${metadataPath}: expected a JSON object`);
+  }
+  const meta = parsed as Record<string, unknown>;
   meta["dolt_server_port"] = port;
   writeFileSync(metadataPath, JSON.stringify(meta, null, 2) + "\n", "utf-8");
 }
@@ -73,6 +81,24 @@ function isTopLevelKey(line: string): boolean {
  */
 function applyListenerPort(yaml: string, port: number): string {
   const lines = yaml.split("\n");
+
+  // adj-182.1.2.2: detect a FLOW-style listener (`listener: {host: ..., port: NNN}`).
+  // The block-style detector below (`/^listener:\s*$/`) does NOT match flow style, so
+  // without this branch we would append a SECOND `listener:` key — ambiguous YAML.
+  // Edit the port inside the braces in place. If no `port:` exists inside the braces,
+  // inject one before the closing brace.
+  const flowIdx = lines.findIndex((l) => /^listener:\s*\{.*\}\s*$/.test(l));
+  if (flowIdx !== -1) {
+    const flowLine = lines[flowIdx] ?? "";
+    if (/\bport:\s*\d+/.test(flowLine)) {
+      lines[flowIdx] = flowLine.replace(/(\bport:\s*)\d+/, `$1${port}`);
+    } else {
+      // No port inside the flow map — insert before the closing brace.
+      lines[flowIdx] = flowLine.replace(/\}\s*$/, `, port: ${port}}`);
+    }
+    return lines.join("\n");
+  }
+
   const listenerIdx = lines.findIndex((l) => /^listener:\s*$/.test(l));
 
   // No listener block at all — append one (preserving a single trailing newline).
@@ -99,7 +125,11 @@ function applyListenerPort(yaml: string, port: number): string {
   if (portIdx !== -1) {
     const existing = lines[portIdx] ?? "";
     const indent = existing.match(/^(\s*)/)?.[1] ?? "  ";
-    lines[portIdx] = `${indent}port: ${port}`;
+    // adj-182.1.2.1: preserve any trailing text after the port value (typically an
+    // inline `# ...` comment). Rewriting as bare `port: <n>` dropped operator comments
+    // and broke comment-preservation/idempotency on the live-cutover re-pin path.
+    const trailing = existing.match(/^\s*port:\s*\d+(.*)$/)?.[1] ?? "";
+    lines[portIdx] = `${indent}port: ${port}${trailing}`;
     return lines.join("\n");
   }
 

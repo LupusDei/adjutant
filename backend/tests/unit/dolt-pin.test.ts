@@ -142,6 +142,36 @@ describe("cli/lib/dolt-pin", () => {
       expect(activePortLines[0]).toContain("17005");
     });
 
+    // ── adj-182.1.2.1: re-pin must PRESERVE a trailing inline comment on the port line ──
+    //
+    // applyListenerPort rewrote the line as `${indent}port: ${port}`, DROPPING any
+    // trailing `# ...` comment. The first pin of a clean template is fine (no comment),
+    // so this bites the live-cutover RE-PIN path and operator-annotated configs.
+    it("should preserve a trailing inline comment on the active port line when re-pinning", () => {
+      const annotated = "listener:\n  host: 127.0.0.1\n  port: 1 # keep\n";
+      seedBeads({ database: "dolt" }, annotated);
+
+      pinDoltPort(beadsDir, 17005);
+
+      const cfg = readFileSync(configPath, "utf-8");
+      // Port updated, comment retained verbatim.
+      expect(cfg).toMatch(/^\s*port: 17005\s+# keep$/m);
+    });
+
+    it("should preserve a multi-word trailing comment with extra spacing on re-pin", () => {
+      const annotated =
+        "listener:\n  host: 127.0.0.1\n  port: 49599   # pinned by adjutant (adj-182)\n";
+      seedBeads({ database: "dolt" }, annotated);
+
+      pinDoltPort(beadsDir, 17009);
+
+      const cfg = readFileSync(configPath, "utf-8");
+      expect(cfg).toContain("port: 17009");
+      expect(cfg).toContain("# pinned by adjutant (adj-182)");
+      // The old port value is gone.
+      expect(cfg).not.toContain("49599");
+    });
+
     it("should add a listener block when the config has none", () => {
       seedBeads({ database: "dolt" }, "# Dolt SQL server configuration\n\n# log_level: info\n");
 
@@ -208,6 +238,74 @@ describe("cli/lib/dolt-pin", () => {
     it("should throw on a port outside the reserved band", () => {
       seedBeads({ database: "dolt" }, CONFIG_TEMPLATE);
       expect(() => pinDoltPort(beadsDir, 80)).toThrow(/band|17000|17999/i);
+    });
+
+    // ── adj-182.1.review.1: pinMetadata must reject non-object metadata.json ──
+    //
+    // pinMetadata JSON.parsed metadata.json but never asserted a plain object:
+    //  (a) a JSON ARRAY → `arr["dolt_server_port"] = port` is silently dropped by
+    //      JSON.stringify, so pinDoltPort returns success while the port never lands,
+    //      leaving beads self-managed (the churn this epic exists to kill).
+    //  (b) a JSON SCALAR (null/number) → a raw TypeError escapes instead of the
+    //      module's clean wrapped "Dolt pin: ..." error.
+    // Fix: assert plain object after parse; throw a clear wrapped error otherwise.
+    it("should throw a clear error when metadata.json is a JSON array (not silently drop the port)", () => {
+      // Seed a metadata.json whose top-level value is an array.
+      mkdirSync(join(beadsDir, "dolt"), { recursive: true });
+      writeFileSync(metadataPath, JSON.stringify([], null, 2), "utf-8");
+      writeFileSync(configPath, CONFIG_TEMPLATE, "utf-8");
+
+      expect(() => pinDoltPort(beadsDir, 17005)).toThrow(/Dolt pin:.*metadata\.json|expected a JSON object/i);
+
+      // And critically: the port must NOT have been silently written anywhere.
+      const raw = readFileSync(metadataPath, "utf-8");
+      expect(raw).not.toContain("dolt_server_port");
+    });
+
+    it("should throw a clear wrapped error when metadata.json is a JSON scalar", () => {
+      mkdirSync(join(beadsDir, "dolt"), { recursive: true });
+      writeFileSync(metadataPath, "42", "utf-8");
+      writeFileSync(configPath, CONFIG_TEMPLATE, "utf-8");
+
+      // A clean wrapped "Dolt pin: ..." error, NOT a raw TypeError.
+      expect(() => pinDoltPort(beadsDir, 17005)).toThrow(/Dolt pin:/);
+    });
+  });
+
+  // ── adj-182.1.2.2: flow-style `listener: {..}` must be detected & edited in place ──
+  //
+  // The detector `/^listener:\s*$/` only matched a block-style header on its own line,
+  // so a flow-style `listener: {host: 127.0.0.1, port: 49599}` was NOT matched and a
+  // SECOND `listener:` block got appended (two top-level listener keys — ambiguous YAML).
+  describe("dolt/config.yaml — flow-style listener (adj-182.1.2.2)", () => {
+    it("should edit a flow-style listener block in place without appending a second listener", () => {
+      const flow = "# Dolt SQL server configuration\nlistener: {host: 127.0.0.1, port: 49599}\n";
+      seedBeads({ database: "dolt" }, flow);
+
+      pinDoltPort(beadsDir, 17005);
+
+      const cfg = readFileSync(configPath, "utf-8");
+      // The pinned port is present.
+      expect(cfg).toContain("17005");
+      // The stale port is gone.
+      expect(cfg).not.toContain("49599");
+      // Exactly ONE top-level listener key — no appended duplicate block.
+      const listenerKeys = cfg.split("\n").filter((l) => l.startsWith("listener:"));
+      expect(listenerKeys).toHaveLength(1);
+    });
+
+    it("should be idempotent on a flow-style listener (re-pin does not stack listener blocks)", () => {
+      const flow = "# Dolt SQL server configuration\nlistener: {host: 127.0.0.1, port: 49599}\n";
+      seedBeads({ database: "dolt" }, flow);
+
+      pinDoltPort(beadsDir, 17005);
+      const afterFirst = readFileSync(configPath, "utf-8");
+      pinDoltPort(beadsDir, 17005);
+      const afterSecond = readFileSync(configPath, "utf-8");
+
+      expect(afterSecond).toBe(afterFirst);
+      const listenerKeys = afterSecond.split("\n").filter((l) => l.startsWith("listener:"));
+      expect(listenerKeys).toHaveLength(1);
     });
   });
 });
