@@ -7,7 +7,7 @@ import XCTest
 /// (`backend/src/routes/questions.ts`), NOT assumed TS-type shapes
 /// (Constitution Rule 1 / adj-067):
 ///
-///   - `GET  /api/questions`              → `data` = `[AgentQuestion]`
+///   - `GET  /api/questions`              → `data` = `{ questions: [AgentQuestion], total }`
 ///   - `POST /api/questions/:id/answer`   → `data` = `{ success: true }`
 ///   - `POST /api/questions/:id/dismiss`  → `data` = `{ success: true }`
 ///
@@ -177,7 +177,7 @@ final class APIClientQuestionsTests: XCTestCase {
             capturedURL = request.url
             return try MockURLProtocol.mockResponse(json: [
                 "success": true,
-                "data": [],
+                "data": ["questions": [], "total": 0],
                 "timestamp": "2026-05-31T10:00:00.000Z"
             ])(request)
         }
@@ -193,7 +193,7 @@ final class APIClientQuestionsTests: XCTestCase {
         MockURLProtocol.mockHandler = { request in
             capturedURL = request.url
             return try MockURLProtocol.mockResponse(json: [
-                "success": true, "data": [],
+                "success": true, "data": ["questions": [], "total": 0],
                 "timestamp": "2026-05-31T10:00:00.000Z"
             ])(request)
         }
@@ -208,7 +208,7 @@ final class APIClientQuestionsTests: XCTestCase {
         MockURLProtocol.mockHandler = { request in
             capturedURL = request.url
             return try MockURLProtocol.mockResponse(json: [
-                "success": true, "data": [],
+                "success": true, "data": ["questions": [], "total": 0],
                 "timestamp": "2026-05-31T10:00:00.000Z"
             ])(request)
         }
@@ -237,26 +237,29 @@ final class APIClientQuestionsTests: XCTestCase {
         MockURLProtocol.mockHandler = MockURLProtocol.mockResponse(json: [
             "success": true,
             "data": [
-                [
-                    "id": "q-001",
-                    "projectId": "proj-uuid",
-                    "agentId": "raynor",
-                    "body": "Decision needed",
-                    "urgency": "blocking",
-                    "status": "open",
-                    "createdAt": "2026-05-31 10:00:00",
-                    "updatedAt": "2026-05-31 10:00:00"
+                "questions": [
+                    [
+                        "id": "q-001",
+                        "projectId": "proj-uuid",
+                        "agentId": "raynor",
+                        "body": "Decision needed",
+                        "urgency": "blocking",
+                        "status": "open",
+                        "createdAt": "2026-05-31 10:00:00",
+                        "updatedAt": "2026-05-31 10:00:00"
+                    ],
+                    [
+                        "id": "q-002",
+                        "projectId": "proj-uuid",
+                        "agentId": "kerrigan",
+                        "body": "Clarify the spec",
+                        "urgency": "normal",
+                        "status": "open",
+                        "createdAt": "2026-05-31 09:00:00",
+                        "updatedAt": "2026-05-31 09:00:00"
+                    ]
                 ],
-                [
-                    "id": "q-002",
-                    "projectId": "proj-uuid",
-                    "agentId": "kerrigan",
-                    "body": "Clarify the spec",
-                    "urgency": "normal",
-                    "status": "open",
-                    "createdAt": "2026-05-31 09:00:00",
-                    "updatedAt": "2026-05-31 09:00:00"
-                ]
+                "total": 2
             ],
             "timestamp": "2026-05-31T10:00:00.000Z"
         ])
@@ -271,7 +274,7 @@ final class APIClientQuestionsTests: XCTestCase {
     func testListQuestionsDecodesEmpty() async throws {
         MockURLProtocol.mockHandler = MockURLProtocol.mockResponse(json: [
             "success": true,
-            "data": [],
+            "data": ["questions": [], "total": 0],
             "timestamp": "2026-05-31T10:00:00.000Z"
         ])
 

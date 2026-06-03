@@ -35,11 +35,23 @@ private struct QuestionActionAck: Decodable {
     let success: Bool
 }
 
+/// Envelope `data` shape for `GET /api/questions` (adj-181.20 fix).
+///
+/// The backend returns `data = { questions: [AgentQuestion], total: Int }` —
+/// NOT a bare array. Decoding `data` directly as `[AgentQuestion]` throws, which
+/// (because callers treat questions as best-effort) silently yields an empty list
+/// — e.g. the Overview banner never appearing. Decode the real shape and unwrap.
+private struct QuestionListEnvelope: Decodable {
+    let questions: [AgentQuestion]
+    let total: Int
+}
+
 extension APIClient {
     /// Fetch agent questions, optionally filtered.
     ///
     /// Maps to `GET /api/questions?status=&projectId=&category=&agentId=&urgency=`
-    /// → `data` = `[AgentQuestion]` inside the success envelope.
+    /// → `data` = `{ questions: [AgentQuestion], total: Int }` inside the success
+    /// envelope. We decode that wrapper and return `.questions`.
     ///
     /// Backend default: `status=open`, sorted blocking→high→normal→low then
     /// oldest-first. All filters are optional and composable.
@@ -75,11 +87,12 @@ extension APIClient {
         if let urgency {
             queryItems.append(URLQueryItem(name: "urgency", value: urgency.rawValue))
         }
-        return try await requestWithEnvelope(
+        let envelope: QuestionListEnvelope = try await requestWithEnvelope(
             .get,
             path: "/questions",
             queryItems: queryItems.isEmpty ? nil : queryItems
         )
+        return envelope.questions
     }
 
     /// Answer an open question.
