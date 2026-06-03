@@ -4,7 +4,7 @@ import express from "express";
 import { agentsRouter, beadsRouter, costsRouter, createCallsignsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createPersonasRouter, createProjectsRouter, createProposalsRouter, createQuestionsRouter, createSchedulesRouter, createWebhooksRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { createDashboardService } from "./services/dashboard-service.js";
 import { apiKeyAuth } from "./middleware/index.js";
-import { logInfo } from "./utils/index.js";
+import { logInfo, logWarn } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
 import { startPrefixMapRefreshScheduler } from "./services/beads/index.js";
 import { initWebSocketServer, setConversationStore, wsBroadcast } from "./services/ws-server.js";
@@ -67,6 +67,7 @@ import { registerCoordinationTools } from "./services/mcp-tools/coordination.js"
 import { registerPersonaTools } from "./services/mcp-tools/personas.js";
 import { createMemoryRouter } from "./routes/memory.js";
 import { CronScheduleStore } from "./services/adjutant/cron-schedule-store.js";
+import { startDoltSupervisorFromEnv } from "./services/dolt-supervisor.js";
 
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
@@ -260,6 +261,20 @@ app.get("/health", (_req, res) => {
 // the projects table already has entries from a previous session in a different directory.
 discoverLocalProjects();
 logInfo("CWD project auto-registered on startup");
+
+// adj-182.2.5 — Dolt supervisor self-heal loop. GATED behind a default-OFF env
+// flag (ADJUTANT_DOLT_SUPERVISOR): when unset/0 (the default) this is a NO-OP and
+// does NOT adopt the supervisor or perform any cutover on the running backend. The
+// real cutover is a separate operator step that flips the flag (karax + General).
+void startDoltSupervisorFromEnv()
+  .then((handle) => {
+    if (handle.enabled) {
+      logInfo("Dolt supervisor self-heal loop active");
+    }
+  })
+  .catch((err) => {
+    logWarn("Dolt supervisor start failed (non-fatal)", { error: String(err) });
+  });
 
 const server = app.listen(PORT, () => {
   logInfo("backend server listening", { port: PORT });
