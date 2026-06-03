@@ -11,10 +11,28 @@ vi.mock("fs", () => ({
 
 vi.mock("os", () => ({
   homedir: vi.fn(() => "/home/test"),
+  userInfo: vi.fn(() => ({ uid: 501 })),
 }));
 
+// child_process: execSync (existing checks) + execFile (the checkDolt real seams,
+// adj-182.2.1). execFile is promisified at module load, so it must exist on the mock.
 vi.mock("child_process", () => ({
   execSync: vi.fn(),
+  execFile: vi.fn((_cmd: string, _args: unknown, cb: (e: Error | null, r: { stdout: string; stderr: string }) => void) => {
+    if (typeof cb === "function") cb(new Error("not available in test"), { stdout: "", stderr: "" });
+  }),
+}));
+
+// net: the SQL probe seam dials a TCP socket; stub it so the unit test never connects.
+vi.mock("net", () => ({
+  createConnection: vi.fn(() => ({
+    setTimeout: vi.fn(),
+    once: vi.fn((event: string, handler: () => void) => {
+      // Immediately signal an error so realSqlProbe resolves false without I/O.
+      if (event === "error") handler();
+    }),
+    destroy: vi.fn(),
+  })),
 }));
 
 // Mock fetch globally
