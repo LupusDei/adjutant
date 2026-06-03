@@ -30,9 +30,14 @@ private struct AnswerQuestionRequest: Encodable {
     }
 }
 
-/// Acknowledgement payload returned by answer/dismiss (`{ success: true }`).
-private struct QuestionActionAck: Decodable {
-    let success: Bool
+/// Response payload for answer/dismiss (adj-181.22 fix).
+///
+/// The backend returns the updated record wrapped as `data = { question: AgentQuestion }`
+/// — NOT `{ success: true }`. Decoding the wrong shape threw AFTER the backend had
+/// already processed the answer/dismiss, so callers' success branch (e.g. removing the
+/// row from the open list) never ran — the question appeared to "do nothing".
+private struct QuestionEnvelope: Decodable {
+    let question: AgentQuestion
 }
 
 /// Envelope `data` shape for `GET /api/questions` (adj-181.20 fix).
@@ -117,7 +122,7 @@ extension APIClient {
     ) async throws {
         let encodedId = questionId
             .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? questionId
-        let _: QuestionActionAck = try await requestWithEnvelope(
+        let _: QuestionEnvelope = try await requestWithEnvelope(
             .post,
             path: "/questions/\(encodedId)/answer",
             body: AnswerQuestionRequest(answerBody: answerBody, chosenOption: chosenOption)
@@ -134,7 +139,7 @@ extension APIClient {
     public func dismissQuestion(questionId: String) async throws {
         let encodedId = questionId
             .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? questionId
-        let _: QuestionActionAck = try await requestWithEnvelope(
+        let _: QuestionEnvelope = try await requestWithEnvelope(
             .post,
             path: "/questions/\(encodedId)/dismiss"
         )

@@ -302,7 +302,7 @@ final class APIClientQuestionsTests: XCTestCase {
             capturedURL = request.url
             return try MockURLProtocol.mockResponse(json: [
                 "success": true,
-                "data": ["success": true],
+                "data": ["question": ["id": "q-ack", "projectId": "p", "agentId": "a", "body": "b", "urgency": "normal", "status": "answered", "createdAt": "2026-06-03 10:00:00", "updatedAt": "2026-06-03 10:00:00"]],
                 "timestamp": "2026-05-31T10:00:00.000Z"
             ])(request)
         }
@@ -318,7 +318,7 @@ final class APIClientQuestionsTests: XCTestCase {
             capturedBody = MockURLProtocol.getBodyData(from: request)
             return try MockURLProtocol.mockResponse(json: [
                 "success": true,
-                "data": ["success": true],
+                "data": ["question": ["id": "q-ack", "projectId": "p", "agentId": "a", "body": "b", "urgency": "normal", "status": "answered", "createdAt": "2026-06-03 10:00:00", "updatedAt": "2026-06-03 10:00:00"]],
                 "timestamp": "2026-05-31T10:00:00.000Z"
             ])(request)
         }
@@ -337,7 +337,7 @@ final class APIClientQuestionsTests: XCTestCase {
             capturedBody = MockURLProtocol.getBodyData(from: request)
             return try MockURLProtocol.mockResponse(json: [
                 "success": true,
-                "data": ["success": true],
+                "data": ["question": ["id": "q-ack", "projectId": "p", "agentId": "a", "body": "b", "urgency": "normal", "status": "answered", "createdAt": "2026-06-03 10:00:00", "updatedAt": "2026-06-03 10:00:00"]],
                 "timestamp": "2026-05-31T10:00:00.000Z"
             ])(request)
         }
@@ -356,7 +356,7 @@ final class APIClientQuestionsTests: XCTestCase {
             capturedBody = MockURLProtocol.getBodyData(from: request)
             return try MockURLProtocol.mockResponse(json: [
                 "success": true,
-                "data": ["success": true],
+                "data": ["question": ["id": "q-ack", "projectId": "p", "agentId": "a", "body": "b", "urgency": "normal", "status": "answered", "createdAt": "2026-06-03 10:00:00", "updatedAt": "2026-06-03 10:00:00"]],
                 "timestamp": "2026-05-31T10:00:00.000Z"
             ])(request)
         }
@@ -393,7 +393,7 @@ final class APIClientQuestionsTests: XCTestCase {
             capturedURL = request.url
             return try MockURLProtocol.mockResponse(json: [
                 "success": true,
-                "data": ["success": true],
+                "data": ["question": ["id": "q-ack", "projectId": "p", "agentId": "a", "body": "b", "urgency": "normal", "status": "answered", "createdAt": "2026-06-03 10:00:00", "updatedAt": "2026-06-03 10:00:00"]],
                 "timestamp": "2026-05-31T10:00:00.000Z"
             ])(request)
         }
@@ -409,7 +409,7 @@ final class APIClientQuestionsTests: XCTestCase {
             capturedRequest = request
             return try MockURLProtocol.mockResponse(json: [
                 "success": true,
-                "data": ["success": true],
+                "data": ["question": ["id": "q-ack", "projectId": "p", "agentId": "a", "body": "b", "urgency": "normal", "status": "answered", "createdAt": "2026-06-03 10:00:00", "updatedAt": "2026-06-03 10:00:00"]],
                 "timestamp": "2026-05-31T10:00:00.000Z"
             ])(request)
         }
