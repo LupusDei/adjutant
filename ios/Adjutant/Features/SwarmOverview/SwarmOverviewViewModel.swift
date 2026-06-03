@@ -27,6 +27,11 @@ final class SwarmOverviewViewModel: ObservableObject {
     /// Recent timeline events for the overview (replaces epics — adj-156)
     @Published var timelineEvents: [TimelineEvent] = []
 
+    /// Open questions scoped to the current project (adj-181.20).
+    /// Empty when there are no open questions or when the fetch failed.
+    /// Non-empty causes the Open Questions banner to appear above Agents.
+    @Published private(set) var openQuestions: [AgentQuestion] = []
+
     // MARK: - Dependencies
 
     private let apiClient: APIClient
@@ -88,6 +93,29 @@ final class SwarmOverviewViewModel: ObservableObject {
             }
         } catch {
             errorMessage = userFriendlyMessage(for: error)
+        }
+
+        // Open questions fetch is best-effort — a failure must NOT break the overview.
+        // Scope to the current project UUID when available; fall back to unscoped (all
+        // open questions) when no project is selected.
+        await fetchOpenQuestions()
+    }
+
+    /// Fetch open questions for the current project.
+    ///
+    /// Always resilient: errors set `openQuestions = []` and do not propagate.
+    /// WS live updates (question:new/answered/dismissed) are a nice-to-have for v2;
+    /// v1 relies on fetch-on-appear + 30-second timer refresh.
+    private func fetchOpenQuestions() async {
+        let projectId = AppState.shared.selectedProject?.id
+        do {
+            openQuestions = try await apiClient.listQuestions(
+                status: .open,
+                projectId: projectId
+            )
+        } catch {
+            // Best-effort: keep whatever was there (or empty on first load)
+            openQuestions = []
         }
     }
 

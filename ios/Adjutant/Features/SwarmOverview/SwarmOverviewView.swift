@@ -51,6 +51,11 @@ struct SwarmOverviewView: View {
                     staleDataBanner
                 }
 
+                // 0. Open Questions banner — shown only when there are open questions (adj-181.20)
+                if !viewModel.openQuestions.isEmpty {
+                    openQuestionsBanner(viewModel.openQuestions)
+                }
+
                 // 1. Agents with status (top element)
                 agentsSection(overview.agents)
 
@@ -71,6 +76,51 @@ struct SwarmOverviewView: View {
         .refreshable {
             await viewModel.refresh()
         }
+    }
+
+    // MARK: - Open Questions Banner (adj-181.20)
+
+    /// Tappable banner displayed above the Agents section when there are open questions.
+    /// Hidden entirely when `questions` is empty.
+    @ViewBuilder
+    private func openQuestionsBanner(_ questions: [AgentQuestion]) -> some View {
+        let hasBlocking = questions.contains { $0.urgency == .blocking }
+
+        Button(action: { coordinator.navigate(to: .openQuestions) }) {
+            CRTCard(style: .standard) {
+                HStack(spacing: CRTTheme.Spacing.sm) {
+                    // Urgency icon — triangle for blocking, question mark otherwise
+                    Image(systemName: hasBlocking ? "exclamationmark.triangle.fill" : "questionmark.circle.fill")
+                        .foregroundColor(hasBlocking ? CRTTheme.State.error : CRTTheme.State.warning)
+                        .font(.system(size: 18))
+
+                    VStack(alignment: .leading, spacing: CRTTheme.Spacing.xxs) {
+                        CRTText("OPEN QUESTIONS", style: .subheader)
+                        if hasBlocking {
+                            CRTText(
+                                "BLOCKING — GENERAL REQUIRED",
+                                style: .caption,
+                                color: CRTTheme.State.error
+                            )
+                        }
+                    }
+
+                    Spacer()
+
+                    // Count badge
+                    CRTText("\(questions.count)", style: .caption, color: .black)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(hasBlocking ? CRTTheme.State.error : CRTTheme.State.warning)
+                        .clipShape(Capsule())
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(theme.dim)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Agents Section
