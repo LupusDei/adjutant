@@ -7,9 +7,13 @@
  * Idempotent: safe to run multiple times.
  */
 
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { execFile } from "child_process";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { createConnection } from "net";
+import { homedir, userInfo } from "os";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
+import { promisify } from "util";
 
 import {
   fileExists,
@@ -24,6 +28,15 @@ import { installPlugin } from "../lib/plugin.js";
 import { QUALITY_FILES, loadTemplate } from "../lib/quality-templates.js";
 import { printHeader, printCheck, printSummary, printSuccess, printError, type CheckResult } from "../lib/output.js";
 import { PRIME_MD_CONTENT } from "../lib/prime.js";
+import { allocateDoltPort } from "../lib/dolt-port-registry.js";
+import { pinDoltPort } from "../lib/dolt-pin.js";
+import {
+  installSupervisor,
+  supervisorLabel,
+  type ExecResult,
+  type InstallSupervisorOptions,
+  type InstallSupervisorResult,
+} from "../lib/dolt-supervisor.js";
 
 interface InitOptions {
   force: boolean;
@@ -174,6 +187,172 @@ export function scaffoldQualityFiles(projectRoot: string, force: boolean): Check
   return results;
 }
 
+// ── initDoltSupervisor() — pin port + install supervisor on init (adj-182.2.3) ─
+//
+// Fresh `adjutant init` makes new projects correct-by-default: allocate (idempotent)
+// + pin a stable per-project Dolt port and install+load the launchd supervisor so the
+// one server is always running on the pinned port. Re-running is idempotent (same port;
+// install bootout+bootstrap is a no-op restart).
+//
+// SAFETY: every external effect (allocate, install/launchctl, plist write, SQL probe) is
+// an INJECTED seam so this is trivially testable and never runs real launchctl/dolt.
+
+/** Allocate (idempotent) the pinned Dolt port for a project. */
+export type AllocatePortFn = (projectId: string) => number;
+
+/** Install + verify the supervised server (wraps {@link installSupervisor}). */
+export type InitInstallSeam = (opts: InstallSupervisorOptions) => Promise<InstallSupervisorResult>;
+
+/** Everything {@link initDoltSupervisor} needs. External effects are injected seams. */
+export interface InitDoltSupervisorOptions {
+  /** Project UUID. */
+  projectId: string;
+  /** Absolute path to the project's `.beads` directory. */
+  beadsDir: string;
+  /** Allocate (idempotent) the pinned port from the registry. */
+  allocatePort: AllocatePortFn;
+  /** Install + verify the supervised server. */
+  install: InitInstallSeam;
+  /**
+   * Extra install options threaded through to {@link install}. Real callers supply the
+   * full seam set via {@link runRealInitDoltSupervisor}; tests stub {@link install}.
+   */
+  installOptions?: Omit<InstallSupervisorOptions, "projectId" | "beadsDir" | "port">;
+}
+
+/**
+ * Allocate+pin the port and install+load the supervisor. Returns a single
+ * {@link CheckResult} summarizing the outcome. Pure orchestration over injected seams.
+ */
+export async function initDoltSupervisor(opts: InitDoltSupervisorOptions): Promise<CheckResult> {
+  // 1. Allocate (idempotent) the pinned port. A failure (band exhausted / no registry)
+  //    aborts BEFORE any install attempt.
+  let port: number;
+  try {
+    port = opts.allocatePort(opts.projectId);
+  } catch (err) {
+    return {
+      name: "Dolt supervisor",
+      status: "fail",
+      message: `port allocation failed: ${(err as Error).message}`,
+    };
+  }
+
+  // 2. Install + load the supervisor (pins the port internally; idempotent).
+  const installOptions = {
+    ...(opts.installOptions ?? {}),
+    projectId: opts.projectId,
+    beadsDir: opts.beadsDir,
+    port,
+  } as InstallSupervisorOptions;
+  const result = await opts.install(installOptions);
+
+  return result.ok
+    ? { name: "Dolt supervisor", status: "created", message: `pinned port ${port}, agent loaded` }
+    : {
+        name: "Dolt supervisor",
+        status: "fail",
+        message: `${result.label} did not verify on port ${port} (bootstrapped=${result.bootstrapped})`,
+      };
+}
+
+// ── Real seams for initDoltSupervisor() ──────────────────────────────────────
+
+const execFileAsync = promisify(execFile);
+
+/** Real exec seam over execFile (never throws — normalizes to an ExecResult). */
+async function realExec(cmd: string, args: readonly string[]): Promise<ExecResult> {
+  try {
+    const { stdout, stderr } = await execFileAsync(cmd, [...args]);
+    return { code: 0, stdout, stderr };
+  } catch (err) {
+    const e = err as { code?: number; stdout?: string; stderr?: string };
+    return {
+      code: typeof e.code === "number" ? e.code : 1,
+      stdout: e.stdout ?? "",
+      stderr: e.stderr ?? String(err),
+    };
+  }
+}
+
+/** Resolve the `dolt` binary absolute path via `which`, or null when absent. */
+async function resolveDoltBin(): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("which", ["dolt"]);
+    const path = stdout.trim();
+    return path.length > 0 ? path : null;
+  } catch {
+    return null;
+  }
+}
+
+/** TCP-connect SQL probe against the pinned port (loopback). Mirrors the installer seam. */
+function realSqlProbe(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host: "127.0.0.1", port });
+    const done = (ok: boolean) => {
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.setTimeout(1000);
+    socket.once("connect", () => done(true));
+    socket.once("timeout", () => done(false));
+    socket.once("error", () => done(false));
+  });
+}
+
+/**
+ * Build the production {@link InitDoltSupervisorOptions} for the project at `projectRoot`
+ * and run {@link initDoltSupervisor}. Returns null when there is no `.beads/metadata.json`
+ * with a `project_id` (not a beads project — nothing to supervise). Returns a `warn`
+ * CheckResult when `dolt` is not installed (init still succeeds; supervisor is optional).
+ */
+export async function runRealInitDoltSupervisor(projectRoot: string): Promise<CheckResult | null> {
+  const beadsDir = join(projectRoot, ".beads");
+  const metadataPath = join(beadsDir, "metadata.json");
+  if (!existsSync(metadataPath)) return null;
+
+  let projectId: string | null = null;
+  try {
+    const meta = JSON.parse(readFileSync(metadataPath, "utf-8")) as Record<string, unknown>;
+    if (typeof meta["project_id"] === "string") projectId = meta["project_id"] as string;
+  } catch {
+    return { name: "Dolt supervisor", status: "warn", message: ".beads/metadata.json unreadable — skipped" };
+  }
+  if (!projectId) {
+    return { name: "Dolt supervisor", status: "warn", message: ".beads/metadata.json has no project_id — skipped" };
+  }
+
+  const doltBin = await resolveDoltBin();
+  if (!doltBin) {
+    return { name: "Dolt supervisor", status: "warn", message: "`dolt` not on PATH — supervisor not installed" };
+  }
+
+  const plistPath = join(
+    homedir(),
+    "Library",
+    "LaunchAgents",
+    `${supervisorLabel(projectId)}.plist`,
+  );
+
+  return initDoltSupervisor({
+    projectId,
+    beadsDir,
+    allocatePort: (id) => allocateDoltPort(id),
+    install: installSupervisor,
+    installOptions: {
+      doltBin,
+      plistPath,
+      logPath: join(beadsDir, "dolt-server.log"),
+      uid: userInfo().uid,
+      exec: realExec,
+      pinPort: pinDoltPort,
+      writePlist: (path, contents) => writeFileSync(path, contents, "utf-8"),
+      sqlProbe: realSqlProbe,
+    },
+  });
+}
+
 export async function runInit(options: InitOptions): Promise<number> {
   printHeader("Adjutant Init");
   const projectRoot = process.cwd();
@@ -205,6 +384,14 @@ export async function runInit(options: InitOptions): Promise<number> {
 
   // Quality-gate files (testing rules, code review, CI, etc.)
   results.push(...scaffoldQualityFiles(projectRoot, options.force));
+
+  // adj-182.2.3: pin the Dolt port + install/load the supervisor (beads projects only).
+  // Idempotent: same port, no-op restart on re-run. A missing `dolt` binary warns
+  // (supervisor optional); only a verified-failure of an installed agent fails init.
+  const doltSupervisor = await runRealInitDoltSupervisor(projectRoot);
+  if (doltSupervisor) {
+    results.push(doltSupervisor);
+  }
 
   for (const r of results) {
     printCheck(r);
