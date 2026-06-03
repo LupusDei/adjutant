@@ -540,6 +540,14 @@ export async function execBdWithReconnect(
     }
     if (isLastAttempt) {
       logError("bd Dolt reconnect exhausted attempt budget", { maxAttempts });
+      // adj-182.2.4.1: a RECURRING outage burns the budget across multiple episodes.
+      // The success path resets the in-process state, but the exhausted-budget path
+      // historically did NOT — so the dead port stayed in `clearedPorts` and the NEXT
+      // episode against that same still-dead port skipped clearing its stale
+      // /tmp/beads-dolt-circuit-<port>.json (the `!clearedPorts.has(port)` guard was
+      // false). bd then kept failing fast and recovery-WITHOUT-restart was defeated.
+      // Reset here so each fresh episode re-clears the circuit file and re-resolves.
+      _resetDoltConnectionState();
       return result;
     }
 

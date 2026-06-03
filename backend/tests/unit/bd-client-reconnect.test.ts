@@ -246,6 +246,73 @@ describe("execBdWithReconnect", () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
+  it("should re-clear the circuit file on a SECOND failed episode against the same port (no clearedPorts leak)", async () => {
+    // adj-182.2.4.1 regression. A recurring outage: episode 1 burns the whole
+    // attempt budget against the dead port and gives up. Today the exhausted-budget
+    // return path does NOT reset doltConnectionState, so the dead port stays in
+    // clearedPorts. On episode 2 against the SAME still-dead port the
+    // `!clearedPorts.has(port)` guard is false, so the stale circuit file is NEVER
+    // re-cleared — bd keeps failing fast and recovery-without-restart is defeated
+    // for any RECURRING outage (the core epic guarantee). After the fix, each
+    // failed episode must perform at least one circuit-file clear for the dead port.
+    const clearCircuitFile = vi.fn(async () => {});
+    const run = vi.fn<ReconnectSeams["run"]>(async () => downResult(17005));
+    const seams = makeSeams({ run, clearCircuitFile, maxAttempts: 2 });
+
+    // Episode 1: exhausts the budget against the dead port.
+    const r1 = await execBdWithReconnect(["list"], { beadsDir: "/tmp/p/.beads" }, seams);
+    expect(r1.success).toBe(false);
+    const clearsAfterEpisode1 = clearCircuitFile.mock.calls.filter((c) => c[0] === 17005).length;
+    expect(clearsAfterEpisode1).toBeGreaterThan(0);
+
+    // Episode 2: a NEW execBd call against the same still-dead port. The stale
+    // clearedPorts state from episode 1 must NOT suppress the re-clear.
+    const r2 = await execBdWithReconnect(["list"], { beadsDir: "/tmp/p/.beads" }, seams);
+    expect(r2.success).toBe(false);
+    const clearsAfterEpisode2 =
+      clearCircuitFile.mock.calls.filter((c) => c[0] === 17005).length - clearsAfterEpisode1;
+    expect(clearsAfterEpisode2).toBeGreaterThan(0);
+  });
+
+  it("should re-resolve and recover on a SECOND episode after the first burned the budget", async () => {
+    // adj-182.2.4.1 — the recovery half of the regression. Episode 1 dies on the
+    // dead port (budget exhausted). The endpoint then heals (port-file moves to the
+    // live port). Episode 2 must re-clear the dead port's circuit file AND reconnect
+    // — proving the exhausted-budget path left no state that fast-fails recovery.
+    let portFile = 17005;
+    const run = vi
+      .fn<ReconnectSeams["run"]>()
+      // Episode 1: two attempts, both connection-down against the dead port.
+      .mockImplementationOnce(async (_a, _o, port) => downResult(port ?? 0))
+      .mockImplementationOnce(async (_a, _o, port) => downResult(port ?? 0))
+      // Episode 2, attempt 1: still resolves the dead port (file=17005), fails; the
+      // seam heals the pin to the live port for the retry.
+      .mockImplementationOnce(async (_a, _o, port) => {
+        portFile = 17009;
+        return downResult(port ?? 0);
+      })
+      // Episode 2, attempt 2: resolves the live port, succeeds.
+      .mockImplementationOnce(async () => okResult({ recovered: true }));
+
+    const clearCircuitFile = vi.fn(async () => {});
+    const seams = makeSeams({
+      run,
+      clearCircuitFile,
+      maxAttempts: 2,
+      readEnvPort: () => null,
+      readMetadataPort: () => null,
+      readPortFile: () => portFile,
+    });
+
+    const r1 = await execBdWithReconnect(["list"], { beadsDir: "/tmp/p/.beads" }, seams);
+    expect(r1.success).toBe(false);
+
+    const r2 = await execBdWithReconnect(["list"], { beadsDir: "/tmp/p/.beads" }, seams);
+    expect(r2.success).toBe(true);
+    // Episode 2 had to re-clear the dead port (17005) — proving the leak is gone.
+    expect(clearCircuitFile).toHaveBeenCalledWith(17005);
+  });
+
   it("should use bounded exponential backoff capped at a max delay", async () => {
     const slept: number[] = [];
     const run = vi.fn<ReconnectSeams["run"]>(async () => downResult(17005));
