@@ -112,4 +112,57 @@ describe("initDoltSupervisor", () => {
     await initDoltSupervisor(opts);
     expect(opts.install).not.toHaveBeenCalled();
   });
+
+  // ── adj-182.2.2.1: first-install double-open guard ──────────────────────────
+  // `adjutant init` shares the first-install exposure: with no launchd agent loaded yet
+  // it must not bootstrap a SECOND server onto a data-dir a rogue already co-owns. The
+  // rogue-detection seams (scanDoltProcesses / killProcess) are OPTIONAL — when absent,
+  // init behaves exactly as before (clean fresh install). When present, init applies the
+  // same pinned-port-squatter kill + refuse-on-unclassifiable policy as doctor --fix.
+  describe("adj-182.2.2.1 first-install rogue guard", () => {
+    it("should kill a pinned-port squatter on the data-dir before installing", async () => {
+      const killed: number[] = [];
+      const opts = makeOpts({
+        scanDoltProcesses: vi.fn(async () => [
+          { pid: 7777, port: PINNED_PORT, cwd: `${BEADS_DIR}/dolt` },
+        ]),
+        killProcess: vi.fn((pid: number) => killed.push(pid)),
+      });
+      const result = await initDoltSupervisor(opts);
+      expect(killed).toEqual([7777]);
+      expect(opts.install).toHaveBeenCalledTimes(1);
+      expect(["created", "pass"]).toContain(result.status);
+    });
+
+    it("should REFUSE to install when an unclassifiable dolt occupies the data-dir", async () => {
+      const killed: number[] = [];
+      const opts = makeOpts({
+        scanDoltProcesses: vi.fn(async () => [
+          { pid: 8888, port: 18000, cwd: `${BEADS_DIR}/dolt` },
+        ]),
+        killProcess: vi.fn((pid: number) => killed.push(pid)),
+      });
+      const result = await initDoltSupervisor(opts);
+      expect(killed).toEqual([]);
+      expect(opts.install).not.toHaveBeenCalled();
+      expect(result.status).toBe("fail");
+    });
+
+    it("should install cleanly when no dolt occupies the data-dir", async () => {
+      const opts = makeOpts({
+        scanDoltProcesses: vi.fn(async () => []),
+        killProcess: vi.fn(),
+      });
+      const result = await initDoltSupervisor(opts);
+      expect(opts.install).toHaveBeenCalledTimes(1);
+      expect(["created", "pass"]).toContain(result.status);
+    });
+
+    it("should still install normally when no scan seam is provided (back-compat)", async () => {
+      const opts = makeOpts(); // no scanDoltProcesses / killProcess seams
+      const result = await initDoltSupervisor(opts);
+      expect(opts.install).toHaveBeenCalledTimes(1);
+      expect(["created", "pass"]).toContain(result.status);
+    });
+  });
 });

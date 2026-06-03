@@ -15,13 +15,13 @@
 
 import { execFile } from "child_process";
 import { existsSync, readFileSync, writeFileSync } from "fs";
-import { createConnection } from "net";
 import { homedir, userInfo } from "os";
 import { join } from "path";
 import { promisify } from "util";
 
 import { allocateDoltPort } from "./dolt-port-registry.js";
 import { pinDoltPort } from "./dolt-pin.js";
+import { doltSqlHandshakeOk } from "./dolt-sql-probe.js";
 import { installSupervisor, supervisorLabel, type ExecResult } from "./dolt-supervisor.js";
 
 const execFileAsync = promisify(execFile);
@@ -67,19 +67,13 @@ async function realExec(cmd: string, args: readonly string[]): Promise<ExecResul
   }
 }
 
-/** Real SQL-probe seam: a TCP connect to the pinned port (loopback). */
+/**
+ * Real SQL-probe seam (adj-182.2.1.r3): a MySQL-handshake probe — validates the
+ * server's greeting packet, NOT a bare TCP accept, so a squatter/rogue on the pinned
+ * port cannot false-pass verification. Delegates to the shared {@link doltSqlHandshakeOk}.
+ */
 function realSqlProbe(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = createConnection({ host: "127.0.0.1", port });
-    const done = (ok: boolean) => {
-      socket.destroy();
-      resolve(ok);
-    };
-    socket.setTimeout(1000);
-    socket.once("connect", () => done(true));
-    socket.once("timeout", () => done(false));
-    socket.once("error", () => done(false));
-  });
+  return doltSqlHandshakeOk(port);
 }
 
 /** Install the supervised Dolt server for the project at `repoRoot`. */

@@ -156,11 +156,17 @@ function applyListenerPort(yaml: string, port: number): string {
  * new YAML text. Comments and every other line are preserved verbatim — same targeted-
  * edit discipline as {@link applyListenerPort}, never a YAML serializer.
  *
- * Three cases:
- *  1. An active `behavior:` block already has an active `autocommit:` line → rewrite its
+ * Cases:
+ *  0. (adj-182.2.6.r1) A FLOW-style active block (`behavior: {autocommit: false}`) → edit
+ *     the autocommit value inside the braces in place, or inject one before the closing
+ *     brace if absent. Mirrors the flow-style listener defense in {@link applyListenerPort};
+ *     without it we would append a SECOND `behavior:` key (a duplicate, ambiguous YAML).
+ *  1. A block-style `behavior:` block with an active `autocommit:` line → rewrite its
  *     value to `true`, preserving indentation and any trailing inline comment.
- *  2. An active `behavior:` block exists without an active `autocommit:` line → insert
- *     `autocommit: true` right after the `behavior:` header (matching child indent).
+ *  2. A block-style `behavior:` block without an active `autocommit:` line → insert
+ *     `autocommit: true` after the header, matching the block's EXISTING child indent
+ *     (adj-182.2.6.r1 — inferred, not a hardcoded 2 spaces, so a 4-space hand-edited
+ *     block doesn't get a mis-indented sibling that misparses).
  *  3. No active `behavior:` block (the shipped template comments it out) → append a
  *     fresh `behavior:\n  autocommit: true` block, leaving the commented template intact.
  *
@@ -169,6 +175,24 @@ function applyListenerPort(yaml: string, port: number): string {
  */
 function applyBehaviorAutocommit(yaml: string): string {
   const lines = yaml.split("\n");
+
+  // 0. adj-182.2.6.r1 — FLOW-style active behavior block (`behavior: {…}`). Edit in place.
+  const flowIdx = lines.findIndex((l) => /^behavior:\s*\{.*\}\s*$/.test(l));
+  if (flowIdx !== -1) {
+    const flowLine = lines[flowIdx] ?? "";
+    if (/\bautocommit:\s*\S+/.test(flowLine)) {
+      // Rewrite the value, preserving the rest of the flow map. Stop the value match at a
+      // brace/comma so we don't swallow the closing `}` or sibling keys.
+      lines[flowIdx] = flowLine.replace(/(\bautocommit:\s*)[^,}\s]+/, `$1true`);
+    } else {
+      // No autocommit inside the flow map — inject before the closing brace, handling both
+      // a populated map (`{read_only: false}`) and an empty one (`{}`).
+      lines[flowIdx] = /\{\s*\}/.test(flowLine)
+        ? flowLine.replace(/\{\s*\}/, `{autocommit: true}`)
+        : flowLine.replace(/\}\s*$/, `, autocommit: true}`);
+    }
+    return lines.join("\n");
+  }
 
   // Active, block-style `behavior:` header on its own line (not a comment, not flow style).
   const behaviorIdx = lines.findIndex((l) => /^behavior:\s*$/.test(l));
@@ -182,11 +206,15 @@ function applyBehaviorAutocommit(yaml: string): string {
   }
 
   // Find an active (uncommented, indented) `autocommit:` line inside the behavior block,
-  // stopping at the next top-level key.
+  // stopping at the next top-level key. Also capture the FIRST child's indent so an insert
+  // can match it (adj-182.2.6.r1).
   let acIdx = -1;
+  let childIndent: string | null = null;
   for (let i = behaviorIdx + 1; i < lines.length; i++) {
     const line = lines[i] ?? "";
     if (isTopLevelKey(line)) break; // left the behavior block
+    const indentMatch = line.match(/^(\s+)\S/);
+    if (indentMatch && childIndent === null) childIndent = indentMatch[1];
     if (/^\s+autocommit:\s*\S+/.test(line)) {
       acIdx = i;
       break;
@@ -204,8 +232,9 @@ function applyBehaviorAutocommit(yaml: string): string {
   }
 
   // Behavior block exists but has no active autocommit line — insert one right after the
-  // `behavior:` header, matching the block's child indentation (default two spaces).
-  lines.splice(behaviorIdx + 1, 0, "  autocommit: true");
+  // `behavior:` header, matching the block's EXISTING child indentation (inferred above;
+  // default two spaces when the block has no other children).
+  lines.splice(behaviorIdx + 1, 0, `${childIndent ?? "  "}autocommit: true`);
   return lines.join("\n");
 }
 

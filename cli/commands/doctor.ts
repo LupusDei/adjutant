@@ -7,7 +7,6 @@
 
 import { execFile, execSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
-import { createConnection } from "net";
 import { homedir, userInfo } from "os";
 import { join } from "path";
 import { promisify } from "util";
@@ -15,6 +14,10 @@ import { promisify } from "util";
 import { printHeader, printCheck, printSummary, type CheckResult } from "../lib/output.js";
 import { allocateDoltPort, type Registry } from "../lib/dolt-port-registry.js";
 import { pinDoltPort } from "../lib/dolt-pin.js";
+import { doltSqlHandshakeOk } from "../lib/dolt-sql-probe.js";
+import { classifyDataDirRogues, cwdUnderDataDir, type DoltProcess } from "../lib/dolt-rogue-guard.js";
+import { scanDoltProcesses as realScanDoltProcesses, launchctlSupervisedPid as realLaunchctlSupervisedPid } from "../lib/dolt-process-scan.js";
+import { clearCircuitFileForPort } from "../lib/dolt-circuit-clear.js";
 import {
   installSupervisor,
   supervisorLabel,
@@ -225,15 +228,10 @@ export function checkQualityFiles(cwd: string): CheckResult[] {
 // launchctl/ps/dolt or touches the live server. checkDolt is read/diagnostic only —
 // there is no kill/mutation seam (repair lives in `doctor --fix`, adj-182.2.2).
 
-/** A discovered `dolt sql-server` process (from the ps/lsof scan seam). */
-export interface DoltProcess {
-  /** Process id. */
-  pid: number;
-  /** Listening port, when discoverable. */
-  port: number | null;
-  /** Working directory — a proxy for which project's data-dir the server owns. */
-  cwd: string | null;
-}
+// `DoltProcess` + `cwdUnderDataDir` now live in the shared rogue-guard module
+// (adj-182.2.2.1) so fixDolt and initDoltSupervisor share one classification policy.
+// Re-exported here to preserve existing `import { DoltProcess } from "doctor.js"`.
+export type { DoltProcess } from "../lib/dolt-rogue-guard.js";
 
 /** One registry port allocation (`{ projectId, doltPort }`) for collision detection. */
 export interface PortAllocation {
@@ -270,18 +268,6 @@ export interface CheckDoltOptions {
 }
 
 /**
- * Does `cwd` point at this project's data-dir (exactly, or a child)?
- *
- * Path-BOUNDARY match (adj-182.1.5.1): a bare prefix would also match sibling dirs
- * that merely share the prefix (`.beads-backup`, `.beads2`) — those belong to OTHER
- * projects. Anchor on the separator so only true children match.
- */
-function cwdUnderDataDir(cwd: string | null, beadsDir: string): boolean {
-  if (!cwd) return false;
-  return cwd === beadsDir || cwd.startsWith(`${beadsDir}/`);
-}
-
-/**
  * The Dolt health-check group. Returns one {@link CheckResult} per dimension:
  * port pinned, agent loaded, server reachable (SQL probe, NOT PID), port-file match,
  * cross-project collision, rogue dolt on the data-dir.
@@ -291,12 +277,39 @@ function cwdUnderDataDir(cwd: string | null, beadsDir: string): boolean {
 export async function checkDolt(opts: CheckDoltOptions): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
 
+  // adj-182.2.1.r2 — rollout exit-code contract. A CLEAN self-managed project (neither a
+  // registry pin NOR a metadata port — i.e. not yet migrated, the state of EVERY project
+  // before the cutover) is NOT a failure: bd manages its own ephemeral server today. The
+  // old code emitted THREE FAILs for this one root cause, so `doctor` exited 1 on every
+  // healthy pre-migration project (noise + broke any CI/script gating on the exit code).
+  //
+  // For the clean self-managed case we emit ONE actionable non-fail notice and SKIP the
+  // dependent reachable/port-file checks (there is no pinned port to reach or match).
+  // We STILL run the agent/collision/rogue checks below, but with nothing pinned they are
+  // benign (agent-loaded degrades to a notice via the same expected-supervised gate).
+  //
+  // Hard FAILs are reserved for genuine inconsistency: a PARTIAL pin (one of metadata /
+  // registry set but not the other), metadataPort != pinnedPort, a stale port file, a
+  // cross-project collision, or a rogue — handled in their own branches.
+  const expectedSupervised = opts.pinnedPort !== null || opts.metadataPort !== null;
+
   // 1. Port pinned — metadata `dolt_server_port` is set AND matches the registry.
-  if (opts.pinnedPort === null || opts.metadataPort === null) {
+  if (opts.pinnedPort === null && opts.metadataPort === null) {
+    // Clean self-managed: not yet migrated. One actionable notice, no FAIL.
+    results.push({
+      name: "Dolt self-managed",
+      status: "info",
+      message: "self-managed Dolt (not yet migrated) — run adjutant doctor --fix to adopt supervised mode",
+    });
+  } else if (opts.pinnedPort === null || opts.metadataPort === null) {
+    // PARTIAL pin — a genuine inconsistency (one source set, the other missing).
     results.push({
       name: "Dolt port pinned",
       status: "fail",
-      message: "self-managed mode — run adjutant doctor --fix",
+      message:
+        opts.metadataPort === null
+          ? `registry pin ${opts.pinnedPort} present but metadata.json dolt_server_port missing — run adjutant doctor --fix`
+          : `metadata.json port ${opts.metadataPort} present but no registry allocation — run adjutant doctor --fix`,
     });
   } else if (opts.metadataPort !== opts.pinnedPort) {
     results.push({
@@ -308,23 +321,23 @@ export async function checkDolt(opts: CheckDoltOptions): Promise<CheckResult[]> 
     results.push({ name: "Dolt port pinned", status: "pass" });
   }
 
-  // 2. Agent loaded — launchd reports a supervised PID for our label.
+  // 2. Agent loaded — launchd reports a supervised PID for our label. Only an EXPECTED-
+  //    supervised project FAILs when the agent is missing (adj-182.2.1.r2): a clean
+  //    self-managed project has no agent by design.
   const supervisedPid = await opts.launchctlSupervisedPid();
   const label = supervisorLabel(opts.projectId);
-  results.push(
-    supervisedPid !== null
-      ? { name: "Dolt launchd agent loaded", status: "pass" }
-      : { name: "Dolt launchd agent loaded", status: "fail", message: `${label} not loaded — run adjutant doctor --fix` },
-  );
+  if (expectedSupervised) {
+    results.push(
+      supervisedPid !== null
+        ? { name: "Dolt launchd agent loaded", status: "pass" }
+        : { name: "Dolt launchd agent loaded", status: "fail", message: `${label} not loaded — run adjutant doctor --fix` },
+    );
+  }
 
   // 3. Server reachable — SQL probe on the PINNED PORT (never the PID — #2670 false-up).
-  if (opts.pinnedPort === null) {
-    results.push({
-      name: "Dolt server reachable",
-      status: "fail",
-      message: "no pinned port to probe",
-    });
-  } else {
+  //    SKIPPED entirely for a clean self-managed project: there is no pinned port to reach
+  //    (adj-182.2.1.r2 — do not emit a FAIL for the absence of something not yet adopted).
+  if (opts.pinnedPort !== null) {
     const reachable = await opts.sqlProbe(opts.pinnedPort);
     results.push(
       reachable
@@ -333,17 +346,17 @@ export async function checkDolt(opts: CheckDoltOptions): Promise<CheckResult[]> 
     );
   }
 
-  // 4. Port-file matches the pinned port.
-  if (opts.pinnedPort === null) {
-    results.push({ name: "Dolt port file matches", status: "fail", message: "no pinned port" });
-  } else if (opts.portFileValue !== opts.pinnedPort) {
-    results.push({
-      name: "Dolt port file matches",
-      status: "fail",
-      message: `.beads/dolt-server.port=${opts.portFileValue ?? "<missing>"} != pinned ${opts.pinnedPort}`,
-    });
-  } else {
-    results.push({ name: "Dolt port file matches", status: "pass" });
+  // 4. Port-file matches the pinned port. SKIPPED when nothing is pinned (adj-182.2.1.r2).
+  if (opts.pinnedPort !== null) {
+    if (opts.portFileValue !== opts.pinnedPort) {
+      results.push({
+        name: "Dolt port file matches",
+        status: "fail",
+        message: `.beads/dolt-server.port=${opts.portFileValue ?? "<missing>"} != pinned ${opts.pinnedPort}`,
+      });
+    } else {
+      results.push({ name: "Dolt port file matches", status: "pass" });
+    }
   }
 
   // 5. No cross-project port collision — no OTHER project shares our doltPort.
@@ -442,74 +455,13 @@ function realPortAllocations(): PortAllocation[] {
   return out;
 }
 
-/** Resolve the supervised PID from launchd via `launchctl print` (adj-182.2.7). */
-async function realLaunchctlSupervisedPid(projectId: string): Promise<number | null> {
-  const label = supervisorLabel(projectId);
-  const target = `gui/${userInfo().uid}/${label}`;
-  try {
-    const { stdout } = await execFileAsync("launchctl", ["print", target]);
-    // `launchctl print` emits a `pid = <n>` line only when the job has a running
-    // process. Absence (or a non-running job) means no supervised PID.
-    const m = stdout.match(/\bpid\s*=\s*(\d+)/);
-    return m ? parseInt(m[1], 10) : null;
-  } catch {
-    return null;
-  }
-}
-
-/** TCP-connect SQL probe against the pinned port (loopback). Mirrors the installer seam. */
+/**
+ * Real Dolt SQL-handshake probe (adj-182.2.1.r3): validates the server's MySQL
+ * greeting, NOT a bare TCP accept — so a squatter/rogue on the pinned port cannot
+ * false-pass. Delegates to the shared {@link doltSqlHandshakeOk}.
+ */
 function realSqlProbe(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = createConnection({ host: "127.0.0.1", port });
-    const done = (ok: boolean) => {
-      socket.destroy();
-      resolve(ok);
-    };
-    socket.setTimeout(1000);
-    socket.once("connect", () => done(true));
-    socket.once("timeout", () => done(false));
-    socket.once("error", () => done(false));
-  });
-}
-
-/** Scan for all `dolt sql-server` processes via ps + lsof (pid/port/cwd). */
-async function realScanDoltProcesses(): Promise<DoltProcess[]> {
-  let psOut = "";
-  try {
-    const { stdout } = await execFileAsync("ps", ["-axo", "pid,command"]);
-    psOut = stdout;
-  } catch {
-    return [];
-  }
-  const pids: number[] = [];
-  for (const line of psOut.split("\n")) {
-    if (!/dolt sql-server/.test(line) || /grep/.test(line)) continue;
-    const m = line.trim().match(/^(\d+)\s/);
-    if (m) pids.push(parseInt(m[1], 10));
-  }
-  const out: DoltProcess[] = [];
-  for (const pid of pids) {
-    let port: number | null = null;
-    let cwd: string | null = null;
-    try {
-      const { stdout } = await execFileAsync("lsof", ["-anP", "-p", String(pid), "-iTCP", "-sTCP:LISTEN"]);
-      const m = stdout.split("\n").find((l) => new RegExp(`^\\S+\\s+${pid}\\b`).test(l));
-      const portMatch = m?.match(/:(\d+)\s*\(LISTEN\)/);
-      if (portMatch) port = parseInt(portMatch[1], 10);
-    } catch {
-      /* port stays null */
-    }
-    try {
-      const { stdout } = await execFileAsync("lsof", ["-p", String(pid)]);
-      const cwdLine = stdout.split("\n").find((l) => /\bcwd\b/.test(l));
-      const parts = cwdLine?.trim().split(/\s+/);
-      if (parts && parts.length > 0) cwd = parts[parts.length - 1];
-    } catch {
-      /* cwd stays null */
-    }
-    out.push({ pid, port, cwd });
-  }
-  return out;
+  return doltSqlHandshakeOk(port);
 }
 
 /**
@@ -568,8 +520,12 @@ export type AllocatePortFn = (projectId: string) => number;
 /** Kill a process by PID (the kill seam — never executed in tests). */
 export type KillProcessFn = (pid: number) => void;
 
-/** Delete stale `/tmp/beads-dolt-circuit-*.json` files; returns the paths cleared. */
-export type ClearCircuitFilesFn = () => Promise<string[]>;
+/**
+ * Clear this project's stale circuit-breaker file (adj-uk9af). Receives the repaired
+ * pinned PORT so it targets ONLY `/tmp/beads-dolt-circuit-<port>.json` — never other
+ * projects' breaker state. Returns the paths cleared.
+ */
+export type ClearCircuitFilesFn = (port: number) => Promise<string[]>;
 
 /** Install + verify the supervised server (wraps {@link installSupervisor}). */
 export type FixInstallSeam = (opts: InstallSupervisorOptions) => Promise<InstallSupervisorResult>;
@@ -622,29 +578,35 @@ export async function fixDolt(opts: FixDoltOptions): Promise<FixDoltResult> {
   const port = opts.allocatePort(opts.projectId);
 
   // 2. Kill rogues FIRST (before install). adj-182.2.7: classify against the launchd
-  //    supervised PID, never the stale pidfile. When the supervised PID is unknown we
-  //    REFUSE to kill — killing the wrong process is worse than leaving a stale one.
+  //    supervised PID, never the stale pidfile.
+  //
+  //    adj-182.2.2.1 — first-install double-open guard: on a first install the agent is
+  //    not yet loaded, so the supervised PID is unknown. We can STILL safely act on a
+  //    rogue that holds the PINNED PORT: port ownership is unambiguous (only one process
+  //    can LISTEN on a port), and that squatter is exactly what our about-to-bootstrap
+  //    server would collide with — so we kill it. A dolt on our data-dir that does NOT
+  //    hold the pinned port remains unclassifiable; killing the wrong process is worse
+  //    than leaving a stale one, so we leave it AND refuse the install (step 3) rather
+  //    than bootstrap a SECOND server onto a data-dir a rogue still co-owns.
   const supervisedPid = await opts.launchctlSupervisedPid();
   const processes = await opts.scanDoltProcesses();
-  const onOurDataDir = processes.filter((p) => cwdUnderDataDir(p.cwd, opts.beadsDir));
+  const { killPids, refuseInstall } = classifyDataDirRogues(processes, {
+    beadsDir: opts.beadsDir,
+    pinnedPort: port,
+    supervisedPid,
+  });
   const killedPids: number[] = [];
-  if (supervisedPid === null) {
-    if (onOurDataDir.length > 0) {
-      results.push({
-        name: "Kill rogue Dolt",
-        status: "warn",
-        message: "agent not loaded — cannot classify dolt on data-dir; not killing",
-      });
-    } else {
-      results.push({ name: "Kill rogue Dolt", status: "pass", message: "no rogues" });
-    }
+  for (const pid of killPids) {
+    opts.killProcess(pid);
+    killedPids.push(pid);
+  }
+  if (refuseInstall) {
+    results.push({
+      name: "Kill rogue Dolt",
+      status: "warn",
+      message: "agent not loaded — a dolt on the data-dir cannot be classified (not on the pinned port); not killing",
+    });
   } else {
-    for (const p of onOurDataDir) {
-      if (p.pid !== supervisedPid) {
-        opts.killProcess(p.pid);
-        killedPids.push(p.pid);
-      }
-    }
     results.push({
       name: "Kill rogue Dolt",
       status: "pass",
@@ -652,7 +614,28 @@ export async function fixDolt(opts: FixDoltOptions): Promise<FixDoltResult> {
     });
   }
 
-  // 3. Install + load the supervisor (pins the port internally; idempotent).
+  // 3. Install + load the supervisor (pins the port internally; idempotent) — UNLESS an
+  //    unclassifiable rogue still co-owns the data-dir. Installing then would put two
+  //    servers on one data-dir (double-open corruption), so we abort with a clear FAIL
+  //    instead and never call the install seam.
+  if (refuseInstall) {
+    results.push({
+      name: "Dolt launchd agent installed",
+      status: "fail",
+      message:
+        "refused: an unclassifiable dolt occupies the data-dir (agent not loaded). " +
+        "Stop the stray dolt server manually, then re-run adjutant doctor --fix.",
+    });
+    // Still clear stale circuit files (harmless, scoped) so the report is complete.
+    const clearedCircuitFiles = await opts.clearCircuitFiles(port);
+    results.push({
+      name: "Cleared stale circuit files",
+      status: "pass",
+      message: `${clearedCircuitFiles.length} cleared`,
+    });
+    return { ok: false, results, killedPids, clearedCircuitFiles };
+  }
+
   const installOptions = {
     ...(opts.installOptions ?? {}),
     projectId: opts.projectId,
@@ -670,8 +653,8 @@ export async function fixDolt(opts: FixDoltOptions): Promise<FixDoltResult> {
         },
   );
 
-  // 4. Clear stale circuit-breaker files.
-  const clearedCircuitFiles = await opts.clearCircuitFiles();
+  // 4. Clear stale circuit-breaker files for THIS port only (adj-uk9af).
+  const clearedCircuitFiles = await opts.clearCircuitFiles(port);
   results.push({
     name: "Cleared stale circuit files",
     status: "pass",
@@ -709,29 +692,18 @@ async function resolveDoltBin(): Promise<string | null> {
   }
 }
 
-/** Delete every `/tmp/beads-dolt-circuit-*.json` breaker file; returns the paths removed. */
-async function realClearCircuitFiles(): Promise<string[]> {
+/**
+ * Clear ONLY this port's `/tmp/beads-dolt-circuit-<port>.json` breaker file (adj-uk9af).
+ * Scoped to the repaired project's pinned port so a single-project `doctor --fix` never
+ * wipes OTHER projects' breaker state. Delegates to the shared, unit-tested helper.
+ */
+async function realClearCircuitFiles(port: number): Promise<string[]> {
   const { readdirSync, rmSync } = await import("fs");
-  const dir = "/tmp";
-  let entries: string[] = [];
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return [];
-  }
-  const cleared: string[] = [];
-  for (const name of entries) {
-    if (/^beads-dolt-circuit-.*\.json$/.test(name)) {
-      const full = join(dir, name);
-      try {
-        rmSync(full);
-        cleared.push(full);
-      } catch {
-        /* best-effort */
-      }
-    }
-  }
-  return cleared;
+  return clearCircuitFileForPort(port, {
+    tmpDir: "/tmp",
+    readdir: (dir) => readdirSync(dir),
+    remove: (p) => rmSync(p),
+  });
 }
 
 /**

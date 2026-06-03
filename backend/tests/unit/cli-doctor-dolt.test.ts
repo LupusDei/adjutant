@@ -80,10 +80,56 @@ describe("checkDolt", () => {
     expect(r?.status).toBe("pass");
   });
 
-  it("should FAIL the port-pinned check when no port is pinned (self-managed mode)", async () => {
-    const results = await checkDolt(makeOpts({ metadataPort: null, pinnedPort: null }));
-    const r = find(results, "pinned");
-    expect(r?.status).toBe("fail");
+  // adj-182.2.1.r2 — rollout exit-code contract. A clean, not-yet-migrated self-managed
+  // project (both pinnedPort AND metadataPort null) must NOT emit three FAILs for one
+  // root cause (which forced doctor exit 1 on every pre-cutover project). Emit ONE
+  // actionable non-fail result and SKIP the dependent reachable/port-file checks.
+  describe("adj-182.2.1.r2 self-managed (not-yet-migrated) contract", () => {
+    it("should emit a single non-fail self-managed notice when both pinned and metadata ports are null", async () => {
+      const results = await checkDolt(makeOpts({ metadataPort: null, pinnedPort: null }));
+      const r = find(results, "self-managed");
+      expect(r).toBeDefined();
+      expect(["info", "warn"]).toContain(r?.status);
+    });
+
+    it("should NOT emit any FAIL for a clean self-managed project (no exit-1 pre-migration)", async () => {
+      const results = await checkDolt(
+        makeOpts({
+          metadataPort: null,
+          pinnedPort: null,
+          portFileValue: null,
+          launchctlSupervisedPid: vi.fn(async () => null),
+          scanDoltProcesses: vi.fn(async () => []),
+        }),
+      );
+      expect(results.some((r) => r.status === "fail")).toBe(false);
+    });
+
+    it("should SKIP the reachable + port-file checks for a clean self-managed project", async () => {
+      const opts = makeOpts({
+        metadataPort: null,
+        pinnedPort: null,
+        portFileValue: null,
+        launchctlSupervisedPid: vi.fn(async () => null),
+        scanDoltProcesses: vi.fn(async () => []),
+      });
+      const results = await checkDolt(opts);
+      expect(find(results, "reachable")).toBeUndefined();
+      expect(find(results, "port file")).toBeUndefined();
+      // It must not even probe when there is nothing pinned to reach.
+      expect(opts.sqlProbe).not.toHaveBeenCalled();
+    });
+
+    it("should still FAIL (expected-supervised) when only the metadata port is set without a registry pin", async () => {
+      // A genuine inconsistency, not a clean self-managed state — keep the hard FAIL.
+      const results = await checkDolt(makeOpts({ pinnedPort: null, metadataPort: 17005 }));
+      expect(results.some((r) => r.status === "fail")).toBe(true);
+    });
+
+    it("should still FAIL (expected-supervised) when only the registry pin is set without metadata", async () => {
+      const results = await checkDolt(makeOpts({ pinnedPort: 17005, metadataPort: null }));
+      expect(results.some((r) => r.status === "fail")).toBe(true);
+    });
   });
 
   it("should FAIL the port-pinned check when metadata port disagrees with the registry", async () => {

@@ -9,7 +9,6 @@
 
 import { execFile } from "child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { createConnection } from "net";
 import { homedir, userInfo } from "os";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -30,6 +29,9 @@ import { printHeader, printCheck, printSummary, printSuccess, printError, type C
 import { PRIME_MD_CONTENT } from "../lib/prime.js";
 import { allocateDoltPort } from "../lib/dolt-port-registry.js";
 import { pinDoltPort } from "../lib/dolt-pin.js";
+import { doltSqlHandshakeOk } from "../lib/dolt-sql-probe.js";
+import { classifyDataDirRogues, type DoltProcess } from "../lib/dolt-rogue-guard.js";
+import { scanDoltProcesses as realScanDoltProcesses, launchctlSupervisedPid as realLaunchctlSupervisedPid } from "../lib/dolt-process-scan.js";
 import {
   installSupervisor,
   supervisorLabel,
@@ -214,6 +216,21 @@ export interface InitDoltSupervisorOptions {
   /** Install + verify the supervised server. */
   install: InitInstallSeam;
   /**
+   * adj-182.2.2.1 — OPTIONAL first-install double-open guard seams. When `scanDoltProcesses`
+   * is provided, init classifies any dolt already running under the data-dir BEFORE
+   * installing (kill a pinned-port squatter; refuse install on an unclassifiable rogue) so
+   * a fresh init never bootstraps a SECOND server onto a shared data-dir. When omitted, init
+   * behaves exactly as before (clean fresh install) for back-compat.
+   */
+  scanDoltProcesses?: () => Promise<DoltProcess[]>;
+  /** Kill a process by PID (paired with {@link scanDoltProcesses}). */
+  killProcess?: (pid: number) => void;
+  /**
+   * Resolve the supervised PID from launchd (adj-182.2.7). At init time the agent is
+   * usually not loaded yet → null → first-install classification. Defaults to null.
+   */
+  launchctlSupervisedPid?: () => Promise<number | null>;
+  /**
    * Extra install options threaded through to {@link install}. Real callers supply the
    * full seam set via {@link runRealInitDoltSupervisor}; tests stub {@link install}.
    */
@@ -236,6 +253,31 @@ export async function initDoltSupervisor(opts: InitDoltSupervisorOptions): Promi
       status: "fail",
       message: `port allocation failed: ${(err as Error).message}`,
     };
+  }
+
+  // 1b. adj-182.2.2.1 first-install double-open guard. Only runs when the caller wires
+  //     the scan seam. Kill a pinned-port squatter (unambiguous); refuse to install if an
+  //     unclassifiable dolt still co-owns the data-dir (would double-open).
+  if (opts.scanDoltProcesses) {
+    const supervisedPid = opts.launchctlSupervisedPid ? await opts.launchctlSupervisedPid() : null;
+    const processes = await opts.scanDoltProcesses();
+    const { killPids, refuseInstall } = classifyDataDirRogues(processes, {
+      beadsDir: opts.beadsDir,
+      pinnedPort: port,
+      supervisedPid,
+    });
+    if (opts.killProcess) {
+      for (const pid of killPids) opts.killProcess(pid);
+    }
+    if (refuseInstall) {
+      return {
+        name: "Dolt supervisor",
+        status: "fail",
+        message:
+          "refused: an unclassifiable dolt occupies the data-dir. Stop the stray dolt " +
+          "server manually, then re-run adjutant init.",
+      };
+    }
   }
 
   // 2. Install + load the supervisor (pins the port internally; idempotent).
@@ -286,19 +328,13 @@ async function resolveDoltBin(): Promise<string | null> {
   }
 }
 
-/** TCP-connect SQL probe against the pinned port (loopback). Mirrors the installer seam. */
+/**
+ * Real Dolt SQL-handshake probe (adj-182.2.1.r3): validates the server's MySQL
+ * greeting, NOT a bare TCP accept — so a squatter/rogue on the pinned port cannot
+ * false-pass. Delegates to the shared {@link doltSqlHandshakeOk}.
+ */
 function realSqlProbe(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = createConnection({ host: "127.0.0.1", port });
-    const done = (ok: boolean) => {
-      socket.destroy();
-      resolve(ok);
-    };
-    socket.setTimeout(1000);
-    socket.once("connect", () => done(true));
-    socket.once("timeout", () => done(false));
-    socket.once("error", () => done(false));
-  });
+  return doltSqlHandshakeOk(port);
 }
 
 /**
@@ -340,6 +376,18 @@ export async function runRealInitDoltSupervisor(projectRoot: string): Promise<Ch
     beadsDir,
     allocatePort: (id) => allocateDoltPort(id),
     install: installSupervisor,
+    // adj-182.2.2.1 first-install double-open guard: wire the real ps/lsof + launchctl
+    // seams so a fresh init never bootstraps a second server onto a data-dir a rogue
+    // already co-owns (kills a pinned-port squatter; refuses on an unclassifiable rogue).
+    scanDoltProcesses: () => realScanDoltProcesses(),
+    launchctlSupervisedPid: () => realLaunchctlSupervisedPid(projectId),
+    killProcess: (pid) => {
+      try {
+        process.kill(pid);
+      } catch {
+        /* best-effort */
+      }
+    },
     installOptions: {
       doltBin,
       plistPath,

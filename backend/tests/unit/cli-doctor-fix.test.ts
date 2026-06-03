@@ -142,32 +142,131 @@ describe("fixDolt", () => {
     expect(killCalls).toHaveLength(0);
   });
 
-  it("should refuse to kill any dolt when the launchd supervised PID is unknown", async () => {
-    // adj-182.2.7 safety: with no supervised PID we cannot tell rogue from legit.
-    // Killing the wrong process is worse than leaving a stale one — kill nothing.
+  it("should refuse to kill a NON-pinned-port dolt when the launchd supervised PID is unknown", async () => {
+    // adj-182.2.7 safety: with no supervised PID and a dolt on our data-dir that does
+    // NOT hold our pinned port, we cannot tell rogue from legit — killing the wrong
+    // process is worse than leaving a stale one. (A dolt that DOES hold the pinned port
+    // is unambiguous and IS killed — see the adj-182.2.2.1 first-install tests below.)
     const { opts, killCalls } = makeOpts({
       launchctlSupervisedPid: vi.fn(async () => null),
       scanDoltProcesses: vi.fn(async () => [
-        { pid: 7777, port: PINNED_PORT, cwd: `${BEADS_DIR}/dolt` },
+        { pid: 7777, port: 18000, cwd: `${BEADS_DIR}/dolt` },
       ]),
     });
     await fixDolt(opts);
     expect(killCalls).toHaveLength(0);
   });
 
+  // ── adj-182.2.2.1: first-install double-open + false-positive verify ──────────
+  // On a FIRST install the launchd agent is not yet loaded, so launchctlSupervisedPid()
+  // returns null. The OLD code refused to kill ANY rogue and then bootstrapped a SECOND
+  // server on the SAME data-dir as a pre-existing rogue (two servers, one data-dir →
+  // double-open corruption); worse, if the rogue held the pinned port, the SQL probe
+  // connected to the rogue and falsely reported verified:true.
+  describe("adj-182.2.2.1 first-install rogue handling (supervised PID unknown)", () => {
+    it("should kill a rogue that holds the PINNED PORT even when the supervised PID is unknown", async () => {
+      // Port ownership is unambiguous — only one process can LISTEN on the pinned port.
+      // A dolt on our data-dir bound to OUR pinned port is the squatter we are about to
+      // bootstrap over, so it is safe (and necessary) to kill before install.
+      const { opts, killCalls } = makeOpts({
+        launchctlSupervisedPid: vi.fn(async () => null),
+        scanDoltProcesses: vi.fn(async () => [
+          { pid: 7777, port: PINNED_PORT, cwd: `${BEADS_DIR}/dolt` },
+        ]),
+      });
+      const result = await fixDolt(opts);
+      expect(killCalls.map((c) => c.pid)).toEqual([7777]);
+      // After clearing the port squatter, the install proceeds.
+      expect(opts.install).toHaveBeenCalledTimes(1);
+      expect(result.killedPids).toEqual([7777]);
+    });
+
+    it("should kill the pinned-port squatter BEFORE installing the supervisor", async () => {
+      const order: string[] = [];
+      const { opts } = makeOpts({
+        launchctlSupervisedPid: vi.fn(async () => null),
+        killProcess: vi.fn(() => order.push("kill")),
+        install: vi.fn(async () => {
+          order.push("install");
+          return { ok: true, verified: true, label: "x", bootstrapped: true };
+        }),
+        scanDoltProcesses: vi.fn(async () => [
+          { pid: 7777, port: PINNED_PORT, cwd: `${BEADS_DIR}/dolt` },
+        ]),
+      });
+      await fixDolt(opts);
+      expect(order).toEqual(["kill", "install"]);
+    });
+
+    it("should REFUSE to install (no double-open) when an unclassifiable rogue sits on the data-dir and cannot be killed", async () => {
+      // supervised PID unknown AND the data-dir dolt does NOT hold our pinned port → we
+      // cannot safely kill it, and bootstrapping anyway would put two servers on one
+      // data-dir. Refuse: do not call install, report a FAIL, ok=false.
+      const { opts, killCalls } = makeOpts({
+        launchctlSupervisedPid: vi.fn(async () => null),
+        scanDoltProcesses: vi.fn(async () => [
+          { pid: 8888, port: 18000, cwd: `${BEADS_DIR}/dolt` },
+        ]),
+      });
+      const result = await fixDolt(opts);
+      expect(killCalls).toHaveLength(0);
+      expect(opts.install).not.toHaveBeenCalled();
+      expect(result.ok).toBe(false);
+      const installed = result.results.find((r) => r.name.toLowerCase().includes("agent"));
+      expect(installed?.status).toBe("fail");
+    });
+
+    it("should install normally on a clean first install (no dolt on the data-dir, supervised PID unknown)", async () => {
+      // The legitimate first-install case: nothing is running yet. Install proceeds.
+      const { opts, killCalls } = makeOpts({
+        launchctlSupervisedPid: vi.fn(async () => null),
+        scanDoltProcesses: vi.fn(async () => []),
+      });
+      const result = await fixDolt(opts);
+      expect(killCalls).toHaveLength(0);
+      expect(opts.install).toHaveBeenCalledTimes(1);
+      expect(result.ok).toBe(true);
+    });
+
+    it("should kill a pinned-port squatter but still REFUSE if another unclassifiable rogue remains on the data-dir", async () => {
+      // Two rogues: one holds the pinned port (killable), one does not (unclassifiable).
+      // After killing the port squatter, an unclassifiable dolt still co-owns the data-dir
+      // → refuse to install rather than risk a double-open.
+      const { opts, killCalls } = makeOpts({
+        launchctlSupervisedPid: vi.fn(async () => null),
+        scanDoltProcesses: vi.fn(async () => [
+          { pid: 7777, port: PINNED_PORT, cwd: `${BEADS_DIR}/dolt` },
+          { pid: 8888, port: 18000, cwd: `${BEADS_DIR}/dolt` },
+        ]),
+      });
+      const result = await fixDolt(opts);
+      expect(killCalls.map((c) => c.pid)).toEqual([7777]);
+      expect(opts.install).not.toHaveBeenCalled();
+      expect(result.ok).toBe(false);
+    });
+  });
+
   // ── Circuit file clearing ─────────────────────────────────────────────────────
   it("should clear stale circuit-breaker files and report the count", async () => {
     const { opts } = makeOpts({
-      clearCircuitFiles: vi.fn(async () => [
-        "/tmp/beads-dolt-circuit-17005.json",
-        "/tmp/beads-dolt-circuit-18000.json",
-      ]),
+      clearCircuitFiles: vi.fn(async () => ["/tmp/beads-dolt-circuit-17005.json"]),
     });
     const result = await fixDolt(opts);
     expect(opts.clearCircuitFiles).toHaveBeenCalledTimes(1);
     const r = result.results.find((x) => x.name.toLowerCase().includes("circuit"));
     expect(r?.status).toBe("pass");
-    expect(r?.message).toContain("2");
+    expect(r?.message).toContain("1");
+  });
+
+  // adj-uk9af: the clear must be SCOPED to THIS project's pinned port — fixDolt passes
+  // the resolved port to the clear seam so it can target only beads-dolt-circuit-<port>.json
+  // (never wiping OTHER projects' breaker state via a broad glob).
+  it("should pass the repaired pinned port to the circuit-file clear seam (adj-uk9af)", async () => {
+    const { opts } = makeOpts({
+      clearCircuitFiles: vi.fn(async () => [`/tmp/beads-dolt-circuit-${PINNED_PORT}.json`]),
+    });
+    await fixDolt(opts);
+    expect(opts.clearCircuitFiles).toHaveBeenCalledWith(PINNED_PORT);
   });
 
   // ── Idempotency ─────────────────────────────────────────────────────────────
