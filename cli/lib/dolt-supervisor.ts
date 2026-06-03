@@ -276,3 +276,97 @@ export async function installSupervisor(
 
   return { ok: verified, verified, label, bootstrapped };
 }
+
+// ── doltLiveCutover() orchestration (adj-182.1.6) ────────────────────────────
+//
+// Migrates a RUNNING project from a self-managed, random-ephemeral-port Dolt
+// server to the supervised, pinned-port server with NO data loss. Order is
+// load-bearing; the cutover ABORTS (no circuit-clear, no backend restart) if the
+// supervised server fails its SQL probe, leaving the old topology intact rather
+// than pointing the backend at a dead server.
+//
+// ALL effects are injected seams. This function never stops/starts a real server,
+// never restarts a real backend, and never touches real /tmp circuit files — the
+// REAL cutover is a separate operator step (specs/.../runbook-cutover.md),
+// coordinated with the operator. This is pure, tested orchestration.
+
+/** Install seam — given supervisor options, install + verify, returning the result. */
+export type InstallSeam = (opts: InstallSupervisorOptions) => Promise<InstallSupervisorResult>;
+
+/** Everything {@link doltLiveCutover} needs. All external effects are seams. */
+export interface DoltLiveCutoverOptions {
+  /** Project UUID. */
+  projectId: string;
+  /** Absolute path to the project's `.beads` directory. */
+  beadsDir: string;
+  /** The pinned Dolt port to cut over to. */
+  port: number;
+  /** Pause/settle in-flight bd writes so nothing is lost across the swap. */
+  quiesce: () => Promise<void>;
+  /** Stop the self-managed (lazy) server bd previously spawned. */
+  stopLazyServer: () => Promise<void>;
+  /** Install + verify the supervised server (wraps {@link installSupervisor}). */
+  install: InstallSeam;
+  /** Delete stale `/tmp/beads-dolt-circuit-*.json` breaker files; returns the paths cleared. */
+  clearCircuitFiles: () => Promise<string[]>;
+  /** Trigger backend re-init against the pinned endpoint. */
+  restartBackend: () => Promise<void>;
+  /**
+   * Supervisor install options passed through to {@link install}, minus the fields
+   * derived here (projectId/beadsDir/port). When omitted, a minimal stub-friendly
+   * object is built; real callers supply the full seam set.
+   */
+  installOptions?: Omit<InstallSupervisorOptions, "projectId" | "beadsDir" | "port">;
+}
+
+/** Outcome of a live cutover. */
+export interface DoltLiveCutoverResult {
+  /** True iff the cutover completed all steps (install verified). */
+  ok: boolean;
+  /** The supervisor install result (the abort gate). */
+  install: InstallSupervisorResult;
+  /** Circuit-breaker files cleared (empty when the cutover aborted before clearing). */
+  clearedCircuitFiles: string[];
+}
+
+/**
+ * Perform the live cutover. Enforced order:
+ *   quiesce → stopLazy → install(+verify) → clearCircuit → restartBackend.
+ *
+ * If `install` does not verify (`ok === false`), the cutover ABORTS immediately
+ * after install: circuit files are NOT cleared and the backend is NOT restarted.
+ */
+export async function doltLiveCutover(
+  opts: DoltLiveCutoverOptions,
+): Promise<DoltLiveCutoverResult> {
+  // 1. Quiesce in-flight writes so nothing is lost across the swap.
+  await opts.quiesce();
+
+  // 2. Stop the lazy/self-managed server BEFORE starting the supervised one — two
+  //    servers on one data-dir risk double-open corruption.
+  await opts.stopLazyServer();
+
+  // 3. Install + verify the supervised server on the pinned port.
+  const installOptions = {
+    ...(opts.installOptions ?? {}),
+    projectId: opts.projectId,
+    beadsDir: opts.beadsDir,
+    port: opts.port,
+  } as InstallSupervisorOptions;
+  const install = await opts.install(installOptions);
+
+  // SAFETY ABORT: if the supervised server did not verify, do NOT clear breaker
+  // files and do NOT restart the backend. Leave the old topology in place.
+  if (!install.ok) {
+    return { ok: false, install, clearedCircuitFiles: [] };
+  }
+
+  // 4. Clear stale circuit-breaker files so bd/backend stop failing fast on the
+  //    dead ephemeral port.
+  const clearedCircuitFiles = await opts.clearCircuitFiles();
+
+  // 5. Trigger backend re-init against the pinned endpoint (LAST).
+  await opts.restartBackend();
+
+  return { ok: true, install, clearedCircuitFiles };
+}
