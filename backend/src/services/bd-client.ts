@@ -426,27 +426,29 @@ const DEFAULT_BASE_BACKOFF_MS = 250;
 const DEFAULT_MAX_BACKOFF_MS = 4000;
 
 /**
- * In-process connection state. `lastGoodPort` records the last port a `bd`
- * command actually succeeded against; clearing it is the in-process "breaker
- * reset" that lets a recovered endpoint resume without a restart.
+ * In-process connection state. `clearedPorts` tracks the ports whose stale
+ * per-port circuit files we already cleared during the CURRENT reconnect episode,
+ * so a single episode does not redundantly clear the same file on every attempt.
+ * Resetting this state (on a successful reconnect OR an exhausted-budget give-up)
+ * is the in-process "breaker reset" that lets a recovered endpoint resume on the
+ * next episode without a process restart (adj-182.2.4.1).
  */
 interface DoltConnectionState {
-  lastGoodPort: number | null;
   /** Ports whose stale circuit files we already cleared this episode. */
   clearedPorts: Set<number>;
 }
 
 let doltConnectionState: DoltConnectionState = {
-  lastGoodPort: null,
   clearedPorts: new Set<number>(),
 };
 
 /**
  * Reset the in-process Dolt connection state. Called after a successful
- * reconnect (so the next call starts clean) and by tests for isolation.
+ * reconnect AND after an exhausted-budget give-up (so the next episode starts
+ * clean and re-clears the circuit file), and by tests for isolation.
  */
 export function _resetDoltConnectionState(): void {
-  doltConnectionState = { lastGoodPort: null, clearedPorts: new Set<number>() };
+  doltConnectionState = { clearedPorts: new Set<number>() };
 }
 
 /**
@@ -519,14 +521,13 @@ export async function execBdWithReconnect(
     const result = await seams.run(args, options, port);
 
     if (result.success) {
-      // Reconnect succeeded (or never needed) — record the good port and reset
-      // the in-process breaker so the next call starts clean. THIS is what lets
-      // a recovered endpoint resume without a process restart.
+      // Reconnect succeeded (or never needed) — reset the in-process breaker so
+      // the next call starts clean. THIS is what lets a recovered endpoint resume
+      // without a process restart.
       if (attempt > 0) {
         logInfo("bd reconnected to Dolt endpoint", { port, attempts: attempt + 1 });
       }
       _resetDoltConnectionState();
-      doltConnectionState.lastGoodPort = port;
       return result;
     }
 
