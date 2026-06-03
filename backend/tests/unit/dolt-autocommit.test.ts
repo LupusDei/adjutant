@@ -61,9 +61,13 @@ function activeAutocommitLines(yaml: string): string[] {
   return yaml.split("\n").filter((l) => /^\s*autocommit:\s*\S+/.test(l));
 }
 
-/** Count uncommented (active) top-level `behavior:` keys. */
+/**
+ * Count uncommented (active) top-level `behavior:` keys — BOTH block style (`behavior:`)
+ * and flow style (`behavior: {…}`). adj-182.2.6.r1: the original helper only matched
+ * block style, masking a duplicate flow-style key the appended block would create.
+ */
 function activeBehaviorKeys(yaml: string): string[] {
-  return yaml.split("\n").filter((l) => /^behavior:\s*$/.test(l));
+  return yaml.split("\n").filter((l) => /^behavior:\s*(\{.*\}\s*)?$/.test(l));
 }
 
 describe("cli/lib/dolt-pin — supervised autocommit (adj-182.2.6)", () => {
@@ -193,6 +197,92 @@ listener:
 
       const cfg = readFileSync(configPath, "utf-8");
       expect(cfg).toMatch(/^\s*autocommit:\s*true\s+# set by operator$/m);
+    });
+
+    // ── adj-182.2.6.r1: flow-style behavior block parity ────────────────────────
+    it("should flip a FLOW-style behavior: {autocommit: false} to true in place (no duplicate block)", () => {
+      const flow = `# header
+behavior: {autocommit: false}
+
+listener:
+  host: 127.0.0.1
+  port: 49599
+`;
+      seedBeads({ database: "dolt" }, flow);
+
+      pinDoltPort(beadsDir, 17005);
+
+      const cfg = readFileSync(configPath, "utf-8");
+      // The flow line is edited in place to true (autocommit lives inside the braces, so
+      // there is no standalone `autocommit:` line — assert on the flow line itself).
+      expect(cfg).toMatch(/^behavior:\s*\{[^}]*autocommit:\s*true[^}]*\}\s*$/m);
+      // No `autocommit: false` survives anywhere.
+      expect(cfg).not.toMatch(/autocommit:\s*false/);
+      // No second behavior block appended (block OR flow style).
+      expect(activeBehaviorKeys(cfg)).toHaveLength(1);
+    });
+
+    it("should inject autocommit into a FLOW-style behavior block that lacks it", () => {
+      const flowNoAc = `behavior: {read_only: false}
+listener:
+  host: 127.0.0.1
+  port: 49599
+`;
+      seedBeads({ database: "dolt" }, flowNoAc);
+
+      pinDoltPort(beadsDir, 17005);
+
+      const cfg = readFileSync(configPath, "utf-8");
+      expect(cfg).toMatch(/^behavior:\s*\{[^}]*read_only:\s*false[^}]*autocommit:\s*true[^}]*\}\s*$/m);
+      expect(activeBehaviorKeys(cfg)).toHaveLength(1);
+    });
+
+    it("should be idempotent after appending a behavior block on re-pin (no stacking on the template path)", () => {
+      // Template ships behavior commented out → first pin APPENDS an active block. A
+      // second pin must EDIT that appended block, not append another.
+      seedBeads({ database: "dolt" }, REAL_TEMPLATE);
+      pinDoltPort(beadsDir, 17005);
+      const afterFirst = readFileSync(configPath, "utf-8");
+      pinDoltPort(beadsDir, 17005);
+      const afterSecond = readFileSync(configPath, "utf-8");
+      expect(afterSecond).toBe(afterFirst);
+      expect(activeBehaviorKeys(afterSecond)).toHaveLength(1);
+      expect(activeAutocommitLines(afterSecond)).toHaveLength(1);
+    });
+
+    it("should be idempotent re-pinning a FLOW-style behavior block", () => {
+      const flow = `behavior: {autocommit: false}
+listener:
+  host: 127.0.0.1
+  port: 49599
+`;
+      seedBeads({ database: "dolt" }, flow);
+      pinDoltPort(beadsDir, 17005);
+      const afterFirst = readFileSync(configPath, "utf-8");
+      pinDoltPort(beadsDir, 17005);
+      const afterSecond = readFileSync(configPath, "utf-8");
+      expect(afterSecond).toBe(afterFirst);
+      expect(activeBehaviorKeys(afterSecond)).toHaveLength(1);
+    });
+
+    // ── adj-182.2.6.r1: indent inference on insert ──────────────────────────────
+    it("should match the block's child indent when inserting autocommit (4-space hand-edited block)", () => {
+      const fourSpace = `behavior:
+    read_only: false
+listener:
+  host: 127.0.0.1
+  port: 49599
+`;
+      seedBeads({ database: "dolt" }, fourSpace);
+
+      pinDoltPort(beadsDir, 17005);
+
+      const cfg = readFileSync(configPath, "utf-8");
+      // The inserted autocommit must use the SAME 4-space indent as the existing child,
+      // not a hardcoded 2 — a mis-indented sibling would misparse as a new top-level key.
+      expect(cfg).toMatch(/^ {4}autocommit:\s*true$/m);
+      expect(cfg).toMatch(/^ {4}read_only:\s*false$/m);
+      expect(activeAutocommitLines(cfg)).toHaveLength(1);
     });
   });
 
