@@ -175,20 +175,20 @@ single-instance is enforced by the launchd singleton + `.beads/dolt-server.lock`
 
 ## 6. Acceptance validation record
 
-> **TBD — populated at the live run.** The live cutover is the **operator-only**
-> step coordinated with **karax** (validated with **raynor**); it has NOT been
-> executed as of this runbook landing (Phase 1). Fill this table in at the
-> coordinated live run and commit it alongside this runbook. Record date,
-> operator, `projectId`, and the allocated pinned port.
+> **EXECUTED — live cutover validated 2026-06-03** (operator **karax**, validated
+> approach with **raynor**; coordinated freeze by the user across the adjutant
+> squad + bloomfolio swarm). First attempt aborted cleanly at install (RC=1) on a
+> port-registry id-space bug (`adj-182.1.4.1`, fixed by `allocateDoltPortByPath`,
+> `6343fa24`); second attempt below succeeded.
 
 | Check | Expected | Result | Notes |
 |---|---|---|---|
-| `bd dolt status` | `running (external)` on pinned port | _TBD_ | |
-| `.beads/dolt-server.port` == pinned | yes | _TBD_ | pinned port: _TBD_ |
-| `bd list` post-cutover | works, no breaker | _TBD_ | |
-| Exactly one `dolt sql-server` for data-dir | yes | _TBD_ | |
-| Forced `kill -9` → recovery | `bd list` recovers, port unchanged | _TBD_ | |
-| Sleep/wake → recovery | `bd list` recovers, port unchanged | _TBD_ | |
-| Backend reconnect (no manual restart, Phase 2) | auto | _TBD_ | |
+| `bd dolt status` | `running (external)` on pinned port | ⚠️ PASS (functional) | bd 0.60.0 prints "not running" — PID-not-connectivity bug #2670; `bd list` connects fine. Phase 3 bd→1.0.4 + our SQL-probe `checkDolt` resolve the cosmetic. |
+| `.beads/dolt-server.port` == pinned | yes | ✅ PASS | 17000 (metadata.json + config.yaml + portfile all agree) |
+| `bd list` post-cutover | works, no breaker | ✅ PASS | BD_OK on port 17000, no backend restart |
+| Exactly one `dolt sql-server` for data-dir | yes | ✅ PASS | single supervised `--config` server |
+| Forced `kill -9` → recovery | `bd list` recovers, port unchanged | ✅ PASS | launchd KeepAlive relaunched in ~1s (PID 33449→38698), still port 17000, `bd list` recovered |
+| Sleep/wake → recovery | `bd list` recovers, port unchanged | ⏭️ SKIPPED | by agreement (`pmset sleepnow` too disruptive); forced-kill validates the same crash-survival path |
+| Backend reconnect (no manual restart, Phase 2) | auto | ✅ PASS | reconnecting bd-client (`adj-182.2.4`) self-heals onto the pinned port; no restart performed |
 
-Date: _TBD_ · Operator: _TBD_ · projectId: _TBD_ · pinned port: _TBD_
+Date: 2026-06-03 · Operator: karax · projectId: c249344d-1d43-4359-a2dd-be8cbb0270e3 · pinned port: 17000
