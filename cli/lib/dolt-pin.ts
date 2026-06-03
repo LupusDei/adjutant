@@ -5,8 +5,19 @@
  * THREE places beads actually reads (plan §1 — NOT the global ~/.config/bd config,
  * which issue #2073 ignores):
  *   1. `<beadsDir>/metadata.json`        → `dolt_server_port`
- *   2. `<beadsDir>/dolt/config.yaml`     → `listener.port`
+ *   2. `<beadsDir>/dolt/config.yaml`     → `listener.port` AND `behavior.autocommit: true`
  *   3. project env (returned as the `BEADS_DOLT_SERVER_PORT=<port>` export line)
+ *
+ * Auto-commit (adj-182.2.6, raynor addendum B):
+ *  - Dolt's SQL-server `behavior.autocommit` defaults OFF. With it off, `bd create`/
+ *    `bd update` land in the working set and are INVISIBLE to `bd list` (a HEAD read)
+ *    until a manual `bd dolt commit`. This bit the team live (adj-181's 32 beads, and
+ *    again while wiring adj-182). We therefore force `behavior.autocommit: true` on the
+ *    SAME config.yaml write as the port pin, so every supervised-server write is
+ *    immediately HEAD-visible. Same targeted-edit discipline as the port pin: no YAML
+ *    serializer, comments preserved, idempotent. The shipped template comments the whole
+ *    `behavior:` block out (Dolt's own default applies), so we append/edit an ACTIVE
+ *    block rather than relying on the commented suggestion line.
  *
  * Setting `dolt_server_port` in metadata puts beads into externally-managed mode
  * (`IsAutoStartDisabled()` true) so it connects to the supervised server instead
@@ -140,11 +151,73 @@ function applyListenerPort(yaml: string, port: number): string {
   return lines.join("\n");
 }
 
-/** Write `listener.port` into dolt/config.yaml, creating the file/block if needed. */
+/**
+ * Force an ACTIVE `behavior.autocommit: true` in the config (adj-182.2.6). Returns the
+ * new YAML text. Comments and every other line are preserved verbatim — same targeted-
+ * edit discipline as {@link applyListenerPort}, never a YAML serializer.
+ *
+ * Three cases:
+ *  1. An active `behavior:` block already has an active `autocommit:` line → rewrite its
+ *     value to `true`, preserving indentation and any trailing inline comment.
+ *  2. An active `behavior:` block exists without an active `autocommit:` line → insert
+ *     `autocommit: true` right after the `behavior:` header (matching child indent).
+ *  3. No active `behavior:` block (the shipped template comments it out) → append a
+ *     fresh `behavior:\n  autocommit: true` block, leaving the commented template intact.
+ *
+ * NOTE: we only consider UNCOMMENTED lines active. The template's `# autocommit: true`
+ * suggestion is a comment, so Dolt's real default (OFF) applies until we write a live one.
+ */
+function applyBehaviorAutocommit(yaml: string): string {
+  const lines = yaml.split("\n");
+
+  // Active, block-style `behavior:` header on its own line (not a comment, not flow style).
+  const behaviorIdx = lines.findIndex((l) => /^behavior:\s*$/.test(l));
+
+  if (behaviorIdx === -1) {
+    // No active behavior block — append one. The commented template (`# behavior:` ...)
+    // is left untouched; YAML ignores the duplicate-looking commented key.
+    const base = yaml.endsWith("\n") || yaml === "" ? yaml : yaml + "\n";
+    const lead = base === "" ? "" : "\n";
+    return base + `${lead}behavior:\n  autocommit: true\n`;
+  }
+
+  // Find an active (uncommented, indented) `autocommit:` line inside the behavior block,
+  // stopping at the next top-level key.
+  let acIdx = -1;
+  for (let i = behaviorIdx + 1; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (isTopLevelKey(line)) break; // left the behavior block
+    if (/^\s+autocommit:\s*\S+/.test(line)) {
+      acIdx = i;
+      break;
+    }
+  }
+
+  if (acIdx !== -1) {
+    const existing = lines[acIdx] ?? "";
+    const indent = existing.match(/^(\s*)/)?.[1] ?? "  ";
+    // Preserve any trailing text after the value (typically an inline `# ...` comment),
+    // mirroring the port-pin comment-preservation fix (adj-182.1.2.1).
+    const trailing = existing.match(/^\s*autocommit:\s*\S+(.*)$/)?.[1] ?? "";
+    lines[acIdx] = `${indent}autocommit: true${trailing}`;
+    return lines.join("\n");
+  }
+
+  // Behavior block exists but has no active autocommit line — insert one right after the
+  // `behavior:` header, matching the block's child indentation (default two spaces).
+  lines.splice(behaviorIdx + 1, 0, "  autocommit: true");
+  return lines.join("\n");
+}
+
+/**
+ * Write `listener.port` AND `behavior.autocommit: true` into dolt/config.yaml, creating
+ * the file/block(s) if needed. Both edits are targeted (comment-preserving, idempotent).
+ */
 function pinConfigYaml(configPath: string, port: number): void {
   const existing = existsSync(configPath) ? readFileSync(configPath, "utf-8") : "";
-  const updated = applyListenerPort(existing, port);
-  writeFileSync(configPath, updated, "utf-8");
+  const withPort = applyListenerPort(existing, port);
+  const withAutocommit = applyBehaviorAutocommit(withPort);
+  writeFileSync(configPath, withAutocommit, "utf-8");
 }
 
 /**
