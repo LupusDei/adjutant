@@ -27,7 +27,7 @@ import { installPlugin } from "../lib/plugin.js";
 import { QUALITY_FILES, loadTemplate } from "../lib/quality-templates.js";
 import { printHeader, printCheck, printSummary, printSuccess, printError, type CheckResult } from "../lib/output.js";
 import { PRIME_MD_CONTENT } from "../lib/prime.js";
-import { allocateDoltPort } from "../lib/dolt-port-registry.js";
+import { allocateDoltPortByPath } from "../lib/dolt-port-registry.js";
 import { pinDoltPort } from "../lib/dolt-pin.js";
 import { doltSqlHandshakeOk } from "../lib/dolt-sql-probe.js";
 import { classifyDataDirRogues, type DoltProcess } from "../lib/dolt-rogue-guard.js";
@@ -374,7 +374,10 @@ export async function runRealInitDoltSupervisor(projectRoot: string): Promise<Ch
   return initDoltSupervisor({
     projectId,
     beadsDir,
-    allocatePort: (id) => allocateDoltPort(id),
+    // Allocate by repo PATH, not the beads UUID: the central registry keys entries by
+    // an 8-char short id, so resolving by UUID throws "not found" (adj-182.1.4.1). The
+    // seam still passes the UUID for label/metadata use; we ignore it for allocation.
+    allocatePort: () => allocateDoltPortByPath(projectRoot),
     install: installSupervisor,
     // adj-182.2.2.1 first-install double-open guard: wire the real ps/lsof + launchctl
     // seams so a fresh init never bootstraps a second server onto a data-dir a rogue

@@ -12,7 +12,7 @@ import { join } from "path";
 import { promisify } from "util";
 
 import { printHeader, printCheck, printSummary, type CheckResult } from "../lib/output.js";
-import { allocateDoltPort, type Registry } from "../lib/dolt-port-registry.js";
+import { allocateDoltPortByPath, type Registry } from "../lib/dolt-port-registry.js";
 import { pinDoltPort } from "../lib/dolt-pin.js";
 import { doltSqlHandshakeOk } from "../lib/dolt-sql-probe.js";
 import { classifyDataDirRogues, cwdUnderDataDir, type DoltProcess } from "../lib/dolt-rogue-guard.js";
@@ -740,7 +740,10 @@ export async function runRealFixDolt(cwd: string): Promise<FixDoltResult | null>
   return fixDolt({
     projectId,
     beadsDir,
-    allocatePort: (id) => allocateDoltPort(id),
+    // Allocate by repo PATH, not the beads UUID: the central registry keys entries by
+    // an 8-char short id, so resolving by UUID throws "not found" (adj-182.1.4.1). The
+    // seam still passes the UUID for label/metadata use; we ignore it for allocation.
+    allocatePort: () => allocateDoltPortByPath(cwd),
     install: installSupervisor,
     launchctlSupervisedPid: () => realLaunchctlSupervisedPid(projectId),
     scanDoltProcesses: realScanDoltProcesses,

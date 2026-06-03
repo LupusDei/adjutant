@@ -19,7 +19,7 @@ import { homedir, userInfo } from "os";
 import { join } from "path";
 import { promisify } from "util";
 
-import { allocateDoltPort } from "./dolt-port-registry.js";
+import { allocateDoltPortByPath } from "./dolt-port-registry.js";
 import { pinDoltPort } from "./dolt-pin.js";
 import { doltSqlHandshakeOk } from "./dolt-sql-probe.js";
 import { installSupervisor, supervisorLabel, type ExecResult } from "./dolt-supervisor.js";
@@ -79,8 +79,12 @@ function realSqlProbe(port: number): Promise<boolean> {
 /** Install the supervised Dolt server for the project at `repoRoot`. */
 export async function runInstall(repoRoot: string): Promise<void> {
   const beadsDir = join(repoRoot, ".beads");
+  // The supervisor LABEL is keyed on the beads UUID (stable across re-pins) — keep it.
   const projectId = readProjectId(beadsDir);
-  const port = allocateDoltPort(projectId);
+  // Port allocation, however, MUST join the central registry by repo PATH: the registry
+  // keys entries by an 8-char short id, NOT the beads UUID, so passing the UUID here
+  // aborted the live cutover with "Project <uuid> not found" (adj-182.1.4.1).
+  const port = allocateDoltPortByPath(repoRoot);
   const doltBin = await resolveDoltBin();
   const plistPath = join(
     homedir(),
