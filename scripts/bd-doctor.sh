@@ -142,7 +142,12 @@ fi
 classify_dolt() {
   local _pid="$1" _port="$2" _cwd="$3"
   echo "    pid=${_pid:-?} port=${_port:-?} cwd=${_cwd:-?}"
-  if [ -n "$_cwd" ] && [[ "$_cwd" == "$BD_DIR"* ]]; then
+  # Path-BOUNDARY match (adj-182.1.5.1): the cwd must be EXACTLY the data-dir or a
+  # path under it (`$BD_DIR/...`). A bare glob prefix (`$BD_DIR*`) also matches SIBLING
+  # dirs that merely share the prefix (`.beads-backup`, `.beads2`, `.beads.bak`) — those
+  # belong to OTHER projects, and killing them is the very "server appears down" outage
+  # we fix. Anchor on the separator so only true children match.
+  if [ -n "$_cwd" ] && { [[ "$_cwd" == "$BD_DIR" ]] || [[ "$_cwd" == "$BD_DIR/"* ]]; }; then
     if [ -n "$SUPERVISED_PID" ] && [ "$_pid" != "$SUPERVISED_PID" ]; then
       # cwd under our data-dir but not the supervised instance → rogue orphan.
       ROGUE_PIDS="${ROGUE_PIDS:+$ROGUE_PIDS }$_pid"
@@ -227,6 +232,16 @@ if [ -z "$ADJUTANT_DOLT_PID" ]; then
     if [ -n "${BD_DOCTOR_RESTART_CMD:-}" ]; then
       restart_cmd="$BD_DOCTOR_RESTART_CMD"
     elif [ "$EXTERNALLY_MANAGED" -eq 1 ]; then
+      # adj-182.1.review.2: the kickstart label is com.adjutant.dolt.<projectId>. With an
+      # empty PROJECT_ID we would build a malformed label ending in a trailing dot, and
+      # the kickstart would fail at runtime with a confusing launchctl error. Refuse with
+      # a clear diagnosis instead — never run a broken-label kickstart.
+      if [ -z "$PROJECT_ID" ]; then
+        red "FAIL: externally-managed (dolt_server_port set) but metadata.json has no project_id"
+        echo "  Cannot derive the supervisor label com.adjutant.dolt.<projectId>." >&2
+        echo "  Fix: re-pin the dolt port (writes project_id) or repair .beads/metadata.json." >&2
+        exit 1
+      fi
       launchctl_bin="${BD_DOCTOR_LAUNCHCTL:-launchctl}"
       restart_cmd="$launchctl_bin kickstart -k gui/$(id -u)/com.adjutant.dolt.${PROJECT_ID}"
     else

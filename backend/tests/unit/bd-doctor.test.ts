@@ -262,4 +262,87 @@ describe('bd-doctor.sh', () => {
     });
     expect(r.stdout).not.toMatch(/KILLED/);
   });
+
+  // ── adj-182.1.5.1: rogue-kill cwd match must be a path BOUNDARY, not a glob prefix ──
+  //
+  // The classify_dolt cwd test used `[[ "$_cwd" == "$BD_DIR"* ]]`, a glob PREFIX match.
+  // A SIBLING directory that merely shares the .beads prefix (`<BD_DIR>-backup`,
+  // `<BD_DIR>2`, `<BD_DIR>.bak`) is NOT under our data-dir, yet the prefix match
+  // claimed it — so a *different* project's healthy dolt got classified rogue and
+  // KILLED. That is the exact "server appears down" outage adj-182 fixes, inverted.
+  // The fix is a path-boundary match: `$_cwd == $BD_DIR || $_cwd == $BD_DIR/*`.
+  it('should NOT classify/kill a sibling-dir dolt that merely shares the .beads prefix (.beads-backup)', () => {
+    // Externally-managed with a known supervised PID, so the rogue path is ARMED.
+    writeMetadata({ project_id: 'proj-uuid-abc', dolt_server_port: 17042 });
+    writePortPid('22222', '54321');
+    // The injected dolt's cwd is a SIBLING dir sharing the prefix — a DIFFERENT project.
+    const siblingCwd = `${beadsDir}-backup`;
+    const r = run([], {
+      ...BROKEN,
+      BD_DOCTOR_DOLT_OVERRIDE: `88888 33333 ${siblingCwd}`,
+      BD_DOCTOR_SUPERVISED_PID: '54321',
+      BD_DOCTOR_KILL: 'echo KILLED', // must NOT fire — sibling is not under our data-dir
+    });
+    // The sibling-dir dolt is another project's server: never killed, never flagged rogue.
+    expect(r.stdout).not.toMatch(/KILLED/);
+    expect(r.stdout).not.toMatch(/rogue/i);
+  });
+
+  it('should still classify/kill a rogue dolt whose cwd is a subdir of .beads (<BD_DIR>/dolt)', () => {
+    // Boundary match must still catch a TRUE child path (cwd = <BD_DIR>/dolt). dolt
+    // commonly chdirs into its data-dir subdir, so this is the realistic rogue shape.
+    writeMetadata({ project_id: 'proj-uuid-abc', dolt_server_port: 17042 });
+    writePortPid('22222', '54321');
+    const r = run([], {
+      ...BROKEN,
+      BD_DOCTOR_DOLT_OVERRIDE: `88888 33333 ${join(beadsDir, 'dolt')}`,
+      BD_DOCTOR_SUPERVISED_PID: '54321',
+      BD_DOCTOR_KILL: 'echo KILLED',
+    });
+    expect(r.stdout).toMatch(/KILLED 88888/);
+    expect(r.stdout).toMatch(/rogue/i);
+  });
+
+  // ── adj-182.1.review.2: guard empty PROJECT_ID before building the kickstart label ──
+  //
+  // When metadata.json carries `dolt_server_port` but NO `project_id`, the script is in
+  // externally-managed mode yet has no id to build `com.adjutant.dolt.<projectId>`. The
+  // old code emitted `...com.adjutant.dolt.` (trailing dot, no id) and ran a launchctl
+  // kickstart that fails with a confusing runtime error. The doctor must instead refuse:
+  // print a clear diagnosis and exit non-zero BEFORE invoking launchctl.
+  it('should refuse (clear error, no launchctl) under --restart when externally-managed but project_id is missing', () => {
+    // Externally-managed (has dolt_server_port) but project_id ABSENT → cannot derive label.
+    writeMetadata({ dolt_server_port: 17042 });
+    writePortPid('11111', '99999');
+    const r = run(['--restart'], {
+      BD_DOCTOR_INITIAL_BD_OK: '0', // bd broken initially
+      BD_DOCTOR_DOLT_OVERRIDE: `54321 22222 /some/other/project/.beads`, // no adjutant dolt found
+      BD_DOCTOR_LAUNCHCTL: 'echo LAUNCHCTL', // must NOT be invoked
+      BD_DOCTOR_SKIP_BD_VERIFY: '1',
+    });
+    expect(r.status).not.toBe(0);
+    // Clear diagnosis mentioning the missing project_id — not a raw launchctl failure.
+    expect(r.stdout + r.stderr).toMatch(/project_id/i);
+    // The malformed kickstart must never run, and no trailing-dot label leaks out.
+    expect(r.stdout).not.toMatch(/LAUNCHCTL kickstart/);
+    expect(r.stdout + r.stderr).not.toMatch(/com\.adjutant\.dolt\.(\s|$)/m);
+  });
+
+  it('should still classify a dolt whose cwd is EXACTLY .beads as the adjutant server (boundary equal case)', () => {
+    // The exact-equal case (`cwd == BD_DIR`) is the supervised server itself: it must
+    // be recognized as the adjutant dolt (and its port/pid trusted), not skipped by the
+    // boundary match. Here pid matches the supervised PID → recognized, not rogue.
+    writeMetadata({ project_id: 'proj-uuid-abc', dolt_server_port: 17042 });
+    writePortPid('11111', '99999'); // stale → forces repair so we see the recognized server
+    const r = run([], {
+      ...BROKEN,
+      BD_DOCTOR_DOLT_OVERRIDE: `54321 22222 ${beadsDir}`,
+      BD_DOCTOR_SUPERVISED_PID: '54321',
+      BD_DOCTOR_KILL: 'echo KILLED', // must NOT fire — this IS the supervised server
+    });
+    expect(r.stdout).not.toMatch(/KILLED/);
+    // Recognized as the live adjutant dolt → stale files repaired to its port/pid.
+    expect(readFileSync(join(beadsDir, 'dolt-server.port'), 'utf-8').trim()).toBe('22222');
+    expect(readFileSync(join(beadsDir, 'dolt-server.pid'), 'utf-8').trim()).toBe('54321');
+  });
 });
