@@ -184,6 +184,196 @@ describe("ensureDoltSupervisor", () => {
   });
 });
 
+/**
+ * adj-182.2.5.1 — boot ENTRY-POINT no-op gate (the function index.ts actually
+ * calls). The "merging must NOT adopt the supervisor / trigger cutover" guarantee
+ * depends on `startDoltSupervisorFromEnv()` / `startDoltSupervisorOnBoot()`
+ * short-circuiting on the REAL ADJUTANT_DOLT_SUPERVISOR env BEFORE reading
+ * ADJUTANT_DOLT_PROJECT_ID / BEADS_DOLT_SERVER_PORT or building any seam. The
+ * existing suite only exercises ensureDoltSupervisor() with a FAKE isFlagEnabled,
+ * so the boot wrappers were untested — a future edit reordering the flag check
+ * (e.g. computing the label or reading projectId first) would silently re-enable
+ * on-merge work with no failing test. These tests mutate process.env in a
+ * try/finally and assert the genuine no-op (no further env read, disabled handle)
+ * AND the flag-on wiring path.
+ */
+describe("startDoltSupervisorFromEnv (boot entry-point gate — adj-182.2.5.1)", () => {
+  /**
+   * Wrap process.env so we can observe WHICH keys the boot wrapper reads. The
+   * genuine no-op must read ONLY the gate flag — never the projectId/port — so a
+   * disabled backend does no further env work or seam build.
+   */
+  function withTrackedEnv<T>(
+    overrides: Record<string, string | undefined>,
+    fn: (readKeys: Set<string>) => Promise<T>,
+  ): Promise<T> {
+    const original = process.env;
+    const readKeys = new Set<string>();
+    const base: NodeJS.ProcessEnv = { ...original };
+    // Apply overrides. Assigning `undefined` (rather than `delete`) clears the
+    // value while satisfying @typescript-eslint/no-dynamic-delete; the gate reads
+    // it as "unset" and the proxy still records the read for the no-op assertions.
+    for (const [k, v] of Object.entries(overrides)) {
+      base[k] = v;
+    }
+    const tracked = new Proxy(base, {
+      get(target, prop: string | symbol) {
+        if (typeof prop === "string") readKeys.add(prop);
+        return target[prop as string];
+      },
+    });
+    process.env = tracked;
+    return fn(readKeys).finally(() => {
+      process.env = original;
+    });
+  }
+
+  it("should be a genuine NO-OP (disabled, no projectId/port read) when the flag is unset", async () => {
+    const { startDoltSupervisorFromEnv } = await import(
+      "../../src/services/dolt-supervisor.js"
+    );
+    await withTrackedEnv(
+      {
+        ADJUTANT_DOLT_SUPERVISOR: undefined,
+        // Provide a VALID projectId + port: the flag-on path WOULD build seams and
+        // start the loop with these. A genuine no-op must ignore them entirely.
+        ADJUTANT_DOLT_PROJECT_ID: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        BEADS_DOLT_SERVER_PORT: "17005",
+      },
+      async (readKeys) => {
+        const handle = await startDoltSupervisorFromEnv();
+        expect(handle.enabled).toBe(false);
+        // The gate flag was consulted...
+        expect(readKeys.has("ADJUTANT_DOLT_SUPERVISOR")).toBe(true);
+        // ...but NOTHING downstream — no projectId, no port, no seam build.
+        expect(readKeys.has("ADJUTANT_DOLT_PROJECT_ID")).toBe(false);
+        expect(readKeys.has("BEADS_DOLT_SERVER_PORT")).toBe(false);
+      },
+    );
+  });
+
+  it("should be a genuine NO-OP when the flag is explicitly 0", async () => {
+    const { startDoltSupervisorFromEnv } = await import(
+      "../../src/services/dolt-supervisor.js"
+    );
+    await withTrackedEnv(
+      {
+        ADJUTANT_DOLT_SUPERVISOR: "0",
+        ADJUTANT_DOLT_PROJECT_ID: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        BEADS_DOLT_SERVER_PORT: "17005",
+      },
+      async (readKeys) => {
+        const handle = await startDoltSupervisorFromEnv();
+        expect(handle.enabled).toBe(false);
+        expect(readKeys.has("ADJUTANT_DOLT_PROJECT_ID")).toBe(false);
+        expect(readKeys.has("BEADS_DOLT_SERVER_PORT")).toBe(false);
+      },
+    );
+  });
+
+  it("should expose a no-op stop() on the disabled handle (boot path never blocks)", async () => {
+    const { startDoltSupervisorFromEnv } = await import(
+      "../../src/services/dolt-supervisor.js"
+    );
+    await withTrackedEnv({ ADJUTANT_DOLT_SUPERVISOR: undefined }, async () => {
+      const handle = await startDoltSupervisorFromEnv();
+      expect(handle.enabled).toBe(false);
+      // Must be safe to call with no scheduled interval.
+      expect(() => { handle.stop(); }).not.toThrow();
+    });
+  });
+
+  it("should stay disabled (and warn) when the flag is on but ADJUTANT_DOLT_PROJECT_ID is missing", async () => {
+    const { startDoltSupervisorFromEnv } = await import(
+      "../../src/services/dolt-supervisor.js"
+    );
+    await withTrackedEnv(
+      {
+        ADJUTANT_DOLT_SUPERVISOR: "1",
+        ADJUTANT_DOLT_PROJECT_ID: undefined,
+        BEADS_DOLT_SERVER_PORT: "17005",
+      },
+      async () => {
+        const handle = await startDoltSupervisorFromEnv();
+        // No projectId ⇒ cannot derive the launchd label ⇒ skip cleanly, never
+        // touching launchctl.
+        expect(handle.enabled).toBe(false);
+      },
+    );
+  });
+
+  it("should stay disabled when the flag is on but BEADS_DOLT_SERVER_PORT is invalid", async () => {
+    const { startDoltSupervisorFromEnv } = await import(
+      "../../src/services/dolt-supervisor.js"
+    );
+    await withTrackedEnv(
+      {
+        ADJUTANT_DOLT_SUPERVISOR: "true",
+        ADJUTANT_DOLT_PROJECT_ID: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        BEADS_DOLT_SERVER_PORT: "not-a-port",
+      },
+      async () => {
+        const handle = await startDoltSupervisorFromEnv();
+        // Invalid port ⇒ nothing to probe ⇒ skip cleanly, never touching launchctl.
+        expect(handle.enabled).toBe(false);
+      },
+    );
+  });
+});
+
+describe("startDoltSupervisorOnBoot (boot wiring — adj-182.2.5.1)", () => {
+  // These tests inject FAKE launchctl/timer behaviour by flipping the env flag and
+  // supplying options, while NEVER touching real launchd: the disabled paths
+  // return before building seams, and the enabled path is asserted only via the
+  // returned handle (no real interval is awaited).
+
+  function withFlag<T>(value: string | undefined, fn: () => Promise<T>): Promise<T> {
+    const original = process.env;
+    // Swap the whole env object (rather than delete a computed key) so we both
+    // restore cleanly and satisfy @typescript-eslint/no-dynamic-delete.
+    const base: NodeJS.ProcessEnv = { ...original };
+    if (value === undefined) base["ADJUTANT_DOLT_SUPERVISOR"] = undefined;
+    else base["ADJUTANT_DOLT_SUPERVISOR"] = value;
+    process.env = base;
+    return fn().finally(() => {
+      process.env = original;
+    });
+  }
+
+  it("should return a disabled handle without building seams when the flag is off", async () => {
+    const { startDoltSupervisorOnBoot } = await import(
+      "../../src/services/dolt-supervisor.js"
+    );
+    await withFlag(undefined, async () => {
+      const handle = await startDoltSupervisorOnBoot({
+        projectId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        uid: 501,
+        plistPath: "/tmp/never-touched.plist",
+        pinnedPort: 17005,
+      });
+      expect(handle.enabled).toBe(false);
+      expect(() => { handle.stop(); }).not.toThrow();
+    });
+  });
+
+  it("should return a disabled handle when the flag is on but no pinned port is resolvable", async () => {
+    const { startDoltSupervisorOnBoot } = await import(
+      "../../src/services/dolt-supervisor.js"
+    );
+    await withFlag("1", async () => {
+      // No pinned port ⇒ buildProductionSupervisorSeams returns null ⇒ disabled,
+      // and crucially launchctl is never invoked (no agent load / probe).
+      const handle = await startDoltSupervisorOnBoot({
+        projectId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        uid: 501,
+        plistPath: "/tmp/never-touched.plist",
+        pinnedPort: null,
+      });
+      expect(handle.enabled).toBe(false);
+    });
+  });
+});
+
 describe("isDoltSupervisorFlagEnabled (env gate)", () => {
   it("should default to OFF semantics for unset/0/empty and ON only for 1/true", async () => {
     const { isDoltSupervisorFlagEnabled } = await import(

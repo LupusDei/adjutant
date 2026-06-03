@@ -210,16 +210,62 @@ async function realKickstartAgent(uid: number, label: string): Promise<void> {
   }
 }
 
-/** TCP-connect SQL probe against the pinned port (loopback). Mirrors doctor.ts. */
+/**
+ * Validate that a buffer is a MySQL-protocol Initial Handshake Packet (v10) —
+ * the greeting Dolt's sql-server sends the instant a client connects. This is the
+ * load-bearing distinction between a real SQL server and a PORT SQUATTER: a bare
+ * TCP connect succeeds against ANY listener (an unrelated service, `nc -l`, a
+ * half-dead socket), but only a MySQL-wire server emits a valid v10 handshake.
+ * Using a bare connect to assert "reachable" therefore false-passes — and the
+ * self-heal loop then fails to kickstart a wedged endpoint (adj-182.2.1.r3).
+ *
+ * Packet layout we validate (no external mysql client — dependency-free):
+ *   bytes [0..2] : payload length, 3-byte little-endian
+ *   byte  [3]    : sequence id — the SERVER's first packet is always 0
+ *   byte  [4]    : protocol version — 0x0a (10) for the modern handshake
+ * We also reject an ERR packet (payload first byte 0xff) — a server that rejects
+ * the connection is NOT a healthy reachable SQL endpoint — and reject an absurd
+ * declared payload length so a random byte stream is very unlikely to pass.
+ */
+export function isMysqlHandshakePacket(buf: Buffer): boolean {
+  // Need at least the 4-byte header + protocol-version byte.
+  if (buf.length < 5) return false;
+  const declaredPayloadLen = buf.readUIntLE(0, 3);
+  const sequenceId = buf[3];
+  const protocolVersion = buf[4];
+  // The server's first packet uses sequence id 0.
+  if (sequenceId !== 0) return false;
+  // Modern handshake is protocol v10. (0xff here would be an ERR packet — a
+  // rejecting server, not a healthy greeting — and is excluded by this check.)
+  if (protocolVersion !== 0x0a) return false;
+  // A real handshake payload is small (tens to ~hundreds of bytes); guard against
+  // an implausibly large declared length and against a length that cannot fit a
+  // protocol byte. This keeps a random byte stream from passing by coincidence.
+  if (declaredPayloadLen < 1 || declaredPayloadLen > 0xffff) return false;
+  return true;
+}
+
+/**
+ * SQL-handshake probe against the pinned port (loopback). Connects, reads the
+ * server's first packet, and confirms it is a MySQL v10 Initial Handshake — so a
+ * bare TCP squatter on the port does NOT false-pass "reachable" (adj-182.2.1.r3).
+ * Mirrors doctor.ts intent but upgrades from a bare connect to a real handshake.
+ */
 function realSqlProbe(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = createConnection({ host: "127.0.0.1", port });
+    let settled = false;
     const done = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
       socket.destroy();
       resolve(ok);
     };
     socket.setTimeout(1000);
-    socket.once("connect", () => { done(true); });
+    // A bare connect is NO LONGER sufficient — we wait for the SQL greeting. If the
+    // server connects but never sends a valid handshake (squatter), the timeout
+    // fires and we fail closed.
+    socket.once("data", (chunk: Buffer) => { done(isMysqlHandshakePacket(chunk)); });
     socket.once("timeout", () => { done(false); });
     socket.once("error", () => { done(false); });
   });
