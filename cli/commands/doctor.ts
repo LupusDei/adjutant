@@ -13,8 +13,15 @@ import { join } from "path";
 import { promisify } from "util";
 
 import { printHeader, printCheck, printSummary, type CheckResult } from "../lib/output.js";
-import { type Registry } from "../lib/dolt-port-registry.js";
-import { supervisorLabel } from "../lib/dolt-supervisor.js";
+import { allocateDoltPort, type Registry } from "../lib/dolt-port-registry.js";
+import { pinDoltPort } from "../lib/dolt-pin.js";
+import {
+  installSupervisor,
+  supervisorLabel,
+  type ExecResult,
+  type InstallSupervisorOptions,
+  type InstallSupervisorResult,
+} from "../lib/dolt-supervisor.js";
 import {
   fileExists,
   dirExists,
@@ -539,7 +546,254 @@ export async function runRealCheckDolt(cwd: string): Promise<CheckResult[]> {
   });
 }
 
-export async function runDoctor(): Promise<number> {
+// ── fixDolt() — `adjutant doctor --fix` repair path (adj-182.2.2) ────────────
+//
+// SAFETY: `--fix` only acts when a HUMAN runs it (never auto-invoked). EVERY
+// external effect is an INJECTED seam (install/launchctl, kill, circuit-file delete,
+// port allocate, process scan) so this orchestration is trivially testable and
+// never runs real launchctl/kill/dolt or mutates the live server in a test.
+//
+// Repair sequence (order load-bearing):
+//   1. Allocate (idempotent) + pin the port — done INSIDE installSupervisor, which
+//      pins before loading the agent.
+//   2. Resolve the launchd-supervised PID (adj-182.2.7 — NOT the stale pidfile) and
+//      kill ROGUE dolt on our data-dir BEFORE installing, so the supervised server
+//      owns the data-dir cleanly (two servers on one data-dir → double-open corruption).
+//   3. Install + load the agent (idempotent: bootout then bootstrap).
+//   4. Clear stale `/tmp/beads-dolt-circuit-*.json` breaker files.
+
+/** Allocate (idempotent) the pinned Dolt port for a project. */
+export type AllocatePortFn = (projectId: string) => number;
+
+/** Kill a process by PID (the kill seam — never executed in tests). */
+export type KillProcessFn = (pid: number) => void;
+
+/** Delete stale `/tmp/beads-dolt-circuit-*.json` files; returns the paths cleared. */
+export type ClearCircuitFilesFn = () => Promise<string[]>;
+
+/** Install + verify the supervised server (wraps {@link installSupervisor}). */
+export type FixInstallSeam = (opts: InstallSupervisorOptions) => Promise<InstallSupervisorResult>;
+
+/** Everything {@link fixDolt} needs. External effects are injected seams. */
+export interface FixDoltOptions {
+  /** Project UUID. */
+  projectId: string;
+  /** Absolute path to the project's `.beads` directory. */
+  beadsDir: string;
+  /** Allocate (idempotent) the pinned port from the registry. */
+  allocatePort: AllocatePortFn;
+  /** Install + verify the supervised server. */
+  install: FixInstallSeam;
+  /** Resolve the supervised PID from launchd (adj-182.2.7 — NOT the pidfile). */
+  launchctlSupervisedPid: () => Promise<number | null>;
+  /** Scan for all `dolt sql-server` processes (ps/lsof). */
+  scanDoltProcesses: () => Promise<DoltProcess[]>;
+  /** Kill a process by PID. */
+  killProcess: KillProcessFn;
+  /** Clear stale circuit-breaker files. */
+  clearCircuitFiles: ClearCircuitFilesFn;
+  /**
+   * Extra install options (doltBin/plistPath/logPath/uid/exec/pinPort/writePlist/
+   * sqlProbe) threaded through to {@link install}. Real callers supply the full seam
+   * set via {@link runRealFixDolt}; tests stub {@link install} and omit these.
+   */
+  installOptions?: Omit<InstallSupervisorOptions, "projectId" | "beadsDir" | "port">;
+}
+
+/** Outcome of a `--fix` repair. */
+export interface FixDoltResult {
+  /** True iff the supervised agent verified after repair. */
+  ok: boolean;
+  /** Per-step CheckResults (kill / agent install / circuit clear). */
+  results: CheckResult[];
+  /** Rogue PIDs that were killed. */
+  killedPids: number[];
+  /** Circuit-breaker files cleared. */
+  clearedCircuitFiles: string[];
+}
+
+/**
+ * Repair the Dolt topology. Pure orchestration over injected seams — no I/O of its own.
+ */
+export async function fixDolt(opts: FixDoltOptions): Promise<FixDoltResult> {
+  const results: CheckResult[] = [];
+
+  // 1. Allocate (idempotent) the pinned port.
+  const port = opts.allocatePort(opts.projectId);
+
+  // 2. Kill rogues FIRST (before install). adj-182.2.7: classify against the launchd
+  //    supervised PID, never the stale pidfile. When the supervised PID is unknown we
+  //    REFUSE to kill — killing the wrong process is worse than leaving a stale one.
+  const supervisedPid = await opts.launchctlSupervisedPid();
+  const processes = await opts.scanDoltProcesses();
+  const onOurDataDir = processes.filter((p) => cwdUnderDataDir(p.cwd, opts.beadsDir));
+  const killedPids: number[] = [];
+  if (supervisedPid === null) {
+    if (onOurDataDir.length > 0) {
+      results.push({
+        name: "Kill rogue Dolt",
+        status: "warn",
+        message: "agent not loaded — cannot classify dolt on data-dir; not killing",
+      });
+    } else {
+      results.push({ name: "Kill rogue Dolt", status: "pass", message: "no rogues" });
+    }
+  } else {
+    for (const p of onOurDataDir) {
+      if (p.pid !== supervisedPid) {
+        opts.killProcess(p.pid);
+        killedPids.push(p.pid);
+      }
+    }
+    results.push({
+      name: "Kill rogue Dolt",
+      status: "pass",
+      message: killedPids.length > 0 ? `killed ${killedPids.length}` : "no rogues",
+    });
+  }
+
+  // 3. Install + load the supervisor (pins the port internally; idempotent).
+  const installOptions = {
+    ...(opts.installOptions ?? {}),
+    projectId: opts.projectId,
+    beadsDir: opts.beadsDir,
+    port,
+  } as InstallSupervisorOptions;
+  const install = await opts.install(installOptions);
+  results.push(
+    install.ok
+      ? { name: "Dolt launchd agent installed", status: "pass" }
+      : {
+          name: "Dolt launchd agent installed",
+          status: "fail",
+          message: `${install.label} did not verify on port ${port} (bootstrapped=${install.bootstrapped})`,
+        },
+  );
+
+  // 4. Clear stale circuit-breaker files.
+  const clearedCircuitFiles = await opts.clearCircuitFiles();
+  results.push({
+    name: "Cleared stale circuit files",
+    status: "pass",
+    message: `${clearedCircuitFiles.length} cleared`,
+  });
+
+  return { ok: install.ok, results, killedPids, clearedCircuitFiles };
+}
+
+// ── Real seams for fixDolt() ─────────────────────────────────────────────────
+
+/** Real exec seam over execFile (never throws — normalizes to an ExecResult). */
+async function realExec(cmd: string, args: readonly string[]): Promise<ExecResult> {
+  try {
+    const { stdout, stderr } = await execFileAsync(cmd, [...args]);
+    return { code: 0, stdout, stderr };
+  } catch (err) {
+    const e = err as { code?: number; stdout?: string; stderr?: string };
+    return {
+      code: typeof e.code === "number" ? e.code : 1,
+      stdout: e.stdout ?? "",
+      stderr: e.stderr ?? String(err),
+    };
+  }
+}
+
+/** Resolve the `dolt` binary absolute path via `which`, or null when absent. */
+async function resolveDoltBin(): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("which", ["dolt"]);
+    const path = stdout.trim();
+    return path.length > 0 ? path : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Delete every `/tmp/beads-dolt-circuit-*.json` breaker file; returns the paths removed. */
+async function realClearCircuitFiles(): Promise<string[]> {
+  const { readdirSync, rmSync } = await import("fs");
+  const dir = "/tmp";
+  let entries: string[] = [];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return [];
+  }
+  const cleared: string[] = [];
+  for (const name of entries) {
+    if (/^beads-dolt-circuit-.*\.json$/.test(name)) {
+      const full = join(dir, name);
+      try {
+        rmSync(full);
+        cleared.push(full);
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
+  return cleared;
+}
+
+/**
+ * Build the production {@link FixDoltOptions} for the project at `cwd` and run
+ * {@link fixDolt}. Returns null when there is no `.beads/metadata.json` with a
+ * `project_id` (nothing to repair).
+ */
+export async function runRealFixDolt(cwd: string): Promise<FixDoltResult | null> {
+  const beadsDir = join(cwd, ".beads");
+  const metadata = readJsonFileSafe<Record<string, unknown>>(join(beadsDir, "metadata.json"));
+  const projectId = metadata && typeof metadata["project_id"] === "string"
+    ? (metadata["project_id"] as string)
+    : null;
+  if (!projectId) return null;
+
+  const doltBin = await resolveDoltBin();
+  if (!doltBin) {
+    return {
+      ok: false,
+      results: [{ name: "Dolt repair", status: "fail", message: "`dolt` binary not found on PATH" }],
+      killedPids: [],
+      clearedCircuitFiles: [],
+    };
+  }
+
+  const { writeFileSync } = await import("fs");
+  const plistPath = join(
+    homedir(),
+    "Library",
+    "LaunchAgents",
+    `${supervisorLabel(projectId)}.plist`,
+  );
+
+  return fixDolt({
+    projectId,
+    beadsDir,
+    allocatePort: (id) => allocateDoltPort(id),
+    install: installSupervisor,
+    launchctlSupervisedPid: () => realLaunchctlSupervisedPid(projectId),
+    scanDoltProcesses: realScanDoltProcesses,
+    killProcess: (pid) => {
+      try {
+        process.kill(pid);
+      } catch {
+        /* best-effort */
+      }
+    },
+    clearCircuitFiles: realClearCircuitFiles,
+    installOptions: {
+      doltBin,
+      plistPath,
+      logPath: join(beadsDir, "dolt-server.log"),
+      uid: userInfo().uid,
+      exec: realExec,
+      pinPort: pinDoltPort,
+      writePlist: (path, contents) => writeFileSync(path, contents, "utf-8"),
+      sqlProbe: realSqlProbe,
+    },
+  });
+}
+
+export async function runDoctor(options: { fix?: boolean } = {}): Promise<number> {
   printHeader("Adjutant Doctor");
   const cwd = process.cwd();
   const results: CheckResult[] = [];
@@ -555,6 +809,19 @@ export async function runDoctor(): Promise<number> {
 
   // adj-013.3.3 - Tool availability checks
   results.push(...checkTools());
+
+  // adj-182.2.2 - `--fix` repair path: install/load the supervisor, pin the port, kill
+  //   rogue dolt, clear stale circuit files. Human-invoked only. Run BEFORE the dolt
+  //   health group so the post-repair state is what gets reported.
+  if (options.fix) {
+    printHeader("Repairing Dolt (--fix)");
+    const fix = await runRealFixDolt(cwd);
+    if (fix) {
+      results.push(...fix.results);
+    } else {
+      results.push({ name: "Dolt repair", status: "info", message: "not a beads project — skipped" });
+    }
+  }
 
   // adj-182.2.1 - Dolt supervised-server health group (omitted on non-beads projects).
   results.push(...(await runRealCheckDolt(cwd)));
