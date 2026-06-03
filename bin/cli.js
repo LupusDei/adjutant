@@ -82,10 +82,11 @@ program
 program
   .command('doctor')
   .description('Check system health and prerequisites')
-  .action(async () => {
+  .option('--fix', 'Repair Dolt supervisor: install/load agent, pin port, kill rogue servers, clear stale circuit files')
+  .action(async (options) => {
     try {
       const { runDoctor } = await import('../dist/cli/commands/doctor.js');
-      const exitCode = await runDoctor();
+      const exitCode = await runDoctor({ fix: options.fix ?? false });
       process.exit(exitCode);
     } catch (error) {
       if (error.code === 'ERR_MODULE_NOT_FOUND') {
