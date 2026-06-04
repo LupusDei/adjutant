@@ -192,3 +192,27 @@ single-instance is enforced by the launchd singleton + `.beads/dolt-server.lock`
 | Backend reconnect (no manual restart, Phase 2) | auto | ✅ PASS | reconnecting bd-client (`adj-182.2.4`) self-heals onto the pinned port; no restart performed |
 
 Date: 2026-06-03 · Operator: karax · projectId: c249344d-1d43-4359-a2dd-be8cbb0270e3 · pinned port: 17000
+
+## 7. Post-cutover addendum — bd 0.60.0 incompatibility (2026-06-04)
+
+A re-validation run the next day exposed a real limitation: **bd 0.60.0 does NOT
+honor externally-managed mode.** Under load/reconnect it auto-spawns its own
+`dolt sql-server -H 127.0.0.1 -P <pinned>`, which takes the data-dir's exclusive
+write-lock — so the launchd `--config` supervisor cannot start and crash-loops
+(`database "dolt" is locked by another dolt process`). The launchd supervisor and
+bd 0.60.0 are therefore **incompatible**; the original Step 4 `kill -9` acceptance
+passed only because bd had not yet spawned a competitor.
+
+**Interim state (live on adjutant as of 2026-06-04):**
+- launchd supervisor **DISABLED** — plist moved to
+  `~/Library/LaunchAgents/com.adjutant.dolt.<projectId>.plist.disabled`.
+- Running **bd-managed on the PINNED port 17000** (single server, verified stable,
+  no churn). **The core anti-churn win — a stable pinned port, no ephemeral drift —
+  is retained.** What's deferred is launchd's proactive KeepAlive crash-restart.
+
+**Re-enable supervision (tracked as `adj-182.3.4`, gated on `adj-182.3.3`):**
+after bd is upgraded fleet-wide to **≥1.0.4** (which honors externally-managed),
+re-enable the plist (`mv .disabled` back → `launchctl bootstrap`), confirm a SINGLE
+supervised server holds the pinned port AND bd connects without spawning a
+competitor (watch ~30s + several `bd` calls), then re-run the `kill -9` acceptance.
+**Do NOT re-enable the launchd supervisor on bd < 1.0.4.**
