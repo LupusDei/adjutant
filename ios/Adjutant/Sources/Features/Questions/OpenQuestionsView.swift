@@ -201,6 +201,9 @@ private struct QuestionRow: View {
             freeTextAnswer
             actionRow
         }
+        // Expand to fill the scroll view width so FlowLayout receives a finite
+        // container width and chips never overflow horizontally (adj-181.24).
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(theme.background.panel)
         .overlay(
@@ -308,6 +311,10 @@ private struct QuestionRow: View {
                         } label: {
                             Text(option)
                                 .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                // Allow text to wrap to multiple lines when FlowLayout
+                                // constrains chip width to the container (adj-181.24).
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .background(theme.primary.opacity(0.15))
@@ -432,44 +439,59 @@ private struct FilterChip: View {
 // MARK: - FlowLayout
 
 /// A simple left-to-right wrapping layout for suggested-option chips.
+///
+/// Items are sized against the available container width (never unbounded) so that
+/// a long chip wraps its text instead of inflating the card past the screen edge.
 private struct FlowLayout: Layout {
     let spacing: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? .infinity
+        // Guard against nil / infinite proposals — use a large but finite fallback only
+        // when the parent genuinely provides no width constraint (e.g. inside a ScrollView
+        // that has unbounded width). On screen this will always be a finite screen width.
+        let availableWidth = (proposal.width.map { $0.isFinite ? $0 : 390 }) ?? 390
         var x: CGFloat = 0
         var y: CGFloat = 0
         var rowHeight: CGFloat = 0
         var maxWidth: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > width && x > 0 {
+            // Clamp to available width so text wraps within the chip rather than overflowing.
+            let size = subview.sizeThatFits(ProposedViewSize(width: availableWidth, height: nil))
+            let itemWidth = min(size.width, availableWidth)
+            if x + itemWidth > availableWidth && x > 0 {
                 x = 0
                 y += rowHeight + spacing
                 rowHeight = 0
             }
-            x += size.width + spacing
+            x += itemWidth + spacing
             rowHeight = max(rowHeight, size.height)
             maxWidth = max(maxWidth, x)
         }
-        return CGSize(width: maxWidth, height: y + rowHeight)
+        // Never report a width wider than what was proposed.
+        return CGSize(width: min(maxWidth, availableWidth), height: y + rowHeight)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let availableWidth = bounds.width.isFinite ? bounds.width : 390
         var x = bounds.minX
         var y = bounds.minY
         var rowHeight: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > bounds.maxX && x > bounds.minX {
+            // Clamp to available width so chips never overflow the card boundary.
+            let size = subview.sizeThatFits(ProposedViewSize(width: availableWidth, height: nil))
+            let itemWidth = min(size.width, availableWidth)
+            if x + itemWidth > bounds.maxX && x > bounds.minX {
                 x = bounds.minX
                 y += rowHeight + spacing
                 rowHeight = 0
             }
-            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
-            x += size.width + spacing
+            subview.place(
+                at: CGPoint(x: x, y: y),
+                proposal: ProposedViewSize(width: itemWidth, height: size.height)
+            )
+            x += itemWidth + spacing
             rowHeight = max(rowHeight, size.height)
         }
     }
