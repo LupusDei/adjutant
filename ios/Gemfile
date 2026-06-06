@@ -1,6 +1,10 @@
 source "https://rubygems.org"
 
 gem "fastlane"
+# Direct dep so fastlane's Bundler.require/replace_gem can load it on CI
+# (it was only transitive; surfaced as "multi_json is not part of the bundle"
+# on the arm64 macOS runners).
+gem "multi_json"
 
 # Optional plugins (uncomment if needed)
 # gem "fastlane-plugin-firebase_app_distribution"
