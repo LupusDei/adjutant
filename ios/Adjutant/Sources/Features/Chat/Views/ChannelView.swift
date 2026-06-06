@@ -28,6 +28,10 @@ struct ChannelView: View {
     @State private var showMembersSheet = false
     @StateObject private var wsService = ChatWebSocketService()
     @State private var incomingCancellable: AnyCancellable?
+    /// Subscribes to the channel only after the WS reaches `.connected` (post-auth),
+    /// re-subscribing on every reconnect. Subscribing before auth completes is
+    /// rejected by the server, so channel broadcasts never reach this client (adj-164).
+    @State private var connectionCancellable: AnyCancellable?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -66,12 +70,28 @@ struct ChannelView: View {
             .sink { message in
                 viewModel.applyIncoming(message)
             }
-        wsService.connect(baseURL: AppState.shared.apiBaseURL, apiKey: AppState.shared.apiKey)
-        wsService.subscribeToChannel(channel.id)
+        // Defer the channel SUBSCRIBE until the socket is authenticated (`.connected`).
+        // Sending subscribe before auth completes is rejected ("not_authenticated"), so
+        // the server never adds us to the conversation's subscriber set and
+        // wsBroadcastToConversation (fail-closed) drops channel messages → no live
+        // updates. Re-subscribing on each `.connected` transition also restores the
+        // subscription after a reconnect. (DMs don't need this — they broadcast to all.)
+        let ws = wsService
+        let channelId = channel.id
+        connectionCancellable = ws.$connectionState
+            .receive(on: DispatchQueue.main)
+            .sink { state in
+                if state == .connected {
+                    ws.subscribeToChannel(channelId)
+                }
+            }
+        ws.connect(baseURL: AppState.shared.apiBaseURL, apiKey: AppState.shared.apiKey)
     }
 
     private func disconnectRealtime() {
         wsService.unsubscribeFromChannel(channel.id)
+        connectionCancellable?.cancel()
+        connectionCancellable = nil
         incomingCancellable?.cancel()
         incomingCancellable = nil
         wsService.disconnect()
