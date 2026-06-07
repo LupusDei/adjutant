@@ -18,7 +18,12 @@ import AdjutantKit
 /// (handled in `AppCoordinator`).
 struct OpenQuestionsView: View {
     @Environment(\.crtTheme) private var theme
-    @ObservedObject var viewModel: OpenQuestionsViewModel
+    // Owned as @StateObject so the loaded questions survive ANCESTOR re-renders.
+    // MainTabView.destinationView creates this VM inline, so an @ObservedObject would
+    // be replaced by a fresh empty VM whenever an ancestor re-rendered (e.g. when the
+    // WS bridge connected ~2-3s after open) — making the list vanish and stay gone
+    // until the screen was reopened. @StateObject keeps the first instance.
+    @StateObject private var viewModel: OpenQuestionsViewModel
 
     /// Reuse the shared app WS client if provided; otherwise create one.
     /// In production the view is created with `nil` and creates its own connection.
@@ -29,7 +34,9 @@ struct OpenQuestionsView: View {
     @StateObject private var wsBridge = QuestionsWSBridge()
 
     init(viewModel: OpenQuestionsViewModel, wsClient: WebSocketClient? = nil) {
-        self.viewModel = viewModel
+        // StateObject(wrappedValue:) creates the VM once per view identity and
+        // discards the inline-passed instance on subsequent re-renders.
+        _viewModel = StateObject(wrappedValue: viewModel)
         self.wsClient = wsClient
     }
 
