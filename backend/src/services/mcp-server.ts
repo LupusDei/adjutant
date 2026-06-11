@@ -30,6 +30,8 @@ export interface AgentConnection {
   server: McpServer;
   transport: StreamableHTTPServerTransport;
   connectedAt: Date;
+  /** Last time a request resolved this session — drives idle-session reaping. */
+  lastActivityAt: Date;
   /** Project context for multi-project bead scoping (undefined = legacy/unscoped) */
   projectContext?: ProjectContext | undefined;
 }
@@ -100,6 +102,84 @@ function evictSupersededConnections(agentId: string, keepSessionId: string): voi
   }
 }
 
+/** Record activity on a session so the idle reaper won't evict a live one. */
+function touchSession(sessionId: string): void {
+  const conn = connections.get(sessionId);
+  if (conn) {
+    conn.lastActivityAt = new Date();
+  }
+}
+
+/** Default idle window before a session is reclaimed by the reaper. */
+const SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 min
+/** How often the reaper sweeps. */
+const SESSION_REAP_INTERVAL_MS = 5 * 60 * 1000; // 5 min
+let sessionReaperTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Evict connections idle longer than `maxIdleMs`. This is the adj-6iwin leak
+ * backstop: supersession bounds NAMED-agent reconnects, but two cases slip past
+ * it and would otherwise accumulate in `connections` forever, each retaining a
+ * McpServer + Ajv graph:
+ *   1. unique placeholder ids (`unknown-agent-*`) — intentionally exempt from
+ *      supersession (they belong to distinct anonymous clients), and
+ *   2. agents that vanish without a clean DELETE and never reconnect.
+ * A falsely-reaped live client simply reconnects on its next request (MCP spec:
+ * a 404 on a stale session id triggers a fresh InitializeRequest). `now` is
+ * injectable for deterministic tests.
+ */
+export function reapStaleSessions(
+  maxIdleMs: number = SESSION_IDLE_TIMEOUT_MS,
+  now: number = Date.now(),
+): number {
+  let reaped = 0;
+  for (const [sid, conn] of connections) {
+    if (now - conn.lastActivityAt.getTime() <= maxIdleMs) {
+      continue;
+    }
+    connections.delete(sid);
+    conn.server.close().catch(() => {});
+    clearAgentStatus(conn.agentId);
+    reaped++;
+    logInfo("MCP reaped idle session", {
+      agentId: conn.agentId,
+      sessionId: sid,
+      idleMs: now - conn.lastActivityAt.getTime(),
+    });
+    getEventBus().emit("mcp:agent_disconnected", {
+      agentId: conn.agentId,
+      sessionId: sid,
+    });
+  }
+  return reaped;
+}
+
+/** Start the periodic idle-session reaper (idempotent). */
+export function startMcpSessionReaper(
+  intervalMs: number = SESSION_REAP_INTERVAL_MS,
+  maxIdleMs: number = SESSION_IDLE_TIMEOUT_MS,
+): void {
+  if (sessionReaperTimer) {
+    return;
+  }
+  sessionReaperTimer = setInterval(() => {
+    const reaped = reapStaleSessions(maxIdleMs);
+    if (reaped > 0) {
+      logInfo("MCP session reaper swept", { reaped });
+    }
+  }, intervalMs);
+  // Don't keep the event loop alive solely for the reaper.
+  sessionReaperTimer.unref?.();
+}
+
+/** Stop the reaper (used by tests / shutdown). */
+export function stopMcpSessionReaper(): void {
+  if (sessionReaperTimer) {
+    clearInterval(sessionReaperTimer);
+    sessionReaperTimer = null;
+  }
+}
+
 // ============================================================================
 // Server lifecycle
 // ============================================================================
@@ -138,6 +218,7 @@ export function setToolRegistrar(registrar: ToolRegistrar): void {
 export function resetMcpServer(): void {
   connections.clear();
   toolRegistrar = null;
+  stopMcpSessionReaper();
 }
 
 /**
@@ -318,12 +399,14 @@ export async function createSessionTransport(
       // the new one, so dropped-without-close sessions don't accumulate.
       evictSupersededConnections(agentId, sessionId);
 
+      const now = new Date();
       const connection: AgentConnection = {
         agentId,
         sessionId,
         server,
         transport,
-        connectedAt: new Date(),
+        connectedAt: now,
+        lastActivityAt: now,
         projectContext,
       };
       connections.set(sessionId, connection);
@@ -417,6 +500,7 @@ export function getConnectedAgents(): AgentConnection[] {
  * Used by MCP tool handlers to resolve who is calling the tool.
  */
 export function getAgentBySession(sessionId: string): string | undefined {
+  touchSession(sessionId);
   return connections.get(sessionId)?.agentId;
 }
 
@@ -496,6 +580,7 @@ export function setProjectContextForSession(
 export function getTransportBySession(
   sessionId: string,
 ): StreamableHTTPServerTransport | undefined {
+  touchSession(sessionId);
   return connections.get(sessionId)?.transport;
 }
 
@@ -556,12 +641,14 @@ export async function recoverSession(
     // adj-6iwin: supersede this agent's prior (stale) sessions first.
     evictSupersededConnections(agentId, sessionId);
 
+    const now = new Date();
     const connection: AgentConnection = {
       agentId,
       sessionId,
       server,
       transport,
-      connectedAt: new Date(),
+      connectedAt: now,
+      lastActivityAt: now,
       projectContext,
     };
     connections.set(sessionId, connection);

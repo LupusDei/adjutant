@@ -113,6 +113,7 @@ import {
   createSessionTransport,
   setToolRegistrar,
   recoverSession,
+  reapStaleSessions,
 } from "../../src/services/mcp-server.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getEventBus } from "../../src/services/event-bus.js";
@@ -692,6 +693,64 @@ describe("MCP Server", () => {
 
       // Different generated fallbacks are distinct clients — none evicts another.
       expect(getConnectedAgents()).toHaveLength(3);
+    });
+  });
+
+  // adj-6iwin backstop: idle/vanished sessions (anonymous unknown-agent-* clients
+  // and agents that drop without a clean DELETE) are reclaimed by the reaper.
+  describe("idle session reaper (adj-6iwin backstop)", () => {
+    async function connect(agentId: string, sessionId: string) {
+      await createSessionTransport(agentId);
+      const t = createdTransports[createdTransports.length - 1]!;
+      t.sessionId = sessionId;
+      t._onsessioninitialized!(sessionId);
+      return t;
+    }
+
+    it("should reap a session idle beyond the timeout", async () => {
+      await connect("ghost", "g1");
+      // 10s of simulated idle against a 1s timeout → reaped.
+      const reaped = reapStaleSessions(1000, Date.now() + 10_000);
+      expect(reaped).toBe(1);
+      expect(getConnectedAgents()).toHaveLength(0);
+      expect(getAgentBySession("g1")).toBeUndefined();
+    });
+
+    it("should NOT reap a fresh session within the timeout", async () => {
+      await connect("active", "a1");
+      const reaped = reapStaleSessions(60_000, Date.now());
+      expect(reaped).toBe(0);
+      expect(getConnectedAgents()).toHaveLength(1);
+    });
+
+    it("should close the reaped session's server to release its graph", async () => {
+      await connect("ghost", "g1");
+      mockClose.mockClear();
+      reapStaleSessions(0, Date.now() + 1);
+      expect(mockClose).toHaveBeenCalled();
+    });
+
+    it("should treat getTransportBySession as activity that defers reaping", async () => {
+      await connect("busy", "b1");
+      // Idle window opens; but a request resolves the session, refreshing activity.
+      const t0 = getConnectedAgents()[0]!.lastActivityAt.getTime();
+      getTransportBySession("b1");
+      const t1 = getConnectedAgents()[0]!.lastActivityAt.getTime();
+      expect(t1).toBeGreaterThanOrEqual(t0);
+      // Reaping relative to the refreshed activity does not evict it.
+      const reaped = reapStaleSessions(60_000, t1 + 1_000);
+      expect(reaped).toBe(0);
+    });
+
+    it("should emit mcp:agent_disconnected for each reaped session", async () => {
+      const bus = getEventBus();
+      await connect("ghost", "g1");
+      vi.clearAllMocks();
+      reapStaleSessions(0, Date.now() + 1);
+      expect(bus.emit).toHaveBeenCalledWith(
+        "mcp:agent_disconnected",
+        expect.objectContaining({ agentId: "ghost", sessionId: "g1" }),
+      );
     });
   });
 });

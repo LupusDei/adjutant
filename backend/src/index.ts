@@ -12,7 +12,7 @@ import { initAgentStatusStream } from "./services/agent-status-stream.js";
 import { initTerminalStream } from "./services/terminal-stream.js";
 import { initStreamingBridge } from "./services/streaming-bridge.js";
 import { getSessionBridge } from "./services/session-bridge.js";
-import { initMcpServer, setToolRegistrar, getAgentBySession } from "./services/mcp-server.js";
+import { initMcpServer, setToolRegistrar, getAgentBySession, startMcpSessionReaper } from "./services/mcp-server.js";
 import { initDatabase } from "./services/database.js";
 import { createMessageStore } from "./services/message-store.js";
 import { registerMessagingTools } from "./services/mcp-tools/messaging.js";
@@ -398,6 +398,11 @@ const server = app.listen(PORT, () => {
   // Each Streamable HTTP session gets its own McpServer; the registrar
   // is called on each new instance to wire up tools.
   initMcpServer();
+
+  // adj-6iwin: reap idle/vanished MCP sessions so leaked per-connection McpServers
+  // (anonymous unknown-agent-* clients + agents that drop without a clean DELETE)
+  // can't accumulate in the connections Map.
+  startMcpSessionReaper();
 
   // Wire spawn health checks — cancel pending timers when agents connect via MCP
   wireSpawnHealthChecks();
