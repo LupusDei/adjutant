@@ -404,6 +404,17 @@ const server = app.listen(PORT, () => {
   // can't accumulate in the connections Map.
   startMcpSessionReaper();
 
+  // adj-6iwin / MCP TS-SDK #1852: Node's default keepAliveTimeout (5s) can make
+  // StreamableHTTPServerTransport tear down an MCP session when an idle TCP
+  // connection closes — forcing the client to reconnect and mint a fresh
+  // per-connection McpServer (reconnect churn + the leak we just fixed). MCP
+  // sessions are meant to persist independently of TCP (via Mcp-Session-Id), so
+  // we widen the socket keep-alive well past typical inter-request gaps; true
+  // idle sessions are still reclaimed at the app layer by the reaper above.
+  // headersTimeout MUST exceed keepAliveTimeout (Node constraint).
+  server.keepAliveTimeout = 65_000;
+  server.headersTimeout = 66_000;
+
   // Wire spawn health checks — cancel pending timers when agents connect via MCP
   wireSpawnHealthChecks();
 
