@@ -68,8 +68,22 @@ let toolRegistrar: ToolRegistrar | null = null;
  * Note: we intentionally do NOT clearAgentStatus here — the same agent is
  * reconnecting and the new session owns its status; clearing would briefly
  * blank a live agent's dashboard status mid-reconnect.
+ *
+ * Placeholder identities are EXEMPT: a non-unique id like `unknown` or a
+ * generated `unknown-agent-*` fallback can belong to MANY distinct clients.
+ * Superseding by it would make those clients evict each other in a reconnect
+ * war (each eviction triggers a client retry, which evicts the next). Their
+ * stale sessions are reclaimed by the staleness reaper instead, which keys on
+ * liveness, not identity.
  */
+function isPlaceholderAgentId(agentId: string): boolean {
+  return agentId === "unknown" || agentId.startsWith("unknown-agent-");
+}
+
 function evictSupersededConnections(agentId: string, keepSessionId: string): void {
+  if (isPlaceholderAgentId(agentId)) {
+    return;
+  }
   for (const [sid, conn] of connections) {
     if (conn.agentId !== agentId || sid === keepSessionId) {
       continue;

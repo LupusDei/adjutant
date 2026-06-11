@@ -650,5 +650,28 @@ describe("MCP Server", () => {
         expect.objectContaining({ agentId: "researcher", sessionId: "session-1" }),
       );
     });
+
+    // Regression: supersession must NOT collapse non-unique placeholder ids.
+    // A literal "unknown" agentId (or a generated unknown-agent-* fallback) can
+    // belong to many distinct clients; superseding by it makes them evict each
+    // other in a reconnect war (observed live: ~180 supersedes/min, all
+    // agentId='unknown'). Placeholders must coexist; the reaper reclaims them.
+    it("should NOT evict other sessions sharing the placeholder 'unknown' id", async () => {
+      await connect("unknown", "u1");
+      await connect("unknown", "u2");
+      await connect("unknown", "u3");
+
+      const ids = getConnectedAgents().map((a) => a.sessionId).sort();
+      expect(ids).toEqual(["u1", "u2", "u3"]);
+    });
+
+    it("should NOT evict other sessions sharing an 'unknown-agent-*' fallback id", async () => {
+      await connect("unknown-agent-aaaa", "a1");
+      await connect("unknown-agent-bbbb", "b1");
+      await connect("unknown-agent-cccc", "c1");
+
+      // Different generated fallbacks are distinct clients — none evicts another.
+      expect(getConnectedAgents()).toHaveLength(3);
+    });
   });
 });
