@@ -191,6 +191,26 @@ describe("MCP Server", () => {
       const id2 = resolveAgentId({}, {});
       expect(id1).not.toBe(id2);
     });
+
+    // adj-6iwin: `.mcp.json` sends `X-Agent-Id: ${ADJUTANT_AGENT_ID:-unknown}`, so a
+    // client launched without ADJUTANT_AGENT_ID sends the LITERAL id "unknown".
+    // That is not a real identity — many distinct clients share it, colliding in
+    // the connections Map. Treat it as absent → unique fallback per client.
+    it("should treat a literal 'unknown' query agentId as absent (unique fallback)", () => {
+      const id = resolveAgentId({ agentId: "unknown" }, {});
+      expect(id).toMatch(/^unknown-agent-/);
+    });
+
+    it("should treat a literal 'unknown' X-Agent-Id header as absent (unique fallback)", () => {
+      const id = resolveAgentId({}, { "x-agent-id": "unknown" });
+      expect(id).toMatch(/^unknown-agent-/);
+    });
+
+    it("should give two clients both sending 'unknown' DISTINCT ids", () => {
+      const id1 = resolveAgentId({}, { "x-agent-id": "unknown" });
+      const id2 = resolveAgentId({}, { "x-agent-id": "unknown" });
+      expect(id1).not.toBe(id2);
+    });
   });
 
   describe("createSessionTransport", () => {

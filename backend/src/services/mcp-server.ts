@@ -156,18 +156,31 @@ export function initMcpServer(): void {
  * Resolve agent identity from request metadata.
  *
  * Priority: query param agentId > X-Agent-Id header > generated fallback.
+ *
+ * The literal `"unknown"` is rejected as a real identity (adj-6iwin): `.mcp.json`
+ * sends `X-Agent-Id: ${ADJUTANT_AGENT_ID:-unknown}`, so any client launched
+ * without ADJUTANT_AGENT_ID set sends the shared placeholder `"unknown"`. Many
+ * distinct clients would then collide on one id in the `connections` Map —
+ * which (pre-guard) triggered a supersession eviction war (each eviction forced
+ * a client reconnect → reconnect storm). Treating `"unknown"` as absent gives
+ * each such client a unique `unknown-agent-*` id instead, eliminating the
+ * collision at its source.
  */
+function isUsableAgentId(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value !== "unknown";
+}
+
 export function resolveAgentId(
   query: Record<string, unknown>,
   headers: Record<string, unknown>,
 ): string {
   const fromQuery = query["agentId"];
-  if (typeof fromQuery === "string" && fromQuery.length > 0) {
+  if (isUsableAgentId(fromQuery)) {
     return fromQuery;
   }
 
   const fromHeader = headers["x-agent-id"];
-  if (typeof fromHeader === "string" && fromHeader.length > 0) {
+  if (isUsableAgentId(fromHeader)) {
     return fromHeader;
   }
 
