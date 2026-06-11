@@ -582,4 +582,73 @@ describe("MCP Server", () => {
       expect(callArgs?.sessionIdGenerator?.()).toBe("reuse-me");
     });
   });
+
+  // adj-6iwin: MCP-server memory leak. Heap snapshot (live, 1.84GB process) showed
+  // 323 McpServer created / 317 still alive, all retained by the module-level
+  // `connections` Map (retainer chain: Global handles → Context[connections] → Map
+  // → AgentConnection → .server → McpServer). Each agent reconnect mints a NEW
+  // sessionId; ungraceful drops never fire onclose/onsessionclosed, so the prior
+  // entry lingers forever with its ~37K-closure Ajv validator graph. Fix: when a
+  // new session initializes for an agentId, evict that agent's prior session(s).
+  describe("session supersession — connections leak prevention (adj-6iwin)", () => {
+    async function connect(agentId: string, sessionId: string) {
+      await createSessionTransport(agentId);
+      const t = createdTransports[createdTransports.length - 1]!;
+      t.sessionId = sessionId;
+      t._onsessioninitialized!(sessionId);
+      return t;
+    }
+
+    it("should evict a prior session when the same agent reconnects with a new session", async () => {
+      await connect("researcher", "session-1");
+      expect(getConnectedAgents()).toHaveLength(1);
+
+      await connect("researcher", "session-2");
+
+      const agents = getConnectedAgents();
+      expect(agents).toHaveLength(1);
+      expect(agents[0]!.sessionId).toBe("session-2");
+      expect(getAgentBySession("session-1")).toBeUndefined();
+      expect(getAgentBySession("session-2")).toBe("researcher");
+    });
+
+    it("should close the superseded server to release its Ajv/closure graph", async () => {
+      await connect("researcher", "session-1");
+      mockClose.mockClear();
+
+      await connect("researcher", "session-2");
+
+      expect(mockClose).toHaveBeenCalled();
+    });
+
+    it("should not evict a different agent's session", async () => {
+      await connect("researcher", "r1");
+      await connect("builder", "b1");
+      await connect("researcher", "r2");
+
+      const ids = getConnectedAgents().map((a) => a.sessionId).sort();
+      expect(ids).toEqual(["b1", "r2"]);
+    });
+
+    it("should keep connections bounded across many reconnects of one agent", async () => {
+      for (let i = 0; i < 50; i++) {
+        await connect("researcher", `s-${i}`);
+      }
+      expect(getConnectedAgents()).toHaveLength(1);
+      expect(getConnectedAgents()[0]!.sessionId).toBe("s-49");
+    });
+
+    it("should emit mcp:agent_disconnected for the superseded session", async () => {
+      const bus = getEventBus();
+      await connect("researcher", "session-1");
+      vi.clearAllMocks();
+
+      await connect("researcher", "session-2");
+
+      expect(bus.emit).toHaveBeenCalledWith(
+        "mcp:agent_disconnected",
+        expect.objectContaining({ agentId: "researcher", sessionId: "session-1" }),
+      );
+    });
+  });
 });

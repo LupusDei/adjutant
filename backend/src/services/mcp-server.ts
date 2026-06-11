@@ -51,6 +51,41 @@ export type ToolRegistrar = (server: McpServer) => void;
 const connections = new Map<string, AgentConnection>();
 let toolRegistrar: ToolRegistrar | null = null;
 
+/**
+ * Evict (close + remove) any existing connections for `agentId` except
+ * `keepSessionId`.
+ *
+ * An agent has at most one live MCP session, so a freshly-initialized session
+ * supersedes the agent's prior ones. This is the adj-6iwin leak fix: when an
+ * agent reconnects (a NEW sessionId is minted), an ungraceful drop of the old
+ * session frequently never fires `transport.onclose`/`onsessionclosed`, so the
+ * stale entry would otherwise linger in `connections` forever — each one
+ * retaining a full per-connection `McpServer` + its Ajv validator graph
+ * (~37K closures). A live heap snapshot showed 323 servers created / 317 still
+ * retained by this Map. Superseding on (re)connect keeps the Map bounded to the
+ * set of genuinely-distinct live agents.
+ *
+ * Note: we intentionally do NOT clearAgentStatus here — the same agent is
+ * reconnecting and the new session owns its status; clearing would briefly
+ * blank a live agent's dashboard status mid-reconnect.
+ */
+function evictSupersededConnections(agentId: string, keepSessionId: string): void {
+  for (const [sid, conn] of connections) {
+    if (conn.agentId !== agentId || sid === keepSessionId) {
+      continue;
+    }
+    connections.delete(sid);
+    // Close the superseded server to release its tools + Ajv validator graph.
+    conn.server.close().catch(() => {});
+    logInfo("MCP superseded stale session", {
+      agentId,
+      supersededSessionId: sid,
+      newSessionId: keepSessionId,
+    });
+    getEventBus().emit("mcp:agent_disconnected", { agentId, sessionId: sid });
+  }
+}
+
 // ============================================================================
 // Server lifecycle
 // ============================================================================
@@ -252,6 +287,10 @@ export async function createSessionTransport(
       ? () => options.reuseSessionId!
       : () => randomUUID(),
     onsessioninitialized: (sessionId: string) => {
+      // adj-6iwin: supersede this agent's prior (stale) sessions before tracking
+      // the new one, so dropped-without-close sessions don't accumulate.
+      evictSupersededConnections(agentId, sessionId);
+
       const connection: AgentConnection = {
         agentId,
         sessionId,
@@ -487,6 +526,9 @@ export async function recoverSession(
 
     // Manually register the connection — the onsessioninitialized callback
     // set up in createSessionTransport won't fire without handleRequest.
+    // adj-6iwin: supersede this agent's prior (stale) sessions first.
+    evictSupersededConnections(agentId, sessionId);
+
     const connection: AgentConnection = {
       agentId,
       sessionId,
