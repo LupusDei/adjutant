@@ -6,7 +6,7 @@
  */
 
 import { execFile, execSync } from "child_process";
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { homedir, userInfo } from "os";
 import { join } from "path";
 import { promisify } from "util";
@@ -768,6 +768,400 @@ export async function runRealFixDolt(cwd: string): Promise<FixDoltResult | null>
   });
 }
 
+// ── checkBdSchema() — bd/dolt schema-currency group (adj-7h8ve, epic adj-182) ─
+//
+// bd 1.0.4 hangs on every server-mode WRITE (it auto-imports issues.jsonl). The fix is
+// upstream #4170 ("auto-import: gate server mode at call site"), which only exists in
+// builds AFTER the `0043` schema migration (`0043_drop_dependencies_generated_column` —
+// it restructures the `dependencies` table to a surrogate `id CHAR(36)` PK). So a
+// migrated DB has a `dependencies.id` column; a pre-0043 DB does not.
+//
+// A second, subtler failure mode is a HALF-APPLIED 0043: a `bd list` READ starts the
+// 0043 migration chain but a read never commits, leaving `schema_migrations` + tables
+// modified (a DIRTY working set) → the next write fails with
+// "pre-existing dirty tables changed during schema migration: …". The repair (fixBdSchema)
+// resets the dirty set then migrates-via-WRITE (a write applies AND commits in one op).
+//
+// checkBdSchema is PURE: it takes the RESULTS of the probes (bd version string, whether
+// `dependencies.id` exists, whether the working set is dirty) — never the live calls —
+// so it is trivially unit-testable with no real bd/dolt invocation. The real probing
+// lives in runRealCheckBdSchema (below), mirroring the checkDolt/runRealCheckDolt split.
+
+/** Seam RESULTS {@link checkBdSchema} reasons over. No live calls here. */
+export interface CheckBdSchemaOptions {
+  /** `bd version` output. A HEAD- build OR a tagged release >= 1.0.5 carries #4170. */
+  bdVersion: string;
+  /** Does `dependencies` have the `id` column? true == the 0043 migration is applied. */
+  dependenciesHasIdColumn: boolean;
+  /** Is the Dolt working set dirty (a half-applied 0043 migration)? */
+  workingSetDirty: boolean;
+  /** Is this a beads project at all? false → the group is omitted entirely. */
+  isBeadsProject: boolean;
+}
+
+/**
+ * Does this `bd version` string carry the #4170 server-mode write fix?
+ *
+ * A HEAD- build (e.g. `HEAD-1825cf3 (Homebrew: HEAD@…)`) is always post-fix. Otherwise
+ * we parse the leading `major.minor.patch` and require >= 1.0.5 (the first tagged release
+ * that includes #4170 + the 0043 migration). An unparseable version is treated as lacking
+ * the fix (fail-closed — better to over-warn than ship the hang).
+ */
+export function bdVersionHasWriteFix(version: string): boolean {
+  if (version.includes("HEAD-")) return true;
+  const m = version.match(/(\d+)\.(\d+)\.(\d+)/);
+  if (!m) return false;
+  const major = Number(m[1]);
+  const minor = Number(m[2]);
+  const patch = Number(m[3]);
+  if (major !== 1) return major > 1; // 2.x.y and up are post-fix; 0.x is pre-fix.
+  if (minor !== 0) return minor > 0; // 1.1.x and up are post-fix.
+  return patch >= 5; // 1.0.5+ carries the fix; 1.0.0–1.0.4 do not.
+}
+
+/**
+ * The bd/dolt schema-currency check group. One {@link CheckResult} on a healthy system;
+ * a single actionable FAIL otherwise. Returns [] for non-beads projects.
+ *
+ * Ordering is deliberate: the bd-version gate is reported FIRST and short-circuits — if
+ * bd itself lacks the fix, migrating the schema is pointless (the next write still hangs),
+ * so we surface the one root cause rather than a cascade of derived failures.
+ */
+export function checkBdSchema(opts: CheckBdSchemaOptions): CheckResult[] {
+  if (!opts.isBeadsProject) return [];
+
+  if (!bdVersionHasWriteFix(opts.bdVersion)) {
+    return [
+      {
+        name: "bd #4170 write fix",
+        status: "fail",
+        message: "bd lacks the #4170 server-mode write fix — run adjutant doctor --fix",
+      },
+    ];
+  }
+
+  if (opts.workingSetDirty) {
+    return [
+      {
+        name: "Dolt working set clean",
+        status: "fail",
+        message: "Dolt working set dirty (half-applied 0043 migration) — run adjutant doctor --fix",
+      },
+    ];
+  }
+
+  if (!opts.dependenciesHasIdColumn) {
+    return [
+      {
+        name: "Dolt schema 0043 applied",
+        status: "fail",
+        message: "Dolt schema pre-0043 (server-mode writes will fail) — run adjutant doctor --fix",
+      },
+    ];
+  }
+
+  return [
+    {
+      name: "bd schema current",
+      status: "pass",
+      message: "0043 applied, #4170 fix present",
+    },
+  ];
+}
+
+// ── Real seams for checkBdSchema() ───────────────────────────────────────────
+// Production wiring that resolves the pure check's inputs against the real system —
+// kept separate so the orchestration stays trivially testable.
+
+/**
+ * Resolve the single dbName subdir under `<beadsDir>/dolt/` (e.g. `beads_adj`, `beads`,
+ * `factorify`). bd lays out exactly one database dir there; returns null when absent.
+ */
+function resolveDoltDbName(beadsDir: string): string | null {
+  const doltDir = join(beadsDir, "dolt");
+  if (!existsSync(doltDir)) return null;
+  try {
+    const dirs = readdirSync(doltDir).filter((e) => {
+      if (e.startsWith(".")) return false;
+      try {
+        return statSync(join(doltDir, e)).isDirectory();
+      } catch {
+        return false;
+      }
+    });
+    return dirs.length > 0 ? dirs[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+/** True iff `dolt status` (routed to the live server) reports a dirty working set. */
+function parseWorkingSetDirty(statusStdout: string): boolean {
+  return /changes not staged for commit|changes to be committed|modified:/i.test(statusStdout);
+}
+
+/** True iff a `SHOW COLUMNS … LIKE 'id'` returned a row (the 0043 `dependencies.id` PK). */
+function parseHasIdColumn(showColumnsStdout: string): boolean {
+  return showColumnsStdout.trim().length > 0 && /\bid\b/i.test(showColumnsStdout);
+}
+
+/**
+ * Probe the real system for {@link checkBdSchema}'s inputs and run it. Returns [] when
+ * there is no `<cwd>/.beads/dolt/<db>` (not a migrated beads project) so the doctor
+ * simply omits the group. The `dolt` CLI is invoked WITH the db dir as cwd so it routes
+ * to the running supervised sql-server (no stop/start, read-only here).
+ */
+export async function runRealCheckBdSchema(cwd: string): Promise<CheckResult[]> {
+  const beadsDir = join(cwd, ".beads");
+  const dbName = resolveDoltDbName(beadsDir);
+  if (!dbName) return [];
+
+  const doltDir = join(beadsDir, "dolt");
+
+  // bd version (the #4170 gate).
+  const versionRes = await realExec("bd", ["version"]);
+  const bdVersion = `${versionRes.stdout} ${versionRes.stderr}`.trim();
+
+  // dolt status — dirty working set detection (run in the db dir → routes to live server).
+  const statusRes = await realExecInDir(doltDir, "dolt", ["status"]);
+  const workingSetDirty = parseWorkingSetDirty(statusRes.stdout);
+
+  // dependencies.id column — the 0043 marker.
+  const colRes = await realExecInDir(doltDir, "dolt", [
+    "sql",
+    "-q",
+    `SHOW COLUMNS FROM ${dbName}.dependencies LIKE 'id'`,
+  ]);
+  const dependenciesHasIdColumn = colRes.code === 0 && parseHasIdColumn(colRes.stdout);
+
+  return checkBdSchema({
+    bdVersion,
+    dependenciesHasIdColumn,
+    workingSetDirty,
+    isBeadsProject: true,
+  });
+}
+
+// ── fixBdSchema() — `adjutant doctor --fix` bd/dolt schema repair (adj-7h8ve) ─
+//
+// The VALIDATED 5-step repair (run live 11× across the fleet):
+//   1. BACKUP the `.beads/dolt` dir + `issues.jsonl` (forward-only migration; the backup
+//      IS the rollback). Always taken, before any mutation.
+//   2. DETECT a dirty working set via `dolt status` (a half-applied 0043 — a READ began
+//      the migration chain but never committed, leaving schema_migrations + tables dirty).
+//   3. If dirty: `dolt reset --hard` to discard the half-applied migration. The dolt CLI,
+//      invoked in the db dir, routes to the RUNNING supervised server — it stays up.
+//   4. MIGRATE-VIA-WRITE: `bd create` + `bd close`. A WRITE (not a read) applies AND
+//      commits the 0043 migration in one op (autocommit on). KEY INSIGHT: reads leave it
+//      dirty, writes commit it.
+//   5. VERIFY: a second `bd create` + `bd close` completes cleanly (no "dirty tables", no
+//      "auto-importing into empty database").
+//
+// SAFETY: `--fix` only acts when a HUMAN runs it (never auto-invoked). EVERY external
+// effect (exec of dolt/bd, the backup copy) is an INJECTED seam — this orchestration runs
+// NO real dolt/bd and never mutates a live server in a test. Idempotent: on an already-
+// migrated, clean system the reset is SKIPPED and the verify write still passes.
+
+/** A throwaway bead title used by the migrate-via-write + verify steps. */
+const SCHEMA_PROBE_TITLE = "adjutant doctor schema-migration probe";
+
+/** Everything {@link fixBdSchema} needs. External effects are injected seams. */
+export interface FixBdSchemaOptions {
+  /** The repo dir whose `.beads/dolt/<db>` we repair. `bd` runs with this as cwd. */
+  repoDir: string;
+  /** The single dolt database name under `.beads/dolt/` (e.g. `beads_adj`). */
+  dbName: string;
+  /** Project path for bd resolution (usually == repoDir). */
+  projectPath: string;
+  /** The exec seam (reused like {@link realExec}). cwd is threaded via the args contract. */
+  exec: (cmd: string, args: readonly string[]) => Promise<ExecResult>;
+  /** Backup the `.beads/dolt` dir + `issues.jsonl`. Returns the backup path. */
+  backup: () => Promise<string>;
+}
+
+/** Outcome of a bd/dolt schema `--fix` repair. */
+export interface FixBdSchemaResult {
+  /** True iff the verify-via-write step completed cleanly. */
+  ok: boolean;
+  /** Per-step CheckResults (backup / reset / migrate / verify). */
+  results: CheckResult[];
+}
+
+/**
+ * Run a `bd create` + `bd close` write cycle in `repoDir`. Returns whether the create
+ * (the migration-committing WRITE) completed — a non-zero code or a "dirty tables" /
+ * "auto-importing" stderr means it did not. The close is best-effort cleanup of the
+ * throwaway bead and never fails the cycle.
+ */
+async function bdWriteCycle(opts: FixBdSchemaOptions): Promise<{ ok: boolean; detail: string }> {
+  const createRes = await opts.exec("bd", [
+    "create",
+    "--title",
+    SCHEMA_PROBE_TITLE,
+    "--type",
+    "task",
+    "-C",
+    opts.repoDir,
+  ]);
+  const combined = `${createRes.stdout}\n${createRes.stderr}`;
+  const failed =
+    createRes.code !== 0 ||
+    /dirty tables|auto-importing into empty database|schema migration/i.test(combined);
+  if (failed) {
+    return { ok: false, detail: createRes.stderr.trim() || combined.trim() };
+  }
+
+  // Extract the created bead id (best-effort) to close it; never fail the cycle on close.
+  const idMatch = createRes.stdout.match(/\b([a-z][a-z0-9]*-[a-z0-9.]+)\b/i);
+  if (idMatch) {
+    await opts.exec("bd", ["close", idMatch[1], "-C", opts.repoDir]);
+  }
+  return { ok: true, detail: createRes.stdout.trim() };
+}
+
+/**
+ * Repair the bd/dolt schema. Pure orchestration over injected seams — no I/O of its own.
+ */
+export async function fixBdSchema(opts: FixBdSchemaOptions): Promise<FixBdSchemaResult> {
+  const results: CheckResult[] = [];
+
+  // 1. BACKUP — always, before any mutation (the backup IS the rollback).
+  const backupPath = await opts.backup();
+  results.push({ name: "Backup .beads/dolt", status: "pass", message: backupPath });
+
+  // 2. DETECT dirty working set (`dolt status`, routed to the live server via the db-dir cwd).
+  const statusRes = await opts.exec("dolt", ["status", "-C", opts.repoDir]);
+  const dirty = parseWorkingSetDirty(statusRes.stdout);
+
+  // 3. RESET --hard only when dirty (discard the half-applied 0043 migration). Idempotent:
+  //    a clean working set SKIPS the reset.
+  if (dirty) {
+    await opts.exec("dolt", ["reset", "--hard", "-C", opts.repoDir]);
+    results.push({
+      name: "Dolt reset --hard (discard half-applied 0043)",
+      status: "pass",
+      message: "discarded dirty working set",
+    });
+  } else {
+    results.push({
+      name: "Dolt reset --hard",
+      status: "info",
+      message: "working set already clean — reset skipped",
+    });
+  }
+
+  // 4. MIGRATE-VIA-WRITE — a WRITE applies AND commits 0043 in one op.
+  const migrate = await bdWriteCycle(opts);
+  if (!migrate.ok) {
+    results.push({
+      name: "Migrate-via-write (0043)",
+      status: "fail",
+      message: migrate.detail || "bd write did not complete",
+    });
+    return { ok: false, results };
+  }
+  results.push({
+    name: "Migrate-via-write (0043)",
+    status: "pass",
+    message: "bd write applied + committed the 0043 migration",
+  });
+
+  // 5. VERIFY — a SECOND bd write completes cleanly (no dirty tables, no empty-db import).
+  const verify = await bdWriteCycle(opts);
+  if (!verify.ok) {
+    results.push({
+      name: "Verify schema (second write)",
+      status: "fail",
+      message: verify.detail || "verify write did not complete",
+    });
+    return { ok: false, results };
+  }
+  results.push({
+    name: "Verify schema (second write)",
+    status: "pass",
+    message: "second bd write completed cleanly",
+  });
+
+  return { ok: true, results };
+}
+
+// ── Real seams for fixBdSchema() ─────────────────────────────────────────────
+
+/** Exec a command WITH a fixed cwd (the dolt CLI routes to the live server by cwd). */
+async function realExecInDir(
+  cwd: string,
+  cmd: string,
+  args: readonly string[],
+): Promise<ExecResult> {
+  try {
+    const { stdout, stderr } = await execFileAsync(cmd, [...args], { cwd });
+    return { code: 0, stdout, stderr };
+  } catch (err) {
+    const e = err as { code?: number; stdout?: string; stderr?: string };
+    return {
+      code: typeof e.code === "number" ? e.code : 1,
+      stdout: e.stdout ?? "",
+      stderr: e.stderr ?? String(err),
+    };
+  }
+}
+
+/**
+ * Back up `<beadsDir>/dolt` + `<beadsDir>/issues.jsonl` to a timestamped sibling dir.
+ * Forward-only migration: this backup IS the rollback. Returns the backup dir path.
+ */
+async function realBackupBeads(beadsDir: string): Promise<string> {
+  const { cpSync, mkdirSync } = await import("fs");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const backupDir = join(beadsDir, `backup-${stamp}`);
+  mkdirSync(backupDir, { recursive: true });
+  const doltDir = join(beadsDir, "dolt");
+  if (existsSync(doltDir)) {
+    cpSync(doltDir, join(backupDir, "dolt"), { recursive: true });
+  }
+  const jsonl = join(beadsDir, "issues.jsonl");
+  if (existsSync(jsonl)) {
+    cpSync(jsonl, join(backupDir, "issues.jsonl"));
+  }
+  return backupDir;
+}
+
+/**
+ * Build the production {@link FixBdSchemaOptions} for the project at `cwd` and run
+ * {@link fixBdSchema}. Returns null when there is no `<cwd>/.beads/dolt/<db>` (nothing
+ * to repair). The exec seam runs `dolt` with the db dir as cwd so it routes to the
+ * running supervised server; `bd` runs in the repo dir.
+ */
+export async function runRealFixBdSchema(cwd: string): Promise<FixBdSchemaResult | null> {
+  const beadsDir = join(cwd, ".beads");
+  const dbName = resolveDoltDbName(beadsDir);
+  if (!dbName) return null;
+
+  const doltDir = join(beadsDir, "dolt");
+
+  return fixBdSchema({
+    repoDir: cwd,
+    dbName,
+    projectPath: cwd,
+    // The exec seam: `dolt` runs in the db dir (routes to the live server); `bd` runs in
+    // the repo dir. We strip the synthetic `-C <repoDir>` contract args used by the pure
+    // orchestration (they make cwd observable in unit tests) and apply the real cwd here.
+    exec: (cmd, args) => {
+      const stripped: string[] = [];
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === "-C") {
+          i++; // skip the -C value
+          continue;
+        }
+        stripped.push(args[i]);
+      }
+      const isDolt = cmd.includes("dolt");
+      return realExecInDir(isDolt ? doltDir : cwd, cmd, stripped);
+    },
+    backup: () => realBackupBeads(beadsDir),
+  });
+}
+
 export async function runDoctor(options: { fix?: boolean } = {}): Promise<number> {
   printHeader("Adjutant Doctor");
   const cwd = process.cwd();
@@ -796,10 +1190,25 @@ export async function runDoctor(options: { fix?: boolean } = {}): Promise<number
     } else {
       results.push({ name: "Dolt repair", status: "info", message: "not a beads project — skipped" });
     }
+
+    // adj-7h8ve - bd/dolt schema repair: reset a half-applied 0043, then migrate-via-write
+    //   so server-mode writes (the #4170 path) stop hanging. Human-invoked only; runs after
+    //   the supervisor repair (the server must be up for the dolt CLI to route to it) and
+    //   BEFORE the schema health check so the post-repair state is reported.
+    printHeader("Repairing bd/dolt schema (--fix)");
+    const schemaFix = await runRealFixBdSchema(cwd);
+    if (schemaFix) {
+      results.push(...schemaFix.results);
+    } else {
+      results.push({ name: "bd schema repair", status: "info", message: "not a beads project — skipped" });
+    }
   }
 
   // adj-182.2.1 - Dolt supervised-server health group (omitted on non-beads projects).
   results.push(...(await runRealCheckDolt(cwd)));
+
+  // adj-7h8ve - bd/dolt schema-currency health group (omitted on non-beads projects).
+  results.push(...(await runRealCheckBdSchema(cwd)));
 
   for (const r of results) {
     printCheck(r);
