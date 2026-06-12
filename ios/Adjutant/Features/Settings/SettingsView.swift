@@ -6,6 +6,7 @@ import AdjutantKit
 struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
     @EnvironmentObject private var coordinator: AppCoordinator
+    @ObservedObject private var serverStore = ServerProfileStore.shared
     @Environment(\.crtTheme) private var theme
 
     var body: some View {
@@ -17,11 +18,8 @@ struct SettingsView: View {
                 // Theme Section
                 themeSection
 
-                // Server URL Section
-                serverSection
-
-                // API Key Section
-                apiKeySection
+                // Adjutant Servers — multi-server switcher (adj-tur55)
+                serversSection
 
                 // Communication Section
                 communicationSection
@@ -79,6 +77,48 @@ struct SettingsView: View {
             }
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
+    }
+
+    // MARK: - Adjutant Servers (multi-server switcher, adj-tur55)
+
+    private var activeServerBinding: Binding<UUID?> {
+        Binding(
+            get: { serverStore.activeID },
+            set: { if let id = $0 { serverStore.select(id) } }
+        )
+    }
+
+    private var serversSection: some View {
+        CRTCard(header: "ADJUTANT SERVERS") {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.md) {
+                if serverStore.profiles.isEmpty {
+                    CRTText("No servers saved yet.", style: .caption, color: theme.dim)
+                } else {
+                    HStack {
+                        CRTText("ACTIVE", style: .caption, color: theme.dim)
+                        Spacer()
+                        Picker("ACTIVE SERVER", selection: activeServerBinding) {
+                            ForEach(serverStore.profiles) { profile in
+                                Text(profile.name).tag(Optional(profile.id))
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(theme.primary)
+                    }
+                    if let active = serverStore.active {
+                        CRTText(active.baseURL, style: .caption, color: theme.dim)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+
+                NavigationLink {
+                    ServerProfilesView()
+                } label: {
+                    CRTText("MANAGE SERVERS  →", style: .body, color: theme.primary)
+                }
+            }
+        }
     }
 
     // MARK: - Server Section
