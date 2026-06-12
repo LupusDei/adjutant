@@ -2,3 +2,5 @@ prefix: adj
 issue-prefix: adj
 sync-branch: "beads-sync-adjutant"
 daemon-interval: "30s"
+
+sync.remote: "git+ssh://git@github.com/LupusDei/adjutant.git"
