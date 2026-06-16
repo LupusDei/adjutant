@@ -18,6 +18,8 @@ import { join } from "path";
 import {
   allocateDoltPort,
   getDoltPort,
+  getDoltPortByPath,
+  getRegistryIdByPath,
   DOLT_PORT_BAND_START,
   DOLT_PORT_BAND_END,
 } from "../../../cli/lib/dolt-port-registry.js";
@@ -209,6 +211,54 @@ describe("cli/lib/dolt-port-registry", () => {
       seedRegistry([{ id: "proj-a", name: "A", path: "/a", hasBeads: true }]);
 
       expect(getDoltPort("ghost", { registryPath })).toBeNull();
+    });
+  });
+
+  // adj-54n52: the doctor holds only the beads UUID but the registry keys entries by an
+  // 8-char short id — so the pin/collision checks MUST resolve by repo PATH, not id.
+  describe("getDoltPortByPath", () => {
+    it("should return the persisted port for the entry matching the repo path", () => {
+      seedRegistry([
+        { id: "3ff68bf1", name: "adjutant", path: "/repo/adjutant", hasBeads: true, doltPort: 17000 },
+      ]);
+
+      expect(getDoltPortByPath("/repo/adjutant", { registryPath })).toBe(17000);
+    });
+
+    it("should return null when the matching entry has no doltPort assigned", () => {
+      seedRegistry([{ id: "3ff68bf1", name: "adjutant", path: "/repo/adjutant", hasBeads: true }]);
+
+      expect(getDoltPortByPath("/repo/adjutant", { registryPath })).toBeNull();
+    });
+
+    it("should return null when no entry matches the path (and not throw)", () => {
+      seedRegistry([{ id: "proj-a", name: "A", path: "/repo/other", hasBeads: true, doltPort: 17001 }]);
+
+      expect(getDoltPortByPath("/repo/adjutant", { registryPath })).toBeNull();
+    });
+
+    it("should return null when the registry file is missing (no throw)", () => {
+      expect(getDoltPortByPath("/repo/adjutant", { registryPath: join(tmpDir, "nope.json") })).toBeNull();
+    });
+  });
+
+  describe("getRegistryIdByPath", () => {
+    it("should resolve the short registry id for the entry matching the repo path", () => {
+      seedRegistry([
+        { id: "3ff68bf1", name: "adjutant", path: "/repo/adjutant", hasBeads: true, doltPort: 17000 },
+      ]);
+
+      expect(getRegistryIdByPath("/repo/adjutant", { registryPath })).toBe("3ff68bf1");
+    });
+
+    it("should return null when no entry matches the path", () => {
+      seedRegistry([{ id: "proj-a", name: "A", path: "/repo/other", hasBeads: true }]);
+
+      expect(getRegistryIdByPath("/repo/adjutant", { registryPath })).toBeNull();
+    });
+
+    it("should return null when the registry file is missing (no throw)", () => {
+      expect(getRegistryIdByPath("/repo/adjutant", { registryPath: join(tmpDir, "nope.json") })).toBeNull();
     });
   });
 });

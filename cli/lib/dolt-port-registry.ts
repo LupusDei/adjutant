@@ -266,3 +266,64 @@ export function getDoltPort(projectId: string, opts?: DoltPortRegistryOptions): 
   }
   return project.doltPort;
 }
+
+/**
+ * Read the persisted Dolt port for the project whose checkout lives at `repoPath`.
+ *
+ * This is the RELIABLE read-only counterpart to {@link allocateDoltPortByPath}: the
+ * central registry keys entries by an 8-char short id (a DIFFERENT id-space from the
+ * beads `project_id` UUID in `.beads/metadata.json`), so callers that only hold the
+ * beads UUID MUST look the pin up by repo PATH — resolving by UUID via {@link getDoltPort}
+ * always returns null and yields a false "no allocation" (adj-54n52).
+ *
+ * Unlike {@link allocateDoltPortByPath}, this NEVER writes, NEVER auto-creates an entry,
+ * and NEVER throws: a missing/malformed registry, an unmatched path, or an entry without
+ * a numeric `doltPort` all resolve to null ("no port assigned").
+ */
+export function getDoltPortByPath(repoPath: string, opts?: DoltPortRegistryOptions): number | null {
+  const registryPath = resolveRegistryPath(opts);
+  if (!existsSync(registryPath)) {
+    return null;
+  }
+  let registry: Registry;
+  try {
+    registry = readRegistry(registryPath);
+  } catch {
+    return null;
+  }
+  const target = normalizeRepoPath(repoPath);
+  const entry = registry.projects.find(
+    (p) => typeof p["path"] === "string" && normalizeRepoPath(p["path"] as string) === target,
+  );
+  if (!entry || typeof entry.doltPort !== "number") {
+    return null;
+  }
+  return entry.doltPort;
+}
+
+/**
+ * Resolve the registry's short `id` for the project whose checkout lives at `repoPath`.
+ *
+ * Read-only counterpart used to identify a project's OWN registry entry across id-spaces
+ * (the registry's short id vs the beads `project_id` UUID). Callers use it to exclude
+ * self from cross-project collision checks — without it, a project's own pinned port
+ * looks like a foreign collision (adj-54n52). Returns null on a missing/malformed
+ * registry or an unmatched path; never throws.
+ */
+export function getRegistryIdByPath(repoPath: string, opts?: DoltPortRegistryOptions): string | null {
+  const registryPath = resolveRegistryPath(opts);
+  if (!existsSync(registryPath)) {
+    return null;
+  }
+  let registry: Registry;
+  try {
+    registry = readRegistry(registryPath);
+  } catch {
+    return null;
+  }
+  const target = normalizeRepoPath(repoPath);
+  const entry = registry.projects.find(
+    (p) => typeof p["path"] === "string" && normalizeRepoPath(p["path"] as string) === target,
+  );
+  return entry && typeof entry.id === "string" ? entry.id : null;
+}

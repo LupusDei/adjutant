@@ -6,13 +6,13 @@
  */
 
 import { execFile, execSync } from "child_process";
-import { existsSync, readFileSync, readdirSync, statSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "fs";
 import { homedir, userInfo } from "os";
-import { join } from "path";
+import { dirname, join } from "path";
 import { promisify } from "util";
 
 import { printHeader, printCheck, printSummary, type CheckResult } from "../lib/output.js";
-import { allocateDoltPortByPath, type Registry } from "../lib/dolt-port-registry.js";
+import { allocateDoltPortByPath, getDoltPortByPath, getRegistryIdByPath, type Registry } from "../lib/dolt-port-registry.js";
 import { pinDoltPort } from "../lib/dolt-pin.js";
 import { doltSqlHandshakeOk } from "../lib/dolt-sql-probe.js";
 import { classifyDataDirRogues, cwdUnderDataDir, type DoltProcess } from "../lib/dolt-rogue-guard.js";
@@ -479,8 +479,14 @@ export async function runRealCheckDolt(cwd: string): Promise<CheckResult[]> {
     return [{ name: "Dolt", status: "warn", message: ".beads/metadata.json has no project_id" }];
   }
 
-  const allocations = realPortAllocations();
-  const pinnedFromRegistry = allocations.find((a) => a.projectId === projectId)?.doltPort ?? null;
+  // Resolve the pinned port AND this project's own registry id by repo PATH, not the beads
+  // UUID: the central registry keys entries by an 8-char short id (a different id-space from
+  // the beads project_id), so a UUID lookup never matches — yielding both a false "no
+  // registry allocation" FAIL and a false self-collision (adj-54n52). Dropping our own entry
+  // (by short id) leaves only genuine cross-project collisions for the collision check.
+  const selfRegistryId = getRegistryIdByPath(cwd);
+  const allocations = realPortAllocations().filter((a) => a.projectId !== selfRegistryId);
+  const pinnedFromRegistry = getDoltPortByPath(cwd);
   const rawMetaPort = metadata["dolt_server_port"];
   const metadataPort = typeof rawMetaPort === "number" ? rawMetaPort : null;
 
@@ -707,6 +713,20 @@ async function realClearCircuitFiles(port: number): Promise<string[]> {
 }
 
 /**
+ * Write a launchd plist, creating its parent directory if missing.
+ *
+ * On a fresh macOS account `~/Library/LaunchAgents` may not exist yet; a bare
+ * `writeFileSync` then throws `ENOENT` and aborts `adjutant doctor --fix` before the
+ * supervisor can install (adj-k5g14). `mkdir -p` of the parent makes the write robust
+ * on a never-before-supervised machine. Idempotent — `recursive: true` is a no-op when
+ * the directory already exists.
+ */
+export function writePlistEnsuringDir(plistPath: string, contents: string): void {
+  mkdirSync(dirname(plistPath), { recursive: true });
+  writeFileSync(plistPath, contents, "utf-8");
+}
+
+/**
  * Build the production {@link FixDoltOptions} for the project at `cwd` and run
  * {@link fixDolt}. Returns null when there is no `.beads/metadata.json` with a
  * `project_id` (nothing to repair).
@@ -729,7 +749,6 @@ export async function runRealFixDolt(cwd: string): Promise<FixDoltResult | null>
     };
   }
 
-  const { writeFileSync } = await import("fs");
   const plistPath = join(
     homedir(),
     "Library",
@@ -762,7 +781,7 @@ export async function runRealFixDolt(cwd: string): Promise<FixDoltResult | null>
       uid: userInfo().uid,
       exec: realExec,
       pinPort: pinDoltPort,
-      writePlist: (path, contents) => writeFileSync(path, contents, "utf-8"),
+      writePlist: writePlistEnsuringDir,
       sqlProbe: realSqlProbe,
     },
   });
@@ -944,6 +963,48 @@ export async function runRealCheckBdSchema(cwd: string): Promise<CheckResult[]> 
     workingSetDirty,
     isBeadsProject: true,
   });
+}
+
+// ── Dolt engine version compatibility (adj-tgthb) ────────────────────────────
+//
+// dolt 2.x changed same-transaction foreign-key visibility. bd's top-level `create`
+// inserts the issue and its self-referential `child_counters` row in ONE transaction;
+// dolt 2.x fails the FK check because it does not see the pending parent insert, so
+// EVERY top-level `bd create` dies with "cannot add or update a child row". The beads
+// HEAD brew formula pulls dolt as a dependency and can silently bump it to 2.x. dolt
+// 1.83.x is the known-good band. Reads are unaffected, so this WARNs (not FAILs).
+
+/**
+ * Classify a `dolt version` string for bd write-compatibility. Pure — no I/O.
+ *
+ * Returns a WARN for dolt major >= 2 (breaks top-level `bd create`), a WARN when the
+ * version cannot be parsed (can't verify), else a PASS carrying the parsed version.
+ */
+export function checkDoltVersionCompat(versionOutput: string): CheckResult {
+  const m = versionOutput.match(/(\d+)\.(\d+)\.(\d+)/);
+  if (!m) {
+    return { name: "Dolt version", status: "warn", message: "could not parse `dolt version` output" };
+  }
+  if (Number(m[1]) >= 2) {
+    return {
+      name: "Dolt version",
+      status: "warn",
+      message: `dolt ${m[0]} breaks top-level bd create (FK same-tx, adj-tgthb) — relink dolt < 2.0 (e.g. 1.83.6)`,
+    };
+  }
+  return { name: "Dolt version", status: "pass", message: `dolt ${m[0]}` };
+}
+
+/**
+ * Probe the real `dolt version` and classify it via {@link checkDoltVersionCompat}.
+ * Returns [] for a non-beads project (the group is irrelevant) or when `dolt` is
+ * absent/unrunnable (the "bd CLI"/dolt-repair groups already cover a missing toolchain).
+ */
+export async function runRealCheckDoltVersion(cwd: string): Promise<CheckResult[]> {
+  if (!resolveDoltDbName(join(cwd, ".beads"))) return [];
+  const res = await realExec("dolt", ["version"]);
+  if (res.code !== 0) return [];
+  return [checkDoltVersionCompat(`${res.stdout} ${res.stderr}`)];
 }
 
 // ── fixBdSchema() — `adjutant doctor --fix` bd/dolt schema repair (adj-7h8ve) ─
@@ -1216,6 +1277,9 @@ export async function runDoctor(options: { fix?: boolean } = {}): Promise<number
 
   // adj-7h8ve - bd/dolt schema-currency health group (omitted on non-beads projects).
   results.push(...(await runRealCheckBdSchema(cwd)));
+
+  // adj-tgthb - Dolt engine version compatibility (dolt 2.x breaks bd top-level create).
+  results.push(...(await runRealCheckDoltVersion(cwd)));
 
   for (const r of results) {
     printCheck(r);
