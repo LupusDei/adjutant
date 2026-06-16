@@ -92,12 +92,19 @@ describe(".claude/settings.json hook registration", () => {
     expect(existsSync(SETTINGS_PATH)).toBe(true);
   });
 
-  it("should register two SessionStart hooks", () => {
+  it("should register two persona-inject SessionStart hooks", () => {
     const content = JSON.parse(readFileSync(SETTINGS_PATH, "utf8"));
 
     expect(content.hooks).toBeDefined();
     expect(content.hooks.SessionStart).toBeDefined();
-    expect(content.hooks.SessionStart).toHaveLength(2);
+    // Two persona-inject hooks (initial + compact). Other SessionStart hooks may
+    // legitimately co-exist (e.g. the beads `bd prime` hook), so scope the count to
+    // the persona-inject script rather than asserting the total SessionStart count.
+    const personaHooks = content.hooks.SessionStart.filter(
+      (h: { hooks: { command: string }[] }) =>
+        h.hooks[0].command === "scripts/hooks/persona-inject.sh",
+    );
+    expect(personaHooks).toHaveLength(2);
   });
 
   it("should have a hook without matcher for initial injection", () => {
@@ -124,12 +131,14 @@ describe(".claude/settings.json hook registration", () => {
     expect(compactHook.hooks[0].command).toBe("scripts/hooks/persona-inject.sh");
   });
 
-  it("should point both hooks to the same script", () => {
+  it("should point both persona hooks to the same script", () => {
     const content = JSON.parse(readFileSync(SETTINGS_PATH, "utf8"));
-    const hooks = content.hooks.SessionStart;
 
-    const commands = hooks.map((h: { hooks: { command: string }[] }) => h.hooks[0].command);
-    // Both should reference the same script
-    expect(new Set(commands).size).toBe(1);
+    const personaCommands = content.hooks.SessionStart
+      .map((h: { hooks: { command: string }[] }) => h.hooks[0].command)
+      .filter((c: string) => c === "scripts/hooks/persona-inject.sh");
+    // Both persona hooks (initial + compact) reference the same script.
+    expect(personaCommands).toHaveLength(2);
+    expect(new Set(personaCommands).size).toBe(1);
   });
 });

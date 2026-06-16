@@ -76,14 +76,24 @@ describe('verify-before-push.sh', () => {
 
   it('should have numbered step labels for clear failure reporting', () => {
     scriptContent = readFileSync(SCRIPT_PATH, 'utf-8');
-    expect(scriptContent).toContain('Step 1/3');
-    expect(scriptContent).toContain('Step 2/3');
-    expect(scriptContent).toContain('Step 3/3');
+    // The script gained a dedicated Typecheck step (adj-181.3.8), so it is now 4 steps:
+    // Lint, Typecheck, Backend tests, Frontend tests. Labels must stay consistent.
+    expect(scriptContent).toContain('Step 1/4');
+    expect(scriptContent).toContain('Step 2/4');
+    expect(scriptContent).toContain('Step 3/4');
+    expect(scriptContent).toContain('Step 4/4');
   });
 
-  it('should not suppress stderr with 2>/dev/null', () => {
+  it('should not suppress stderr on any verification command', () => {
     scriptContent = readFileSync(SCRIPT_PATH, 'utf-8');
-    expect(scriptContent).not.toContain('2>/dev/null');
+    // Intent: never hide failures of the verification STEPS (lint/typecheck/tests).
+    // A benign `2>/dev/null` on the optional `.tsc-baseline` config read is allowed —
+    // it has a `|| echo 0` fallback and runs no verification. Assert no other line
+    // suppresses stderr.
+    const offending = scriptContent
+      .split('\n')
+      .filter((l) => l.includes('2>/dev/null') && !l.includes('.tsc-baseline'));
+    expect(offending).toEqual([]);
   });
 });
 
