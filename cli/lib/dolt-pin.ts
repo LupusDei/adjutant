@@ -250,8 +250,22 @@ function pinConfigYaml(configPath: string, port: number): void {
 }
 
 /**
- * Pin the Dolt SQL-server port across metadata.json, dolt/config.yaml, and return
- * the env export line.
+ * Write the pinned port into `<beadsDir>/dolt-server.port` (adj-182.3.11).
+ *
+ * bd 1.0.4+ treats this PORT FILE as the AUTHORITATIVE source for the supervised
+ * server's port and explicitly warns that metadata.json's `dolt_server_port` is
+ * deprecated. Pinning metadata/config alone therefore left bd dialing a STALE
+ * port-file value after a port churn — the 2026-06-11 fleet outage (bd fell back to a
+ * dead port recorded in this file). bd writes the bare integer with no trailing
+ * newline; we match that byte-for-byte so re-pinning stays idempotent.
+ */
+function pinPortFile(beadsDir: string, port: number): void {
+  writeFileSync(join(beadsDir, "dolt-server.port"), String(port), "utf-8");
+}
+
+/**
+ * Pin the Dolt SQL-server port across metadata.json, dolt/config.yaml, the
+ * authoritative dolt-server.port file, and return the env export line.
  *
  * @param beadsDir absolute path to the project's `.beads` directory.
  * @param port     the pinned port (must be in the reserved 17000-17999 band).
@@ -273,6 +287,11 @@ export function pinDoltPort(beadsDir: string, port: number): string {
   // Ensure the dolt/ subdir exists before writing config.yaml.
   mkdirSync(join(beadsDir, "dolt"), { recursive: true });
   pinConfigYaml(configPath, port);
+
+  // adj-182.3.11: bd 1.0.4+ reads <beadsDir>/dolt-server.port as the AUTHORITATIVE
+  // port (metadata.json's dolt_server_port is deprecated). Pin it too, or bd dials a
+  // stale port-file value after a churn (the 2026-06-11 fleet outage).
+  pinPortFile(beadsDir, port);
 
   return `BEADS_DOLT_SERVER_PORT=${port}`;
 }

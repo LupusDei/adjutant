@@ -65,6 +65,42 @@ describe("cli/lib/dolt-pin", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  describe("dolt-server.port file (adj-182.3.11)", () => {
+    const portFilePath = () => join(beadsDir, "dolt-server.port");
+
+    it("should write the pinned port into the authoritative dolt-server.port file", () => {
+      seedBeads({ database: "dolt", backend: "dolt" }, CONFIG_TEMPLATE);
+
+      pinDoltPort(beadsDir, 17005);
+
+      // bd 1.0.4+ reads this file as the AUTHORITATIVE port (metadata is deprecated).
+      // Pinning metadata/config alone left bd dialing a stale port after a churn.
+      expect(existsSync(portFilePath())).toBe(true);
+      expect(readFileSync(portFilePath(), "utf-8")).toBe("17005");
+    });
+
+    it("should write the bare integer with no trailing newline (matches bd's format)", () => {
+      seedBeads({ database: "dolt", backend: "dolt" }, CONFIG_TEMPLATE);
+
+      pinDoltPort(beadsDir, 17042);
+
+      const raw = readFileSync(portFilePath(), "utf-8");
+      expect(raw).toBe("17042");
+      expect(raw.endsWith("\n")).toBe(false);
+    });
+
+    it("should be idempotent — re-pinning the same port yields a byte-identical port file", () => {
+      seedBeads({ database: "dolt", backend: "dolt" }, CONFIG_TEMPLATE);
+
+      pinDoltPort(beadsDir, 17005);
+      const first = readFileSync(portFilePath(), "utf-8");
+      pinDoltPort(beadsDir, 17005);
+      const second = readFileSync(portFilePath(), "utf-8");
+
+      expect(second).toBe(first);
+    });
+  });
+
   describe("metadata.json", () => {
     it("should write dolt_server_port into metadata.json", () => {
       seedBeads({ database: "dolt", backend: "dolt" }, CONFIG_TEMPLATE);
