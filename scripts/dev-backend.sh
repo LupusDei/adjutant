@@ -31,10 +31,24 @@ while true; do
     start_time=$(date +%s)
     echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Starting backend (attempt $((retry_count + 1)))..." | tee -a "$LOG_FILE"
 
-    # Run tsx watch, tee output to both terminal and log file
-    cd backend && npx tsx watch src/index.ts 2>&1 | tee -a "../$LOG_FILE"
+    # Run the backend, tee output to both terminal and log file.
+    #
+    # adj-8mmyd: `tsx watch` hot-reloads on ANY change to index.ts's import graph
+    # (the reachable src/*.ts files). In a multi-agent session, an agent saving a
+    # watched backend source file in the CANONICAL checkout restarts the server and
+    # bounces EVERY MCP session simultaneously (all agents drop to idle). Set
+    # ADJUTANT_NO_WATCH=1 to run a STABLE backend (no file watching → no reload on
+    # edit) while a squad is active. Durable root fix: agents edit isolated git
+    # worktrees so their saves never touch the watched canonical tree (Constitution
+    # Rule 7); then watch mode is safe for human devs.
+    if [ "${ADJUTANT_NO_WATCH:-}" = "1" ] || [ "${ADJUTANT_NO_WATCH:-}" = "true" ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Backend mode: STABLE (no-watch — ADJUTANT_NO_WATCH set; edits will NOT reload)" | tee -a "$LOG_FILE"
+        ( cd backend && npx tsx src/index.ts ) 2>&1 | tee -a "$LOG_FILE"
+    else
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Backend mode: WATCH (hot-reload; set ADJUTANT_NO_WATCH=1 for a stable backend during multi-agent work)" | tee -a "$LOG_FILE"
+        ( cd backend && npx tsx watch src/index.ts ) 2>&1 | tee -a "$LOG_FILE"
+    fi
     exit_code=${PIPESTATUS[0]}
-    cd ..
 
     end_time=$(date +%s)
     uptime=$((end_time - start_time))

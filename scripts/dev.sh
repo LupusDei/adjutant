@@ -8,9 +8,18 @@
 # Options:
 #   --gt-root <path>  Path to Gas Town directory (enables mode switching)
 #
+# Environment:
+#   ADJUTANT_NO_WATCH=1  Run the backend in STABLE mode (no `tsx watch` hot-reload).
+#                        Use this during multi-agent / squad sessions: with watch mode,
+#                        any agent saving a backend source file in this checkout restarts
+#                        the server and bounces EVERY MCP session (adj-8mmyd). Stable mode
+#                        keeps the backend up across edits. (Durable fix: agents work in
+#                        git worktrees so their edits never touch this watched tree.)
+#
 # Examples:
-#   npm run dev                        # Standalone mode in CWD
+#   npm run dev                        # Standalone mode in CWD (watch / hot-reload)
 #   npm run dev -- --gt-root ~/gt      # Standalone + Gas Town available
+#   ADJUTANT_NO_WATCH=1 npm run dev    # Stable backend (no reload) — for agent squads
 
 set -e
 
