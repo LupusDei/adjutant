@@ -27,6 +27,7 @@
 import { createConnection } from "net";
 import { promisify } from "util";
 import { execFile } from "child_process";
+import { existsSync } from "fs";
 import { homedir, userInfo } from "os";
 import { join } from "path";
 
@@ -79,6 +80,20 @@ export interface DoltSupervisorSeams {
   kickstartAgent: () => Promise<void>;
   /** SQL/TCP health probe against the pinned port (NOT the PID). */
   sqlProbe: (port: number) => Promise<boolean>;
+  /**
+   * Write-path liveness probe against the supervised server (adj-iw0vy).
+   *
+   * The handshake {@link sqlProbe} only proves the server ACCEPTS connections — it
+   * passes even when every WRITE wedges (the bd server-mode auto-import hang, a dolt
+   * write deadlock, a read-only/disk-full server). Such a server is "alive" to the
+   * handshake probe forever, so it never self-heals. This probe runs a scratch write;
+   * a write-wedged-but-reachable server fails it and gets kickstarted.
+   *
+   * OPTIONAL: when omitted, only the handshake is checked (legacy behavior). Resolves
+   * a boolean (never rejects). Receives the pinned port for symmetry/logging; the
+   * production impl routes via the repo dir.
+   */
+  writeProbe?: (port: number) => Promise<boolean>;
   /** Re-initialise the bd-client connection (reuse adj-182.2.4 breaker reset). */
   reinitBdClient: () => void;
   /** Health-probe interval (ms). */
@@ -143,18 +158,37 @@ export async function ensureDoltSupervisor(
 
   // 2. One health-loop tick: probe → self-heal on failure. Errors are swallowed
   //    so a transient probe failure never kills the loop.
+  const selfHeal = async (reason: string): Promise<void> => {
+    seams.log("warn", `Dolt health probe failed (${reason}) — kickstarting agent + re-init bd-client`, {
+      label,
+      port: seams.pinnedPort,
+    });
+    await seams.kickstartAgent();
+    // Re-init the bd-client so it drops the open in-process breaker and
+    // reconnects to the (restarted) endpoint without a backend restart.
+    seams.reinitBdClient();
+  };
+
   const tick = async (): Promise<void> => {
     try {
-      const healthy = await seams.sqlProbe(seams.pinnedPort);
-      if (healthy) return;
-      seams.log("warn", "Dolt health probe failed — kickstarting agent + re-init bd-client", {
-        label,
-        port: seams.pinnedPort,
-      });
-      await seams.kickstartAgent();
-      // Re-init the bd-client so it drops the open in-process breaker and
-      // reconnects to the (restarted) endpoint without a backend restart.
-      seams.reinitBdClient();
+      // Phase 1 — handshake/liveness (cheap). A failed handshake means crashed or
+      // unreachable; heal immediately and skip the more expensive write probe.
+      const reachable = await seams.sqlProbe(seams.pinnedPort);
+      if (!reachable) {
+        await selfHeal("server unreachable");
+        return;
+      }
+      // Phase 2 — write-path liveness (adj-iw0vy). A reachable server can still be
+      // WRITE-WEDGED (handshake passes, every write hangs). Without this, such a
+      // server never self-heals. Only runs when a writeProbe seam is supplied.
+      if (seams.writeProbe) {
+        const writable = await seams.writeProbe(seams.pinnedPort);
+        if (!writable) {
+          await selfHeal("reachable but write-wedged");
+          return;
+        }
+      }
+      // Healthy: reachable AND (no write probe configured OR writable).
     } catch (err) {
       seams.log("error", "Dolt health tick threw — swallowed to keep the loop alive", {
         error: String(err),
@@ -271,6 +305,48 @@ function realSqlProbe(port: number): Promise<boolean> {
   });
 }
 
+/** Default write-probe timeout (ms). The wedge HANGS, so the timeout IS the detector. */
+const DEFAULT_WRITE_PROBE_TIMEOUT_MS = 5_000;
+
+/** Scratch write the {@link doltWriteProbe} runs. TEMPORARY → no persistent/synced state. */
+const WRITE_PROBE_SQL =
+  "CREATE TEMPORARY TABLE _adj_write_probe (x INT); " +
+  "INSERT INTO _adj_write_probe VALUES (1); " +
+  "DROP TABLE _adj_write_probe;";
+
+/** The exec seam {@link doltWriteProbe} drives (injected so tests never spawn `dolt`). */
+export type WriteProbeExec = (
+  file: string,
+  args: string[],
+  opts: { cwd: string; timeout: number },
+) => Promise<unknown>;
+
+/**
+ * Write-path liveness probe (adj-iw0vy). Runs a scratch CREATE TEMPORARY TABLE /
+ * INSERT / DROP via the `dolt` CLI in `doltRepoDir`, which routes to the running
+ * supervised sql-server. Resolves `true` only when the write COMPLETES.
+ *
+ * The wedge case (auto-import hang / write deadlock) HANGS the statement, so the exec
+ * `timeout` fires, the child is killed, the promise rejects, and we resolve `false` —
+ * the timeout IS the write-wedge detector. Any other error also resolves `false`
+ * (fail-closed). The TEMPORARY table is session-scoped, so the live fleet-synced issue
+ * DB is never polluted and the working set stays clean.
+ *
+ * Never rejects — always resolves a boolean — so the health tick treats it as a plain
+ * predicate.
+ */
+export function doltWriteProbe(
+  doltRepoDir: string,
+  options: { exec?: WriteProbeExec; timeoutMs?: number } = {},
+): Promise<boolean> {
+  const exec: WriteProbeExec =
+    options.exec ?? ((file, args, o) => execFileAsync(file, args, o));
+  const timeoutMs = options.timeoutMs ?? DEFAULT_WRITE_PROBE_TIMEOUT_MS;
+  return exec("dolt", ["sql", "-q", WRITE_PROBE_SQL], { cwd: doltRepoDir, timeout: timeoutMs })
+    .then(() => true)
+    .catch(() => false);
+}
+
 /** Options for building the production seam set. */
 export interface ProductionSupervisorOptions {
   /** Project UUID. */
@@ -289,6 +365,13 @@ export interface ProductionSupervisorOptions {
   pinnedPort?: number | null;
   /** Override the probe interval (ms). */
   probeIntervalMs?: number;
+  /**
+   * Dolt repo/data dir the write probe runs `dolt sql` in (adj-iw0vy). Must be a dir
+   * that routes to the supervised server (the beads `dolt` data-dir). When omitted or
+   * non-existent, the write probe is skipped (handshake-only, legacy behavior) — we
+   * never wire a probe that would false-fail against a missing dir.
+   */
+  doltRepoDir?: string | null;
 }
 
 /**
@@ -308,6 +391,19 @@ export function buildProductionSupervisorSeams(
     return null;
   }
   const label = supervisorLabel(opts.projectId);
+  // adj-iw0vy: wire the write-path probe only when a real dolt repo dir is available,
+  // so a missing dir degrades to handshake-only rather than false-failing every tick.
+  const repoDir = opts.doltRepoDir ?? null;
+  const writeProbe =
+    typeof repoDir === "string" && existsSync(repoDir)
+      ? (_port: number) => doltWriteProbe(repoDir)
+      : undefined;
+  if (!writeProbe) {
+    logWarn("Dolt supervisor: no usable doltRepoDir — write-wedge probe disabled (handshake-only)", {
+      projectId: opts.projectId,
+      doltRepoDir: repoDir,
+    });
+  }
   return {
     projectId: opts.projectId,
     pinnedPort: port,
@@ -316,6 +412,7 @@ export function buildProductionSupervisorSeams(
     loadAgent: () => realLoadAgent(opts.uid, opts.plistPath),
     kickstartAgent: () => realKickstartAgent(opts.uid, label),
     sqlProbe: realSqlProbe,
+    ...(writeProbe ? { writeProbe } : {}),
     // adj-182.2.4: clearing the in-process Dolt connection state IS the bd-client
     // re-init — the next execBd re-reads the pinned endpoint and reconnects.
     reinitBdClient: () => { _resetDoltConnectionState(); },
@@ -368,6 +465,8 @@ export async function startDoltSupervisorOnBoot(
  *   - ADJUTANT_DOLT_PLIST       — plist path (defaults to the conventional
  *                                 ~/Library/LaunchAgents/com.adjutant.dolt.<id>.plist)
  *   - ADJUTANT_DOLT_PROBE_MS    — optional probe interval override
+ *   - ADJUTANT_DOLT_REPO_DIR    — optional dolt data-dir for the write-wedge probe
+ *                                 (adj-iw0vy); defaults to <cwd>/.beads/dolt
  */
 export async function startDoltSupervisorFromEnv(): Promise<DoltSupervisorHandle> {
   if (!isDoltSupervisorFlagEnabled(process.env[DOLT_SUPERVISOR_FLAG])) {
@@ -394,11 +493,18 @@ export async function startDoltSupervisorFromEnv(): Promise<DoltSupervisorHandle
   const probeRaw = process.env["ADJUTANT_DOLT_PROBE_MS"]?.trim();
   const probeIntervalMs = probeRaw ? Number.parseInt(probeRaw, 10) : undefined;
 
+  // adj-iw0vy: the write-wedge probe runs `dolt sql` here. Default to the conventional
+  // beads data-dir under the backend's cwd; buildProductionSupervisorSeams disables the
+  // probe if the dir does not exist (degrades to handshake-only, never false-fails).
+  const doltRepoDir =
+    process.env["ADJUTANT_DOLT_REPO_DIR"]?.trim() || join(process.cwd(), ".beads", "dolt");
+
   return startDoltSupervisorOnBoot({
     projectId,
     uid: userInfo().uid,
     plistPath,
     pinnedPort,
+    doltRepoDir,
     ...(probeIntervalMs && probeIntervalMs > 0 ? { probeIntervalMs } : {}),
   });
 }

@@ -20,6 +20,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import {
   ensureDoltSupervisor,
+  doltWriteProbe,
   type DoltSupervisorSeams,
   type DoltSupervisorHandle,
 } from "../../src/services/dolt-supervisor.js";
@@ -162,6 +163,72 @@ describe("ensureDoltSupervisor", () => {
     handle.stop();
 
     expect(clearIntervalFn).not.toHaveBeenCalled();
+  });
+
+  // adj-iw0vy — write-path liveness: a reachable-but-write-wedged server (handshake
+  // passes, every write hangs) must self-heal instead of staying blind forever.
+  it("should kickstart + re-init when the server is reachable but WRITE-WEDGED", async () => {
+    let tick: (() => void | Promise<void>) | undefined;
+    const setIntervalFn = vi.fn((fn: () => void) => {
+      tick = fn;
+      return 1 as unknown as ReturnType<typeof setInterval>;
+    });
+    const sqlProbe = vi.fn(async () => true); // handshake OK (reachable)
+    const writeProbe = vi.fn(async () => false); // but writes are wedged
+    const kickstartAgent = vi.fn(async () => {});
+    const reinitBdClient = vi.fn();
+
+    const seams = makeSeams({ setIntervalFn, sqlProbe, writeProbe, kickstartAgent, reinitBdClient });
+
+    await ensureDoltSupervisor(seams);
+    await tick!();
+
+    expect(sqlProbe).toHaveBeenCalledWith(17005);
+    expect(writeProbe).toHaveBeenCalledWith(17005);
+    // The write-wedge is the new self-heal trigger this bead adds.
+    expect(kickstartAgent).toHaveBeenCalledTimes(1);
+    expect(reinitBdClient).toHaveBeenCalledTimes(1);
+  });
+
+  it("should NOT run the write probe when the handshake already failed (heal first, skip)", async () => {
+    let tick: (() => void | Promise<void>) | undefined;
+    const setIntervalFn = vi.fn((fn: () => void) => {
+      tick = fn;
+      return 1 as unknown as ReturnType<typeof setInterval>;
+    });
+    const sqlProbe = vi.fn(async () => false); // unreachable
+    const writeProbe = vi.fn(async () => true);
+    const kickstartAgent = vi.fn(async () => {});
+
+    const seams = makeSeams({ setIntervalFn, sqlProbe, writeProbe, kickstartAgent });
+
+    await ensureDoltSupervisor(seams);
+    await tick!();
+
+    // Handshake failed → heal immediately; the expensive write probe is skipped.
+    expect(writeProbe).not.toHaveBeenCalled();
+    expect(kickstartAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it("should NOT kickstart when reachable AND writable", async () => {
+    let tick: (() => void | Promise<void>) | undefined;
+    const setIntervalFn = vi.fn((fn: () => void) => {
+      tick = fn;
+      return 1 as unknown as ReturnType<typeof setInterval>;
+    });
+    const sqlProbe = vi.fn(async () => true);
+    const writeProbe = vi.fn(async () => true);
+    const kickstartAgent = vi.fn(async () => {});
+    const reinitBdClient = vi.fn();
+
+    const seams = makeSeams({ setIntervalFn, sqlProbe, writeProbe, kickstartAgent, reinitBdClient });
+
+    await ensureDoltSupervisor(seams);
+    await tick!();
+
+    expect(writeProbe).toHaveBeenCalledWith(17005);
+    expect(kickstartAgent).not.toHaveBeenCalled();
+    expect(reinitBdClient).not.toHaveBeenCalled();
   });
 
   it("should not crash the boot path if a single probe tick throws", async () => {
@@ -385,5 +452,49 @@ describe("isDoltSupervisorFlagEnabled (env gate)", () => {
     expect(isDoltSupervisorFlagEnabled("false")).toBe(false);
     expect(isDoltSupervisorFlagEnabled("1")).toBe(true);
     expect(isDoltSupervisorFlagEnabled("true")).toBe(true);
+  });
+});
+
+/**
+ * adj-iw0vy — doltWriteProbe: the write-path liveness check. The exec is an injected
+ * seam so the unit test NEVER spawns `dolt` or touches a real server. The wedge case
+ * is modeled as the exec rejecting (a real timeout kills the child → rejection).
+ */
+describe("doltWriteProbe (write-wedge detector — adj-iw0vy)", () => {
+  it("should resolve true when the scratch write completes", async () => {
+    const exec = vi.fn(async () => ({ stdout: "", stderr: "" }));
+
+    const ok = await doltWriteProbe("/repo/.beads/dolt", { exec });
+
+    expect(ok).toBe(true);
+    // Routes via the repo dir, carries a hard timeout, and runs a non-persisting
+    // TEMPORARY-table write (no fleet-synced state).
+    expect(exec).toHaveBeenCalledTimes(1);
+    const [file, args, opts] = exec.mock.calls[0] as [string, string[], { cwd: string; timeout: number }];
+    expect(file).toBe("dolt");
+    expect(args[0]).toBe("sql");
+    expect(args.join(" ")).toMatch(/CREATE TEMPORARY TABLE/i);
+    expect(args.join(" ")).toMatch(/DROP TABLE/i);
+    expect(opts.cwd).toBe("/repo/.beads/dolt");
+    expect(opts.timeout).toBeGreaterThan(0);
+  });
+
+  it("should resolve false when the write hangs/exec rejects (timeout IS the detector)", async () => {
+    // A wedged server hangs; the exec timeout kills the child and rejects.
+    const exec = vi.fn(async () => {
+      throw Object.assign(new Error("write probe timed out"), { killed: true, signal: "SIGTERM" });
+    });
+
+    const ok = await doltWriteProbe("/repo/.beads/dolt", { exec });
+
+    expect(ok).toBe(false);
+  });
+
+  it("should resolve false (never reject) on any exec error — fail-closed", async () => {
+    const exec = vi.fn(async () => {
+      throw new Error("dolt: command not found");
+    });
+
+    await expect(doltWriteProbe("/repo/.beads/dolt", { exec })).resolves.toBe(false);
   });
 });
