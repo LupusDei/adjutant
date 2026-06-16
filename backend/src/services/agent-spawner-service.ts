@@ -20,7 +20,7 @@ import { getSessionBridge } from "./session-bridge.js";
 import type { SessionMode } from "./session-registry.js";
 import { listTmuxSessions } from "./tmux.js";
 import { getPersonaService } from "./persona-service.js";
-import { provisionAgentWorktree } from "./worktree-service.js";
+import { provisionAgentWorktree, resolveWorktreeDoltEnv } from "./worktree-service.js";
 import { buildGenesisPrompt, extractLoreExcerpt } from "./adjutant/genesis-prompt.js";
 
 // ============================================================================
@@ -218,11 +218,24 @@ export async function spawnAgent(
     // checkout the dev backend watches (adj-8mmyd). Fail-open: if provisioning fails
     // we fall back to the canonical path (with a warn) rather than block the spawn.
     let effectiveProjectPath = req.projectPath;
+    const isolationEnv: Record<string, string> = {};
     if (req.isolation === "worktree") {
       const worktreePath = await provisionAgentWorktree(req.projectPath, req.name);
       if (worktreePath) {
         effectiveProjectPath = worktreePath;
         logInfo("Spawning agent in isolated worktree", { name: req.name, worktree: worktreePath });
+        // adj-182.3.1: point the worktree agent at the SUPERVISED server (pinned port)
+        // and assert it has no stray local dolt data-dir, so it never spawns a rogue
+        // server. Best-effort: a resolution failure must not block the spawn.
+        try {
+          const { port } = resolveWorktreeDoltEnv(req.projectPath, worktreePath);
+          isolationEnv["BEADS_DOLT_SERVER_PORT"] = String(port);
+        } catch (err) {
+          logWarn("Could not resolve supervised Dolt port for worktree agent", {
+            name: req.name,
+            error: String(err),
+          });
+        }
       } else {
         logWarn("Worktree isolation requested but unavailable — agent will run in the canonical checkout", {
           name: req.name,
@@ -280,13 +293,15 @@ export async function spawnAgent(
     // SessionMode is currently "swarm" only; default to "swarm" and pass through
     // Safe cast: we accept broader input but narrow to SessionMode for the bridge
     const mode = (req.mode ?? "swarm") as SessionMode;
+    // Merge caller env with the worktree-isolation env (BEADS_DOLT_SERVER_PORT, adj-182.3.1).
+    const mergedEnvVars = { ...req.envVars, ...isolationEnv };
     const result = await bridge.createSession({
       name: req.name,
       projectPath: effectiveProjectPath,
       mode,
       ...(claudeArgs.length > 0 ? { claudeArgs } : {}),
       ...(effectivePrompt ? { initialPrompt: effectivePrompt } : {}),
-      ...(req.envVars ? { envVars: req.envVars } : {}),
+      ...(Object.keys(mergedEnvVars).length > 0 ? { envVars: mergedEnvVars } : {}),
     });
 
     if (result.success) {

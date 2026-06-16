@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
-# provision-worktree.sh — instantly provision node_modules into a git worktree
-# by SYMLINKING them from the main repo (adj-pd49t).
+# provision-worktree.sh — instantly provision node_modules AND .beads into a git
+# worktree by SYMLINKING them from the main repo (adj-pd49t, adj-182.3.1).
 #
-# Why: root/backend/frontend node_modules are gitignored, so `git worktree add`
-# creates a worktree WITHOUT them. A fresh worktree engineer then runs a slow
-# `npm install` that trips the 600s spawn watchdog and stalls. Symlinking is
-# O(1) and Node resolves modules through the symlink fine (pnpm-style).
+# Why node_modules: root/backend/frontend node_modules are gitignored, so
+# `git worktree add` creates a worktree WITHOUT them. A fresh worktree engineer then
+# runs a slow `npm install` that trips the 600s spawn watchdog and stalls. Symlinking
+# is O(1) and Node resolves modules through the symlink fine (pnpm-style).
+#
+# Why .beads (adj-182.3.1): .beads is gitignored too, so a worktree starts WITHOUT it.
+# Without .beads a worktree agent's bd would spin up its OWN ephemeral-port Dolt server
+# (a STRAY data-dir) — the exact churn the adj-182 line eliminates. Symlinking .beads
+# shares the main repo's supervised, pinned-port server (metadata.json's
+# dolt_server_port + the authoritative .beads/dolt-server.port travel through the link),
+# so the worktree agent connects to the ONE supervised server and creates no stray dir.
 #
 # Safe + idempotent:
 #   - skips a target that already exists (real dir OR symlink) — never clobbers
@@ -67,7 +74,7 @@ yellow() { printf "\033[33m%s\033[0m\n" "$1"; }
 
 linked=0
 skipped=0
-for rel in node_modules backend/node_modules frontend/node_modules; do
+for rel in node_modules backend/node_modules frontend/node_modules .beads; do
   src="$MAIN_ABS/$rel"
   dst="$WORKTREE_ABS/$rel"
 
