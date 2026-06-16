@@ -231,6 +231,9 @@ export function registerCoordinationTools(
         name,
         projectPath: resolvedProjectPath,
         initialPrompt: prompt,
+        // adj-182.5: workers edit files — isolate them in a worktree so their saves
+        // never touch the watched canonical checkout and bounce every session (adj-8mmyd).
+        isolation: "worktree",
         ...(agentFile ? { agentFile } : {}),
         ...(spawnEnvVars ? { envVars: spawnEnvVars } : {}),
       });

@@ -17,6 +17,7 @@ import { getProject } from "../services/projects-service.js";
 import { getPersonaService } from "../services/persona-service.js";
 import { generatePersonaPrompt } from "../services/prompt-generator.js";
 import { writeAgentFile } from "../services/agent-file-writer.js";
+import { provisionAgentWorktree } from "../services/worktree-service.js";
 import { buildGenesisPrompt, extractLoreExcerpt } from "../services/adjutant/genesis-prompt.js";
 import { readProjectConstitution, formatConstitutionPrompt } from "../services/agent-spawner-service.js";
 import { success, internalError, badRequest, notFound, conflict } from "../utils/responses.js";
@@ -78,6 +79,10 @@ const spawnAgentSchema = z.object({
   projectId: z.string().min(1).optional(),
   callsign: z.string().optional(),
   personaId: z.string().min(1).optional(),
+  // adj-182.5: dashboard-spawned teammates edit files, so they default to an isolated
+  // git worktree (their saves never bounce the watched canonical checkout — adj-8mmyd).
+  // Pass "none" to run in the project root as-is (e.g., a read-only/observer agent).
+  isolation: z.enum(["worktree", "none"]).optional(),
 });
 
 /**
@@ -184,11 +189,20 @@ agentsRouter.post("/spawn", async (req, res) => {
     envVars["ADJUTANT_PERSONA_ID"] = persona.id;
   }
 
+  // adj-182.5: provision an isolated git worktree (default for dashboard teammate
+  // spawns) so the agent's edits never touch the watched canonical checkout and
+  // bounce every MCP session (adj-8mmyd). Fail-open to the canonical path on failure.
+  let effectiveProjectPath = projectPath;
+  if (parsed.data.isolation !== "none") {
+    const worktreePath = await provisionAgentWorktree(projectPath, name);
+    if (worktreePath) effectiveProjectPath = worktreePath;
+  }
+
   // Write persona prompt as .claude/agents/<name>.md and pass --agent flag
   // instead of injecting via paste-buffer (FR-001, FR-002, FR-005).
   let claudeArgs: string[] | undefined;
   if (personaPrompt && persona) {
-    const agentName = await writeAgentFile(projectPath, persona.name, personaPrompt, persona.description);
+    const agentName = await writeAgentFile(effectiveProjectPath, persona.name, personaPrompt, persona.description);
     claudeArgs = ["--agent", agentName];
   }
 
@@ -219,7 +233,7 @@ agentsRouter.post("/spawn", async (req, res) => {
 
   // Constitution injection (adj-160): Prepend project constitution to prompt
   // so every agent spawned via REST API receives project-specific rules.
-  const constitutionText = await readProjectConstitution(projectPath);
+  const constitutionText = await readProjectConstitution(effectiveProjectPath);
   const constitutionPrompt = formatConstitutionPrompt(constitutionText);
   if (constitutionPrompt && initialPrompt) {
     initialPrompt = `${constitutionPrompt}\n\n---\n\n${initialPrompt}`;
@@ -229,7 +243,7 @@ agentsRouter.post("/spawn", async (req, res) => {
 
   const result = await bridge.createSession({
     name,
-    projectPath,
+    projectPath: effectiveProjectPath,
     mode: "swarm",
     workspaceType: "primary",
     claudeArgs,
@@ -247,7 +261,7 @@ agentsRouter.post("/spawn", async (req, res) => {
   return res.status(201).json(success({
     sessionId: result.sessionId,
     callsign: session?.name ?? name,
-    projectPath,
+    projectPath: effectiveProjectPath,
     spawned: true,
     ...(persona ? { personaId: persona.id, personaName: persona.name } : {}),
   }));

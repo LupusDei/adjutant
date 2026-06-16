@@ -50,6 +50,12 @@ vi.mock("../../src/services/persona-service.js", () => ({
   }),
 }));
 
+// Mock worktree service (adj-182.5) — never run real git in unit tests.
+const mockProvisionAgentWorktree = vi.fn();
+vi.mock("../../src/services/worktree-service.js", () => ({
+  provisionAgentWorktree: (...args: unknown[]) => mockProvisionAgentWorktree(...args),
+}));
+
 import {
   spawnAgent,
   isAgentAlive,
@@ -106,6 +112,45 @@ describe("agent-spawner-service", () => {
           projectPath: "/tmp/project",
           mode: "swarm",
         })
+      );
+    });
+
+    it("should provision a worktree and root the session there when isolation='worktree' (adj-182.5)", async () => {
+      mockListTmuxSessions.mockResolvedValue(new Set());
+      mockBridgeCreateSession.mockResolvedValue({ success: true, sessionId: "s-wt" });
+      mockProvisionAgentWorktree.mockResolvedValue("/tmp/project/worktrees/test-agent");
+
+      await spawnAgent({ name: "test-agent", projectPath: "/tmp/project", isolation: "worktree" });
+
+      expect(mockProvisionAgentWorktree).toHaveBeenCalledWith("/tmp/project", "test-agent");
+      // The agent's cwd is its worktree — not the watched canonical checkout.
+      expect(mockBridgeCreateSession).toHaveBeenCalledWith(
+        expect.objectContaining({ projectPath: "/tmp/project/worktrees/test-agent" }),
+      );
+    });
+
+    it("should NOT provision a worktree when isolation is unset (coordinator/system default) (adj-182.5)", async () => {
+      mockListTmuxSessions.mockResolvedValue(new Set());
+      mockBridgeCreateSession.mockResolvedValue({ success: true, sessionId: "s-none" });
+
+      await spawnAgent({ name: "coordinator", projectPath: "/tmp/project" });
+
+      expect(mockProvisionAgentWorktree).not.toHaveBeenCalled();
+      expect(mockBridgeCreateSession).toHaveBeenCalledWith(
+        expect.objectContaining({ projectPath: "/tmp/project" }),
+      );
+    });
+
+    it("should fall back to the canonical checkout when worktree provisioning fails (adj-182.5)", async () => {
+      mockListTmuxSessions.mockResolvedValue(new Set());
+      mockBridgeCreateSession.mockResolvedValue({ success: true, sessionId: "s-fb" });
+      mockProvisionAgentWorktree.mockResolvedValue(null); // provisioning failed → fail-open
+
+      await spawnAgent({ name: "test-agent", projectPath: "/tmp/project", isolation: "worktree" });
+
+      expect(mockProvisionAgentWorktree).toHaveBeenCalledOnce();
+      expect(mockBridgeCreateSession).toHaveBeenCalledWith(
+        expect.objectContaining({ projectPath: "/tmp/project" }),
       );
     });
 

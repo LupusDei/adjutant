@@ -20,6 +20,7 @@ import { getSessionBridge } from "./session-bridge.js";
 import type { SessionMode } from "./session-registry.js";
 import { listTmuxSessions } from "./tmux.js";
 import { getPersonaService } from "./persona-service.js";
+import { provisionAgentWorktree } from "./worktree-service.js";
 import { buildGenesisPrompt, extractLoreExcerpt } from "./adjutant/genesis-prompt.js";
 
 // ============================================================================
@@ -125,6 +126,15 @@ export interface SpawnAgentRequest {
   initialPrompt?: string;
   /** Additional environment variables to set in the tmux session before starting Claude */
   envVars?: Record<string, string>;
+  /**
+   * Workspace isolation (adj-182.5). "worktree" provisions a dedicated git worktree
+   * and roots the agent there so its edits never touch the canonical checkout (which
+   * the dev backend watches — see adj-8mmyd). "none" (default) runs in `projectPath`
+   * as-is; used for the coordinator / system agents that manage from the main repo and
+   * for read-only agents. Worker spawn paths (spawn_worker, REST teammate spawn) pass
+   * "worktree".
+   */
+  isolation?: "worktree" | "none";
 }
 
 export interface SpawnAgentResult {
@@ -203,9 +213,26 @@ export async function spawnAgent(
       return { success: true, tmuxSession };
     }
 
+    // Workspace isolation (adj-182.5): when requested, provision a dedicated git
+    // worktree and root the agent there so its file edits never touch the canonical
+    // checkout the dev backend watches (adj-8mmyd). Fail-open: if provisioning fails
+    // we fall back to the canonical path (with a warn) rather than block the spawn.
+    let effectiveProjectPath = req.projectPath;
+    if (req.isolation === "worktree") {
+      const worktreePath = await provisionAgentWorktree(req.projectPath, req.name);
+      if (worktreePath) {
+        effectiveProjectPath = worktreePath;
+        logInfo("Spawning agent in isolated worktree", { name: req.name, worktree: worktreePath });
+      } else {
+        logWarn("Worktree isolation requested but unavailable — agent will run in the canonical checkout", {
+          name: req.name,
+        });
+      }
+    }
+
     // Constitution injection (adj-160): Read project constitution and inject
     // into the effective prompt so every agent receives project-specific rules.
-    const constitutionText = await readProjectConstitution(req.projectPath);
+    const constitutionText = await readProjectConstitution(effectiveProjectPath);
     const constitutionPrompt = formatConstitutionPrompt(constitutionText);
 
     // Living Personas (adj-158.2.3): If the callsign has no linked persona
@@ -255,7 +282,7 @@ export async function spawnAgent(
     const mode = (req.mode ?? "swarm") as SessionMode;
     const result = await bridge.createSession({
       name: req.name,
-      projectPath: req.projectPath,
+      projectPath: effectiveProjectPath,
       mode,
       ...(claudeArgs.length > 0 ? { claudeArgs } : {}),
       ...(effectivePrompt ? { initialPrompt: effectivePrompt } : {}),
