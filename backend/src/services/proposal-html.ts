@@ -22,6 +22,32 @@ import MarkdownIt from "markdown-it";
 import type { Proposal } from "../types/proposals.js";
 import { sanitizeProposalHtml } from "./proposal-sanitize.js";
 
+/**
+ * The canonical Content-Security-Policy for a composed proposal document — the single
+ * source of truth shared by the in-document `<meta>` (below) AND the public `/p/:token`
+ * HTTP response header (`public-proposals.ts`), so the two can never drift.
+ *
+ * Deny everything by default, then re-permit only what a self-contained document needs:
+ *   - style-src 'unsafe-inline' → inline `<style>` blocks and `style=""` attributes
+ *   - img-src data:            → data: URI images only (no external / tracking pixels)
+ * Scripts, external connects, framing, and base/form targets stay denied. (NFR-001/002.)
+ *
+ * Why also as a `<meta>` (adj-200.2.4.1): the SAME document is rendered on surfaces that
+ * carry NO HTTP headers — iOS WKWebView `loadHTMLString` and web `<iframe srcdoc>` — so
+ * an HTTP-header-only CSP would leave the sanitizer as the sole defense exactly where the
+ * mXSS / escaped-url() vectors bite. `frame-ancestors` is a header-only directive (UAs
+ * ignore it inside `<meta>`); it is retained for the HTTP path and harmlessly ignored in
+ * the meta.
+ */
+export const PROPOSAL_DOCUMENT_CSP = [
+  "default-src 'none'",
+  "style-src 'unsafe-inline'",
+  "img-src data:",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+].join("; ");
+
 // markdown-it with raw-HTML passthrough DISABLED (raw HTML in the markdown description
 // is escaped, not injected) — the sanitizer is still applied as defense in depth.
 const md = new MarkdownIt({
@@ -146,6 +172,7 @@ export function composeProposalDocument(proposal: Proposal): string {
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="${PROPOSAL_DOCUMENT_CSP}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>${safeTitle}</title>
