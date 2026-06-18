@@ -18,9 +18,14 @@ const PUBLIC_PATHS = ["/health"];
 
 /**
  * Path prefixes that bypass API key authentication.
- * MCP routes use their own identity system (agentId header on connect).
+ * - /mcp: MCP routes use their own identity system (agentId header on connect).
+ * - /p/:  public, shareable proposal pages (adj-200) — intentionally no-API-key so a
+ *         link works in any browser. Also mounted before this middleware in index.ts;
+ *         listed here as defense in depth against future mount-order changes. The
+ *         trailing slash keeps this from matching unrelated `/p…` routes (e.g. future
+ *         /ping, /preview) — only the `/p/:token` page bypasses auth.
  */
-const PUBLIC_PREFIXES = ["/mcp"];
+const PUBLIC_PREFIXES = ["/mcp", "/p/"];
 
 /**
  * Extract bearer token from Authorization header.

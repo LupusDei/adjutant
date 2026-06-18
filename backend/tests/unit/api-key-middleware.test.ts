@@ -20,6 +20,7 @@ describe("api-key-middleware", () => {
     app.use(apiKeyAuth);
     app.get("/health", (_req, res) => res.json({ status: "ok" }));
     app.get("/api/test", (_req, res) => res.json({ data: "protected" }));
+    app.get("/p/:token", (_req, res) => res.type("html").send("<html></html>"));
   });
 
   describe("public paths", () => {
@@ -30,6 +31,15 @@ describe("api-key-middleware", () => {
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({ status: "ok" });
+    });
+
+    it("allows the public proposal route /p/:token without authentication (adj-200)", async () => {
+      vi.mocked(hasApiKeys).mockReturnValue(true);
+
+      const response = await request(app).get("/p/sometoken123456789");
+
+      expect(response.status).toBe(200);
+      expect(validateApiKey).not.toHaveBeenCalled();
     });
   });
 
