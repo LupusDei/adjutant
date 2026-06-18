@@ -39,6 +39,9 @@ export type { AgentStatusInfo, UseAgentStatusResult } from "./useAgentStatus";
 export { useProposals } from "./useProposals";
 export type { UseProposalsResult } from "./useProposals";
 
+export { useProjectStyleGuide } from "./useProjectStyleGuide";
+export type { UseProjectStyleGuideResult } from "./useProjectStyleGuide";
+
 export { useCostDashboard } from "./useCostDashboard";
 export type { UseCostDashboardOptions, UseCostDashboardResult } from "./useCostDashboard";
 

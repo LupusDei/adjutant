@@ -21,6 +21,8 @@ import type {
   SessionInfo,
   ProjectInfo,
   ProjectHealth,
+  ProjectStyleGuide,
+  SetProjectStyleGuideInput,
   Persona,
   CreatePersonaInput,
   UpdatePersonaInput,
@@ -482,6 +484,29 @@ export const api = {
 
     async getAutoDevelopStatus(id: string): Promise<AutoDevelopStatus> {
       return apiFetch(`/projects/${encodeURIComponent(id)}/auto-develop`);
+    },
+
+    /**
+     * Read a project's proposal style guide (brand color, adj-201).
+     * An unset guide returns both colors as `null` — a valid, non-error state.
+     * Unknown project id → 404 (surfaced as an ApiError).
+     */
+    async getStyleGuide(id: string): Promise<ProjectStyleGuide> {
+      return apiFetch(`/projects/${encodeURIComponent(id)}/style-guide`);
+    },
+
+    /**
+     * Set (or clear) a project's brand color (adj-201).
+     * An empty `primary` clears the whole guide. Invalid hex → 400.
+     */
+    async updateStyleGuide(
+      id: string,
+      input: SetProjectStyleGuideInput,
+    ): Promise<ProjectStyleGuide> {
+      return apiFetch(`/projects/${encodeURIComponent(id)}/style-guide`, {
+        method: 'PUT',
+        body: input,
+      });
     },
   },
 

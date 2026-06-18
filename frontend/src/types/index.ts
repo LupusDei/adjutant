@@ -314,6 +314,22 @@ export interface ProjectHealth {
   status: 'healthy' | 'degraded' | 'stale';
 }
 
+/**
+ * Per-project proposal style guide (adj-201) — v1 is brand color only.
+ * Both colors are `null` when no guide is set (a valid, non-error state).
+ * Mirrors the backend `GET /api/projects/:id/style-guide` response shape.
+ */
+export interface ProjectStyleGuide {
+  brandColorPrimary: string | null;
+  brandColorSecondary: string | null;
+}
+
+/** Body for `PUT /api/projects/:id/style-guide`. Empty `primary` clears the guide. */
+export interface SetProjectStyleGuideInput {
+  primary: string;
+  secondary: string | null;
+}
+
 // ============================================================================
 // Persona Types
 // ============================================================================
