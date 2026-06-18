@@ -43,6 +43,16 @@ export default defineConfig({
           proxy.on("error", suppressProxyError);
         },
       },
+      // Public proposal share pages (adj-200) are served by the backend at /p/:token.
+      // Proxy them so no-API-key share links work through the dev tunnel, matching
+      // the single-origin production deploy where the backend serves both.
+      "/p": {
+        target: `http://localhost:${API_PORT}`,
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on("error", suppressProxyError);
+        },
+      },
       "/ngrok-api": {
         target: "http://127.0.0.1:4040",
         changeOrigin: true,
