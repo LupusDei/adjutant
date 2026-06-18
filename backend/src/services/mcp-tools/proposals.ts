@@ -9,7 +9,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getAgentBySession, getProjectContextBySession, resolveToolProjectContext } from "../mcp-server.js";
 import type { ProposalStore } from "../proposal-store.js";
-import { getProject } from "../projects-service.js";
+import { getProject, getProjectStyleGuide } from "../projects-service.js";
 import { logInfo } from "../../utils/index.js";
 
 /**
@@ -219,6 +219,50 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
 
       return {
         content: [{ type: "text" as const, text: JSON.stringify(proposal) }],
+      };
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // get_project_style (adj-201)
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "get_project_style",
+    {
+      // Authoring note surfaced at the tool: read the project's brand color(s) and honor them
+      // in the proposal html (accent borders/headings/links) so shared pages look on-brand.
+      // Enforcement is authoring-only — the server does NOT inject these tokens.
+      projectId: z.string().optional().describe(
+        "Project UUID to read the style guide for (defaults to the session's project). " +
+        "Supports cross-project reads (adj-146).",
+      ),
+    },
+    async ({ projectId }, extra) => {
+      // Resolve the project via the adj-146 pattern: explicit projectId override → session context.
+      const projectContext = resolveToolProjectContext(projectId, extra.sessionId);
+      if (!projectContext) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "No project context — cannot read project style guide" }) }],
+        };
+      }
+
+      const result = getProjectStyleGuide(projectContext.projectId);
+      if (!result.success || !result.data) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: result.error?.message ?? "Failed to read project style guide" }) }],
+        };
+      }
+
+      // An unset guide is a valid state, NOT an error — surface it as `null` (the guide is
+      // all-or-nothing on its required primary, so a null primary means no guide at all).
+      const guide = result.data.brandColorPrimary === null
+        ? null
+        : { brandColorPrimary: result.data.brandColorPrimary, brandColorSecondary: result.data.brandColorSecondary };
+
+      logInfo("get_project_style", { projectId: projectContext.projectId, hasGuide: guide !== null });
+
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(guide) }],
       };
     },
   );
