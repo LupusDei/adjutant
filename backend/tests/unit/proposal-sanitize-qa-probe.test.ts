@@ -1,6 +1,48 @@
+import { parseFragment } from "parse5";
 import { describe, it, expect } from "vitest";
 
 import { sanitizeProposalHtml } from "../../src/services/proposal-sanitize.js";
+
+/**
+ * Walk the sanitizer OUTPUT through parse5 — the SAME spec-compliant parser a browser
+ * (and iOS WKWebView `loadHTMLString`) uses — and collect anything that would execute
+ * or fetch once the markup is live. This is the DOM-level mXSS gate (adj-200.2.3.1):
+ * string assertions can be fooled by raw-text smuggling, so we assert on the parsed tree.
+ */
+function liveThreats(html: string): {
+  eventHandlerAttrs: string[];
+  scriptNodes: number;
+  externalImgSrcs: string[];
+} {
+  // parse5 element node shape (subset we touch). Typed locally to avoid `any`.
+  interface P5Attr {
+    name: string;
+    value: string;
+  }
+  interface P5Node {
+    tagName?: string;
+    nodeName: string;
+    attrs?: P5Attr[];
+    childNodes?: P5Node[];
+  }
+  const eventHandlerAttrs: string[] = [];
+  const externalImgSrcs: string[] = [];
+  let scriptNodes = 0;
+
+  const walk = (node: P5Node): void => {
+    if (node.tagName === "script") scriptNodes++;
+    for (const attr of node.attrs ?? []) {
+      if (/^on/i.test(attr.name)) eventHandlerAttrs.push(`${node.tagName}.${attr.name}`);
+      if (node.tagName === "img" && attr.name === "src" && !/^data:/i.test(attr.value)) {
+        externalImgSrcs.push(attr.value);
+      }
+    }
+    for (const child of node.childNodes ?? []) walk(child);
+  };
+  walk(parseFragment(html) as unknown as P5Node);
+
+  return { eventHandlerAttrs, scriptNodes, externalImgSrcs };
+}
 
 /**
  * adj-200 QA (nova) — ADVERSARIAL probe suite. Each test encodes an attack the
@@ -174,6 +216,43 @@ describe("QA probe: sanitizer bypass attempts", () => {
         `<div style="background:url(data:image/svg+xml,%3Csvg%3E%3C/svg%3E)">x</div>`,
       );
       expect(out).toContain("data:image/svg+xml");
+    });
+  });
+
+  // ── DOM-level mXSS gate (adj-200.2.3.1): re-parse OUTPUT through parse5 and assert ──
+  // ── the live tree carries no script / event-handler / external-fetch nodes.        ──
+  describe("spec-parser re-parse leaves no live threats (NFR-001 / NFR-002)", () => {
+    // Each payload is a known parser-confusion / mutation-XSS vector. After sanitize,
+    // a browser-equivalent re-parse of the output must yield ZERO live event handlers,
+    // ZERO live <script>, and ZERO external <img src>.
+    const mutationVectors: [string, string][] = [
+      ["svg>style harbors img onerror", `<svg><style><img src=1 href=1 onerror=alert(1) //>`],
+      ["svg>style breakout to script", `<svg><style></style><script>alert(1)</script></svg>`],
+      ["math>style harbors img onerror", `<math><style><img src=1 onerror=alert(1)></style></math>`],
+      ["noscript-wrapped onerror img", `<noscript><p title="</noscript><img src=x onerror=alert(1)>"></p></noscript>`],
+      ["title RCDATA breakout", `<title><img src=x onerror=alert(1)></title>`],
+      ["stray </style> then onerror img", `<style>x{}</style><img src=x onerror="alert(1)">`],
+    ];
+
+    for (const [name, payload] of mutationVectors) {
+      it(`PROBE(DOM): "${name}" yields no live handler/script/external-img after re-parse`, () => {
+        const threats = liveThreats(sanitizeProposalHtml(payload));
+        expect(threats.eventHandlerAttrs).toEqual([]);
+        expect(threats.scriptNodes).toBe(0);
+        expect(threats.externalImgSrcs).toEqual([]);
+      });
+    }
+
+    it("PROBE(DOM): a legitimate data: image survives the re-parse as a real node", () => {
+      // Sanity: the gate is not vacuously passing by nuking everything. A safe data:
+      // image must remain a live <img> with its data: src intact (no external src).
+      const out = sanitizeProposalHtml(
+        `<img src="data:image/png;base64,iVBORw0KGgo=" alt="ok">`,
+      );
+      const threats = liveThreats(out);
+      expect(threats.eventHandlerAttrs).toEqual([]);
+      expect(threats.externalImgSrcs).toEqual([]);
+      expect(out).toContain("data:image/png;base64");
     });
   });
 });
