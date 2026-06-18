@@ -116,6 +116,70 @@ describe("composeProposalDocument", () => {
     expect(out).toMatch(/-apple-system|system-ui/i);
   });
 
+  // adj-201.4.1 — dark/accessible/friendly baseline (US3) ----------------------
+
+  it("should default to a dark document aesthetic (dark base, no prefers-color-scheme gate)", () => {
+    const out = composeProposalDocument(makeProposal());
+    // Declares color-scheme so form controls / scrollbars follow the dark default.
+    expect(out).toMatch(/color-scheme:\s*dark\s+light/i);
+    // The base (un-toggled, no media query) body background is a dark value, not the
+    // light #f6f8fa baseline that the old light-default wrapper used.
+    expect(out).not.toMatch(/body\s*\{[^}]*background:\s*#f6f8fa/i);
+  });
+
+  it("should provide a prefers-color-scheme: light variant", () => {
+    const out = composeProposalDocument(makeProposal());
+    expect(out).toMatch(/@media\s*\(\s*prefers-color-scheme:\s*light\s*\)/i);
+  });
+
+  it("should provide a manual light/dark toggle that needs no JavaScript", () => {
+    const out = composeProposalDocument(makeProposal());
+    // A CSS-only toggle: a checkbox/control whose :checked state flips the theme.
+    // (No script can run — CSP default-src 'none' with no script-src — so the toggle
+    // MUST be pure CSS.)
+    expect(out).toMatch(/class="proposal-doc__theme-toggle"/i);
+    expect(out).toMatch(/type="checkbox"/i);
+    expect(out).toMatch(/:checked/i);
+    // The toggle is operable + labelled for assistive tech.
+    expect(out).toMatch(/aria-label="[^"]*theme[^"]*"/i);
+    // ☀/☾ affordance present.
+    expect(out).toMatch(/[☀☾🌙🌞]/u);
+  });
+
+  it("should NOT introduce any script for the toggle (CSP-safe, sanitizer-safe)", () => {
+    const out = composeProposalDocument(makeProposal());
+    expect(out).not.toMatch(/<script\b/i);
+    expect(out.toLowerCase()).not.toContain("onclick");
+    expect(out.toLowerCase()).not.toContain("onchange");
+    // No script-src re-permit slipped into the CSP for the toggle.
+    const policy = CSP_META_RE.exec(out)?.[1] ?? "";
+    expect(policy).not.toMatch(/script-src/i);
+  });
+
+  it("should keep the dark/toggle baseline fully self-contained (no external resources)", () => {
+    const out = composeProposalDocument(
+      makeProposal({ html: `<section><h2>Body</h2><p>content</p></section>` }),
+    );
+    expect(hasExternalResourceRef(out)).toBe(false);
+  });
+
+  it("should declare a document language for accessibility", () => {
+    const out = composeProposalDocument(makeProposal());
+    expect(out).toMatch(/<html[^>]+lang="[a-z]{2}(?:-[A-Za-z]+)?"/i);
+  });
+
+  it("should use semantic landmarks for accessibility", () => {
+    const out = composeProposalDocument(makeProposal());
+    expect(out).toMatch(/<main[\s>]/i);
+    expect(out).toMatch(/<header[\s>]/i);
+  });
+
+  it("should define visible focus styles for keyboard accessibility", () => {
+    const out = composeProposalDocument(makeProposal());
+    // A :focus / :focus-visible rule exists in the inline stylesheet.
+    expect(out).toMatch(/:focus(?:-visible)?\b/i);
+  });
+
   // adj-200.2.4.1 — the document is rendered on surfaces with NO HTTP headers
   // (iOS WKWebView loadHTMLString, web iframe srcdoc), so the strict CSP must travel
   // INSIDE the document as a <meta>, not only as the public route's HTTP header.

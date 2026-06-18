@@ -88,56 +88,191 @@ function renderBody(proposal: Proposal): string {
 }
 
 /**
- * The self-contained document stylesheet. Readable "document" aesthetic: light page,
- * dark text, system font stack (no @font-face / external fonts), comfortable measure.
- * No `url(...)` references → nothing to fetch.
+ * The self-contained document stylesheet (adj-201.4.1). A friendly, readable "document"
+ * aesthetic that is **dark by default**, honors `prefers-color-scheme: light`, and exposes
+ * a **CSS-only** ☀/☾ light/dark toggle. System font stack (no `@font-face` / external
+ * fonts) and no `url(...)` references → nothing to fetch (preserves the adj-200
+ * self-contained / CSP contract).
+ *
+ * Theming model — everything reads CSS custom properties resolved on `.proposal-root`:
+ *   1. `.proposal-root` carries the DARK token set as the baseline (dark default).
+ *   2. `@media (prefers-color-scheme: light)` re-binds those tokens to the LIGHT set, so
+ *      a reader whose OS prefers light gets light without touching anything.
+ *   3. The manual toggle is a single hidden `<input type="checkbox">` placed BEFORE
+ *      `.proposal-root`; when `:checked` it re-binds the tokens to the LIGHT set via the
+ *      sibling combinator. Because that rule is authored AFTER the media query (and is no
+ *      less specific), the explicit user choice wins. No JavaScript is involved — the CSP
+ *      forbids scripts and the sanitizer strips them, so the toggle MUST be pure CSS.
+ *
+ * Accessibility: WCAG AA contrast in both token sets, semantic landmarks in the markup,
+ * a visible `:focus-visible` outline on the toggle, and the toggle is keyboard-operable
+ * (a real checkbox) and labelled (`aria-label`).
  */
 const DOCUMENT_STYLES = `
-  :root { color-scheme: light; }
+  :root { color-scheme: dark light; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
+
+  /* DARK token set — the default. AA contrast against the dark surfaces below. */
+  .proposal-root {
+    --page-bg: #0d1117;
+    --doc-bg: #161b22;
+    --doc-border: #30363d;
+    --text: #e6edf3;
+    --heading: #f0f6fc;
+    --muted: #9da7b3;
+    --rule: #30363d;
+    --link: #79c0ff;
+    --code-bg: #1f2630;
+    --code-text: #e6edf3;
+    --pre-bg: #010409;
+    --pre-text: #e6edf3;
+    --quote-text: #b3bcc7;
+    --th-bg: #1f2630;
+    --toggle-bg: #21262d;
+    --toggle-border: #30363d;
+    --toggle-text: #e6edf3;
+    --focus: #79c0ff;
+  }
+
+  /* LIGHT token set — applied when the OS prefers light, OR (below) when toggled. */
+  @media (prefers-color-scheme: light) {
+    .proposal-root {
+      --page-bg: #f6f8fa;
+      --doc-bg: #ffffff;
+      --doc-border: #d0d7de;
+      --text: #1f2328;
+      --heading: #11161c;
+      --muted: #57606a;
+      --rule: #eaecef;
+      --link: #0969da;
+      --code-bg: #eff1f3;
+      --code-text: #1f2328;
+      --pre-bg: #1f2328;
+      --pre-text: #f6f8fa;
+      --quote-text: #57606a;
+      --th-bg: #f6f8fa;
+      --toggle-bg: #ffffff;
+      --toggle-border: #d0d7de;
+      --toggle-text: #1f2328;
+      --focus: #0969da;
+    }
+  }
+
+  /* Manual override: checking the toggle forces the LIGHT token set regardless of OS.
+     Authored last + sibling-scoped so the explicit user choice beats the media query. */
+  .proposal-doc__theme-input:checked ~ .proposal-root {
+    --page-bg: #f6f8fa;
+    --doc-bg: #ffffff;
+    --doc-border: #d0d7de;
+    --text: #1f2328;
+    --heading: #11161c;
+    --muted: #57606a;
+    --rule: #eaecef;
+    --link: #0969da;
+    --code-bg: #eff1f3;
+    --code-text: #1f2328;
+    --pre-bg: #1f2328;
+    --pre-text: #f6f8fa;
+    --quote-text: #57606a;
+    --th-bg: #f6f8fa;
+    --toggle-bg: #ffffff;
+    --toggle-border: #d0d7de;
+    --toggle-text: #1f2328;
+    --focus: #0969da;
+  }
+
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     line-height: 1.65;
-    color: #1f2328;
-    background: #f6f8fa;
     -webkit-text-size-adjust: 100%;
   }
+  .proposal-root {
+    min-height: 100vh;
+    background: var(--page-bg);
+    color: var(--text);
+  }
+
+  /* The hidden checkbox driving the CSS-only toggle. Kept off-screen (not display:none)
+     so it stays reachable by keyboard/AT; the visible affordance is its <label>. */
+  .proposal-doc__theme-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .proposal-doc__theme-toggle {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 10;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.7rem;
+    font-size: 0.95rem;
+    line-height: 1;
+    cursor: pointer;
+    user-select: none;
+    border: 1px solid var(--toggle-border);
+    border-radius: 999px;
+    background: var(--toggle-bg);
+    color: var(--toggle-text);
+  }
+  .proposal-doc__theme-toggle .proposal-doc__theme-icon--light { display: none; }
+  .proposal-doc__theme-toggle .proposal-doc__theme-icon--dark { display: inline; }
+  /* When toggled to light, show the ☀ affordance (and vice-versa). */
+  .proposal-doc__theme-input:checked ~ .proposal-root .proposal-doc__theme-icon--dark { display: none; }
+  .proposal-doc__theme-input:checked ~ .proposal-root .proposal-doc__theme-icon--light { display: inline; }
+  /* Visible focus ring for keyboard users (the toggle is the only interactive control). */
+  .proposal-doc__theme-input:focus-visible ~ .proposal-root .proposal-doc__theme-toggle,
+  .proposal-doc__theme-toggle:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+  }
+
   .proposal-doc {
     max-width: 46rem;
     margin: 2.5rem auto;
     padding: 2.5rem 3rem;
-    background: #ffffff;
-    border: 1px solid #d0d7de;
-    border-radius: 10px;
-    box-shadow: 0 1px 3px rgba(27, 31, 36, 0.08);
+    background: var(--doc-bg);
+    border: 1px solid var(--doc-border);
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(1, 4, 9, 0.4);
   }
   .proposal-doc h1, .proposal-doc h2, .proposal-doc h3,
   .proposal-doc h4, .proposal-doc h5, .proposal-doc h6 {
     line-height: 1.25;
     margin: 1.6em 0 0.6em;
     font-weight: 600;
-    color: #11161c;
+    color: var(--heading);
   }
-  .proposal-doc h1 { font-size: 2rem; margin-top: 0; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
-  .proposal-doc h2 { font-size: 1.5rem; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+  .proposal-doc h1 { font-size: 2rem; margin-top: 0; border-bottom: 1px solid var(--rule); padding-bottom: 0.3em; }
+  .proposal-doc h2 { font-size: 1.5rem; border-bottom: 1px solid var(--rule); padding-bottom: 0.3em; }
   .proposal-doc p, .proposal-doc ul, .proposal-doc ol, .proposal-doc blockquote, .proposal-doc table {
     margin: 0 0 1rem;
   }
-  .proposal-doc a { color: #0969da; text-decoration: none; }
+  .proposal-doc a { color: var(--link); text-decoration: none; }
   .proposal-doc a:hover { text-decoration: underline; }
+  .proposal-doc a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
   .proposal-doc code, .proposal-doc pre, .proposal-doc kbd, .proposal-doc samp {
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   }
   .proposal-doc code {
-    background: #eff1f3;
+    background: var(--code-bg);
+    color: var(--code-text);
     padding: 0.2em 0.4em;
     border-radius: 4px;
     font-size: 0.9em;
   }
   .proposal-doc pre {
-    background: #1f2328;
-    color: #f6f8fa;
+    background: var(--pre-bg);
+    color: var(--pre-text);
     padding: 1rem;
     border-radius: 8px;
     overflow: auto;
@@ -146,17 +281,21 @@ const DOCUMENT_STYLES = `
   .proposal-doc blockquote {
     margin-left: 0;
     padding: 0.2em 1rem;
-    color: #57606a;
-    border-left: 0.25em solid #d0d7de;
+    color: var(--quote-text);
+    border-left: 0.25em solid var(--doc-border);
   }
   .proposal-doc table { border-collapse: collapse; width: 100%; }
-  .proposal-doc th, .proposal-doc td { border: 1px solid #d0d7de; padding: 0.5em 0.75em; text-align: left; }
-  .proposal-doc th { background: #f6f8fa; font-weight: 600; }
+  .proposal-doc th, .proposal-doc td { border: 1px solid var(--doc-border); padding: 0.5em 0.75em; text-align: left; }
+  .proposal-doc th { background: var(--th-bg); font-weight: 600; }
   .proposal-doc img, .proposal-doc svg { max-width: 100%; height: auto; }
-  .proposal-doc hr { border: none; border-top: 1px solid #d0d7de; margin: 2rem 0; }
+  .proposal-doc hr { border: none; border-top: 1px solid var(--rule); margin: 2rem 0; }
   .proposal-doc__header { margin-bottom: 1.5rem; }
-  .proposal-doc__title { font-size: 2rem; font-weight: 600; margin: 0; color: #11161c; }
-  .proposal-doc__meta { color: #57606a; font-size: 0.85rem; margin-top: 0.4rem; }
+  .proposal-doc__title { font-size: 2rem; font-weight: 600; margin: 0; color: var(--heading); }
+  .proposal-doc__meta { color: var(--muted); font-size: 0.85rem; margin-top: 0.4rem; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .proposal-doc__theme-toggle { transition: background 0.15s ease, color 0.15s ease; }
+  }
 `;
 
 /**
@@ -179,6 +318,13 @@ export function composeProposalDocument(proposal: Proposal): string {
 <style>${DOCUMENT_STYLES}</style>
 </head>
 <body>
+<input type="checkbox" id="proposal-theme-toggle" class="proposal-doc__theme-input" aria-label="Toggle light or dark theme">
+<div class="proposal-root">
+<label for="proposal-theme-toggle" class="proposal-doc__theme-toggle">
+<span class="proposal-doc__theme-icon proposal-doc__theme-icon--dark" aria-hidden="true">☾</span>
+<span class="proposal-doc__theme-icon proposal-doc__theme-icon--light" aria-hidden="true">☀</span>
+<span>Theme</span>
+</label>
 <main class="proposal-doc">
 <header class="proposal-doc__header">
 <h1 class="proposal-doc__title">${safeTitle}</h1>
@@ -186,6 +332,7 @@ export function composeProposalDocument(proposal: Proposal): string {
 </header>
 ${body}
 </main>
+</div>
 </body>
 </html>`;
 }
