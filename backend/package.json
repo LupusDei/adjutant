@@ -42,6 +42,8 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "markdown-it": "^14.2.0",
+    "sanitize-html": "^2.17.5",
     "ws": "^8.19.0",
     "zod": "^4.3.5"
   },
@@ -50,7 +52,9 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^25.0.6",
+    "@types/sanitize-html": "^2.16.1",
     "@types/supertest": "^6.0.3",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^3.2.4",
