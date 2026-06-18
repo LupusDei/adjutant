@@ -17,9 +17,9 @@ import { type CSSProperties } from 'react';
 
 export interface ProposalPageViewerProps {
   /** Self-contained, server-sanitized HTML document. Absent on legacy proposals. */
-  html?: string;
+  html?: string | undefined;
   /** Proposal title — used for the iframe accessible name and the status strip. */
-  title?: string;
+  title?: string | undefined;
 }
 
 /**
