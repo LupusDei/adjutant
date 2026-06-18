@@ -147,4 +147,46 @@ describe("GET /p/:token", () => {
     expect(res.status).toBe(404);
     expect(res.text).not.toContain("abc123unknowntoken");
   });
+
+  // adj-200.2.5.1 — the 404 path must carry the SAME hardened headers as the 200 path.
+  it("should apply CSP, Referrer-Policy, and nosniff headers to the 404 response", async () => {
+    const res = await supertest(app).get(`/p/unknown-token-zzz`);
+
+    expect(res.status).toBe(404);
+    expect(res.headers["content-security-policy"]).toMatch(/default-src 'none'/);
+    expect(res.headers["referrer-policy"]).toBe("no-referrer");
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+  });
+});
+
+// adj-200.2.5.1 — defense in depth: if composition ever throws, the route must NOT fall
+// through to Express's default error handler (which leaks a stack trace when NODE_ENV is
+// not production). It must return a generic page with the hardened headers and no detail.
+describe("GET /p/:token — compose failure is contained", () => {
+  let failApp: Express;
+
+  beforeEach(() => {
+    failApp = express();
+    failApp.use(
+      "/p",
+      createPublicProposalsRouter(store, () => {
+        throw new Error("INTERNAL_STACK_SECRET composition blew up at line 42");
+      }),
+    );
+  });
+
+  it("should return a generic hardened error page (no stack leak) when compose throws", async () => {
+    const token = seedPublished(`<p>body</p>`);
+
+    const res = await supertest(failApp).get(`/p/${token}`);
+
+    // Not a 200, and the error detail / stack never reaches the client.
+    expect(res.status).toBeGreaterThanOrEqual(500);
+    expect(res.text).not.toContain("INTERNAL_STACK_SECRET");
+    expect(res.text).not.toMatch(/at .+:\d+:\d+/); // no stack frames
+    // Hardened headers still applied on the error path.
+    expect(res.headers["content-security-policy"]).toMatch(/default-src 'none'/);
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+    expect(res.headers["referrer-policy"]).toBe("no-referrer");
+  });
 });
