@@ -30,6 +30,27 @@ const PROJECT_ID_RE = /^[0-9a-f]{8}(-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 const MAX_HTML_CHARS = 256 * 1024;
 
 /**
+ * Agent-facing authoring contract for the self-contained proposal `html` body (adj-200).
+ * Surfaced verbatim in the create_proposal/revise_proposal tool schemas so an authoring
+ * agent reads the rules at tool-call time. The composition pipeline sanitizes every body
+ * server-side (proposal-sanitize.ts), so anything outside this contract is silently removed —
+ * the contract tells agents how to author so the rendered page matches their intent.
+ */
+const HTML_AUTHORING_CONTRACT = [
+  "Optional self-contained HTML body for the shareable page view (the public /p/<token> page,",
+  "the in-app viewer, and iOS all render it). AUTHORING CONTRACT:",
+  "(1) SELF-CONTAINED ONLY — style with an inline <style> block and inline CSS; draw graphics",
+  "with inline <svg>. NO external resources of any kind: no external stylesheets, scripts, fonts,",
+  "or images. Embed any image as a data: URI.",
+  "(2) NO <script> and no on*= event handlers (onclick, onload, …) — both are stripped server-side.",
+  "(3) Write a clean, readable DOCUMENT: semantic structure with headings (<h1>/<h2>), <section>s,",
+  "paragraphs, lists, tables, and blockquotes — not an app UI.",
+  "(4) The markdown `description` stays REQUIRED and drives list previews, search, and scoring;",
+  "the html is additive, never a replacement for it.",
+  `All html is sanitized server-side before rendering. Max ${MAX_HTML_CHARS} characters (256 KiB).`,
+].join(" ");
+
+/**
  * Build the public, no-API-key URL for a published proposal: `<origin>/p/<token>`.
  *
  * MCP tool handlers have no incoming HTTP request to derive the host from (unlike the REST
@@ -93,8 +114,8 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       type: z.enum(["product", "engineering"]).describe("Proposal type: 'product' for UX/product improvements, 'engineering' for refactoring/architecture"),
       project: z.string().describe("Project this proposal is for (e.g., 'adjutant')"),
       projectId: z.string().optional().describe("Project UUID for cross-project operations (defaults to session project)"),
-      html: z.string().max(MAX_HTML_CHARS, `html must be at most ${MAX_HTML_CHARS} characters (256 KiB)`).optional().describe("Optional self-contained HTML body for the shareable page view. Sanitized server-side. See the authoring contract below."),
-      public: z.boolean().optional().describe("When true, immediately publish the proposal and return a no-API-key public URL (publicUrl)."),
+      html: z.string().max(MAX_HTML_CHARS, `html must be at most ${MAX_HTML_CHARS} characters (256 KiB)`).optional().describe(HTML_AUTHORING_CONTRACT),
+      public: z.boolean().optional().describe("When true, immediately publish the proposal and return a no-API-key public URL (publicUrl) anyone can open — no API key required. Defaults to private."),
     },
     async ({ title, description, type, project: _clientProject, projectId, html, public: makePublic }, extra) => {
       const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
@@ -331,8 +352,8 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       title: z.string().min(1).optional().describe("New title (optional — omit to keep current)"),
       description: z.string().min(1).optional().describe("New description (optional — omit to keep current)"),
       type: z.enum(["product", "engineering"]).optional().describe("New type (optional — omit to keep current)"),
-      html: z.string().max(MAX_HTML_CHARS, `html must be at most ${MAX_HTML_CHARS} characters (256 KiB)`).optional().describe("Replacement self-contained HTML body for the shareable page view. Sanitized server-side. See the authoring contract below."),
-      public: z.boolean().optional().describe("When true, publish (or re-publish) the proposal and return a no-API-key public URL (publicUrl)."),
+      html: z.string().max(MAX_HTML_CHARS, `html must be at most ${MAX_HTML_CHARS} characters (256 KiB)`).optional().describe(`Replacement body — replaces any existing html. ${HTML_AUTHORING_CONTRACT}`),
+      public: z.boolean().optional().describe("When true, publish (or re-publish) the proposal and return a no-API-key public URL (publicUrl) anyone can open — no API key required."),
       changelog: z.string().min(1).describe("Description of what changed and why"),
     },
     async ({ id, title, description, type, html, public: makePublic, changelog }, extra) => {
@@ -448,7 +469,12 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
   server.tool(
     "publish_proposal",
     {
-      id: z.string().describe("Proposal UUID to publish"),
+      // Authoring note surfaced here so it is read at the publish step too: the page served
+      // at the returned URL is composed from the proposal's html (or its markdown description
+      // when no html), then sanitized. Author the html to the self-contained contract
+      // documented on create_proposal/revise_proposal (inline CSS + inline <svg> only, no
+      // external resources, no <script>) so the published page renders as intended.
+      id: z.string().describe("Proposal UUID to publish. Returns a no-API-key public URL (publicUrl) that serves the proposal's sanitized, self-contained HTML page (falls back to the markdown description when no html was authored)."),
       projectId: z.string().optional().describe("Project UUID for cross-project operations (defaults to session project)"),
     },
     async ({ id, projectId }, extra) => {

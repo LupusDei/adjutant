@@ -112,6 +112,41 @@ create_proposal({
 ```
 Types: `product` (UX/product improvements), `engineering` (refactoring/architecture)
 
+The markdown `description` is REQUIRED and drives list previews, search, and confidence
+scoring. Optionally, you can also author a rich, self-contained HTML page for the proposal
+and publish it as a shareable public link.
+
+**`create_proposal` / `revise_proposal` — optional `html` + `public`** (adj-200)
+```
+create_proposal({
+  title: "Unified notification center",
+  description: "What/Why/How/Impact in markdown (still required)...",
+  type: "product",
+  html: "<h1>Unified Notification Center</h1><section><h2>Problem</h2><p>...</p></section>",
+  public: true   // immediately publish → response includes a no-API-key publicUrl
+})
+```
+
+Self-contained HTML authoring contract (the html is sanitized server-side — anything
+outside this is stripped, so author to it):
+- **Self-contained only**: style with an inline `<style>` block / inline CSS; draw graphics
+  with inline `<svg>`. NO external stylesheets, scripts, fonts, or images — embed images as
+  `data:` URIs.
+- **No `<script>` and no `on*=` handlers** (onclick, onload, …) — both are removed.
+- **Write a document, not an app UI**: semantic headings (`<h1>`/`<h2>`), `<section>`s,
+  paragraphs, lists, tables, blockquotes.
+- The html is **additive** — it never replaces the required markdown `description`.
+- Max 256 KiB.
+
+**`publish_proposal`** / **`unpublish_proposal`** -- Toggle the public share link.
+```
+publish_proposal({ id: "<uuid>" })     // → { isPublic: true, shareToken, publicUrl }
+unpublish_proposal({ id: "<uuid>" })   // → { isPublic: false, revoked: true } (token kept)
+```
+`publish_proposal` returns a public URL (`<origin>/p/<token>`) that serves the proposal's
+sanitized page with NO API key required — share it with anyone. Unpublishing makes the link
+404 immediately; the token is retained so a later re-publish revives the same URL.
+
 **`list_proposals`** -- List existing proposals. Use to check uniqueness before creating.
 ```
 list_proposals()                           // All proposals
