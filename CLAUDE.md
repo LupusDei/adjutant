@@ -27,8 +27,12 @@ Adjutant is a standalone multi-agent dashboard backed by beads (issue tracking) 
   composition pipeline (`proposal-html.ts` → sanitize via a parse5 mXSS fixpoint →
   self-contained doc) feeds three consumers: the public share link, a sandboxed web
   `<iframe srcdoc>` viewer, and iOS `WKWebView.loadHTMLString`. Markdown `description` stays
-  the required summary; HTML is additive. See "Proposal Sharing" in
-  `.claude/rules/04-architecture.md` and `specs/058-proposal-html-pages/`.
+  the required summary; HTML is additive. Pages are **dark-by-default, WCAG-AA, and friendly**,
+  and honor a per-project **style guide** (accent/brand color via the `get_project_style`
+  MCP tool). Enforcement is **authoring-only** (no server token injection); a QA **drift-lint**
+  (`proposal-style-lint.ts`) is the safety net for off-brand / no-dark-mode / a11y drift. The
+  authoring contract lives in `docs/proposal-page-authoring.md`. See "Proposal Sharing" in
+  `.claude/rules/04-architecture.md` and specs `058-proposal-html-pages/` + `059-project-style-guide/`.
 - **Dashboard**: Retro terminal themed web UI showing agents, beads, chat, and system state
 
 ### Conversation Model (chat — adj-164)

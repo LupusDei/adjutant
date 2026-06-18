@@ -2,6 +2,24 @@
 
 Notable, user-facing changes to Adjutant. Newer entries first.
 
+## adj-201 — Per-Project Proposal Style Guide + Dark/Accessible Pages (2026-06-18)
+
+Proposal pages are now dark-by-default, accessible, and on-brand for each project.
+
+### Added
+- **Per-project style guide.** Set a project's primary brand color (and optional secondary)
+  on the project page (web + iOS), persisted via `PUT /api/projects/:id/style-guide`. Hex
+  validated; empty/unset is valid. Authoring agents read it via the new `get_project_style`
+  MCP tool and color the proposal page to match.
+- **Dark / accessible / friendly pages.** Every composed proposal page is dark-by-default,
+  honors `prefers-color-scheme`, exposes a CSS-only light/dark toggle, meets WCAG AA contrast,
+  uses semantic landmarks, and shows visible focus — preserving the adj-200 self-contained /
+  CSP-safe contract (no external resources, no scripts).
+- **QA drift-lint.** `proposal-style-lint.ts` (`lintProposalPage`) statically checks a composed
+  page for accent-color presence, dark-mode support, and a11y basics — the safety net for the
+  authoring-only enforcement model. Authoring contract documented in
+  `docs/proposal-page-authoring.md`.
+
 ## adj-200 — Proposals as Shareable Standalone HTML Pages (2026-06-18)
 
 Proposals are no longer just markdown in a side panel — they can be authored as rich,

@@ -224,6 +224,36 @@ in-app reading of PRIVATE proposals — web renders the html in a **sandboxed `<
 (no `allow-scripts`), iOS via `WKWebView.loadHTMLString`. Both consume the same composed
 document, so there is no per-surface rendering logic.
 
+### Per-Project Style Guide + Dark/Accessible Baseline (adj-201)
+
+Extends proposal sharing with a per-project **style guide** and a baked-in
+**dark-by-default, WCAG-AA, friendly** page baseline. Spec: `specs/059-project-style-guide/`.
+**Enforcement is AUTHORING-ONLY** — the server never injects project tokens into the page;
+agents read the guide via MCP and author the HTML to match. A QA drift-lint is the safety net.
+
+- **Style guide** (v1 = accent/brand color only): a project carries `brandColorPrimary`
+  (required when a guide is set) + optional `brandColorSecondary`, both hex-validated via
+  `isValidHexColor` (`projects-service.ts`). Set on web + iOS, persisted via
+  `PUT /api/projects/:id/style-guide`. Empty/unset is a valid state. Agents read it with the
+  **`get_project_style`** MCP tool (resolves by projectId, honors adj-146 cross-project
+  context), which returns `{ brandColorPrimary, brandColorSecondary } | null`.
+- **Baseline** (`composeProposalDocument`): the document shell is dark-by-default with a
+  `@media (prefers-color-scheme: light)` variant and a **CSS-only** ☀/☾ toggle (no JS — the
+  CSP forbids scripts), AA contrast in both token sets, semantic landmarks, and visible
+  `:focus-visible`. Self-contained / CSP guarantees from adj-200 are unchanged.
+- **Drift-lint** (`backend/src/services/proposal-style-lint.ts` → `lintProposalPage(html,
+  { expectedBrandColor? })`): static safety net for the authoring-only model. Reports
+  accent-color presence (when `expectedBrandColor` is given — normalizes `#RGB`↔`#RRGGBB`,
+  case-insensitive; skipped when omitted), dark-mode support (`prefers-color-scheme` OR a
+  theme toggle), and a11y basics (`lang` attr, `<main>`/`<header>` landmark, a same-color/
+  background contrast red-flag). Codes: `missing-accent-color`, `invalid-expected-color`,
+  `no-dark-mode`, `missing-lang`, `missing-landmark`, `contrast-red-flag`. `ok` is false on
+  any `error`-severity finding. It is a lightweight static check, not a browser.
+- **Authoring contract**: documented for agents in `docs/proposal-page-authoring.md` and
+  surfaced verbatim at tool-call time via `HTML_AUTHORING_CONTRACT` in
+  `mcp-tools/proposals.ts` (self-contained/CSP-safe, honor the brand color from
+  `get_project_style`, dark/accessible/friendly).
+
 ## Key Decisions
 
 1. **MCP for Agent Communication**: Agents connect via MCP SSE and use tools for messaging, status, and beads
