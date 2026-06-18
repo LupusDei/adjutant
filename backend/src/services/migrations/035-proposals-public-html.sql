@@ -19,7 +19,8 @@ ALTER TABLE proposals ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE proposals ADD COLUMN share_token TEXT;
 ALTER TABLE proposals ADD COLUMN published_at TEXT;
 
+-- Public reads dial by token: `WHERE share_token = ? AND is_public = 1`. The share_token
+-- UNIQUE index below already satisfies that lookup, so no standalone is_public index is
+-- created — an index on a 2-value boolean adds write overhead for no read benefit
+-- (adj-200.2.1.1).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_proposals_share_token ON proposals(share_token);
-
--- Public reads dial by token; index it for the GET /p/:token lookup.
-CREATE INDEX IF NOT EXISTS idx_proposals_is_public ON proposals(is_public);
