@@ -210,6 +210,90 @@ describe("agents-service", () => {
       expect(result.data?.[0].project).toBe("my-project");
     });
 
+    it("should resolve to the MOST-SPECIFIC project when a parent project path is also registered (adj-tbxva)", async () => {
+      // Regression: a project "ai" registered at /code/ai is a path-prefix of
+      // every nested project, so a worktree agent in adjutant was mislabeled "ai".
+      const worktreePath = "/Users/Reason/code/ai/adjutant/worktrees/fenix";
+      vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-fenix"]));
+      mockManagedSessions([
+        { id: "s1", name: "fenix", tmuxSession: "adj-swarm-fenix", projectPath: worktreePath },
+      ]);
+      // "ai" listed FIRST (as in the real registry) to prove order-independence.
+      mockListProjects.mockReturnValue({
+        success: true,
+        data: [
+          { name: "ai", path: "/Users/Reason/code/ai", id: "f1e8f895" },
+          { name: "adjutant", path: "/Users/Reason/code/ai/adjutant", id: "0e578d15" },
+        ],
+      });
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      expect(result.data?.[0].project).toBe("adjutant");
+    });
+
+    it("should resolve to the most-specific project regardless of registry order (adj-tbxva)", async () => {
+      // Same as above but with "adjutant" listed first — still correct.
+      const worktreePath = "/Users/Reason/code/ai/adjutant/worktrees/fenix";
+      vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-fenix"]));
+      mockManagedSessions([
+        { id: "s1", name: "fenix", tmuxSession: "adj-swarm-fenix", projectPath: worktreePath },
+      ]);
+      mockListProjects.mockReturnValue({
+        success: true,
+        data: [
+          { name: "adjutant", path: "/Users/Reason/code/ai/adjutant", id: "0e578d15" },
+          { name: "ai", path: "/Users/Reason/code/ai", id: "f1e8f895" },
+        ],
+      });
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      expect(result.data?.[0].project).toBe("adjutant");
+    });
+
+    it("should still resolve a direct agent in the parent 'ai' project itself (adj-tbxva)", async () => {
+      // An agent whose CWD is exactly the parent project must stay "ai".
+      vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-root"]));
+      mockManagedSessions([
+        { id: "s1", name: "root", tmuxSession: "adj-swarm-root", projectPath: "/Users/Reason/code/ai" },
+      ]);
+      mockListProjects.mockReturnValue({
+        success: true,
+        data: [
+          { name: "ai", path: "/Users/Reason/code/ai", id: "f1e8f895" },
+          { name: "adjutant", path: "/Users/Reason/code/ai/adjutant", id: "0e578d15" },
+        ],
+      });
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      expect(result.data?.[0].project).toBe("ai");
+    });
+
+    it("should NOT match a sibling project that shares a name prefix but not a path boundary (adj-tbxva)", async () => {
+      // /code/ai-tools must not be matched by the /code/ai project (no '/' boundary).
+      vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-sib"]));
+      mockManagedSessions([
+        { id: "s1", name: "sib", tmuxSession: "adj-swarm-sib", projectPath: "/Users/Reason/code/ai-tools/worktrees/x" },
+      ]);
+      mockListProjects.mockReturnValue({
+        success: true,
+        data: [
+          { name: "ai", path: "/Users/Reason/code/ai", id: "f1e8f895" },
+          { name: "ai-tools", path: "/Users/Reason/code/ai-tools", id: "abc123" },
+        ],
+      });
+
+      const result = await getAgents();
+
+      expect(result.success).toBe(true);
+      expect(result.data?.[0].project).toBe("ai-tools");
+    });
+
     it("should exclude unmanaged tmux sessions that do not look like agent sessions", async () => {
       vi.mocked(listTmuxSessions).mockResolvedValue(
         new Set(["adj-swarm-alice", "my-random-session", "vim-editor"]),

@@ -54,12 +54,25 @@ function resolveProjectName(projectPath: string, pathMap: Map<string, string>): 
     if (match) return match;
   }
 
-  // Fallback: check if projectPath starts with any registered project path
+  // Fallback: match the MOST-SPECIFIC (longest) registered project path that is
+  // an ancestor of projectPath. A simple "first prefix wins" loop is wrong when
+  // projects nest: e.g. a project "ai" at /code/ai is a prefix of every project
+  // under /code/ai/*, so a worktree agent in /code/ai/adjutant/worktrees/<x> was
+  // mislabeled as "ai". Comparing on registeredPath + "/" enforces a path
+  // boundary so /code/ai never matches a sibling like /code/ai-tools (adj-tbxva).
+  let bestName = "";
+  let bestLen = -1;
   for (const [registeredPath, name] of pathMap) {
-    if (projectPath.startsWith(registeredPath + "/")) return name;
+    if (
+      projectPath.startsWith(registeredPath + "/") &&
+      registeredPath.length > bestLen
+    ) {
+      bestName = name;
+      bestLen = registeredPath.length;
+    }
   }
 
-  return "";
+  return bestName;
 }
 
 // ============================================================================
