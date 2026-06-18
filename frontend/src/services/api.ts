@@ -701,6 +701,27 @@ export const api = {
         body: { status },
       });
     },
+
+    /**
+     * Publish a proposal, generating (or reviving) its public share link.
+     * Returns the updated proposal plus the full no-API-key public URL
+     * (`<origin>/p/<shareToken>`) served by `GET /p/:token`.
+     */
+    async publish(id: string): Promise<{ proposal: Proposal; publicUrl: string }> {
+      return apiFetch(`/proposals/${encodeURIComponent(id)}/publish`, {
+        method: 'POST',
+      });
+    },
+
+    /**
+     * Unpublish a proposal — revokes public access. The share token is retained
+     * (a later re-publish revives the same link) but `GET /p/:token` will 404.
+     */
+    async unpublish(id: string): Promise<{ proposal: Proposal }> {
+      return apiFetch(`/proposals/${encodeURIComponent(id)}/unpublish`, {
+        method: 'POST',
+      });
+    },
   },
 
   /**
