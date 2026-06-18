@@ -93,6 +93,20 @@ describe("POST /api/proposals/:id/publish", () => {
     expect(res.status).toBe(404);
     expect(res.body.success).toBe(false);
   });
+
+  it("should build the public URL from X-Forwarded-Proto/Host behind a tunnel (adj-200.2.6.1)", async () => {
+    const id = seed();
+
+    const res = await supertest(app)
+      .post(`/api/proposals/${id}/publish`)
+      .set("X-Forwarded-Proto", "https")
+      .set("X-Forwarded-Host", "happy-otter.ngrok.app");
+
+    expect(res.status).toBe(200);
+    const token = res.body.data.proposal.shareToken;
+    // The link reflects the EXTERNAL tunnel origin, not the internal http://127.0.0.1.
+    expect(res.body.data.publicUrl).toBe(`https://happy-otter.ngrok.app/p/${token}`);
+  });
 });
 
 describe("POST /api/proposals/:id/unpublish", () => {
