@@ -5,10 +5,11 @@
 
 import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 
-import { api } from '../../services/api';
+import { api, publicProposalUrl } from '../../services/api';
 import type { Proposal } from '../../types';
 import { MarkdownBody } from '../chat/MarkdownBody';
 import { getConfidenceColor, getConfidenceLabel } from './ProposalCard';
+import { ProposalPageViewer } from './ProposalPageViewer';
 
 /** Signal display configuration with labels and weights. */
 const CONFIDENCE_SIGNALS = [
@@ -56,6 +57,12 @@ export function ProposalDetailView({
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Sharing UI state (adj-200): page-vs-detail view, in-flight publish toggle,
+  // and a transient "copied" confirmation.
+  const [viewAsPage, setViewAsPage] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Fetch proposal (extracted so the error state can offer a Retry).
   const loadProposal = useCallback(() => {
@@ -122,6 +129,50 @@ export function ProposalDetailView({
     if (proposal) onDiscuss(proposal);
   }, [proposal, onDiscuss]);
 
+  const handlePublish = useCallback(async () => {
+    if (!proposal || sharing) return;
+    setSharing(true);
+    setShareError(null);
+    try {
+      const { proposal: updated } = await api.proposals.publish(proposal.id);
+      setProposal(updated);
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Could not publish.');
+    } finally {
+      setSharing(false);
+    }
+  }, [proposal, sharing]);
+
+  const handleUnpublish = useCallback(async () => {
+    if (!proposal || sharing) return;
+    setSharing(true);
+    setShareError(null);
+    try {
+      const { proposal: updated } = await api.proposals.unpublish(proposal.id);
+      setProposal(updated);
+    } catch (err: unknown) {
+      setShareError(err instanceof Error ? err.message : 'Could not unpublish.');
+    } finally {
+      setSharing(false);
+    }
+  }, [proposal, sharing]);
+
+  // The public URL is derived from the share token (the GET payload carries the
+  // token, not a full URL) using the same origin rule as the backend.
+  const shareToken = proposal?.shareToken;
+  const publicUrl = shareToken ? publicProposalUrl(shareToken) : null;
+
+  const handleCopyLink = useCallback(async () => {
+    if (!publicUrl) return;
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      setCopied(true);
+      window.setTimeout(() => { setCopied(false); }, 2000);
+    } catch {
+      setShareError('Could not copy the link.');
+    }
+  }, [publicUrl]);
+
   if (!proposalId) return null;
 
   const isPending = proposal?.status === 'pending';
@@ -182,8 +233,75 @@ export function ProposalDetailView({
                 }}>
                   {proposal.status.toUpperCase()}
                 </span>
+
+                {/* Visibility badge — public vs private page */}
+                <span style={{
+                  ...styles.badge,
+                  ...(proposal.isPublic ? styles.badgePublic : styles.badgePrivate),
+                }}>
+                  {proposal.isPublic ? 'PUBLIC' : 'PRIVATE'}
+                </span>
               </div>
 
+              {/* Share toolbar — view-as-page, publish/unpublish, copy/open link */}
+              <div style={styles.shareBar}>
+                <button
+                  type="button"
+                  style={{
+                    ...styles.shareBtn,
+                    ...(viewAsPage ? styles.shareBtnActive : {}),
+                  }}
+                  aria-pressed={viewAsPage}
+                  onClick={() => { setViewAsPage((v) => !v); }}
+                >
+                  {viewAsPage ? 'VIEW DETAILS' : 'VIEW AS PAGE'}
+                </button>
+
+                {proposal.isPublic ? (
+                  <button
+                    type="button"
+                    style={styles.shareBtn}
+                    disabled={sharing}
+                    onClick={() => { void handleUnpublish(); }}
+                  >
+                    {sharing ? 'WORKING…' : 'UNPUBLISH'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    style={styles.shareBtnPrimary}
+                    disabled={sharing}
+                    onClick={() => { void handlePublish(); }}
+                  >
+                    {sharing ? 'WORKING…' : 'PUBLISH'}
+                  </button>
+                )}
+
+                {proposal.isPublic && publicUrl && (
+                  <>
+                    <button type="button" style={styles.shareBtn} onClick={() => { void handleCopyLink(); }}>
+                      {copied ? 'LINK COPIED' : 'COPY LINK'}
+                    </button>
+                    <a
+                      href={publicUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={styles.shareLink}
+                    >
+                      OPEN IN NEW TAB
+                    </a>
+                  </>
+                )}
+              </div>
+
+              {shareError && <div style={styles.shareError}>{shareError}</div>}
+
+              {viewAsPage ? (
+                <div style={styles.pageViewerWrap}>
+                  <ProposalPageViewer html={proposal.html} title={proposal.title} />
+                </div>
+              ) : (
+                <>
               {/* Metadata */}
               <div style={styles.section}>
                 <h4 style={styles.sectionTitle}>METADATA</h4>
@@ -266,6 +384,8 @@ export function ProposalDetailView({
                   <MarkdownBody>{proposal.description}</MarkdownBody>
                 </div>
               </div>
+                </>
+              )}
 
               {/* Actions */}
               <div style={styles.actions}>
@@ -446,6 +566,78 @@ const styles = {
     color: '#666',
     borderColor: '#666',
     backgroundColor: 'rgba(102, 102, 102, 0.1)',
+  },
+  badgePublic: {
+    color: 'var(--pipboy-green, #00ff00)',
+    borderColor: 'var(--pipboy-green, #00ff00)',
+    backgroundColor: 'rgba(0, 255, 0, 0.12)',
+    boxShadow: '0 0 6px var(--pipboy-green-glow, #00ff0066)',
+  },
+  badgePrivate: {
+    color: 'var(--crt-phosphor-dim, #00aa00)',
+    borderColor: 'var(--crt-phosphor-dim, #00aa00)',
+    backgroundColor: 'rgba(0, 170, 0, 0.06)',
+  },
+  shareBar: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '14px',
+    paddingBottom: '14px',
+    borderBottom: '1px solid rgba(0, 255, 0, 0.1)',
+  },
+  shareBtn: {
+    background: 'transparent',
+    border: '1px solid var(--crt-phosphor-dim, #00aa00)',
+    color: 'var(--crt-phosphor, #00ff00)',
+    padding: '6px 14px',
+    fontSize: '0.7rem',
+    fontFamily: '"Share Tech Mono", monospace',
+    cursor: 'pointer',
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+  },
+  shareBtnActive: {
+    backgroundColor: 'rgba(0, 255, 0, 0.12)',
+    boxShadow: 'inset 0 0 6px var(--pipboy-green-glow, #00ff0066)',
+  },
+  shareBtnPrimary: {
+    background: 'transparent',
+    border: '1px solid var(--pipboy-green, #00ff00)',
+    color: 'var(--pipboy-green, #00ff00)',
+    padding: '6px 14px',
+    fontSize: '0.7rem',
+    fontFamily: '"Share Tech Mono", monospace',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+    boxShadow: '0 0 4px var(--pipboy-green-glow, #00ff0066)',
+  },
+  shareLink: {
+    background: 'transparent',
+    border: '1px solid var(--crt-phosphor-dim, #00aa00)',
+    color: 'var(--crt-phosphor, #00ff00)',
+    padding: '6px 14px',
+    fontSize: '0.7rem',
+    fontFamily: '"Share Tech Mono", monospace',
+    cursor: 'pointer',
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+    textDecoration: 'none',
+  },
+  shareError: {
+    color: '#FF4444',
+    fontSize: '0.75rem',
+    marginBottom: '12px',
+    letterSpacing: '0.05em',
+  },
+  pageViewerWrap: {
+    // The viewer fills the remaining panel height for a comfortable read.
+    height: '70vh',
+    minHeight: '420px',
+    marginBottom: '16px',
   },
   section: {
     marginBottom: '16px',
