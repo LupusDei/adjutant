@@ -166,5 +166,33 @@ export function createProposalsRouter(store: ProposalStore): Router {
     res.json(success(revisions));
   });
 
+  // POST /api/proposals/:id/publish (adj-200)
+  // Publishes the proposal and returns the full, no-API-key public URL. The base is
+  // derived from the request host so the link is correct behind whatever origin the
+  // dashboard is served from.
+  router.post("/:id/publish", (req, res) => {
+    const proposal = store.publishProposal(req.params.id);
+    if (!proposal) {
+      res.status(404).json(notFound("Proposal", req.params.id));
+      return;
+    }
+
+    const publicUrl = `${req.protocol}://${req.get("host") ?? "localhost"}/p/${proposal.shareToken}`;
+    res.json(success({ proposal, publicUrl }));
+  });
+
+  // POST /api/proposals/:id/unpublish (adj-200)
+  // Revokes public access: the share token is retained (so a later re-publish revives
+  // the same link) but GET /p/:token will 404 until re-published.
+  router.post("/:id/unpublish", (req, res) => {
+    const proposal = store.unpublishProposal(req.params.id);
+    if (!proposal) {
+      res.status(404).json(notFound("Proposal", req.params.id));
+      return;
+    }
+
+    res.json(success({ proposal }));
+  });
+
   return router;
 }
