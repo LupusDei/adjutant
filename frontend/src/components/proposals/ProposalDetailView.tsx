@@ -257,6 +257,18 @@ export function ProposalDetailView({
                   {viewAsPage ? 'VIEW DETAILS' : 'VIEW AS PAGE'}
                 </button>
 
+                {/* Authed full-page reader (works for private proposals too),
+                    mirroring the standalone graph window. Distinct from the
+                    public OPEN IN NEW TAB below, which needs no API key. */}
+                <a
+                  href={`${window.location.origin}#proposal/${encodeURIComponent(proposal.id)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={styles.shareLink}
+                >
+                  FULL PAGE
+                </a>
+
                 {proposal.isPublic ? (
                   <button
                     type="button"
