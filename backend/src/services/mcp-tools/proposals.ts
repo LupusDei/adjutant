@@ -21,6 +21,31 @@ import { logInfo } from "../../utils/index.js";
 const PROJECT_ID_RE = /^[0-9a-f]{8}(-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?$/i;
 
 /**
+ * Maximum size (in characters) of an agent-authored self-contained `html` body (adj-200).
+ * 256 KiB. The bound is enforced at the Zod boundary so an oversized document is rejected
+ * before it ever reaches the store. Measured in UTF-16 code units (string length) — a close
+ * proxy for bytes for the predominantly-ASCII HTML agents produce; the cap is deliberately
+ * generous (a self-contained page with inline CSS + inline SVG is comfortably under it).
+ */
+const MAX_HTML_CHARS = 256 * 1024;
+
+/**
+ * Build the public, no-API-key URL for a published proposal: `<origin>/p/<token>`.
+ *
+ * MCP tool handlers have no incoming HTTP request to derive the host from (unlike the REST
+ * publish route, which uses `req`), so the origin is resolved from configuration:
+ *   1. `ADJUTANT_PUBLIC_URL` — the canonical externally-reachable origin (e.g. a tunnel URL).
+ *   2. Fallback: `http://localhost:<PORT>` (PORT mirrors the server's listen port, default 4201).
+ * Any trailing slash on the configured origin is stripped so the result is never `//p/`.
+ * Read at call-time (not module load) so deployment/test env changes take effect.
+ */
+export function buildPublicProposalUrl(token: string): string {
+  const port = process.env["PORT"] ?? "4201";
+  const origin = (process.env["ADJUTANT_PUBLIC_URL"] ?? `http://localhost:${port}`).replace(/\/+$/, "");
+  return `${origin}/p/${token}`;
+}
+
+/**
  * Cross-project validation helper. Returns an error response if the proposal
  * belongs to a different project than the caller's resolved project context.
  *
@@ -68,8 +93,10 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       type: z.enum(["product", "engineering"]).describe("Proposal type: 'product' for UX/product improvements, 'engineering' for refactoring/architecture"),
       project: z.string().describe("Project this proposal is for (e.g., 'adjutant')"),
       projectId: z.string().optional().describe("Project UUID for cross-project operations (defaults to session project)"),
+      html: z.string().max(MAX_HTML_CHARS, `html must be at most ${MAX_HTML_CHARS} characters (256 KiB)`).optional().describe("Optional self-contained HTML body for the shareable page view. Sanitized server-side. See the authoring contract below."),
+      public: z.boolean().optional().describe("When true, immediately publish the proposal and return a no-API-key public URL (publicUrl)."),
     },
-    async ({ title, description, type, project: _clientProject, projectId }, extra) => {
+    async ({ title, description, type, project: _clientProject, projectId, html, public: makePublic }, extra) => {
       const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
       if (!agentId) {
         return {
@@ -104,18 +131,40 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
         project: projectContext.projectId,
       });
 
-      logInfo("create_proposal", { agentId, proposalId: proposal.id, type, title });
+      // Persist the optional self-contained HTML body (adj-200). The store/composition
+      // pipeline sanitizes on render; we persist the raw author html here.
+      let current = proposal;
+      if (html !== undefined) {
+        const withHtml = store.setHtml(proposal.id, html);
+        if (withHtml) current = withHtml;
+      }
+
+      // Optional auto-publish: generate the share token (if absent), flip visibility, and
+      // return the public URL so the agent can hand off a working link immediately.
+      let publicUrl: string | undefined;
+      if (makePublic) {
+        const published = store.publishProposal(proposal.id);
+        if (published) {
+          current = published;
+          if (published.shareToken) publicUrl = buildPublicProposalUrl(published.shareToken);
+        }
+      }
+
+      logInfo("create_proposal", { agentId, proposalId: proposal.id, type, title, html: html !== undefined, public: makePublic === true });
 
       return {
         content: [{
           type: "text" as const,
           text: JSON.stringify({
-            id: proposal.id,
-            title: proposal.title,
-            type: proposal.type,
-            project: proposal.project,
-            status: proposal.status,
-            createdAt: proposal.createdAt,
+            id: current.id,
+            title: current.title,
+            type: current.type,
+            project: current.project,
+            status: current.status,
+            createdAt: current.createdAt,
+            isPublic: current.isPublic,
+            ...(current.shareToken ? { shareToken: current.shareToken } : {}),
+            ...(publicUrl ? { publicUrl } : {}),
           }),
         }],
       };
@@ -282,9 +331,11 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
       title: z.string().min(1).optional().describe("New title (optional — omit to keep current)"),
       description: z.string().min(1).optional().describe("New description (optional — omit to keep current)"),
       type: z.enum(["product", "engineering"]).optional().describe("New type (optional — omit to keep current)"),
+      html: z.string().max(MAX_HTML_CHARS, `html must be at most ${MAX_HTML_CHARS} characters (256 KiB)`).optional().describe("Replacement self-contained HTML body for the shareable page view. Sanitized server-side. See the authoring contract below."),
+      public: z.boolean().optional().describe("When true, publish (or re-publish) the proposal and return a no-API-key public URL (publicUrl)."),
       changelog: z.string().min(1).describe("Description of what changed and why"),
     },
-    async ({ id, title, description, type, changelog }, extra) => {
+    async ({ id, title, description, type, html, public: makePublic, changelog }, extra) => {
       const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
       if (!agentId) {
         return {
@@ -292,9 +343,9 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
         };
       }
 
-      if (title === undefined && description === undefined && type === undefined) {
+      if (title === undefined && description === undefined && type === undefined && html === undefined) {
         return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: "At least one of title, description, or type must be provided" }) }],
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "At least one of title, description, type, or html must be provided" }) }],
         };
       }
 
@@ -312,6 +363,8 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
         };
       }
 
+      // reviseProposal snapshots the prior body (title/description/type) into a revision row
+      // BEFORE applying the new values — the same snapshot mechanism every other field uses.
       const revised = store.reviseProposal(id, {
         author: agentId,
         title,
@@ -326,12 +379,30 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
         };
       }
 
-      logInfo("revise_proposal", { agentId, proposalId: id, title: revised.title });
+      // Apply the replacement HTML body after the snapshot so the revision captures the
+      // prior state (adj-200).
+      let current = revised;
+      if (html !== undefined) {
+        const withHtml = store.setHtml(id, html);
+        if (withHtml) current = withHtml;
+      }
+
+      // Optional (re-)publish — returns the public URL, reusing the existing token if any.
+      let publicUrl: string | undefined;
+      if (makePublic) {
+        const published = store.publishProposal(id);
+        if (published) {
+          current = published;
+          if (published.shareToken) publicUrl = buildPublicProposalUrl(published.shareToken);
+        }
+      }
+
+      logInfo("revise_proposal", { agentId, proposalId: id, title: current.title, html: html !== undefined, public: makePublic === true });
 
       return {
         content: [{
           type: "text" as const,
-          text: JSON.stringify(revised),
+          text: JSON.stringify(publicUrl ? { ...current, publicUrl } : current),
         }],
       };
     },
