@@ -178,6 +178,52 @@ pattern as DM broadcasts).
 **APNS push payload** on `question:new`: title `[URGENCY] Question from <agentId>`,
 truncated body, `data.screen = "open_questions"` for iOS deep-link.
 
+### Proposal Sharing — Standalone HTML Pages (adj-200)
+
+Proposals are authored as (optionally) rich, self-contained HTML and can be **published**
+to a public, no-API-key link. **One composition pipeline, two delivery paths** — there is a
+single security surface to audit. Spec: `specs/058-proposal-html-pages/`.
+
+**Data model** (migration `035-proposals-public-html.sql`): proposals gain `html` (nullable
+agent-authored body source), `is_public`, `share_token` (UNIQUE, nullable until first
+publish), `published_at`. Markdown `description` stays REQUIRED — it drives list previews,
+search, and confidence scoring; `html` is additive.
+
+**Composition** (`backend/src/services/proposal-html.ts` → `composeProposalDocument`): wraps
+the agent `html` (or, if null, the markdown `description` rendered via markdown-it) in a
+branded, readable **"document" aesthetic** (NOT the CRT-green dashboard theme — these pages
+are shared with outsiders) and assembles a **self-contained** document: CSS inlined, inline
+SVG, `data:` images — zero external resource references, so it renders offline and inside
+iOS `loadHTMLString`. A `<meta http-equiv="Content-Security-Policy">` is embedded for
+defense-in-depth on non-HTTP surfaces.
+
+**Sanitizer** (`backend/src/services/proposal-sanitize.ts` — the load-bearing security
+boundary, served to UNAUTHENTICATED viewers): allows semantic tags, `<style>`, inline
+`<svg>`, and `data:` images; strips `<script>`, `on*` handlers, `javascript:`/external
+URLs, and `<iframe>`/`<object>`/`<embed>`. sanitize-html (htmlparser2) alone is insufficient
+against **mutation-XSS** (e.g. `<svg><style><img onerror>` re-parsing to a live handler in a
+spec-compliant browser), so the output is passed through a **parse5 re-serialize fixpoint**
+and re-sanitized until stable. The XSS-payload + mXSS regression suite gates merge (adj-200.2.3).
+
+**Public route** (`backend/src/routes/public-proposals.ts`): `GET /p/:token` serves the
+composed document with strict CSP and `404`s for unknown / unpublished / private tokens
+(indistinguishable — no existence leak). It is mounted BEFORE `apiKeyAuth` and `/p` is in the
+middleware bypass list. Publish/unpublish: `POST /api/proposals/:id/publish` (generates a
+collision-safe ≥16-char base62 `share_token`, returns the full `publicUrl`) and
+`/unpublish` (revokes; the token is retained so a later re-publish revives the same link).
+The public base URL is derived honoring `X-Forwarded-*` (`backend/src/utils/public-url.ts`)
+so share links are correct behind a tunnel/reverse-proxy.
+
+**Authoring** (`mcp-tools/proposals.ts`): `create_proposal`/`revise_proposal` accept `html`
+and `public`; `publish_proposal`/`unpublish_proposal` return the public URL. Tool
+descriptions document the self-contained contract (inline CSS/SVG, no external resources, no
+scripts).
+
+**Delivery paths**: (1) public link — `GET /p/:token`, shared with anyone; (2) embedded
+in-app reading of PRIVATE proposals — web renders the html in a **sandboxed `<iframe srcdoc>`**
+(no `allow-scripts`), iOS via `WKWebView.loadHTMLString`. Both consume the same composed
+document, so there is no per-surface rendering logic.
+
 ## Key Decisions
 
 1. **MCP for Agent Communication**: Agents connect via MCP SSE and use tools for messaging, status, and beads

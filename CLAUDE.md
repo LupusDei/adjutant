@@ -22,6 +22,13 @@ Adjutant is a standalone multi-agent dashboard backed by beads (issue tracking) 
   blocking tasks/actions (Constitution Rule 5). A triage view (web + iOS) aggregates open
   questions sorted blocking → high → normal → low; answering notifies the asker via DM;
   new blocking/high questions push APNS. See "Question Triage" in `.claude/rules/04-architecture.md`.
+- **Proposal Sharing**: Proposals (adj-200) can carry a self-contained, sanitized HTML body
+  and be **published** to a public, no-API-key link served at `GET /p/:token`. One
+  composition pipeline (`proposal-html.ts` → sanitize via a parse5 mXSS fixpoint →
+  self-contained doc) feeds three consumers: the public share link, a sandboxed web
+  `<iframe srcdoc>` viewer, and iOS `WKWebView.loadHTMLString`. Markdown `description` stays
+  the required summary; HTML is additive. See "Proposal Sharing" in
+  `.claude/rules/04-architecture.md` and `specs/058-proposal-html-pages/`.
 - **Dashboard**: Retro terminal themed web UI showing agents, beads, chat, and system state
 
 ### Conversation Model (chat — adj-164)
