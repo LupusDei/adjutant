@@ -13,14 +13,25 @@
  *            `<iframe>`/`<object>`/`<embed>`, external resource URLs (external
  *            `<img src>`, external CSS `url()` / `@import`), and CSS `expression()`.
  *
- * Two layers:
+ * Layers:
  *   1. sanitize-html with an explicit allowlist (tags / attributes / URL schemes).
- *   2. A CSS pass that neutralizes external/script resource references that live
+ *   2. A mutation-XSS (mXSS) fixpoint pass: sanitize-html parses with htmlparser2,
+ *      which keeps some constructs (e.g. an `<img>` inside `<svg><style>…`) as raw
+ *      text — but a SPEC-COMPLIANT browser parser (parse5/Chrome/WebKit) re-parses
+ *      that raw text into LIVE elements with LIVE event handlers (classic mXSS). We
+ *      defend the class by re-serializing the sanitized output through parse5 — the
+ *      same algorithm the browser uses — and re-running the allowlist to a fixpoint,
+ *      so anything the browser would resurrect is itself sanitized. The public /p
+ *      route adds CSP on top, but the composed document is ALSO rendered on surfaces
+ *      with NO CSP (iOS WKWebView loadHTMLString, non-CSP embeds), so the sanitizer
+ *      must stand alone here. (adj-200.2.3.1, NFR-001.)
+ *   3. A CSS pass that neutralizes external/script resource references that live
  *      inside inline `style` attributes and `<style>` blocks (sanitize-html does not
  *      parse CSS bodies). This enforces the "self-contained, no external fetch"
- *      contract (NFR-002) on top of the script-execution defenses in layer 1.
+ *      contract (NFR-002) on top of the script-execution defenses above.
  */
 
+import { parseFragment, serialize } from "parse5";
 import sanitizeHtml from "sanitize-html";
 
 // --- Allowlists -------------------------------------------------------------
@@ -130,6 +141,39 @@ function neutralizeCss(html: string): string {
   return out;
 }
 
+// --- Layer 2: mutation-XSS fixpoint -----------------------------------------
+
+// Re-serializing through parse5 + re-sanitizing converges fast (each pass exposes one
+// layer of parser-confusion). A handful of passes is far more than any real payload
+// needs; the cap is a safety bound so a pathological input can never loop forever.
+const MAX_REPARSE_PASSES = 4;
+
+/**
+ * Re-parse an HTML fragment with parse5 (the spec-compliant, browser-equivalent
+ * parser) and re-serialize it. Constructs that sanitize-html's htmlparser2 left as
+ * raw text but a browser would promote to live nodes (mXSS) surface as real markup
+ * here, where the next sanitize pass can strip them.
+ */
+function reserializeWithSpecParser(html: string): string {
+  return serialize(parseFragment(html));
+}
+
+/**
+ * Sanitize, then repeatedly (re-serialize through the spec parser → re-sanitize) until
+ * the output is stable under a browser-equivalent re-parse. The fixpoint guarantees the
+ * served markup contains no element a compliant parser would mutate into a live
+ * script/event-handler node — closing the mXSS class (adj-200.2.3.1).
+ */
+function sanitizeToFixpoint(html: string): string {
+  let current = sanitizeHtml(html, SANITIZE_OPTIONS);
+  for (let pass = 0; pass < MAX_REPARSE_PASSES; pass++) {
+    const next = sanitizeHtml(reserializeWithSpecParser(current), SANITIZE_OPTIONS);
+    if (next === current) return current; // stable under spec re-parse — done
+    current = next;
+  }
+  return current;
+}
+
 /**
  * Sanitize an untrusted proposal HTML fragment into safe, self-contained HTML.
  * Always returns a string (never throws); an unsafe input that reduces to nothing
@@ -137,6 +181,5 @@ function neutralizeCss(html: string): string {
  */
 export function sanitizeProposalHtml(html: string): string {
   if (!html) return "";
-  const stage1 = sanitizeHtml(html, SANITIZE_OPTIONS);
-  return neutralizeCss(stage1);
+  return neutralizeCss(sanitizeToFixpoint(html));
 }
