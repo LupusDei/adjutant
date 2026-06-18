@@ -866,4 +866,195 @@ describe("proposal-store", () => {
       expect(fetched!.publishedAt).toBe("2026-06-18T00:00:00Z");
     });
   });
+
+  // adj-200.2.2 — sharing methods + collision-safe token generation
+  describe("generateShareToken", () => {
+    it("should return an unguessable base62 string of at least 16 chars", async () => {
+      const { generateShareToken } = await import("../../src/services/proposal-store.js");
+      const token = generateShareToken();
+      expect(token).toMatch(/^[0-9A-Za-z]+$/);
+      expect(token.length).toBeGreaterThanOrEqual(16);
+    });
+
+    it("should produce distinct tokens across many calls", async () => {
+      const { generateShareToken } = await import("../../src/services/proposal-store.js");
+      const tokens = new Set<string>();
+      for (let i = 0; i < 500; i++) {
+        tokens.add(generateShareToken());
+      }
+      expect(tokens.size).toBe(500);
+    });
+  });
+
+  describe("setHtml", () => {
+    it("should store the html body and return the updated proposal", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+      const p = store.insertProposal({
+        author: "agent",
+        title: "Has html",
+        description: "markdown still required",
+        type: "engineering",
+        project: "adjutant",
+      });
+
+      const updated = store.setHtml(p.id, "<section><h1>Rich</h1></section>");
+      expect(updated).not.toBeNull();
+      expect(updated!.html).toBe("<section><h1>Rich</h1></section>");
+      expect(store.getProposal(p.id)!.html).toBe("<section><h1>Rich</h1></section>");
+    });
+
+    it("should return null for a non-existent proposal", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+      expect(store.setHtml("does-not-exist", "<p>x</p>")).toBeNull();
+    });
+  });
+
+  describe("publishProposal", () => {
+    it("should generate a token, set is_public and published_at", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+      const p = store.insertProposal({
+        author: "agent",
+        title: "Publish me",
+        description: "desc",
+        type: "product",
+        project: "adjutant",
+      });
+
+      const published = store.publishProposal(p.id);
+      expect(published).not.toBeNull();
+      expect(published!.isPublic).toBe(true);
+      expect(published!.shareToken).toMatch(/^[0-9A-Za-z]{16,}$/);
+      expect(published!.publishedAt).toBeTruthy();
+    });
+
+    it("should reuse the same token when re-publishing after unpublish (idempotent link)", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+      const p = store.insertProposal({
+        author: "agent",
+        title: "Toggle",
+        description: "desc",
+        type: "product",
+        project: "adjutant",
+      });
+
+      const first = store.publishProposal(p.id);
+      const token = first!.shareToken;
+      store.unpublishProposal(p.id);
+      const second = store.publishProposal(p.id);
+
+      expect(second!.shareToken).toBe(token);
+      expect(second!.isPublic).toBe(true);
+    });
+
+    it("should regenerate the token on a UNIQUE collision", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+
+      // Pre-occupy a token via a store whose generator emits a fixed value.
+      const occupier = createProposalStore(db, { generateToken: () => "COLLIDINGTOKEN0000001" });
+      const a = occupier.insertProposal({
+        author: "agent",
+        title: "A",
+        description: "desc",
+        type: "product",
+        project: "adjutant",
+      });
+      occupier.publishProposal(a.id);
+
+      // Second store: emit the colliding token first, then a unique one.
+      let calls = 0;
+      const store = createProposalStore(db, {
+        generateToken: () => (calls++ === 0 ? "COLLIDINGTOKEN0000001" : "UNIQUETOKEN000000002"),
+      });
+      const b = store.insertProposal({
+        author: "agent",
+        title: "B",
+        description: "desc",
+        type: "product",
+        project: "adjutant",
+      });
+      const published = store.publishProposal(b.id);
+
+      expect(published!.shareToken).toBe("UNIQUETOKEN000000002");
+      expect(calls).toBe(2); // regenerated after the first collision
+    });
+
+    it("should return null for a non-existent proposal", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+      expect(store.publishProposal("nope")).toBeNull();
+    });
+  });
+
+  describe("unpublishProposal", () => {
+    it("should set is_public to false but keep the token so the link can be revived", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+      const p = store.insertProposal({
+        author: "agent",
+        title: "Unpub",
+        description: "desc",
+        type: "product",
+        project: "adjutant",
+      });
+      const published = store.publishProposal(p.id);
+      const token = published!.shareToken;
+
+      const unpublished = store.unpublishProposal(p.id);
+      expect(unpublished).not.toBeNull();
+      expect(unpublished!.isPublic).toBe(false);
+      expect(unpublished!.shareToken).toBe(token); // token retained
+    });
+
+    it("should return null for a non-existent proposal", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+      expect(store.unpublishProposal("nope")).toBeNull();
+    });
+  });
+
+  describe("getProposalByToken", () => {
+    it("should return the proposal only when it is public", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+      const p = store.insertProposal({
+        author: "agent",
+        title: "Public lookup",
+        description: "desc",
+        type: "product",
+        project: "adjutant",
+      });
+      const published = store.publishProposal(p.id);
+      const token = published!.shareToken!;
+
+      const found = store.getProposalByToken(token);
+      expect(found).not.toBeNull();
+      expect(found!.id).toBe(p.id);
+    });
+
+    it("should return null for a token whose proposal has been unpublished", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+      const p = store.insertProposal({
+        author: "agent",
+        title: "Revoked",
+        description: "desc",
+        type: "product",
+        project: "adjutant",
+      });
+      const token = store.publishProposal(p.id)!.shareToken!;
+      store.unpublishProposal(p.id);
+
+      expect(store.getProposalByToken(token)).toBeNull();
+    });
+
+    it("should return null for an unknown token", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+      expect(store.getProposalByToken("totally-unknown-token-xyz")).toBeNull();
+    });
+  });
 });
