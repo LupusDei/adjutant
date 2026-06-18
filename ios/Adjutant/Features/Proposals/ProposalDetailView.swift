@@ -29,6 +29,7 @@ struct ProposalDetailView: View {
                         confidenceCard(proposal)
                     }
                     descriptionCard(proposal)
+                    ProposalSharingCard(proposal: proposal)
                     commentsSection
                     revisionsSection
                     actionsCard(proposal)
@@ -560,6 +561,106 @@ struct ProposalDetailView: View {
             return CRTTheme.State.error
         }
     }
+}
+
+// MARK: - Sharing Card (adj-200, Path D / US4)
+
+/// "READ AS PAGE" + publish toggle + share-link controls for a proposal.
+///
+/// Owns an AdjutantKit ``ProposalSharingViewModel`` (the unit-tested publish/share
+/// logic). Instantiated only once the parent has a loaded proposal, so the
+/// `@StateObject` initial value always has a real proposal.
+private struct ProposalSharingCard: View {
+    @Environment(\.crtTheme) private var theme
+    @EnvironmentObject private var coordinator: AppCoordinator
+    @StateObject private var sharing: ProposalSharingViewModel
+    @State private var showShareSheet = false
+
+    private let proposalId: String
+
+    init(proposal: Proposal) {
+        self.proposalId = proposal.id
+        _sharing = StateObject(wrappedValue: ProposalSharingViewModel(
+            proposal: proposal,
+            apiClient: AppState.shared.apiClient,
+            serverBaseURL: { ServerProfileStore.shared.active?.baseURL }
+        ))
+    }
+
+    var body: some View {
+        CRTCard(header: "SHARE") {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+                visibilityRow
+
+                HStack(spacing: CRTTheme.Spacing.md) {
+                    CRTButton("READ AS PAGE", variant: .secondary, size: .medium) {
+                        coordinator.navigate(to: .proposalWebView(id: proposalId))
+                    }
+
+                    CRTButton(
+                        sharing.isPublished ? "UNPUBLISH" : "PUBLISH",
+                        variant: sharing.isPublished ? .danger : .primary,
+                        size: .medium,
+                        isLoading: sharing.isWorking
+                    ) {
+                        Task<Void, Never> { await sharing.togglePublished() }
+                    }
+                    .disabled(sharing.isWorking)
+
+                    Spacer()
+                }
+
+                if let url = sharing.shareURL {
+                    CRTButton("SHARE LINK", variant: .secondary, size: .small) {
+                        showShareSheet = true
+                    }
+                    CRTText(url.absoluteString, style: .caption, glowIntensity: .none)
+                        .foregroundColor(theme.dim)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+
+                if let error = sharing.errorMessage {
+                    CRTText(error, style: .caption, glowIntensity: .none)
+                        .foregroundColor(CRTTheme.State.error)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let url = sharing.shareURL {
+                ShareSheet(items: [url])
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var visibilityRow: some View {
+        let isPublic = sharing.isPublished
+        let color = isPublic ? CRTTheme.State.success : theme.dim
+        HStack(spacing: CRTTheme.Spacing.xs) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+            CRTText(isPublic ? "PUBLIC" : "PRIVATE", style: .caption, glowIntensity: .subtle)
+                .foregroundColor(color)
+            Spacer()
+        }
+    }
+}
+
+// MARK: - Share Sheet
+
+/// Thin `UIActivityViewController` wrapper for sharing the public proposal URL.
+private struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - Preview

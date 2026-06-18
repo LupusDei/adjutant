@@ -134,6 +134,8 @@ private struct TabContent: View {
             BeadDetailView(beadId: id)
         case .proposalDetail(let id):
             ProposalDetailView(proposalId: id)
+        case .proposalWebView(let id):
+            ProposalPageView(proposalId: id)
         case .projectDetail(let project):
             SwarmProjectDetailView(project: project)
         case .themeSettings, .voiceSettings:

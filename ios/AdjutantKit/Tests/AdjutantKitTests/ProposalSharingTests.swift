@@ -264,6 +264,121 @@ final class ProposalSharingTests: XCTestCase {
         XCTAssertEqual(url?.absoluteString, "https://api.example.com/p/tok")
     }
 
+    // MARK: - ProposalSharingViewModel (adj-200.5.3)
+
+    private func makeProposal(
+        id: String = "p-001",
+        isPublic: Bool? = nil,
+        shareToken: String? = nil
+    ) -> Proposal {
+        Proposal(
+            id: id,
+            author: "raynor",
+            title: "Shareable",
+            description: "Body",
+            type: .engineering,
+            status: .pending,
+            createdAt: "2026-06-18 10:00:00",
+            updatedAt: "2026-06-18 10:00:00",
+            html: "<p>x</p>",
+            isPublic: isPublic,
+            shareToken: shareToken,
+            publishedAt: nil
+        )
+    }
+
+    @MainActor
+    func testSharingViewModelInitialUnpublishedHasNoShareURL() {
+        let vm = ProposalSharingViewModel(
+            proposal: makeProposal(),
+            apiClient: client,
+            serverBaseURL: { "https://host.example.com/api" }
+        )
+        XCTAssertFalse(vm.isPublished)
+        XCTAssertNil(vm.shareURL, "Unpublished proposal must not expose a share URL")
+    }
+
+    @MainActor
+    func testSharingViewModelPublishTogglesStateAndBuildsShareURL() async {
+        MockURLProtocol.mockHandler = MockURLProtocol.mockResponse(json: [
+            "success": true,
+            "data": [
+                "proposal": Self.publishedProposalDict(id: "p-001", token: "tok0123456789abcd"),
+                "publicUrl": "https://host.example.com/p/tok0123456789abcd"
+            ],
+            "timestamp": "2026-06-18T10:00:00.000Z"
+        ])
+
+        let vm = ProposalSharingViewModel(
+            proposal: makeProposal(),
+            apiClient: client,
+            serverBaseURL: { "https://host.example.com/api" }
+        )
+
+        await vm.publish()
+
+        XCTAssertTrue(vm.isPublished, "publish() should flip isPublished to true")
+        XCTAssertNil(vm.errorMessage)
+        XCTAssertFalse(vm.isWorking)
+        // share URL is built from the ACTIVE server base (strip /api → /p/{token})
+        XCTAssertEqual(vm.shareURL?.absoluteString, "https://host.example.com/p/tok0123456789abcd")
+    }
+
+    @MainActor
+    func testSharingViewModelUnpublishClearsShareURL() async {
+        MockURLProtocol.mockHandler = MockURLProtocol.mockResponse(json: [
+            "success": true,
+            "data": [
+                "proposal": Self.unpublishedProposalDict(id: "p-001", token: "tok0123456789abcd")
+            ],
+            "timestamp": "2026-06-18T10:00:00.000Z"
+        ])
+
+        let vm = ProposalSharingViewModel(
+            proposal: makeProposal(isPublic: true, shareToken: "tok0123456789abcd"),
+            apiClient: client,
+            serverBaseURL: { "https://host.example.com/api" }
+        )
+        XCTAssertTrue(vm.isPublished)
+        XCTAssertEqual(vm.shareURL?.absoluteString, "https://host.example.com/p/tok0123456789abcd")
+
+        await vm.unpublish()
+
+        XCTAssertFalse(vm.isPublished, "unpublish() should flip isPublished to false")
+        XCTAssertNil(vm.shareURL, "Unpublished proposal must not expose a share URL")
+        XCTAssertNil(vm.errorMessage)
+    }
+
+    @MainActor
+    func testSharingViewModelPublishErrorSetsMessageAndKeepsState() async {
+        MockURLProtocol.mockHandler = MockURLProtocol.mockError(
+            statusCode: 404, code: "NOT_FOUND", message: "Proposal not found"
+        )
+
+        let vm = ProposalSharingViewModel(
+            proposal: makeProposal(),
+            apiClient: client,
+            serverBaseURL: { "https://host.example.com/api" }
+        )
+
+        await vm.publish()
+
+        XCTAssertFalse(vm.isPublished, "Failed publish must not flip published state")
+        XCTAssertNotNil(vm.errorMessage)
+        XCTAssertFalse(vm.isWorking)
+    }
+
+    @MainActor
+    func testSharingViewModelShareURLNilWhenNoActiveServer() {
+        let vm = ProposalSharingViewModel(
+            proposal: makeProposal(isPublic: true, shareToken: "tok0123456789abcd"),
+            apiClient: client,
+            serverBaseURL: { nil }
+        )
+        XCTAssertTrue(vm.isPublished)
+        XCTAssertNil(vm.shareURL, "No active server → no share URL")
+    }
+
     // MARK: - Fixtures (camelCase, matching backend rowToProposal)
 
     private static func publishedProposalDict(id: String, token: String) -> [String: Any] {

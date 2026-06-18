@@ -46,6 +46,8 @@ enum AppRoute: Hashable {
     case beadDetail(id: String)
     case epicDetail(id: String)
     case proposalDetail(id: String)
+    // Read-as-page in-app browser for a proposal's HTML (adj-200, Path D / US4)
+    case proposalWebView(id: String)
 
     // Project routes
     case projectDetail(project: Project)
