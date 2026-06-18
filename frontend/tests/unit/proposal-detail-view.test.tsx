@@ -141,6 +141,13 @@ describe("ProposalDetailView sharing controls (adj-200.4.3)", () => {
     expect(openLink.getAttribute("target")).toBe("_blank");
   });
 
+  it("offers a FULL PAGE link to the authed standalone route for any proposal", async () => {
+    renderView();
+    const fullPage = await screen.findByRole("link", { name: /full page/i });
+    expect(fullPage.getAttribute("href")).toContain("#proposal/p1");
+    expect(fullPage.getAttribute("target")).toBe("_blank");
+  });
+
   it("does not show COPY LINK / OPEN IN NEW TAB for a private proposal", async () => {
     renderView();
     await screen.findByText(/^PRIVATE$/);

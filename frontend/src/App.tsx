@@ -12,6 +12,7 @@ import { ProjectProvider } from "./contexts/ProjectContext";
 import { CommunicationProvider } from "./contexts/CommunicationContext";
 import { DashboardView } from "./components/dashboard/OverviewDashboard";
 import { ProposalsView } from "./components/proposals/ProposalsView";
+import { ProposalPage } from "./components/proposals/ProposalPage";
 import { PersonasView } from "./components/personas/PersonasView";
 import { TimelineView } from "./components/timeline/TimelineView";
 import { EpicGraphPage } from "./components/beads/EpicGraphPage";
@@ -211,13 +212,23 @@ function AppContent() {
 
 /**
  * Parse hash route for standalone pages.
- * Supports: #graph/<epicId> — full-page dependency graph for an epic.
+ * Supports:
+ *   #graph/<epicId>     — full-page dependency graph for an epic.
+ *   #proposal/<id>      — full-page standalone proposal reader (adj-200).
  */
-function parseHashRoute(): { type: 'graph'; epicId: string } | null {
+export type HashRoute =
+  | { type: 'graph'; epicId: string }
+  | { type: 'proposal'; proposalId: string };
+
+export function parseHashRoute(): HashRoute | null {
   const hash = window.location.hash;
   const graphMatch = /^#graph\/(.+)$/.exec(hash);
   if (graphMatch?.[1]) {
     return { type: 'graph', epicId: decodeURIComponent(graphMatch[1]) };
+  }
+  const proposalMatch = /^#proposal\/(.+)$/.exec(hash);
+  if (proposalMatch?.[1]) {
+    return { type: 'proposal', proposalId: decodeURIComponent(proposalMatch[1]) };
   }
   return null;
 }
@@ -230,6 +241,15 @@ function App() {
     return (
       <ProjectProvider>
         <EpicGraphPage epicId={hashRoute.epicId} />
+      </ProjectProvider>
+    );
+  }
+
+  // Standalone proposal page — full-page reader, no dashboard chrome
+  if (hashRoute?.type === 'proposal') {
+    return (
+      <ProjectProvider>
+        <ProposalPage proposalId={hashRoute.proposalId} />
       </ProjectProvider>
     );
   }
