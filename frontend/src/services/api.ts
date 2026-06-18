@@ -78,6 +78,22 @@ export function clearApiKey(): void {
 }
 
 /**
+ * Build the no-API-key public URL for a published proposal from its share token.
+ *
+ * The public page (`GET /p/:token`) is served by the backend at the API host
+ * WITHOUT the `/api` prefix (the frozen Path A contract). When the API base is
+ * relative (`/api`) the page is same-origin, so we use the current origin.
+ * When it points at a different host we strip the trailing `/api`.
+ */
+export function publicProposalUrl(shareToken: string): string {
+  const origin =
+    API_BASE_URL === '/api'
+      ? window.location.origin
+      : API_BASE_URL.replace(/\/api\/?$/, '');
+  return `${origin}/p/${shareToken}`;
+}
+
+/**
  * Check if an API key is configured.
  */
 export function hasApiKey(): boolean {
