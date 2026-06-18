@@ -375,4 +375,137 @@ describe("MCP proposal authoring contract (adj-200 Path B)", () => {
       expect(result.success).toBe(false);
     });
   });
+
+  // ===========================================================================
+  // adj-200.3.2 — publish_proposal MCP tool
+  // ===========================================================================
+  describe("publish_proposal (adj-200.3.2)", () => {
+    it("should publish, toggle visibility, and return the public URL", async () => {
+      const store = createMockStore();
+      process.env["ADJUTANT_PUBLIC_URL"] = "https://share.example.com";
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "publish_proposal");
+      const result = await handler({ id: "test-uuid" }, { sessionId: TEST_SESSION_ID });
+
+      expect(store.publishProposal).toHaveBeenCalledWith("test-uuid");
+      const parsed = parseResult(result);
+      expect(parsed).not.toHaveProperty("error");
+      expect(parsed["isPublic"]).toBe(true);
+      expect(parsed["shareToken"]).toBe("TOKENabc123");
+      expect(parsed["publicUrl"]).toBe("https://share.example.com/p/TOKENabc123");
+    });
+
+    it("should return a validation error for an unknown id", async () => {
+      const store = createMockStore();
+      (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue(null);
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "publish_proposal");
+      const result = await handler({ id: "missing" }, { sessionId: TEST_SESSION_ID });
+
+      const parsed = parseResult(result);
+      expect(parsed).toHaveProperty("error");
+      expect(store.publishProposal).not.toHaveBeenCalled();
+    });
+
+    it("should reject when the proposal belongs to a different project", async () => {
+      const store = createMockStore();
+      (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue({
+        ...BASE_PROPOSAL,
+        project: "secret-project",
+      });
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "publish_proposal");
+      const result = await handler({ id: "test-uuid" }, { sessionId: TEST_SESSION_ID });
+
+      const parsed = parseResult(result);
+      expect(parsed).toHaveProperty("error");
+      expect((parsed as { error: string }).error).toContain("secret-project");
+      expect(store.publishProposal).not.toHaveBeenCalled();
+    });
+
+    it("should honor an explicit cross-project projectId override (adj-146)", async () => {
+      const OTHER = {
+        projectId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        projectName: "bloomfolio",
+        projectPath: "/p/bloom",
+        beadsDir: "/p/bloom/.beads",
+      };
+      const store = createMockStore();
+      (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue({ ...BASE_PROPOSAL, project: OTHER.projectId });
+      (store.publishProposal as ReturnType<typeof vi.fn>).mockReturnValue({
+        ...BASE_PROPOSAL,
+        project: OTHER.projectId,
+        isPublic: true,
+        shareToken: "TOKENabc123",
+      });
+      mockGetAgentBySession.mockReturnValue("duke");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+      mockResolveToolProjectContext.mockImplementation((explicit: string | undefined, sessionId: string | undefined) => {
+        if (explicit === OTHER.projectId) return OTHER;
+        if (sessionId) return mockGetProjectContextBySession(sessionId);
+        return undefined;
+      });
+
+      const handler = getToolHandler(store, "publish_proposal");
+      const result = await handler({ id: "test-uuid", projectId: OTHER.projectId }, { sessionId: TEST_SESSION_ID });
+
+      const parsed = parseResult(result);
+      expect(parsed).not.toHaveProperty("error");
+      expect(store.publishProposal).toHaveBeenCalledWith("test-uuid");
+    });
+  });
+
+  // ===========================================================================
+  // adj-200.3.2 — unpublish_proposal MCP tool
+  // ===========================================================================
+  describe("unpublish_proposal (adj-200.3.2)", () => {
+    it("should revoke public access and confirm revocation", async () => {
+      const store = createMockStore();
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "unpublish_proposal");
+      const result = await handler({ id: "test-uuid" }, { sessionId: TEST_SESSION_ID });
+
+      expect(store.unpublishProposal).toHaveBeenCalledWith("test-uuid");
+      const parsed = parseResult(result);
+      expect(parsed).not.toHaveProperty("error");
+      expect(parsed["isPublic"]).toBe(false);
+      expect(parsed["revoked"]).toBe(true);
+    });
+
+    it("should return a validation error for an unknown id", async () => {
+      const store = createMockStore();
+      (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue(null);
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "unpublish_proposal");
+      const result = await handler({ id: "missing" }, { sessionId: TEST_SESSION_ID });
+
+      const parsed = parseResult(result);
+      expect(parsed).toHaveProperty("error");
+      expect(store.unpublishProposal).not.toHaveBeenCalled();
+    });
+
+    it("should reject when the proposal belongs to a different project", async () => {
+      const store = createMockStore();
+      (store.getProposal as ReturnType<typeof vi.fn>).mockReturnValue({ ...BASE_PROPOSAL, project: "secret-project" });
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "unpublish_proposal");
+      const result = await handler({ id: "test-uuid" }, { sessionId: TEST_SESSION_ID });
+
+      const parsed = parseResult(result);
+      expect(parsed).toHaveProperty("error");
+      expect(store.unpublishProposal).not.toHaveBeenCalled();
+    });
+  });
 });

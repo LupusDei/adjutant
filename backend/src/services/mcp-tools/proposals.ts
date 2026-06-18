@@ -443,6 +443,102 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
   );
 
   // ---------------------------------------------------------------------------
+  // publish_proposal (adj-200)
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "publish_proposal",
+    {
+      id: z.string().describe("Proposal UUID to publish"),
+      projectId: z.string().optional().describe("Project UUID for cross-project operations (defaults to session project)"),
+    },
+    async ({ id, projectId }, extra) => {
+      // Resolve + cross-project guard FIRST so an unknown/foreign id never mutates state.
+      const proposal = store.getProposal(id);
+      if (!proposal) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Proposal not found" }) }],
+        };
+      }
+      const accessError = validateProjectAccess(proposal, extra, projectId);
+      if (accessError) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(accessError) }],
+        };
+      }
+
+      const published = store.publishProposal(id);
+      if (!published) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Proposal not found" }) }],
+        };
+      }
+
+      const publicUrl = published.shareToken ? buildPublicProposalUrl(published.shareToken) : undefined;
+      logInfo("publish_proposal", { proposalId: id, shareToken: published.shareToken });
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            id: published.id,
+            isPublic: published.isPublic,
+            shareToken: published.shareToken,
+            publishedAt: published.publishedAt,
+            ...(publicUrl ? { publicUrl } : {}),
+          }),
+        }],
+      };
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // unpublish_proposal (adj-200)
+  // ---------------------------------------------------------------------------
+  server.tool(
+    "unpublish_proposal",
+    {
+      id: z.string().describe("Proposal UUID to unpublish (revoke the public share link)"),
+      projectId: z.string().optional().describe("Project UUID for cross-project operations (defaults to session project)"),
+    },
+    async ({ id, projectId }, extra) => {
+      const proposal = store.getProposal(id);
+      if (!proposal) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Proposal not found" }) }],
+        };
+      }
+      const accessError = validateProjectAccess(proposal, extra, projectId);
+      if (accessError) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(accessError) }],
+        };
+      }
+
+      const unpublished = store.unpublishProposal(id);
+      if (!unpublished) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Proposal not found" }) }],
+        };
+      }
+
+      logInfo("unpublish_proposal", { proposalId: id });
+
+      // The share token is retained so a later re-publish revives the same link, but the
+      // public route now 404s. Confirm the revocation explicitly.
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            id: unpublished.id,
+            isPublic: unpublished.isPublic,
+            revoked: true,
+          }),
+        }],
+      };
+    },
+  );
+
+  // ---------------------------------------------------------------------------
   // list_proposals
   // ---------------------------------------------------------------------------
   server.tool(
