@@ -982,6 +982,47 @@ describe("proposal-store", () => {
       expect(calls).toBe(2); // regenerated after the first collision
     });
 
+    it("should throw after MAX_ATTEMPTS when every generated token collides (adj-200.2.2.1)", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+
+      // Pre-occupy a fixed token.
+      const occupier = createProposalStore(db, { generateToken: () => "ALWAYSCOLLIDES000001" });
+      const a = occupier.insertProposal({
+        author: "agent",
+        title: "A",
+        description: "desc",
+        type: "product",
+        project: "adjutant",
+      });
+      occupier.publishProposal(a.id);
+
+      // Second store ALWAYS emits the same already-occupied token, so every one of the
+      // MAX_ATTEMPTS inserts hits SQLITE_CONSTRAINT_UNIQUE. publishProposal must THROW —
+      // not silently return an unpublished proposal.
+      let calls = 0;
+      const store = createProposalStore(db, {
+        generateToken: () => {
+          calls++;
+          return "ALWAYSCOLLIDES000001";
+        },
+      });
+      const b = store.insertProposal({
+        author: "agent",
+        title: "B",
+        description: "desc",
+        type: "product",
+        project: "adjutant",
+      });
+
+      expect(() => store.publishProposal(b.id)).toThrow(/unique share token/i);
+      expect(calls).toBe(5); // exactly MAX_ATTEMPTS regeneration attempts, all colliding
+
+      // And the collision left the proposal genuinely unpublished (no token leaked).
+      const after = store.getProposal(b.id);
+      expect(after!.isPublic).toBe(false);
+      expect(after!.shareToken).toBeUndefined();
+    });
+
     it("should return null for a non-existent proposal", async () => {
       const { createProposalStore } = await import("../../src/services/proposal-store.js");
       const store = createProposalStore(db);
