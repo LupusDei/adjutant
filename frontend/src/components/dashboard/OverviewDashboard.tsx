@@ -10,6 +10,7 @@ import { statusIndicatorClass, statusLabel } from './agentStatusDisplay';
 import type { AgentOverview, OverviewUnreadSummary } from '../../types/overview';
 import { AutoDevelopToggle } from './AutoDevelopToggle';
 import { AutoDevelopPanel } from './AutoDevelopPanel';
+import { StyleGuideEditor } from './StyleGuideEditor';
 import { EscalationBanner } from './EscalationBanner';
 import { CycleHistory } from './CycleHistory';
 import './DashboardView.css';
@@ -227,6 +228,16 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
         {/* Auto-Develop Panel - shown when enabled */}
         {showAutoDevPanel && autoDevelopStatus && (
           <AutoDevelopPanel status={autoDevelopStatus} />
+        )}
+
+        {/* Style Guide Widget — per-project proposal brand color (adj-201) */}
+        {activeProjectId && (
+          <DashboardWidget
+            title="STYLE GUIDE"
+            className="dashboard-widget-full-width"
+          >
+            <StyleGuideEditor projectId={activeProjectId} />
+          </DashboardWidget>
         )}
 
         {/* Agents Widget (top, full width) */}
