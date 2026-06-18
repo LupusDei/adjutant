@@ -796,4 +796,74 @@ describe("proposal-store", () => {
       expect(fetched!.confidenceSignals).toBeUndefined();
     });
   });
+
+  // adj-200.2.1 — migration 035 (html, is_public, share_token, published_at) + Proposal mapping
+  describe("public-html schema (migration 035)", () => {
+    it("should add html, is_public, share_token, published_at columns to proposals table", () => {
+      const columns = (db.prepare("PRAGMA table_info(proposals)").all() as { name: string }[]).map(
+        (c) => c.name,
+      );
+      expect(columns).toContain("html");
+      expect(columns).toContain("is_public");
+      expect(columns).toContain("share_token");
+      expect(columns).toContain("published_at");
+    });
+
+    it("should enforce a UNIQUE index on share_token", () => {
+      const indexes = db.prepare("PRAGMA index_list(proposals)").all() as {
+        name: string;
+        unique: number;
+      }[];
+      const shareTokenIndex = indexes.find((idx) => {
+        const cols = (db.prepare(`PRAGMA index_info(${idx.name})`).all() as { name: string }[]).map(
+          (c) => c.name,
+        );
+        return cols.includes("share_token");
+      });
+      expect(shareTokenIndex).toBeDefined();
+      expect(shareTokenIndex!.unique).toBe(1);
+    });
+
+    it("should default a new proposal to no html, private, no token, no published_at", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+
+      const proposal = store.insertProposal({
+        author: "agent",
+        title: "Defaults",
+        description: "A fresh proposal has no public-html fields set.",
+        type: "engineering",
+        project: "adjutant",
+      });
+
+      expect(proposal.html).toBeUndefined();
+      expect(proposal.isPublic).toBe(false);
+      expect(proposal.shareToken).toBeUndefined();
+      expect(proposal.publishedAt).toBeUndefined();
+    });
+
+    it("should map populated html/is_public/share_token/published_at columns onto the Proposal", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+
+      const proposal = store.insertProposal({
+        author: "agent",
+        title: "Mapped",
+        description: "This row is mutated directly to exercise rowToProposal mapping.",
+        type: "product",
+        project: "adjutant",
+      });
+
+      db.prepare(
+        "UPDATE proposals SET html = ?, is_public = 1, share_token = ?, published_at = ? WHERE id = ?",
+      ).run("<h1>Hello</h1>", "tokenABC1234567890", "2026-06-18T00:00:00Z", proposal.id);
+
+      const fetched = store.getProposal(proposal.id);
+      expect(fetched).not.toBeNull();
+      expect(fetched!.html).toBe("<h1>Hello</h1>");
+      expect(fetched!.isPublic).toBe(true);
+      expect(fetched!.shareToken).toBe("tokenABC1234567890");
+      expect(fetched!.publishedAt).toBe("2026-06-18T00:00:00Z");
+    });
+  });
 });
