@@ -1,4 +1,3 @@
-export { PersonasView } from './PersonasView';
 export { PersonaEditor } from './PersonaEditor';
 export { PersonaPreview } from './PersonaPreview';
 export { PersonaRosterCard } from './PersonaRosterCard';
