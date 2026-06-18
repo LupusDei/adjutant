@@ -86,6 +86,44 @@ extension APIClient {
         return try await requestWithEnvelope(.patch, path: "/proposals/\(encodedId)", body: request)
     }
 
+    // MARK: - Sharing (adj-200, Path D / US4)
+
+    /// Publishes a proposal to its public `/p/:token` page and returns the updated
+    /// proposal plus the full, no-API-key public URL (derived server-side from the
+    /// request host).
+    ///
+    /// Maps to `POST /api/proposals/:id/publish` → `{ proposal, publicUrl }`.
+    ///
+    /// - Parameter id: The proposal UUID.
+    /// - Returns: A ``PublishProposalResult`` carrying the updated ``Proposal`` and the
+    ///   public URL string.
+    /// - Throws: ``APIClientError`` if the request fails or the proposal is not found.
+    public func publishProposal(id: String) async throws -> PublishProposalResult {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let envelope: PublishProposalResponse = try await requestWithEnvelope(
+            .post,
+            path: "/proposals/\(encodedId)/publish"
+        )
+        return PublishProposalResult(proposal: envelope.proposal, publicUrl: envelope.publicUrl)
+    }
+
+    /// Revokes public access to a proposal. The share token is retained (so a later
+    /// re-publish revives the same link) but `GET /p/:token` will 404 until re-published.
+    ///
+    /// Maps to `POST /api/proposals/:id/unpublish` → `{ proposal }`.
+    ///
+    /// - Parameter id: The proposal UUID.
+    /// - Returns: The updated ``Proposal`` (now with `isPublic == false`).
+    /// - Throws: ``APIClientError`` if the request fails or the proposal is not found.
+    public func unpublishProposal(id: String) async throws -> Proposal {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let envelope: UnpublishProposalResponse = try await requestWithEnvelope(
+            .post,
+            path: "/proposals/\(encodedId)/unpublish"
+        )
+        return envelope.proposal
+    }
+
     // MARK: - Comments
 
     /// Fetches comments for a proposal.
