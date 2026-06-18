@@ -111,34 +111,121 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   },
 };
 
-// --- Layer 2: CSS resource neutralization -----------------------------------
+// --- Layer 3: scoped CSS resource neutralization ----------------------------
 
 const EXTERNAL_URL_PLACEHOLDER = "url()";
 
 /**
- * Neutralize resource references inside CSS text (both inline `style` attributes and
- * `<style>` block bodies appear in the sanitized HTML string, so we operate on the
- * whole document text). Keeps `data:` URIs; strips everything else that would fetch
- * or execute: external `url(...)`, `@import`, and `expression(...)`.
+ * Minimal structural view of the parse5 nodes we walk. parse5's full tree-adapter
+ * types are large and we touch only these fields; the default tree adapter always
+ * produces element nodes with `attrs`/`childNodes` and text nodes with `value`.
+ */
+interface CssWalkNode {
+  nodeName: string;
+  tagName?: string;
+  value?: string; // present on #text nodes
+  attrs?: { name: string; value: string }[];
+  childNodes?: CssWalkNode[];
+}
+
+// SVG presentation attributes whose value can be a CSS `url(...)` reference (paint
+// servers, clip/mask/marker/filter). They fetch exactly like CSS `url()`, so they are
+// neutralized alongside `style` — but, unlike the old whole-document scan, ONLY here.
+const CSS_URL_ATTRS = new Set([
+  "fill", "stroke", "clip-path", "mask", "filter",
+  "marker-start", "marker-mid", "marker-end",
+]);
+
+/**
+ * Decode CSS identifier escapes (CSS Syntax §4): `\<1–6 hex>` (+ one optional trailing
+ * whitespace) → the code point, and `\<char>` → the literal char. A spec-compliant CSS
+ * parser decodes these BEFORE tokenizing, so `\75rl(…)` and `\000075rl(…)` are really
+ * `url(…)` and WOULD fetch. The bespoke regex layer was escape-blind (it matched the
+ * literal ascii `url(`), letting escaped function names smuggle an external reference
+ * past the self-contained guarantee — decode first so we see what the browser sees
+ * (adj-200.2.3.2 / NFR-002).
+ */
+function decodeCssEscapes(css: string): string {
+  return css.replace(
+    /\\([0-9a-fA-F]{1,6})[ \t\n\f\r]?|\\([\s\S])/g,
+    (_match, hex: string | undefined, literal: string | undefined): string => {
+      if (hex !== undefined) {
+        const cp = parseInt(hex, 16);
+        // Null, out-of-range, and surrogate code points decode to U+FFFD per the spec.
+        if (cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) return "�";
+        return String.fromCodePoint(cp);
+      }
+      return literal ?? "";
+    },
+  );
+}
+
+/** A `url(...)` target that fetches NOTHING external: `data:` URIs and in-document `#fragment` refs. */
+function isSelfContainedUrlTarget(target: string): boolean {
+  return /^\s*data:/i.test(target) || /^\s*#/.test(target);
+}
+
+/**
+ * Neutralize external/script resource references inside a single CSS string — a
+ * `<style>` body, a `style="…"` value, or an SVG paint attribute like `fill="url(…)"`.
+ * Escapes are decoded first so escape-obfuscated `url()`/`@import`/`expression()` cannot
+ * slip past (adj-200.2.3.2). If, even after decoding, the value carries no such
+ * construct, the ORIGINAL text is returned untouched so legitimate CSS escapes
+ * (e.g. `content:"\2014"`) are preserved.
+ */
+function neutralizeCssText(css: string): string {
+  const decoded = decodeCssEscapes(css);
+  const hasResourceConstruct =
+    /@import/i.test(decoded) || /\burl\s*\(/i.test(decoded) || /\bexpression\s*\(/i.test(decoded);
+  if (!hasResourceConstruct) return css;
+
+  let out = decoded;
+  // `@import url("https://…")` / `@import "https://…"` — drop unless it targets data:.
+  out = out.replace(/@import\b[^;]*;?/gi, (rule) =>
+    /url\(\s*['"]?data:/i.test(rule) || /['"]data:/i.test(rule) ? rule : "",
+  );
+  // `url(...)` — keep data: and in-document `#fragment` refs; neutralize everything else
+  // (external http(s), protocol-relative, javascript:, etc.).
+  out = out.replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi, (match, _quote, target: string) =>
+    isSelfContainedUrlTarget(target) ? match : EXTERNAL_URL_PLACEHOLDER,
+  );
+  // Legacy IE `expression(...)` script vector.
+  out = out.replace(/expression\s*\([^)]*\)/gi, "");
+  return out;
+}
+
+/** Recursively neutralize CSS only inside `<style>` bodies, `style=""`, and SVG paint attrs. */
+function walkAndNeutralizeCss(node: CssWalkNode): void {
+  const isStyleElement = node.tagName === "style";
+  for (const child of node.childNodes ?? []) {
+    // Neutralize CSS ONLY in an actual `<style>` body — never plain text/`<code>`/`<pre>`,
+    // which is inert HTML text and must survive verbatim (adj-200.2.3.3).
+    if (isStyleElement && child.nodeName === "#text" && typeof child.value === "string") {
+      child.value = neutralizeCssText(child.value);
+    }
+    walkAndNeutralizeCss(child);
+  }
+  for (const attr of node.attrs ?? []) {
+    if (attr.name === "style" || CSS_URL_ATTRS.has(attr.name.toLowerCase())) {
+      attr.value = neutralizeCssText(attr.value);
+    }
+  }
+}
+
+/**
+ * Scope CSS neutralization to ACTUAL CSS contexts only — `<style>` bodies, `style="…"`
+ * attributes, and SVG paint attributes — by walking the parsed tree instead of the raw
+ * document string. The previous whole-string scan rewrote any `url(...)`/`@import`/
+ * `expression(...)` that merely APPEARED in visible prose or `<code>`/`<pre>`, corrupting
+ * proposals that document CSS (adj-200.2.3.3). Input is already mXSS-stable
+ * (sanitizeToFixpoint), so this re-parse + re-serialize introduces no new live nodes.
  */
 function neutralizeCss(html: string): string {
-  let out = html;
-
-  // 1. `@import url("https://…")` or `@import "https://…"` — drop the whole rule.
-  out = out.replace(/@import\b[^;]*;?/gi, (rule) => {
-    return /url\(\s*['"]?data:/i.test(rule) || /['"]data:/i.test(rule) ? rule : "";
-  });
-
-  // 2. `url(...)` — keep data: URIs, neutralize anything else (external http(s),
-  //    protocol-relative, javascript:, etc.).
-  out = out.replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi, (match, _quote, target: string) => {
-    return /^\s*data:/i.test(target) ? match : EXTERNAL_URL_PLACEHOLDER;
-  });
-
-  // 3. Legacy CSS `expression(...)` (old IE script vector) — strip the call.
-  out = out.replace(/expression\s*\([^)]*\)/gi, "");
-
-  return out;
+  const fragment = parseFragment(html);
+  // Safe cast: parse5's default tree adapter yields nodes shaped like CssWalkNode; we
+  // mutate `attrs[].value` / text `value` in place on the very nodes serialize() reads.
+  walkAndNeutralizeCss(fragment as unknown as CssWalkNode);
+  return serialize(fragment);
 }
 
 // --- Layer 2: mutation-XSS fixpoint -----------------------------------------

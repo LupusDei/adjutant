@@ -169,6 +169,74 @@ describe("sanitizeProposalHtml", () => {
     });
   });
 
+  // adj-200.2.3.2 — the CSS neutralizer must decode CSS identifier escapes before
+  // matching, or an escaped `url(` function name smuggles an external fetch past it.
+  describe("CSS-escaped resource references (adj-200.2.3.2)", () => {
+    it("should neutralize a CSS-escaped url() (\\75rl) in an inline style", () => {
+      const out = sanitizeProposalHtml(
+        `<div style="background:\\75rl(https://evil.example.com/x.png)">x</div>`,
+      );
+      expect(out).not.toContain("evil.example.com");
+    });
+
+    it("should neutralize a full-hex CSS-escaped url() (\\000075rl) in an inline style", () => {
+      const out = sanitizeProposalHtml(
+        `<div style="background:\\000075rl(https://evil.example.com/y.png)">x</div>`,
+      );
+      expect(out).not.toContain("evil.example.com");
+    });
+
+    it("should neutralize a CSS-escaped @import inside a <style> block", () => {
+      const out = sanitizeProposalHtml(
+        `<style>\\40 import url(https://evil.example.com/a.css);</style>`,
+      );
+      expect(out).not.toContain("evil.example.com");
+    });
+
+    it("should neutralize an external url() in an SVG fill paint attribute", () => {
+      const out = sanitizeProposalHtml(
+        `<svg><rect fill="url(https://evil.example.com/p.svg#g)" width="4" height="4"/></svg>`,
+      );
+      expect(out).not.toContain("evil.example.com");
+    });
+
+    it("should preserve an in-document #fragment paint reference (self-contained)", () => {
+      const out = sanitizeProposalHtml(
+        `<svg><defs><linearGradient id="g"/></defs><rect fill="url(#g)" width="4" height="4"/></svg>`,
+      );
+      expect(out).toContain("url(#g)");
+    });
+  });
+
+  // adj-200.2.3.3 — CSS neutralization must be scoped to real CSS contexts; literal
+  // url()/@import/expression appearing in VISIBLE prose or code must survive verbatim.
+  describe("CSS neutralization is scoped to CSS contexts (adj-200.2.3.3)", () => {
+    it("should preserve a literal url(...) inside a <code> block (documentation)", () => {
+      const out = sanitizeProposalHtml(
+        `<pre><code>background: url(https://example.com/a.png)</code></pre>`,
+      );
+      expect(out).toContain("https://example.com/a.png");
+    });
+
+    it("should preserve literal @import and expression() text inside <code>", () => {
+      const out = sanitizeProposalHtml(
+        `<p>Avoid <code>@import url(https://cdn.example.com/x.css)</code> and ` +
+          `<code>width: expression(alert(1))</code> in stylesheets.</p>`,
+      );
+      expect(out).toContain("@import url(https://cdn.example.com/x.css)");
+      expect(out).toContain("expression(alert(1))");
+    });
+
+    it("should STILL neutralize the same constructs when they are real CSS", () => {
+      const out = sanitizeProposalHtml(
+        `<style>@import url(https://cdn.example.com/x.css);</style>` +
+          `<div style="width:expression(alert(1))">y</div>`,
+      );
+      expect(out).not.toContain("cdn.example.com");
+      expect(out.toLowerCase()).not.toContain("expression(");
+    });
+  });
+
   describe("edge cases", () => {
     it("should return an empty string for empty input", () => {
       expect(sanitizeProposalHtml("")).toBe("");
