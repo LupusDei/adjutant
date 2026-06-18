@@ -216,6 +216,54 @@ final class ProposalSharingTests: XCTestCase {
         }
     }
 
+    // MARK: - publicProposalURL helper (adj-200.5.2)
+
+    /// The active server base ends in `/api`; the public origin strips it and appends `/p/{token}`.
+    func testPublicProposalURLStripsApiSuffix() {
+        let url = publicProposalURL(base: "https://host.example.com/api", token: "tok123")
+        XCTAssertEqual(url?.absoluteString, "https://host.example.com/p/tok123")
+    }
+
+    /// A trailing slash after `/api` must be tolerated.
+    func testPublicProposalURLStripsApiWithTrailingSlash() {
+        let url = publicProposalURL(base: "https://host.example.com/api/", token: "tok123")
+        XCTAssertEqual(url?.absoluteString, "https://host.example.com/p/tok123")
+    }
+
+    /// A base WITHOUT a trailing `/api` still produces a valid public URL.
+    func testPublicProposalURLWithoutApiSuffix() {
+        let url = publicProposalURL(base: "https://host.example.com", token: "tok123")
+        XCTAssertEqual(url?.absoluteString, "https://host.example.com/p/tok123")
+    }
+
+    /// Bare trailing slash (no /api) is tolerated.
+    func testPublicProposalURLWithTrailingSlashNoApi() {
+        let url = publicProposalURL(base: "https://host.example.com/", token: "tok123")
+        XCTAssertEqual(url?.absoluteString, "https://host.example.com/p/tok123")
+    }
+
+    /// Port + path origins survive the transform.
+    func testPublicProposalURLWithPort() {
+        let url = publicProposalURL(base: "http://localhost:4201/api", token: "abc")
+        XCTAssertEqual(url?.absoluteString, "http://localhost:4201/p/abc")
+    }
+
+    /// An empty token yields nil (nothing to share).
+    func testPublicProposalURLEmptyTokenReturnsNil() {
+        XCTAssertNil(publicProposalURL(base: "https://host.example.com/api", token: ""))
+    }
+
+    /// An empty base yields nil.
+    func testPublicProposalURLEmptyBaseReturnsNil() {
+        XCTAssertNil(publicProposalURL(base: "", token: "tok"))
+    }
+
+    /// Must NOT strip an `api` that is only a substring of the host (not a trailing path segment).
+    func testPublicProposalURLDoesNotStripApiInsideHost() {
+        let url = publicProposalURL(base: "https://api.example.com/api", token: "tok")
+        XCTAssertEqual(url?.absoluteString, "https://api.example.com/p/tok")
+    }
+
     // MARK: - Fixtures (camelCase, matching backend rowToProposal)
 
     private static func publishedProposalDict(id: String, token: String) -> [String: Any] {
