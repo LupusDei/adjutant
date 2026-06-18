@@ -47,6 +47,8 @@ import {
   deleteProject,
   discoverLocalProjects,
   checkProjectHealth,
+  getProjectStyleGuide,
+  setProjectStyleGuide,
 } from "../../src/services/projects-service.js";
 import type { Project } from "../../src/services/projects-service.js";
 
@@ -60,7 +62,9 @@ function createTestDb(): Database.Database {
       git_remote TEXT,
       mode TEXT NOT NULL DEFAULT 'swarm',
       created_at TEXT NOT NULL,
-      active INTEGER NOT NULL DEFAULT 0
+      active INTEGER NOT NULL DEFAULT 0,
+      brand_color_primary TEXT,
+      brand_color_secondary TEXT
     )
   `);
   return db;
@@ -615,6 +619,139 @@ describe("projects-service", () => {
       const result = checkProjectHealth("u1");
       expect(result.success).toBe(true);
       expect(result.data!.hasBeads).toBe(true);
+    });
+  });
+
+  // ===========================================================================
+  // getProjectStyleGuide (adj-201.1.2)
+  // ===========================================================================
+
+  describe("getProjectStyleGuide", () => {
+    it("should return the stored brand colors when a guide is set", () => {
+      insertProject(testDb, createMockProject({ id: "sg1", name: "branded", path: "/path/sg1" }));
+      testDb
+        .prepare("UPDATE projects SET brand_color_primary = ?, brand_color_secondary = ? WHERE id = ?")
+        .run("#00ff00", "#0a0a0a", "sg1");
+
+      const result = getProjectStyleGuide("sg1");
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual({ brandColorPrimary: "#00ff00", brandColorSecondary: "#0a0a0a" });
+    });
+
+    it("should return NOT_FOUND for an unknown project", () => {
+      vi.mocked(existsSync).mockReturnValue(false);
+      const result = getProjectStyleGuide("does-not-exist");
+      expect(result.success).toBe(false);
+      expect(result.error!.code).toBe("NOT_FOUND");
+    });
+
+    it("should return null colors when no guide is set (valid unset state)", () => {
+      insertProject(testDb, createMockProject({ id: "sg-unset", name: "plain", path: "/path/sg-unset" }));
+      const result = getProjectStyleGuide("sg-unset");
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual({ brandColorPrimary: null, brandColorSecondary: null });
+    });
+
+    it("should return primary set with null secondary", () => {
+      insertProject(testDb, createMockProject({ id: "sg-pri", name: "pri", path: "/path/sg-pri" }));
+      testDb.prepare("UPDATE projects SET brand_color_primary = ? WHERE id = ?").run("#fff", "sg-pri");
+      const result = getProjectStyleGuide("sg-pri");
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual({ brandColorPrimary: "#fff", brandColorSecondary: null });
+    });
+  });
+
+  // ===========================================================================
+  // setProjectStyleGuide (adj-201.1.2)
+  // ===========================================================================
+
+  describe("setProjectStyleGuide", () => {
+    it("should persist primary and secondary brand colors (happy path)", () => {
+      insertProject(testDb, createMockProject({ id: "set1", name: "set1", path: "/path/set1" }));
+      const result = setProjectStyleGuide("set1", { primary: "#00FF00", secondary: "#0a0a0a" });
+      expect(result.success).toBe(true);
+
+      const guide = getProjectStyleGuide("set1");
+      expect(guide.data).toEqual({ brandColorPrimary: "#00FF00", brandColorSecondary: "#0a0a0a" });
+    });
+
+    it("should persist primary with null secondary when secondary omitted", () => {
+      insertProject(testDb, createMockProject({ id: "set-pri", name: "set-pri", path: "/path/set-pri" }));
+      const result = setProjectStyleGuide("set-pri", { primary: "#abc" });
+      expect(result.success).toBe(true);
+
+      const guide = getProjectStyleGuide("set-pri");
+      expect(guide.data).toEqual({ brandColorPrimary: "#abc", brandColorSecondary: null });
+    });
+
+    it("should accept both #RGB and #RRGGBB hex forms", () => {
+      insertProject(testDb, createMockProject({ id: "set-hex", name: "set-hex", path: "/path/set-hex" }));
+      const short = setProjectStyleGuide("set-hex", { primary: "#0F0", secondary: "#A1B2C3" });
+      expect(short.success).toBe(true);
+      expect(getProjectStyleGuide("set-hex").data).toEqual({
+        brandColorPrimary: "#0F0",
+        brandColorSecondary: "#A1B2C3",
+      });
+    });
+
+    it("should reject invalid primary hex with VALIDATION_ERROR", () => {
+      insertProject(testDb, createMockProject({ id: "set-bad", name: "set-bad", path: "/path/set-bad" }));
+      const result = setProjectStyleGuide("set-bad", { primary: "green" });
+      expect(result.success).toBe(false);
+      expect(result.error!.code).toBe("VALIDATION_ERROR");
+    });
+
+    it("should reject invalid secondary hex with VALIDATION_ERROR", () => {
+      insertProject(testDb, createMockProject({ id: "set-bad2", name: "set-bad2", path: "/path/set-bad2" }));
+      const result = setProjectStyleGuide("set-bad2", { primary: "#00ff00", secondary: "#xyz" });
+      expect(result.success).toBe(false);
+      expect(result.error!.code).toBe("VALIDATION_ERROR");
+    });
+
+    it("should not mutate the row when validation fails", () => {
+      insertProject(testDb, createMockProject({ id: "set-keep", name: "set-keep", path: "/path/set-keep" }));
+      testDb
+        .prepare("UPDATE projects SET brand_color_primary = ?, brand_color_secondary = ? WHERE id = ?")
+        .run("#111", "#222", "set-keep");
+
+      const result = setProjectStyleGuide("set-keep", { primary: "not-a-color" });
+      expect(result.success).toBe(false);
+
+      const guide = getProjectStyleGuide("set-keep");
+      expect(guide.data).toEqual({ brandColorPrimary: "#111", brandColorSecondary: "#222" });
+    });
+
+    it("should clear the whole guide when primary is empty (both columns null)", () => {
+      insertProject(testDb, createMockProject({ id: "set-clear", name: "set-clear", path: "/path/set-clear" }));
+      testDb
+        .prepare("UPDATE projects SET brand_color_primary = ?, brand_color_secondary = ? WHERE id = ?")
+        .run("#111", "#222", "set-clear");
+
+      const result = setProjectStyleGuide("set-clear", { primary: "" });
+      expect(result.success).toBe(true);
+
+      const guide = getProjectStyleGuide("set-clear");
+      expect(guide.data).toEqual({ brandColorPrimary: null, brandColorSecondary: null });
+    });
+
+    it("should clear secondary when primary set but secondary explicitly null", () => {
+      insertProject(testDb, createMockProject({ id: "set-sec", name: "set-sec", path: "/path/set-sec" }));
+      testDb
+        .prepare("UPDATE projects SET brand_color_primary = ?, brand_color_secondary = ? WHERE id = ?")
+        .run("#111", "#222", "set-sec");
+
+      const result = setProjectStyleGuide("set-sec", { primary: "#333", secondary: null });
+      expect(result.success).toBe(true);
+
+      const guide = getProjectStyleGuide("set-sec");
+      expect(guide.data).toEqual({ brandColorPrimary: "#333", brandColorSecondary: null });
+    });
+
+    it("should return NOT_FOUND for an unknown project", () => {
+      vi.mocked(existsSync).mockReturnValue(false);
+      const result = setProjectStyleGuide("nope", { primary: "#00ff00" });
+      expect(result.success).toBe(false);
+      expect(result.error!.code).toBe("NOT_FOUND");
     });
   });
 });

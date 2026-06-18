@@ -38,6 +38,27 @@ export interface Project {
   visionContext?: string | undefined;
   /** Agent assigned as product owner for auto-develop lifecycle */
   autoDevelopProductOwner?: string | undefined;
+  /** Required hex brand color when a style guide is set (null = no guide) */
+  brandColorPrimary?: string | null | undefined;
+  /** Optional secondary hex brand color (null when unset) */
+  brandColorSecondary?: string | null | undefined;
+}
+
+/**
+ * A project's proposal style guide (adj-201, v1 = accent/brand color only).
+ * Both null = no guide set (a valid state).
+ */
+export interface ProjectStyleGuide {
+  brandColorPrimary: string | null;
+  brandColorSecondary: string | null;
+}
+
+/** Input for {@link setProjectStyleGuide}. */
+export interface SetProjectStyleGuideInput {
+  /** Primary brand color. Empty/whitespace clears the entire guide. */
+  primary: string;
+  /** Optional secondary brand color. null/omitted/empty clears the secondary. */
+  secondary?: string | null | undefined;
 }
 
 export interface ProjectsStore {
@@ -90,6 +111,23 @@ interface ProjectRow {
   auto_develop_paused_at: string | null;
   vision_context: string | null;
   auto_develop_product_owner: string | null;
+  brand_color_primary: string | null;
+  brand_color_secondary: string | null;
+}
+
+// ============================================================================
+// Style Guide Validation (adj-201)
+// ============================================================================
+
+/**
+ * Hex color validator — accepts `#RGB` and `#RRGGBB` (case-insensitive).
+ * The SERVICE is the single source of truth for hex validation (spec locked):
+ * routes/MCP tools delegate here rather than re-implementing the regex.
+ */
+const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+export function isValidHexColor(value: string): boolean {
+  return HEX_COLOR_RE.test(value);
 }
 
 // ============================================================================
@@ -142,6 +180,8 @@ function rowToProject(row: ProjectRow): Project {
     autoDevelopPausedAt: row.auto_develop_paused_at ?? undefined,
     visionContext: row.vision_context ?? undefined,
     autoDevelopProductOwner: row.auto_develop_product_owner ?? undefined,
+    brandColorPrimary: row.brand_color_primary ?? null,
+    brandColorSecondary: row.brand_color_secondary ?? null,
   };
 }
 
@@ -782,6 +822,104 @@ export function clearAutoDevelopProductOwner(id: string): ProjectsServiceResult<
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to clear product owner";
     logError("clearAutoDevelopProductOwner failed", { error: message });
+    return { success: false, error: { code: "INTERNAL_ERROR", message } };
+  }
+}
+
+// ============================================================================
+// Style Guide Functions (adj-201)
+// ============================================================================
+
+/**
+ * Read a project's proposal style guide (v1 = brand color).
+ *
+ * Returns both colors (each null when unset) for a known project — an unset
+ * guide is a valid state, NOT an error. Unknown projectId → NOT_FOUND.
+ */
+export function getProjectStyleGuide(id: string): ProjectsServiceResult<ProjectStyleGuide> {
+  try {
+    const db = getDatabase();
+    const row = db
+      .prepare("SELECT brand_color_primary, brand_color_secondary FROM projects WHERE id = ?")
+      .get(id) as Pick<ProjectRow, "brand_color_primary" | "brand_color_secondary"> | undefined;
+    if (!row) {
+      return { success: false, error: { code: "NOT_FOUND", message: `Project '${id}' not found` } };
+    }
+    return {
+      success: true,
+      data: {
+        brandColorPrimary: row.brand_color_primary ?? null,
+        brandColorSecondary: row.brand_color_secondary ?? null,
+      },
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to get style guide";
+    logError("getProjectStyleGuide failed", { error: message });
+    return { success: false, error: { code: "INTERNAL_ERROR", message } };
+  }
+}
+
+/**
+ * Set (or clear) a project's proposal style guide.
+ *
+ * - Empty/whitespace `primary` clears the whole guide (both columns NULL) — the
+ *   guide is all-or-nothing on its required primary.
+ * - A non-empty `primary` MUST be valid hex (`#RGB`/`#RRGGBB`); a provided
+ *   non-empty `secondary` must also be valid hex. Invalid hex → VALIDATION_ERROR
+ *   and the row is left untouched.
+ * - `secondary` null/omitted/empty clears the secondary while keeping primary.
+ * - Unknown projectId → NOT_FOUND.
+ *
+ * Hex validation lives here (single source of truth); routes/MCP delegate.
+ */
+export function setProjectStyleGuide(
+  id: string,
+  input: SetProjectStyleGuideInput,
+): ProjectsServiceResult<Project> {
+  try {
+    const db = getDatabase();
+    const row = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow | undefined;
+    if (!row) {
+      return { success: false, error: { code: "NOT_FOUND", message: `Project '${id}' not found` } };
+    }
+
+    const primary = (input.primary ?? "").trim();
+
+    // Empty primary clears the entire guide — secondary cannot outlive primary.
+    if (primary === "") {
+      db.prepare(
+        "UPDATE projects SET brand_color_primary = NULL, brand_color_secondary = NULL WHERE id = ?",
+      ).run(id);
+      const cleared = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow;
+      logInfo("project style guide cleared", { id, name: row.name });
+      return { success: true, data: rowToProject(cleared) };
+    }
+
+    if (!isValidHexColor(primary)) {
+      return {
+        success: false,
+        error: { code: "VALIDATION_ERROR", message: `Invalid primary brand color (expected hex like #00ff00): '${primary}'` },
+      };
+    }
+
+    const rawSecondary = input.secondary ?? null;
+    const secondary = rawSecondary === null ? "" : rawSecondary.trim();
+    if (secondary !== "" && !isValidHexColor(secondary)) {
+      return {
+        success: false,
+        error: { code: "VALIDATION_ERROR", message: `Invalid secondary brand color (expected hex like #0a0a0a): '${secondary}'` },
+      };
+    }
+
+    db.prepare(
+      "UPDATE projects SET brand_color_primary = ?, brand_color_secondary = ? WHERE id = ?",
+    ).run(primary, secondary === "" ? null : secondary, id);
+    const updated = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow;
+    logInfo("project style guide set", { id, name: row.name });
+    return { success: true, data: rowToProject(updated) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to set style guide";
+    logError("setProjectStyleGuide failed", { error: message });
     return { success: false, error: { code: "INTERNAL_ERROR", message } };
   }
 }

@@ -10,6 +10,8 @@
  * - GET    /api/projects/:id          - Get single project
  * - GET    /api/projects/:id/overview - Get project overview (beads, epics, agents)
  * - GET    /api/projects/:id/health   - Check project health (path, git, beads)
+ * - GET    /api/projects/:id/style-guide - Get the project's brand-color style guide
+ * - PUT    /api/projects/:id/style-guide - Set/clear the project's brand-color style guide
  * - POST   /api/projects/:id/activate - Activate a project
  * - PATCH  /api/projects/:id          - Update project settings (autoDevelop, visionContext)
  * - DELETE /api/projects/:id          - Delete project registration (not files)
@@ -27,6 +29,8 @@ import {
   enableAutoDevelop,
   disableAutoDevelop,
   setVisionContext,
+  getProjectStyleGuide,
+  setProjectStyleGuide,
 } from "../services/projects-service.js";
 import { listDirectory, readFile } from "../services/files-service.js";
 import {
@@ -72,6 +76,17 @@ const createProjectSchema = z.object({
   (data) => data.path || data.cloneUrl || (data.empty && data.name),
   { message: "Must provide path, cloneUrl, or empty with name" }
 );
+
+/**
+ * Zod schema for setting a project style guide (adj-201).
+ * `primary` is required at the boundary (empty string is allowed — it clears the
+ * guide). Hex validation lives in the service (single source of truth), so it is
+ * NOT duplicated here.
+ */
+const setStyleGuideSchema = z.object({
+  primary: z.string(),
+  secondary: z.string().nullable().optional(),
+});
 
 /**
  * Create a projects router bound to the given MessageStore.
@@ -182,6 +197,62 @@ export function createProjectsRouter(store: MessageStore, proposalStore?: Propos
     const status = buildAutoDevelopStatus(project, proposalStore, autoDevelopStore);
 
     return res.json(success(status));
+  });
+
+  /**
+   * GET /api/projects/:id/style-guide
+   * Read a project's proposal style guide (brand color). Unset guide is valid
+   * (returns null colors). Unknown project → 404.
+   */
+  router.get("/:id/style-guide", (req, res) => {
+    const { id } = req.params;
+    const result = getProjectStyleGuide(id);
+
+    if (!result.success) {
+      if (result.error?.code === "NOT_FOUND") {
+        return res.status(404).json(notFound("Project", id));
+      }
+      return res.status(500).json(
+        internalError(result.error?.message ?? "Failed to get style guide"),
+      );
+    }
+
+    return res.json(success(result.data));
+  });
+
+  /**
+   * PUT /api/projects/:id/style-guide
+   * Set (or clear) a project's brand color. Invalid hex → 400; unknown project →
+   * 404; empty primary clears the whole guide. Thin handler — all validation and
+   * persistence live in the service.
+   */
+  router.put("/:id/style-guide", (req, res) => {
+    const { id } = req.params;
+    const parsed = setStyleGuideSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(
+        badRequest(parsed.error.issues[0]?.message ?? "Invalid request"),
+      );
+    }
+
+    const result = setProjectStyleGuide(id, {
+      primary: parsed.data.primary,
+      secondary: parsed.data.secondary ?? null,
+    });
+
+    if (!result.success) {
+      if (result.error?.code === "NOT_FOUND") {
+        return res.status(404).json(notFound("Project", id));
+      }
+      if (result.error?.code === "VALIDATION_ERROR") {
+        return res.status(400).json(badRequest(result.error.message));
+      }
+      return res.status(500).json(
+        internalError(result.error?.message ?? "Failed to set style guide"),
+      );
+    }
+
+    return res.json(success(result.data));
   });
 
   /**
