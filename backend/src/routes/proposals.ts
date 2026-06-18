@@ -21,6 +21,7 @@ import {
 } from "../types/proposals.js";
 import type { ProposalStore } from "../services/proposal-store.js";
 import { success, badRequest, notFound, validationError } from "../utils/responses.js";
+import { resolvePublicBaseUrl } from "../utils/public-url.js";
 
 export function createProposalsRouter(store: ProposalStore): Router {
   const router = Router();
@@ -167,9 +168,10 @@ export function createProposalsRouter(store: ProposalStore): Router {
   });
 
   // POST /api/proposals/:id/publish (adj-200)
-  // Publishes the proposal and returns the full, no-API-key public URL. The base is
-  // derived from the request host so the link is correct behind whatever origin the
-  // dashboard is served from.
+  // Publishes the proposal and returns the full, no-API-key public URL. The base origin
+  // is resolved from the EXTERNAL request context (X-Forwarded-Proto/Host, or a pinned
+  // PROPOSAL_PUBLIC_BASE_URL) so the link is correct behind a reverse proxy / tunnel —
+  // not the internal http://localhost (adj-200.2.6.1).
   router.post("/:id/publish", (req, res) => {
     const proposal = store.publishProposal(req.params.id);
     if (!proposal) {
@@ -177,7 +179,7 @@ export function createProposalsRouter(store: ProposalStore): Router {
       return;
     }
 
-    const publicUrl = `${req.protocol}://${req.get("host") ?? "localhost"}/p/${proposal.shareToken}`;
+    const publicUrl = `${resolvePublicBaseUrl(req)}/p/${proposal.shareToken}`;
     res.json(success({ proposal, publicUrl }));
   });
 

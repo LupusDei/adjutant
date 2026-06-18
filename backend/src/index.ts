@@ -72,6 +72,12 @@ import { startDoltSupervisorFromEnv } from "./services/dolt-supervisor.js";
 const app = express();
 const PORT = process.env["PORT"] ?? 4201;
 
+// Adjutant is served through a reverse proxy / tunnel (ngrok, tunnelRouter), so trust
+// the proxy's X-Forwarded-* headers. This makes req.protocol / req.hostname / req.ip
+// reflect the EXTERNAL origin — required so public proposal share links (`/p/:token`)
+// are built against the tunnel host rather than http://localhost (adj-200.2.6.1).
+app.set("trust proxy", true);
+
 // Stores must be initialized BEFORE the webhook router below — webhook routes
 // are mounted ahead of the global JSON body parser so HMAC verification can
 // read raw bytes, and they need eventStore for persisting deploy events.
