@@ -824,6 +824,16 @@ describe("proposal-store", () => {
       expect(shareTokenIndex!.unique).toBe(1);
     });
 
+    it("should NOT create a standalone is_public index (low-value, dropped — adj-200.2.1.1)", () => {
+      // The public read path (WHERE share_token = ? AND is_public = 1) is already served
+      // by the share_token UNIQUE index; a standalone index on the 2-value boolean adds
+      // write overhead for no read benefit, so migration 035 no longer creates it.
+      const indexNames = (db.prepare("PRAGMA index_list(proposals)").all() as { name: string }[]).map(
+        (idx) => idx.name,
+      );
+      expect(indexNames).not.toContain("idx_proposals_is_public");
+    });
+
     it("should default a new proposal to no html, private, no token, no published_at", async () => {
       const { createProposalStore } = await import("../../src/services/proposal-store.js");
       const store = createProposalStore(db);
