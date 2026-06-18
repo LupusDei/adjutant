@@ -115,4 +115,39 @@ describe("composeProposalDocument", () => {
     // system font stack (no external font fetch)
     expect(out).toMatch(/-apple-system|system-ui/i);
   });
+
+  // adj-200.2.4.1 — the document is rendered on surfaces with NO HTTP headers
+  // (iOS WKWebView loadHTMLString, web iframe srcdoc), so the strict CSP must travel
+  // INSIDE the document as a <meta>, not only as the public route's HTTP header.
+  // The CSP value contains single quotes (e.g. 'none'), so capture from the
+  // double-quoted content attribute that composeProposalDocument emits.
+  const CSP_META_RE =
+    /<meta[^>]+http-equiv=["']Content-Security-Policy["'][^>]*content="([^"]+)"[^>]*>/i;
+
+  it("should embed a CSP <meta> in <head> for defense-in-depth on non-HTTP surfaces", () => {
+    const out = composeProposalDocument(makeProposal());
+
+    const metaMatch = CSP_META_RE.exec(out);
+    expect(metaMatch).not.toBeNull();
+
+    const policy = metaMatch?.[1] ?? "";
+    // Deny by default; re-permit only what a self-contained document needs.
+    expect(policy).toContain("default-src 'none'");
+    expect(policy).toContain("style-src 'unsafe-inline'");
+    expect(policy).toContain("img-src data:");
+
+    // The meta must live in <head> (before </head>) to take effect.
+    const metaIdx = out.search(/<meta[^>]+Content-Security-Policy/i);
+    expect(metaIdx).toBeGreaterThan(-1);
+    expect(metaIdx).toBeLessThan(out.indexOf("</head>"));
+  });
+
+  it("should not allow script execution under the embedded CSP (no script-src)", () => {
+    const out = composeProposalDocument(makeProposal());
+    const policy = CSP_META_RE.exec(out)?.[1] ?? "";
+    expect(policy.length).toBeGreaterThan(0);
+    // No directive re-permits scripts — default-src 'none' with no script-src override.
+    expect(policy).not.toMatch(/script-src[^;]*'unsafe-inline'/i);
+    expect(policy).not.toMatch(/script-src[^;]*\bhttps?:/i);
+  });
 });

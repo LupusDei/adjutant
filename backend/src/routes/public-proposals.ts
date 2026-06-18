@@ -18,23 +18,13 @@
 import { Router } from "express";
 
 import type { ProposalStore } from "../services/proposal-store.js";
-import { composeProposalDocument } from "../services/proposal-html.js";
+import { composeProposalDocument, PROPOSAL_DOCUMENT_CSP } from "../services/proposal-html.js";
 
-/**
- * Strict Content-Security-Policy for the public document. `default-src 'none'` denies
- * everything; we then re-permit only what a self-contained document needs:
- *  - style-src 'unsafe-inline' → inline <style> blocks and style="" attributes
- *  - img-src data:            → data: URI images only (no external/tracking pixels)
- * Scripts, external connects, framing, and base/form targets stay denied.
- */
-const PUBLIC_DOCUMENT_CSP = [
-  "default-src 'none'",
-  "style-src 'unsafe-inline'",
-  "img-src data:",
-  "base-uri 'none'",
-  "form-action 'none'",
-  "frame-ancestors 'none'",
-].join("; ");
+// The HTTP-header CSP for the public route is the SAME policy embedded in the document
+// `<meta>` (single source of truth in proposal-html.ts), so the header and meta can never
+// drift. On this route the header is authoritative (`frame-ancestors` etc. take effect);
+// the meta is the defense-in-depth copy for non-HTTP surfaces (iOS loadHTMLString).
+const PUBLIC_DOCUMENT_CSP = PROPOSAL_DOCUMENT_CSP;
 
 const NOT_FOUND_PAGE =
   "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
