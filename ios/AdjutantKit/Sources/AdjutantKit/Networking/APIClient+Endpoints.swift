@@ -188,6 +188,49 @@ extension APIClient {
     public func discoverProjects() async throws -> DiscoverProjectsResponse {
         try await requestWithEnvelope(.post, path: "/projects/discover")
     }
+
+    // MARK: - Style Guide (adj-201 / US4)
+
+    /// Reads a project's proposal **style guide** (brand color).
+    ///
+    /// Maps to `GET /api/projects/:id/style-guide`.
+    ///
+    /// An unset guide is a VALID state — the server returns
+    /// `{ brandColorPrimary: null, brandColorSecondary: null }`, decoded here as a
+    /// ``ProjectStyleGuide`` with nil fields (NOT an error).
+    ///
+    /// - Parameter projectId: The project UUID.
+    /// - Returns: The project's ``ProjectStyleGuide`` (fields may be nil when unset).
+    /// - Throws: ``APIClientError`` if the request fails or the project is not found (404).
+    public func getProjectStyleGuide(projectId: String) async throws -> ProjectStyleGuide {
+        let encodedId = projectId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? projectId
+        return try await requestWithEnvelope(.get, path: "/projects/\(encodedId)/style-guide")
+    }
+
+    /// Sets (or clears) a project's brand color.
+    ///
+    /// Maps to `PUT /api/projects/:id/style-guide` with body
+    /// `{ "primary": String, "secondary": String? }`.
+    ///
+    /// Passing an empty `primary` clears the whole guide server-side; the returned
+    /// guide then has both colors nil. Invalid hex → 400.
+    ///
+    /// - Parameters:
+    ///   - projectId: The project UUID.
+    ///   - primary: The primary brand color as a hex string (`#RGB` / `#RRGGBB`), or empty to clear.
+    ///   - secondary: Optional secondary brand color (hex), or nil. Serialized as explicit JSON null when nil.
+    /// - Returns: The updated ``ProjectStyleGuide``.
+    /// - Throws: ``APIClientError`` if the request fails, the project is not found (404),
+    ///   or the hex is invalid (400).
+    public func updateProjectStyleGuide(
+        projectId: String,
+        primary: String,
+        secondary: String?
+    ) async throws -> ProjectStyleGuide {
+        let encodedId = projectId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? projectId
+        let request = SetProjectStyleGuideRequest(primary: primary, secondary: secondary)
+        return try await requestWithEnvelope(.put, path: "/projects/\(encodedId)/style-guide", body: request)
+    }
 }
 
 // MARK: - Auto-Develop Endpoints

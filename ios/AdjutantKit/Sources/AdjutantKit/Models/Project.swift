@@ -81,6 +81,62 @@ public struct CreateProjectRequest: Encodable {
     }
 }
 
+/// A project's proposal **style guide** (adj-201 / US4). v1 is brand color only:
+/// a required primary (when a guide is set) and an optional secondary.
+///
+/// Mirrors the backend `ProjectStyleGuide` type from `services/projects-service.ts`.
+/// Both fields are optional because an **unset guide is a valid state** — the backend
+/// returns `{ brandColorPrimary: null, brandColorSecondary: null }` when no guide is set.
+public struct ProjectStyleGuide: Codable, Equatable {
+    /// Primary brand/accent color as a hex string (`#RGB` / `#RRGGBB`), or nil when unset.
+    public let brandColorPrimary: String?
+    /// Optional secondary brand color as a hex string, or nil.
+    public let brandColorSecondary: String?
+
+    enum CodingKeys: String, CodingKey {
+        case brandColorPrimary, brandColorSecondary
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // decodeIfPresent tolerates absent keys (older backends) AND JSON null.
+        self.brandColorPrimary = try container.decodeIfPresent(String.self, forKey: .brandColorPrimary)
+        self.brandColorSecondary = try container.decodeIfPresent(String.self, forKey: .brandColorSecondary)
+    }
+
+    public init(brandColorPrimary: String? = nil, brandColorSecondary: String? = nil) {
+        self.brandColorPrimary = brandColorPrimary
+        self.brandColorSecondary = brandColorSecondary
+    }
+}
+
+/// Request body for `PUT /api/projects/:id/style-guide`.
+///
+/// The wire shape is `{ "primary": String, "secondary": String? }` — matching the
+/// backend Zod schema EXACTLY (NOT the model's `brandColor*` field names). `secondary`
+/// is always emitted (as JSON `null` when nil) so the server can distinguish a cleared
+/// secondary from an omitted field.
+public struct SetProjectStyleGuideRequest: Encodable {
+    public let primary: String
+    public let secondary: String?
+
+    public init(primary: String, secondary: String?) {
+        self.primary = primary
+        self.secondary = secondary
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case primary, secondary
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(primary, forKey: .primary)
+        // encode (not encodeIfPresent) so a nil secondary serializes as explicit null.
+        try container.encode(secondary, forKey: .secondary)
+    }
+}
+
 /// Response for project deletion.
 public struct DeleteProjectResponse: Codable {
     public let id: String
