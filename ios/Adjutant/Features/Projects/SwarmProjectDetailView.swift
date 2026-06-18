@@ -20,6 +20,7 @@ struct SwarmProjectDetailView: View {
             VStack(spacing: CRTTheme.Spacing.md) {
                 projectHeaderCard
                 autoDevelopCard
+                styleGuideCard
                 sessionsCard
                 swarmsCard
                 filesCard
@@ -40,6 +41,7 @@ struct SwarmProjectDetailView: View {
         }
         .onAppear {
             viewModel.onAppear()
+            Task<Void, Never> { await viewModel.loadStyleGuide() }
         }
         .onDisappear {
             viewModel.onDisappear()
@@ -177,6 +179,111 @@ struct SwarmProjectDetailView: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Style Guide Card (adj-201 / US4)
+
+    /// Brand-color editor for the project's proposal style guide. v1 = a required
+    /// primary + an optional secondary, both hex-validated for parity with the backend.
+    /// Saving an empty primary clears the whole guide.
+    private var styleGuideCard: some View {
+        CRTCard(style: .standard) {
+            VStack(alignment: .leading, spacing: CRTTheme.Spacing.sm) {
+                HStack {
+                    Image(systemName: "paintpalette")
+                        .foregroundColor(theme.primary)
+                    CRTText("STYLE GUIDE", style: .subheader)
+                    Spacer()
+                    if viewModel.isSavingStyleGuide {
+                        LoadingIndicator(size: .small)
+                    }
+                }
+
+                Divider()
+                    .background(theme.dim.opacity(0.3))
+
+                CRTText(
+                    "BRAND COLOR FOR PROPOSAL PAGES. CLEAR PRIMARY TO REMOVE.",
+                    style: .caption,
+                    glowIntensity: .subtle,
+                    color: theme.dim
+                )
+
+                // Primary (required when a guide is set)
+                styleGuideColorRow(
+                    label: "PRIMARY",
+                    hex: $viewModel.styleGuidePrimary,
+                    placeholder: "#00FF00"
+                )
+
+                // Secondary (optional)
+                styleGuideColorRow(
+                    label: "SECONDARY",
+                    hex: $viewModel.styleGuideSecondary,
+                    placeholder: "OPTIONAL — #003300"
+                )
+
+                if let error = viewModel.styleGuideError {
+                    CRTText(error, style: .caption, glowIntensity: .subtle, color: CRTTheme.State.error)
+                } else if viewModel.styleGuideSaved {
+                    HStack(spacing: CRTTheme.Spacing.xxxs) {
+                        Image(systemName: "checkmark.circle")
+                            .font(.system(size: 12))
+                            .foregroundColor(CRTTheme.State.success)
+                        CRTText("SAVED", style: .caption, glowIntensity: .subtle, color: CRTTheme.State.success)
+                    }
+                }
+
+                CRTButton(
+                    "SAVE STYLE GUIDE",
+                    variant: .secondary,
+                    size: .medium,
+                    isLoading: viewModel.isSavingStyleGuide
+                ) {
+                    Task<Void, Never> { await viewModel.saveStyleGuide() }
+                }
+                .disabled(!viewModel.canSaveStyleGuide || viewModel.isSavingStyleGuide)
+            }
+        }
+    }
+
+    /// A labeled hex input with a live color swatch. The swatch only renders when the
+    /// current text is valid hex (defensive — never force-unwraps a parse).
+    private func styleGuideColorRow(
+        label: String,
+        hex: Binding<String>,
+        placeholder: String
+    ) -> some View {
+        HStack(spacing: CRTTheme.Spacing.sm) {
+            CRTText(label, style: .caption, glowIntensity: .subtle, color: theme.dim)
+                .frame(width: 84, alignment: .leading)
+
+            CRTTextField(placeholder, text: hex)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+
+            swatch(for: hex.wrappedValue)
+        }
+    }
+
+    /// A 24x24 color swatch for a hex string, or an empty outlined placeholder when
+    /// the value is missing/invalid.
+    @ViewBuilder
+    private func swatch(for hexValue: String) -> some View {
+        let trimmed = hexValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let color = Color(hexString: trimmed) {
+            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                .fill(color)
+                .frame(width: 24, height: 24)
+                .overlay(
+                    RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                        .stroke(theme.dim.opacity(0.4), lineWidth: 1)
+                )
+        } else {
+            RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
+                .stroke(theme.dim.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+                .frame(width: 24, height: 24)
         }
     }
 
@@ -505,6 +612,31 @@ struct SwarmProjectDetailView: View {
         case .waitingPermission: return CRTTheme.State.warning
         case .offline: return theme.dim
         }
+    }
+}
+
+// MARK: - Color(hexString:)
+
+private extension Color {
+    /// Failable initializer parsing `#RGB` / `#RRGGBB` hex strings. Returns nil for
+    /// anything that isn't one of those two forms — used for the style-guide swatch so
+    /// an invalid in-progress edit simply shows the empty placeholder rather than crashing.
+    init?(hexString: String) {
+        var hex = hexString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard hex.hasPrefix("#") else { return nil }
+        hex.removeFirst()
+
+        // Expand shorthand #RGB → #RRGGBB.
+        if hex.count == 3 {
+            hex = hex.map { "\($0)\($0)" }.joined()
+        }
+        guard hex.count == 6, let value = UInt32(hex, radix: 16) else { return nil }
+
+        self.init(
+            red: Double((value >> 16) & 0xFF) / 255.0,
+            green: Double((value >> 8) & 0xFF) / 255.0,
+            blue: Double(value & 0xFF) / 255.0
+        )
     }
 }
 
