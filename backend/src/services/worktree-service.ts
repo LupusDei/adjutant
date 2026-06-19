@@ -17,7 +17,7 @@
  */
 
 import { execFile } from "child_process";
-import { existsSync, lstatSync, readFileSync } from "fs";
+import { existsSync, lstatSync, readFileSync, writeFileSync, appendFileSync } from "fs";
 import { join } from "path";
 
 import { logInfo, logWarn } from "../utils/index.js";
@@ -48,6 +48,137 @@ async function realProvisionDeps(worktreePath: string, projectPath: string): Pro
   }
 }
 
+// ── Worktree MCP identity (adj-vevei) ────────────────────────────────────────
+//
+// Agents bind their dashboard identity via the `X-Agent-Id` header in the
+// `.mcp.json` that Claude Code loads from the agent's working directory. Claude
+// Code expands `${VAR}` in that file ONCE at process startup and never on
+// reconnect. Worktree agents run in OTHER projects' trees (e.g. OttoDom), whose
+// `.mcp.json` may lack the header entirely or use the fragile `${ADJUTANT_AGENT_ID}`
+// env form — so they connect identity-less and the server mints `unknown-agent-*`.
+//
+// Fix: at worktree creation (the one component that knows BOTH callsign and path),
+// write a self-contained worktree-local `.mcp.json` whose `X-Agent-Id` is the
+// LITERAL callsign — zero env / timing / startup-cache dependency. Idempotent:
+// never clobber an existing (possibly hand-tuned) worktree file.
+
+const DEFAULT_MCP_URL = "http://localhost:4201/mcp";
+
+/**
+ * Build a self-contained `.mcp.json` for a worktree agent. Mirrors the project's
+ * existing `adjutant` MCP server entry (so we don't hardcode the endpoint/type)
+ * but pins `X-Agent-Id` and `X-Project-Root` to LITERAL values — no `${...}`.
+ *
+ * @param sourceMcpJson Raw contents of the project root `.mcp.json`, or null.
+ */
+export function buildWorktreeMcpConfig(
+  callsign: string,
+  worktreePath: string,
+  sourceMcpJson: string | null,
+): string {
+  let url = DEFAULT_MCP_URL;
+  let type = "http";
+  if (sourceMcpJson) {
+    try {
+      const parsed = JSON.parse(sourceMcpJson) as {
+        mcpServers?: { adjutant?: { url?: unknown; type?: unknown } };
+      };
+      const adj = parsed.mcpServers?.adjutant;
+      if (adj && typeof adj.url === "string" && adj.url.length > 0) url = adj.url;
+      if (adj && typeof adj.type === "string" && adj.type.length > 0) type = adj.type;
+    } catch {
+      // Malformed source — fall back to defaults rather than failing the spawn.
+    }
+  }
+  const config = {
+    mcpServers: {
+      adjutant: {
+        type,
+        url,
+        headers: {
+          "X-Agent-Id": callsign,
+          "X-Project-Root": worktreePath,
+        },
+      },
+    },
+  };
+  return `${JSON.stringify(config, null, 2)}\n`;
+}
+
+/** Injected seams for {@link writeWorktreeMcpIdentity}. */
+export interface WorktreeMcpIdentitySeams {
+  exists?: (path: string) => boolean;
+  /** Read a file, returning null if it does not exist / can't be read. */
+  readFile?: (path: string) => string | null;
+  writeFile?: (path: string, content: string) => void;
+  /** Best-effort: exclude `pattern` from git in this worktree (default: info/exclude). */
+  ensureExcluded?: (worktreePath: string, pattern: string) => void;
+}
+
+function defaultReadFile(path: string): string | null {
+  try {
+    return readFileSync(path, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Best-effort: add `pattern` to the worktree's git exclude so the per-agent
+ * identity file never shows up as a change to commit. A linked worktree's `.git`
+ * is a FILE (`gitdir: <path>`); its exclude lives at `<gitdir>/info/exclude`.
+ * Never throws — gitignore is a nicety, not the fix.
+ */
+function defaultEnsureExcluded(worktreePath: string, pattern: string): void {
+  try {
+    const dotGit = join(worktreePath, ".git");
+    if (!existsSync(dotGit)) return;
+    let gitDir: string;
+    if (lstatSync(dotGit).isDirectory()) {
+      gitDir = dotGit;
+    } else {
+      const m = /^gitdir:\s*(.+)$/m.exec(readFileSync(dotGit, "utf-8").trim());
+      if (!m?.[1]) return;
+      gitDir = m[1].trim();
+    }
+    const excludeFile = join(gitDir, "info", "exclude");
+    const existing = (() => {
+      try { return readFileSync(excludeFile, "utf-8"); } catch { return ""; }
+    })();
+    if (existing.split("\n").some((l) => l.trim() === pattern)) return;
+    appendFileSync(excludeFile, `${existing.length && !existing.endsWith("\n") ? "\n" : ""}${pattern}\n`);
+  } catch {
+    // Non-fatal.
+  }
+}
+
+/**
+ * Ensure a worktree carries a durable, literal MCP identity file so the agent
+ * binds as `callsign` on the dashboard regardless of the host project's config.
+ * Idempotent — skips if `<worktree>/.mcp.json` already exists. adj-vevei.
+ */
+export function writeWorktreeMcpIdentity(
+  worktreePath: string,
+  callsign: string,
+  projectPath: string,
+  seams: WorktreeMcpIdentitySeams = {},
+): void {
+  const exists = seams.exists ?? existsSync;
+  const readFile = seams.readFile ?? defaultReadFile;
+  const writeFile = seams.writeFile ?? ((p: string, c: string) => { writeFileSync(p, c); });
+  const ensureExcluded = seams.ensureExcluded ?? defaultEnsureExcluded;
+
+  const target = join(worktreePath, ".mcp.json");
+  if (exists(target)) {
+    // Never stomp an existing (possibly hand-tuned) worktree identity file.
+    return;
+  }
+  const source = readFile(join(projectPath, ".mcp.json"));
+  writeFile(target, buildWorktreeMcpConfig(callsign, worktreePath, source));
+  ensureExcluded(worktreePath, ".mcp.json");
+  logInfo("Wrote worktree MCP identity", { callsign, worktreePath });
+}
+
 /** Injected seams for {@link provisionAgentWorktree}. Defaults use real git/fs/shell. */
 export interface ProvisionWorktreeOptions {
   /** Run a command (default: execFile-based). */
@@ -58,6 +189,8 @@ export interface ProvisionWorktreeOptions {
   provisionDeps?: (worktreePath: string, projectPath: string) => Promise<void>;
   /** Branch-name prefix (default: "agent"). */
   branchPrefix?: string;
+  /** Write the worktree-local MCP identity file (default: real fs). adj-vevei. */
+  writeMcpIdentity?: (worktreePath: string, callsign: string, projectPath: string) => void;
 }
 
 /**
@@ -79,6 +212,7 @@ export async function provisionAgentWorktree(
   const exists = opts.exists ?? existsSync;
   const provisionDeps = opts.provisionDeps ?? realProvisionDeps;
   const branchPrefix = opts.branchPrefix ?? "agent";
+  const writeMcpIdentity = opts.writeMcpIdentity ?? writeWorktreeMcpIdentity;
 
   const relPath = `worktrees/${name}`;
   const worktreePath = join(projectPath, "worktrees", name);
@@ -90,6 +224,17 @@ export async function provisionAgentWorktree(
     } else {
       await exec("git", ["worktree", "add", "-b", `${branchPrefix}/${name}`, relPath], projectPath);
       logInfo("Created isolated agent worktree", { name, worktreePath });
+    }
+    // adj-vevei: pin a durable, literal X-Agent-Id into the worktree so the agent
+    // binds as `name` on the dashboard (not unknown-agent-*). Idempotent. Best-effort
+    // — an identity-write failure must NEVER fail the spawn (fail-open, like deps).
+    try {
+      writeMcpIdentity(worktreePath, name, projectPath);
+    } catch (err) {
+      logWarn("Worktree MCP identity write failed (agent may bind as unknown-agent-*)", {
+        name,
+        error: String(err),
+      });
     }
     await provisionDeps(worktreePath, projectPath);
     return worktreePath;
