@@ -59,7 +59,11 @@ Commander (mic/cam)  ⇄  Bridge panel (React + LiveKit client)  ⇄  Runway GWM
     - `adj-202.3.6` — useBridgeSession.ts hook (TDD) — dep: .3.5
     - `adj-202.3.7` — BridgePanel + AuthoritativeResultPanel + CreditMeter — dep: .3.6
     - `adj-202.3.8` — Integration smoke: read-only briefing flow — dep: .3.5, .3.7
-  - `adj-202.4` — Phase 2: Command [follow-on] (P2) — depends on adj-202.3
+  - `adj-202.7` — Avatar read-only tool loop (P1) — closes the Phase-1 "avatar can actually query" gap (RPC tools on the /avatar session → /api/bridge/tool); found in live test
+  - `adj-202.4` — Phase 2: Command — avatar directs the swarm (write tools, independence doctrine)
+    - `adj-202.4.1` — send_message (message any agent by name, no IDs)
+    - `adj-202.4.2` — nudge_agent · `adj-202.4.3` — answer_question · `adj-202.4.4` — create_bead
+    - `adj-202.4.5` — spawn_worker (read-back); decommission/destructive FORBIDDEN
   - `adj-202.5` — Phase 3: Presence [follow-on] (P2) — depends on adj-202.3
   - `adj-202.6` — Phase 4: Embodied coordinator [follow-on] (P3) — depends on adj-202.3
 

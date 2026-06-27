@@ -32,8 +32,31 @@ marked `[setup]`, `[docs]`, `[scaffold]`, `[action]`. Phases = sub-epics.
 - [ ] T026 [US1] Build the Bridge panel UI in `frontend/src/components/bridge/BridgePanel.tsx` + `AuthoritativeResultPanel.tsx` + `CreditMeter.tsx`. Phases: write failing tests first for `AuthoritativeResultPanel` (renders structured tool output verbatim) in `frontend/tests/unit/authoritative-result-panel.test.tsx` → confirm RED → implement → confirm GREEN. Pure styling/layout is exempt; honor project brand + dark/accessible baseline.
 - [ ] T027 [US1] Integration smoke of the read-only briefing flow: write a failing integration test first in `backend/tests/integration/bridge-readonly-flow.test.ts` (session create → tool-bridge get_project_state → authoritative result shape) → confirm RED → wire end-to-end → confirm GREEN. Live-avatar smoke is manual (documented in research.md).
 
-## Follow-on (not decomposed in this epic)
+## Phase 1.5 (adj-202.7) — Avatar read-only tool loop
 
-- [ ] adj-202.4 — Phase 2: Command (write tools + identity bridge + confirm gates).
+- [ ] adj-202.7 [US1] Wire the avatar read-only tool loop so a spoken status question
+      results in a real backend tool call (closes the Phase-1 "avatar stalls on query" gap).
+      Phases: write failing tests FIRST for the RPC-tool → `/api/bridge/tool` proxy +
+      arg-mapping + error handling (mock fetch) → confirm RED → implement (register read-only
+      RPC tools on the `/avatar` session per the avatars-sdk-react `nextjs-rpc-*` examples;
+      proxy each whitelist tool to `POST /api/bridge/tool`; give GWM-1 the tool schemas so it
+      calls them; surface the structured result in `AuthoritativeResultPanel`) → confirm GREEN.
+      Live-avatar invocation is on-device manual smoke (research.md). Read-only only; secret
+      server-side; single cost-guarded session.
+
+## Phase 2 (adj-202.4) — Command: avatar directs the swarm (write tools)
+
+Each tool: add a descriptor (timeoutSeconds <= 8) + a deliberate write path reusing the REAL
+service (Rules 4+9) + a persona nudge (act with independence; no IDs; only ask if a NAME is
+ambiguous); sender attributed to the coordinator; reversible tools = no confirm; log every
+action; TDD; server-side so no iOS rebuild.
+
+- [ ] adj-202.4.1 [US] send_message — message any agent by name `{ to, body }`, no IDs (in progress)
+- [ ] adj-202.4.2 [US] nudge_agent — redirect / poke an agent by name
+- [ ] adj-202.4.3 [US] answer_question — resolve an open triage question
+- [ ] adj-202.4.4 [US] create_bead — file a work item (sensible default project)
+- [ ] adj-202.4.5 [US] spawn_worker — start an agent (spoken read-back before spawn); `decommission_agent` stays FORBIDDEN
+
+## Follow-on (not decomposed in this epic)
 - [ ] adj-202.5 — Phase 3: Presence (video + screen-share).
 - [ ] adj-202.6 — Phase 4: Embodied coordinator (service refactor + proactive alerts).

@@ -70,3 +70,52 @@ Captured as child epics; decomposed after Phase 0 is GO and Phase 1 lands.
 
 - External: Runway dev-org credits, Avatar ID, LiveKit. The 5-min session cap and tool-loop latency are the core unknowns → **Phase 0 gates the rest**.
 - The silent-partial-write bug (adj-ovbhc) is unrelated but in the same proposal surface; track separately.
+
+## Addendum — Avatar read-only tool loop (adj-202.7)
+
+Found in Phase-1 live testing: the avatar can SPEAK but cannot actually query the fleet — no
+tools are registered on the avatar session, so a status question stalls ("querying…"
+indefinitely). Phase 1 shipped the backend tool API (`/api/bridge/tool`) + the dashboard panel,
+but nothing connects the spoken question to a real tool call. This closes that gap — the
+read-only slice of the Phase-2 tool loop, pulled forward so the briefing actually works.
+
+**Requirement:** the Adjutant avatar invokes a real read-only tool during conversation and
+answers grounded in the structured result.
+- Register read-only RPC tools on the `/avatar` Runway session for the whitelist
+  (`get_project_state`, `list_agents`, `list_questions`, `list_beads`, `get_auto_develop_status`),
+  each proxying to `POST /api/bridge/tool`. Follow the SDK RPC pattern (avatars-sdk-react
+  `examples/nextjs-rpc-weather`, `examples/nextjs-rpc-external-api`).
+- The GWM-1 character MUST be told the tools exist (tool name/description/param schemas; nudge via
+  the per-session `personality`/`startScript`) so it calls them instead of stalling.
+- Structured result = source of truth; surface it in the dashboard `AuthoritativeResultPanel`
+  (external mode, via the bridge `postMessage` channel); the voice only narrates.
+- Read-only only; secret stays server-side; reuse the single cost-guarded session.
+- **Acceptance:** "what's the current agent roster?" → the avatar calls `list_agents` → answers
+  with the real roster within a few seconds (no endless "querying"); the panel shows the result.
+- **Verification:** the RPC-handler → `/api/bridge/tool` proxy/arg-mapping/error-handling is
+  unit-tested; the live avatar invocation is an on-device manual smoke (documented in research.md).
+
+## Phase 2 — Command: the avatar directs the swarm (write tools + independence doctrine)
+
+The avatar embodies the coordinator, so it must ACT, not just report. Live feedback (the avatar
+refusing to message agents without project/bead/epic IDs) drives the **independence doctrine**:
+the avatar acts on the Commander's intent directly, uses sensible defaults, never demands IDs it
+can avoid, and only asks the Commander to clarify when something is genuinely ambiguous (e.g. an
+unknown agent name). Every command tool reuses the SAME service layer the MCP tools use (Rules
+4 + 9); each is added incrementally to the same server-side tool loop (so no iOS rebuild).
+
+**Command toolset:**
+| Tool | What | Gate | Bead |
+|---|---|---|---|
+| `send_message` | Message any agent by NAME (or `user`); `{ to, body }` — no IDs | none (free-flowing) | adj-202.4.1 |
+| `nudge_agent` | Poke / redirect an idle or stalled agent by name | none | adj-202.4.2 |
+| `answer_question` | Resolve an open triage question the avatar surfaced | none | adj-202.4.3 |
+| `create_bead` | File a work item for the swarm (sensible default project) | none | adj-202.4.4 |
+| `spawn_worker` | Start a new agent / squad member | read-back (state what it will spawn) | adj-202.4.5 |
+| `decommission_agent` / destructive | — | **FORBIDDEN** — the Commander does these deliberately | — |
+
+**Independence doctrine (baked into the persona):** act on intent; message/nudge/answer/create
+by name with sensible defaults; do NOT block on missing IDs. Issued actions are attributed to
+the coordinator so agents treat them as command directives, and every avatar-issued action is
+logged for audit. Reversible actions need NO confirmation (free-flowing direction); only
+resource-creating spawns get a spoken read-back; destructive tools stay off-limits.
