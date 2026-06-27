@@ -53,6 +53,17 @@ export default defineConfig({
           proxy.on("error", suppressProxyError);
         },
       },
+      // The Bridge avatar prototype (adj-202.2) is served by the backend at /avatar
+      // (page) + /avatar/connect (session). Proxy it so the iOS WKWebView overlay,
+      // which loads <tunnel>/avatar through the frontend origin, reaches the backend
+      // instead of falling through to the SPA (which served the dashboard — adj-202 bug).
+      "/avatar": {
+        target: `http://localhost:${API_PORT}`,
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on("error", suppressProxyError);
+        },
+      },
       "/ngrok-api": {
         target: "http://127.0.0.1:4040",
         changeOrigin: true,
