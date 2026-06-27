@@ -79,25 +79,27 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
     background-repeat: repeat, repeat, repeat, repeat, repeat, repeat, no-repeat, no-repeat, no-repeat;
   }
 
-  /* Avatar layer — near-full-screen PORTRAIT via full-bleed cover. The video is
-     positioned against the VIEWPORT (position:fixed) and forced to cover it
-     (min 100vw AND 100vh, natural aspect): driving min-height makes a landscape
-     source grow tall and overflow its width, so it crops to portrait. Because it's
-     always >= the viewport, it can't collapse against AvatarCall's nested DOM
-     (the bug that made it vanish). #root clips the overflow. */
+  /* Avatar layer — fill the screen in PORTRAIT. The SDK call widget is
+     [data-avatar-call] { width:100%; aspect-ratio:16/9 } — a landscape strip pinned at
+     the top. Override THAT container to full-viewport (height-driven, dvh for mobile);
+     its inner [data-avatar-video] video already does object-fit:cover, so the landscape
+     source crops to a full-screen portrait. (Targeting the SDK's own container is what
+     finally works — its ::before filter:blur() traps position:fixed, so my earlier
+     viewport-fixed video override never applied.) */
   #root { position: fixed; inset: 0; z-index: 1; overflow: hidden; }
   #root, #root * { background-color: transparent !important; }
-  #root video, #root canvas {
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-    min-width: 100vw !important;
-    min-height: 100vh !important;
-    width: auto !important;
-    height: auto !important;
+  [data-avatar-call] {
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    aspect-ratio: auto !important;
     max-width: none !important;
     max-height: none !important;
+  }
+  [data-avatar-video], [data-avatar-video] > * { height: 100% !important; }
+  [data-avatar-video] video, #root video, #root canvas {
+    width: 100% !important;
+    height: 100% !important;
     object-fit: cover !important;
   }
 
