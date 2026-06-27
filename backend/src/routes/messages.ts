@@ -20,6 +20,7 @@ import type { MessageStore } from "../services/message-store.js";
 import { wsBroadcast } from "../services/ws-server.js";
 import { dmConversationId } from "../services/conversation-store.js";
 import { getSessionBridge } from "../services/session-bridge.js";
+import { deliverDirectMessage } from "../services/direct-message-delivery.js";
 
 import { getAgents } from "../services/agents-service.js";
 import {
@@ -148,55 +149,24 @@ export function createMessagesRouter(store: MessageStore): Router {
 
     const { to, body, threadId, metadata } = parseResult.data;
 
-    // adj-164.2: every user→agent send is tagged with the deterministic DM
-    // conversation id for the (user, recipient) pair. This is the root-cause
-    // fix for wrong-thread bleed — conversation-scoped reads and WS delivery
-    // both key off conversation_id, retiring the agent/recipient widening.
-    const conversationId = dmConversationId("user", to);
+    // adj-164.2 + adj-202.4.1: persist (tagged with the deterministic DM conversation id
+    // for the (user, recipient) pair — the wrong-thread-bleed fix), broadcast, and inject
+    // into the recipient's live session via the SHARED deliverDirectMessage helper (the
+    // same path the avatar's send_message command tool uses — no second impl). No APNs
+    // here: this is the user→agent direction and the user is in the app when sending.
+    const result = deliverDirectMessage(
+      { store },
+      {
+        from: "user",
+        to,
+        body,
+        role: "user",
+        ...(threadId !== undefined ? { threadId } : {}),
+        ...(metadata !== undefined ? { metadata } : {}),
+      },
+    );
 
-    const insertInput: Parameters<typeof store.insertMessage>[0] = {
-      agentId: "user",
-      recipient: to,
-      role: "user",
-      body,
-      conversationId,
-    };
-    if (threadId !== undefined) insertInput.threadId = threadId;
-    if (metadata !== undefined) insertInput.metadata = metadata;
-    const message = store.insertMessage(insertInput);
-
-    // Broadcast via WebSocket
-    wsBroadcast({
-      type: "chat_message",
-      id: message.id,
-      from: "user",
-      to,
-      body: message.body,
-      timestamp: message.createdAt,
-      threadId: message.threadId ?? undefined,
-      conversationId: message.conversationId ?? undefined,
-      metadata: message.metadata ?? undefined,
-    });
-
-    // NOTE: No APNs push here — this is the user→agent direction.
-    // The user is actively in the app when sending, so push is unnecessary.
-    // If agent-side push is needed in future, add sendNotificationToAgent(to, ...)
-    // here using the ChatMessagePayload contract from types/apns.ts.
-
-    // Deliver to agent's tmux pane — sendInput handles status-based routing
-    try {
-      const bridge = getSessionBridge();
-      const sessions = bridge.registry.findByName(to);
-      for (const session of sessions) {
-        bridge.sendInput(session.id, body).then((sent) => {
-          if (sent) store.markDelivered(message.id);
-        }).catch(() => {});
-      }
-    } catch {
-      // Session bridge not initialized — agent will pull via MCP
-    }
-
-    return res.status(201).json(success({ messageId: message.id, timestamp: message.createdAt }));
+    return res.status(201).json(success({ messageId: result.messageId, timestamp: result.timestamp }));
   });
 
   // POST /api/messages/broadcast — send a status update request to all active agents

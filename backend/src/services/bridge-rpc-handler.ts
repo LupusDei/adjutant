@@ -72,13 +72,33 @@ export type CreateRpcHandlerFn = (options: CreateRpcHandlerOptions) => Promise<R
 // Dispatch map
 // ============================================================================
 
+/** Delivery info returned by the send_message write path. */
+export interface BridgeSendMessageResult {
+  messageId: string;
+  conversationId: string;
+  /** Number of live recipient sessions the directive reached (0 ⇒ offline/unknown). */
+  deliveredToSessions: number;
+}
+
+/**
+ * The write path for the avatar's `send_message` command tool. Delivers a directive
+ * to a named agent (or "user"); resolves to delivery info, or throws on failure.
+ * Deliberately separate from the fail-closed read-only `executeTool` (adj-202.4.1).
+ */
+export type BridgeSendMessageFn = (input: { to: string; body: string }) => Promise<BridgeSendMessageResult>;
+
 export interface BridgeToolDispatchDeps {
-  /** The read-only tool bridge to delegate every call to. */
+  /** The read-only tool bridge to delegate every read call to. */
   executeTool: BridgeToolBridge["executeTool"];
   /** Project context for project-scoped tools (the session's selected project). */
   defaultProjectId?: string | undefined;
   /** Optional sink fired with each tool result (e.g. to surface in the dashboard). */
   onResult?: ((result: BridgeToolResult) => void) | undefined;
+  /**
+   * Optional write path enabling the `send_message` command tool. When omitted, the
+   * dispatch is read-only (no send_message handler) — fail-closed by default.
+   */
+  sendMessage?: BridgeSendMessageFn | undefined;
 }
 
 /**
@@ -121,6 +141,37 @@ export function buildBridgeToolDispatch(deps: BridgeToolDispatchDeps): Record<st
     };
   }
 
+  // send_message — the lone WRITE/command tool (adj-202.4.1), wired only when a write
+  // path is provided. Deliberately NOT routed through the fail-closed read-only bridge.
+  const sendMessage = deps.sendMessage;
+  if (sendMessage) {
+    dispatch["send_message"] = async (args: Record<string, unknown>): Promise<Record<string, unknown>> => {
+      const to = typeof args["to"] === "string" ? args["to"].trim() : "";
+      const body = typeof args["body"] === "string" ? args["body"] : "";
+      // The avatar directs agents by NAME — no project/epic/bead id is ever required.
+      if (!to || !body) {
+        return {
+          ok: false,
+          tool: "send_message",
+          error: { code: "INVALID_ARGS", message: "send_message requires both 'to' (agent name) and 'body'." },
+        };
+      }
+      try {
+        const result = await sendMessage({ to, body });
+        return {
+          ok: true,
+          tool: "send_message",
+          to,
+          messageId: result.messageId,
+          deliveredToSessions: result.deliveredToSessions,
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { ok: false, tool: "send_message", to, error: { code: "SEND_FAILED", message } };
+      }
+    };
+  }
+
   return dispatch;
 }
 
@@ -137,6 +188,11 @@ export interface BridgeRpcManagerConfig {
   createHandler?: CreateRpcHandlerFn;
   /** Sink fired with every tool result across all sessions (dashboard surfacing). */
   onResult?: ((sessionId: string, result: BridgeToolResult) => void) | undefined;
+  /**
+   * Optional write path enabling the `send_message` command tool (adj-202.4.1). When
+   * omitted, every attached session is read-only.
+   */
+  sendMessage?: BridgeSendMessageFn | undefined;
 }
 
 export interface AttachOptions {
@@ -188,6 +244,7 @@ export function createBridgeRpcManager(config: BridgeRpcManagerConfig): BridgeRp
       executeTool: config.executeTool,
       defaultProjectId: projectId,
       onResult: resultSink ? (result) => { resultSink(sessionId, result); } : undefined,
+      sendMessage: config.sendMessage,
     });
 
     try {
