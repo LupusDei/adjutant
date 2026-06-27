@@ -79,27 +79,21 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
     background-repeat: repeat, repeat, repeat, repeat, repeat, repeat, no-repeat, no-repeat, no-repeat;
   }
 
-  /* Avatar layer — centered, transparent so the galaxy shows behind it */
+  /* Avatar layer — centered, large, transparent so the galaxy shows behind it.
+     Known-good: do NOT force position/object-fit on AvatarCall's internal DOM (that
+     collapsed the render). Just center + cap to natural aspect, as large as fits. */
   #root { position: fixed; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; }
   #root, #root * { background-color: transparent !important; }
-  /* The AvatarCall root IS the portrait frame; the video fills it 100% (cover-cropped),
-     so the frame and the video always agree — no overflow/clipping mismatch. */
-  #root > * {
-    position: relative !important;
-    width: min(92vw, 64vh) !important;
-    height: min(86vh, 122vw) !important;
-    max-width: 92vw !important;
-    max-height: 88vh !important;
-    border-radius: 22px !important;
-    overflow: hidden !important;
-    box-shadow: 0 0 70px rgba(161,24,196,.40), 0 0 150px rgba(31,182,214,.18);
-  }
+  #root > * { max-width: 96vw !important; max-height: 92vh !important; }
   #root video, #root canvas {
-    position: absolute !important;
-    inset: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    object-fit: cover !important;
+    display: block;
+    margin: auto;
+    width: auto;
+    height: auto;
+    max-width: 96vw;
+    max-height: 92vh;
+    border-radius: 18px;
+    box-shadow: 0 0 70px rgba(161,24,196,.40), 0 0 150px rgba(31,182,214,.18);
   }
 
   #status { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; padding: 12px 16px env(safe-area-inset-bottom); text-align: center; font-size: 14px; color: #c9a0e0; }
