@@ -1,0 +1,186 @@
+/**
+ * Tests for the Bridge REST routes (adj-202.3.5).
+ *
+ * Routes are thin HTTP adapters over the session broker + read-only tool bridge.
+ * Both deps are fully mocked; tests assert status codes, response envelopes, Zod
+ * validation, the cost-ceiling → 429 mapping, and the tool-error → status mapping
+ * (whitelist reject → 403). Auth (apiKeyAuth) is applied at mount time in index.ts,
+ * not inside the router, so it is not exercised here.
+ *
+ * Coverage:
+ *   POST /api/bridge/session — success, ceiling-tripped (429), upstream failure (502), validation (400)
+ *   POST /api/bridge/tool    — success, whitelist reject (403), validation (400, no delegate),
+ *                              project-not-found (404), tool-failed (500)
+ */
+
+import { describe, it, expect, vi } from "vitest";
+import express from "express";
+import request from "supertest";
+
+import { createBridgeRouter } from "../../src/routes/bridge.js";
+import { BridgeCostCeilingError } from "../../src/services/bridge-session-broker.js";
+import type { BridgeSessionCreds } from "../../src/services/bridge-session-broker.js";
+import type { BridgeToolResult } from "../../src/services/bridge-tool-bridge.js";
+
+const CREDS: BridgeSessionCreds = {
+  sessionId: "sess-1",
+  sessionKey: "stk_abc",
+  avatarId: "8ac1dce0-cf52-4b72-bd3d-84ecc6a5f6c9",
+  expiresAt: "2026-06-27T14:47:01.147Z",
+};
+
+function makeApp(deps: {
+  startSession?: ReturnType<typeof vi.fn>;
+  executeTool?: ReturnType<typeof vi.fn>;
+}) {
+  const broker = { startSession: deps.startSession ?? vi.fn().mockResolvedValue(CREDS) };
+  const toolBridge = {
+    executeTool:
+      deps.executeTool ??
+      vi.fn().mockResolvedValue({ ok: true, tool: "list_agents", projectId: null, data: { agents: [] } }),
+  };
+  const app = express();
+  app.use(express.json());
+  app.use("/api/bridge", createBridgeRouter({ broker, toolBridge }));
+  return { app, broker, toolBridge };
+}
+
+describe("bridge-routes: POST /api/bridge/session", () => {
+  it("should return 200 with one-shot creds on success", async () => {
+    const startSession = vi.fn().mockResolvedValue(CREDS);
+    const { app } = makeApp({ startSession });
+
+    const res = await request(app).post("/api/bridge/session").send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).toEqual(CREDS);
+    expect(startSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("should forward an optional personality/startScript seed to the broker", async () => {
+    const startSession = vi.fn().mockResolvedValue(CREDS);
+    const { app } = makeApp({ startSession });
+
+    await request(app)
+      .post("/api/bridge/session")
+      .send({ personality: "You are the Adjutant.", startScript: "Commander, status nominal." });
+
+    expect(startSession).toHaveBeenCalledWith(
+      expect.objectContaining({ personality: "You are the Adjutant.", startScript: "Commander, status nominal." }),
+    );
+  });
+
+  it("should return a structured 429 when the daily credit ceiling is tripped", async () => {
+    const startSession = vi.fn().mockRejectedValue(new BridgeCostCeilingError());
+    const { app } = makeApp({ startSession });
+
+    const res = await request(app).post("/api/bridge/session").send({});
+
+    expect(res.status).toBe(429);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe("DAILY_CREDIT_CEILING_REACHED");
+  });
+
+  it("should return 502 when the broker fails to create the session (upstream error)", async () => {
+    const startSession = vi.fn().mockRejectedValue(new Error("Runway session create failed (HTTP 502): boom"));
+    const { app } = makeApp({ startSession });
+
+    const res = await request(app).post("/api/bridge/session").send({});
+
+    expect(res.status).toBe(502);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe("BRIDGE_SESSION_FAILED");
+  });
+
+  it("should return 400 on an invalid body without calling the broker (validation)", async () => {
+    const startSession = vi.fn().mockResolvedValue(CREDS);
+    const { app } = makeApp({ startSession });
+
+    const res = await request(app).post("/api/bridge/session").send({ avatarId: 123 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(startSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("bridge-routes: POST /api/bridge/tool", () => {
+  it("should return 200 with the structured tool result on success", async () => {
+    const result: BridgeToolResult = {
+      ok: true,
+      tool: "list_agents",
+      projectId: null,
+      data: { agents: [{ id: "a1" }], count: 1 },
+    };
+    const executeTool = vi.fn().mockResolvedValue(result);
+    const { app } = makeApp({ executeTool });
+
+    const res = await request(app).post("/api/bridge/tool").send({ tool: "list_agents" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).toMatchObject({ tool: "list_agents", projectId: null, data: { count: 1 } });
+    expect(executeTool).toHaveBeenCalledWith({ tool: "list_agents" });
+  });
+
+  it("should reject a non-whitelisted tool with 403 TOOL_NOT_ALLOWED", async () => {
+    const result: BridgeToolResult = {
+      ok: false,
+      tool: "create_bead",
+      projectId: null,
+      error: { code: "TOOL_NOT_ALLOWED", message: "Tool 'create_bead' is not in the read-only Bridge whitelist." },
+    };
+    const executeTool = vi.fn().mockResolvedValue(result);
+    const { app } = makeApp({ executeTool });
+
+    const res = await request(app).post("/api/bridge/tool").send({ tool: "create_bead" });
+
+    expect(res.status).toBe(403);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe("TOOL_NOT_ALLOWED");
+  });
+
+  it("should return 400 and NOT delegate when the tool name is missing (validation)", async () => {
+    const executeTool = vi.fn();
+    const { app } = makeApp({ executeTool });
+
+    const res = await request(app).post("/api/bridge/tool").send({ projectId: "p1" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(executeTool).not.toHaveBeenCalled();
+  });
+
+  it("should map PROJECT_NOT_FOUND to 404", async () => {
+    const result: BridgeToolResult = {
+      ok: false,
+      tool: "list_beads",
+      projectId: "missing",
+      error: { code: "PROJECT_NOT_FOUND", message: "Project 'missing' not found." },
+    };
+    const executeTool = vi.fn().mockResolvedValue(result);
+    const { app } = makeApp({ executeTool });
+
+    const res = await request(app).post("/api/bridge/tool").send({ tool: "list_beads", projectId: "missing" });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe("PROJECT_NOT_FOUND");
+  });
+
+  it("should map a TOOL_FAILED execution error to 500", async () => {
+    const result: BridgeToolResult = {
+      ok: false,
+      tool: "list_beads",
+      projectId: "p1",
+      error: { code: "TOOL_FAILED", message: "bd exec failed" },
+    };
+    const executeTool = vi.fn().mockResolvedValue(result);
+    const { app } = makeApp({ executeTool });
+
+    const res = await request(app).post("/api/bridge/tool").send({ tool: "list_beads", projectId: "p1" });
+
+    expect(res.status).toBe(500);
+    expect(res.body.error.code).toBe("TOOL_FAILED");
+  });
+});
