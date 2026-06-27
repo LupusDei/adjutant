@@ -119,6 +119,45 @@ export const BRIDGE_RPC_TOOLS: RunwayRpcToolDef[] = [
     ],
     timeoutSeconds: 8,
   },
+  {
+    type: "backend_rpc",
+    name: "nudge_agent",
+    description:
+      "Poke / redirect an agent that's already running by NAME — a quick prompt straight into their session (e.g. refocus them, ask for a status update). No IDs needed. Use to redirect an active agent rather than start a conversation.",
+    parameters: [
+      { name: "agentId", type: "string", description: "The agent's name to nudge (e.g. \"kerrigan\")." },
+      { name: "message", type: "string", description: "The nudge / redirect prompt." },
+    ],
+    timeoutSeconds: 8,
+  },
+  {
+    type: "backend_rpc",
+    name: "answer_question",
+    description:
+      "Resolve an open triage question the fleet is waiting on (use the questionId from list_questions). Provide answerBody (free text) and/or chosenOption (one of the question's suggested options). No other IDs needed.",
+    parameters: [
+      { name: "questionId", type: "string", description: "The id of the open question to answer (from list_questions)." },
+      { name: "answerBody", type: "string", description: "Free-text answer. Provide this and/or chosenOption." },
+      {
+        name: "chosenOption",
+        type: "string",
+        description: "One of the question's suggested options. Provide this and/or answerBody.",
+      },
+    ],
+    timeoutSeconds: 8,
+  },
+  {
+    type: "backend_rpc",
+    name: "create_bead",
+    description:
+      "File a work item (bead) for the swarm. Only a title is required; description and type ('task' default, or 'epic'/'bug') are optional. It lands in the currently selected project automatically — you do NOT need a project, epic, or parent id.",
+    parameters: [
+      { name: "title", type: "string", description: "Short title of the work item." },
+      { name: "description", type: "string", description: "Optional details (defaults to the title)." },
+      { name: "type", type: "string", description: 'Optional: "task" (default), "epic", or "bug".' },
+    ],
+    timeoutSeconds: 8,
+  },
 ];
 
 /**
@@ -138,7 +177,13 @@ You can query live fleet state using these read-only tools. CALL the matching to
 
 After a tool returns, narrate its STRUCTURED result faithfully and conversationally. The returned data is the source of truth. If a tool reports it needs a project and none is selected, say so plainly and ask the Commander to select one. Keep answers brief and grounded.
 
-You can also DIRECT the swarm: use send_message to message any agent BY NAME (and "user" to reach the Commander). You do NOT need a project, epic, or bead id to send — just the agent's name and the message. Act with independence: when the Commander tells you to relay something to an agent, send it right away and confirm you did. Only ask the Commander to clarify if the agent NAME itself is ambiguous — never demand IDs.`;
+You can also DIRECT the swarm with these command tools — act on the Commander's intent right away and confirm what you did:
+- send_message — message any agent BY NAME (or "user" to reach the Commander).
+- nudge_agent — poke / redirect an agent that's already running, by name.
+- answer_question — resolve an open question from list_questions (give answerBody and/or chosenOption).
+- create_bead — file a work item; it lands in the selected project automatically (only a title is required).
+
+INDEPENDENCE DOCTRINE: address agents BY NAME and use sensible defaults. You do NOT need a project, epic, or bead id for any of these — never demand IDs. Only ask the Commander to clarify when an agent NAME (or which question) is genuinely ambiguous. These actions are reversible, so act decisively without asking permission first.`;
 
 /**
  * Compose the per-session personality: append the fleet-tool guidance to a caller-
