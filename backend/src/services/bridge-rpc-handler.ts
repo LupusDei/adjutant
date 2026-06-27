@@ -35,7 +35,30 @@ import type {
   BridgeToolResult,
 } from "./bridge-tool-bridge.js";
 import { BRIDGE_READONLY_TOOLS } from "./bridge-tool-bridge.js";
+import type { AgentNameResolution } from "./agent-name-resolver.js";
 import { logError, logInfo } from "../utils/logger.js";
+
+/** Resolve a spoken agent name to the canonical agent (adj-202.4.6). Async: hits the registry. */
+export type BridgeResolveAgentFn = (spoken: string) => Promise<AgentNameResolution>;
+
+/** Recipients that mean "the Commander", not an agent — never name-resolved. */
+const USER_ALIASES: ReadonlySet<string> = new Set(["user", "mayor", "mayor/", "commander"]);
+function isUserRecipient(to: string): boolean {
+  const n = to.trim().toLowerCase();
+  return USER_ALIASES.has(n) || n.startsWith("mayor/");
+}
+
+/** Build the "unknown agent" envelope, suggesting the closest names when we have them. */
+function unknownAgent(tool: string, requested: string, closest: string[]): Record<string, unknown> {
+  const suffix = closest.length ? ` Did you mean: ${closest.join(", ")}?` : "";
+  return {
+    ok: false,
+    tool,
+    error: { code: "UNKNOWN_AGENT", message: `I don't see an agent named "${requested}".${suffix}` },
+    requested,
+    closest,
+  };
+}
 
 // ============================================================================
 // Minimal local typings for `@runwayml/avatars-node-rpc`.
@@ -124,6 +147,12 @@ export interface BridgeToolDispatchDeps {
   nudgeAgent?: BridgeNudgeAgentFn | undefined;
   answerQuestion?: BridgeAnswerQuestionFn | undefined;
   createBead?: BridgeCreateBeadFn | undefined;
+  /**
+   * Resolve a spoken agent name to the canonical agent (adj-202.4.6). When provided,
+   * send_message + nudge_agent resolve their target FIRST and only deliver to the real
+   * agent — no phantom sends. Omitted ⇒ targets are used as-spoken (back-compat).
+   */
+  resolveAgent?: BridgeResolveAgentFn | undefined;
 }
 
 /** A structured INVALID_ARGS envelope for a command tool (never throws to the model). */
@@ -199,18 +228,26 @@ export function buildBridgeToolDispatch(deps: BridgeToolDispatchDeps): Record<st
           error: { code: "INVALID_ARGS", message: "send_message requires both 'to' (agent name) and 'body'." },
         };
       }
+      // Resolve the spoken name to the canonical agent (adj-202.4.6) — but never for
+      // the Commander ("user"). No confident match ⇒ surface closest, do NOT send.
+      let target = to;
+      if (deps.resolveAgent && !isUserRecipient(to)) {
+        const resolution = await deps.resolveAgent(to);
+        if (!resolution.ok) return unknownAgent("send_message", to, resolution.closest);
+        target = resolution.agent.name;
+      }
       try {
-        const result = await sendMessage({ to, body });
+        const result = await sendMessage({ to: target, body });
         return {
           ok: true,
           tool: "send_message",
-          to,
+          to: target,
           messageId: result.messageId,
           deliveredToSessions: result.deliveredToSessions,
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        return { ok: false, tool: "send_message", to, error: { code: "SEND_FAILED", message } };
+        return { ok: false, tool: "send_message", to: target, error: { code: "SEND_FAILED", message } };
       }
     };
   }
@@ -227,7 +264,14 @@ export function buildBridgeToolDispatch(deps: BridgeToolDispatchDeps): Record<st
         );
       }
       return runCommand("nudge_agent", async () => {
-        const result = await nudgeAgent({ agentId, message });
+        // Resolve the spoken name to the canonical agent (adj-202.4.6) before poking.
+        let target = agentId;
+        if (deps.resolveAgent) {
+          const resolution = await deps.resolveAgent(agentId);
+          if (!resolution.ok) return unknownAgent("nudge_agent", agentId, resolution.closest);
+          target = resolution.agent.name;
+        }
+        const result = await nudgeAgent({ agentId: target, message });
         return { ok: true, tool: "nudge_agent", agentId: result.agentId, delivered: result.delivered };
       });
     };
@@ -311,6 +355,8 @@ export interface BridgeRpcManagerConfig {
   nudgeAgent?: BridgeNudgeAgentFn | undefined;
   answerQuestion?: BridgeAnswerQuestionFn | undefined;
   createBead?: BridgeCreateBeadFn | undefined;
+  /** Agent-name resolution for the agent-targeted command tools (adj-202.4.6). */
+  resolveAgent?: BridgeResolveAgentFn | undefined;
 }
 
 export interface AttachOptions {
@@ -366,6 +412,7 @@ export function createBridgeRpcManager(config: BridgeRpcManagerConfig): BridgeRp
       nudgeAgent: config.nudgeAgent,
       answerQuestion: config.answerQuestion,
       createBead: config.createBead,
+      resolveAgent: config.resolveAgent,
     });
 
     try {

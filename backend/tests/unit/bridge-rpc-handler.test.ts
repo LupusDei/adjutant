@@ -268,6 +268,81 @@ describe("buildBridgeToolDispatch — nudge/answer/create command tools (adj-202
   });
 });
 
+describe("buildBridgeToolDispatch — agent-name resolution (adj-202.4.6)", () => {
+  it("send_message resolves a spoken name to the canonical agent before delivering", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const sendMessage = vi.fn(async () => ({ messageId: "m1", conversationId: "dm", deliveredToSessions: 1 }));
+    const resolveAgent = vi.fn(async () => ({ ok: true as const, agent: { id: "fenix", name: "fenix" } }));
+    const dispatch = buildBridgeToolDispatch({ executeTool, sendMessage, resolveAgent });
+
+    const out = await dispatch["send_message"]!({ to: "Phoenix", body: "status?" });
+
+    expect(resolveAgent).toHaveBeenCalledWith("Phoenix");
+    expect(sendMessage).toHaveBeenCalledWith({ to: "fenix", body: "status?" }); // canonical, not "Phoenix"
+    expect(out).toMatchObject({ ok: true, tool: "send_message", to: "fenix", deliveredToSessions: 1 });
+  });
+
+  it("send_message returns UNKNOWN_AGENT + closest and does NOT send on no match (no phantom send)", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const sendMessage = vi.fn();
+    const resolveAgent = vi.fn(async () => ({ ok: false as const, closest: ["fenix"] }));
+    const dispatch = buildBridgeToolDispatch({ executeTool, sendMessage, resolveAgent });
+
+    const out = (await dispatch["send_message"]!({ to: "Phoenix", body: "hi" })) as {
+      ok: boolean;
+      error: { code: string };
+      closest: string[];
+    };
+
+    expect(out.ok).toBe(false);
+    expect(out.error.code).toBe("UNKNOWN_AGENT");
+    expect(out.closest).toEqual(["fenix"]);
+    expect(sendMessage).not.toHaveBeenCalled(); // never persisted to a phantom recipient
+  });
+
+  it("send_message to the Commander ('user') bypasses agent resolution", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const sendMessage = vi.fn(async () => ({ messageId: "m1", conversationId: "dm", deliveredToSessions: 0 }));
+    const resolveAgent = vi.fn();
+    const dispatch = buildBridgeToolDispatch({ executeTool, sendMessage, resolveAgent });
+
+    await dispatch["send_message"]!({ to: "user", body: "update" });
+
+    expect(resolveAgent).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith({ to: "user", body: "update" });
+  });
+
+  it("nudge_agent resolves the spoken name to canonical, and reports UNKNOWN_AGENT on no match", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const nudgeAgent = vi.fn(async () => ({ agentId: "fenix", delivered: true }));
+    const resolveAgent = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, agent: { id: "fenix", name: "fenix" } })
+      .mockResolvedValueOnce({ ok: false, closest: ["fenix", "raynor"] });
+    const dispatch = buildBridgeToolDispatch({ executeTool, nudgeAgent, resolveAgent });
+
+    const okOut = await dispatch["nudge_agent"]!({ agentId: "Praetor Fenix", message: "refocus" });
+    expect(nudgeAgent).toHaveBeenCalledWith({ agentId: "fenix", message: "refocus" });
+    expect(okOut).toMatchObject({ ok: true, tool: "nudge_agent", agentId: "fenix", delivered: true });
+
+    const badOut = (await dispatch["nudge_agent"]!({ agentId: "Zorblax", message: "x" })) as {
+      ok: boolean;
+      error: { code: string };
+    };
+    expect(badOut.ok).toBe(false);
+    expect(badOut.error.code).toBe("UNKNOWN_AGENT");
+  });
+
+  it("without a resolveAgent dep, send_message uses the name as-spoken (back-compat)", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const sendMessage = vi.fn(async () => ({ messageId: "m1", conversationId: "dm", deliveredToSessions: 1 }));
+    const dispatch = buildBridgeToolDispatch({ executeTool, sendMessage });
+
+    await dispatch["send_message"]!({ to: "kerrigan", body: "go" });
+    expect(sendMessage).toHaveBeenCalledWith({ to: "kerrigan", body: "go" });
+  });
+});
+
 describe("createBridgeRpcManager", () => {
   function fakeHandler(): RpcHandlerLike {
     return { close: vi.fn(async () => {}), connected: true };

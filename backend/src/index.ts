@@ -35,6 +35,8 @@ import { createBridgeRpcManager } from "./services/bridge-rpc-handler.js";
 import { BRIDGE_DIRECTIVE_PREFIX } from "./services/bridge-rpc-tools.js";
 import { deliverDirectMessage } from "./services/direct-message-delivery.js";
 import { nudgeAgentViaBridge, answerQuestionViaBridge, createBeadViaBridge } from "./services/bridge-commands.js";
+import { resolveAgentName, type ResolvableAgent } from "./services/agent-name-resolver.js";
+import { getAgents } from "./services/agents-service.js";
 import { createEventStore } from "./services/event-store.js";
 import { createQuestionStore } from "./services/question-store.js";
 import { createQuestionService } from "./services/question-service.js";
@@ -203,6 +205,18 @@ const bridgeRpcManager = createBridgeRpcManager({
   nudgeAgent: (input) => nudgeAgentViaBridge(input),
   answerQuestion: (input) => answerQuestionViaBridge(questionService, input),
   createBead: (input) => createBeadViaBridge(input),
+  // adj-202.4.6 — resolve a spoken agent name against the REAL registry (the same
+  // source list_agents uses) so send_message/nudge_agent hit the canonical agent
+  // ("Phoenix"/"Praetor Fenix" → fenix) instead of a phantom recipient.
+  resolveAgent: async (spoken) => {
+    const result = await getAgents();
+    const agents: ResolvableAgent[] = (result.success && result.data ? result.data : []).map((a) => ({
+      id: a.id,
+      name: a.name,
+      status: a.status,
+    }));
+    return resolveAgentName(spoken, agents);
+  },
 });
 
 // The Bridge — avatar (adj-202.2 / adj-202.7.1). Public (no API key) so the iOS WKWebView
