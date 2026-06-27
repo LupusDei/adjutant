@@ -405,6 +405,37 @@ describe("proposal-store", () => {
       expect(revisions[0]!.changelog).toBe("Changed the title");
     });
 
+    // adj-ovbhc — prove the single-statement UPDATE persists a LARGE description.
+    // The observed "description silently dropped" could NOT originate here: this
+    // confirms the store layer is innocent, localizing the drop to the transport/
+    // client boundary (the in-process path round-trips a large description fine).
+    it("should persist a large description in a single revise (store is innocent)", async () => {
+      const { createProposalStore } = await import("../../src/services/proposal-store.js");
+      const store = createProposalStore(db);
+
+      const proposal = store.insertProposal({
+        author: "raynor",
+        title: "T",
+        description: "small",
+        type: "engineering",
+        project: "adjutant",
+      });
+
+      const bigDescription = "D".repeat(5000);
+      const revised = store.reviseProposal(proposal.id, {
+        author: "raynor",
+        title: "T2",
+        description: bigDescription,
+        changelog: "large description revise",
+      });
+
+      expect(revised).not.toBeNull();
+      expect(revised!.title).toBe("T2");
+      expect(revised!.description).toBe(bigDescription); // fully persisted, not dropped
+      // Re-read from disk to be certain it round-trips through SQLite.
+      expect(store.getProposal(proposal.id)!.description).toBe(bigDescription);
+    });
+
     it("should increment revision_number for successive revisions", async () => {
       const { createProposalStore } = await import("../../src/services/proposal-store.js");
       const store = createProposalStore(db);

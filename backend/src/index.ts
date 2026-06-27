@@ -103,7 +103,12 @@ app.use(cors());
 // express.json() so signature verification sees the exact bytes Vercel signed.
 app.use("/api/webhooks", createWebhooksRouter(eventStore));
 
-app.use(express.json());
+// adj-ovbhc: raise the JSON body limit well above the largest legitimate MCP
+// payload. Express's 100 KB default would 413-reject (or stall) a revise_proposal
+// carrying a near-max html body — the tool advertises up to 256 KiB of html, plus
+// title/description/changelog and JSON-escaping overhead. 1 MB covers that with
+// headroom so large-but-valid authoring payloads round-trip intact.
+app.use(express.json({ limit: "1mb" }));
 app.use((req, res, next) => {
   const start = Date.now();
   res.on("finish", () => {
