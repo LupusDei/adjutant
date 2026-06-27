@@ -43,6 +43,12 @@ import type {
   VoiceConfigResponse,
   VoiceStatus,
 } from '../types/voice';
+import type {
+  BridgeSessionCreds,
+  BridgeSessionOptions,
+  BridgeToolRequest,
+  BridgeToolResponse,
+} from '../types/bridge';
 
 // =============================================================================
 // Configuration
@@ -937,6 +943,35 @@ export const api = {
 
       const json = (await response.json()) as ApiResponse<TranscribeResponse>;
       return json;
+    },
+  },
+
+  /**
+   * The Bridge (adj-202) — read-only Fleet Briefing avatar session + tool calls.
+   * Both endpoints sit behind `apiKeyAuth`; `apiFetch` attaches the stored key.
+   */
+  bridge: {
+    /**
+     * Open a managed avatar session. Returns short-lived WebRTC creds; the
+     * Runway secret stays server-side. May reject (429) when the daily credit
+     * ceiling is tripped — the caller surfaces that as an error state.
+     */
+    async startSession(opts?: BridgeSessionOptions): Promise<BridgeSessionCreds> {
+      return apiFetch<BridgeSessionCreds>('/bridge/session', {
+        method: 'POST',
+        body: opts ?? {},
+      });
+    },
+
+    /**
+     * Execute one whitelisted, read-only fleet tool. The returned `data` is the
+     * authoritative structured result the avatar's voice only narrates.
+     */
+    async runTool(req: BridgeToolRequest): Promise<BridgeToolResponse> {
+      return apiFetch<BridgeToolResponse>('/bridge/tool', {
+        method: 'POST',
+        body: req,
+      });
     },
   },
 };
