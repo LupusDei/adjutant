@@ -7,17 +7,27 @@
  * results in the AuthoritativeResultPanel are the source of TRUTH. The voice only
  * narrates what the readout already proves (the grounding contract).
  *
- * This component wires the session lifecycle (`useBridgeSession`) to the avatar
- * viewport, the live credit meter, the read-only fleet tools, and an action log.
- * The logic-bearing pieces (meter math, verbatim readout) are unit-tested in
- * their own modules; this is the composition + presentation shell.
+ * One session, broker-owned (adj-202.3.7.3): the panel hands the cost-guarded
+ * broker creds to the iframe over postMessage (`?external=1` ⇒ the page does NOT
+ * self-connect), so the meter and the 429 ceiling track the REAL stream — no
+ * duplicate session, no double billing. The same channel surfaces live captions
+ * (.7.1) and mic control (.7.2). Cost safety (.7.4: idle auto-disconnect +
+ * expiry teardown) and ceiling clarity (.7.6) come from useBridgeSession.
  */
-import { type CSSProperties, useCallback, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 
 import { useBridgeSession } from '../../hooks/useBridgeSession';
 import type { BridgeToolName, BridgeToolRunResult } from '../../types/bridge';
 import { AuthoritativeResultPanel } from './AuthoritativeResultPanel';
 import { CreditMeter } from './CreditMeter';
+import { CaptionsPanel, type CaptionLine } from './CaptionsPanel';
+import { MicToggle } from './MicToggle';
+import { describeConnectError } from './connect-error';
+import {
+  applyCaption,
+  parseAvatarMessage,
+  type ParentToAvatarMessage,
+} from './avatar-bridge';
 
 const AZURE = '#1FB6D6';
 const PURPLE = '#a118c4';
@@ -52,12 +62,20 @@ const STATE_COLOR: Record<ReturnType<typeof useBridgeSession>['state'], string> 
   error: '#ff5c6c',
 };
 
+const END_REASON_NOTE: Record<'idle' | 'expired', string> = {
+  idle: 'Session ended after inactivity to protect the budget. Open the link to resume.',
+  expired: 'Session reached its time limit and closed. Open the link to resume.',
+};
+
 export interface BridgePanelProps {
   /** Optional target project for project-scoped tools (UUID — the canonical key). */
   projectId?: string;
   /** Display name for the scoped project (header context only). */
   projectName?: string;
-  /** Avatar page URL — same-origin `/avatar` by default (proxied in dev). */
+  /**
+   * Avatar page base URL. The panel appends `?external=1` so the page waits for
+   * broker creds instead of self-connecting (one session). Default same-origin.
+   */
   avatarSrc?: string;
 }
 
@@ -70,11 +88,88 @@ interface LogEntry {
 
 export function BridgePanel({ projectId, projectName, avatarSrc = '/avatar' }: BridgePanelProps) {
   const session = useBridgeSession();
-  const { state, error, meter, elapsedMs, connect, disconnect, runTool } = session;
+  const {
+    state,
+    creds,
+    error,
+    errorCode,
+    errorStatus,
+    lastEndReason,
+    meter,
+    elapsedMs,
+    connect,
+    disconnect,
+    markActivity,
+    runTool,
+  } = session;
 
   const [result, setResult] = useState<BridgeToolRunResult | null>(null);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [running, setRunning] = useState(false);
+  const [captions, setCaptions] = useState<CaptionLine[]>([]);
+  const [micEnabled, setMicEnabled] = useState(true);
+
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const connected = state === 'connected';
+
+  /** Post a typed command to the avatar iframe (same-origin). */
+  const postToAvatar = useCallback((msg: ParentToAvatarMessage) => {
+    iframeRef.current?.contentWindow?.postMessage(msg, window.location.origin);
+  }, []);
+
+  // Listen for avatar→parent events: hand off creds on ready, collect captions,
+  // mirror mic state. Defensive — only same-origin, well-formed messages count.
+  useEffect(() => {
+    function onMessage(ev: MessageEvent) {
+      if (ev.origin !== window.location.origin) return;
+      const msg = parseAvatarMessage(ev.data);
+      if (!msg) return;
+
+      switch (msg.type) {
+        case 'bridge:ready':
+          // The page is up in external mode and waiting — hand it the broker creds
+          // so it streams the SAME session the meter/ceiling already track.
+          if (creds) {
+            postToAvatar({
+              type: 'bridge:session',
+              sessionId: creds.sessionId,
+              sessionKey: creds.sessionKey,
+              avatarId: creds.avatarId,
+            });
+          }
+          break;
+        case 'bridge:caption':
+          setCaptions((prev) => applyCaption(prev, msg));
+          break;
+        case 'bridge:mic':
+          setMicEnabled(msg.enabled);
+          break;
+        case 'bridge:status':
+          // Lifecycle echo — reserved for future surfacing; ignored for now.
+          break;
+      }
+    }
+
+    window.addEventListener('message', onMessage);
+    return () => { window.removeEventListener('message', onMessage); };
+  }, [creds, postToAvatar]);
+
+  // Reset per-session UI when a link opens; clear it when one ends.
+  useEffect(() => {
+    if (connected) {
+      setCaptions([]);
+      setMicEnabled(true);
+    } else {
+      setCaptions([]);
+    }
+  }, [connected]);
+
+  const toggleMic = useCallback(() => {
+    const next = !micEnabled;
+    setMicEnabled(next); // optimistic; the iframe echoes authoritative state
+    postToAvatar({ type: 'bridge:mic', enabled: next });
+    markActivity();
+  }, [micEnabled, postToAvatar, markActivity]);
 
   const fireTool = useCallback(
     async (qt: QuickTool) => {
@@ -97,7 +192,8 @@ export function BridgePanel({ projectId, projectName, avatarSrc = '/avatar' }: B
     [runTool, projectId],
   );
 
-  const connected = state === 'connected';
+  const connectError =
+    state === 'error' ? describeConnectError({ error, errorCode, errorStatus }) : null;
 
   return (
     <main style={rootStyle} aria-label="The Bridge — fleet briefing">
@@ -128,28 +224,52 @@ export function BridgePanel({ projectId, projectName, avatarSrc = '/avatar' }: B
       </header>
 
       <div style={bodyStyle}>
-        {/* Avatar viewscreen — the narrating face. */}
-        <section style={viewscreenStyle} aria-label="Adjutant avatar viewscreen">
-          {connected ? (
-            <iframe
-              title="Adjutant avatar"
-              src={avatarSrc}
-              style={iframeStyle}
-              allow="microphone; autoplay"
-              sandbox="allow-scripts allow-same-origin allow-microphone"
-            />
-          ) : (
-            <div style={viewscreenIdleStyle}>
-              <p style={{ color: '#9aa0a6', maxWidth: 280, textAlign: 'center' }}>
-                {state === 'error'
-                  ? (error ?? 'The link to the Adjutant failed.')
-                  : 'The viewscreen is dark. Open the link to summon the Adjutant.'}
-              </p>
-            </div>
-          )}
-        </section>
+        {/* Left column: avatar viewscreen + live captions. */}
+        <div style={leftColStyle}>
+          <section style={viewscreenStyle} aria-label="Adjutant avatar viewscreen">
+            {connected ? (
+              <iframe
+                ref={iframeRef}
+                title="Adjutant avatar"
+                src={`${avatarSrc}?external=1`}
+                style={iframeStyle}
+                allow="microphone; autoplay"
+                sandbox="allow-scripts allow-same-origin allow-microphone"
+              />
+            ) : (
+              <div style={viewscreenIdleStyle}>
+                {connectError ? (
+                  <div style={{ textAlign: 'center', maxWidth: 320 }} role="alert">
+                    <p
+                      style={{
+                        color: connectError.kind === 'ceiling' ? '#ffb84d' : '#ff5c6c',
+                        fontWeight: 700,
+                        letterSpacing: '0.04em',
+                      }}
+                    >
+                      {connectError.title}
+                    </p>
+                    {connectError.detail && (
+                      <p style={{ color: '#9aa0a6', fontSize: '0.75rem', marginTop: '0.35rem' }}>
+                        {connectError.detail}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p style={{ color: '#9aa0a6', maxWidth: 300, textAlign: 'center' }}>
+                    {lastEndReason === 'idle' || lastEndReason === 'expired'
+                      ? END_REASON_NOTE[lastEndReason]
+                      : 'The viewscreen is dark. Open the link to summon the Adjutant.'}
+                  </p>
+                )}
+              </div>
+            )}
+          </section>
 
-        {/* Authoritative readout — the source of truth. */}
+          <CaptionsPanel captions={captions} />
+        </div>
+
+        {/* Right column: authoritative readout — the source of truth. */}
         <AuthoritativeResultPanel result={result} />
       </div>
 
@@ -169,6 +289,7 @@ export function BridgePanel({ projectId, projectName, avatarSrc = '/avatar' }: B
               {state === 'connecting' ? 'Linking…' : 'Open link'}
             </button>
           )}
+          <MicToggle enabled={micEnabled} disabled={!connected} onToggle={toggleMic} />
         </div>
 
         <div style={controlGroupStyle} role="group" aria-label="Fleet tools">
@@ -266,13 +387,20 @@ const bodyStyle: CSSProperties = {
   minHeight: 0,
 };
 
+const leftColStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateRows: 'minmax(0, 1.6fr) minmax(0, 1fr)',
+  gap: '0.75rem',
+  minHeight: 0,
+};
+
 const viewscreenStyle: CSSProperties = {
   position: 'relative',
   border: `1px solid ${PURPLE}55`,
   borderRadius: 4,
   background: '#000',
   overflow: 'hidden',
-  minHeight: 240,
+  minHeight: 200,
 };
 
 const iframeStyle: CSSProperties = {
@@ -304,6 +432,7 @@ const controlGroupStyle: CSSProperties = {
   display: 'flex',
   gap: '0.5rem',
   flexWrap: 'wrap',
+  alignItems: 'center',
 };
 
 function primaryBtn(color: string): CSSProperties {

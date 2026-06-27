@@ -208,3 +208,133 @@ describe('useBridgeSession', () => {
     });
   });
 });
+
+describe('useBridgeSession — cost safety + error mapping (adj-202.3.7.4 / .7.6)', () => {
+  const BASE = '2026-06-27T12:00:00.000Z';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(BASE));
+    // A far-future expiry by default so idle (not expiry) is what fires in idle tests.
+    mockStartSession.mockResolvedValue({ ...CREDS, expiresAt: '2026-06-27T13:00:00.000Z' });
+    mockRunTool.mockResolvedValue({ tool: 'list_agents', projectId: null, data: { count: 0 } });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function connectHook(opts?: { idleTimeoutMs?: number }) {
+    const view = renderHook(() => useBridgeSession(opts));
+    await act(async () => {
+      await view.result.current.connect();
+    });
+    return view;
+  }
+
+  it('should auto-disconnect after the idle timeout with reason "idle"', async () => {
+    const { result } = await connectHook({ idleTimeoutMs: 5_000 });
+    expect(result.current.state).toBe('connected');
+
+    await act(async () => {
+      vi.advanceTimersByTime(5_000);
+    });
+
+    expect(result.current.state).toBe('idle');
+    expect(result.current.lastEndReason).toBe('idle');
+    expect(result.current.creds).toBeNull();
+  });
+
+  it('should reset the idle countdown on markActivity', async () => {
+    const { result } = await connectHook({ idleTimeoutMs: 5_000 });
+
+    await act(async () => {
+      vi.advanceTimersByTime(4_000);
+    });
+    act(() => {
+      result.current.markActivity();
+    });
+    // 4s more — would have tripped the original 5s deadline, but activity reset it.
+    await act(async () => {
+      vi.advanceTimersByTime(4_000);
+    });
+    expect(result.current.state).toBe('connected');
+
+    // Now let the reset window fully elapse.
+    await act(async () => {
+      vi.advanceTimersByTime(1_500);
+    });
+    expect(result.current.state).toBe('idle');
+  });
+
+  it('should treat runTool as activity (resets idle)', async () => {
+    const { result } = await connectHook({ idleTimeoutMs: 5_000 });
+
+    await act(async () => {
+      vi.advanceTimersByTime(4_000);
+    });
+    await act(async () => {
+      await result.current.runTool('list_agents');
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(4_000);
+    });
+    expect(result.current.state).toBe('connected');
+  });
+
+  it('should tear down at expiresAt with reason "expired"', async () => {
+    mockStartSession.mockResolvedValue({
+      ...CREDS,
+      expiresAt: new Date(Date.parse(BASE) + 5_000).toISOString(),
+    });
+    const { result } = await connectHook({ idleTimeoutMs: 60_000 });
+    expect(result.current.state).toBe('connected');
+
+    await act(async () => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(result.current.state).toBe('idle');
+    expect(result.current.lastEndReason).toBe('expired');
+  });
+
+  it('should expose errorCode and errorStatus when the broker returns a 429 ceiling', async () => {
+    const ceiling = Object.assign(new Error('Daily credit ceiling reached.'), {
+      code: 'DAILY_CREDIT_CEILING_REACHED',
+      status: 429,
+    });
+    mockStartSession.mockRejectedValueOnce(ceiling);
+
+    const view = renderHook(() => useBridgeSession());
+    await act(async () => {
+      await view.result.current.connect();
+    });
+
+    expect(view.result.current.state).toBe('error');
+    expect(view.result.current.errorCode).toBe('DAILY_CREDIT_CEILING_REACHED');
+    expect(view.result.current.errorStatus).toBe(429);
+    expect(view.result.current.error).toContain('ceiling');
+  });
+
+  it('should clear error code/status and end reason on a fresh connect', async () => {
+    const ceiling = Object.assign(new Error('Daily credit ceiling reached.'), {
+      code: 'DAILY_CREDIT_CEILING_REACHED',
+      status: 429,
+    });
+    mockStartSession.mockRejectedValueOnce(ceiling);
+
+    const view = renderHook(() => useBridgeSession());
+    await act(async () => {
+      await view.result.current.connect();
+    });
+    expect(view.result.current.errorStatus).toBe(429);
+
+    // Next attempt succeeds — stale error metadata must be gone.
+    await act(async () => {
+      await view.result.current.connect();
+    });
+    expect(view.result.current.state).toBe('connected');
+    expect(view.result.current.errorCode).toBeNull();
+    expect(view.result.current.errorStatus).toBeNull();
+  });
+});
