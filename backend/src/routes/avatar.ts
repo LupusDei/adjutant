@@ -84,8 +84,14 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
   #root, #root * { background-color: transparent !important; }
   #root > * { max-width: 96vw !important; max-height: 84vh !important; }
   #root video, #root canvas {
-    display: block; margin: auto; width: auto; height: auto;
-    max-width: 96vw; max-height: 84vh;
+    display: block; margin: auto;
+    /* Portrait frame: the avatar source is landscape, so crop it tall (object-fit cover)
+       into a 3:4 portrait box centered on the avatar. */
+    height: 86vh !important;
+    width: auto !important;
+    aspect-ratio: 3 / 4 !important;
+    max-width: 94vw !important;
+    object-fit: cover !important;
     border-radius: 22px;
     box-shadow: 0 0 70px rgba(161,24,196,.40), 0 0 150px rgba(31,182,214,.18);
   }
