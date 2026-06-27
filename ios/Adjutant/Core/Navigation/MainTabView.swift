@@ -8,6 +8,8 @@ struct MainTabView: View {
     @EnvironmentObject private var dependencyContainer: DependencyContainer
     @Environment(\.crtTheme) private var theme
     @ObservedObject private var appState = AppState.shared
+    /// The Bridge — presents the full-screen Adjutant avatar (triggered by the LIVE tab button).
+    @State private var showAvatar = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,11 +23,18 @@ struct MainTabView: View {
             )
             .environmentObject(coordinator)
 
-            // Custom tab bar
+            // Custom tab bar — Projects moved into Settings; central LIVE button added (adj-202).
             CRTTabBar(
                 selectedTab: $coordinator.selectedTab,
-                unreadCount: appState.unreadMailCount
+                unreadCount: appState.unreadMailCount,
+                visibleTabs: AppTab.allCases.filter { $0 != .projects },
+                onLive: { showAvatar = true }
             )
+        }
+        .fullScreenCover(isPresented: $showAvatar) {
+            AvatarOverlayView(apiBaseURL: AppState.shared.apiBaseURL) {
+                showAvatar = false
+            }
         }
         .background(theme.background.screen)
         .environmentObject(coordinator)
@@ -159,17 +168,18 @@ struct CRTTabBar: View {
     @Binding var selectedTab: AppTab
     let unreadCount: Int
     var visibleTabs: [AppTab] = AppTab.allCases
+    /// Action for the central, prominent LIVE button (opens the Adjutant avatar). adj-202.
+    var onLive: () -> Void = {}
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(visibleTabs) { tab in
-                CRTTabBarItem(
-                    tab: tab,
-                    isSelected: selectedTab == tab,
-                    badgeCount: tab == .chat ? unreadCount : 0
-                ) {
-                    selectedTab = tab
-                }
+        let mid = visibleTabs.count / 2
+        return HStack(spacing: 0) {
+            ForEach(Array(visibleTabs.prefix(mid))) { tab in
+                tabItem(tab)
+            }
+            LiveTabButton(action: onLive)
+            ForEach(Array(visibleTabs.suffix(from: mid))) { tab in
+                tabItem(tab)
             }
         }
         .padding(.top, CRTTheme.Spacing.xs)
@@ -189,6 +199,16 @@ struct CRTTabBar: View {
         )
     }
 
+    private func tabItem(_ tab: AppTab) -> some View {
+        CRTTabBarItem(
+            tab: tab,
+            isSelected: selectedTab == tab,
+            badgeCount: tab == .chat ? unreadCount : 0
+        ) {
+            selectedTab = tab
+        }
+    }
+
     private var tabBarBackground: some View {
         theme.background.panel
             .overlay(
@@ -198,6 +218,39 @@ struct CRTTabBar: View {
                 alignment: .top
             )
             .shadow(color: theme.primary.opacity(0.1), radius: 8, y: -4)
+    }
+}
+
+// MARK: - Live Tab Button
+
+/// Central, prominent "LIVE" button — opens the Adjutant avatar (adj-202). ~20% larger than
+/// the standard tab items, using the avatar's face (88×88 asset) as its icon.
+private struct LiveTabButton: View {
+    @Environment(\.crtTheme) private var theme
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: CRTTheme.Spacing.xxs) {
+                Image("LiveAvatarIcon")
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 30, height: 30)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(theme.primary, lineWidth: 1.5))
+                    .crtGlow(color: theme.primary, radius: 6, intensity: 0.6)
+
+                Text("LIVE")
+                    .font(CRTTheme.Typography.font(size: 11, weight: .bold))
+                    .tracking(CRTTheme.Typography.letterSpacing)
+                    .foregroundColor(theme.primary)
+                    .crtGlow(color: theme.primary, radius: 3, intensity: 0.5)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Live — talk to the Adjutant")
     }
 }
 

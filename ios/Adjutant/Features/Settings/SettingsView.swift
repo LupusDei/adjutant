@@ -15,6 +15,9 @@ struct SettingsView: View {
                 // Header
                 settingsHeader
 
+                // Projects (moved from the bottom tab bar — adj-202)
+                projectsSection
+
                 // Theme Section
                 themeSection
 
@@ -54,6 +57,35 @@ struct SettingsView: View {
                 CRTText("SYSTEM CONFIGURATION", style: .caption, color: theme.dim)
             }
             Spacer()
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
+    }
+
+    // MARK: - Projects (moved from the bottom tab bar — adj-202)
+
+    private var projectsSection: some View {
+        CRTCard(header: "PROJECTS") {
+            NavigationLink {
+                ProjectsListView(
+                    apiClient: AppState.shared.apiClient,
+                    onSelectProject: { project in
+                        coordinator.navigate(to: .projectDetail(project: project))
+                    }
+                )
+            } label: {
+                HStack(spacing: CRTTheme.Spacing.sm) {
+                    Image(systemName: "folder")
+                        .foregroundColor(theme.primary)
+                    CRTText("MANAGE PROJECTS", style: .body)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(theme.dim)
+                }
+                .padding(.vertical, CRTTheme.Spacing.xs)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, CRTTheme.Spacing.md)
     }
