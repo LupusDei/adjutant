@@ -58,15 +58,46 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
 <link rel="stylesheet" href="https://esm.sh/@runwayml/avatars-react/styles.css" />
 <style>
   :root { color-scheme: dark; }
-  html, body { margin: 0; height: 100%; background: #0b0710; color: #e7d9ee; font-family: -apple-system, system-ui, sans-serif; }
-  #root { position: fixed; inset: 0; }
-  #status { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 16px env(safe-area-inset-bottom); text-align: center; font-size: 14px; color: #c9a0e0; }
+  html, body { margin: 0; height: 100%; color: #e7d9ee; font-family: -apple-system, system-ui, sans-serif; overflow: hidden; }
+  body { background: #04020a; }
+
+  /* Deep-space backdrop: tiled stars + brand-tinted nebula (purple #a118c4 / azure #1FB6D6) + vignette */
+  .space {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-color: #04020a;
+    background-image:
+      radial-gradient(1px 1px at 25px 35px, #ffffff, transparent),
+      radial-gradient(1px 1px at 70px 90px, rgba(255,255,255,.85), transparent),
+      radial-gradient(1.6px 1.6px at 130px 50px, #cfe6ff, transparent),
+      radial-gradient(1px 1px at 180px 130px, #ffffff, transparent),
+      radial-gradient(1.4px 1.4px at 95px 165px, rgba(255,255,255,.7), transparent),
+      radial-gradient(2px 2px at 150px 20px, rgba(255,255,255,.95), transparent),
+      radial-gradient(ellipse 60% 50% at 74% 20%, rgba(161,24,196,.34), transparent 60%),
+      radial-gradient(ellipse 55% 45% at 20% 82%, rgba(31,182,214,.24), transparent 60%),
+      radial-gradient(circle at 50% 45%, rgba(24,10,46,.55), #04020a 78%);
+    background-size: 200px 200px, 200px 200px, 220px 220px, 200px 200px, 200px 200px, 260px 260px, 100% 100%, 100% 100%, 100% 100%;
+    background-repeat: repeat, repeat, repeat, repeat, repeat, repeat, no-repeat, no-repeat, no-repeat;
+  }
+
+  /* Avatar layer — centered in the middle, transparent so the galaxy shows behind it */
+  #root { position: fixed; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; }
+  #root, #root * { background-color: transparent !important; }
+  #root > * { max-width: 96vw !important; max-height: 84vh !important; }
+  #root video, #root canvas {
+    display: block; margin: auto; width: auto; height: auto;
+    max-width: 96vw; max-height: 84vh;
+    border-radius: 22px;
+    box-shadow: 0 0 70px rgba(161,24,196,.40), 0 0 150px rgba(31,182,214,.18);
+  }
+
+  #status { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; padding: 12px 16px env(safe-area-inset-bottom); text-align: center; font-size: 14px; color: #c9a0e0; }
   #status.err { color: #ff8e8e; }
   .spin { display:inline-block; width:14px;height:14px;border:2px solid #a118c4;border-top-color:transparent;border-radius:50%;animation:s .8s linear infinite;vertical-align:-2px;margin-right:8px;}
   @keyframes s { to { transform: rotate(360deg);} }
 </style>
 </head>
 <body>
+<div class="space"></div>
 <div id="root"></div>
 <div id="status"><span class="spin"></span>Connecting to the Adjutant…</div>
 <script type="module">
