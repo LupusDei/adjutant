@@ -19,6 +19,8 @@ import { EpicGraphPage } from "./components/beads/EpicGraphPage";
 import { ChatBadge } from "./components/chat/ChatBadge";
 import { OpenQuestionsView } from "./components/questions/OpenQuestionsView";
 import { QuestionsBadge } from "./components/questions/QuestionsBadge";
+import { BridgePanel } from "./components/bridge";
+import { useProject } from "./contexts/ProjectContext";
 
 export type ThemeId = 'pipboy' | 'document' | 'starcraft' | 'friendly' | 'glass';
 
@@ -50,7 +52,7 @@ function migrateTheme(stored: string | null): ThemeId {
   return legacyMap[stored] ?? 'starcraft';
 }
 
-type TabId = "dashboard" | "chat" | "epics" | "crew" | "beads" | "projects" | "timeline" | "proposals" | "questions" | "settings";
+type TabId = "dashboard" | "bridge" | "chat" | "epics" | "crew" | "beads" | "projects" | "timeline" | "proposals" | "questions" | "settings";
 
 interface Tab {
   id: TabId;
@@ -60,6 +62,7 @@ interface Tab {
 
 const TABS: Tab[] = [
   { id: "dashboard", label: "OVERVIEW", icon: "📊" },
+  { id: "bridge", label: "THE BRIDGE", icon: "🛰" },
   { id: "chat", label: "CHAT", icon: "💬" },
   { id: "epics", label: "EPICS", icon: "📋" },
   { id: "crew", label: "AGENTS", icon: "👥" },
@@ -96,6 +99,7 @@ function AppContent() {
   );
   const themeConfig = THEME_CONFIGS[theme];
   const isSmallScreen = useIsSmallScreen();
+  const { selectedProject } = useProject();
 
   // Apply theme to document element (html) globally for proper CSS variable cascade
   useEffect(() => {
@@ -138,6 +142,21 @@ function AppContent() {
             aria-hidden={activeTab !== "dashboard"}
           >
             <DashboardView onNavigateToChat={(agentName: string) => { setChatRecipient(agentName); setActiveTab('chat'); }} />
+          </section>
+          <section
+            className="tab-view"
+            hidden={activeTab !== "bridge"}
+            aria-hidden={activeTab !== "bridge"}
+          >
+            {/* Mount only when active so the avatar iframe + live session tear
+                down on tab switch (no audio or credit burn on a hidden tab). */}
+            {activeTab === "bridge" && (
+              <BridgePanel
+                {...(selectedProject
+                  ? { projectId: selectedProject.id, projectName: selectedProject.name }
+                  : {})}
+              />
+            )}
           </section>
           <section
             className="tab-view"
