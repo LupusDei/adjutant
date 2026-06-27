@@ -1,0 +1,132 @@
+/**
+ * Runway realtime-sessions HTTP client (adj-202.3.1 — "The Bridge" Phase-1).
+ *
+ * A THIN, authed wrapper over the two Runway endpoints the avatar flow needs:
+ *   POST /v1/realtime_sessions        -> create a `gwm1_avatars` session  -> { id }
+ *   GET  /v1/realtime_sessions/{id}   -> poll for readiness               -> { status, sessionKey?, expiresAt? }
+ *
+ * It owns NO lifecycle/polling logic — that is `bridge-session-broker.ts`'s job. This layer
+ * only signs requests (Bearer + X-Runway-Version), shapes the JSON body, and turns non-2xx
+ * responses into a typed `RunwayApiError`. The secret `RUNWAYML_API_SECRET` is read here and
+ * NEVER leaves the server (NFR — Constitution Rule 4): only `sessionKey` (the short-lived
+ * browser cred) ever flows outward, and that happens in the broker/route, not here.
+ *
+ * Flow + shapes verified live against api.dev.runwayml.com (2026-06-27) — see
+ * specs/060-the-bridge-voice-coordinator/research.md.
+ */
+
+const RUNWAY_BASE = "https://api.dev.runwayml.com/v1";
+const RUNWAY_API_VERSION = "2024-11-06";
+const RUNWAY_AVATAR_MODEL = "gwm1_avatars";
+
+export interface RunwayClientConfig {
+  /** Runway dev-org secret. Defaults to process.env.RUNWAYML_API_SECRET. */
+  apiKey?: string;
+  /** API base URL. Defaults to the dev endpoint. */
+  baseUrl?: string;
+  /** Runway API version header. Defaults to the pinned version. */
+  apiVersion?: string;
+  /** Injectable for tests. Defaults to global fetch. */
+  fetchImpl?: typeof fetch;
+}
+
+/** Avatar selector for a realtime session (Runway "custom" character). */
+export interface RunwayAvatarSelector {
+  type: string;
+  avatarId: string;
+}
+
+/** Input for {@link RunwayClient.createRealtimeSession}. */
+export interface CreateRealtimeSessionInput {
+  avatar: RunwayAvatarSelector;
+  /** Defaults to "gwm1_avatars". */
+  model?: string;
+  /** Optional per-session system persona, included in the body only when provided. */
+  personality?: string;
+  /** Optional opening line the avatar speaks, included in the body only when provided. */
+  startScript?: string;
+}
+
+/** A realtime-session row as returned by Runway (fields appear progressively as it readies). */
+export interface RealtimeSessionRow {
+  id: string;
+  status?: string;
+  createdAt?: string;
+  expiresAt?: string;
+  /** "stk_…" — only present once status is READY. */
+  sessionKey?: string;
+}
+
+/** Typed error for a non-2xx Runway response. Carries the HTTP status + truncated body. */
+export class RunwayApiError extends Error {
+  readonly status: number;
+  readonly detail: string;
+
+  constructor(operation: string, status: number, detail: string) {
+    super(`Runway ${operation} failed (HTTP ${status}): ${detail}`);
+    this.name = "RunwayApiError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+export class RunwayClient {
+  private readonly apiKey: string;
+  private readonly baseUrl: string;
+  private readonly apiVersion: string;
+  private readonly doFetch: typeof fetch;
+
+  constructor(cfg: RunwayClientConfig = {}) {
+    this.apiKey = cfg.apiKey ?? process.env["RUNWAYML_API_SECRET"] ?? "";
+    this.baseUrl = cfg.baseUrl ?? RUNWAY_BASE;
+    this.apiVersion = cfg.apiVersion ?? RUNWAY_API_VERSION;
+    this.doFetch = cfg.fetchImpl ?? fetch;
+
+    if (!this.apiKey) throw new Error("RUNWAYML_API_SECRET is not configured");
+  }
+
+  /** Create a realtime avatar session. Returns the raw `{ id }` row Runway responds with. */
+  async createRealtimeSession(input: CreateRealtimeSessionInput): Promise<RealtimeSessionRow> {
+    const body: Record<string, unknown> = {
+      model: input.model ?? RUNWAY_AVATAR_MODEL,
+      avatar: input.avatar,
+    };
+    // Only attach seed fields when supplied — keeps the proven base body byte-identical.
+    if (input.personality !== undefined) body["personality"] = input.personality;
+    if (input.startScript !== undefined) body["startScript"] = input.startScript;
+
+    const res = await this.doFetch(`${this.baseUrl}/realtime_sessions`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new RunwayApiError("session create", res.status, await safeText(res));
+    return (await res.json()) as RealtimeSessionRow;
+  }
+
+  /** Fetch a single realtime session by id (poll target for readiness). */
+  async getRealtimeSession(sessionId: string): Promise<RealtimeSessionRow> {
+    const res = await this.doFetch(`${this.baseUrl}/realtime_sessions/${sessionId}`, {
+      method: "GET",
+      headers: this.headers(),
+    });
+    if (!res.ok) throw new RunwayApiError("session fetch", res.status, await safeText(res));
+    return (await res.json()) as RealtimeSessionRow;
+  }
+
+  private headers(): Record<string, string> {
+    return {
+      Authorization: `Bearer ${this.apiKey}`,
+      "X-Runway-Version": this.apiVersion,
+      "Content-Type": "application/json",
+    };
+  }
+}
+
+async function safeText(res: Response): Promise<string> {
+  try {
+    return (await res.text()).slice(0, 300);
+  } catch {
+    return "<no body>";
+  }
+}
