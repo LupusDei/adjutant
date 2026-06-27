@@ -1,0 +1,386 @@
+/**
+ * The Bridge — read-only tool bridge (adj-202.3.2).
+ *
+ * A READ-ONLY, whitelisted adapter that lets the Adjutant avatar answer
+ * fleet-status questions by calling the SAME service layer the MCP tools use.
+ * This is deliberately NOT a second control plane (Constitution Rules 4 + 9):
+ * every tool here delegates to an existing service function — it adds whitelist
+ * enforcement, projectId scoping, and a uniform STRUCTURED result envelope, and
+ * nothing else.
+ *
+ * The structured result is the source of truth; the voice only narrates it later.
+ * So every handler returns plain data (never the human-readable text the MCP
+ * tool envelopes produce).
+ *
+ * Cross-project reads are ALLOWED here: the avatar embodies the Layer-2
+ * coordinator, and every call names its target projectId. Tools that need a
+ * project's `.beads/` directory (list_beads, get_project_state,
+ * get_auto_develop_status) REQUIRE a projectId; fleet-wide tools (list_agents,
+ * list_questions) treat it as an optional filter.
+ *
+ * IMPORTANT: only the five read-only tools below are reachable. Anything else —
+ * including write tools that exist in the MCP surface (create_bead, close_bead,
+ * send_message, …) — is rejected with a structured TOOL_NOT_ALLOWED error.
+ */
+
+import { z } from "zod";
+
+import { getAgents } from "./agents-service.js";
+import { getConnectedAgents } from "./mcp-server.js";
+import { getProject, type Project } from "./projects-service.js";
+import { execBd, resolveBeadsDir, type BeadsIssue } from "./bd-client.js";
+import { buildAutoDevelopStatus } from "./auto-develop-status.js";
+import type { MessageStore } from "./message-store.js";
+import type { ProposalStore } from "./proposal-store.js";
+import type { AutoDevelopStore } from "./auto-develop-store.js";
+import type { QuestionService } from "./question-service.js";
+
+// ============================================================================
+// Whitelist
+// ============================================================================
+
+/** The exact set of read-only tools the avatar may call. */
+export const BRIDGE_READONLY_TOOLS = [
+  "get_project_state",
+  "list_agents",
+  "list_questions",
+  "list_beads",
+  "get_auto_develop_status",
+] as const;
+
+export type BridgeToolName = (typeof BRIDGE_READONLY_TOOLS)[number];
+
+const ALLOWED_TOOLS: ReadonlySet<string> = new Set<string>(BRIDGE_READONLY_TOOLS);
+
+// ============================================================================
+// Public types
+// ============================================================================
+
+/**
+ * The slice of the existing service layer the bridge needs injected. Module-level
+ * functions (getAgents, getConnectedAgents, getProject, execBd, buildAutoDevelopStatus)
+ * are imported directly; only the stateful stores/services are passed in so the
+ * caller controls their lifecycle (and tests can substitute fakes).
+ */
+export interface BridgeToolDeps {
+  messageStore: Pick<MessageStore, "getMessages" | "getUnreadCounts">;
+  proposalStore: ProposalStore;
+  autoDevelopStore: AutoDevelopStore | undefined;
+  questionService: Pick<QuestionService, "listQuestions">;
+}
+
+export interface BridgeToolRequest {
+  /** Tool name the avatar wants to call. */
+  tool: string;
+  /** Target project UUID. Required for project-scoped tools, optional otherwise. */
+  projectId?: string | undefined;
+  /** Tool-specific arguments. */
+  args?: Record<string, unknown> | undefined;
+}
+
+export interface BridgeToolErrorBody {
+  code: string;
+  message: string;
+}
+
+export type BridgeToolResult =
+  | { ok: true; tool: BridgeToolName; projectId: string | null; data: unknown }
+  | { ok: false; tool: string; projectId: string | null; error: BridgeToolErrorBody };
+
+export interface BridgeToolBridge {
+  /** Execute a whitelisted, read-only tool and return a structured result. */
+  executeTool(req: BridgeToolRequest): Promise<BridgeToolResult>;
+  /** Type guard: is the given tool name on the read-only whitelist? */
+  isAllowed(tool: string): tool is BridgeToolName;
+  /** The list of callable tool names. */
+  listTools(): BridgeToolName[];
+}
+
+// ============================================================================
+// Result helpers
+// ============================================================================
+
+function ok(tool: BridgeToolName, projectId: string | null, data: unknown): BridgeToolResult {
+  return { ok: true, tool, projectId, data };
+}
+
+function reject(
+  tool: string,
+  projectId: string | null,
+  code: string,
+  message: string,
+): BridgeToolResult {
+  return { ok: false, tool, projectId, error: { code, message } };
+}
+
+// ============================================================================
+// Per-tool argument schemas (defensive — this surface is reachable from the
+// avatar's tool loop over HTTP).
+// ============================================================================
+
+const listAgentsArgs = z.object({
+  status: z.enum(["active", "idle", "all"]).optional(),
+});
+
+const listQuestionsArgs = z.object({
+  status: z.enum(["open", "answered", "dismissed"]).optional(),
+  category: z.enum(["decision", "clarification", "approval", "action_required", "other"]).optional(),
+  agentId: z.string().optional(),
+  urgency: z.enum(["low", "normal", "high", "blocking"]).optional(),
+});
+
+const listBeadsArgs = z.object({
+  status: z.enum(["open", "in_progress", "closed", "all"]).optional(),
+  assignee: z.string().optional(),
+  type: z.enum(["epic", "task", "bug"]).optional(),
+});
+
+// ============================================================================
+// Project resolution
+// ============================================================================
+
+interface ResolvedProject {
+  project: Project;
+  cwd: string;
+  beadsDir: string;
+}
+
+type ProjectResolution =
+  | { ok: true; resolved: ResolvedProject }
+  | { ok: false; code: string; message: string };
+
+/**
+ * Resolve a named projectId to its registry record + `.beads/` directory.
+ * Returns a structured failure (never throws) so callers can map it to a
+ * BridgeToolResult.
+ */
+function resolveProject(projectId: string | undefined): ProjectResolution {
+  if (!projectId) {
+    return { ok: false, code: "PROJECT_REQUIRED", message: "This tool requires a target projectId." };
+  }
+
+  const result = getProject(projectId);
+  if (!result.success || !result.data) {
+    return { ok: false, code: "PROJECT_NOT_FOUND", message: `Project '${projectId}' not found.` };
+  }
+
+  const project = result.data;
+  let beadsDir: string;
+  try {
+    beadsDir = resolveBeadsDir(project.path);
+  } catch {
+    return {
+      ok: false,
+      code: "PROJECT_NOT_FOUND",
+      message: `Could not resolve the beads directory for project '${projectId}'.`,
+    };
+  }
+
+  return { ok: true, resolved: { project, cwd: project.path, beadsDir } };
+}
+
+// ============================================================================
+// Factory
+// ============================================================================
+
+export function createBridgeToolBridge(deps: BridgeToolDeps): BridgeToolBridge {
+  function isAllowed(tool: string): tool is BridgeToolName {
+    return ALLOWED_TOOLS.has(tool);
+  }
+
+  async function executeTool(req: BridgeToolRequest): Promise<BridgeToolResult> {
+    const tool = req.tool;
+    const projectId = req.projectId ?? null;
+    const args = req.args ?? {};
+
+    // ---- Whitelist enforcement (fail-closed) ----
+    if (!isAllowed(tool)) {
+      return reject(
+        tool,
+        projectId,
+        "TOOL_NOT_ALLOWED",
+        `Tool '${tool}' is not in the read-only Bridge whitelist.`,
+      );
+    }
+
+    try {
+      switch (tool) {
+        case "list_agents":
+          return await runListAgents(deps, args, projectId);
+        case "list_questions":
+          return runListQuestions(deps, args, projectId);
+        case "list_beads":
+          return await runListBeads(args, req.projectId);
+        case "get_project_state":
+          return await runGetProjectState(deps, req.projectId);
+        case "get_auto_develop_status":
+          return runGetAutoDevelopStatus(deps, req.projectId);
+        default:
+          // Unreachable — isAllowed already gated the set, but keep TS exhaustive.
+          return reject(tool, projectId, "TOOL_NOT_ALLOWED", `Tool '${tool}' is not callable.`);
+      }
+    } catch (err) {
+      return reject(
+        tool,
+        projectId,
+        "TOOL_FAILED",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+
+  return {
+    executeTool,
+    isAllowed,
+    listTools: () => [...BRIDGE_READONLY_TOOLS],
+  };
+}
+
+// ============================================================================
+// Tool handlers — each delegates to the existing service layer.
+// ============================================================================
+
+const TOOL_LIST_AGENTS: BridgeToolName = "list_agents";
+const TOOL_LIST_QUESTIONS: BridgeToolName = "list_questions";
+const TOOL_LIST_BEADS: BridgeToolName = "list_beads";
+const TOOL_GET_PROJECT_STATE: BridgeToolName = "get_project_state";
+const TOOL_GET_AUTO_DEVELOP_STATUS: BridgeToolName = "get_auto_develop_status";
+
+async function runListAgents(
+  _deps: BridgeToolDeps,
+  args: Record<string, unknown>,
+  projectId: string | null,
+): Promise<BridgeToolResult> {
+  const parsed = listAgentsArgs.safeParse(args);
+  if (!parsed.success) {
+    return reject(TOOL_LIST_AGENTS, projectId, "INVALID_ARGS", parsed.error.issues.map((i) => i.message).join("; "));
+  }
+  const status = parsed.data.status ?? "all";
+
+  // Delegate to the same sources list_agents (MCP) uses.
+  const connected = getConnectedAgents();
+  const connectedIds = new Set(connected.map((c) => c.agentId));
+
+  const agentsResult = await getAgents();
+  let agents = agentsResult.success && agentsResult.data ? agentsResult.data : [];
+
+  // Cross-project read: when a projectId is named, scope to that project's crew.
+  if (projectId) {
+    agents = agents.filter((a) => a.project === projectId);
+  }
+
+  if (status === "active") {
+    agents = agents.filter((a) => a.status === "working" || a.status === "blocked" || a.status === "stuck");
+  } else if (status === "idle") {
+    agents = agents.filter((a) => a.status === "idle");
+  }
+
+  const enriched = agents.map((a) => ({ ...a, connected: connectedIds.has(a.id) }));
+  return ok(TOOL_LIST_AGENTS, projectId, { agents: enriched, count: enriched.length });
+}
+
+function runListQuestions(
+  deps: BridgeToolDeps,
+  args: Record<string, unknown>,
+  projectId: string | null,
+): BridgeToolResult {
+  const parsed = listQuestionsArgs.safeParse(args);
+  if (!parsed.success) {
+    return reject(TOOL_LIST_QUESTIONS, projectId, "INVALID_ARGS", parsed.error.issues.map((i) => i.message).join("; "));
+  }
+
+  // projectId is an optional scope: omitted ⇒ fleet-wide listing.
+  const questions = deps.questionService.listQuestions({
+    projectId: projectId ?? undefined,
+    status: parsed.data.status,
+    category: parsed.data.category,
+    agentId: parsed.data.agentId,
+    urgency: parsed.data.urgency,
+  });
+
+  return ok(TOOL_LIST_QUESTIONS, projectId, { questions, count: questions.length });
+}
+
+async function runListBeads(
+  args: Record<string, unknown>,
+  rawProjectId: string | undefined,
+): Promise<BridgeToolResult> {
+  const projectId = rawProjectId ?? null;
+
+  const parsed = listBeadsArgs.safeParse(args);
+  if (!parsed.success) {
+    return reject(TOOL_LIST_BEADS, projectId, "INVALID_ARGS", parsed.error.issues.map((i) => i.message).join("; "));
+  }
+
+  const resolution = resolveProject(rawProjectId);
+  if (!resolution.ok) {
+    return reject(TOOL_LIST_BEADS, projectId, resolution.code, resolution.message);
+  }
+  const { cwd, beadsDir } = resolution.resolved;
+
+  const bdArgs: string[] = ["list", "--json"];
+  if (parsed.data.status === "all") {
+    bdArgs.push("--all");
+  } else if (parsed.data.status) {
+    bdArgs.push("--status", parsed.data.status);
+  }
+  if (parsed.data.assignee) bdArgs.push("--assignee", parsed.data.assignee);
+  if (parsed.data.type) bdArgs.push("--type", parsed.data.type);
+
+  const result = await execBd<BeadsIssue[]>(bdArgs, { cwd, beadsDir });
+  if (!result.success) {
+    return reject(TOOL_LIST_BEADS, projectId, "TOOL_FAILED", result.error?.message ?? "bd list failed");
+  }
+
+  const beads = Array.isArray(result.data) ? result.data : [];
+  return ok(TOOL_LIST_BEADS, projectId, { beads, count: beads.length });
+}
+
+async function runGetProjectState(
+  deps: BridgeToolDeps,
+  rawProjectId: string | undefined,
+): Promise<BridgeToolResult> {
+  const projectId = rawProjectId ?? null;
+
+  const resolution = resolveProject(rawProjectId);
+  if (!resolution.ok) {
+    return reject(TOOL_GET_PROJECT_STATE, projectId, resolution.code, resolution.message);
+  }
+  const { cwd, beadsDir } = resolution.resolved;
+
+  const connectedAgents = getConnectedAgents().length;
+
+  // Open beads scoped to the named project's .beads/ directory.
+  let openBeads = 0;
+  const bdResult = await execBd<BeadsIssue[]>(["list", "--json"], { cwd, beadsDir });
+  if (bdResult.success && Array.isArray(bdResult.data)) {
+    openBeads = bdResult.data.filter((b) => b.status !== "closed").length;
+  }
+
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const recentMessages = deps.messageStore.getMessages({ after: since }).length;
+  const unreadCounts = deps.messageStore.getUnreadCounts();
+
+  return ok(TOOL_GET_PROJECT_STATE, projectId, {
+    projectId,
+    connectedAgents,
+    openBeads,
+    recentMessages,
+    unreadCounts,
+  });
+}
+
+function runGetAutoDevelopStatus(
+  deps: BridgeToolDeps,
+  rawProjectId: string | undefined,
+): BridgeToolResult {
+  const projectId = rawProjectId ?? null;
+
+  const resolution = resolveProject(rawProjectId);
+  if (!resolution.ok) {
+    return reject(TOOL_GET_AUTO_DEVELOP_STATUS, projectId, resolution.code, resolution.message);
+  }
+
+  const status = buildAutoDevelopStatus(resolution.resolved.project, deps.proposalStore, deps.autoDevelopStore);
+  return ok(TOOL_GET_AUTO_DEVELOP_STATUS, projectId, status);
+}
