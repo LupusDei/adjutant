@@ -28,6 +28,9 @@ import { backfillConversations } from "./services/conversation-backfill.js";
 import { createConversationStore } from "./services/conversation-store.js";
 import { createConversationsRouter } from "./routes/conversations.js";
 import { createChannelsRouter } from "./routes/channels.js";
+import { createBridgeRouter } from "./routes/bridge.js";
+import { BridgeSessionBroker } from "./services/bridge-session-broker.js";
+import { createBridgeToolBridge } from "./services/bridge-tool-bridge.js";
 import { createEventStore } from "./services/event-store.js";
 import { createQuestionStore } from "./services/question-store.js";
 import { createQuestionService } from "./services/question-service.js";
@@ -181,6 +184,18 @@ const questionService = createQuestionService({
   },
 });
 app.use("/api/questions", createQuestionsRouter(questionService));
+
+// adj-202.3.5 — The Bridge: managed avatar session + read-only fleet tool surface.
+// Behind apiKeyAuth (the dashboard calls it with the key): read-only today, but
+// startSession() spends real Runway credits, so it must not be public.
+const bridgeBroker = new BridgeSessionBroker();
+const bridgeToolBridge = createBridgeToolBridge({
+  messageStore,
+  proposalStore,
+  autoDevelopStore,
+  questionService,
+});
+app.use("/api/bridge", createBridgeRouter({ broker: bridgeBroker, toolBridge: bridgeToolBridge }));
 
 // Initialize persona and callsign toggle services and mount routes
 const personaService = createPersonaService(messageDb);
