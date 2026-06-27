@@ -119,6 +119,10 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
       avatarId: session.avatarId,
       sessionId: session.sessionId,
       sessionKey: session.sessionKey,
+      // Voice conversation: keep the mic, disable the user's front camera so there's
+      // no self-view picture-in-picture (and no camera permission prompt).
+      audio: true,
+      video: false,
       onError: (e) => { statusEl.style.display = 'block'; setStatus('Error: ' + (e && e.message ? e.message : e), true); },
     }));
   } catch (e) {
