@@ -34,6 +34,7 @@ import { createBridgeToolBridge } from "./services/bridge-tool-bridge.js";
 import { createBridgeRpcManager } from "./services/bridge-rpc-handler.js";
 import { BRIDGE_DIRECTIVE_PREFIX } from "./services/bridge-rpc-tools.js";
 import { deliverDirectMessage } from "./services/direct-message-delivery.js";
+import { nudgeAgentViaBridge, answerQuestionViaBridge, createBeadViaBridge } from "./services/bridge-commands.js";
 import { createEventStore } from "./services/event-store.js";
 import { createQuestionStore } from "./services/question-store.js";
 import { createQuestionService } from "./services/question-service.js";
@@ -196,6 +197,12 @@ const bridgeRpcManager = createBridgeRpcManager({
       deliveredToSessions: result.deliveredToSessions,
     };
   },
+  // adj-202.4.2/.3/.4 — more safe-write command tools, each reusing the REAL service
+  // (Rules 4+9): nudge → session bridge, answer_question → question-service, create_bead
+  // → bd CLI. Reversible → no confirm gate; attributed to the coordinator; logged.
+  nudgeAgent: (input) => nudgeAgentViaBridge(input),
+  answerQuestion: (input) => answerQuestionViaBridge(questionService, input),
+  createBead: (input) => createBeadViaBridge(input),
 });
 
 // The Bridge — avatar (adj-202.2 / adj-202.7.1). Public (no API key) so the iOS WKWebView

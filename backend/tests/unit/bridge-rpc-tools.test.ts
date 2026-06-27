@@ -18,9 +18,17 @@ import {
 } from "../../src/services/bridge-rpc-tools.js";
 
 describe("BRIDGE_RPC_TOOLS descriptors", () => {
-  it("should declare every read-only whitelist tool PLUS the send_message command tool", () => {
+  it("should declare every read-only whitelist tool PLUS the safe-write command tools", () => {
     const names = BRIDGE_RPC_TOOLS.map((t) => t.name).sort();
-    expect(names).toEqual([...BRIDGE_READONLY_TOOLS, "send_message"].sort());
+    expect(names).toEqual(
+      [...BRIDGE_READONLY_TOOLS, "send_message", "nudge_agent", "answer_question", "create_bead"].sort(),
+    );
+  });
+
+  it("should NOT expose destructive tools (decommission/spawn stay out of the toolset)", () => {
+    const names = BRIDGE_RPC_TOOLS.map((t) => t.name);
+    expect(names).not.toContain("decommission_agent");
+    expect(names).not.toContain("spawn_worker");
   });
 
   it("should mark every tool as backend_rpc with a description and a Runway-legal timeout (<=8s)", () => {
@@ -76,6 +84,13 @@ describe("composeBridgePersonality", () => {
     expect(text).toMatch(/by name/);
     // ...and that no project/epic/bead id is required.
     expect(text).toMatch(/do not need|don't need|no .*(project|epic|bead) id/);
+  });
+
+  it("should name the full safe-write command toolset in the persona", () => {
+    const text = BRIDGE_RPC_PERSONALITY.toLowerCase();
+    for (const tool of ["send_message", "nudge_agent", "answer_question", "create_bead"]) {
+      expect(text).toContain(tool);
+    }
   });
 
   it("should append the tool guidance to a supplied base personality", () => {
