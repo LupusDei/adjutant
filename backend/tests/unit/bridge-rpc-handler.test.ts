@@ -120,6 +120,64 @@ describe("buildBridgeToolDispatch", () => {
   });
 });
 
+describe("buildBridgeToolDispatch — send_message command tool (adj-202.4.1)", () => {
+  it("should NOT register send_message when no sendMessage write path is provided (fail-closed)", () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const dispatch = buildBridgeToolDispatch({ executeTool });
+    expect(dispatch["send_message"]).toBeUndefined();
+    expect(Object.keys(dispatch).sort()).toEqual([...BRIDGE_READONLY_TOOLS].sort());
+  });
+
+  it("should register send_message when a sendMessage write path IS provided", () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const sendMessage = vi.fn();
+    const dispatch = buildBridgeToolDispatch({ executeTool, sendMessage });
+    expect(typeof dispatch["send_message"]).toBe("function");
+  });
+
+  it("should map { to, body } to the write path and return the structured ok envelope (no IDs)", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const sendMessage = vi.fn(async () => ({
+      messageId: "msg-9",
+      conversationId: "dm_x",
+      deliveredToSessions: 1,
+    }));
+    const dispatch = buildBridgeToolDispatch({ executeTool, sendMessage });
+
+    const out = await dispatch["send_message"]!({ to: " kerrigan ", body: "check the auth epic" });
+
+    // Recipient is trimmed; NO projectId/beadId/epicId ever passed.
+    expect(sendMessage).toHaveBeenCalledWith({ to: "kerrigan", body: "check the auth epic" });
+    expect(out).toMatchObject({ ok: true, tool: "send_message", to: "kerrigan", messageId: "msg-9", deliveredToSessions: 1 });
+  });
+
+  it("should reject when 'to' or 'body' is missing — without calling the write path (validation)", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const sendMessage = vi.fn();
+    const dispatch = buildBridgeToolDispatch({ executeTool, sendMessage });
+
+    const out = (await dispatch["send_message"]!({ to: "kerrigan" })) as { ok: boolean; error: { code: string } };
+    expect(out.ok).toBe(false);
+    expect(out.error.code).toBe("INVALID_ARGS");
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("should never reject — a write-path throw becomes a structured error envelope", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const sendMessage = vi.fn(async () => {
+      throw new Error("store down");
+    });
+    const dispatch = buildBridgeToolDispatch({ executeTool, sendMessage });
+
+    const out = (await dispatch["send_message"]!({ to: "kerrigan", body: "go" })) as {
+      ok: boolean;
+      error: { message: string };
+    };
+    expect(out.ok).toBe(false);
+    expect(out.error.message).toContain("store down");
+  });
+});
+
 describe("createBridgeRpcManager", () => {
   function fakeHandler(): RpcHandlerLike {
     return { close: vi.fn(async () => {}), connected: true };
@@ -156,6 +214,23 @@ describe("createBridgeRpcManager", () => {
     await captured!.tools["list_beads"]!({ status: "open" });
 
     expect(executeTool).toHaveBeenCalledWith({ tool: "list_beads", args: { status: "open" }, projectId: "p1" });
+  });
+
+  it("should wire the send_message command tool into the attached handler when configured", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const sendMessage = vi.fn(async () => ({ messageId: "m1", conversationId: "dm_y", deliveredToSessions: 0 }));
+    let captured: Parameters<CreateRpcHandlerFn>[0] | null = null;
+    const createHandler: CreateRpcHandlerFn = vi.fn(async (opts) => {
+      captured = opts;
+      return fakeHandler();
+    });
+    const manager = createBridgeRpcManager({ executeTool, apiKey: "k", createHandler, sendMessage });
+
+    await manager.attach({ sessionId: "sess-cmd" });
+    expect(Object.keys(captured!.tools).sort()).toEqual([...BRIDGE_READONLY_TOOLS, "send_message"].sort());
+
+    await captured!.tools["send_message"]!({ to: "kerrigan", body: "go" });
+    expect(sendMessage).toHaveBeenCalledWith({ to: "kerrigan", body: "go" });
   });
 
   it("should close and forget a session via close(), and close all via closeAll()", async () => {

@@ -1,28 +1,36 @@
 /**
- * The Bridge — read-only RPC tool descriptors (adj-202.7).
+ * The Bridge — RPC tool descriptors (adj-202.7 / adj-202.4.1).
  *
  * These are the `backend_rpc` tool definitions handed to Runway at session-create
- * time so GWM-1 (the avatar's model) KNOWS the read-only fleet tools exist and can
- * invoke them mid-conversation. Without them the avatar has nothing to call and a
- * status question stalls forever ("querying…") — the gap this task closes.
+ * time so GWM-1 (the avatar's model) KNOWS the tools exist and can invoke them mid-
+ * conversation. Without them the avatar has nothing to call and a status question
+ * stalls forever ("querying…").
  *
- * The descriptors mirror the read-only whitelist in {@link BRIDGE_READONLY_TOOLS}
- * exactly: every callable tool, no write tools. The avatar never speaks a project
- * UUID, so `projectId` is NOT a model-visible parameter — it is injected
- * server-side from the session's project context (see bridge-rpc-handler.ts). Only
- * the functional arguments (status / type / urgency / …) are exposed to the model.
+ * Two groups:
+ *   - the five READ-ONLY fleet tools (mirror {@link BRIDGE_READONLY_TOOLS}); the
+ *     avatar never speaks a project UUID, so `projectId` is NOT a model-visible
+ *     parameter — it is injected server-side from session context.
+ *   - the `send_message` COMMAND tool (adj-202.4.1) so the avatar can DIRECT agents
+ *     by name. Its contract is just { to, body } — no project/epic/bead id, ever.
  *
- * Runway tool-parameter shape (verified against the avatars-sdk-react
- * `nextjs-rpc-*` examples): `{ name, type, description }`. There is no enum field,
- * so allowed values are spelled out in each parameter description.
+ * Runway tool-parameter shape (verified against the avatars-sdk-react `nextjs-rpc-*`
+ * examples): `{ name, type, description }`. There is no enum field, so allowed values
+ * are spelled out in each description. `timeoutSeconds` must be <= 8 (Runway max).
  */
 
 import type { RunwayRpcToolDef } from "./runway-client.js";
 
 /**
- * The `backend_rpc` tool descriptors for the five read-only fleet tools. The order
- * and names are kept in lockstep with {@link BRIDGE_READONLY_TOOLS}; a drift is
- * caught by bridge-rpc-tools.test.ts.
+ * Prefix applied to the text injected into a directed agent's live session, so the
+ * agent knows the message is a command directive relayed through The Bridge (the
+ * persisted/broadcast message is additionally attributed to the "adjutant" sender).
+ */
+export const BRIDGE_DIRECTIVE_PREFIX = "[Command directive via The Bridge] ";
+
+/**
+ * The `backend_rpc` tool descriptors. The read-only names stay in lockstep with
+ * {@link BRIDGE_READONLY_TOOLS} (drift is caught by bridge-rpc-tools.test.ts);
+ * `send_message` is the lone write/command tool.
  */
 export const BRIDGE_RPC_TOOLS: RunwayRpcToolDef[] = [
   {
@@ -96,6 +104,21 @@ export const BRIDGE_RPC_TOOLS: RunwayRpcToolDef[] = [
     parameters: [],
     timeoutSeconds: 8,
   },
+  {
+    type: "backend_rpc",
+    name: "send_message",
+    description:
+      "Message any agent by name to direct the swarm (e.g. tell 'kerrigan' to start a task). You do NOT need a project, epic, or bead id — just the agent's name and what to say. Also accepts 'user' to message the Commander. Use this readily to relay the Commander's direction.",
+    parameters: [
+      {
+        name: "to",
+        type: "string",
+        description: "Recipient: an agent's name (e.g. \"kerrigan\"), or \"user\" to message the Commander.",
+      },
+      { name: "body", type: "string", description: "The message / directive to send." },
+    ],
+    timeoutSeconds: 8,
+  },
 ];
 
 /**
@@ -113,7 +136,9 @@ You can query live fleet state using these read-only tools. CALL the matching to
 - get_project_state — a snapshot of the selected project.
 - get_auto_develop_status — the auto-develop loop status for the selected project.
 
-After a tool returns, narrate its STRUCTURED result faithfully and conversationally. The returned data is the source of truth. If a tool reports it needs a project and none is selected, say so plainly and ask the Commander to select one. Keep answers brief and grounded.`;
+After a tool returns, narrate its STRUCTURED result faithfully and conversationally. The returned data is the source of truth. If a tool reports it needs a project and none is selected, say so plainly and ask the Commander to select one. Keep answers brief and grounded.
+
+You can also DIRECT the swarm: use send_message to message any agent BY NAME (and "user" to reach the Commander). You do NOT need a project, epic, or bead id to send — just the agent's name and the message. Act with independence: when the Commander tells you to relay something to an agent, send it right away and confirm you did. Only ask the Commander to clarify if the agent NAME itself is ambiguous — never demand IDs.`;
 
 /**
  * Compose the per-session personality: append the fleet-tool guidance to a caller-

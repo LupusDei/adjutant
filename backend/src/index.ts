@@ -32,6 +32,8 @@ import { createBridgeRouter } from "./routes/bridge.js";
 import { BridgeSessionBroker } from "./services/bridge-session-broker.js";
 import { createBridgeToolBridge } from "./services/bridge-tool-bridge.js";
 import { createBridgeRpcManager } from "./services/bridge-rpc-handler.js";
+import { BRIDGE_DIRECTIVE_PREFIX } from "./services/bridge-rpc-tools.js";
+import { deliverDirectMessage } from "./services/direct-message-delivery.js";
 import { createEventStore } from "./services/event-store.js";
 import { createQuestionStore } from "./services/question-store.js";
 import { createQuestionService } from "./services/question-service.js";
@@ -170,8 +172,30 @@ const bridgeToolBridge = createBridgeToolBridge({
 });
 // Dispatches the avatar's `backend_rpc` calls to the SAME read-only tool bridge, so a
 // spoken status question resolves to real fleet data instead of stalling on "querying…".
+// adj-202.4.1: the avatar can also DIRECT agents — send_message is a deliberate write
+// path (the read-only bridge stays fail-closed) that reuses deliverDirectMessage, the
+// same persist+broadcast+inject path the user→agent route uses. Sent as the "adjutant"
+// coordinator and prefixed so the agent knows it's a command directive via The Bridge.
 const bridgeRpcManager = createBridgeRpcManager({
   executeTool: (req) => bridgeToolBridge.executeTool(req),
+  sendMessage: async ({ to, body }) => {
+    const result = deliverDirectMessage(
+      { store: messageStore, eventStore },
+      {
+        from: "adjutant",
+        to,
+        body,
+        role: "agent",
+        emitEvent: true,
+        deliveryText: `${BRIDGE_DIRECTIVE_PREFIX}${body}`,
+      },
+    );
+    return {
+      messageId: result.messageId,
+      conversationId: result.conversationId,
+      deliveredToSessions: result.deliveredToSessions,
+    };
+  },
 });
 
 // The Bridge — avatar (adj-202.2 / adj-202.7.1). Public (no API key) so the iOS WKWebView

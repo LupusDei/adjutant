@@ -18,18 +18,27 @@ import {
 } from "../../src/services/bridge-rpc-tools.js";
 
 describe("BRIDGE_RPC_TOOLS descriptors", () => {
-  it("should declare exactly one backend_rpc tool per read-only whitelist entry", () => {
+  it("should declare every read-only whitelist tool PLUS the send_message command tool", () => {
     const names = BRIDGE_RPC_TOOLS.map((t) => t.name).sort();
-    expect(names).toEqual([...BRIDGE_READONLY_TOOLS].sort());
+    expect(names).toEqual([...BRIDGE_READONLY_TOOLS, "send_message"].sort());
   });
 
-  it("should mark every tool as backend_rpc with a description and a timeout (model-callable shape)", () => {
+  it("should mark every tool as backend_rpc with a description and a Runway-legal timeout (<=8s)", () => {
     for (const tool of BRIDGE_RPC_TOOLS) {
       expect(tool.type).toBe("backend_rpc");
       expect(tool.description.length).toBeGreaterThan(10);
       expect(tool.timeoutSeconds).toBeGreaterThan(0);
+      expect(tool.timeoutSeconds).toBeLessThanOrEqual(8); // Runway max
       expect(Array.isArray(tool.parameters)).toBe(true);
     }
+  });
+
+  it("should describe send_message with { to, body } and state NO project/epic/bead id is needed", () => {
+    const send = BRIDGE_RPC_TOOLS.find((t) => t.name === "send_message");
+    expect(send).toBeDefined();
+    const paramNames = send!.parameters.map((p) => p.name).sort();
+    expect(paramNames).toEqual(["body", "to"]);
+    expect(send!.description.toLowerCase()).toMatch(/do not need|don't need|no .*(project|epic|bead)/);
   });
 
   it("should NOT expose a projectId parameter (it is injected server-side from session context)", () => {
@@ -58,6 +67,15 @@ describe("composeBridgePersonality", () => {
     // Must instruct the model to call tools rather than stall, and to ground its
     // answer in the returned data.
     expect(text).toMatch(/call|use/);
+  });
+
+  it("should empower GWM-1 to message agents by name without requiring any IDs", () => {
+    const text = BRIDGE_RPC_PERSONALITY.toLowerCase();
+    expect(text).toContain("send_message");
+    // Tells the avatar it can direct agents by name...
+    expect(text).toMatch(/by name/);
+    // ...and that no project/epic/bead id is required.
+    expect(text).toMatch(/do not need|don't need|no .*(project|epic|bead) id/);
   });
 
   it("should append the tool guidance to a supplied base personality", () => {
