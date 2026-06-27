@@ -147,12 +147,16 @@ describe("createBridgeToolBridge — whitelist", () => {
 // ============================================================================
 
 describe("list_agents", () => {
+  // NOTE (adj-202.3.2.1 / Constitution Rule 1): getAgents() sets CrewMember.project
+  // to the project NAME (via resolveProjectName), NEVER the UUID. These fixtures use
+  // the real shape (project: "adjutant") so the cross-project filter is tested against
+  // production reality — an earlier UUID fixture masked a real zero-results bug.
   it("delegates to getAgents + getConnectedAgents and returns structured data", async () => {
     mockGetAgents.mockResolvedValue({
       success: true,
       data: [
-        { id: "adjutant/Raynor", name: "Raynor", type: "engineer", project: PROJECT_ID, status: "working" },
-        { id: "other/Kerrigan", name: "Kerrigan", type: "engineer", project: "other-proj", status: "idle" },
+        { id: "adjutant/Raynor", name: "Raynor", type: "engineer", project: "adjutant", status: "working" },
+        { id: "other/Kerrigan", name: "Kerrigan", type: "engineer", project: "other", status: "idle" },
       ],
     });
     mockGetConnectedAgents.mockReturnValue([{ agentId: "adjutant/Raynor", sessionId: "s1", connectedAt: new Date() }]);
@@ -169,23 +173,42 @@ describe("list_agents", () => {
     }
   });
 
-  it("filters agents by projectId when one is supplied (cross-project read)", async () => {
+  it("filters agents by projectId by resolving the UUID to the project NAME (cross-project read)", async () => {
+    // Agents carry the project NAME; the caller names the project by UUID.
+    // getProject(PROJECT_ID) resolves to { name: "adjutant" } (beforeEach default),
+    // so the filter must match Raynor (project: "adjutant") and exclude Kerrigan.
+    // This FAILS against the old `a.project === projectId` (UUID) comparison.
     mockGetAgents.mockResolvedValue({
       success: true,
       data: [
-        { id: "adjutant/Raynor", name: "Raynor", type: "engineer", project: PROJECT_ID, status: "working" },
-        { id: "other/Kerrigan", name: "Kerrigan", type: "engineer", project: "other-proj", status: "idle" },
+        { id: "adjutant/Raynor", name: "Raynor", type: "engineer", project: "adjutant", status: "working" },
+        { id: "other/Kerrigan", name: "Kerrigan", type: "engineer", project: "other", status: "idle" },
       ],
     });
 
     const bridge = createBridgeToolBridge(makeDeps());
     const res = await bridge.executeTool({ tool: "list_agents", projectId: PROJECT_ID });
+
+    expect(mockGetProject).toHaveBeenCalledWith(PROJECT_ID);
     expect(res.ok).toBe(true);
     if (res.ok) {
       const data = res.data as { agents: { id: string }[]; count: number };
       expect(data.count).toBe(1);
       expect(data.agents[0]!.id).toBe("adjutant/Raynor");
     }
+  });
+
+  it("returns PROJECT_NOT_FOUND when list_agents is scoped to an unknown projectId", async () => {
+    mockGetProject.mockReturnValue({ success: false, error: { code: "NOT_FOUND", message: "nope" } });
+    mockGetAgents.mockResolvedValue({
+      success: true,
+      data: [{ id: "adjutant/Raynor", name: "Raynor", type: "engineer", project: "adjutant", status: "working" }],
+    });
+
+    const bridge = createBridgeToolBridge(makeDeps());
+    const res = await bridge.executeTool({ tool: "list_agents", projectId: "ghost" });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe("PROJECT_NOT_FOUND");
   });
 
   it("rejects invalid args with INVALID_ARGS", async () => {

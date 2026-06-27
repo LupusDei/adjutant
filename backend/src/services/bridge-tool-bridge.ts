@@ -265,8 +265,17 @@ async function runListAgents(
   let agents = agentsResult.success && agentsResult.data ? agentsResult.data : [];
 
   // Cross-project read: when a projectId is named, scope to that project's crew.
+  // getAgents() sets CrewMember.project to the project NAME (resolveProjectName),
+  // NOT the UUID — so we must resolve the named projectId to its registry name
+  // before comparing (adj-202.3.2.1). Comparing the UUID directly returns zero
+  // agents and silently breaks cross-project reads.
   if (projectId) {
-    agents = agents.filter((a) => a.project === projectId);
+    const projectResult = getProject(projectId);
+    if (!projectResult.success || !projectResult.data) {
+      return reject(TOOL_LIST_AGENTS, projectId, "PROJECT_NOT_FOUND", `Project '${projectId}' not found.`);
+    }
+    const projectName = projectResult.data.name;
+    agents = agents.filter((a) => a.project === projectName);
   }
 
   if (status === "active") {
