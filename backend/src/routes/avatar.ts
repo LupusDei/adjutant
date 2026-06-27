@@ -79,21 +79,26 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
     background-repeat: repeat, repeat, repeat, repeat, repeat, repeat, no-repeat, no-repeat, no-repeat;
   }
 
-  /* Avatar layer — centered, large, transparent so the galaxy shows behind it.
-     Known-good: do NOT force position/object-fit on AvatarCall's internal DOM (that
-     collapsed the render). Just center + cap to natural aspect, as large as fits. */
-  #root { position: fixed; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; }
+  /* Avatar layer — near-full-screen PORTRAIT via full-bleed cover. The video is
+     positioned against the VIEWPORT (position:fixed) and forced to cover it
+     (min 100vw AND 100vh, natural aspect): driving min-height makes a landscape
+     source grow tall and overflow its width, so it crops to portrait. Because it's
+     always >= the viewport, it can't collapse against AvatarCall's nested DOM
+     (the bug that made it vanish). #root clips the overflow. */
+  #root { position: fixed; inset: 0; z-index: 1; overflow: hidden; }
   #root, #root * { background-color: transparent !important; }
-  #root > * { max-width: 96vw !important; max-height: 92vh !important; }
   #root video, #root canvas {
-    display: block;
-    margin: auto;
-    width: auto;
-    height: auto;
-    max-width: 96vw;
-    max-height: 92vh;
-    border-radius: 18px;
-    box-shadow: 0 0 70px rgba(161,24,196,.40), 0 0 150px rgba(31,182,214,.18);
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    min-width: 100vw !important;
+    min-height: 100vh !important;
+    width: auto !important;
+    height: auto !important;
+    max-width: none !important;
+    max-height: none !important;
+    object-fit: cover !important;
   }
 
   #status { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; padding: 12px 16px env(safe-area-inset-bottom); text-align: center; font-size: 14px; color: #c9a0e0; }
