@@ -58,6 +58,8 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Adjutant needs microphone access to enable voice input for sending messages.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Adjutant needs camera access for live video conversations with the Adjutant avatar.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Adjutant uses speech recognition to convert your voice into text messages.</string>
 </dict>

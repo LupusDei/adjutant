@@ -9,9 +9,14 @@ struct SwarmOverviewView: View {
     @State private var skeletonPulse = false
     /// Tracks whether a long-press gesture fired, to suppress the button's tap action on release.
     @State private var longPressTriggered = false
+    /// The Bridge (adj-202.2.4): controls the full-screen Adjutant avatar overlay.
+    @State private var showAvatar = false
 
     var body: some View {
         VStack(spacing: 0) {
+            // The Bridge — open the conversational Adjutant avatar (pinned at the very top).
+            talkToAdjutantButton
+
             if viewModel.isLoading && viewModel.overview == nil {
                 loadingSkeleton
             } else if let error = viewModel.errorMessage, viewModel.overview == nil {
@@ -20,6 +25,11 @@ struct SwarmOverviewView: View {
                 overviewContent(overview)
             } else {
                 emptyView
+            }
+        }
+        .fullScreenCover(isPresented: $showAvatar) {
+            AvatarOverlayView(apiBaseURL: AppState.shared.apiBaseURL) {
+                showAvatar = false
             }
         }
         .background(theme.background.screen)
@@ -38,6 +48,40 @@ struct SwarmOverviewView: View {
                 Task<Void, Never> { await viewModel.startAgent(callsign: callsign) }
             }
         }
+    }
+
+    // MARK: - The Bridge (avatar)
+
+    private var talkToAdjutantButton: some View {
+        Button {
+            showAvatar = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "waveform.circle.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                Text("TALK TO THE ADJUTANT")
+                    .font(.system(.subheadline, design: .monospaced).weight(.bold))
+                    .kerning(1.5)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .bold))
+                    .opacity(0.7)
+            }
+            .foregroundStyle(Color(red: 0xA1 / 255, green: 0x18 / 255, blue: 0xC4 / 255))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .background(Color(red: 0xA1 / 255, green: 0x18 / 255, blue: 0xC4 / 255).opacity(0.12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color(red: 0xA1 / 255, green: 0x18 / 255, blue: 0xC4 / 255).opacity(0.6), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .padding(.horizontal, CRTTheme.Spacing.lg)
+        .padding(.top, CRTTheme.Spacing.md)
+        .padding(.bottom, CRTTheme.Spacing.sm)
+        .accessibilityLabel("Talk to the Adjutant")
     }
 
     // MARK: - Content

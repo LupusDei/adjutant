@@ -20,6 +20,7 @@ export { createConversationsRouter } from "./conversations.js";
 export { createChannelsRouter } from "./channels.js";
 export { createProposalsRouter } from "./proposals.js";
 export { createPublicProposalsRouter } from "./public-proposals.js";
+export { createAvatarRouter } from "./avatar.js";
 export { createDashboardRouter } from "./dashboard.js";
 export { createOverviewRouter } from "./overview.js";
 export { createPersonasRouter } from "./personas.js";
