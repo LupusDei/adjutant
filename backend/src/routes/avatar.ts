@@ -1,37 +1,80 @@
 /**
- * The Bridge — avatar prototype routes (adj-202.2.1 / adj-202.2.4).
+ * The Bridge — avatar routes (adj-202.2.1 / adj-202.2.4 / adj-202.7.1).
  *
  * Two public, no-API-key endpoints (mounted BEFORE apiKeyAuth, like /p):
- *   POST /avatar/connect  -> server-side Runway session create+poll, returns { sessionId, sessionKey, avatarId }
+ *   POST /avatar/connect  -> cost-guarded broker session, returns { sessionId, sessionKey, avatarId, expiresAt }
  *   GET  /avatar          -> a self-contained web client (loads @runwayml/avatars-react from a CDN,
  *                            fetches /avatar/connect, renders <AvatarCall>). Loaded by the iOS WKWebView overlay.
  *
  * The secret RUNWAYML_API_SECRET stays server-side; the browser only ever sees the short-lived
- * sessionKey. PROTOTYPE: not wired to the coordinator/MCP tools yet — this just talks to the character.
+ * sessionKey. These stay intentionally unauthenticated so the WKWebView page can call /connect
+ * same-origin without the dashboard API key.
  *
- * NOTE: these are intentionally unauthenticated for the prototype so the WKWebView page can call
- * /connect same-origin without injecting the dashboard API key. Each connect burns ~2 Runway credits;
- * tighten before any non-prototype use.
+ * adj-202.7.1: /avatar/connect now goes through the SAME `BridgeSessionBroker` +
+ * `BridgeRpcManager` the dashboard uses (it previously called the un-guarded,
+ * un-tool-enabled `createReadyAvatarSession`). So the iOS/default avatar gets (a) the
+ * read-only fleet tool loop — "what's the agent roster?" actually queries — and (b)
+ * the daily credit ceiling + cost guard. The response contract is unchanged. This also
+ * retires the duplicate create+poll lifecycle (DRY — adj-202.3.4.1).
  */
 
 import { Router } from "express";
-import { createReadyAvatarSession } from "../services/runway-avatar.js";
+
+import type { BridgeSessionBroker, StartSessionOptions } from "../services/bridge-session-broker.js";
+import { BridgeCostCeilingError } from "../services/bridge-session-broker.js";
+import type { BridgeRpcManager } from "../services/bridge-rpc-handler.js";
+import { BRIDGE_RPC_TOOLS, composeBridgePersonality } from "../services/bridge-rpc-tools.js";
 import { logError, logInfo } from "../utils/logger.js";
 
-export function createAvatarRouter(): Router {
+/** The slice of each service the avatar router needs (keeps it testable with fakes). */
+export interface AvatarRouterDeps {
+  broker: Pick<BridgeSessionBroker, "startSession">;
+  /**
+   * Server-side read-only tool loop (adj-202.7.1). When present, every avatar
+   * session gets a handler attached so the avatar can query the fleet. `attach`
+   * never throws, so it cannot break a (billable) session.
+   */
+  rpcManager?: Pick<BridgeRpcManager, "attach">;
+}
+
+export function createAvatarRouter(deps: AvatarRouterDeps): Router {
   const router = Router();
 
   router.post("/connect", async (req, res) => {
     const body = req.body as { customAvatarId?: unknown } | undefined;
     const customAvatarId =
       typeof body?.customAvatarId === "string" && body.customAvatarId.length > 0 ? body.customAvatarId : undefined;
+
+    // Tool-enable the session exactly like POST /api/bridge/session: the avatar gets
+    // the read-only fleet tools + a persona that tells GWM-1 to CALL them. Default
+    // mode has no selected project — fleet tools (list_agents/list_questions) need none.
+    const opts: StartSessionOptions = {
+      tools: BRIDGE_RPC_TOOLS,
+      personality: composeBridgePersonality(),
+    };
+    if (customAvatarId !== undefined) opts.avatarId = customAvatarId;
+
     try {
-      const session = await createReadyAvatarSession(customAvatarId ? { avatarId: customAvatarId } : {});
+      const session = await deps.broker.startSession(opts);
+
+      // Attach the server-side tool loop so the avatar can actually query the fleet.
+      // `attach` swallows its own errors — a tool-loop hiccup must not fail a live,
+      // billable session — so awaiting it is safe.
+      if (deps.rpcManager) {
+        await deps.rpcManager.attach({ sessionId: session.sessionId });
+      }
+
       logInfo("avatar session created", { sessionId: session.sessionId, avatarId: session.avatarId });
-      res.json(session);
+      // Preserve the EXACT contract the /avatar page consumes.
+      return res.json(session);
     } catch (err) {
+      // Daily credit ceiling — expected, recoverable; surface distinctly (429) like /api/bridge/session.
+      if (err instanceof BridgeCostCeilingError) {
+        logError("avatar session refused (cost ceiling)", { error: err.message });
+        return res.status(429).json({ success: false, error: { code: err.code, message: err.message } });
+      }
       logError("avatar session create failed", { error: err instanceof Error ? err.message : String(err) });
-      res.status(502).json({
+      return res.status(502).json({
         success: false,
         error: { code: "AVATAR_SESSION_FAILED", message: err instanceof Error ? err.message : "Unknown error" },
       });

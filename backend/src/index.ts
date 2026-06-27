@@ -131,9 +131,53 @@ app.use((req, res, next) => {
 // so a shareable /p/:token link works in any browser with no API key.
 app.use("/p", createPublicProposalsRouter(proposalStore));
 
-// The Bridge — avatar prototype (adj-202.2). Public (no API key) so the iOS WKWebView
+// adj-181.3 / adj-181.2 — question triage service. Constructed here (BEFORE the /avatar
+// mount) because the read-only Bridge tool bridge depends on it, and the iOS/default
+// /avatar route now shares that broker + tool loop (adj-202.7.1). Still top-level so the
+// MCP setToolRegistrar callback can reach it. Its REST route is mounted below, after auth.
+const questionStore = createQuestionStore(messageDb);
+const questionService = createQuestionService({
+  questionStore,
+  conversationStore,
+  messageStore,
+  wsBroadcast,
+  // adj-181.19: inject the answer into the asking agent's live tmux session so it
+  // acts immediately instead of waiting to read its DM. Mirrors the proven
+  // bead-assign-notification pattern; no-ops gracefully when no live session.
+  notifyAgentSession: (agentId, text) => {
+    try {
+      const bridge = getSessionBridge();
+      for (const session of bridge.registry.findByName(agentId)) {
+        if (session.status === "offline") continue;
+        void bridge.sendInput(session.id, text).catch(() => {});
+      }
+    } catch {
+      // Session bridge not ready — agent will pull the answer from its DM.
+    }
+  },
+});
+
+// adj-202.3.5 / adj-202.7 — The Bridge: cost-guarded avatar session broker + read-only
+// fleet tool surface + the server-side tool loop. Constructed BEFORE /avatar so the
+// iOS/default route can share the SAME broker + tool loop (adj-202.7.1). startSession()
+// spends real Runway credits, so the /api/bridge REST surface stays behind apiKeyAuth.
+const bridgeBroker = new BridgeSessionBroker();
+const bridgeToolBridge = createBridgeToolBridge({
+  messageStore,
+  proposalStore,
+  autoDevelopStore,
+  questionService,
+});
+// Dispatches the avatar's `backend_rpc` calls to the SAME read-only tool bridge, so a
+// spoken status question resolves to real fleet data instead of stalling on "querying…".
+const bridgeRpcManager = createBridgeRpcManager({
+  executeTool: (req) => bridgeToolBridge.executeTool(req),
+});
+
+// The Bridge — avatar (adj-202.2 / adj-202.7.1). Public (no API key) so the iOS WKWebView
 // overlay can load /avatar and call /avatar/connect same-origin. Mounted BEFORE apiKeyAuth.
-app.use("/avatar", createAvatarRouter());
+// It shares the broker + tool loop so the phone avatar is cost-guarded AND can query the fleet.
+app.use("/avatar", createAvatarRouter({ broker: bridgeBroker, rpcManager: bridgeRpcManager }));
 
 app.use(apiKeyAuth);
 
@@ -160,48 +204,12 @@ app.use("/api/projects", createProjectsRouter(messageStore, proposalStore, autoD
 app.use("/api/overview", createOverviewRouter(messageStore));
 app.use("/api/proposals", createProposalsRouter(proposalStore));
 
-// adj-181.3 — agent question triage: REST API + WS broadcast + APNS push
-// adj-181.2 — question service is also needed by registerQuestionTools (MCP tools)
-//             so it must be top-level (accessible in the setToolRegistrar callback)
-const questionStore = createQuestionStore(messageDb);
-const questionService = createQuestionService({
-  questionStore,
-  conversationStore,
-  messageStore,
-  wsBroadcast,
-  // adj-181.19: inject the answer into the asking agent's live tmux session so it
-  // acts immediately instead of waiting to read its DM. Mirrors the proven
-  // bead-assign-notification pattern; no-ops gracefully when no live session.
-  notifyAgentSession: (agentId, text) => {
-    try {
-      const bridge = getSessionBridge();
-      for (const session of bridge.registry.findByName(agentId)) {
-        if (session.status === "offline") continue;
-        void bridge.sendInput(session.id, text).catch(() => {});
-      }
-    } catch {
-      // Session bridge not ready — agent will pull the answer from its DM.
-    }
-  },
-});
+// adj-181.3 — agent question triage REST API (service constructed above the /avatar mount).
 app.use("/api/questions", createQuestionsRouter(questionService));
 
-// adj-202.3.5 — The Bridge: managed avatar session + read-only fleet tool surface.
-// Behind apiKeyAuth (the dashboard calls it with the key): read-only today, but
-// startSession() spends real Runway credits, so it must not be public.
-const bridgeBroker = new BridgeSessionBroker();
-const bridgeToolBridge = createBridgeToolBridge({
-  messageStore,
-  proposalStore,
-  autoDevelopStore,
-  questionService,
-});
-// adj-202.7 — server-side avatar tool loop: dispatches the avatar's `backend_rpc`
-// calls to the SAME read-only tool bridge, so a spoken status question resolves to
-// real fleet data instead of stalling on "querying…".
-const bridgeRpcManager = createBridgeRpcManager({
-  executeTool: (req) => bridgeToolBridge.executeTool(req),
-});
+// adj-202.3.5 / adj-202.7 — The Bridge REST surface (broker + tool bridge + tool loop all
+// constructed above). Behind apiKeyAuth (the dashboard calls it with the key): startSession()
+// spends real Runway credits, so it must not be public.
 app.use(
   "/api/bridge",
   createBridgeRouter({ broker: bridgeBroker, toolBridge: bridgeToolBridge, rpcManager: bridgeRpcManager }),
