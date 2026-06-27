@@ -217,7 +217,7 @@ export function createBridgeToolBridge(deps: BridgeToolDeps): BridgeToolBridge {
           return runGetAutoDevelopStatus(deps, req.projectId);
         default:
           // Unreachable — isAllowed already gated the set, but keep TS exhaustive.
-          return reject(tool, projectId, "TOOL_NOT_ALLOWED", `Tool '${tool}' is not callable.`);
+          return reject(tool, projectId, "TOOL_NOT_ALLOWED", `Tool '${String(tool)}' is not callable.`);
       }
     } catch (err) {
       return reject(
