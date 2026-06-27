@@ -30,6 +30,7 @@ import {
   type RunwayClientConfig,
   type RealtimeSessionRow,
   type CreateRealtimeSessionInput,
+  type RunwayRpcToolDef,
 } from "./runway-client.js";
 import { BridgeCostGuard } from "./bridge-cost-guard.js";
 
@@ -56,6 +57,8 @@ export interface StartSessionOptions {
   personality?: string;
   /** Opening line the avatar speaks (forwarded only when provided). */
   startScript?: string;
+  /** `backend_rpc` tools the avatar may call (forwarded only when non-empty). */
+  tools?: RunwayRpcToolDef[];
 }
 
 export interface BridgeSessionBrokerConfig {
@@ -152,6 +155,7 @@ export class BridgeSessionBroker {
     const input: CreateRealtimeSessionInput = { avatar: { type: "custom", avatarId } };
     if (opts.personality !== undefined) input.personality = opts.personality;
     if (opts.startScript !== undefined) input.startScript = opts.startScript;
+    if (opts.tools !== undefined) input.tools = opts.tools;
 
     // 2. Create — Runway charges the upfront credits here, so record them immediately
     //    (conservative: a later poll timeout/failure still cost real money).

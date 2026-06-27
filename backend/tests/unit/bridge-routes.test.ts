@@ -21,6 +21,7 @@ import { createBridgeRouter } from "../../src/routes/bridge.js";
 import { BridgeCostCeilingError } from "../../src/services/bridge-session-broker.js";
 import type { BridgeSessionCreds } from "../../src/services/bridge-session-broker.js";
 import type { BridgeToolResult } from "../../src/services/bridge-tool-bridge.js";
+import { BRIDGE_RPC_TOOLS, BRIDGE_RPC_PERSONALITY } from "../../src/services/bridge-rpc-tools.js";
 
 const CREDS: BridgeSessionCreds = {
   sessionId: "sess-1",
@@ -32,6 +33,9 @@ const CREDS: BridgeSessionCreds = {
 function makeApp(deps: {
   startSession?: ReturnType<typeof vi.fn>;
   executeTool?: ReturnType<typeof vi.fn>;
+  attach?: ReturnType<typeof vi.fn>;
+  /** Set false to mount WITHOUT the rpc manager (pre-202.7 behaviour). */
+  withRpcManager?: boolean;
 }) {
   const broker = { startSession: deps.startSession ?? vi.fn().mockResolvedValue(CREDS) };
   const toolBridge = {
@@ -39,10 +43,18 @@ function makeApp(deps: {
       deps.executeTool ??
       vi.fn().mockResolvedValue({ ok: true, tool: "list_agents", projectId: null, data: { agents: [] } }),
   };
+  const rpcManager = { attach: deps.attach ?? vi.fn().mockResolvedValue(undefined) };
   const app = express();
   app.use(express.json());
-  app.use("/api/bridge", createBridgeRouter({ broker, toolBridge }));
-  return { app, broker, toolBridge };
+  app.use(
+    "/api/bridge",
+    createBridgeRouter(
+      deps.withRpcManager === false
+        ? { broker, toolBridge }
+        : { broker, toolBridge, rpcManager },
+    ),
+  );
+  return { app, broker, toolBridge, rpcManager };
 }
 
 describe("bridge-routes: POST /api/bridge/session", () => {
@@ -58,7 +70,19 @@ describe("bridge-routes: POST /api/bridge/session", () => {
     expect(startSession).toHaveBeenCalledTimes(1);
   });
 
-  it("should forward an optional personality/startScript seed to the broker", async () => {
+  it("should always tool-enable the session: pass the read-only RPC tools + tool-aware persona", async () => {
+    const startSession = vi.fn().mockResolvedValue(CREDS);
+    const { app } = makeApp({ startSession });
+
+    await request(app).post("/api/bridge/session").send({});
+
+    const opts = startSession.mock.calls[0]![0];
+    expect(opts.tools).toEqual(BRIDGE_RPC_TOOLS);
+    // No base persona supplied ⇒ the default tool-aware persona is used verbatim.
+    expect(opts.personality).toBe(BRIDGE_RPC_PERSONALITY);
+  });
+
+  it("should compose a supplied base personality with the tool guidance, and forward startScript", async () => {
     const startSession = vi.fn().mockResolvedValue(CREDS);
     const { app } = makeApp({ startSession });
 
@@ -66,9 +90,38 @@ describe("bridge-routes: POST /api/bridge/session", () => {
       .post("/api/bridge/session")
       .send({ personality: "You are the Adjutant.", startScript: "Commander, status nominal." });
 
-    expect(startSession).toHaveBeenCalledWith(
-      expect.objectContaining({ personality: "You are the Adjutant.", startScript: "Commander, status nominal." }),
-    );
+    const opts = startSession.mock.calls[0]![0];
+    expect(opts.personality.startsWith("You are the Adjutant.")).toBe(true);
+    expect(opts.personality).toContain("list_agents");
+    expect(opts.startScript).toBe("Commander, status nominal.");
+  });
+
+  it("should attach the server-side tool loop with the session id and selected projectId", async () => {
+    const startSession = vi.fn().mockResolvedValue(CREDS);
+    const attach = vi.fn().mockResolvedValue(undefined);
+    const { app } = makeApp({ startSession, attach });
+
+    await request(app).post("/api/bridge/session").send({ projectId: "proj-uuid" });
+
+    expect(attach).toHaveBeenCalledWith({ sessionId: CREDS.sessionId, projectId: "proj-uuid" });
+  });
+
+  it("should attach without a projectId when none is selected (fleet-wide tools still work)", async () => {
+    const attach = vi.fn().mockResolvedValue(undefined);
+    const { app } = makeApp({ attach });
+
+    await request(app).post("/api/bridge/session").send({});
+
+    expect(attach).toHaveBeenCalledWith({ sessionId: CREDS.sessionId });
+  });
+
+  it("should still open a session (200) when no rpc manager is wired (graceful degrade)", async () => {
+    const { app } = makeApp({ withRpcManager: false });
+
+    const res = await request(app).post("/api/bridge/session").send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual(CREDS);
   });
 
   it("should return a structured 429 when the daily credit ceiling is tripped", async () => {
