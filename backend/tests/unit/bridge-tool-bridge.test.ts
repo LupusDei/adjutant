@@ -71,6 +71,55 @@ const PROJECT = {
   autoDevelopProductOwner: null,
 };
 
+// Real `bd list --json` output shape (Constitution Rule 1) — captured from the
+// live bd CLI, not hand-crafted from the TypeScript interface. Includes the
+// fields production parses (status) plus the surrounding shape the avatar may
+// render (description, issue_type, created_at, dependencies, *_count).
+const REAL_BD_LIST_OUTPUT = [
+  {
+    id: "adj-202.2",
+    title: "Phase 0: Spike (GATING)",
+    description: "Prove the tool-loop before MVP; measure latency/injection/renew; go-no-go.",
+    status: "open",
+    priority: 0,
+    issue_type: "epic",
+    owner: "lupusdei108@gmail.com",
+    created_at: "2026-06-27T14:10:19Z",
+    created_by: "Justin Martin",
+    updated_at: "2026-06-27T14:10:19Z",
+    dependencies: [
+      {
+        issue_id: "adj-202.2",
+        depends_on_id: "adj-202.1",
+        type: "blocks",
+        created_at: "2026-06-27T09:11:07Z",
+        created_by: "Justin Martin",
+        metadata: "{}",
+      },
+    ],
+    dependency_count: 1,
+    dependent_count: 1,
+    comment_count: 0,
+  },
+  {
+    id: "adj-202.3.2",
+    title: "bridge-tool-bridge.ts (TDD)",
+    description: "Read-only whitelist adapter over existing MCP service layer.",
+    status: "closed",
+    priority: 1,
+    issue_type: "task",
+    owner: "lupusdei108@gmail.com",
+    created_at: "2026-06-27T14:10:30Z",
+    created_by: "Justin Martin",
+    updated_at: "2026-06-27T17:51:00Z",
+    closed_at: "2026-06-27T17:51:00Z",
+    dependencies: [],
+    dependency_count: 0,
+    dependent_count: 1,
+    comment_count: 0,
+  },
+];
+
 function makeDeps(overrides: Partial<BridgeToolDeps> = {}): BridgeToolDeps {
   return {
     messageStore: {
@@ -217,6 +266,17 @@ describe("list_agents", () => {
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error.code).toBe("INVALID_ARGS");
   });
+
+  it("throws-path: a getAgents rejection is caught and returned as TOOL_FAILED", async () => {
+    mockGetAgents.mockRejectedValue(new Error("agents service down"));
+    const bridge = createBridgeToolBridge(makeDeps());
+    const res = await bridge.executeTool({ tool: "list_agents" });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.code).toBe("TOOL_FAILED");
+      expect(res.error.message).toContain("agents service down");
+    }
+  });
 });
 
 // ============================================================================
@@ -256,6 +316,26 @@ describe("list_questions", () => {
       expect.objectContaining({ projectId: undefined }),
     );
   });
+
+  it("rejects invalid args (bad urgency enum) with INVALID_ARGS", async () => {
+    const bridge = createBridgeToolBridge(makeDeps());
+    const res = await bridge.executeTool({ tool: "list_questions", args: { urgency: "ASAP" } });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe("INVALID_ARGS");
+  });
+
+  it("throws-path: a questionService failure is caught and returned as TOOL_FAILED", async () => {
+    const listQuestions = vi.fn().mockImplementation(() => {
+      throw new Error("question store offline");
+    });
+    const bridge = createBridgeToolBridge(makeDeps({ questionService: { listQuestions } }));
+    const res = await bridge.executeTool({ tool: "list_questions", projectId: PROJECT_ID });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.code).toBe("TOOL_FAILED");
+      expect(res.error.message).toContain("question store offline");
+    }
+  });
 });
 
 // ============================================================================
@@ -264,17 +344,14 @@ describe("list_questions", () => {
 
 describe("list_beads", () => {
   it("resolves the project and delegates to execBd scoped to the project's beads dir", async () => {
-    mockExecBd.mockResolvedValue({
-      success: true,
-      exitCode: 0,
-      data: [{ id: "adj-1", title: "T", status: "open", priority: 1, issue_type: "task" }],
-    });
+    // Real bd output shape (Rule 1) returned verbatim in the structured result.
+    mockExecBd.mockResolvedValue({ success: true, exitCode: 0, data: REAL_BD_LIST_OUTPUT });
 
     const bridge = createBridgeToolBridge(makeDeps());
     const res = await bridge.executeTool({
       tool: "list_beads",
       projectId: PROJECT_ID,
-      args: { status: "open" },
+      args: { status: "all" },
     });
 
     expect(mockGetProject).toHaveBeenCalledWith(PROJECT_ID);
@@ -285,9 +362,43 @@ describe("list_beads", () => {
     );
     expect(res.ok).toBe(true);
     if (res.ok) {
-      const data = res.data as { beads: unknown[]; count: number };
-      expect(data.count).toBe(1);
+      const data = res.data as { beads: typeof REAL_BD_LIST_OUTPUT; count: number };
+      expect(data.count).toBe(2);
+      // Structured result is the source of truth — full bd records pass through verbatim.
+      expect(data.beads[0]).toEqual(REAL_BD_LIST_OUTPUT[0]);
+      expect(data.beads[0]!.dependencies[0]!.depends_on_id).toBe("adj-202.1");
     }
+  });
+
+  it("throws-path: an execBd rejection is caught and returned as TOOL_FAILED", async () => {
+    mockExecBd.mockRejectedValue(new Error("dolt server unreachable"));
+    const bridge = createBridgeToolBridge(makeDeps());
+    const res = await bridge.executeTool({ tool: "list_beads", projectId: PROJECT_ID });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.code).toBe("TOOL_FAILED");
+      expect(res.error.message).toContain("dolt server unreachable");
+    }
+  });
+
+  it("rejects invalid args (bad status enum) with INVALID_ARGS before touching bd", async () => {
+    const bridge = createBridgeToolBridge(makeDeps());
+    const res = await bridge.executeTool({ tool: "list_beads", projectId: PROJECT_ID, args: { status: "nope" } });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe("INVALID_ARGS");
+    expect(mockExecBd).not.toHaveBeenCalled();
+  });
+
+  it("rejects with PROJECT_NOT_FOUND when resolveBeadsDir throws for the named project", async () => {
+    // getProject succeeds but the project's .beads/ cannot be resolved.
+    mockResolveBeadsDir.mockImplementation(() => {
+      throw new Error("no .beads dir");
+    });
+    const bridge = createBridgeToolBridge(makeDeps());
+    const res = await bridge.executeTool({ tool: "list_beads", projectId: PROJECT_ID });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe("PROJECT_NOT_FOUND");
+    expect(mockExecBd).not.toHaveBeenCalled();
   });
 
   it("requires a projectId (PROJECT_REQUIRED when omitted)", async () => {
@@ -321,18 +432,23 @@ describe("list_beads", () => {
 // ============================================================================
 
 describe("get_project_state", () => {
-  it("scopes the open-bead count to the named project and aggregates store state", async () => {
-    mockExecBd.mockResolvedValue({
-      success: true,
-      exitCode: 0,
-      data: [
-        { id: "adj-1", status: "open" },
-        { id: "adj-2", status: "closed" },
-      ],
-    });
-    mockGetConnectedAgents.mockReturnValue([{ agentId: "a", sessionId: "s", connectedAt: new Date() }]);
+  it("scopes openBeads + connectedAgents to the project and labels fleet-wide fields separately", async () => {
+    // Real bd output: 1 open + 1 closed ⇒ openBeads = 1 (project-scoped).
+    mockExecBd.mockResolvedValue({ success: true, exitCode: 0, data: REAL_BD_LIST_OUTPUT });
 
-    const bridge = createBridgeToolBridge(makeDeps());
+    // Two connected agents: one in the target project, one in another project.
+    // connectedAgents must count ONLY the target project's session (grounding).
+    mockGetConnectedAgents.mockReturnValue([
+      { agentId: "adjutant/Raynor", sessionId: "s1", connectedAt: new Date(), projectContext: { projectId: PROJECT_ID } },
+      { agentId: "other/Kerrigan", sessionId: "s2", connectedAt: new Date(), projectContext: { projectId: "other-uuid" } },
+    ]);
+
+    const messageStore = {
+      getMessages: vi.fn().mockReturnValue([{ id: "m1" }, { id: "m2" }, { id: "m3" }]),
+      getUnreadCounts: vi.fn().mockReturnValue([{ agentId: "x", count: 4 }]),
+    } as unknown as BridgeToolDeps["messageStore"];
+
+    const bridge = createBridgeToolBridge(makeDeps({ messageStore }));
     const res = await bridge.executeTool({ tool: "get_project_state", projectId: PROJECT_ID });
 
     expect(mockExecBd).toHaveBeenCalledWith(
@@ -341,9 +457,20 @@ describe("get_project_state", () => {
     );
     expect(res.ok).toBe(true);
     if (res.ok) {
-      const data = res.data as { openBeads: number; connectedAgents: number };
-      expect(data.openBeads).toBe(1);
-      expect(data.connectedAgents).toBe(1);
+      const data = res.data as {
+        projectId: string;
+        project: { openBeads: number; connectedAgents: number };
+        fleet: { recentMessages: number; unreadCounts: unknown[] };
+      };
+      // Project-scoped block.
+      expect(data.project.openBeads).toBe(1);
+      expect(data.project.connectedAgents).toBe(1);
+      // Fleet-wide block is explicitly separated so it can't be read as this project's.
+      expect(data.fleet.recentMessages).toBe(3);
+      expect(data.fleet.unreadCounts).toHaveLength(1);
+      // No flat fleet-wide field leaks at the top level (grounding contract).
+      expect((data as Record<string, unknown>)["connectedAgents"]).toBeUndefined();
+      expect((data as Record<string, unknown>)["recentMessages"]).toBeUndefined();
     }
   });
 
@@ -382,5 +509,27 @@ describe("get_auto_develop_status", () => {
     const res = await bridge.executeTool({ tool: "get_auto_develop_status" });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error.code).toBe("PROJECT_REQUIRED");
+  });
+
+  it("rejects an unknown projectId with PROJECT_NOT_FOUND", async () => {
+    mockGetProject.mockReturnValue({ success: false, error: { code: "NOT_FOUND", message: "nope" } });
+    const bridge = createBridgeToolBridge(makeDeps());
+    const res = await bridge.executeTool({ tool: "get_auto_develop_status", projectId: "ghost" });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe("PROJECT_NOT_FOUND");
+    expect(mockBuildAutoDevelopStatus).not.toHaveBeenCalled();
+  });
+
+  it("throws-path: a buildAutoDevelopStatus failure is caught and returned as TOOL_FAILED", async () => {
+    mockBuildAutoDevelopStatus.mockImplementation(() => {
+      throw new Error("proposal store exploded");
+    });
+    const bridge = createBridgeToolBridge(makeDeps());
+    const res = await bridge.executeTool({ tool: "get_auto_develop_status", projectId: PROJECT_ID });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.code).toBe("TOOL_FAILED");
+      expect(res.error.message).toContain("proposal store exploded");
+    }
   });
 });

@@ -355,9 +355,21 @@ async function runGetProjectState(
   if (!resolution.ok) {
     return reject(TOOL_GET_PROJECT_STATE, projectId, resolution.code, resolution.message);
   }
-  const { cwd, beadsDir } = resolution.resolved;
+  const { project, cwd, beadsDir } = resolution.resolved;
 
-  const connectedAgents = getConnectedAgents().length;
+  // GROUNDING CONTRACT (adj-202.3.2.2): the avatar narrates this result verbatim
+  // from the authoritative panel, so the envelope must NOT let a consumer mistake
+  // fleet-wide numbers for one project's state. We split the result into:
+  //   - `project`: fields genuinely scoped to the named project, and
+  //   - `fleet`:   fields the underlying services only expose fleet-wide.
+  // The message store has no project/conversation→project dimension, so recent
+  // messages and unread counts are honestly labeled fleet-wide rather than
+  // mislabeled as this project's.
+
+  // Connected agents scoped to the named project via each session's projectContext.
+  const connectedAgents = getConnectedAgents().filter(
+    (c) => c.projectContext?.projectId === project.id,
+  ).length;
 
   // Open beads scoped to the named project's .beads/ directory.
   let openBeads = 0;
@@ -366,16 +378,21 @@ async function runGetProjectState(
     openBeads = bdResult.data.filter((b) => b.status !== "closed").length;
   }
 
+  // Fleet-wide (NOT project-scoped) — the message store is not partitioned by project.
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const recentMessages = deps.messageStore.getMessages({ after: since }).length;
   const unreadCounts = deps.messageStore.getUnreadCounts();
 
   return ok(TOOL_GET_PROJECT_STATE, projectId, {
     projectId,
-    connectedAgents,
-    openBeads,
-    recentMessages,
-    unreadCounts,
+    project: {
+      connectedAgents,
+      openBeads,
+    },
+    fleet: {
+      recentMessages,
+      unreadCounts,
+    },
   });
 }
 
