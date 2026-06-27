@@ -96,12 +96,19 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
     max-width: none !important;
     max-height: none !important;
   }
-  [data-avatar-video], [data-avatar-video] > * { height: 100% !important; }
-  [data-avatar-video] video, #root video, #root canvas {
+  /* The widget is now full-screen (position:relative). Absolutely fill the video to it,
+     cover-cropped → centered full-screen portrait. Absolute (not fixed) so the widget's
+     ::before filter:blur() doesn't trap it; the widget itself is the positioned ancestor. */
+  [data-avatar-video], [data-avatar-video] > * { position: absolute !important; inset: 0 !important; height: 100% !important; width: 100% !important; }
+  [data-avatar-call] video, [data-avatar-call] canvas, #root video, #root canvas {
+    position: absolute !important;
+    inset: 0 !important;
     width: 100% !important;
     height: 100% !important;
     object-fit: cover !important;
   }
+  /* Keep the call controls above the full-bleed video */
+  [data-avatar-control-bar] { z-index: 2 !important; }
 
   #status { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; padding: 12px 16px env(safe-area-inset-bottom); text-align: center; font-size: 14px; color: #c9a0e0; }
   #status.err { color: #ff8e8e; }
