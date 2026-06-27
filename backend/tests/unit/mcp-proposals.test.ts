@@ -374,6 +374,48 @@ describe("MCP proposal authoring contract (adj-200 Path B)", () => {
       const result = schema.safeParse({ id: "x", html: oversized, changelog: "c" });
       expect(result.success).toBe(false);
     });
+
+    // adj-8efyi — publish-only revise: `public:true` is a valid standalone operation.
+    // The tool documents `public` as "publish (or re-publish)", so it must be honored
+    // even when no title/description/type/html field is changed.
+    it("should publish when only public:true is provided (no content change) and not snapshot a revision", async () => {
+      const store = createMockStore();
+      process.env["ADJUTANT_PUBLIC_URL"] = "https://share.example.com";
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "revise_proposal");
+      const result = await handler(
+        { id: "test-uuid", changelog: "just publish", public: true },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed).not.toHaveProperty("error");
+      expect(store.publishProposal).toHaveBeenCalledWith("test-uuid");
+      expect(parsed["publicUrl"]).toBe("https://share.example.com/p/TOKENabc123");
+      expect(parsed["isPublic"]).toBe(true);
+      // A pure publish is not a content revision — no snapshot, no html write.
+      expect(store.reviseProposal).not.toHaveBeenCalled();
+      expect(store.setHtml).not.toHaveBeenCalled();
+    });
+
+    it("should still reject when neither a content field nor public is provided", async () => {
+      const store = createMockStore();
+      mockGetAgentBySession.mockReturnValue("test-agent");
+      mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+      const handler = getToolHandler(store, "revise_proposal");
+      const result = await handler(
+        { id: "test-uuid", changelog: "nothing", public: false },
+        { sessionId: TEST_SESSION_ID },
+      );
+
+      const parsed = parseResult(result);
+      expect(parsed).toHaveProperty("error");
+      expect(store.reviseProposal).not.toHaveBeenCalled();
+      expect(store.publishProposal).not.toHaveBeenCalled();
+    });
   });
 
   // ===========================================================================

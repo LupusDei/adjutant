@@ -414,9 +414,13 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
         };
       }
 
-      if (title === undefined && description === undefined && type === undefined && html === undefined) {
+      // A revise must change something: a content field, the html body, or visibility.
+      // `public:true` alone is a valid standalone operation (adj-8efyi) — it honors the
+      // documented "publish (or re-publish)" contract — so it is NOT rejected here.
+      const hasContentChange = title !== undefined || description !== undefined || type !== undefined;
+      if (!hasContentChange && html === undefined && !makePublic) {
         return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: "At least one of title, description, type, or html must be provided" }) }],
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "At least one of title, description, type, html, or public must be provided" }) }],
         };
       }
 
@@ -434,28 +438,34 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
         };
       }
 
-      // reviseProposal snapshots the prior body (title/description/type) into a revision row
-      // BEFORE applying the new values — the same snapshot mechanism every other field uses.
-      const revised = store.reviseProposal(id, {
-        author: agentId,
-        title,
-        description,
-        type,
-        changelog,
-      });
+      let current = proposal;
 
-      if (!revised) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: "Proposal not found" }) }],
-        };
-      }
+      // Content/html revision. Skipped for a publish-only call (adj-8efyi) so that a pure
+      // publish does not record a spurious, empty revision snapshot.
+      if (hasContentChange || html !== undefined) {
+        // reviseProposal snapshots the prior body (title/description/type) into a revision
+        // row BEFORE applying the new values — the same snapshot mechanism every field uses.
+        const revised = store.reviseProposal(id, {
+          author: agentId,
+          title,
+          description,
+          type,
+          changelog,
+        });
 
-      // Apply the replacement HTML body after the snapshot so the revision captures the
-      // prior state (adj-200).
-      let current = revised;
-      if (html !== undefined) {
-        const withHtml = store.setHtml(id, html);
-        if (withHtml) current = withHtml;
+        if (!revised) {
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify({ error: "Proposal not found" }) }],
+          };
+        }
+        current = revised;
+
+        // Apply the replacement HTML body after the snapshot so the revision captures the
+        // prior state (adj-200).
+        if (html !== undefined) {
+          const withHtml = store.setHtml(id, html);
+          if (withHtml) current = withHtml;
+        }
       }
 
       // Optional (re-)publish — returns the public URL, reusing the existing token if any.

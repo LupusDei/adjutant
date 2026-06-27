@@ -1,7 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, costsRouter, createCallsignsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createPersonasRouter, createProjectsRouter, createProposalsRouter, createPublicProposalsRouter, createQuestionsRouter, createSchedulesRouter, createWebhooksRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, costsRouter, createAvatarRouter, createCallsignsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createPersonasRouter, createProjectsRouter, createProposalsRouter, createPublicProposalsRouter, createQuestionsRouter, createSchedulesRouter, createWebhooksRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { createDashboardService } from "./services/dashboard-service.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo, logWarn } from "./utils/index.js";
@@ -121,6 +121,10 @@ app.use((req, res, next) => {
 // Public, unauthenticated proposal pages (adj-200). MUST be mounted BEFORE apiKeyAuth
 // so a shareable /p/:token link works in any browser with no API key.
 app.use("/p", createPublicProposalsRouter(proposalStore));
+
+// The Bridge — avatar prototype (adj-202.2). Public (no API key) so the iOS WKWebView
+// overlay can load /avatar and call /avatar/connect same-origin. Mounted BEFORE apiKeyAuth.
+app.use("/avatar", createAvatarRouter());
 
 app.use(apiKeyAuth);
 

@@ -25,7 +25,7 @@ const PUBLIC_PATHS = ["/health"];
  *         trailing slash keeps this from matching unrelated `/p…` routes (e.g. future
  *         /ping, /preview) — only the `/p/:token` page bypasses auth.
  */
-const PUBLIC_PREFIXES = ["/mcp", "/p/"];
+const PUBLIC_PREFIXES = ["/mcp", "/p/", "/avatar"];
 
 /**
  * Extract bearer token from Authorization header.
