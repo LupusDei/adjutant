@@ -31,6 +31,7 @@ import { createChannelsRouter } from "./routes/channels.js";
 import { createBridgeRouter } from "./routes/bridge.js";
 import { BridgeSessionBroker } from "./services/bridge-session-broker.js";
 import { createBridgeToolBridge } from "./services/bridge-tool-bridge.js";
+import { createBridgeRpcManager } from "./services/bridge-rpc-handler.js";
 import { createEventStore } from "./services/event-store.js";
 import { createQuestionStore } from "./services/question-store.js";
 import { createQuestionService } from "./services/question-service.js";
@@ -195,7 +196,16 @@ const bridgeToolBridge = createBridgeToolBridge({
   autoDevelopStore,
   questionService,
 });
-app.use("/api/bridge", createBridgeRouter({ broker: bridgeBroker, toolBridge: bridgeToolBridge }));
+// adj-202.7 — server-side avatar tool loop: dispatches the avatar's `backend_rpc`
+// calls to the SAME read-only tool bridge, so a spoken status question resolves to
+// real fleet data instead of stalling on "querying…".
+const bridgeRpcManager = createBridgeRpcManager({
+  executeTool: (req) => bridgeToolBridge.executeTool(req),
+});
+app.use(
+  "/api/bridge",
+  createBridgeRouter({ broker: bridgeBroker, toolBridge: bridgeToolBridge, rpcManager: bridgeRpcManager }),
+);
 
 // Initialize persona and callsign toggle services and mount routes
 const personaService = createPersonaService(messageDb);

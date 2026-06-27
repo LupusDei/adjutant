@@ -36,6 +36,28 @@ export interface RunwayAvatarSelector {
   avatarId: string;
 }
 
+/** One declared parameter of a Runway RPC tool (the shape the model sees). */
+export interface RunwayRpcToolParam {
+  name: string;
+  /** JSON-ish type, e.g. "string" | "number" | "boolean". */
+  type: string;
+  description: string;
+}
+
+/**
+ * A `backend_rpc` tool the avatar's model may call mid-conversation. Declared at
+ * session-create so the model knows the tool exists; the actual handler runs
+ * server-side via `@runwayml/avatars-node-rpc` (see bridge-rpc-handler.ts).
+ */
+export interface RunwayRpcToolDef {
+  type: "backend_rpc";
+  name: string;
+  description: string;
+  parameters: RunwayRpcToolParam[];
+  /** How long Runway waits for the handler before giving up on the call. */
+  timeoutSeconds: number;
+}
+
 /** Input for {@link RunwayClient.createRealtimeSession}. */
 export interface CreateRealtimeSessionInput {
   avatar: RunwayAvatarSelector;
@@ -45,6 +67,8 @@ export interface CreateRealtimeSessionInput {
   personality?: string;
   /** Optional opening line the avatar speaks, included in the body only when provided. */
   startScript?: string;
+  /** Optional `backend_rpc` tools the model may call; included only when non-empty. */
+  tools?: RunwayRpcToolDef[];
 }
 
 /** A realtime-session row as returned by Runway (fields appear progressively as it readies). */
@@ -94,6 +118,7 @@ export class RunwayClient {
     // Only attach seed fields when supplied — keeps the proven base body byte-identical.
     if (input.personality !== undefined) body["personality"] = input.personality;
     if (input.startScript !== undefined) body["startScript"] = input.startScript;
+    if (input.tools !== undefined && input.tools.length > 0) body["tools"] = input.tools;
 
     const res = await this.doFetch(`${this.baseUrl}/realtime_sessions`, {
       method: "POST",

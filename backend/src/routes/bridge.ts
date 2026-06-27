@@ -23,6 +23,8 @@ import { z } from "zod";
 import type { BridgeSessionBroker, StartSessionOptions } from "../services/bridge-session-broker.js";
 import { BridgeCostCeilingError } from "../services/bridge-session-broker.js";
 import type { BridgeToolBridge } from "../services/bridge-tool-bridge.js";
+import type { BridgeRpcManager } from "../services/bridge-rpc-handler.js";
+import { BRIDGE_RPC_TOOLS, composeBridgePersonality } from "../services/bridge-rpc-tools.js";
 import { success, error, validationError, ErrorCode } from "../utils/responses.js";
 import { logError } from "../utils/logger.js";
 
@@ -30,6 +32,13 @@ import { logError } from "../utils/logger.js";
 export interface BridgeRouterDeps {
   broker: Pick<BridgeSessionBroker, "startSession">;
   toolBridge: Pick<BridgeToolBridge, "executeTool">;
+  /**
+   * Owns the server-side read-only tool loop (adj-202.7). When present, every
+   * session that opens gets a handler attached so the avatar can actually CALL the
+   * fleet tools. Optional: if omitted, the avatar still talks — it just can't query
+   * (the pre-202.7 behaviour). `attach` never throws, so it cannot break a session.
+   */
+  rpcManager?: Pick<BridgeRpcManager, "attach">;
 }
 
 const SessionBodySchema = z
@@ -37,6 +46,8 @@ const SessionBodySchema = z
     avatarId: z.string().min(1).optional(),
     personality: z.string().optional(),
     startScript: z.string().optional(),
+    /** The dashboard's selected project — default context for project-scoped tools. */
+    projectId: z.string().min(1).optional(),
   })
   .strict();
 
@@ -68,13 +79,28 @@ export function createBridgeRouter(deps: BridgeRouterDeps): Router {
     }
 
     // Build options with only the keys actually present (exactOptionalPropertyTypes).
-    const opts: StartSessionOptions = {};
+    // The Bridge avatar is always tool-enabled: it gets the read-only fleet tools and
+    // a persona that tells GWM-1 to CALL them (instead of stalling on "querying…").
+    const opts: StartSessionOptions = {
+      tools: BRIDGE_RPC_TOOLS,
+      personality: composeBridgePersonality(parsed.data.personality),
+    };
     if (parsed.data.avatarId !== undefined) opts.avatarId = parsed.data.avatarId;
-    if (parsed.data.personality !== undefined) opts.personality = parsed.data.personality;
     if (parsed.data.startScript !== undefined) opts.startScript = parsed.data.startScript;
 
     try {
       const creds = await deps.broker.startSession(opts);
+
+      // Attach the server-side tool loop so the avatar can actually query the fleet.
+      // `attach` swallows its own errors (a live, billable session must never be torn
+      // down by a tool-loop hiccup), so awaiting it is safe and makes the loop ready
+      // before the browser finishes connecting.
+      if (deps.rpcManager) {
+        const attachOpts: { sessionId: string; projectId?: string } = { sessionId: creds.sessionId };
+        if (parsed.data.projectId !== undefined) attachOpts.projectId = parsed.data.projectId;
+        await deps.rpcManager.attach(attachOpts);
+      }
+
       return res.json(success(creds));
     } catch (err) {
       // Cost ceiling is an expected, recoverable condition — surface it distinctly (429).
