@@ -350,6 +350,73 @@ describe("MCP proposal authoring contract (adj-200 Path B)", () => {
       expect(store.setHtml).not.toHaveBeenCalled();
     });
 
+    // adj-ovbhc — silent partial-write hardening. The in-process handler must (a)
+    // forward EVERY provided field to the store even alongside a large html, and
+    // (b) echo which fields it applied so a field dropped before the handler (the
+    // observed client/transport-side truncation on huge multi-field tool calls)
+    // is VISIBLE in the result, never silent.
+    describe("loud applied-fields echo (adj-ovbhc)", () => {
+      it("should forward a large description AND large html together (store is innocent)", async () => {
+        const store = createMockStore();
+        mockGetAgentBySession.mockReturnValue("test-agent");
+        mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+        const bigDescription = "D".repeat(5000);
+        const bigHtml = `<h2>Body</h2><p>${"x".repeat(25000)}</p>`;
+
+        const handler = getToolHandler(store, "revise_proposal");
+        const result = await handler(
+          { id: "test-uuid", description: bigDescription, html: bigHtml, changelog: "big revise" },
+          { sessionId: TEST_SESSION_ID },
+        );
+
+        // BOTH fields reach their stores — the handler does not drop description.
+        expect(store.reviseProposal).toHaveBeenCalledWith(
+          "test-uuid",
+          expect.objectContaining({ description: bigDescription }),
+        );
+        expect(store.setHtml).toHaveBeenCalledWith("test-uuid", bigHtml);
+
+        const parsed = parseResult(result);
+        expect(parsed).not.toHaveProperty("error");
+      });
+
+      it("should echo `applied` listing exactly the content fields that were provided", async () => {
+        const store = createMockStore();
+        mockGetAgentBySession.mockReturnValue("test-agent");
+        mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+        const handler = getToolHandler(store, "revise_proposal");
+        const result = await handler(
+          { id: "test-uuid", title: "New T", description: "New D", html: "<p>h</p>", changelog: "c" },
+          { sessionId: TEST_SESSION_ID },
+        );
+
+        const parsed = parseResult(result) as { applied?: Record<string, boolean> };
+        expect(parsed.applied).toEqual(
+          expect.objectContaining({ title: true, description: true, type: false, html: true }),
+        );
+      });
+
+      it("should make a DROPPED description visible (applied.description = false) on an html-only call", async () => {
+        const store = createMockStore();
+        mockGetAgentBySession.mockReturnValue("test-agent");
+        mockGetProjectContextBySession.mockReturnValue(TEST_PROJECT_CONTEXT);
+
+        // Mirrors the observed bug: description never arrived; only html present.
+        const handler = getToolHandler(store, "revise_proposal");
+        const result = await handler(
+          { id: "test-uuid", html: "<p>only html</p>", changelog: "html only" },
+          { sessionId: TEST_SESSION_ID },
+        );
+
+        const parsed = parseResult(result) as { applied?: Record<string, boolean> };
+        // The result LOUDLY shows description was not part of this revision.
+        expect(parsed.applied?.description).toBe(false);
+        expect(parsed.applied?.html).toBe(true);
+      });
+    });
+
     it("should auto-publish on revise when public is true and return the public URL", async () => {
       const store = createMockStore();
       process.env["ADJUTANT_PUBLIC_URL"] = "https://share.example.com";

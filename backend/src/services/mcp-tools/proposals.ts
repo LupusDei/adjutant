@@ -478,12 +478,27 @@ export function registerProposalTools(server: McpServer, store: ProposalStore): 
         }
       }
 
-      logInfo("revise_proposal", { agentId, proposalId: id, title: current.title, html: html !== undefined, public: makePublic === true });
+      // adj-ovbhc — LOUD applied-fields echo. A revise carrying a large multi-field
+      // payload can lose a field BEFORE it reaches this handler (observed: the model/
+      // MCP client omits `description` while serializing a huge tool call — it arrives
+      // absent in otherwise-valid JSON, so nothing here can recover it). Echoing exactly
+      // which fields this revision applied turns a silent partial write into a visible
+      // one: a caller that intended to change `description` sees `applied.description:
+      // false` and knows to resend, rather than believing the write fully succeeded.
+      const applied = {
+        title: title !== undefined,
+        description: description !== undefined,
+        type: type !== undefined,
+        html: html !== undefined,
+        published: makePublic === true,
+      };
+
+      logInfo("revise_proposal", { agentId, proposalId: id, applied });
 
       return {
         content: [{
           type: "text" as const,
-          text: JSON.stringify(publicUrl ? { ...current, publicUrl } : current),
+          text: JSON.stringify({ ...current, applied, ...(publicUrl ? { publicUrl } : {}) }),
         }],
       };
     },
