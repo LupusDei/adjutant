@@ -10,10 +10,13 @@
  *   POST /v1/realtime_sessions  { model:"gwm1_avatars", avatar:{type:"custom", avatarId} } -> { id }
  *   GET  /v1/realtime_sessions/{id}  -> { status: "NOT_READY" } ... -> { status:"READY", expiresAt, sessionKey }
  * Session TTL ≈ 5 minutes; sessionKey ("stk_…") appears only once status is READY.
+ *
+ * adj-202.3.1: the two HTTP calls are now delegated to the thin {@link RunwayClient}; this
+ * module keeps the create+poll lifecycle that the live `/avatar` prototype route depends on.
+ * The Phase-1 broker (`bridge-session-broker.ts`) generalizes this lifecycle.
  */
 
-const RUNWAY_BASE = "https://api.dev.runwayml.com/v1";
-const RUNWAY_API_VERSION = "2024-11-06";
+import { RunwayClient, type RealtimeSessionRow } from "./runway-client.js";
 
 export interface RunwayAvatarConfig {
   /** Runway dev-org secret. Defaults to process.env.RUNWAYML_API_SECRET. */
@@ -37,13 +40,6 @@ export interface AvatarSession {
   expiresAt?: string;
 }
 
-interface SessionRow {
-  id: string;
-  status?: string;
-  expiresAt?: string;
-  sessionKey?: string;
-}
-
 const defaultSleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /**
@@ -51,43 +47,36 @@ const defaultSleep = (ms: number): Promise<void> => new Promise((r) => setTimeou
  * @throws if no API key / avatarId is configured, the create call fails, or it never readies.
  */
 export async function createReadyAvatarSession(cfg: RunwayAvatarConfig = {}): Promise<AvatarSession> {
-  const apiKey = cfg.apiKey ?? process.env["RUNWAYML_API_SECRET"] ?? "";
+  // Constructing the client validates + holds the secret (throws if the key is missing).
+  const client = new RunwayClient({
+    ...(cfg.apiKey !== undefined ? { apiKey: cfg.apiKey } : {}),
+    ...(cfg.baseUrl !== undefined ? { baseUrl: cfg.baseUrl } : {}),
+    ...(cfg.apiVersion !== undefined ? { apiVersion: cfg.apiVersion } : {}),
+    ...(cfg.fetchImpl !== undefined ? { fetchImpl: cfg.fetchImpl } : {}),
+  });
+
   const avatarId = cfg.avatarId ?? process.env["RUNWAY_AVATAR_ID"] ?? "";
-  const baseUrl = cfg.baseUrl ?? RUNWAY_BASE;
-  const apiVersion = cfg.apiVersion ?? RUNWAY_API_VERSION;
-  const doFetch = cfg.fetchImpl ?? fetch;
   const sleep = cfg.sleepFn ?? defaultSleep;
   const pollIntervalMs = cfg.pollIntervalMs ?? 1500;
   const timeoutMs = cfg.timeoutMs ?? 30_000;
 
-  if (!apiKey) throw new Error("RUNWAYML_API_SECRET is not configured");
   if (!avatarId) throw new Error("avatarId is not configured (set RUNWAY_AVATAR_ID)");
 
-  const headers = {
-    Authorization: `Bearer ${apiKey}`,
-    "X-Runway-Version": apiVersion,
-    "Content-Type": "application/json",
-  };
-
   // 1. Create
-  const createRes = await doFetch(`${baseUrl}/realtime_sessions`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ model: "gwm1_avatars", avatar: { type: "custom", avatarId } }),
-  });
-  if (!createRes.ok) {
-    const detail = await safeText(createRes);
-    throw new Error(`Runway session create failed (HTTP ${createRes.status}): ${detail}`);
-  }
-  const created = (await createRes.json()) as SessionRow;
+  const created = await client.createRealtimeSession({ avatar: { type: "custom", avatarId } });
   const sessionId = created.id;
 
   // 2. Poll to READY
   const maxAttempts = Math.max(1, Math.ceil(timeoutMs / Math.max(1, pollIntervalMs)));
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const getRes = await doFetch(`${baseUrl}/realtime_sessions/${sessionId}`, { method: "GET", headers });
-    if (getRes.ok) {
-      const row = (await getRes.json()) as SessionRow;
+    let row: RealtimeSessionRow | undefined;
+    try {
+      row = await client.getRealtimeSession(sessionId);
+    } catch {
+      // Transient poll failure — keep trying until the timeout budget runs out.
+      row = undefined;
+    }
+    if (row) {
       if ((row.status === "READY" || row.status === "RUNNING") && row.sessionKey) {
         return {
           sessionId,
@@ -103,12 +92,4 @@ export async function createReadyAvatarSession(cfg: RunwayAvatarConfig = {}): Pr
     await sleep(pollIntervalMs);
   }
   throw new Error(`Runway session ${sessionId} timed out before reaching READY`);
-}
-
-async function safeText(res: Response): Promise<string> {
-  try {
-    return (await res.text()).slice(0, 300);
-  } catch {
-    return "<no body>";
-  }
 }
