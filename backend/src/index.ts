@@ -35,6 +35,8 @@ import { createBridgeRpcManager } from "./services/bridge-rpc-handler.js";
 import { BRIDGE_DIRECTIVE_PREFIX } from "./services/bridge-rpc-tools.js";
 import { deliverDirectMessage } from "./services/direct-message-delivery.js";
 import { nudgeAgentViaBridge, answerQuestionViaBridge, createBeadViaBridge } from "./services/bridge-commands.js";
+import { getAgents } from "./services/agents-service.js";
+import { resolveAgentName } from "./services/bridge-agent-resolver.js";
 import { createEventStore } from "./services/event-store.js";
 import { createQuestionStore } from "./services/question-store.js";
 import { createQuestionService } from "./services/question-service.js";
@@ -177,14 +179,30 @@ const bridgeToolBridge = createBridgeToolBridge({
 // path (the read-only bridge stays fail-closed) that reuses deliverDirectMessage, the
 // same persist+broadcast+inject path the user→agent route uses. Sent as the "adjutant"
 // coordinator and prefixed so the agent knows it's a command directive via The Bridge.
+// adj-202.4.6: resolve a spoken agent NAME to a registered agent's canonical messaging
+// name before any command tool delivers (the avatar said "Phoenix" for "fenix" and the
+// message vanished to a phantom recipient). No confident match throws — the dispatch
+// surfaces the message so the avatar asks the Commander instead of sending into the void.
+async function resolveBridgeAgent(spoken: string): Promise<string> {
+  const res = await getAgents();
+  const agents = res.success && res.data ? res.data.map((a) => ({ id: a.id, name: a.name })) : [];
+  const resolution = resolveAgentName(spoken, agents);
+  if (!resolution.matched || !resolution.canonical) {
+    const hint = resolution.candidates.length ? ` Did you mean: ${resolution.candidates.join(", ")}?` : "";
+    throw new Error(`No agent named "${spoken}".${hint}`);
+  }
+  return resolution.canonical;
+}
+
 const bridgeRpcManager = createBridgeRpcManager({
   executeTool: (req) => bridgeToolBridge.executeTool(req),
   sendMessage: async ({ to, body }) => {
+    const canonical = await resolveBridgeAgent(to);
     const result = deliverDirectMessage(
       { store: messageStore, eventStore },
       {
         from: "adjutant",
-        to,
+        to: canonical,
         body,
         role: "agent",
         emitEvent: true,
@@ -200,7 +218,8 @@ const bridgeRpcManager = createBridgeRpcManager({
   // adj-202.4.2/.3/.4 — more safe-write command tools, each reusing the REAL service
   // (Rules 4+9): nudge → session bridge, answer_question → question-service, create_bead
   // → bd CLI. Reversible → no confirm gate; attributed to the coordinator; logged.
-  nudgeAgent: (input) => nudgeAgentViaBridge(input),
+  nudgeAgent: async (input) =>
+    nudgeAgentViaBridge({ agentId: await resolveBridgeAgent(input.agentId), message: input.message }),
   answerQuestion: (input) => answerQuestionViaBridge(questionService, input),
   createBead: (input) => createBeadViaBridge(input),
 });
