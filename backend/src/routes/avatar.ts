@@ -109,30 +109,72 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
 <script type="module">
   const statusEl = document.getElementById('status');
   const setStatus = (msg, isErr) => { statusEl.innerHTML = msg; statusEl.className = isErr ? 'err' : ''; };
+  // EXTERNAL mode (adj-202.3.7.3): the dashboard BridgePanel loads /avatar?external=1
+  // and hands off ONE broker-owned session via postMessage, so the iframe must NOT
+  // self-connect (no second session = no double-billing, ceiling-gated). Default mode
+  // (no param — e.g. the iOS WKWebView overlay) self-connects, unchanged.
+  const external = new URLSearchParams(location.search).has('external');
+  const post = (m) => { try { if (window.parent && window.parent !== window) window.parent.postMessage(m, location.origin); } catch (_) {} };
   try {
     const React = (await import('https://esm.sh/react@18')).default;
     const { createRoot } = await import('https://esm.sh/react-dom@18/client');
     const { AvatarCall } = await import('https://esm.sh/@runwayml/avatars-react?deps=react@18,react-dom@18');
-
-    const res = await fetch('/avatar/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    if (!res.ok) { const t = await res.text(); throw new Error('Session failed (' + res.status + '): ' + t); }
-    const session = await res.json();
-
-    setStatus('');
-    statusEl.style.display = 'none';
     const root = createRoot(document.getElementById('root'));
-    root.render(React.createElement(AvatarCall, {
-      avatarId: session.avatarId,
-      sessionId: session.sessionId,
-      sessionKey: session.sessionKey,
-      // Voice conversation: keep the mic, disable the user's front camera so there's
-      // no self-view picture-in-picture (and no camera permission prompt).
-      audio: true,
-      video: false,
-      onError: (e) => { statusEl.style.display = 'block'; setStatus('Error: ' + (e && e.message ? e.message : e), true); },
-    }));
+
+    let micEnabled = true;
+    let current = null;
+    const render = () => {
+      if (!current) return;
+      root.render(React.createElement(AvatarCall, {
+        avatarId: current.avatarId,
+        sessionId: current.sessionId,
+        sessionKey: current.sessionKey,
+        // Voice conversation: keep the mic, disable the front camera (no self-view PiP).
+        audio: micEnabled,
+        video: false,
+        onError: (e) => {
+          const msg = e && e.message ? e.message : String(e);
+          if (external) post({ type: 'bridge:status', status: 'error', detail: msg });
+          statusEl.style.display = 'block'; setStatus('Error: ' + msg, true);
+        },
+        onEnd: () => { if (external) post({ type: 'bridge:status', status: 'ended' }); },
+      }));
+    };
+    const start = (session) => {
+      current = session;
+      setStatus(''); statusEl.style.display = 'none';
+      if (external) post({ type: 'bridge:status', status: 'connecting' });
+      render();
+      if (external) post({ type: 'bridge:status', status: 'connected' });
+    };
+
+    if (external) {
+      let started = false;
+      window.addEventListener('message', (ev) => {
+        if (ev.origin !== location.origin) return;
+        const d = ev.data;
+        if (!d || typeof d.type !== 'string') return;
+        if (d.type === 'bridge:session' && !started && d.sessionId && d.sessionKey) {
+          started = true;
+          start({ sessionId: d.sessionId, sessionKey: d.sessionKey, avatarId: d.avatarId });
+        } else if (d.type === 'bridge:mic' && typeof d.enabled === 'boolean') {
+          micEnabled = d.enabled;
+          render();
+          post({ type: 'bridge:mic', enabled: micEnabled }); // echo confirmed state
+        }
+      });
+      post({ type: 'bridge:ready' }); // tell the panel we're loaded and awaiting creds
+      // NOTE: captions (bridge:caption) are intentionally not emitted — the
+      // @runwayml/avatars-react SDK does not expose a transcript stream (adj-202.3.7.1 deferred).
+    } else {
+      const res = await fetch('/avatar/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      if (!res.ok) { const t = await res.text(); throw new Error('Session failed (' + res.status + '): ' + t); }
+      start(await res.json());
+    }
   } catch (e) {
-    setStatus('Could not connect to the Adjutant: ' + (e && e.message ? e.message : e), true);
+    const msg = e && e.message ? e.message : String(e);
+    if (external) post({ type: 'bridge:status', status: 'error', detail: msg });
+    setStatus('Could not connect to the Adjutant: ' + msg, true);
   }
 </script>
 </body>
