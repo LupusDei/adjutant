@@ -78,7 +78,7 @@ export const BRIDGE_RPC_TOOLS: RunwayRpcToolDef[] = [
       { name: "assignee", type: "string", description: "Optional: only beads assigned to this person." },
       { name: "type", type: "string", description: 'Optional: "epic", "task", or "bug".' },
     ],
-    timeoutSeconds: 12,
+    timeoutSeconds: 8,
   },
   {
     type: "backend_rpc",
@@ -86,7 +86,7 @@ export const BRIDGE_RPC_TOOLS: RunwayRpcToolDef[] = [
     description:
       "Get a snapshot of the currently selected project: connected agents, open beads, and recent message activity. Use for a general 'how are we doing' briefing on the project.",
     parameters: [],
-    timeoutSeconds: 12,
+    timeoutSeconds: 8,
   },
   {
     type: "backend_rpc",
@@ -94,7 +94,7 @@ export const BRIDGE_RPC_TOOLS: RunwayRpcToolDef[] = [
     description:
       "Get the auto-develop loop status for the currently selected project (phase, active proposal, progress). Use when asked whether auto-develop is running or what phase it's in.",
     parameters: [],
-    timeoutSeconds: 12,
+    timeoutSeconds: 8,
   },
 ];
 
