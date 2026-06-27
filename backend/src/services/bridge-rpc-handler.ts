@@ -87,6 +87,27 @@ export interface BridgeSendMessageResult {
  */
 export type BridgeSendMessageFn = (input: { to: string; body: string }) => Promise<BridgeSendMessageResult>;
 
+/** nudge_agent write path — poke a running agent by name. */
+export type BridgeNudgeAgentFn = (input: {
+  agentId: string;
+  message: string;
+}) => Promise<{ agentId: string; delivered: boolean }>;
+
+/** answer_question write path — resolve an open triage question. */
+export type BridgeAnswerQuestionFn = (input: {
+  questionId: string;
+  answerBody?: string | undefined;
+  chosenOption?: string | undefined;
+}) => Promise<{ questionId: string; status: string }>;
+
+/** create_bead write path — file a work item in the (defaulted) project. */
+export type BridgeCreateBeadFn = (input: {
+  title: string;
+  description?: string | undefined;
+  type?: "epic" | "task" | "bug" | undefined;
+  projectId?: string | undefined;
+}) => Promise<{ beadId: string; title: string; projectId: string }>;
+
 export interface BridgeToolDispatchDeps {
   /** The read-only tool bridge to delegate every read call to. */
   executeTool: BridgeToolBridge["executeTool"];
@@ -95,10 +116,32 @@ export interface BridgeToolDispatchDeps {
   /** Optional sink fired with each tool result (e.g. to surface in the dashboard). */
   onResult?: ((result: BridgeToolResult) => void) | undefined;
   /**
-   * Optional write path enabling the `send_message` command tool. When omitted, the
-   * dispatch is read-only (no send_message handler) — fail-closed by default.
+   * Optional WRITE/command paths (adj-202.4). Each command tool is registered ONLY
+   * when its write path is provided — fail-closed by default; the read-only
+   * `executeTool` bridge stays untouched. All are reversible (no confirm gate).
    */
   sendMessage?: BridgeSendMessageFn | undefined;
+  nudgeAgent?: BridgeNudgeAgentFn | undefined;
+  answerQuestion?: BridgeAnswerQuestionFn | undefined;
+  createBead?: BridgeCreateBeadFn | undefined;
+}
+
+/** A structured INVALID_ARGS envelope for a command tool (never throws to the model). */
+function invalidArgs(tool: string, message: string): Record<string, unknown> {
+  return { ok: false, tool, error: { code: "INVALID_ARGS", message } };
+}
+
+/** Wrap a command write-path call so an unexpected throw becomes a structured error. */
+async function runCommand(
+  tool: string,
+  fn: () => Promise<Record<string, unknown>>,
+): Promise<Record<string, unknown>> {
+  try {
+    return await fn();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, tool, error: { code: "COMMAND_FAILED", message } };
+  }
 }
 
 /**
@@ -172,6 +215,78 @@ export function buildBridgeToolDispatch(deps: BridgeToolDispatchDeps): Record<st
     };
   }
 
+  // nudge_agent — poke a running agent by name (adj-202.4.2).
+  const nudgeAgent = deps.nudgeAgent;
+  if (nudgeAgent) {
+    dispatch["nudge_agent"] = (args: Record<string, unknown>): Promise<Record<string, unknown>> => {
+      const agentId = typeof args["agentId"] === "string" ? args["agentId"].trim() : "";
+      const message = typeof args["message"] === "string" ? args["message"] : "";
+      if (!agentId || !message) {
+        return Promise.resolve(
+          invalidArgs("nudge_agent", "nudge_agent requires both 'agentId' (agent name) and 'message'."),
+        );
+      }
+      return runCommand("nudge_agent", async () => {
+        const result = await nudgeAgent({ agentId, message });
+        return { ok: true, tool: "nudge_agent", agentId: result.agentId, delivered: result.delivered };
+      });
+    };
+  }
+
+  // answer_question — resolve an open triage question (adj-202.4.3).
+  const answerQuestion = deps.answerQuestion;
+  if (answerQuestion) {
+    dispatch["answer_question"] = (args: Record<string, unknown>): Promise<Record<string, unknown>> => {
+      const questionId = typeof args["questionId"] === "string" ? args["questionId"].trim() : "";
+      const answerBody = typeof args["answerBody"] === "string" && args["answerBody"].length > 0 ? args["answerBody"] : undefined;
+      const chosenOption =
+        typeof args["chosenOption"] === "string" && args["chosenOption"].length > 0 ? args["chosenOption"] : undefined;
+      // Answer contract: questionId + at least one of answerBody / chosenOption.
+      if (!questionId || (answerBody === undefined && chosenOption === undefined)) {
+        return Promise.resolve(
+          invalidArgs(
+            "answer_question",
+            "answer_question requires 'questionId' and at least one of 'answerBody' or 'chosenOption'.",
+          ),
+        );
+      }
+      return runCommand("answer_question", async () => {
+        const input: { questionId: string; answerBody?: string; chosenOption?: string } = { questionId };
+        if (answerBody !== undefined) input.answerBody = answerBody;
+        if (chosenOption !== undefined) input.chosenOption = chosenOption;
+        const result = await answerQuestion(input);
+        return { ok: true, tool: "answer_question", questionId: result.questionId, status: result.status };
+      });
+    };
+  }
+
+  // create_bead — file a work item; defaults to the session's selected project (adj-202.4.4).
+  const createBead = deps.createBead;
+  if (createBead) {
+    dispatch["create_bead"] = (args: Record<string, unknown>): Promise<Record<string, unknown>> => {
+      const title = typeof args["title"] === "string" ? args["title"].trim() : "";
+      const description = typeof args["description"] === "string" && args["description"].length > 0 ? args["description"] : undefined;
+      const rawType = typeof args["type"] === "string" ? args["type"] : undefined;
+      if (!title) {
+        return Promise.resolve(invalidArgs("create_bead", "create_bead requires a 'title'."));
+      }
+      if (rawType !== undefined && rawType !== "epic" && rawType !== "task" && rawType !== "bug") {
+        return Promise.resolve(invalidArgs("create_bead", "create_bead 'type' must be one of: epic, task, bug."));
+      }
+      return runCommand("create_bead", async () => {
+        const input: { title: string; description?: string; type?: "epic" | "task" | "bug"; projectId?: string } = {
+          title,
+        };
+        if (description !== undefined) input.description = description;
+        if (rawType !== undefined) input.type = rawType;
+        // The avatar never speaks a UUID — inject the session's selected project.
+        if (deps.defaultProjectId !== undefined) input.projectId = deps.defaultProjectId;
+        const result = await createBead(input);
+        return { ok: true, tool: "create_bead", beadId: result.beadId, title: result.title, projectId: result.projectId };
+      });
+    };
+  }
+
   return dispatch;
 }
 
@@ -189,10 +304,13 @@ export interface BridgeRpcManagerConfig {
   /** Sink fired with every tool result across all sessions (dashboard surfacing). */
   onResult?: ((sessionId: string, result: BridgeToolResult) => void) | undefined;
   /**
-   * Optional write path enabling the `send_message` command tool (adj-202.4.1). When
-   * omitted, every attached session is read-only.
+   * Optional WRITE/command paths (adj-202.4). Each enables its command tool on every
+   * attached session; omitting them leaves the avatar read-only. All are reversible.
    */
   sendMessage?: BridgeSendMessageFn | undefined;
+  nudgeAgent?: BridgeNudgeAgentFn | undefined;
+  answerQuestion?: BridgeAnswerQuestionFn | undefined;
+  createBead?: BridgeCreateBeadFn | undefined;
 }
 
 export interface AttachOptions {
@@ -245,6 +363,9 @@ export function createBridgeRpcManager(config: BridgeRpcManagerConfig): BridgeRp
       defaultProjectId: projectId,
       onResult: resultSink ? (result) => { resultSink(sessionId, result); } : undefined,
       sendMessage: config.sendMessage,
+      nudgeAgent: config.nudgeAgent,
+      answerQuestion: config.answerQuestion,
+      createBead: config.createBead,
     });
 
     try {

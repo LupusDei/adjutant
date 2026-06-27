@@ -178,6 +178,96 @@ describe("buildBridgeToolDispatch — send_message command tool (adj-202.4.1)", 
   });
 });
 
+describe("buildBridgeToolDispatch — nudge/answer/create command tools (adj-202.4.2/.3/.4)", () => {
+  it("registers each command tool only when its write path is provided (fail-closed)", () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const none = buildBridgeToolDispatch({ executeTool });
+    expect(none["nudge_agent"]).toBeUndefined();
+    expect(none["answer_question"]).toBeUndefined();
+    expect(none["create_bead"]).toBeUndefined();
+
+    const all = buildBridgeToolDispatch({
+      executeTool,
+      nudgeAgent: vi.fn(),
+      answerQuestion: vi.fn(),
+      createBead: vi.fn(),
+    });
+    expect(typeof all["nudge_agent"]).toBe("function");
+    expect(typeof all["answer_question"]).toBe("function");
+    expect(typeof all["create_bead"]).toBe("function");
+  });
+
+  it("nudge_agent maps { agentId, message } to the write path and reports delivery", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const nudgeAgent = vi.fn(async () => ({ agentId: "kerrigan", delivered: true }));
+    const dispatch = buildBridgeToolDispatch({ executeTool, nudgeAgent });
+
+    const out = await dispatch["nudge_agent"]!({ agentId: "kerrigan", message: "refocus" });
+    expect(nudgeAgent).toHaveBeenCalledWith({ agentId: "kerrigan", message: "refocus" });
+    expect(out).toMatchObject({ ok: true, tool: "nudge_agent", agentId: "kerrigan", delivered: true });
+  });
+
+  it("nudge_agent rejects when agentId or message is missing (validation)", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const nudgeAgent = vi.fn();
+    const dispatch = buildBridgeToolDispatch({ executeTool, nudgeAgent });
+    const out = (await dispatch["nudge_agent"]!({ agentId: "kerrigan" })) as { ok: boolean; error: { code: string } };
+    expect(out.ok).toBe(false);
+    expect(out.error.code).toBe("INVALID_ARGS");
+    expect(nudgeAgent).not.toHaveBeenCalled();
+  });
+
+  it("answer_question requires questionId AND at least one of answerBody/chosenOption", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const answerQuestion = vi.fn(async () => ({ questionId: "q1", status: "answered" }));
+    const dispatch = buildBridgeToolDispatch({ executeTool, answerQuestion });
+
+    const bad = (await dispatch["answer_question"]!({ questionId: "q1" })) as { ok: boolean; error: { code: string } };
+    expect(bad.ok).toBe(false);
+    expect(bad.error.code).toBe("INVALID_ARGS");
+    expect(answerQuestion).not.toHaveBeenCalled();
+
+    const ok = await dispatch["answer_question"]!({ questionId: "q1", chosenOption: "Redis" });
+    expect(answerQuestion).toHaveBeenCalledWith({ questionId: "q1", chosenOption: "Redis" });
+    expect(ok).toMatchObject({ ok: true, tool: "answer_question", questionId: "q1", status: "answered" });
+  });
+
+  it("create_bead requires a title and injects the session's default projectId", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const createBead = vi.fn(async () => ({ beadId: "adj-1", title: "x", projectId: "p1" }));
+    const dispatch = buildBridgeToolDispatch({ executeTool, createBead, defaultProjectId: "p1" });
+
+    const bad = (await dispatch["create_bead"]!({})) as { ok: boolean; error: { code: string } };
+    expect(bad.ok).toBe(false);
+    expect(bad.error.code).toBe("INVALID_ARGS");
+
+    const out = await dispatch["create_bead"]!({ title: "Fix login", type: "bug" });
+    expect(createBead).toHaveBeenCalledWith({ title: "Fix login", type: "bug", projectId: "p1" });
+    expect(out).toMatchObject({ ok: true, tool: "create_bead", beadId: "adj-1", projectId: "p1" });
+  });
+
+  it("create_bead rejects an invalid type without calling the write path", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const createBead = vi.fn();
+    const dispatch = buildBridgeToolDispatch({ executeTool, createBead });
+    const out = (await dispatch["create_bead"]!({ title: "x", type: "saga" })) as { ok: boolean; error: { code: string } };
+    expect(out.ok).toBe(false);
+    expect(out.error.code).toBe("INVALID_ARGS");
+    expect(createBead).not.toHaveBeenCalled();
+  });
+
+  it("a command write-path throw becomes a structured error envelope (never rejects)", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const createBead = vi.fn(async () => {
+      throw new Error("bd down");
+    });
+    const dispatch = buildBridgeToolDispatch({ executeTool, createBead });
+    const out = (await dispatch["create_bead"]!({ title: "x" })) as { ok: boolean; error: { message: string } };
+    expect(out.ok).toBe(false);
+    expect(out.error.message).toContain("bd down");
+  });
+});
+
 describe("createBridgeRpcManager", () => {
   function fakeHandler(): RpcHandlerLike {
     return { close: vi.fn(async () => {}), connected: true };
