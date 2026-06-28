@@ -20,7 +20,7 @@
 
 import { Router } from "express";
 
-import type { BridgeSessionBroker, StartSessionOptions } from "../services/bridge-session-broker.js";
+import type { BridgeSessionBroker, StartSessionOptions, BridgeSessionCreds } from "../services/bridge-session-broker.js";
 import { BridgeCostCeilingError } from "../services/bridge-session-broker.js";
 import type { BridgeRpcManager } from "../services/bridge-rpc-handler.js";
 import { BRIDGE_RPC_TOOLS, composeBridgePersonality } from "../services/bridge-rpc-tools.js";
@@ -40,32 +40,91 @@ export interface AvatarRouterDeps {
 export function createAvatarRouter(deps: AvatarRouterDeps): Router {
   const router = Router();
 
+  // ── Warm-session cache (adj-202.10, load perf) ──────────────────────────────
+  // Runway takes ~3-5s to provision a session, which is the load-time floor. So we keep ONE
+  // pre-provisioned, tool-enabled session ready: iOS calls POST /avatar/prepare on foreground
+  // (intent), and POST /avatar/connect hands that warm session out instantly (~2s to first
+  // frame instead of ~5s). We warm ONLY on explicit prepare (not after connect) so we never
+  // burn credits keeping a session alive when nobody is about to use it; the cost-guard ceiling
+  // still gates every create. A warm session unused past its TTL is simply dropped.
+  const WARM_TTL_MS = 4 * 60 * 1000; // Runway sessions live ~5min — keep a safety buffer.
+  let warm: { creds: BridgeSessionCreds; createdAt: number } | null = null;
+  let warming: Promise<void> | null = null;
+
+  const buildOpts = (customAvatarId?: string): StartSessionOptions => {
+    // Tool-enable exactly like POST /api/bridge/session: read-only fleet tools + a persona that
+    // tells GWM-1 to CALL them. Default mode has no selected project (fleet tools need none).
+    const opts: StartSessionOptions = { tools: BRIDGE_RPC_TOOLS, personality: composeBridgePersonality() };
+    if (customAvatarId !== undefined) opts.avatarId = customAvatarId;
+    return opts;
+  };
+
+  // Create a fully-ready session: broker create+poll, then attach the tool-loop handler.
+  async function createReadySession(customAvatarId?: string): Promise<BridgeSessionCreds> {
+    const session = await deps.broker.startSession(buildOpts(customAvatarId));
+    // `attach` swallows its own errors — a tool-loop hiccup must not fail a billable session.
+    if (deps.rpcManager) await deps.rpcManager.attach({ sessionId: session.sessionId });
+    return session;
+  }
+
+  const warmFresh = (): boolean => warm !== null && Date.now() - warm.createdAt < WARM_TTL_MS;
+
+  // Provision a warm session in the background (idempotent + ceiling-gated). No-op if one is
+  // already fresh or a warm is already in flight.
+  function triggerWarm(): void {
+    if (warming || warmFresh()) return;
+    warming = (async () => {
+      try {
+        const creds = await createReadySession();
+        warm = { creds, createdAt: Date.now() };
+        logInfo("avatar warm session ready", { sessionId: creds.sessionId });
+      } catch (err) {
+        // Ceiling reached or create failed — leave the slot empty; connect falls back on-demand.
+        warm = null;
+        logInfo("avatar warm skipped", { error: err instanceof Error ? err.message : String(err) });
+      } finally {
+        warming = null;
+      }
+    })();
+  }
+
+  // Take the warm session if it is still fresh; otherwise drop any stale one and return null.
+  function takeWarm(): BridgeSessionCreds | null {
+    if (warmFresh() && warm) {
+      const creds = warm.creds;
+      warm = null;
+      return creds;
+    }
+    warm = null;
+    return null;
+  }
+
+  // POST /avatar/prepare — warm a session ahead of a tap (called by iOS on foreground/intent).
+  // Idempotent, cost-guarded, returns immediately without blocking on provisioning.
+  router.post("/prepare", (_req, res) => {
+    triggerWarm();
+    return res.json({ ok: true, warm: warmFresh() });
+  });
+
   router.post("/connect", async (req, res) => {
     const body = req.body as { customAvatarId?: unknown } | undefined;
     const customAvatarId =
       typeof body?.customAvatarId === "string" && body.customAvatarId.length > 0 ? body.customAvatarId : undefined;
 
-    // Tool-enable the session exactly like POST /api/bridge/session: the avatar gets
-    // the read-only fleet tools + a persona that tells GWM-1 to CALL them. Default
-    // mode has no selected project — fleet tools (list_agents/list_questions) need none.
-    const opts: StartSessionOptions = {
-      tools: BRIDGE_RPC_TOOLS,
-      personality: composeBridgePersonality(),
-    };
-    if (customAvatarId !== undefined) opts.avatarId = customAvatarId;
-
     try {
-      const session = await deps.broker.startSession(opts);
-
-      // Attach the server-side tool loop so the avatar can actually query the fleet.
-      // `attach` swallows its own errors — a tool-loop hiccup must not fail a live,
-      // billable session — so awaiting it is safe.
-      if (deps.rpcManager) {
-        await deps.rpcManager.attach({ sessionId: session.sessionId });
+      // Fast path: hand out the pre-warmed session (default avatar only — a custom avatar can't
+      // reuse the warm one). This is the ~2s path.
+      if (customAvatarId === undefined) {
+        const warmCreds = takeWarm();
+        if (warmCreds) {
+          logInfo("avatar session served warm", { sessionId: warmCreds.sessionId });
+          return res.json(warmCreds);
+        }
       }
 
+      // On-demand path (no warm session available).
+      const session = await createReadySession(customAvatarId);
       logInfo("avatar session created", { sessionId: session.sessionId, avatarId: session.avatarId });
-      // Preserve the EXACT contract the /avatar page consumes.
       return res.json(session);
     } catch (err) {
       // Daily credit ceiling — expected, recoverable; surface distinctly (429) like /api/bridge/session.

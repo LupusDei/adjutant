@@ -108,3 +108,52 @@ describe("avatar routes: POST /avatar/connect (broker-backed)", () => {
     expect(res.text).toContain("/avatar/connect");
   });
 });
+
+describe("avatar routes: warm-session cache (POST /avatar/prepare) — load perf adj-202.10", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("prepare warms a session in the background and returns ok", async () => {
+    const startSession = vi.fn().mockResolvedValue(CREDS);
+    const { app } = makeApp({ startSession });
+    const res = await request(app).post("/avatar/prepare").send({});
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(startSession).toHaveBeenCalledTimes(1); // warmed exactly one
+  });
+
+  it("connect serves the pre-warmed session without creating a second one (~2s fast path)", async () => {
+    const startSession = vi.fn().mockResolvedValue(CREDS);
+    const attach = vi.fn().mockResolvedValue(undefined);
+    const { app } = makeApp({ startSession, attach });
+
+    await request(app).post("/avatar/prepare").send({});
+    await new Promise((r) => setTimeout(r, 10)); // let the background warm settle
+
+    const res = await request(app).post("/avatar/connect").send({});
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(CREDS);
+    // Exactly ONE create total: the warm one. connect reused it (no second provisioning).
+    expect(startSession).toHaveBeenCalledTimes(1);
+    expect(attach).toHaveBeenCalledTimes(1);
+  });
+
+  it("prepare is idempotent: a second prepare while one is fresh does not create another", async () => {
+    const startSession = vi.fn().mockResolvedValue(CREDS);
+    const { app } = makeApp({ startSession });
+    await request(app).post("/avatar/prepare").send({});
+    await new Promise((r) => setTimeout(r, 10));
+    await request(app).post("/avatar/prepare").send({});
+    expect(startSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("a custom avatarId bypasses the warm cache and provisions fresh", async () => {
+    const startSession = vi.fn().mockResolvedValue(CREDS);
+    const { app } = makeApp({ startSession });
+    await request(app).post("/avatar/prepare").send({});
+    await new Promise((r) => setTimeout(r, 10));
+    await request(app).post("/avatar/connect").send({ customAvatarId: "custom-x" });
+    // 1 warm + 1 fresh on-demand for the custom avatar = 2 creates.
+    expect(startSession).toHaveBeenCalledTimes(2);
+    expect(startSession.mock.calls[1]![0]).toMatchObject({ avatarId: "custom-x" });
+  });
+});
