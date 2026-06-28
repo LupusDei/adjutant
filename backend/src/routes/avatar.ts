@@ -161,9 +161,6 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
 <!-- Warm the CDN connection + start fetching the SDK modules during HTML parse (load perf — adj-202). -->
 <link rel="preconnect" href="https://esm.sh" crossorigin />
 <link rel="dns-prefetch" href="https://esm.sh" />
-<link rel="modulepreload" href="https://esm.sh/react@18" />
-<link rel="modulepreload" href="https://esm.sh/react-dom@18/client" />
-<link rel="modulepreload" href="https://esm.sh/@runwayml/avatars-react?deps=react@18,react-dom@18" />
 <style>
   :root { color-scheme: dark; }
   html, body { margin: 0; height: 100%; color: #e7d9ee; font-family: -apple-system, system-ui, sans-serif; overflow: hidden; }
@@ -249,16 +246,13 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
         });
   if (sessionPromise) sessionPromise.catch(() => {}); // pre-handle: avoid unhandled rejection if imports fail first
   try {
-    // Download the three SDK modules concurrently (was a serial waterfall) — modulepreload in
-    // <head> has usually already warmed these by now.
-    const [reactMod, reactDomMod, avatarsMod] = await Promise.all([
-      import('https://esm.sh/react@18'),
-      import('https://esm.sh/react-dom@18/client'),
-      import('https://esm.sh/@runwayml/avatars-react?deps=react@18,react-dom@18'),
-    ]);
-    const React = reactMod.default;
-    const { createRoot } = reactDomMod;
-    const { AvatarCall } = avatarsMod;
+    // Load the SDK modules SERIALLY — the proven order (react first so react-dom and
+    // avatars-react resolve it from cache). Parallel Promise.all imports + modulepreload tripped
+    // a WKWebView "Importing a module script failed". The session fetch above already overlaps
+    // the slowest part, so the imports don't need to be parallelized.
+    const React = (await import('https://esm.sh/react@18')).default;
+    const { createRoot } = await import('https://esm.sh/react-dom@18/client');
+    const { AvatarCall } = await import('https://esm.sh/@runwayml/avatars-react?deps=react@18,react-dom@18');
     const root = createRoot(document.getElementById('root'));
 
     let micEnabled = true;
