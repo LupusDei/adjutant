@@ -11,17 +11,17 @@ import Foundation
 ///
 /// Fire-and-forget: the request is non-blocking and failures are intentionally ignored — a
 /// missed warm just means the next connect falls back to on-demand provisioning.
-enum BridgePrewarmer {
+public enum BridgePrewarmer {
     /// UserDefaults key shared with SettingsViewModel's `prewarmBridgeEnabled` toggle.
-    static let userDefaultsKey = "prewarmBridgeEnabled"
+    public static let userDefaultsKey = "prewarmBridgeEnabled"
 
-    static var isEnabled: Bool {
+    public static var isEnabled: Bool {
         UserDefaults.standard.bool(forKey: userDefaultsKey)
     }
 
     /// If pre-warm is enabled, kick off a background `POST /avatar/prepare`. Non-blocking.
     @MainActor
-    static func prepareIfEnabled() {
+    public static func prepareIfEnabled() {
         guard isEnabled, let url = prepareURL() else { return }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
