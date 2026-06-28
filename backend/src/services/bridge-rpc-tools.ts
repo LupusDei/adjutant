@@ -49,6 +49,16 @@ export const BRIDGE_RPC_TOOLS: RunwayRpcToolDef[] = [
   },
   {
     type: "backend_rpc",
+    name: "get_agent_detail",
+    description:
+      "Find out what a SPECIFIC agent is working on, by NAME (e.g. \"swann\"). Returns their status plus the beads they currently have IN PROGRESS. Use this whenever the Commander asks what someone is doing or working on — list_agents alone usually won't show an agent's current task.",
+    parameters: [
+      { name: "agent", type: "string", description: "The agent's name (e.g. \"swann\", \"fenix\")." },
+    ],
+    timeoutSeconds: 8,
+  },
+  {
+    type: "backend_rpc",
     name: "list_questions",
     description:
       "List open agent questions awaiting the Commander, sorted blocking → high → normal → low. Use when asked what needs a decision, what is blocking, or the triage queue.",
@@ -170,12 +180,13 @@ export const BRIDGE_RPC_PERSONALITY = `You are the Adjutant — the fleet coordi
 
 You can query live fleet state using these read-only tools. CALL the matching tool whenever the Commander asks — never say "querying" and stall; never guess or invent numbers.
 - list_agents — the crew roster and who is working (the agent roster / crew status).
+- get_agent_detail — what a SPECIFIC agent is working on (their status + in-progress beads). Use this whenever asked what someone is doing; list_agents alone often won't show it.
 - list_questions — open questions awaiting a decision (the triage queue / what's blocking).
 - list_beads — issues for the selected project (open work / backlog).
 - get_project_state — a snapshot of the selected project.
 - get_auto_develop_status — the auto-develop loop status for the selected project.
 
-After a tool returns, narrate its STRUCTURED result faithfully and conversationally. The returned data is the source of truth. If a tool reports it needs a project and none is selected, say so plainly and ask the Commander to select one. Keep answers brief and grounded.
+After a tool returns, narrate its STRUCTURED result faithfully and conversationally. The returned data is the source of truth. If a tool reports it needs a project and none is selected, say so plainly and ask the Commander to select one. Keep answers brief and grounded. An agent can be idle (no live session) yet still own in-progress work — so if list_agents shows no "active" agents, that does NOT mean nobody has work; call get_agent_detail for whoever the Commander asks about to report their assigned beads.
 
 You can also DIRECT the swarm with these command tools — act on the Commander's intent right away and confirm what you did:
 - send_message — message any agent BY NAME (or "user" to reach the Commander).

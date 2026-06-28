@@ -30,6 +30,7 @@ import { getConnectedAgents } from "./mcp-server.js";
 import { getProject, type Project } from "./projects-service.js";
 import { execBd, resolveBeadsDir, type BeadsIssue } from "./bd-client.js";
 import { buildAutoDevelopStatus } from "./auto-develop-status.js";
+import { resolveAgentName } from "./bridge-agent-resolver.js";
 import type { MessageStore } from "./message-store.js";
 import type { ProposalStore } from "./proposal-store.js";
 import type { AutoDevelopStore } from "./auto-develop-store.js";
@@ -43,6 +44,7 @@ import type { QuestionService } from "./question-service.js";
 export const BRIDGE_READONLY_TOOLS = [
   "get_project_state",
   "list_agents",
+  "get_agent_detail",
   "list_questions",
   "list_beads",
   "get_auto_develop_status",
@@ -135,6 +137,10 @@ const listBeadsArgs = z.object({
   type: z.enum(["epic", "task", "bug"]).optional(),
 });
 
+const getAgentDetailArgs = z.object({
+  agent: z.string().min(1),
+});
+
 // ============================================================================
 // Project resolution
 // ============================================================================
@@ -207,6 +213,8 @@ export function createBridgeToolBridge(deps: BridgeToolDeps): BridgeToolBridge {
       switch (tool) {
         case "list_agents":
           return await runListAgents(deps, args, projectId);
+        case "get_agent_detail":
+          return await runGetAgentDetail(deps, args, projectId);
         case "list_questions":
           return runListQuestions(deps, args, projectId);
         case "list_beads":
@@ -241,6 +249,7 @@ export function createBridgeToolBridge(deps: BridgeToolDeps): BridgeToolBridge {
 // ============================================================================
 
 const TOOL_LIST_AGENTS: BridgeToolName = "list_agents";
+const TOOL_GET_AGENT_DETAIL: BridgeToolName = "get_agent_detail";
 const TOOL_LIST_QUESTIONS: BridgeToolName = "list_questions";
 const TOOL_LIST_BEADS: BridgeToolName = "list_beads";
 const TOOL_GET_PROJECT_STATE: BridgeToolName = "get_project_state";
@@ -286,6 +295,73 @@ async function runListAgents(
 
   const enriched = agents.map((a) => ({ ...a, connected: connectedIds.has(a.id) }));
   return ok(TOOL_LIST_AGENTS, projectId, { agents: enriched, count: enriched.length });
+}
+
+/**
+ * get_agent_detail — "what is <agent> working on?" Resolves a spoken/typed agent name to a
+ * registered agent (Phoenix → fenix), returns its live status + the beads it is actually
+ * IN PROGRESS on (the reliable source of work — MCP `currentTask` is frequently empty). bd
+ * runs in the agent's own project (falling back to the named projectId, else "adjutant").
+ */
+async function runGetAgentDetail(
+  _deps: BridgeToolDeps,
+  args: Record<string, unknown>,
+  projectId: string | null,
+): Promise<BridgeToolResult> {
+  const parsed = getAgentDetailArgs.safeParse(args);
+  if (!parsed.success) {
+    return reject(TOOL_GET_AGENT_DETAIL, projectId, "INVALID_ARGS", parsed.error.issues.map((i) => i.message).join("; "));
+  }
+
+  const connectedIds = new Set(getConnectedAgents().map((c) => c.agentId));
+  const agentsResult = await getAgents();
+  const allAgents = agentsResult.success && agentsResult.data ? agentsResult.data : [];
+
+  // Resolve the spoken/typed name to a registered agent (case/alias/phonetic/edit-distance).
+  const resolution = resolveAgentName(parsed.data.agent, allAgents.map((a) => ({ id: a.id, name: a.name })));
+  if (!resolution.matched || !resolution.canonical) {
+    const hint = resolution.candidates.length ? ` Closest: ${resolution.candidates.join(", ")}.` : "";
+    return reject(TOOL_GET_AGENT_DETAIL, projectId, "AGENT_NOT_FOUND", `No agent named '${parsed.data.agent}'.${hint}`);
+  }
+  const canonical = resolution.canonical;
+  const agent = allAgents.find((a) => a.name === canonical);
+
+  // Reliable "what are they working on": the beads bd reports as in_progress for this assignee.
+  const projectKey = agent?.project ?? projectId ?? "adjutant";
+  let inProgressBeads: BeadsIssue[] = [];
+  let beadsError: string | undefined;
+  const projResult = getProject(projectKey);
+  if (projResult.success && projResult.data) {
+    try {
+      const beadsDir = resolveBeadsDir(projResult.data.path);
+      const bdResult = await execBd<BeadsIssue[]>(
+        ["list", "--assignee", canonical, "--status", "in_progress", "--json"],
+        { cwd: projResult.data.path, beadsDir },
+      );
+      if (bdResult.success && Array.isArray(bdResult.data)) {
+        inProgressBeads = bdResult.data;
+      } else {
+        beadsError = bdResult.error?.message ?? "bd list failed";
+      }
+    } catch (err) {
+      beadsError = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  return ok(TOOL_GET_AGENT_DETAIL, projectId, {
+    agent: agent
+      ? {
+          name: agent.name,
+          status: agent.status,
+          currentTask: agent.currentTask ?? null,
+          project: agent.project,
+          connected: connectedIds.has(agent.id),
+        }
+      : { name: canonical, status: "unknown", currentTask: null, project: null, connected: false },
+    inProgressBeads,
+    inProgressCount: inProgressBeads.length,
+    ...(beadsError ? { beadsError } : {}),
+  });
 }
 
 function runListQuestions(

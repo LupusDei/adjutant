@@ -151,9 +151,10 @@ beforeEach(() => {
 // ============================================================================
 
 describe("createBridgeToolBridge — whitelist", () => {
-  it("exposes exactly the five read-only tools", () => {
+  it("exposes exactly the six read-only tools", () => {
     expect([...BRIDGE_READONLY_TOOLS].sort()).toEqual(
       [
+        "get_agent_detail",
         "get_auto_develop_status",
         "get_project_state",
         "list_agents",
@@ -276,6 +277,68 @@ describe("list_agents", () => {
       expect(res.error.code).toBe("TOOL_FAILED");
       expect(res.error.message).toContain("agents service down");
     }
+  });
+});
+
+// ============================================================================
+// get_agent_detail — resolve name → status + in-progress beads (adj-202.9)
+// ============================================================================
+
+describe("get_agent_detail", () => {
+  it("resolves the agent by name (case-insensitive) and returns status + in-progress beads", async () => {
+    mockGetAgents.mockResolvedValue({
+      success: true,
+      data: [
+        { id: "adjutant/swann", name: "swann", type: "engineer", project: "adjutant", status: "idle", currentTask: null },
+      ],
+    });
+    mockGetConnectedAgents.mockReturnValue([]);
+    mockGetProject.mockReturnValue({ success: true, data: { id: "p1", name: "adjutant", path: "/repo" } });
+    mockResolveBeadsDir.mockReturnValue("/repo/.beads");
+    mockExecBd.mockResolvedValue({
+      success: true,
+      data: [{ id: "adj-139", title: "Frontend Performance Overhaul", status: "in_progress" }],
+    });
+
+    const bridge = createBridgeToolBridge(makeDeps());
+    const res = await bridge.executeTool({ tool: "get_agent_detail", args: { agent: "Swann" } });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const data = res.data as {
+        agent: { name: string; status: string };
+        inProgressBeads: { id: string }[];
+        inProgressCount: number;
+      };
+      expect(data.agent.name).toBe("swann");
+      expect(data.inProgressCount).toBe(1);
+      expect(data.inProgressBeads[0]!.id).toBe("adj-139");
+    }
+    expect(mockExecBd).toHaveBeenCalledWith(
+      expect.arrayContaining(["list", "--assignee", "swann", "--status", "in_progress"]),
+      expect.anything(),
+    );
+  });
+
+  it("returns AGENT_NOT_FOUND for an unknown name (no phantom lookup)", async () => {
+    mockGetAgents.mockResolvedValue({
+      success: true,
+      data: [{ id: "a/fenix", name: "fenix", type: "engineer", project: "adjutant", status: "idle" }],
+    });
+    mockGetConnectedAgents.mockReturnValue([]);
+
+    const bridge = createBridgeToolBridge(makeDeps());
+    const res = await bridge.executeTool({ tool: "get_agent_detail", args: { agent: "zzzzzzzz" } });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe("AGENT_NOT_FOUND");
+  });
+
+  it("rejects invalid args (missing agent) with INVALID_ARGS", async () => {
+    const bridge = createBridgeToolBridge(makeDeps());
+    const res = await bridge.executeTool({ tool: "get_agent_detail", args: {} });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe("INVALID_ARGS");
   });
 });
 
