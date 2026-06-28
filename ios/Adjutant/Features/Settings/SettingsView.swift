@@ -33,6 +33,9 @@ struct SettingsView: View {
                 // Voice Section
                 voiceSection
 
+                // Bridge Section (adj-202.10 — avatar pre-warm)
+                bridgeSection
+
                 // About Section
                 aboutSection
             }
@@ -336,6 +339,19 @@ struct SettingsView: View {
                 title: "PUSH NOTIFICATIONS",
                 subtitle: "Receive alerts for new mail and crew status",
                 isOn: $viewModel.notificationsEnabled
+            )
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
+    }
+
+    // MARK: - Bridge Section (adj-202.10 — avatar pre-warm)
+
+    private var bridgeSection: some View {
+        CRTCard(header: "THE BRIDGE") {
+            SettingsToggleRow(
+                title: "PRE-WARM AVATAR",
+                subtitle: "Provision a session when the app opens so LIVE connects in ~2s. Uses extra Runway credits.",
+                isOn: $viewModel.prewarmBridgeEnabled
             )
         }
         .padding(.horizontal, CRTTheme.Spacing.md)

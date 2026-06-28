@@ -18,6 +18,15 @@ final class SettingsViewModel: BaseViewModel {
         }
     }
 
+    /// Whether to pre-warm the Bridge avatar session on app foreground (adj-202.10).
+    /// Off by default — it provisions a Runway session ahead of use (extra credits) to cut
+    /// the LIVE load time from ~5s to ~2s. Key is shared with BridgePrewarmer.
+    @Published var prewarmBridgeEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(prewarmBridgeEnabled, forKey: "prewarmBridgeEnabled")
+        }
+    }
+
     /// Selected voice for text-to-speech
     @Published var selectedVoice: VoiceOption {
         didSet {
@@ -98,6 +107,7 @@ final class SettingsViewModel: BaseViewModel {
         // Load persisted values
         self.selectedTheme = AppState.shared.currentTheme
         self.notificationsEnabled = UserDefaults.standard.bool(forKey: "notificationsEnabled")
+        self.prewarmBridgeEnabled = UserDefaults.standard.bool(forKey: "prewarmBridgeEnabled")
 
         let savedVolume = UserDefaults.standard.double(forKey: "voiceVolume")
         self.voiceVolume = savedVolume == 0 ? 0.8 : savedVolume // Default volume

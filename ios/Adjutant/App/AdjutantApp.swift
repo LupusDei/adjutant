@@ -26,6 +26,9 @@ struct AdjutantApp: App {
             switch newPhase {
             case .active:
                 DataSyncService.shared.start()
+                // Pre-warm the Bridge avatar session if the Commander enabled it (adj-202.10),
+                // so a tap on LIVE connects in ~2s. No-op when the toggle is off.
+                BridgePrewarmer.prepareIfEnabled()
                 // Defer SSE reconnection by one RunLoop cycle so the UI can
                 // stabilize first. Without this, the SSE connect + data refresh
                 // cascade saturates the main actor and freezes the UI for 2-5s.
