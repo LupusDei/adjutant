@@ -82,7 +82,7 @@ export interface BridgeSessionBrokerConfig {
   nowFn?: () => number;
 }
 
-const DEFAULT_POLL_INTERVAL_MS = 1500;
+const DEFAULT_POLL_INTERVAL_MS = 400;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_RENEW_LEAD_MS = 30_000;
 

@@ -99,6 +99,12 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Adjutant</title>
 <link rel="stylesheet" href="https://esm.sh/@runwayml/avatars-react/styles.css" />
+<!-- Warm the CDN connection + start fetching the SDK modules during HTML parse (load perf — adj-202). -->
+<link rel="preconnect" href="https://esm.sh" crossorigin />
+<link rel="dns-prefetch" href="https://esm.sh" />
+<link rel="modulepreload" href="https://esm.sh/react@18" />
+<link rel="modulepreload" href="https://esm.sh/react-dom@18/client" />
+<link rel="modulepreload" href="https://esm.sh/@runwayml/avatars-react?deps=react@18,react-dom@18" />
 <style>
   :root { color-scheme: dark; }
   html, body { margin: 0; height: 100%; color: #e7d9ee; font-family: -apple-system, system-ui, sans-serif; overflow: hidden; }
@@ -172,10 +178,28 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
   // (no param — e.g. the iOS WKWebView overlay) self-connects, unchanged.
   const external = new URLSearchParams(location.search).has('external');
   const post = (m) => { try { if (window.parent && window.parent !== window) window.parent.postMessage(m, location.origin); } catch (_) {} };
+  // PERF (adj-202): start the session create IMMEDIATELY (default mode) so Runway provisions the
+  // avatar WHILE the SDK downloads — the two slowest steps now overlap instead of running back to
+  // back. External mode receives its creds from the parent, so it does not self-fetch.
+  const sessionPromise = external
+    ? null
+    : fetch('/avatar/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+        .then(async (res) => {
+          if (!res.ok) { const t = await res.text(); throw new Error('Session failed (' + res.status + '): ' + t); }
+          return res.json();
+        });
+  if (sessionPromise) sessionPromise.catch(() => {}); // pre-handle: avoid unhandled rejection if imports fail first
   try {
-    const React = (await import('https://esm.sh/react@18')).default;
-    const { createRoot } = await import('https://esm.sh/react-dom@18/client');
-    const { AvatarCall } = await import('https://esm.sh/@runwayml/avatars-react?deps=react@18,react-dom@18');
+    // Download the three SDK modules concurrently (was a serial waterfall) — modulepreload in
+    // <head> has usually already warmed these by now.
+    const [reactMod, reactDomMod, avatarsMod] = await Promise.all([
+      import('https://esm.sh/react@18'),
+      import('https://esm.sh/react-dom@18/client'),
+      import('https://esm.sh/@runwayml/avatars-react?deps=react@18,react-dom@18'),
+    ]);
+    const React = reactMod.default;
+    const { createRoot } = reactDomMod;
+    const { AvatarCall } = avatarsMod;
     const root = createRoot(document.getElementById('root'));
 
     let micEnabled = true;
@@ -224,9 +248,8 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
       // NOTE: captions (bridge:caption) are intentionally not emitted — the
       // @runwayml/avatars-react SDK does not expose a transcript stream (adj-202.3.7.1 deferred).
     } else {
-      const res = await fetch('/avatar/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-      if (!res.ok) { const t = await res.text(); throw new Error('Session failed (' + res.status + '): ' + t); }
-      start(await res.json());
+      // Session was kicked off in parallel at the top — await its result now (often already done).
+      start(await sessionPromise);
     }
   } catch (e) {
     const msg = e && e.message ? e.message : String(e);
