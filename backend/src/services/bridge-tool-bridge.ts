@@ -48,6 +48,7 @@ export const BRIDGE_READONLY_TOOLS = [
   "list_questions",
   "list_beads",
   "get_auto_develop_status",
+  "read_messages",
 ] as const;
 
 export type BridgeToolName = (typeof BRIDGE_READONLY_TOOLS)[number];
@@ -141,6 +142,15 @@ const getAgentDetailArgs = z.object({
   agent: z.string().min(1),
 });
 
+const READ_MESSAGES_DEFAULT_LIMIT = 20;
+const READ_MESSAGES_MAX_LIMIT = 50;
+
+const readMessagesArgs = z.object({
+  agentId: z.string().min(1).optional(),
+  conversationId: z.string().min(1).optional(),
+  limit: z.number().int().positive().optional(),
+});
+
 // ============================================================================
 // Project resolution
 // ============================================================================
@@ -223,6 +233,8 @@ export function createBridgeToolBridge(deps: BridgeToolDeps): BridgeToolBridge {
           return await runGetProjectState(deps, req.projectId);
         case "get_auto_develop_status":
           return runGetAutoDevelopStatus(deps, req.projectId);
+        case "read_messages":
+          return await runReadMessages(deps, args, projectId);
         default:
           // Unreachable — isAllowed already gated the set, but keep TS exhaustive.
           return reject(tool, projectId, "TOOL_NOT_ALLOWED", `Tool '${String(tool)}' is not callable.`);
@@ -254,6 +266,7 @@ const TOOL_LIST_QUESTIONS: BridgeToolName = "list_questions";
 const TOOL_LIST_BEADS: BridgeToolName = "list_beads";
 const TOOL_GET_PROJECT_STATE: BridgeToolName = "get_project_state";
 const TOOL_GET_AUTO_DEVELOP_STATUS: BridgeToolName = "get_auto_develop_status";
+const TOOL_READ_MESSAGES: BridgeToolName = "read_messages";
 
 async function runListAgents(
   _deps: BridgeToolDeps,
@@ -485,4 +498,60 @@ function runGetAutoDevelopStatus(
 
   const status = buildAutoDevelopStatus(resolution.resolved.project, deps.proposalStore, deps.autoDevelopStore);
   return ok(TOOL_GET_AUTO_DEVELOP_STATUS, projectId, status);
+}
+
+/**
+ * read_messages — let the avatar recall past agent/user communications so it can give the
+ * Commander context on prior discussions (the gap the avatar flagged about itself, adj-202.11).
+ * REUSES the SAME messageStore.getMessages the REST/MCP paths use — no new store.
+ *
+ * Fleet-wide by default; an optional `agentId` (resolved Phoenix → fenix via the shared
+ * agent-name resolver) scopes to that agent's DM thread, and a `conversationId` scopes strictly
+ * to one conversation (bleed-free, takes precedence in the store). The store returns newest-first;
+ * we present oldest-first so the avatar narrates the discussion in conversation order.
+ */
+async function runReadMessages(
+  deps: BridgeToolDeps,
+  args: Record<string, unknown>,
+  projectId: string | null,
+): Promise<BridgeToolResult> {
+  const parsed = readMessagesArgs.safeParse(args);
+  if (!parsed.success) {
+    return reject(TOOL_READ_MESSAGES, projectId, "INVALID_ARGS", parsed.error.issues.map((i) => i.message).join("; "));
+  }
+
+  const limit = Math.min(parsed.data.limit ?? READ_MESSAGES_DEFAULT_LIMIT, READ_MESSAGES_MAX_LIMIT);
+  const opts: { limit: number; agentId?: string; conversationId?: string } = { limit };
+
+  // Resolve a spoken/typed agent name to the canonical id (case/alias/phonetic), mirroring
+  // get_agent_detail — so "Phoenix" filters to fenix's thread. An unresolvable name is a hard
+  // miss (don't silently widen to a fleet-wide read the Commander didn't ask for).
+  if (parsed.data.agentId !== undefined) {
+    const agentsResult = await getAgents();
+    const allAgents = agentsResult.success && agentsResult.data ? agentsResult.data : [];
+    const resolution = resolveAgentName(parsed.data.agentId, allAgents.map((a) => ({ id: a.id, name: a.name })));
+    if (!resolution.matched || !resolution.canonical) {
+      const hint = resolution.candidates.length ? ` Closest: ${resolution.candidates.join(", ")}.` : "";
+      return reject(TOOL_READ_MESSAGES, projectId, "AGENT_NOT_FOUND", `No agent named '${parsed.data.agentId}'.${hint}`);
+    }
+    opts.agentId = resolution.canonical;
+  }
+
+  // conversationId takes precedence in the store (strict scoping); pass it through when given.
+  if (parsed.data.conversationId !== undefined) opts.conversationId = parsed.data.conversationId;
+
+  const newestFirst = deps.messageStore.getMessages(opts);
+  // Present oldest → newest for natural narration of the prior discussion.
+  const ordered = [...newestFirst].reverse();
+  const messages = ordered.map((m) => ({
+    id: m.id,
+    sender: m.agentId,
+    recipient: m.recipient,
+    role: m.role,
+    body: m.body,
+    conversationId: m.conversationId,
+    timestamp: m.createdAt,
+  }));
+
+  return ok(TOOL_READ_MESSAGES, projectId, { messages, count: messages.length });
 }

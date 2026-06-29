@@ -151,7 +151,7 @@ beforeEach(() => {
 // ============================================================================
 
 describe("createBridgeToolBridge — whitelist", () => {
-  it("exposes exactly the six read-only tools", () => {
+  it("exposes exactly the seven read-only tools", () => {
     expect([...BRIDGE_READONLY_TOOLS].sort()).toEqual(
       [
         "get_agent_detail",
@@ -160,6 +160,7 @@ describe("createBridgeToolBridge — whitelist", () => {
         "list_agents",
         "list_beads",
         "list_questions",
+        "read_messages",
       ].sort(),
     );
     const bridge = createBridgeToolBridge(makeDeps());
@@ -593,6 +594,127 @@ describe("get_auto_develop_status", () => {
     if (!res.ok) {
       expect(res.error.code).toBe("TOOL_FAILED");
       expect(res.error.message).toContain("proposal store exploded");
+    }
+  });
+});
+
+// ============================================================================
+// read_messages — fleet-wide message recall (adj-202.11)
+// ============================================================================
+
+describe("read_messages", () => {
+  const SAMPLE_MESSAGES = [
+    // Store returns newest-first (created_at DESC).
+    {
+      id: "m3", agentId: "fenix", recipient: "user", role: "agent",
+      body: "Phase 2 complete", conversationId: "dm_x", createdAt: "2026-06-29T03:00:00Z",
+    },
+    {
+      id: "m2", agentId: "user", recipient: "fenix", role: "user",
+      body: "How is the bridge epic?", conversationId: "dm_x", createdAt: "2026-06-29T02:00:00Z",
+    },
+    {
+      id: "m1", agentId: "fenix", recipient: "user", role: "agent",
+      body: "Starting adj-202", conversationId: "dm_x", createdAt: "2026-06-29T01:00:00Z",
+    },
+  ];
+
+  it("returns messages (sender, recipient, body, timestamp) + count, oldest-first for narration", async () => {
+    const getMessages = vi.fn().mockReturnValue(SAMPLE_MESSAGES);
+    const messageStore = {
+      getMessages,
+      getUnreadCounts: vi.fn().mockReturnValue([]),
+    } as unknown as BridgeToolDeps["messageStore"];
+
+    const bridge = createBridgeToolBridge(makeDeps({ messageStore }));
+    const res = await bridge.executeTool({ tool: "read_messages", args: {} });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const data = res.data as { messages: { id: string; sender: string; recipient: string | null; body: string; timestamp: string }[]; count: number };
+      expect(data.count).toBe(3);
+      // Presented oldest → newest so the avatar narrates the discussion in order.
+      expect(data.messages.map((m) => m.id)).toEqual(["m1", "m2", "m3"]);
+      expect(data.messages[0]).toMatchObject({
+        id: "m1", sender: "fenix", recipient: "user", body: "Starting adj-202", timestamp: "2026-06-29T01:00:00Z",
+      });
+    }
+    // Default limit applied (20) when none supplied.
+    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ limit: 20 }));
+  });
+
+  it("resolves a spoken agent name to the canonical id before filtering (Fenix → fenix)", async () => {
+    mockGetAgents.mockResolvedValue({ success: true, data: [{ id: "adjutant/fenix", name: "fenix" }] });
+    const getMessages = vi.fn().mockReturnValue([]);
+    const messageStore = {
+      getMessages,
+      getUnreadCounts: vi.fn().mockReturnValue([]),
+    } as unknown as BridgeToolDeps["messageStore"];
+
+    const bridge = createBridgeToolBridge(makeDeps({ messageStore }));
+    const res = await bridge.executeTool({ tool: "read_messages", args: { agentId: "Fenix" } });
+
+    expect(res.ok).toBe(true);
+    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ agentId: "fenix" }));
+  });
+
+  it("rejects AGENT_NOT_FOUND when a supplied agent name cannot be resolved (no store hit)", async () => {
+    mockGetAgents.mockResolvedValue({ success: true, data: [{ id: "adjutant/fenix", name: "fenix" }] });
+    const getMessages = vi.fn().mockReturnValue([]);
+    const messageStore = {
+      getMessages,
+      getUnreadCounts: vi.fn().mockReturnValue([]),
+    } as unknown as BridgeToolDeps["messageStore"];
+
+    const bridge = createBridgeToolBridge(makeDeps({ messageStore }));
+    const res = await bridge.executeTool({ tool: "read_messages", args: { agentId: "zzzznotanagent" } });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe("AGENT_NOT_FOUND");
+    expect(getMessages).not.toHaveBeenCalled();
+  });
+
+  it("caps the limit at 50 even if a larger value is requested", async () => {
+    const getMessages = vi.fn().mockReturnValue([]);
+    const messageStore = {
+      getMessages,
+      getUnreadCounts: vi.fn().mockReturnValue([]),
+    } as unknown as BridgeToolDeps["messageStore"];
+
+    const bridge = createBridgeToolBridge(makeDeps({ messageStore }));
+    await bridge.executeTool({ tool: "read_messages", args: { limit: 500 } });
+
+    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ limit: 50 }));
+  });
+
+  it("scopes strictly to a conversationId when given (bleed-free)", async () => {
+    const getMessages = vi.fn().mockReturnValue([]);
+    const messageStore = {
+      getMessages,
+      getUnreadCounts: vi.fn().mockReturnValue([]),
+    } as unknown as BridgeToolDeps["messageStore"];
+
+    const bridge = createBridgeToolBridge(makeDeps({ messageStore }));
+    await bridge.executeTool({ tool: "read_messages", args: { conversationId: "dm_abc" } });
+
+    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ conversationId: "dm_abc" }));
+  });
+
+  it("returns an empty result (count 0) when there are no messages", async () => {
+    const getMessages = vi.fn().mockReturnValue([]);
+    const messageStore = {
+      getMessages,
+      getUnreadCounts: vi.fn().mockReturnValue([]),
+    } as unknown as BridgeToolDeps["messageStore"];
+
+    const bridge = createBridgeToolBridge(makeDeps({ messageStore }));
+    const res = await bridge.executeTool({ tool: "read_messages", args: {} });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const data = res.data as { messages: unknown[]; count: number };
+      expect(data.messages).toEqual([]);
+      expect(data.count).toBe(0);
     }
   });
 });

@@ -116,6 +116,18 @@ export const BRIDGE_RPC_TOOLS: RunwayRpcToolDef[] = [
   },
   {
     type: "backend_rpc",
+    name: "read_messages",
+    description:
+      "Read recent agent/user messages so you can RECALL what was said earlier and give the Commander context on prior/past discussions. No IDs needed: omit everything for a fleet-wide recent read, or pass an agent NAME to focus on that agent's thread. The structured result is the source of truth.",
+    parameters: [
+      { name: "agentId", type: "string", description: "Optional agent NAME (e.g. \"fenix\") to focus on that agent's conversation." },
+      { name: "conversationId", type: "string", description: "Optional: scope strictly to one conversation id." },
+      { name: "limit", type: "number", description: "Optional max messages to return (default 20, capped at 50)." },
+    ],
+    timeoutSeconds: 8,
+  },
+  {
+    type: "backend_rpc",
     name: "send_message",
     description:
       "Message any agent by name to direct the swarm (e.g. tell 'kerrigan' to start a task). You do NOT need a project, epic, or bead id — just the agent's name and what to say. Also accepts 'user' to message the Commander. Use this readily to relay the Commander's direction.",
@@ -206,6 +218,7 @@ You can query live fleet state using these read-only tools. CALL the matching to
 - list_beads — issues for the selected project (open work / backlog).
 - get_project_state — a snapshot of the selected project.
 - get_auto_develop_status — the auto-develop loop status for the selected project.
+- read_messages — recall what was said EARLIER between agents/the Commander; use it to give context on prior/past discussions. Pass an agent NAME to focus on their thread; otherwise it reads recent fleet-wide. The structured result is the source of truth.
 
 After a tool returns, narrate its STRUCTURED result faithfully and conversationally. The returned data is the source of truth. If a tool reports it needs a project and none is selected, say so plainly and ask the Commander to select one. Keep answers brief and grounded. An agent can be idle (no live session) yet still own in-progress work — so if list_agents shows no "active" agents, that does NOT mean nobody has work; call get_agent_detail for whoever the Commander asks about to report their assigned beads.
 
