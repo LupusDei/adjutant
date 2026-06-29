@@ -631,7 +631,7 @@ describe("read_messages", () => {
 
     expect(res.ok).toBe(true);
     if (res.ok) {
-      const data = res.data as { messages: Array<{ id: string; sender: string; recipient: string | null; body: string; timestamp: string }>; count: number };
+      const data = res.data as { messages: { id: string; sender: string; recipient: string | null; body: string; timestamp: string }[]; count: number };
       expect(data.count).toBe(3);
       // Presented oldest → newest so the avatar narrates the discussion in order.
       expect(data.messages.map((m) => m.id)).toEqual(["m1", "m2", "m3"]);
