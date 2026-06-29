@@ -35,6 +35,13 @@ export interface AvatarRouterDeps {
    * never throws, so it cannot break a (billable) session.
    */
   rpcManager?: Pick<BridgeRpcManager, "attach">;
+  /**
+   * Re-validate a cached warm session is still consumable before handing it out
+   * (adj-202.10.1). Returns the session's current Runway status (e.g. "READY"),
+   * or rejects if the lookup fails. When omitted, no validation is done and the
+   * warm session is served as-is. Real wiring passes `broker.getSessionStatus`.
+   */
+  getSessionStatus?: (sessionId: string) => Promise<string | undefined>;
 }
 
 export function createAvatarRouter(deps: AvatarRouterDeps): Router {
@@ -88,15 +95,41 @@ export function createAvatarRouter(deps: AvatarRouterDeps): Router {
     })();
   }
 
-  // Take the warm session if it is still fresh; otherwise drop any stale one and return null.
-  function takeWarm(): BridgeSessionCreds | null {
-    if (warmFresh() && warm) {
-      const creds = warm.creds;
+  // Take the warm session if it is still fresh AND Runway still reports it consumable;
+  // otherwise drop it and return null so connect falls back to an on-demand create.
+  //
+  // adj-202.10.1: an unused warm session can transition to FAILED/expired before the
+  // Commander taps LIVE. Handing out those stale creds made /avatar/connect return a
+  // session the client cannot consume ("Cannot consume session in status: FAILED"),
+  // forcing a manual second tap. We now RE-VALIDATE the status before handing it out and
+  // discard anything not READY/RUNNING (or whose status lookup fails) — never hand out a
+  // non-READY warm session. Validation is skipped only when no validator was wired.
+  async function takeWarm(): Promise<BridgeSessionCreds | null> {
+    if (!(warmFresh() && warm)) {
       warm = null;
-      return creds;
+      return null;
     }
-    warm = null;
-    return null;
+    const creds = warm.creds;
+    warm = null; // consume the slot regardless — a warm session is never reused twice.
+
+    if (deps.getSessionStatus) {
+      let status: string | undefined;
+      try {
+        status = await deps.getSessionStatus(creds.sessionId);
+      } catch (err) {
+        // A failed status lookup means we cannot prove the session is healthy — discard it.
+        logInfo("avatar warm session discarded (status check failed)", {
+          sessionId: creds.sessionId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return null;
+      }
+      if (status !== "READY" && status !== "RUNNING") {
+        logInfo("avatar warm session discarded (not READY)", { sessionId: creds.sessionId, status });
+        return null;
+      }
+    }
+    return creds;
   }
 
   // POST /avatar/prepare — warm a session ahead of a tap (called by iOS on foreground/intent).
@@ -115,7 +148,7 @@ export function createAvatarRouter(deps: AvatarRouterDeps): Router {
       // Fast path: hand out the pre-warmed session (default avatar only — a custom avatar can't
       // reuse the warm one). This is the ~2s path.
       if (customAvatarId === undefined) {
-        const warmCreds = takeWarm();
+        const warmCreds = await takeWarm();
         if (warmCreds) {
           logInfo("avatar session served warm", { sessionId: warmCreds.sessionId });
           return res.json(warmCreds);
@@ -234,16 +267,18 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
   // (no param — e.g. the iOS WKWebView overlay) self-connects, unchanged.
   const external = new URLSearchParams(location.search).has('external');
   const post = (m) => { try { if (window.parent && window.parent !== window) window.parent.postMessage(m, location.origin); } catch (_) {} };
+  // Fetch a fresh on-demand session from the backend. Reused for the initial connect AND
+  // for the one-shot consume-failure retry below (adj-202.10.1).
+  const fetchSession = () =>
+    fetch('/avatar/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      .then(async (res) => {
+        if (!res.ok) { const t = await res.text(); throw new Error('Session failed (' + res.status + '): ' + t); }
+        return res.json();
+      });
   // PERF (adj-202): start the session create IMMEDIATELY (default mode) so Runway provisions the
   // avatar WHILE the SDK downloads — the two slowest steps now overlap instead of running back to
   // back. External mode receives its creds from the parent, so it does not self-fetch.
-  const sessionPromise = external
-    ? null
-    : fetch('/avatar/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-        .then(async (res) => {
-          if (!res.ok) { const t = await res.text(); throw new Error('Session failed (' + res.status + '): ' + t); }
-          return res.json();
-        });
+  const sessionPromise = external ? null : fetchSession();
   if (sessionPromise) sessionPromise.catch(() => {}); // pre-handle: avoid unhandled rejection if imports fail first
   try {
     // Load the SDK modules SERIALLY — the proven order (react first so react-dom and
@@ -257,6 +292,7 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
 
     let micEnabled = true;
     let current = null;
+    let retriedConsume = false; // adj-202.10.1: allow exactly ONE auto-reconnect.
     const render = () => {
       if (!current) return;
       root.render(React.createElement(AvatarCall, {
@@ -268,6 +304,21 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
         video: false,
         onError: (e) => {
           const msg = e && e.message ? e.message : String(e);
+          // adj-202.10.1: a (now-defended) stale session can still fail to consume
+          // ("Cannot consume session in status: FAILED. Session must be READY."). Rather than
+          // make the Commander tap twice, auto-retry ONCE with a fresh on-demand session before
+          // surfacing the error. Default mode only — external mode's session is owned by the
+          // parent, so re-fetching would mint a second (double-billed) session.
+          if (!external && !retriedConsume && /consume|must be ready|cannot consume|status:\\s*failed/i.test(msg)) {
+            retriedConsume = true;
+            statusEl.style.display = 'block';
+            setStatus('<span class="spin"></span>Reconnecting to the Adjutant…', false);
+            fetchSession().then(start).catch((err) => {
+              const m = err && err.message ? err.message : String(err);
+              statusEl.style.display = 'block'; setStatus('Error: ' + m, true);
+            });
+            return;
+          }
           if (external) post({ type: 'bridge:status', status: 'error', detail: msg });
           statusEl.style.display = 'block'; setStatus('Error: ' + msg, true);
         },

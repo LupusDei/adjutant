@@ -199,6 +199,17 @@ export class BridgeSessionBroker {
     return this.startSession(opts);
   }
 
+  /**
+   * Current Runway status string for a session id (e.g. "READY" / "RUNNING" / "FAILED"),
+   * or undefined if Runway reported none. Rejects if the lookup fails — callers decide how
+   * to treat that. Used to re-validate a cached warm session is still consumable before it
+   * is handed out (adj-202.10.1), so a session that has since FAILED is never served.
+   */
+  async getSessionStatus(sessionId: string): Promise<string | undefined> {
+    const row = await this.client.getRealtimeSession(sessionId);
+    return row.status;
+  }
+
   /** Milliseconds until the session's cap, or undefined when Runway reported no expiry. */
   msUntilExpiry(creds: Pick<BridgeSessionCreds, "expiresAt">, nowMs: number = this.now()): number | undefined {
     if (!creds.expiresAt) return undefined;

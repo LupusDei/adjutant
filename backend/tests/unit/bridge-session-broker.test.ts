@@ -266,3 +266,32 @@ describe("BridgeSessionBroker: idle + meter accounting", () => {
     expect(costGuard.spentToday()).toBe(computeSessionMeter(60_000).credits);
   });
 });
+
+describe("BridgeSessionBroker: getSessionStatus (warm-session re-validation, adj-202.10.1)", () => {
+  it("should return the current Runway status for a session id (happy path)", async () => {
+    const client = fakeClient({ id: "sess-1" }, [{ id: "sess-1", status: "READY", sessionKey: "stk_abc" }]);
+    const broker = new BridgeSessionBroker({ client, avatarId: CID });
+    expect(await broker.getSessionStatus("sess-1")).toBe("READY");
+  });
+
+  it("should surface a FAILED status so a stale warm session can be discarded", async () => {
+    const client = fakeClient({ id: "sess-1" }, [{ id: "sess-1", status: "FAILED" }]);
+    const broker = new BridgeSessionBroker({ client, avatarId: CID });
+    expect(await broker.getSessionStatus("sess-1")).toBe("FAILED");
+  });
+
+  it("should reject when the underlying status lookup fails (caller treats as not-ready)", async () => {
+    const client: RunwaySessionApi = {
+      createRealtimeSession: vi.fn(),
+      getRealtimeSession: vi.fn().mockRejectedValue(new Error("Runway session fetch failed (HTTP 404)")),
+    };
+    const broker = new BridgeSessionBroker({ client, avatarId: CID });
+    await expect(broker.getSessionStatus("sess-gone")).rejects.toThrow(/HTTP 404/);
+  });
+
+  it("should return undefined when Runway reports no status field (edge case)", async () => {
+    const client = fakeClient({ id: "sess-1" }, [{ id: "sess-1" }]);
+    const broker = new BridgeSessionBroker({ client, avatarId: CID });
+    expect(await broker.getSessionStatus("sess-1")).toBeUndefined();
+  });
+});

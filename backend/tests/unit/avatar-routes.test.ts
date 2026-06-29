@@ -28,16 +28,19 @@ function makeApp(opts: {
   startSession?: ReturnType<typeof vi.fn>;
   attach?: ReturnType<typeof vi.fn>;
   withRpcManager?: boolean;
+  getSessionStatus?: ReturnType<typeof vi.fn>;
 } = {}) {
   const broker = { startSession: opts.startSession ?? vi.fn().mockResolvedValue(CREDS) };
   const rpcManager = { attach: opts.attach ?? vi.fn().mockResolvedValue(undefined) };
+  const getSessionStatus = opts.getSessionStatus;
+  const deps = opts.withRpcManager === false ? { broker } : { broker, rpcManager };
   const app = express();
   app.use(express.json());
   app.use(
     "/avatar",
-    createAvatarRouter(opts.withRpcManager === false ? { broker } : { broker, rpcManager }),
+    createAvatarRouter(getSessionStatus ? { ...deps, getSessionStatus } : deps),
   );
-  return { app, broker, rpcManager };
+  return { app, broker, rpcManager, getSessionStatus };
 }
 
 describe("avatar routes: POST /avatar/connect (broker-backed)", () => {
@@ -155,5 +158,60 @@ describe("avatar routes: warm-session cache (POST /avatar/prepare) — load perf
     // 1 warm + 1 fresh on-demand for the custom avatar = 2 creates.
     expect(startSession).toHaveBeenCalledTimes(2);
     expect(startSession.mock.calls[1]![0]).toMatchObject({ avatarId: "custom-x" });
+  });
+});
+
+describe("avatar routes: warm-session validate-before-handout (adj-202.10.1 regression)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("discards a warm session that Runway has since FAILED and falls back to on-demand create", async () => {
+    // The warm create returns CREDS, but by the time connect runs the session has gone FAILED.
+    const FRESH: BridgeSessionCreds = { ...CREDS, sessionId: "sess-fresh", sessionKey: "stk_fresh" };
+    const startSession = vi
+      .fn()
+      .mockResolvedValueOnce(CREDS) // warm provisioning
+      .mockResolvedValueOnce(FRESH); // on-demand fallback after the warm is discarded
+    const getSessionStatus = vi.fn().mockResolvedValue("FAILED");
+    const { app } = makeApp({ startSession, getSessionStatus });
+
+    await request(app).post("/avatar/prepare").send({});
+    await new Promise((r) => setTimeout(r, 10)); // let the background warm settle
+
+    const res = await request(app).post("/avatar/connect").send({});
+    expect(res.status).toBe(200);
+    // The stale (FAILED) warm session must NOT be handed out — a fresh on-demand one is.
+    expect(getSessionStatus).toHaveBeenCalledWith(CREDS.sessionId);
+    expect(res.body).toEqual(FRESH);
+    expect(startSession).toHaveBeenCalledTimes(2); // warm + fallback create
+  });
+
+  it("hands out the warm session when it re-validates as READY (still the ~2s fast path)", async () => {
+    const startSession = vi.fn().mockResolvedValue(CREDS);
+    const getSessionStatus = vi.fn().mockResolvedValue("READY");
+    const { app } = makeApp({ startSession, getSessionStatus });
+
+    await request(app).post("/avatar/prepare").send({});
+    await new Promise((r) => setTimeout(r, 10));
+
+    const res = await request(app).post("/avatar/connect").send({});
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(CREDS);
+    expect(getSessionStatus).toHaveBeenCalledWith(CREDS.sessionId);
+    expect(startSession).toHaveBeenCalledTimes(1); // warm reused, no second create
+  });
+
+  it("discards the warm session when the status fetch itself fails (treat as not-ready)", async () => {
+    const FRESH: BridgeSessionCreds = { ...CREDS, sessionId: "sess-fresh2" };
+    const startSession = vi.fn().mockResolvedValueOnce(CREDS).mockResolvedValueOnce(FRESH);
+    const getSessionStatus = vi.fn().mockRejectedValue(new Error("Runway session fetch failed (HTTP 404)"));
+    const { app } = makeApp({ startSession, getSessionStatus });
+
+    await request(app).post("/avatar/prepare").send({});
+    await new Promise((r) => setTimeout(r, 10));
+
+    const res = await request(app).post("/avatar/connect").send({});
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(FRESH);
+    expect(startSession).toHaveBeenCalledTimes(2);
   });
 });

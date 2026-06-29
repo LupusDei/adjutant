@@ -227,7 +227,16 @@ const bridgeRpcManager = createBridgeRpcManager({
 // The Bridge — avatar (adj-202.2 / adj-202.7.1). Public (no API key) so the iOS WKWebView
 // overlay can load /avatar and call /avatar/connect same-origin. Mounted BEFORE apiKeyAuth.
 // It shares the broker + tool loop so the phone avatar is cost-guarded AND can query the fleet.
-app.use("/avatar", createAvatarRouter({ broker: bridgeBroker, rpcManager: bridgeRpcManager }));
+app.use(
+  "/avatar",
+  createAvatarRouter({
+    broker: bridgeBroker,
+    rpcManager: bridgeRpcManager,
+    // adj-202.10.1: re-validate a cached warm session is still READY before handing it out,
+    // so a session Runway has since FAILED never reaches the client (no manual second tap).
+    getSessionStatus: (sessionId) => bridgeBroker.getSessionStatus(sessionId),
+  }),
+);
 
 app.use(apiKeyAuth);
 
