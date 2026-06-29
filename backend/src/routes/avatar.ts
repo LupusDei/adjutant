@@ -230,6 +230,21 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
     width: 100% !important; height: 100% !important; object-fit: cover !important;
   }
 
+  /* Shared-surface preview (adj-202.5.2) — top-right PiP, mirrors the self-view. The SDK
+     only renders [data-avatar-screen-share] while sharing, so no explicit hide rule needed. */
+  [data-avatar-screen-share] {
+    position: absolute !important;
+    top: calc(12px + env(safe-area-inset-top)); right: 12px; z-index: 3;
+    width: 36vw; max-width: 220px; aspect-ratio: 16 / 10;
+    border-radius: 10px; overflow: hidden;
+    border: 1px solid rgba(161,24,196,.55); box-shadow: 0 4px 18px rgba(0,0,0,.55);
+    background: #000 !important;
+  }
+  [data-avatar-screen-share] video {
+    position: absolute !important; inset: 0 !important;
+    width: 100% !important; height: 100% !important; object-fit: contain !important;
+  }
+
   /* On-screen media controls (default mode — iOS / standalone). Pinned bottom, above the
      status line. The dashboard (external mode) renders its own chrome controls instead. */
   .bridge-controls {
@@ -283,10 +298,15 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
     // the slowest part, so the imports don't need to be parallelized.
     const React = (await import('https://esm.sh/react@18')).default;
     const { createRoot } = await import('https://esm.sh/react-dom@18/client');
-    const { AvatarCall, AvatarVideo, UserVideo, useLocalMedia } =
+    const { AvatarCall, AvatarVideo, UserVideo, ScreenShareVideo, useLocalMedia } =
       await import('https://esm.sh/@runwayml/avatars-react?deps=react@18,react-dom@18');
     const h = React.createElement;
     const root = createRoot(document.getElementById('root'));
+
+    // Screen-share (adj-202.5.2) needs getDisplayMedia, which iOS Safari / WKWebView do
+    // NOT implement — so the screen-share control only appears where capture is possible.
+    const canScreenShare =
+      !!(navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function');
 
     // BridgeControls (adj-202.5.1) — two-way mic + camera using the SDK's useLocalMedia
     // toggles, which flip the LIVE WebRTC tracks (setMicrophoneEnabled / setCameraEnabled)
@@ -297,10 +317,12 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
     //    bridge:camera commands to the live tracks and echoes the authoritative state back.
     // Must be a child of <AvatarCall> so useLocalMedia sees the session context.
     function BridgeControls() {
-      const { isMicEnabled, isCameraEnabled, toggleMic, toggleCamera } = useLocalMedia();
+      const { isMicEnabled, isCameraEnabled, isScreenShareEnabled, toggleMic, toggleCamera, toggleScreenShare } =
+        useLocalMedia();
       // Mirror current state into refs so the message handler compares without re-subscribing.
       const micRef = React.useRef(isMicEnabled); micRef.current = isMicEnabled;
       const camRef = React.useRef(isCameraEnabled); camRef.current = isCameraEnabled;
+      const shareRef = React.useRef(isScreenShareEnabled); shareRef.current = isScreenShareEnabled;
 
       React.useEffect(() => {
         if (!external) return;
@@ -311,18 +333,20 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
           // Commands carry the DESIRED state; toggle only when it differs (avoids double-flip).
           if (d.type === 'bridge:mic' && typeof d.enabled === 'boolean' && d.enabled !== micRef.current) toggleMic();
           else if (d.type === 'bridge:camera' && typeof d.enabled === 'boolean' && d.enabled !== camRef.current) toggleCamera();
+          else if (d.type === 'bridge:screenshare' && typeof d.enabled === 'boolean' && d.enabled !== shareRef.current) toggleScreenShare();
         };
         window.addEventListener('message', onMsg);
         return () => window.removeEventListener('message', onMsg);
-      }, [toggleMic, toggleCamera]);
+      }, [toggleMic, toggleCamera, toggleScreenShare]);
 
       // Echo authoritative track state so the dashboard chrome toggles track reality.
       React.useEffect(() => { if (external) post({ type: 'bridge:mic', enabled: isMicEnabled }); }, [isMicEnabled]);
       React.useEffect(() => { if (external) post({ type: 'bridge:camera', enabled: isCameraEnabled }); }, [isCameraEnabled]);
+      React.useEffect(() => { if (external) post({ type: 'bridge:screenshare', enabled: isScreenShareEnabled }); }, [isScreenShareEnabled]);
 
       if (external) return null; // the dashboard chrome owns the visible controls
 
-      return h('div', { className: 'bridge-controls' }, [
+      const buttons = [
         h('button', {
           key: 'mic', type: 'button',
           className: 'bridge-ctrl' + (isMicEnabled ? ' on' : ''),
@@ -337,7 +361,18 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
           'aria-label': isCameraEnabled ? 'Turn off camera' : 'Turn on camera',
           onClick: toggleCamera,
         }, (isCameraEnabled ? '📹' : '🚫') + '  ' + (isCameraEnabled ? 'Camera' : 'No cam')),
-      ]);
+      ];
+      // Screen-share only where the surface picker exists (not iOS WKWebView).
+      if (canScreenShare) {
+        buttons.push(h('button', {
+          key: 'share', type: 'button',
+          className: 'bridge-ctrl' + (isScreenShareEnabled ? ' on' : ''),
+          'aria-pressed': isScreenShareEnabled,
+          'aria-label': isScreenShareEnabled ? 'Stop sharing screen' : 'Share screen',
+          onClick: toggleScreenShare,
+        }, '🖥  ' + (isScreenShareEnabled ? 'Sharing' : 'Share')));
+      }
+      return h('div', { className: 'bridge-controls' }, buttons);
     }
 
     let current = null;
@@ -359,6 +394,8 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
       }, [
         h(AvatarVideo, { key: 'avatar' }),
         h(UserVideo, { key: 'self' }),
+        // Local preview of the shared surface (adj-202.5.2); renders null unless sharing.
+        h(ScreenShareVideo, { key: 'share' }),
         h(BridgeControls, { key: 'controls' }),
       ]));
     };

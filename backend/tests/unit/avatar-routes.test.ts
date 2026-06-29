@@ -124,6 +124,17 @@ describe("avatar routes: POST /avatar/connect (broker-backed)", () => {
     expect(html).toContain("video: false");
   });
 
+  it("GET /avatar wires screen-share with an iOS-safe feature gate (adj-202.5.2)", async () => {
+    const { app } = makeApp();
+    const html = (await request(app).get("/avatar")).text;
+    expect(html).toContain("toggleScreenShare");
+    expect(html).toContain("ScreenShareVideo");
+    // Screen-share command/echo over the postMessage bridge.
+    expect(html).toContain("bridge:screenshare");
+    // getDisplayMedia feature gate — iOS Safari / WKWebView lack it, so the control hides.
+    expect(html).toContain("getDisplayMedia");
+  });
+
   it("GET /avatar keeps the WKWebView-safe SERIAL imports (no modulepreload / Promise.all)", async () => {
     const { app } = makeApp();
     const html = (await request(app).get("/avatar")).text;

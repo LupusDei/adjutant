@@ -44,6 +44,18 @@ describe('parseAvatarMessage', () => {
     expect(parseAvatarMessage({ type: 'bridge:camera' })).toBeNull();
   });
 
+  it('should parse a screen-share state echo', () => {
+    expect(parseAvatarMessage({ type: 'bridge:screenshare', enabled: true })).toEqual({
+      type: 'bridge:screenshare',
+      enabled: true,
+    });
+  });
+
+  it('should reject a screen-share echo with a non-boolean enabled', () => {
+    expect(parseAvatarMessage({ type: 'bridge:screenshare', enabled: 1 })).toBeNull();
+    expect(parseAvatarMessage({ type: 'bridge:screenshare' })).toBeNull();
+  });
+
   it('should reject foreign / malformed messages', () => {
     expect(parseAvatarMessage(null)).toBeNull();
     expect(parseAvatarMessage('hello')).toBeNull();

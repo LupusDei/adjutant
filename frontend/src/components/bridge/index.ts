@@ -12,6 +12,8 @@ export { MicToggle } from './MicToggle';
 export type { MicToggleProps } from './MicToggle';
 export { CameraToggle } from './CameraToggle';
 export type { CameraToggleProps } from './CameraToggle';
+export { ScreenShareToggle } from './ScreenShareToggle';
+export type { ScreenShareToggleProps } from './ScreenShareToggle';
 export { describeConnectError } from './connect-error';
 export type { ConnectErrorView, ConnectErrorInput } from './connect-error';
 export { parseAvatarMessage, applyCaption, MAX_CAPTIONS } from './avatar-bridge';
@@ -21,5 +23,6 @@ export type {
   BridgeSessionHandoff,
   BridgeMicCommand,
   BridgeCameraCommand,
+  BridgeScreenShareCommand,
   AvatarStatus,
 } from './avatar-bridge';
