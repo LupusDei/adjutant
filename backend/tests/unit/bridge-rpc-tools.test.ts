@@ -30,6 +30,14 @@ describe("BRIDGE_RPC_TOOLS descriptors", () => {
     expect(names).not.toContain("decommission_agent");
   });
 
+  it("should describe read_messages with { agentId, conversationId, limit } for recalling past discussion", () => {
+    const read = BRIDGE_RPC_TOOLS.find((t) => t.name === "read_messages");
+    expect(read).toBeDefined();
+    const paramNames = read!.parameters.map((p) => p.name).sort();
+    expect(paramNames).toEqual(["agentId", "conversationId", "limit"]);
+    expect(read!.description.toLowerCase()).toMatch(/recall|past|earlier|previous|history/);
+  });
+
   it("should describe spawn_worker with { agentType, project, task, confirm } and require confirmation", () => {
     const spawn = BRIDGE_RPC_TOOLS.find((t) => t.name === "spawn_worker");
     expect(spawn).toBeDefined();
@@ -100,6 +108,12 @@ describe("composeBridgePersonality", () => {
     for (const tool of ["send_message", "nudge_agent", "answer_question", "create_bead", "spawn_worker"]) {
       expect(text).toContain(tool);
     }
+  });
+
+  it("should tell GWM-1 to use read_messages to recall earlier discussion", () => {
+    const text = BRIDGE_RPC_PERSONALITY.toLowerCase();
+    expect(text).toContain("read_messages");
+    expect(text).toMatch(/recall|earlier|past|previous|prior/);
   });
 
   it("should instruct GWM-1 to read back and confirm before spawning, and forbid decommission", () => {
