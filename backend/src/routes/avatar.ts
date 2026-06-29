@@ -42,6 +42,12 @@ export interface AvatarRouterDeps {
    * warm session is served as-is. Real wiring passes `broker.getSessionStatus`.
    */
   getSessionStatus?: (sessionId: string) => Promise<string | undefined>;
+  /**
+   * Default project for the avatar's project-scoped tools (get_project_state, list_beads,
+   * get_auto_develop_status). The iOS/default session selects no project, so without this
+   * those tools error PROJECT_REQUIRED (adj-202). getProject resolves a name or UUID.
+   */
+  defaultProjectId?: string | undefined;
 }
 
 export function createAvatarRouter(deps: AvatarRouterDeps): Router {
@@ -70,7 +76,11 @@ export function createAvatarRouter(deps: AvatarRouterDeps): Router {
   async function createReadySession(customAvatarId?: string): Promise<BridgeSessionCreds> {
     const session = await deps.broker.startSession(buildOpts(customAvatarId));
     // `attach` swallows its own errors — a tool-loop hiccup must not fail a billable session.
-    if (deps.rpcManager) await deps.rpcManager.attach({ sessionId: session.sessionId });
+    if (deps.rpcManager) {
+      const attachOpts: { sessionId: string; projectId?: string } = { sessionId: session.sessionId };
+      if (deps.defaultProjectId !== undefined) attachOpts.projectId = deps.defaultProjectId;
+      await deps.rpcManager.attach(attachOpts);
+    }
     return session;
   }
 
@@ -363,8 +373,12 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
     // the slowest part, so the imports don't need to be parallelized.
     const React = (await import('https://esm.sh/react@18')).default;
     const { createRoot } = await import('https://esm.sh/react-dom@18/client');
+    // ?bundle inlines the heavy transitive deps (LiveKit + components-react + avatars) into ONE
+    // module instead of a deep graph of dozens of cross-origin fetches — any one of which failing
+    // in a mobile WKWebView throws "Importing a module script failed". react/react-dom stay
+    // externalized (&deps) so these components share the one React instance imported above.
     const { AvatarCall, AvatarVideo, UserVideo, ScreenShareVideo, useLocalMedia } =
-      await import('https://esm.sh/@runwayml/avatars-react?deps=react@18,react-dom@18');
+      await import('https://esm.sh/@runwayml/avatars-react?bundle&deps=react@18,react-dom@18');
     const h = React.createElement;
     const root = createRoot(document.getElementById('root'));
 

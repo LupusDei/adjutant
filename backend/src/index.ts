@@ -239,6 +239,10 @@ app.use(
     // adj-202.10.1: re-validate a cached warm session is still READY before handing it out,
     // so a session Runway has since FAILED never reaches the client (no manual second tap).
     getSessionStatus: (sessionId) => bridgeBroker.getSessionStatus(sessionId),
+    // adj-202: the iOS/default avatar selects no project, so default its project-scoped tools
+    // (get_project_state, list_beads, get_auto_develop_status) to "adjutant" — otherwise they
+    // error PROJECT_REQUIRED. getProject resolves the name; the dashboard still passes its own.
+    defaultProjectId: "adjutant",
   }),
 );
 
