@@ -252,14 +252,44 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
     z-index: 4; display: flex; gap: 12px; justify-content: center; pointer-events: none;
   }
   .bridge-ctrl {
-    pointer-events: auto; display: inline-flex; align-items: center; gap: 6px;
-    padding: 10px 16px; border-radius: 999px;
+    pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    min-height: 44px; padding: 10px 18px; border-radius: 999px; /* >=44px tap target (iOS) */
     border: 1px solid rgba(255,136,0,.7); background: rgba(8,4,16,.62) !important;
-    color: #ffab4d; font-family: inherit; font-size: 13px; letter-spacing: .04em;
+    color: #ffab4d; font-family: inherit; font-size: 14px; letter-spacing: .04em;
     cursor: pointer; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
   }
   .bridge-ctrl.on { border-color: rgba(31,182,214,.75); color: #7fe8ff; }
   .bridge-ctrl:focus-visible { outline: 2px solid #7fe8ff; outline-offset: 2px; }
+
+  /* "Camera live" badge (adj-202.5.5) — unambiguous signal the front camera is on,
+     pairs with the self-view PiP. Top-center so it reads regardless of PiP size. */
+  .bridge-live {
+    position: fixed; top: calc(12px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+    z-index: 5; display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 999px; font-size: 12px; letter-spacing: .06em;
+    color: #7fe8ff; background: rgba(8,4,16,.66) !important; border: 1px solid rgba(31,182,214,.55);
+  }
+
+  /* "Sharing your screen" indicator (adj-202.5.6) — persistent while a surface is shared,
+     with a one-tap Stop. (Stacked below the camera-live badge if both are present.) */
+  .bridge-sharing {
+    position: fixed; top: calc(56px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+    z-index: 5; display: inline-flex; align-items: center; gap: 10px;
+    padding: 8px 12px 8px 14px; border-radius: 999px; font-size: 13px;
+    color: #e6b8ff; background: rgba(8,4,16,.72) !important; border: 1px solid rgba(161,24,196,.6);
+  }
+  .bridge-sharing .bridge-ctrl { min-height: 32px; padding: 4px 12px; font-size: 12px; }
+
+  /* Permission-blocked banner (adj-202.5.4) — friendly guidance instead of a raw
+     getUserMedia NotAllowedError when the OS-level camera/mic permission is denied. */
+  .bridge-perm {
+    position: fixed; left: 16px; right: 16px; top: 50%; transform: translateY(-50%);
+    z-index: 6; display: flex; flex-direction: column; align-items: center; gap: 12px;
+    max-width: 420px; margin: 0 auto; padding: 18px 20px; border-radius: 14px; text-align: center;
+    color: #ffd9d9; background: rgba(8,4,16,.94) !important; border: 1px solid rgba(255,142,142,.6);
+    font-size: 14px; line-height: 1.45;
+  }
+  .bridge-perm-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 
   #status { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; padding: 12px 16px env(safe-area-inset-bottom); text-align: center; font-size: 14px; color: #c9a0e0; }
   #status.err { color: #ff8e8e; }
@@ -308,6 +338,23 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
     const canScreenShare =
       !!(navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function');
 
+    // iOS native bridge (adj-202.5.4): the WKWebView injects a 'bridgeOpenSettings' message
+    // handler so the in-page permission banner can deep-link to the OS Settings app (a web
+    // page cannot open iOS Settings on its own). Absent in a plain browser.
+    const settingsBridge =
+      (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.bridgeOpenSettings) || null;
+
+    // A denied OS-level camera/mic permission surfaces as a getUserMedia NotAllowedError
+    // (via the SDK's MediaDevicesError → cameraError/micError). Detect it so we can show
+    // friendly guidance instead of a raw error string (adj-202.5.4).
+    const isPermissionError = (err) => {
+      if (!err) return false;
+      const name = err.name || '';
+      const m = (err.message || '').toLowerCase();
+      return name === 'NotAllowedError' || name === 'SecurityError' ||
+        m.includes('permission') || m.includes('denied') || m.includes('not allowed');
+    };
+
     // BridgeControls (adj-202.5.1) — two-way mic + camera using the SDK's useLocalMedia
     // toggles, which flip the LIVE WebRTC tracks (setMicrophoneEnabled / setCameraEnabled)
     // WITHOUT reconnecting. (The old approach re-rendered AvatarCall with a new audio prop,
@@ -317,8 +364,11 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
     //    bridge:camera commands to the live tracks and echoes the authoritative state back.
     // Must be a child of <AvatarCall> so useLocalMedia sees the session context.
     function BridgeControls() {
-      const { isMicEnabled, isCameraEnabled, isScreenShareEnabled, toggleMic, toggleCamera, toggleScreenShare } =
-        useLocalMedia();
+      const {
+        isMicEnabled, isCameraEnabled, isScreenShareEnabled,
+        toggleMic, toggleCamera, toggleScreenShare,
+        micError, cameraError, retryMic, retryCamera,
+      } = useLocalMedia();
       // Mirror current state into refs so the message handler compares without re-subscribing.
       const micRef = React.useRef(isMicEnabled); micRef.current = isMicEnabled;
       const camRef = React.useRef(isCameraEnabled); camRef.current = isCameraEnabled;
@@ -344,35 +394,78 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
       React.useEffect(() => { if (external) post({ type: 'bridge:camera', enabled: isCameraEnabled }); }, [isCameraEnabled]);
       React.useEffect(() => { if (external) post({ type: 'bridge:screenshare', enabled: isScreenShareEnabled }); }, [isScreenShareEnabled]);
 
-      if (external) return null; // the dashboard chrome owns the visible controls
+      const children = [];
 
-      const buttons = [
-        h('button', {
-          key: 'mic', type: 'button',
-          className: 'bridge-ctrl' + (isMicEnabled ? ' on' : ''),
-          'aria-pressed': isMicEnabled,
-          'aria-label': isMicEnabled ? 'Mute microphone' : 'Unmute microphone',
-          onClick: toggleMic,
-        }, (isMicEnabled ? '🎙' : '🔇') + '  ' + (isMicEnabled ? 'Mic' : 'Muted')),
-        h('button', {
-          key: 'cam', type: 'button',
-          className: 'bridge-ctrl' + (isCameraEnabled ? ' on' : ''),
-          'aria-pressed': isCameraEnabled,
-          'aria-label': isCameraEnabled ? 'Turn off camera' : 'Turn on camera',
-          onClick: toggleCamera,
-        }, (isCameraEnabled ? '📹' : '🚫') + '  ' + (isCameraEnabled ? 'Camera' : 'No cam')),
-      ];
-      // Screen-share only where the surface picker exists (not iOS WKWebView).
-      if (canScreenShare) {
-        buttons.push(h('button', {
-          key: 'share', type: 'button',
-          className: 'bridge-ctrl' + (isScreenShareEnabled ? ' on' : ''),
-          'aria-pressed': isScreenShareEnabled,
-          'aria-label': isScreenShareEnabled ? 'Stop sharing screen' : 'Share screen',
-          onClick: toggleScreenShare,
-        }, '🖥  ' + (isScreenShareEnabled ? 'Sharing' : 'Share')));
+      // Camera-live badge (adj-202.5.5) — both modes; pairs with the self-view PiP.
+      if (isCameraEnabled) {
+        children.push(h('div', { key: 'live', className: 'bridge-live', role: 'status' }, '🔴  Camera live'));
       }
-      return h('div', { className: 'bridge-controls' }, buttons);
+
+      // Sharing indicator + one-tap Stop (adj-202.5.6) — default mode only; the dashboard
+      // chrome shows its own in external mode.
+      if (!external && isScreenShareEnabled) {
+        children.push(h('div', { key: 'sharing', className: 'bridge-sharing', role: 'status' }, [
+          h('span', { key: 'l' }, '🟣  Sharing your screen'),
+          h('button', {
+            key: 'stop', type: 'button', className: 'bridge-ctrl',
+            'aria-label': 'Stop sharing screen', onClick: toggleScreenShare,
+          }, 'Stop'),
+        ]));
+      }
+
+      // Permission-blocked banner (adj-202.5.4) — friendly guidance, NOT a raw SDK error.
+      // Shown in both modes (it renders inside the iframe over the avatar).
+      const blockedKind = isPermissionError(cameraError) ? 'Camera' : (isPermissionError(micError) ? 'Microphone' : null);
+      if (blockedKind) {
+        const retry = blockedKind === 'Camera' ? retryCamera : retryMic;
+        const actions = [
+          h('button', { key: 'retry', type: 'button', className: 'bridge-ctrl', onClick: () => retry() }, 'Try again'),
+        ];
+        if (settingsBridge) {
+          actions.push(h('button', {
+            key: 'settings', type: 'button', className: 'bridge-ctrl',
+            onClick: () => { try { settingsBridge.postMessage('open'); } catch (_) {} },
+          }, 'Open Settings'));
+        }
+        children.push(h('div', { key: 'perm', className: 'bridge-perm', role: 'alert' }, [
+          h('div', { key: 'msg' }, blockedKind + ' access is off. Enable it in Settings, then try again. Voice still works without it.'),
+          h('div', { key: 'acts', className: 'bridge-perm-actions' }, actions),
+        ]));
+      }
+
+      // Control pills (default mode only — the dashboard chrome owns external-mode controls).
+      if (!external) {
+        const buttons = [
+          h('button', {
+            key: 'mic', type: 'button',
+            className: 'bridge-ctrl' + (isMicEnabled ? ' on' : ''),
+            'aria-pressed': isMicEnabled,
+            'aria-label': isMicEnabled ? 'Mute microphone' : 'Unmute microphone',
+            onClick: toggleMic,
+          }, (isMicEnabled ? '🎙' : '🔇') + '  ' + (isMicEnabled ? 'Mic' : 'Muted')),
+          h('button', {
+            key: 'cam', type: 'button',
+            className: 'bridge-ctrl' + (isCameraEnabled ? ' on' : ''),
+            'aria-pressed': isCameraEnabled,
+            'aria-label': isCameraEnabled ? 'Turn off camera' : 'Turn on camera',
+            onClick: toggleCamera,
+          }, (isCameraEnabled ? '📹' : '🚫') + '  ' + (isCameraEnabled ? 'Camera' : 'No cam')),
+        ];
+        // Screen-share only where the surface picker exists (not iOS WKWebView).
+        if (canScreenShare) {
+          buttons.push(h('button', {
+            key: 'share', type: 'button',
+            className: 'bridge-ctrl' + (isScreenShareEnabled ? ' on' : ''),
+            'aria-pressed': isScreenShareEnabled,
+            'aria-label': isScreenShareEnabled ? 'Stop sharing screen' : 'Share screen',
+            title: 'Pick a tab, window, or screen to share into the Bridge',
+            onClick: toggleScreenShare,
+          }, '🖥  ' + (isScreenShareEnabled ? 'Sharing' : 'Share')));
+        }
+        children.push(h('div', { key: 'controls', className: 'bridge-controls' }, buttons));
+      }
+
+      return children.length ? h(React.Fragment, null, children) : null;
     }
 
     let current = null;

@@ -135,6 +135,27 @@ describe("avatar routes: POST /avatar/connect (broker-backed)", () => {
     expect(html).toContain("getDisplayMedia");
   });
 
+  it("GET /avatar handles a denied camera/mic permission with friendly guidance, not a raw error (adj-202.5.4)", async () => {
+    const { app } = makeApp();
+    const html = (await request(app).get("/avatar")).text;
+    // Reads the SDK media errors + retry, detects a permission denial, and offers Settings.
+    expect(html).toContain("cameraError");
+    expect(html).toContain("retryCamera");
+    expect(html).toContain("isPermissionError");
+    expect(html).toContain("NotAllowedError");
+    expect(html).toContain("Enable it in Settings");
+    // iOS Settings deep-link bridge (the page cannot open Settings on its own).
+    expect(html).toContain("bridgeOpenSettings");
+  });
+
+  it("GET /avatar shows a camera-live indicator + a sharing indicator with a Stop control (adj-202.5.5 / .5.6)", async () => {
+    const { app } = makeApp();
+    const html = (await request(app).get("/avatar")).text;
+    expect(html).toContain("Camera live");
+    expect(html).toContain("Sharing your screen");
+    expect(html).toContain("bridge-sharing");
+  });
+
   it("GET /avatar keeps the WKWebView-safe SERIAL imports (no modulepreload / Promise.all)", async () => {
     const { app } = makeApp();
     const html = (await request(app).get("/avatar")).text;

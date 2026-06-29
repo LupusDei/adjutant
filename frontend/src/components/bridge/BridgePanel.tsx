@@ -331,6 +331,21 @@ export function BridgePanel({ projectId, projectName, avatarSrc = '/avatar' }: B
               onToggle={toggleScreenShare}
             />
           )}
+          {connected && screenShareEnabled && (
+            <span style={sharingIndicatorStyle} role="status">
+              <span
+                aria-hidden
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: PURPLE,
+                  boxShadow: `0 0 8px ${PURPLE}`,
+                }}
+              />
+              Sharing your screen
+            </span>
+          )}
         </div>
 
         <div style={controlGroupStyle} role="group" aria-label="Fleet tools">
@@ -474,6 +489,16 @@ const controlGroupStyle: CSSProperties = {
   gap: '0.5rem',
   flexWrap: 'wrap',
   alignItems: 'center',
+};
+
+const sharingIndicatorStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '0.4rem',
+  fontSize: '0.75rem',
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase',
+  color: '#e6b8ff',
 };
 
 function primaryBtn(color: string): CSSProperties {
