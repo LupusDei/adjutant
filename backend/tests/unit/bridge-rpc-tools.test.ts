@@ -112,6 +112,32 @@ describe("composeBridgePersonality", () => {
     expect(text).toMatch(/decommission|destroy/);
   });
 
+  it("should carve spawn_worker OUT of the act-decisively doctrine (adj-202.5.3 P1)", () => {
+    const text = BRIDGE_RPC_PERSONALITY.toLowerCase();
+    // The "act decisively without asking permission" doctrine must NOT apply to spawn_worker —
+    // it has to be paired with an explicit exception/exclusion naming spawn_worker.
+    expect(text).toMatch(/act decisively/);
+    expect(text).toMatch(/spawn_worker[^.]*\b(except|exception|not|never)\b|\b(except|exception|not|never)\b[^.]*spawn_worker/);
+  });
+
+  it("should require stating role, project, and task/bead and WAITING for an explicit affirmative (adj-202.5.3 P1)", () => {
+    const text = BRIDGE_RPC_PERSONALITY.toLowerCase();
+    // The read-back must enumerate what will be spawned: role/persona, target project, the task/bead.
+    expect(text).toMatch(/role|persona/);
+    expect(text).toMatch(/project/);
+    expect(text).toMatch(/task|bead/);
+    // And it must WAIT for an explicit affirmative before firing (not just "confirm" generically).
+    expect(text).toMatch(/wait/);
+    expect(text).toMatch(/explicit/);
+  });
+
+  it("should forbid treating ambiguous musing as assent (adj-202.5.3 P1)", () => {
+    const text = BRIDGE_RPC_PERSONALITY.toLowerCase();
+    // Must explicitly say ambiguous/musing/"maybe" is NOT a go.
+    expect(text).toMatch(/ambiguous|musing|maybe|thinking out loud/);
+    expect(text).toMatch(/not (a |an )?(assent|yes|confirmation|go|affirmative)|do not (treat|count|take)|never (treat|count|take)/);
+  });
+
   it("should append the tool guidance to a supplied base personality", () => {
     const base = "You are the Adjutant. Address the user as Commander.";
     const composed = composeBridgePersonality(base);
