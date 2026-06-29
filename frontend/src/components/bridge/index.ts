@@ -14,6 +14,8 @@ export { CameraToggle } from './CameraToggle';
 export type { CameraToggleProps } from './CameraToggle';
 export { ScreenShareToggle } from './ScreenShareToggle';
 export type { ScreenShareToggleProps } from './ScreenShareToggle';
+export { SpawnConfirmPanel } from './SpawnConfirmPanel';
+export type { SpawnConfirmPanelProps } from './SpawnConfirmPanel';
 export { describeConnectError } from './connect-error';
 export type { ConnectErrorView, ConnectErrorInput } from './connect-error';
 export { parseAvatarMessage, applyCaption, MAX_CAPTIONS } from './avatar-bridge';
@@ -24,5 +26,7 @@ export type {
   BridgeMicCommand,
   BridgeCameraCommand,
   BridgeScreenShareCommand,
+  BridgeSpawnDecisionCommand,
+  AvatarSpawnConfirmMessage,
   AvatarStatus,
 } from './avatar-bridge';

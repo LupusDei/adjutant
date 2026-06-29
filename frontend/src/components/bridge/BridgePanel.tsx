@@ -24,11 +24,13 @@ import { CaptionsPanel, type CaptionLine } from './CaptionsPanel';
 import { MicToggle } from './MicToggle';
 import { CameraToggle } from './CameraToggle';
 import { ScreenShareToggle } from './ScreenShareToggle';
+import { SpawnConfirmPanel } from './SpawnConfirmPanel';
 import { describeConnectError } from './connect-error';
 import {
   applyCaption,
   parseAvatarMessage,
   type ParentToAvatarMessage,
+  type AvatarSpawnConfirmMessage,
 } from './avatar-bridge';
 
 const AZURE = '#1FB6D6';
@@ -118,6 +120,8 @@ export function BridgePanel({ projectId, projectName, avatarSrc = '/avatar' }: B
   const screenShareSupported =
     typeof navigator !== 'undefined' &&
     typeof navigator.mediaDevices?.getDisplayMedia === 'function';
+  // A pending spawn read-back the avatar surfaced (adj-202.5.3) — null when none.
+  const [pendingSpawn, setPendingSpawn] = useState<AvatarSpawnConfirmMessage | null>(null);
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const connected = state === 'connected';
@@ -160,6 +164,11 @@ export function BridgePanel({ projectId, projectName, avatarSrc = '/avatar' }: B
         case 'bridge:screenshare':
           setScreenShareEnabled(msg.enabled);
           break;
+        case 'bridge:spawn-confirm':
+          // The avatar read back a heavy spawn and is WAITING — surface the visible
+          // confirm gate so assent is not voice-only (adj-202.5.3).
+          setPendingSpawn(msg);
+          break;
         case 'bridge:status':
           // Lifecycle echo — reserved for future surfacing; ignored for now.
           break;
@@ -177,8 +186,10 @@ export function BridgePanel({ projectId, projectName, avatarSrc = '/avatar' }: B
       setMicEnabled(true);
       setCameraEnabled(false);
       setScreenShareEnabled(false);
+      setPendingSpawn(null);
     } else {
       setCaptions([]);
+      setPendingSpawn(null);
     }
   }, [connected]);
 
@@ -203,6 +214,22 @@ export function BridgePanel({ projectId, projectName, avatarSrc = '/avatar' }: B
     postToAvatar({ type: 'bridge:screenshare', enabled: next });
     markActivity();
   }, [screenShareEnabled, postToAvatar, markActivity]);
+
+  // Relay the Commander's spawn decision (adj-202.5.3). The visible button is the
+  // authoritative assent — the avatar/backend only spawns on `confirmed: true`.
+  const resolveSpawn = useCallback(
+    (confirmed: boolean) => {
+      const requestId = pendingSpawn?.requestId;
+      postToAvatar(
+        requestId
+          ? { type: 'bridge:spawn-decision', confirmed, requestId }
+          : { type: 'bridge:spawn-decision', confirmed },
+      );
+      setPendingSpawn(null);
+      markActivity();
+    },
+    [pendingSpawn, postToAvatar, markActivity],
+  );
 
   const fireTool = useCallback(
     async (qt: QuickTool) => {
@@ -302,8 +329,18 @@ export function BridgePanel({ projectId, projectName, avatarSrc = '/avatar' }: B
           <CaptionsPanel captions={captions} />
         </div>
 
-        {/* Right column: authoritative readout — the source of truth. */}
-        <AuthoritativeResultPanel result={result} />
+        {/* Right column: the visible spawn confirm gate (when one is pending) sits above
+            the authoritative readout — the source of truth. */}
+        <div style={rightColStyle}>
+          {pendingSpawn && (
+            <SpawnConfirmPanel
+              pending={pendingSpawn}
+              onConfirm={() => { resolveSpawn(true); }}
+              onCancel={() => { resolveSpawn(false); }}
+            />
+          )}
+          <AuthoritativeResultPanel result={result} />
+        </div>
       </div>
 
       <footer style={controlsStyle}>
@@ -330,6 +367,21 @@ export function BridgePanel({ projectId, projectName, avatarSrc = '/avatar' }: B
               disabled={!connected}
               onToggle={toggleScreenShare}
             />
+          )}
+          {connected && screenShareEnabled && (
+            <span style={sharingIndicatorStyle} role="status">
+              <span
+                aria-hidden
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: PURPLE,
+                  boxShadow: `0 0 8px ${PURPLE}`,
+                }}
+              />
+              Sharing your screen
+            </span>
           )}
         </div>
 
@@ -435,6 +487,13 @@ const leftColStyle: CSSProperties = {
   minHeight: 0,
 };
 
+const rightColStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '0.75rem',
+  minHeight: 0,
+};
+
 const viewscreenStyle: CSSProperties = {
   position: 'relative',
   border: `1px solid ${PURPLE}55`,
@@ -474,6 +533,16 @@ const controlGroupStyle: CSSProperties = {
   gap: '0.5rem',
   flexWrap: 'wrap',
   alignItems: 'center',
+};
+
+const sharingIndicatorStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '0.4rem',
+  fontSize: '0.75rem',
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase',
+  color: '#e6b8ff',
 };
 
 function primaryBtn(color: string): CSSProperties {
