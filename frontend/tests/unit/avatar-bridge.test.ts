@@ -32,6 +32,18 @@ describe('parseAvatarMessage', () => {
     });
   });
 
+  it('should parse a camera state echo', () => {
+    expect(parseAvatarMessage({ type: 'bridge:camera', enabled: true })).toEqual({
+      type: 'bridge:camera',
+      enabled: true,
+    });
+  });
+
+  it('should reject a camera echo with a non-boolean enabled', () => {
+    expect(parseAvatarMessage({ type: 'bridge:camera', enabled: 'yes' })).toBeNull();
+    expect(parseAvatarMessage({ type: 'bridge:camera' })).toBeNull();
+  });
+
   it('should reject foreign / malformed messages', () => {
     expect(parseAvatarMessage(null)).toBeNull();
     expect(parseAvatarMessage('hello')).toBeNull();

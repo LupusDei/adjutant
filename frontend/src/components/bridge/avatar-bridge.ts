@@ -29,7 +29,15 @@ export interface BridgeMicCommand {
   enabled: boolean;
 }
 
-export type ParentToAvatarMessage = BridgeSessionHandoff | BridgeMicCommand;
+export interface BridgeCameraCommand {
+  type: 'bridge:camera';
+  enabled: boolean;
+}
+
+export type ParentToAvatarMessage =
+  | BridgeSessionHandoff
+  | BridgeMicCommand
+  | BridgeCameraCommand;
 
 // ── iframe → parent (events) ─────────────────────────────────────────────────
 
@@ -58,11 +66,17 @@ export interface AvatarMicMessage {
   enabled: boolean;
 }
 
+export interface AvatarCameraMessage {
+  type: 'bridge:camera';
+  enabled: boolean;
+}
+
 export type AvatarToParentMessage =
   | AvatarReadyMessage
   | AvatarStatusMessage
   | AvatarCaptionMessage
-  | AvatarMicMessage;
+  | AvatarMicMessage
+  | AvatarCameraMessage;
 
 const AVATAR_STATUSES: ReadonlySet<string> = new Set(['connecting', 'connected', 'ended', 'error']);
 const CAPTION_ROLES: ReadonlySet<string> = new Set(['assistant', 'user']);
@@ -114,6 +128,12 @@ export function parseAvatarMessage(data: unknown): AvatarToParentMessage | null 
       const enabled = data['enabled'];
       if (typeof enabled !== 'boolean') return null;
       return { type: 'bridge:mic', enabled };
+    }
+
+    case 'bridge:camera': {
+      const enabled = data['enabled'];
+      if (typeof enabled !== 'boolean') return null;
+      return { type: 'bridge:camera', enabled };
     }
 
     default:

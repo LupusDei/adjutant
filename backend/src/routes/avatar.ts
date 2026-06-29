@@ -201,19 +201,50 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
     max-width: none !important;
     max-height: none !important;
   }
-  /* The widget is now full-screen (position:relative). Absolutely fill the video to it,
-     cover-cropped → centered full-screen portrait. Absolute (not fixed) so the widget's
-     ::before filter:blur() doesn't trap it; the widget itself is the positioned ancestor. */
+  /* The widget is now full-screen (position:relative). Absolutely fill the REMOTE avatar
+     video to it, cover-cropped → centered full-screen portrait. Absolute (not fixed) so the
+     widget's ::before filter:blur() doesn't trap it; the widget itself is the positioned
+     ancestor. Scoped to [data-avatar-video] so it does NOT also blow up the self-view PiP. */
   [data-avatar-video], [data-avatar-video] > * { position: absolute !important; inset: 0 !important; height: 100% !important; width: 100% !important; }
-  [data-avatar-call] video, [data-avatar-call] canvas, #root video, #root canvas {
+  [data-avatar-video] video, [data-avatar-video] canvas {
     position: absolute !important;
     inset: 0 !important;
     width: 100% !important;
     height: 100% !important;
     object-fit: cover !important;
   }
-  /* Keep the call controls above the full-bleed video */
-  [data-avatar-control-bar] { z-index: 2 !important; }
+
+  /* Self-view (Commander's front camera, adj-202.5.1) — small rounded PiP, top-left, above
+     the avatar. Absolute (not fixed) to dodge the blur-trap. Hidden when the camera is off. */
+  [data-avatar-user-video] {
+    position: absolute !important;
+    top: calc(12px + env(safe-area-inset-top)); left: 12px; z-index: 3;
+    width: 28vw; max-width: 132px; aspect-ratio: 3 / 4;
+    border-radius: 10px; overflow: hidden;
+    border: 1px solid rgba(31,182,214,.55); box-shadow: 0 4px 18px rgba(0,0,0,.55);
+    background: #000 !important;
+  }
+  [data-avatar-user-video][data-avatar-has-video="false"] { display: none !important; }
+  [data-avatar-user-video] video {
+    position: absolute !important; inset: 0 !important;
+    width: 100% !important; height: 100% !important; object-fit: cover !important;
+  }
+
+  /* On-screen media controls (default mode — iOS / standalone). Pinned bottom, above the
+     status line. The dashboard (external mode) renders its own chrome controls instead. */
+  .bridge-controls {
+    position: fixed; left: 0; right: 0; bottom: calc(46px + env(safe-area-inset-bottom));
+    z-index: 4; display: flex; gap: 12px; justify-content: center; pointer-events: none;
+  }
+  .bridge-ctrl {
+    pointer-events: auto; display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 16px; border-radius: 999px;
+    border: 1px solid rgba(255,136,0,.7); background: rgba(8,4,16,.62) !important;
+    color: #ffab4d; font-family: inherit; font-size: 13px; letter-spacing: .04em;
+    cursor: pointer; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+  .bridge-ctrl.on { border-color: rgba(31,182,214,.75); color: #7fe8ff; }
+  .bridge-ctrl:focus-visible { outline: 2px solid #7fe8ff; outline-offset: 2px; }
 
   #status { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; padding: 12px 16px env(safe-area-inset-bottom); text-align: center; font-size: 14px; color: #c9a0e0; }
   #status.err { color: #ff8e8e; }
@@ -252,19 +283,72 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
     // the slowest part, so the imports don't need to be parallelized.
     const React = (await import('https://esm.sh/react@18')).default;
     const { createRoot } = await import('https://esm.sh/react-dom@18/client');
-    const { AvatarCall } = await import('https://esm.sh/@runwayml/avatars-react?deps=react@18,react-dom@18');
+    const { AvatarCall, AvatarVideo, UserVideo, useLocalMedia } =
+      await import('https://esm.sh/@runwayml/avatars-react?deps=react@18,react-dom@18');
+    const h = React.createElement;
     const root = createRoot(document.getElementById('root'));
 
-    let micEnabled = true;
+    // BridgeControls (adj-202.5.1) — two-way mic + camera using the SDK's useLocalMedia
+    // toggles, which flip the LIVE WebRTC tracks (setMicrophoneEnabled / setCameraEnabled)
+    // WITHOUT reconnecting. (The old approach re-rendered AvatarCall with a new audio prop,
+    // which is a no-op after connect — audio/video props only seed the INITIAL state.)
+    //  - default mode (iOS / standalone): renders on-screen mic + camera pills.
+    //  - external mode (dashboard): renders nothing; relays the chrome's bridge:mic /
+    //    bridge:camera commands to the live tracks and echoes the authoritative state back.
+    // Must be a child of <AvatarCall> so useLocalMedia sees the session context.
+    function BridgeControls() {
+      const { isMicEnabled, isCameraEnabled, toggleMic, toggleCamera } = useLocalMedia();
+      // Mirror current state into refs so the message handler compares without re-subscribing.
+      const micRef = React.useRef(isMicEnabled); micRef.current = isMicEnabled;
+      const camRef = React.useRef(isCameraEnabled); camRef.current = isCameraEnabled;
+
+      React.useEffect(() => {
+        if (!external) return;
+        const onMsg = (ev) => {
+          if (ev.origin !== location.origin) return;
+          const d = ev.data;
+          if (!d || typeof d.type !== 'string') return;
+          // Commands carry the DESIRED state; toggle only when it differs (avoids double-flip).
+          if (d.type === 'bridge:mic' && typeof d.enabled === 'boolean' && d.enabled !== micRef.current) toggleMic();
+          else if (d.type === 'bridge:camera' && typeof d.enabled === 'boolean' && d.enabled !== camRef.current) toggleCamera();
+        };
+        window.addEventListener('message', onMsg);
+        return () => window.removeEventListener('message', onMsg);
+      }, [toggleMic, toggleCamera]);
+
+      // Echo authoritative track state so the dashboard chrome toggles track reality.
+      React.useEffect(() => { if (external) post({ type: 'bridge:mic', enabled: isMicEnabled }); }, [isMicEnabled]);
+      React.useEffect(() => { if (external) post({ type: 'bridge:camera', enabled: isCameraEnabled }); }, [isCameraEnabled]);
+
+      if (external) return null; // the dashboard chrome owns the visible controls
+
+      return h('div', { className: 'bridge-controls' }, [
+        h('button', {
+          key: 'mic', type: 'button',
+          className: 'bridge-ctrl' + (isMicEnabled ? ' on' : ''),
+          'aria-pressed': isMicEnabled,
+          'aria-label': isMicEnabled ? 'Mute microphone' : 'Unmute microphone',
+          onClick: toggleMic,
+        }, (isMicEnabled ? '🎙' : '🔇') + '  ' + (isMicEnabled ? 'Mic' : 'Muted')),
+        h('button', {
+          key: 'cam', type: 'button',
+          className: 'bridge-ctrl' + (isCameraEnabled ? ' on' : ''),
+          'aria-pressed': isCameraEnabled,
+          'aria-label': isCameraEnabled ? 'Turn off camera' : 'Turn on camera',
+          onClick: toggleCamera,
+        }, (isCameraEnabled ? '📹' : '🚫') + '  ' + (isCameraEnabled ? 'Camera' : 'No cam')),
+      ]);
+    }
+
     let current = null;
     const render = () => {
       if (!current) return;
-      root.render(React.createElement(AvatarCall, {
+      root.render(h(AvatarCall, {
         avatarId: current.avatarId,
         sessionId: current.sessionId,
         sessionKey: current.sessionKey,
-        // Voice conversation: keep the mic, disable the front camera (no self-view PiP).
-        audio: micEnabled,
+        // Seed: mic ON, camera OFF. Both are then toggled LIVE via useLocalMedia (no reconnect).
+        audio: true,
         video: false,
         onError: (e) => {
           const msg = e && e.message ? e.message : String(e);
@@ -272,7 +356,11 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
           statusEl.style.display = 'block'; setStatus('Error: ' + msg, true);
         },
         onEnd: () => { if (external) post({ type: 'bridge:status', status: 'ended' }); },
-      }));
+      }, [
+        h(AvatarVideo, { key: 'avatar' }),
+        h(UserVideo, { key: 'self' }),
+        h(BridgeControls, { key: 'controls' }),
+      ]));
     };
     const start = (session) => {
       current = session;
@@ -291,11 +379,8 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
         if (d.type === 'bridge:session' && !started && d.sessionId && d.sessionKey) {
           started = true;
           start({ sessionId: d.sessionId, sessionKey: d.sessionKey, avatarId: d.avatarId });
-        } else if (d.type === 'bridge:mic' && typeof d.enabled === 'boolean') {
-          micEnabled = d.enabled;
-          render();
-          post({ type: 'bridge:mic', enabled: micEnabled }); // echo confirmed state
         }
+        // bridge:mic / bridge:camera commands are handled inside BridgeControls (live tracks).
       });
       post({ type: 'bridge:ready' }); // tell the panel we're loaded and awaiting creds
       // NOTE: captions (bridge:caption) are intentionally not emitted — the
