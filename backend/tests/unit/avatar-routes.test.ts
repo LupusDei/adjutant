@@ -110,6 +110,42 @@ describe("avatar routes: POST /avatar/connect (broker-backed)", () => {
     expect(res.text).toContain("avatars-react");
     expect(res.text).toContain("/avatar/connect");
   });
+
+  it("GET /avatar wires two-way mic + camera via the SDK useLocalMedia toggles (adj-202.5.1)", async () => {
+    const { app } = makeApp();
+    const html = (await request(app).get("/avatar")).text;
+    // Live track toggling — NOT the old no-op of re-rendering with a changed audio prop.
+    expect(html).toContain("useLocalMedia");
+    expect(html).toContain("toggleMic");
+    expect(html).toContain("toggleCamera");
+    // Camera command/echo over the postMessage bridge.
+    expect(html).toContain("bridge:camera");
+    // Self-view PiP element is rendered.
+    expect(html).toContain("UserVideo");
+    // Seed state: mic on, camera off at connect.
+    expect(html).toContain("audio: true");
+    expect(html).toContain("video: false");
+  });
+
+  it("GET /avatar wires screen-share with an iOS-safe feature gate (adj-202.5.2)", async () => {
+    const { app } = makeApp();
+    const html = (await request(app).get("/avatar")).text;
+    expect(html).toContain("toggleScreenShare");
+    expect(html).toContain("ScreenShareVideo");
+    // Screen-share command/echo over the postMessage bridge.
+    expect(html).toContain("bridge:screenshare");
+    // getDisplayMedia feature gate — iOS Safari / WKWebView lack it, so the control hides.
+    expect(html).toContain("getDisplayMedia");
+  });
+
+  it("GET /avatar keeps the WKWebView-safe SERIAL imports (no modulepreload / Promise.all)", async () => {
+    const { app } = makeApp();
+    const html = (await request(app).get("/avatar")).text;
+    // Regression guard (adj-202.10): parallel imports + modulepreload broke WKWebView.
+    // Match the actual mechanisms, not the cautionary comment text.
+    expect(html).not.toMatch(/rel=["']modulepreload["']/);
+    expect(html).not.toMatch(/Promise\.all\s*\(/);
+  });
 });
 
 describe("avatar routes: warm-session cache (POST /avatar/prepare) — load perf adj-202.10", () => {

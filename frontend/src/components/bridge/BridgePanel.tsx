@@ -22,6 +22,8 @@ import { AuthoritativeResultPanel } from './AuthoritativeResultPanel';
 import { CreditMeter } from './CreditMeter';
 import { CaptionsPanel, type CaptionLine } from './CaptionsPanel';
 import { MicToggle } from './MicToggle';
+import { CameraToggle } from './CameraToggle';
+import { ScreenShareToggle } from './ScreenShareToggle';
 import { describeConnectError } from './connect-error';
 import {
   applyCaption,
@@ -108,6 +110,14 @@ export function BridgePanel({ projectId, projectName, avatarSrc = '/avatar' }: B
   const [running, setRunning] = useState(false);
   const [captions, setCaptions] = useState<CaptionLine[]>([]);
   const [micEnabled, setMicEnabled] = useState(true);
+  // Camera starts OFF — voice is the default; the Commander opts into video.
+  const [cameraEnabled, setCameraEnabled] = useState(false);
+  // Screen-share starts OFF; only offered where the browser can capture a surface
+  // (getDisplayMedia is absent on iOS Safari / WKWebView).
+  const [screenShareEnabled, setScreenShareEnabled] = useState(false);
+  const screenShareSupported =
+    typeof navigator !== 'undefined' &&
+    typeof navigator.mediaDevices?.getDisplayMedia === 'function';
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const connected = state === 'connected';
@@ -144,6 +154,12 @@ export function BridgePanel({ projectId, projectName, avatarSrc = '/avatar' }: B
         case 'bridge:mic':
           setMicEnabled(msg.enabled);
           break;
+        case 'bridge:camera':
+          setCameraEnabled(msg.enabled);
+          break;
+        case 'bridge:screenshare':
+          setScreenShareEnabled(msg.enabled);
+          break;
         case 'bridge:status':
           // Lifecycle echo — reserved for future surfacing; ignored for now.
           break;
@@ -159,6 +175,8 @@ export function BridgePanel({ projectId, projectName, avatarSrc = '/avatar' }: B
     if (connected) {
       setCaptions([]);
       setMicEnabled(true);
+      setCameraEnabled(false);
+      setScreenShareEnabled(false);
     } else {
       setCaptions([]);
     }
@@ -170,6 +188,21 @@ export function BridgePanel({ projectId, projectName, avatarSrc = '/avatar' }: B
     postToAvatar({ type: 'bridge:mic', enabled: next });
     markActivity();
   }, [micEnabled, postToAvatar, markActivity]);
+
+  const toggleCamera = useCallback(() => {
+    const next = !cameraEnabled;
+    setCameraEnabled(next); // optimistic; the iframe echoes authoritative state
+    postToAvatar({ type: 'bridge:camera', enabled: next });
+    markActivity();
+  }, [cameraEnabled, postToAvatar, markActivity]);
+
+  const toggleScreenShare = useCallback(() => {
+    const next = !screenShareEnabled;
+    // No optimism: the OS surface-picker can be cancelled, so trust the iframe's
+    // authoritative bridge:screenshare echo to set the visible state.
+    postToAvatar({ type: 'bridge:screenshare', enabled: next });
+    markActivity();
+  }, [screenShareEnabled, postToAvatar, markActivity]);
 
   const fireTool = useCallback(
     async (qt: QuickTool) => {
@@ -290,6 +323,14 @@ export function BridgePanel({ projectId, projectName, avatarSrc = '/avatar' }: B
             </button>
           )}
           <MicToggle enabled={micEnabled} disabled={!connected} onToggle={toggleMic} />
+          <CameraToggle enabled={cameraEnabled} disabled={!connected} onToggle={toggleCamera} />
+          {screenShareSupported && (
+            <ScreenShareToggle
+              enabled={screenShareEnabled}
+              disabled={!connected}
+              onToggle={toggleScreenShare}
+            />
+          )}
         </div>
 
         <div style={controlGroupStyle} role="group" aria-label="Fleet tools">
