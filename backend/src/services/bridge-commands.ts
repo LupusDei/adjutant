@@ -1,22 +1,29 @@
 /**
- * The Bridge — avatar command write-paths (adj-202.4.2 / .4.3 / .4.4).
+ * The Bridge — avatar command write-paths (adj-202.4.2 / .4.3 / .4.4 / .4.5).
  *
- * Deliberate, reversible WRITE actions the avatar can take to DIRECT the swarm. Each
- * reuses the SAME real service the corresponding MCP tool uses — no second control
- * plane (Constitution Rules 4 + 9):
- *   - nudgeAgentViaBridge   → the session bridge (live tmux poke), like nudge_agent
+ * Deliberate WRITE actions the avatar can take to DIRECT the swarm. Each reuses the
+ * SAME real service the corresponding MCP tool uses — no second control plane
+ * (Constitution Rules 4 + 9):
+ *   - nudgeAgentViaBridge    → the session bridge (live tmux poke), like nudge_agent
  *   - answerQuestionViaBridge→ question-service.answerQuestion, like answer_question
  *   - createBeadViaBridge    → the bd CLI via execBd, like create_bead
+ *   - spawnWorkerViaBridge   → agent-spawner-service.spawnAgent, like spawn_worker
  *
  * Issued actions are attributed to the coordinator ("adjutant"). The avatar directs
  * agents by NAME and never needs project/epic/bead IDs — create_bead defaults to the
  * session's selected project (or "adjutant"); the others take only what the model
- * naturally knows. Destructive tools (decommission/spawn) are intentionally NOT here.
+ * naturally knows.
+ *
+ * spawn_worker (adj-202.4.5) is the one HEAVY action here: it starts a real agent, so
+ * it is gated behind a spoken READ-BACK / CONFIRM (it never spawns unless confirm===true;
+ * a first call returns a `needsConfirmation` summary). DESTRUCTIVE tools (decommission /
+ * destroy) are intentionally still NOT here.
  */
 
 import { getSessionBridge } from "./session-bridge.js";
 import { execBd, resolveBeadsDir } from "./bd-client.js";
 import { getProject } from "./projects-service.js";
+import { spawnAgent } from "./agent-spawner-service.js";
 import type { QuestionService } from "./question-service.js";
 import type { AnswerQuestionInput } from "../types/index.js";
 import { logInfo } from "../utils/logger.js";
@@ -136,4 +143,95 @@ export async function createBeadViaBridge(input: {
   const beadId = String(result.data?.["id"] ?? "unknown");
   logInfo("bridge create_bead", { beadId, projectId: project.id, type: input.type ?? "task" });
   return { beadId, title: input.title, projectId: project.id };
+}
+
+// ============================================================================
+// spawn_worker (HEAVY — read-back / confirm gated)
+// ============================================================================
+
+export interface SpawnWorkerViaBridgeInput {
+  /** The role to spawn, e.g. "engineer" / "qa". Becomes part of the worker's prompt. */
+  agentType: string;
+  /** The objective the new agent should work on. */
+  task: string;
+  /** Target project NAME (or UUID). Defaults to "adjutant" when absent. */
+  project?: string | undefined;
+  /** Must be true to actually spawn; anything else returns a read-back instead. */
+  confirm?: boolean | undefined;
+}
+
+export interface SpawnWorkerResult {
+  ok: boolean;
+  /** True on the read-back turn (confirm not yet given) — nothing was spawned. */
+  needsConfirmation?: boolean | undefined;
+  /** The spoken read-back the avatar relays to the Commander before spawning. */
+  summary?: string | undefined;
+  agentName?: string | undefined;
+  sessionId?: string | undefined;
+  /** The resolved project NAME the agent was spawned on. */
+  project?: string | undefined;
+  agentType?: string | undefined;
+}
+
+/** Short collision-resistant suffix so two same-role spawns get distinct names. */
+function spawnNameSuffix(): string {
+  return Math.random().toString(36).slice(2, 6);
+}
+
+/** Strip a role to a tmux/name-safe slug (letters, digits, dashes). */
+function sanitizeRole(role: string): string {
+  const slug = role.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug.length > 0 ? slug : "worker";
+}
+
+/**
+ * Start a new agent via the SAME spawn service `spawn_worker` (MCP) uses
+ * ({@link spawnAgent}) — no second spawn implementation (Rules 4 + 9). Workers are
+ * worktree-isolated like every other spawned worker.
+ *
+ * HEAVY action ⇒ READ-BACK / CONFIRM GATE: this NEVER spawns unless `confirm===true`.
+ * On the first call (confirm omitted/false) it returns `{ ok:false, needsConfirmation:true,
+ * summary }` WITHOUT touching the spawn service, so the avatar can state the plan (role,
+ * project, task) to the Commander and only call again with `confirm:true` after assent.
+ *
+ * The avatar never speaks a UUID: `project` is a NAME (defaulting to "adjutant"), resolved
+ * via `getProject` (which accepts a name or UUID) to the project's filesystem path.
+ */
+export async function spawnWorkerViaBridge(input: SpawnWorkerViaBridgeInput): Promise<SpawnWorkerResult> {
+  const agentType = input.agentType.trim();
+  const task = input.task.trim();
+  const projectRef = input.project?.trim() || "adjutant";
+  const summary = `I'll spawn a ${agentType} on ${projectRef} to ${task} — confirm?`;
+
+  // Read-back / confirm gate: spawning is heavyweight, so never spawn unprompted.
+  if (input.confirm !== true) {
+    return { ok: false, needsConfirmation: true, summary };
+  }
+
+  const projResult = getProject(projectRef);
+  if (!projResult.success || !projResult.data) {
+    throw new Error(`Project '${projectRef}' not found.`);
+  }
+  const project = projResult.data;
+
+  const name = `${sanitizeRole(agentType)}-${spawnNameSuffix()}`;
+  const initialPrompt =
+    `You are a ${agentType} agent on the ${project.name} project, started by the Commander via The Bridge.\n\n` +
+    `Your task:\n${task}`;
+
+  const result = await spawnAgent({
+    name,
+    projectPath: project.path,
+    initialPrompt,
+    // Workers edit files — isolate them in a worktree so their saves never touch the
+    // watched canonical checkout (mirrors the spawn_worker MCP tool, adj-182.5).
+    isolation: "worktree",
+  });
+
+  if (!result.success) {
+    throw new Error(result.error ?? "spawn failed");
+  }
+
+  logInfo("bridge spawn_worker", { agentName: name, projectId: project.id, agentType });
+  return { ok: true, agentName: name, sessionId: result.sessionId, project: project.name, agentType };
 }

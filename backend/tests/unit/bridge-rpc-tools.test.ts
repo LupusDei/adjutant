@@ -18,17 +18,26 @@ import {
 } from "../../src/services/bridge-rpc-tools.js";
 
 describe("BRIDGE_RPC_TOOLS descriptors", () => {
-  it("should declare every read-only whitelist tool PLUS the safe-write command tools", () => {
+  it("should declare every read-only whitelist tool PLUS the safe-write command tools (incl. the gated spawn_worker)", () => {
     const names = BRIDGE_RPC_TOOLS.map((t) => t.name).sort();
     expect(names).toEqual(
-      [...BRIDGE_READONLY_TOOLS, "send_message", "nudge_agent", "answer_question", "create_bead"].sort(),
+      [...BRIDGE_READONLY_TOOLS, "send_message", "nudge_agent", "answer_question", "create_bead", "spawn_worker"].sort(),
     );
   });
 
-  it("should NOT expose destructive tools (decommission/spawn stay out of the toolset)", () => {
+  it("should NOT expose destructive tools (decommission stays out of the toolset)", () => {
     const names = BRIDGE_RPC_TOOLS.map((t) => t.name);
     expect(names).not.toContain("decommission_agent");
-    expect(names).not.toContain("spawn_worker");
+  });
+
+  it("should describe spawn_worker with { agentType, project, task, confirm } and require confirmation", () => {
+    const spawn = BRIDGE_RPC_TOOLS.find((t) => t.name === "spawn_worker");
+    expect(spawn).toBeDefined();
+    const paramNames = spawn!.parameters.map((p) => p.name).sort();
+    expect(paramNames).toEqual(["agentType", "confirm", "project", "task"]);
+    // No project/epic/bead id — at most a project NAME — and a confirm requirement.
+    expect(spawn!.description.toLowerCase()).toMatch(/confirm/);
+    expect(spawn!.description.toLowerCase()).toMatch(/name/);
   });
 
   it("should mark every tool as backend_rpc with a description and a Runway-legal timeout (<=8s)", () => {
@@ -88,9 +97,19 @@ describe("composeBridgePersonality", () => {
 
   it("should name the full safe-write command toolset in the persona", () => {
     const text = BRIDGE_RPC_PERSONALITY.toLowerCase();
-    for (const tool of ["send_message", "nudge_agent", "answer_question", "create_bead"]) {
+    for (const tool of ["send_message", "nudge_agent", "answer_question", "create_bead", "spawn_worker"]) {
       expect(text).toContain(tool);
     }
+  });
+
+  it("should instruct GWM-1 to read back and confirm before spawning, and forbid decommission", () => {
+    const text = BRIDGE_RPC_PERSONALITY.toLowerCase();
+    expect(text).toContain("spawn_worker");
+    expect(text).toContain("confirm");
+    // The persona must tell the model to read back the plan before spawning.
+    expect(text).toMatch(/read back|read-back/);
+    // Decommission / destroying agents stays explicitly off the table.
+    expect(text).toMatch(/decommission|destroy/);
   });
 
   it("should append the tool guidance to a supplied base personality", () => {

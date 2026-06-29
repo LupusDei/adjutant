@@ -108,6 +108,27 @@ export type BridgeCreateBeadFn = (input: {
   projectId?: string | undefined;
 }) => Promise<{ beadId: string; title: string; projectId: string }>;
 
+/**
+ * spawn_worker write path (adj-202.4.5) — START a new agent. HEAVY + confirm-gated:
+ * the write path NEVER spawns unless `confirm===true`; a first call (confirm omitted)
+ * resolves to `{ ok:false, needsConfirmation:true, summary }` so the avatar reads the
+ * plan back to the Commander before spawning.
+ */
+export type BridgeSpawnWorkerFn = (input: {
+  agentType: string;
+  task: string;
+  project?: string | undefined;
+  confirm?: boolean | undefined;
+}) => Promise<{
+  ok: boolean;
+  needsConfirmation?: boolean | undefined;
+  summary?: string | undefined;
+  agentName?: string | undefined;
+  sessionId?: string | undefined;
+  project?: string | undefined;
+  agentType?: string | undefined;
+}>;
+
 export interface BridgeToolDispatchDeps {
   /** The read-only tool bridge to delegate every read call to. */
   executeTool: BridgeToolBridge["executeTool"];
@@ -124,6 +145,8 @@ export interface BridgeToolDispatchDeps {
   nudgeAgent?: BridgeNudgeAgentFn | undefined;
   answerQuestion?: BridgeAnswerQuestionFn | undefined;
   createBead?: BridgeCreateBeadFn | undefined;
+  /** spawn_worker — HEAVY + confirm-gated (adj-202.4.5); registered only when provided. */
+  spawnWorker?: BridgeSpawnWorkerFn | undefined;
 }
 
 /** A structured INVALID_ARGS envelope for a command tool (never throws to the model). */
@@ -287,6 +310,30 @@ export function buildBridgeToolDispatch(deps: BridgeToolDispatchDeps): Record<st
     };
   }
 
+  // spawn_worker — START a new agent (adj-202.4.5). HEAVY: the write path enforces the
+  // read-back / confirm gate (never spawns unless confirm===true). Here we only validate
+  // the model's args and pass `confirm` straight through to the gate.
+  const spawnWorker = deps.spawnWorker;
+  if (spawnWorker) {
+    dispatch["spawn_worker"] = (args: Record<string, unknown>): Promise<Record<string, unknown>> => {
+      const agentType = typeof args["agentType"] === "string" ? args["agentType"].trim() : "";
+      const task = typeof args["task"] === "string" ? args["task"].trim() : "";
+      const project = typeof args["project"] === "string" && args["project"].trim().length > 0 ? args["project"].trim() : undefined;
+      const confirm = args["confirm"] === true;
+      if (!agentType || !task) {
+        return Promise.resolve(invalidArgs("spawn_worker", "spawn_worker requires 'agentType' (role) and 'task'."));
+      }
+      return runCommand("spawn_worker", async () => {
+        const input: { agentType: string; task: string; confirm: boolean; project?: string } = { agentType, task, confirm };
+        // An explicit project NAME wins; otherwise default to the session's selected project.
+        if (project !== undefined) input.project = project;
+        else if (deps.defaultProjectId !== undefined) input.project = deps.defaultProjectId;
+        const result = await spawnWorker(input);
+        return { tool: "spawn_worker", ...result };
+      });
+    };
+  }
+
   return dispatch;
 }
 
@@ -311,6 +358,8 @@ export interface BridgeRpcManagerConfig {
   nudgeAgent?: BridgeNudgeAgentFn | undefined;
   answerQuestion?: BridgeAnswerQuestionFn | undefined;
   createBead?: BridgeCreateBeadFn | undefined;
+  /** spawn_worker — HEAVY + confirm-gated (adj-202.4.5). */
+  spawnWorker?: BridgeSpawnWorkerFn | undefined;
 }
 
 export interface AttachOptions {
@@ -366,6 +415,7 @@ export function createBridgeRpcManager(config: BridgeRpcManagerConfig): BridgeRp
       nudgeAgent: config.nudgeAgent,
       answerQuestion: config.answerQuestion,
       createBead: config.createBead,
+      spawnWorker: config.spawnWorker,
     });
 
     try {

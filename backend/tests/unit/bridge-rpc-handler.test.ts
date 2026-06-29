@@ -268,6 +268,86 @@ describe("buildBridgeToolDispatch — nudge/answer/create command tools (adj-202
   });
 });
 
+describe("buildBridgeToolDispatch — spawn_worker command tool (adj-202.4.5)", () => {
+  it("registers spawn_worker only when its write path is provided (fail-closed)", () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    expect(buildBridgeToolDispatch({ executeTool })["spawn_worker"]).toBeUndefined();
+    expect(typeof buildBridgeToolDispatch({ executeTool, spawnWorker: vi.fn() })["spawn_worker"]).toBe("function");
+  });
+
+  it("requires agentType and task (validation, never spawns on bad args)", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const spawnWorker = vi.fn();
+    const dispatch = buildBridgeToolDispatch({ executeTool, spawnWorker });
+
+    const noType = (await dispatch["spawn_worker"]!({ task: "do it" })) as { ok: boolean; error: { code: string } };
+    expect(noType.ok).toBe(false);
+    expect(noType.error.code).toBe("INVALID_ARGS");
+
+    const noTask = (await dispatch["spawn_worker"]!({ agentType: "engineer" })) as { ok: boolean; error: { code: string } };
+    expect(noTask.ok).toBe(false);
+    expect(noTask.error.code).toBe("INVALID_ARGS");
+
+    expect(spawnWorker).not.toHaveBeenCalled();
+  });
+
+  it("forwards the read-back (needsConfirmation) envelope when confirm is omitted, without spawning", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const spawnWorker = vi.fn(async () => ({
+      ok: false,
+      needsConfirmation: true,
+      summary: "I'll spawn a engineer on adjutant to do it — confirm?",
+    }));
+    const dispatch = buildBridgeToolDispatch({ executeTool, spawnWorker, defaultProjectId: "p1" });
+
+    const out = (await dispatch["spawn_worker"]!({ agentType: "engineer", task: "do it" })) as {
+      ok: boolean;
+      tool: string;
+      needsConfirmation: boolean;
+      summary: string;
+    };
+    // confirm:false is passed through to the gate (the write path decides).
+    expect(spawnWorker).toHaveBeenCalledWith({ agentType: "engineer", task: "do it", confirm: false, project: "p1" });
+    expect(out.ok).toBe(false);
+    expect(out.tool).toBe("spawn_worker");
+    expect(out.needsConfirmation).toBe(true);
+    expect(out.summary).toContain("confirm");
+  });
+
+  it("passes confirm:true and an explicit project NAME through, returning the spawned agent", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const spawnWorker = vi.fn(async () => ({ ok: true, agentName: "engineer-ab12", sessionId: "s9", project: "bloomfolio" }));
+    const dispatch = buildBridgeToolDispatch({ executeTool, spawnWorker, defaultProjectId: "p1" });
+
+    const out = (await dispatch["spawn_worker"]!({
+      agentType: "engineer",
+      project: "bloomfolio",
+      task: "add export",
+      confirm: true,
+    })) as { ok: boolean; tool: string; agentName: string };
+
+    // An explicit project NAME overrides the session default.
+    expect(spawnWorker).toHaveBeenCalledWith({ agentType: "engineer", task: "add export", confirm: true, project: "bloomfolio" });
+    expect(out.ok).toBe(true);
+    expect(out.tool).toBe("spawn_worker");
+    expect(out.agentName).toBe("engineer-ab12");
+  });
+
+  it("a spawn write-path throw becomes a structured error envelope (never rejects)", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const spawnWorker = vi.fn(async () => {
+      throw new Error("tmux unavailable");
+    });
+    const dispatch = buildBridgeToolDispatch({ executeTool, spawnWorker });
+    const out = (await dispatch["spawn_worker"]!({ agentType: "engineer", task: "x", confirm: true })) as {
+      ok: boolean;
+      error: { message: string };
+    };
+    expect(out.ok).toBe(false);
+    expect(out.error.message).toContain("tmux unavailable");
+  });
+});
+
 describe("createBridgeRpcManager", () => {
   function fakeHandler(): RpcHandlerLike {
     return { close: vi.fn(async () => {}), connected: true };
