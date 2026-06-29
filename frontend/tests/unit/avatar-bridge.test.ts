@@ -56,6 +56,36 @@ describe('parseAvatarMessage', () => {
     expect(parseAvatarMessage({ type: 'bridge:screenshare' })).toBeNull();
   });
 
+  it('should parse a spawn read-back (confirm) message with just a summary', () => {
+    expect(parseAvatarMessage({ type: 'bridge:spawn-confirm', summary: "I'll spawn a QA engineer" })).toEqual({
+      type: 'bridge:spawn-confirm',
+      summary: "I'll spawn a QA engineer",
+    });
+  });
+
+  it('should carry the optional structured fields on a spawn read-back', () => {
+    const msg = {
+      type: 'bridge:spawn-confirm',
+      summary: "I'll spawn a QA engineer on adjutant to triage flaky tests — confirm?",
+      requestId: 'req-1',
+      agentType: 'QA engineer',
+      projectRef: 'adjutant',
+      task: 'triage flaky tests',
+    };
+    expect(parseAvatarMessage(msg)).toEqual(msg);
+  });
+
+  it('should reject a spawn read-back without a string summary', () => {
+    expect(parseAvatarMessage({ type: 'bridge:spawn-confirm' })).toBeNull();
+    expect(parseAvatarMessage({ type: 'bridge:spawn-confirm', summary: 42 })).toBeNull();
+  });
+
+  it('should drop non-string optional fields on a spawn read-back rather than trust them', () => {
+    expect(
+      parseAvatarMessage({ type: 'bridge:spawn-confirm', summary: 'ok', requestId: 5, task: {} }),
+    ).toEqual({ type: 'bridge:spawn-confirm', summary: 'ok' });
+  });
+
   it('should reject foreign / malformed messages', () => {
     expect(parseAvatarMessage(null)).toBeNull();
     expect(parseAvatarMessage('hello')).toBeNull();
