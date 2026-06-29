@@ -639,8 +639,8 @@ describe("read_messages", () => {
         id: "m1", sender: "fenix", recipient: "user", body: "Starting adj-202", timestamp: "2026-06-29T01:00:00Z",
       });
     }
-    // Default limit applied (20) when none supplied.
-    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ limit: 20 }));
+    // Default limit applied (10) when none supplied — small payload for the RPC return.
+    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ limit: 10 }));
   });
 
   it("resolves a spoken agent name to the canonical id before filtering (Fenix → fenix)", async () => {
@@ -658,7 +658,8 @@ describe("read_messages", () => {
     expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ agentId: "fenix" }));
   });
 
-  it("rejects AGENT_NOT_FOUND when a supplied agent name cannot be resolved (no store hit)", async () => {
+  it("falls back to the raw name (NOT an error) when a name can't be resolved — reading history with OFFLINE agents", async () => {
+    // Only fenix is a live agent; kerrigan is offline (not in getAgents) but has message history.
     mockGetAgents.mockResolvedValue({ success: true, data: [{ id: "adjutant/fenix", name: "fenix" }] });
     const getMessages = vi.fn().mockReturnValue([]);
     const messageStore = {
@@ -667,14 +668,15 @@ describe("read_messages", () => {
     } as unknown as BridgeToolDeps["messageStore"];
 
     const bridge = createBridgeToolBridge(makeDeps({ messageStore }));
-    const res = await bridge.executeTool({ tool: "read_messages", args: { agentId: "zzzznotanagent" } });
+    const res = await bridge.executeTool({ tool: "read_messages", args: { agentId: "kerrigan" } });
 
-    expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error.code).toBe("AGENT_NOT_FOUND");
-    expect(getMessages).not.toHaveBeenCalled();
+    // Message history is usually with agents not currently running, so an unresolved name is NOT
+    // an error — filter by the provided name as-is (empty result if truly unknown, never a reject).
+    expect(res.ok).toBe(true);
+    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ agentId: "kerrigan" }));
   });
 
-  it("caps the limit at 50 even if a larger value is requested", async () => {
+  it("caps the limit at 15 even if a larger value is requested (keep the RPC payload small)", async () => {
     const getMessages = vi.fn().mockReturnValue([]);
     const messageStore = {
       getMessages,
@@ -684,7 +686,7 @@ describe("read_messages", () => {
     const bridge = createBridgeToolBridge(makeDeps({ messageStore }));
     await bridge.executeTool({ tool: "read_messages", args: { limit: 500 } });
 
-    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ limit: 50 }));
+    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ limit: 15 }));
   });
 
   it("scopes strictly to a conversationId when given (bleed-free)", async () => {

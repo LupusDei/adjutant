@@ -142,8 +142,11 @@ const getAgentDetailArgs = z.object({
   agent: z.string().min(1),
 });
 
-const READ_MESSAGES_DEFAULT_LIMIT = 20;
-const READ_MESSAGES_MAX_LIMIT = 50;
+const READ_MESSAGES_DEFAULT_LIMIT = 10;
+const READ_MESSAGES_MAX_LIMIT = 15;
+// Cap each body so a batch of messages stays well under the LiveKit RPC payload ceiling (a
+// large result silently fails to return to the avatar). The avatar narrates a digest, not full text.
+const READ_MESSAGES_BODY_MAX = 280;
 
 const readMessagesArgs = z.object({
   agentId: z.string().min(1).optional(),
@@ -527,14 +530,14 @@ async function runReadMessages(
   // get_agent_detail — so "Phoenix" filters to fenix's thread. An unresolvable name is a hard
   // miss (don't silently widen to a fleet-wide read the Commander didn't ask for).
   if (parsed.data.agentId !== undefined) {
+    // Resolve to a canonical LIVE-agent name when possible (Phoenix→fenix). But message HISTORY
+    // is usually with agents that are NOT currently running (so not in getAgents()), so a
+    // non-match is NOT an error — fall back to filtering by the provided name as-is (the store
+    // matches messages from/to that name; an unknown name simply yields an empty result).
     const agentsResult = await getAgents();
     const allAgents = agentsResult.success && agentsResult.data ? agentsResult.data : [];
     const resolution = resolveAgentName(parsed.data.agentId, allAgents.map((a) => ({ id: a.id, name: a.name })));
-    if (!resolution.matched || !resolution.canonical) {
-      const hint = resolution.candidates.length ? ` Closest: ${resolution.candidates.join(", ")}.` : "";
-      return reject(TOOL_READ_MESSAGES, projectId, "AGENT_NOT_FOUND", `No agent named '${parsed.data.agentId}'.${hint}`);
-    }
-    opts.agentId = resolution.canonical;
+    opts.agentId = resolution.matched && resolution.canonical ? resolution.canonical : parsed.data.agentId;
   }
 
   // conversationId takes precedence in the store (strict scoping); pass it through when given.
@@ -548,7 +551,7 @@ async function runReadMessages(
     sender: m.agentId,
     recipient: m.recipient,
     role: m.role,
-    body: m.body,
+    body: m.body.length > READ_MESSAGES_BODY_MAX ? m.body.slice(0, READ_MESSAGES_BODY_MAX) + "…" : m.body,
     conversationId: m.conversationId,
     timestamp: m.createdAt,
   }));
