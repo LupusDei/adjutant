@@ -26,6 +26,11 @@ vi.mock("../../src/services/projects-service.js", () => ({
   getProject: (...args: unknown[]) => mockGetProject(...args),
 }));
 
+const mockSpawnAgent = vi.fn();
+vi.mock("../../src/services/agent-spawner-service.js", () => ({
+  spawnAgent: (...args: unknown[]) => mockSpawnAgent(...args),
+}));
+
 vi.mock("../../src/utils/logger.js", () => ({
   logInfo: vi.fn(),
   logWarn: vi.fn(),
@@ -37,6 +42,7 @@ import {
   nudgeAgentViaBridge,
   answerQuestionViaBridge,
   createBeadViaBridge,
+  spawnWorkerViaBridge,
 } from "../../src/services/bridge-commands.js";
 
 beforeEach(() => {
@@ -138,5 +144,80 @@ describe("createBeadViaBridge", () => {
     mockGetProject.mockReturnValue({ success: true, data: { id: "u", name: "adjutant", path: "/p" } });
     mockExecBd.mockResolvedValue({ success: false, error: { message: "bd boom" } });
     await expect(createBeadViaBridge({ title: "x" })).rejects.toThrow(/bd boom/);
+  });
+});
+
+describe("spawnWorkerViaBridge (adj-202.4.5)", () => {
+  it("does NOT spawn without confirm — returns a read-back summary asking the Commander to confirm", async () => {
+    const res = await spawnWorkerViaBridge({ agentType: "engineer", project: "adjutant", task: "add a CSV export" });
+
+    expect(mockSpawnAgent).not.toHaveBeenCalled();
+    expect(mockGetProject).not.toHaveBeenCalled();
+    expect(res.ok).toBe(false);
+    expect(res.needsConfirmation).toBe(true);
+    // The read-back names the role, project, and task so the Commander can assent.
+    expect(res.summary).toMatch(/engineer/);
+    expect(res.summary).toMatch(/adjutant/);
+    expect(res.summary).toMatch(/add a CSV export/);
+    expect((res.summary ?? "").toLowerCase()).toMatch(/confirm/);
+  });
+
+  it("treats confirm:false the same as missing confirm (no spawn)", async () => {
+    const res = await spawnWorkerViaBridge({ agentType: "qa", task: "audit the auth flow", confirm: false });
+    expect(mockSpawnAgent).not.toHaveBeenCalled();
+    expect(res.ok).toBe(false);
+    expect(res.needsConfirmation).toBe(true);
+  });
+
+  it("spawns via the REAL spawn service (worktree-isolated) only when confirm:true", async () => {
+    mockGetProject.mockReturnValue({ success: true, data: { id: "uuid-1", name: "adjutant", path: "/proj" } });
+    mockSpawnAgent.mockResolvedValue({ success: true, sessionId: "sess-99" });
+
+    const res = await spawnWorkerViaBridge({ agentType: "engineer", project: "adjutant", task: "add a CSV export", confirm: true });
+
+    expect(mockGetProject).toHaveBeenCalledWith("adjutant");
+    expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+    const spawnArg = mockSpawnAgent.mock.calls[0]![0] as {
+      name: string;
+      projectPath: string;
+      initialPrompt: string;
+      isolation: string;
+    };
+    expect(spawnArg.projectPath).toBe("/proj");
+    expect(spawnArg.isolation).toBe("worktree");
+    expect(spawnArg.initialPrompt).toContain("add a CSV export");
+    expect(spawnArg.initialPrompt.toLowerCase()).toContain("engineer");
+    expect(spawnArg.name.length).toBeGreaterThan(0);
+
+    expect(res.ok).toBe(true);
+    expect(res.needsConfirmation).toBeUndefined();
+    expect(res.agentName).toBe(spawnArg.name);
+    expect(res.sessionId).toBe("sess-99");
+    expect(res.project).toBe("adjutant");
+  });
+
+  it("defaults the project to 'adjutant' when none is supplied (confirm:true)", async () => {
+    mockGetProject.mockReturnValue({ success: true, data: { id: "uuid-adj", name: "adjutant", path: "/adj" } });
+    mockSpawnAgent.mockResolvedValue({ success: true, sessionId: "s1" });
+
+    await spawnWorkerViaBridge({ agentType: "engineer", task: "do the thing", confirm: true });
+
+    expect(mockGetProject).toHaveBeenCalledWith("adjutant");
+  });
+
+  it("throws when the target project cannot be resolved (confirm:true)", async () => {
+    mockGetProject.mockReturnValue({ success: false, data: null });
+    await expect(
+      spawnWorkerViaBridge({ agentType: "engineer", project: "missing", task: "x", confirm: true }),
+    ).rejects.toThrow(/not found/i);
+    expect(mockSpawnAgent).not.toHaveBeenCalled();
+  });
+
+  it("throws when the spawn service reports failure (confirm:true)", async () => {
+    mockGetProject.mockReturnValue({ success: true, data: { id: "u", name: "adjutant", path: "/p" } });
+    mockSpawnAgent.mockResolvedValue({ success: false, error: "tmux unavailable" });
+    await expect(
+      spawnWorkerViaBridge({ agentType: "engineer", task: "x", confirm: true }),
+    ).rejects.toThrow(/tmux unavailable/);
   });
 });

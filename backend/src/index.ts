@@ -34,7 +34,7 @@ import { createBridgeToolBridge } from "./services/bridge-tool-bridge.js";
 import { createBridgeRpcManager } from "./services/bridge-rpc-handler.js";
 import { BRIDGE_DIRECTIVE_PREFIX } from "./services/bridge-rpc-tools.js";
 import { deliverDirectMessage } from "./services/direct-message-delivery.js";
-import { nudgeAgentViaBridge, answerQuestionViaBridge, createBeadViaBridge } from "./services/bridge-commands.js";
+import { nudgeAgentViaBridge, answerQuestionViaBridge, createBeadViaBridge, spawnWorkerViaBridge } from "./services/bridge-commands.js";
 import { getAgents } from "./services/agents-service.js";
 import { resolveAgentName } from "./services/bridge-agent-resolver.js";
 import { createEventStore } from "./services/event-store.js";
@@ -222,6 +222,10 @@ const bridgeRpcManager = createBridgeRpcManager({
     nudgeAgentViaBridge({ agentId: await resolveBridgeAgent(input.agentId), message: input.message }),
   answerQuestion: (input) => answerQuestionViaBridge(questionService, input),
   createBead: (input) => createBeadViaBridge(input),
+  // adj-202.4.5 — spawn_worker: HEAVY, so it reuses the REAL spawn service (Rules 4+9)
+  // behind a read-back/confirm gate (no spawn unless confirm:true). decommission/destroy
+  // intentionally stay OUT of the avatar's toolset.
+  spawnWorker: (input) => spawnWorkerViaBridge(input),
 });
 
 // The Bridge — avatar (adj-202.2 / adj-202.7.1). Public (no API key) so the iOS WKWebView

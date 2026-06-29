@@ -168,6 +168,27 @@ export const BRIDGE_RPC_TOOLS: RunwayRpcToolDef[] = [
     ],
     timeoutSeconds: 8,
   },
+  {
+    type: "backend_rpc",
+    name: "spawn_worker",
+    description:
+      "START a new agent to work on a task. HEAVY action — you MUST confirm first: call this WITHOUT confirm to get a read-back summary (nothing is spawned), state that plan to the Commander, and only call again with confirm:true once they say yes. You need NO IDs — at most a project NAME (defaults to the selected project, or 'adjutant'). Give the role and the task.",
+    parameters: [
+      { name: "agentType", type: "string", description: 'The role to spawn, e.g. "engineer" or "qa".' },
+      { name: "task", type: "string", description: "What the new agent should work on (the objective)." },
+      {
+        name: "project",
+        type: "string",
+        description: "Optional project NAME to spawn on (defaults to the selected project, or 'adjutant'). Never a UUID.",
+      },
+      {
+        name: "confirm",
+        type: "boolean",
+        description: "Must be true to actually spawn. Omit it on the first call to get a read-back the Commander must confirm.",
+      },
+    ],
+    timeoutSeconds: 8,
+  },
 ];
 
 /**
@@ -194,7 +215,10 @@ You can also DIRECT the swarm with these command tools — act on the Commander'
 - answer_question — resolve an open question from list_questions (give answerBody and/or chosenOption).
 - create_bead — file a work item; it lands in the selected project automatically (only a title is required).
 
-INDEPENDENCE DOCTRINE: address agents BY NAME and use sensible defaults. You do NOT need a project, epic, or bead id for any of these — never demand IDs. Only ask the Commander to clarify when an agent NAME (or which question) is genuinely ambiguous. These actions are reversible, so act decisively without asking permission first.`;
+You can also START a new agent, but this one is HEAVY and is GATED behind your spoken confirmation:
+- spawn_worker — start a new agent on a task. You MUST read back the plan first: call spawn_worker WITHOUT confirm — it returns a read-back summary and does NOT spawn — then state that plan (the role, the project, and the task) to the Commander and ONLY call spawn_worker again with confirm:true after they say yes. You need no IDs, at most a project NAME (defaults to the selected project, or "adjutant"). You CANNOT decommission, stop, or destroy agents — that is off the table.
+
+INDEPENDENCE DOCTRINE: address agents BY NAME and use sensible defaults. You do NOT need a project, epic, or bead id for any of these — never demand IDs. Only ask the Commander to clarify when an agent NAME (or which question) is genuinely ambiguous. The send/nudge/answer/create actions are reversible, so act decisively without asking permission first — the ONE exception is spawn_worker, which you must read back and confirm before spawning.`;
 
 /**
  * Compose the per-session personality: append the fleet-tool guidance to a caller-
