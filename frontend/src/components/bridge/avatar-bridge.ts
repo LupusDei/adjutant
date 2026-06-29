@@ -39,11 +39,24 @@ export interface BridgeScreenShareCommand {
   enabled: boolean;
 }
 
+/**
+ * The Commander's decision on a pending spawn read-back (adj-202.5.3). Sent from
+ * the dashboard chrome to the avatar page when the visible "Confirm spawn" /
+ * "Cancel" button is pressed — so assent is NOT voice-only. `requestId` correlates
+ * the decision with the read-back the avatar surfaced.
+ */
+export interface BridgeSpawnDecisionCommand {
+  type: 'bridge:spawn-decision';
+  confirmed: boolean;
+  requestId?: string;
+}
+
 export type ParentToAvatarMessage =
   | BridgeSessionHandoff
   | BridgeMicCommand
   | BridgeCameraCommand
-  | BridgeScreenShareCommand;
+  | BridgeScreenShareCommand
+  | BridgeSpawnDecisionCommand;
 
 // ── iframe → parent (events) ─────────────────────────────────────────────────
 
@@ -82,13 +95,30 @@ export interface AvatarScreenShareMessage {
   enabled: boolean;
 }
 
+/**
+ * A pending spawn read-back surfaced from the avatar (adj-202.5.3). spawn_worker is
+ * confirm-gated: the avatar's first (un-confirmed) call returns a read-back summary
+ * and spawns NOTHING. The avatar page relays that read-back here so the dashboard can
+ * show a VISIBLE "Confirm spawn" button (voice assent alone is too easy to mis-hear).
+ * `summary` is the spoken read-back; the optional fields mirror the gate's plan.
+ */
+export interface AvatarSpawnConfirmMessage {
+  type: 'bridge:spawn-confirm';
+  summary: string;
+  requestId?: string;
+  agentType?: string;
+  projectRef?: string;
+  task?: string;
+}
+
 export type AvatarToParentMessage =
   | AvatarReadyMessage
   | AvatarStatusMessage
   | AvatarCaptionMessage
   | AvatarMicMessage
   | AvatarCameraMessage
-  | AvatarScreenShareMessage;
+  | AvatarScreenShareMessage
+  | AvatarSpawnConfirmMessage;
 
 const AVATAR_STATUSES: ReadonlySet<string> = new Set(['connecting', 'connected', 'ended', 'error']);
 const CAPTION_ROLES: ReadonlySet<string> = new Set(['assistant', 'user']);
@@ -152,6 +182,22 @@ export function parseAvatarMessage(data: unknown): AvatarToParentMessage | null 
       const enabled = data['enabled'];
       if (typeof enabled !== 'boolean') return null;
       return { type: 'bridge:screenshare', enabled };
+    }
+
+    case 'bridge:spawn-confirm': {
+      const summary = data['summary'];
+      if (typeof summary !== 'string') return null;
+      const msg: AvatarSpawnConfirmMessage = { type: 'bridge:spawn-confirm', summary };
+      // Optional structured fields — copied only when they are strings (don't trust the rest).
+      const requestId = data['requestId'];
+      const agentType = data['agentType'];
+      const projectRef = data['projectRef'];
+      const task = data['task'];
+      if (typeof requestId === 'string') msg.requestId = requestId;
+      if (typeof agentType === 'string') msg.agentType = agentType;
+      if (typeof projectRef === 'string') msg.projectRef = projectRef;
+      if (typeof task === 'string') msg.task = task;
+      return msg;
     }
 
     default:
