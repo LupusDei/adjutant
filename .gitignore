@@ -54,3 +54,4 @@ AuthKey_*.p8
 
 # Beads / Dolt files (added by bd init)
 .beads-credential-key
+backend/avatar-sdk-build/node_modules/

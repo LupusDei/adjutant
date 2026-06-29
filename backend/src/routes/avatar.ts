@@ -18,6 +18,9 @@
  * retires the duplicate create+poll lifecycle (DRY — adj-202.3.4.1).
  */
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { Router } from "express";
 
 import type { BridgeSessionBroker, StartSessionOptions, BridgeSessionCreds } from "../services/bridge-session-broker.js";
@@ -50,8 +53,27 @@ export interface AvatarRouterDeps {
   defaultProjectId?: string | undefined;
 }
 
+/**
+ * Self-hosted avatar SDK bundle (adj-202): React + react-dom + @runwayml/avatars-react bundled
+ * into ONE same-origin file, served at GET /avatar/sdk.js. Eliminates the esm.sh CDN module-graph
+ * that caused "Importing a module script failed" on mobile. Loaded once at startup; stays null if
+ * the bundle is absent (the page then falls back to esm.sh, so a missing file never crashes boot).
+ */
+let avatarSdkJs: string | null = null;
+try {
+  avatarSdkJs = readFileSync(fileURLToPath(new URL("../../public/avatar-sdk.js", import.meta.url)), "utf8");
+} catch {
+  avatarSdkJs = null;
+}
+
 export function createAvatarRouter(deps: AvatarRouterDeps): Router {
   const router = Router();
+
+  // Same-origin SDK bundle — the avatar page imports this instead of the flaky esm.sh graph.
+  router.get("/sdk.js", (_req, res) => {
+    if (!avatarSdkJs) return res.status(404).type("text/plain").send("avatar SDK bundle not built");
+    return res.type("application/javascript").set("Cache-Control", "public, max-age=86400").send(avatarSdkJs);
+  });
 
   // ── Warm-session cache (adj-202.10, load perf) ──────────────────────────────
   // Runway takes ~3-5s to provision a session, which is the load-time floor. So we keep ONE
@@ -371,14 +393,21 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
     // avatars-react resolve it from cache). Parallel Promise.all imports + modulepreload tripped
     // a WKWebView "Importing a module script failed". The session fetch above already overlaps
     // the slowest part, so the imports don't need to be parallelized.
-    const React = (await import('https://esm.sh/react@18')).default;
-    const { createRoot } = await import('https://esm.sh/react-dom@18/client');
-    // ?bundle inlines the heavy transitive deps (LiveKit + components-react + avatars) into ONE
-    // module instead of a deep graph of dozens of cross-origin fetches — any one of which failing
-    // in a mobile WKWebView throws "Importing a module script failed". react/react-dom stay
-    // externalized (&deps) so these components share the one React instance imported above.
-    const { AvatarCall, AvatarVideo, UserVideo, ScreenShareVideo, useLocalMedia } =
-      await import('https://esm.sh/@runwayml/avatars-react?bundle&deps=react@18,react-dom@18');
+    // PRIMARY: the self-hosted SDK bundle — ONE same-origin file (React + react-dom +
+    // avatars-react + LiveKit all inlined), so there is NO esm.sh CDN module graph to fail on a
+    // mobile WKWebView. FALLBACK: if the local bundle can't load, drop to esm.sh ?bundle, so this
+    // can never regress below the prior behaviour. Either path yields one consistent React.
+    let sdk;
+    try {
+      sdk = await import('/avatar/sdk.js');
+    } catch (_e) {
+      const r = (await import('https://esm.sh/react@18')).default;
+      const { createRoot: cr } = await import('https://esm.sh/react-dom@18/client');
+      const m = await import('https://esm.sh/@runwayml/avatars-react?bundle&deps=react@18,react-dom@18');
+      sdk = { React: r, createRoot: cr, ...m };
+    }
+    const React = sdk.React;
+    const { createRoot, AvatarCall, AvatarVideo, UserVideo, ScreenShareVideo, useLocalMedia } = sdk;
     const h = React.createElement;
     const root = createRoot(document.getElementById('root'));
 
