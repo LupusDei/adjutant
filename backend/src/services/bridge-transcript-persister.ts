@@ -62,7 +62,7 @@ export interface BridgeTranscriptPersisterDeps {
   broadcast?: ((turn: PersistedTranscriptTurn) => void) | undefined;
   /** The Commander's member id. Defaults to "user" (the canonical user member). */
   commanderId?: string | undefined;
-  /** The coordinator's member id. Defaults to "adjutant". */
+  /** The coordinator's member id. Defaults to "adjutant-coordinator" (the avatar IS the coordinator). */
   coordinatorId?: string | undefined;
 }
 
@@ -90,7 +90,7 @@ export function createBridgeTranscriptPersister(
   deps: BridgeTranscriptPersisterDeps,
 ): BridgeTranscriptPersister {
   const commanderId = deps.commanderId ?? "user";
-  const coordinatorId = deps.coordinatorId ?? "adjutant";
+  const coordinatorId = deps.coordinatorId ?? "adjutant-coordinator";
 
   const sessions = new Map<string, SessionState>();
   // The DM id is deterministic; resolve the conversation ROW once (lazily) so it (and its

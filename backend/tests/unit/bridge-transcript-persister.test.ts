@@ -36,7 +36,7 @@ let messageStore: MessageStore;
 let persister: BridgeTranscriptPersister;
 let broadcast: ReturnType<typeof vi.fn>;
 
-const DM_ID = dmConversationId("user", "adjutant");
+const DM_ID = dmConversationId("user", "adjutant-coordinator");
 
 beforeEach(() => {
   db = new Database(":memory:");
@@ -99,20 +99,20 @@ describe("createBridgeTranscriptPersister — finalized persistence + roles", ()
     const m = msgs[0]!;
     expect(m.role).toBe("user");
     expect(m.agentId).toBe("user");
-    expect(m.recipient).toBe("adjutant");
+    expect(m.recipient).toBe("adjutant-coordinator");
     expect(m.conversationId).toBe(DM_ID);
     expect(m.body).toBe("Status report");
     expect(m.metadata).toMatchObject({ source: "bridge-voice", sessionId: "s1", speaker: "commander" });
   });
 
-  it("should persist the avatar's finalized speech as a role='agent' message from 'adjutant'", () => {
+  it("should persist the avatar's finalized speech as a role='agent' message from 'adjutant-coordinator'", () => {
     persister.onSegment({ sessionId: "s1", speaker: "avatar", text: "All agents nominal.", segmentId: "a1", final: true });
 
     const msgs = messagesInDm();
     expect(msgs).toHaveLength(1);
     const m = msgs[0]!;
     expect(m.role).toBe("agent");
-    expect(m.agentId).toBe("adjutant");
+    expect(m.agentId).toBe("adjutant-coordinator");
     expect(m.recipient).toBe("user");
     expect(m.conversationId).toBe(DM_ID);
     expect(m.metadata).toMatchObject({ source: "bridge-voice", speaker: "avatar" });
@@ -132,7 +132,7 @@ describe("createBridgeTranscriptPersister — finalized persistence + roles", ()
     expect(conv).not.toBeNull();
     expect(conv!.kind).toBe("dm");
     const members = conversationStore.getMembers(DM_ID).map((m) => m.memberId).sort();
-    expect(members).toEqual(["adjutant", "user"]);
+    expect(members).toEqual(["adjutant-coordinator", "user"]);
   });
 
   it("should fire the broadcast hook once per persisted turn with from/to peers", () => {
@@ -141,7 +141,7 @@ describe("createBridgeTranscriptPersister — finalized persistence + roles", ()
     expect(broadcast).toHaveBeenCalledTimes(1);
     const turn = broadcast.mock.calls[0]![0] as PersistedTranscriptTurn;
     expect(turn.from).toBe("user");
-    expect(turn.to).toBe("adjutant");
+    expect(turn.to).toBe("adjutant-coordinator");
     expect(turn.message.body).toBe("Go");
   });
 });

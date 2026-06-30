@@ -211,9 +211,16 @@ const bridgeSessionCollector = createBridgeSessionCollector({ memoryStore });
 // 4 + 9 — no new store). wsBroadcast fans each turn out live so the dashboard/iOS Chat update as
 // the conversation happens. The capture adapter registers the lk.transcription text-stream
 // handler on the EXISTING server-side LiveKit participant connection (no second connection).
+// The Bridge avatar IS the adjutant coordinator (Phase 4 — one identity, not two). The avatar
+// speaks, messages, and persists its dialogue AS "adjutant-coordinator" so EVERYTHING lands in
+// the SAME conversation the Commander already has with the coordinator in Chat — never a separate,
+// invisible "adjutant" thread. This is the established coordinator id (see product-owner wiring).
+const BRIDGE_COORDINATOR_ID = "adjutant-coordinator";
+
 const bridgeTranscriptPersister = createBridgeTranscriptPersister({
   conversationStore,
   messageStore,
+  coordinatorId: BRIDGE_COORDINATOR_ID,
   broadcast: ({ message, from, to }) => {
     wsBroadcast({
       type: "chat_message",
@@ -236,7 +243,7 @@ const bridgeRpcManager = createBridgeRpcManager({
     const result = deliverDirectMessage(
       { store: messageStore, eventStore },
       {
-        from: "adjutant",
+        from: BRIDGE_COORDINATOR_ID,
         to: canonical,
         body,
         role: "agent",
