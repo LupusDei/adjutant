@@ -521,6 +521,32 @@ describe("createBridgeRpcManager", () => {
     expect(finalizeSession).toHaveBeenCalledWith("sess-close");
   });
 
+  it("fires onSessionEnd to fetch+persist the transcript on disconnect (adj-202.6.6)", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const onSessionEnd = vi.fn();
+    let captured: Parameters<CreateRpcHandlerFn>[0] | null = null;
+    const createHandler: CreateRpcHandlerFn = vi.fn(async (opts) => {
+      captured = opts;
+      return fakeHandler();
+    });
+    const manager = createBridgeRpcManager({ executeTool, apiKey: "k", createHandler, onSessionEnd });
+
+    await manager.attach({ sessionId: "sess-tx" });
+    captured!.onDisconnected?.();
+    expect(onSessionEnd).toHaveBeenCalledWith("sess-tx");
+  });
+
+  it("fires onSessionEnd on an explicit close() too (adj-202.6.6)", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const onSessionEnd = vi.fn();
+    const createHandler: CreateRpcHandlerFn = vi.fn(async () => fakeHandler());
+    const manager = createBridgeRpcManager({ executeTool, apiKey: "k", createHandler, onSessionEnd });
+
+    await manager.attach({ sessionId: "sess-tx-close" });
+    await manager.close("sess-tx-close");
+    expect(onSessionEnd).toHaveBeenCalledWith("sess-tx-close");
+  });
+
   it("should attach a handler with the session id, api key, and the whitelist tool map", async () => {
     const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
     let captured: Parameters<CreateRpcHandlerFn>[0] | null = null;
