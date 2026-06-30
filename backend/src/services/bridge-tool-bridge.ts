@@ -147,13 +147,12 @@ const getAgentDetailArgs = z.object({
   agent: z.string().min(1),
 });
 
-const READ_MESSAGES_DEFAULT_LIMIT = 5;
-const READ_MESSAGES_MAX_LIMIT = 6;
-// Keep the result TINY + plain-ASCII. The Runway tool-RPC return fails ("RPC cancelled or
-// failed") on anything but a small payload — message bodies are large + emoji-heavy. We hand
-// back ONE short string (no arrays/objects), per-message capped here and overall-capped below.
-const READ_MESSAGES_BODY_MAX = 70;
-const READ_MESSAGES_TOTAL_MAX = 350;
+// The LiveKit RPC response limit is ~15KB (responses chunk at STREAM_CHUNK_SIZE=15e3), so these
+// are sized for USEFULNESS, not paranoia: ~15 messages × 300-char bodies ≈ 5KB, well under the
+// ceiling. (An earlier 440-byte cap was a misdiagnosis — payload size was never the failure.)
+const READ_MESSAGES_DEFAULT_LIMIT = 10;
+const READ_MESSAGES_MAX_LIMIT = 15;
+const READ_MESSAGES_BODY_MAX = 300;
 
 const readMessagesArgs = z.object({
   agentId: z.string().min(1).optional(),
@@ -576,20 +575,21 @@ async function runReadMessages(
   // Plain-ASCII, whitespace-collapsed, hard-capped — and ONLY from/to/text (no nulls, no ids/
   // timestamps) — so the RPC return stays small + safe. Large or emoji-heavy payloads fail the
   // Runway tool RPC ("RPC cancelled or failed"); the avatar only needs a short narratable digest.
+  // Collapse control chars + whitespace (keep unicode — the ~15KB RPC ceiling makes ASCII-stripping
+  // unnecessary) and cap each body so a batch stays well under the limit while staying readable.
   const clean = (s: string): string =>
     s
-      .replace(/[^\x20-\x7E]/g, "")
+      .replace(/[ -]/g, " ")
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, READ_MESSAGES_BODY_MAX);
-  // ONE tiny ASCII string, not an array of objects. The Runway tool-RPC return rejects anything
-  // but a small payload, so we narrate a single digest line per message and hard-cap the total.
-  const recent = ordered
-    .map((m) => `${m.agentId}->${m.recipient ?? "?"}: ${clean(m.body)}`)
-    .join(" | ")
-    .slice(0, READ_MESSAGES_TOTAL_MAX);
+  const messages = ordered.map((m) => ({
+    from: m.agentId,
+    to: m.recipient ?? "",
+    text: clean(m.body),
+  }));
 
-  return ok(TOOL_READ_MESSAGES, projectId, { recent, count: ordered.length });
+  return ok(TOOL_READ_MESSAGES, projectId, { messages, count: messages.length });
 }
 
 /**
