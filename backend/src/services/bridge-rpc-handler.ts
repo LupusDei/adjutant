@@ -732,6 +732,10 @@ export function createBridgeRpcManager(config: BridgeRpcManagerConfig): BridgeRp
       };
       if (apiKey !== undefined) handlerOpts.apiKey = apiKey;
       handlerOpts.sessionId = sessionId;
+      // Diagnostic: make @runwayml/avatars-node-rpc log every INCOMING tool RPC (name, caller
+      // identity, payload). Our tools[] log only fires once a call passes the SDK's `worker:`
+      // caller-auth gate + JSON.parse — so if a call fails upstream of us, only this shows it.
+      handlerOpts.debug = true;
       // adj-202.6.6 — when capturing transcripts, hand the room-owning factory a callback to
       // wire this session's room (register the lk.transcription text-stream handler) on the
       // SAME participant connection serving the tool loop.
