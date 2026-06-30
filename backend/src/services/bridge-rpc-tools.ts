@@ -118,11 +118,10 @@ export const BRIDGE_RPC_TOOLS: RunwayRpcToolDef[] = [
     type: "backend_rpc",
     name: "read_messages",
     description:
-      "Read recent agent/user messages so you can RECALL what was said earlier and give the Commander context on prior/past discussions. No IDs needed: omit everything for a fleet-wide recent read, or pass an agent NAME to focus on that agent's thread. The structured result is the source of truth.",
+      "Read recent agent/user messages to RECALL what was said earlier. You NEVER need a conversation id or any other id — to read a specific agent's thread just pass that agent's NAME in agentId (e.g. \"fenix\"); to read fleet-wide recent traffic, omit everything. The lookup resolves the conversation for you. The structured result is the source of truth.",
     parameters: [
-      { name: "agentId", type: "string", description: "Optional agent NAME (e.g. \"fenix\") to focus on that agent's conversation." },
-      { name: "conversationId", type: "string", description: "Optional: scope strictly to one conversation id." },
-      { name: "limit", type: "number", description: "Optional max messages to return (default 20, capped at 50)." },
+      { name: "agentId", type: "string", description: "Optional agent NAME (e.g. \"fenix\"). This is all you need to read one agent's thread — no id required." },
+      { name: "limit", type: "number", description: "Optional max messages to return (default 10, capped at 15)." },
     ],
     timeoutSeconds: 8,
   },

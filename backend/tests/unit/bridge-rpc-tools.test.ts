@@ -40,12 +40,15 @@ describe("BRIDGE_RPC_TOOLS descriptors", () => {
     expect(names).not.toContain("decommission_agent");
   });
 
-  it("should describe read_messages with { agentId, conversationId, limit } for recalling past discussion", () => {
+  it("should describe read_messages with { agentId, limit } only — NO conversationId (read by agent name)", () => {
     const read = BRIDGE_RPC_TOOLS.find((t) => t.name === "read_messages");
     expect(read).toBeDefined();
     const paramNames = read!.parameters.map((p) => p.name).sort();
-    expect(paramNames).toEqual(["agentId", "conversationId", "limit"]);
+    // conversationId is deliberately NOT advertised: the avatar kept asking for an id it can't get.
+    expect(paramNames).toEqual(["agentId", "limit"]);
+    expect(paramNames).not.toContain("conversationId");
     expect(read!.description.toLowerCase()).toMatch(/recall|past|earlier|previous|history/);
+    expect(read!.description.toLowerCase()).toMatch(/never need|no id|name/);
   });
 
   it("should describe spawn_worker with { agentType, project, task, confirm } and require confirmation", () => {
