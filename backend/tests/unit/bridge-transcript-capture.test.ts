@@ -194,6 +194,66 @@ describe("createBridgeTranscriptCapture — resilience", () => {
   });
 });
 
+describe("createBridgeTranscriptCapture — diagnostic observation (live-verify seam)", () => {
+  it("should fire onStreamObserved for a final stream with the raw stream shape", async () => {
+    const onStreamObserved = vi.fn();
+    const capture = createBridgeTranscriptCapture({ persister, onStreamObserved });
+    const f = fakeRoom();
+    capture.register(f.room, "sess-1");
+
+    f.fire(reader("All agents nominal.", { "lk.segment_id": "seg-1" }), { identity: "worker:avatar-9" });
+    await vi.waitFor(() => { expect(onStreamObserved).toHaveBeenCalledTimes(1); });
+
+    expect(onStreamObserved.mock.calls[0]![0]).toMatchObject({
+      sessionId: "sess-1",
+      topic: TRANSCRIPTION_TOPIC,
+      identity: "worker:avatar-9",
+      speaker: "avatar",
+      segmentId: "seg-1",
+      final: true,
+      textLength: "All agents nominal.".length,
+    });
+  });
+
+  it("should fire onStreamObserved for an INTERIM (non-final) stream", async () => {
+    const onStreamObserved = vi.fn();
+    const capture = createBridgeTranscriptCapture({ persister, onStreamObserved });
+    const f = fakeRoom();
+    capture.register(f.room, "sess-1");
+
+    f.fire(reader("partial", { "lk.transcription_final": "false" }), { identity: "user-42" });
+    await vi.waitFor(() => { expect(onStreamObserved).toHaveBeenCalledTimes(1); });
+
+    expect(onStreamObserved.mock.calls[0]![0]).toMatchObject({ final: false, speaker: "commander" });
+  });
+
+  it("should fire onStreamObserved even for a dropped (empty) stream — proving Runway published something", async () => {
+    const onStreamObserved = vi.fn();
+    const capture = createBridgeTranscriptCapture({ persister, onStreamObserved });
+    const f = fakeRoom();
+    capture.register(f.room, "sess-1");
+
+    f.fire(reader("   "), { identity: "worker:a" });
+    await vi.waitFor(() => { expect(onStreamObserved).toHaveBeenCalledTimes(1); });
+
+    // The observer sees the empty utterance (textLength 0) that persistence intentionally drops.
+    expect(onStreamObserved.mock.calls[0]![0]).toMatchObject({ textLength: 0 });
+    expect(persister.onSegment).not.toHaveBeenCalled();
+  });
+
+  it("should not let an onStreamObserved throw break capture (persister still runs)", async () => {
+    const onStreamObserved = vi.fn(() => {
+      throw new Error("observer blew up");
+    });
+    const capture = createBridgeTranscriptCapture({ persister, onStreamObserved });
+    const f = fakeRoom();
+    capture.register(f.room, "sess-1");
+
+    expect(() => { f.fire(reader("hi"), { identity: "worker:a" }); }).not.toThrow();
+    await vi.waitFor(() => { expect(persister.onSegment).toHaveBeenCalledTimes(1); });
+  });
+});
+
 describe("createBridgeTranscriptCapture — endSession", () => {
   it("should delegate endSession to the persister", () => {
     const capture = createBridgeTranscriptCapture({ persister });

@@ -234,7 +234,24 @@ const bridgeTranscriptPersister = createBridgeTranscriptPersister({
     });
   },
 });
-const bridgeTranscriptCapture = createBridgeTranscriptCapture({ persister: bridgeTranscriptPersister });
+const bridgeTranscriptCapture = createBridgeTranscriptCapture({
+  persister: bridgeTranscriptPersister,
+  // adj-202.6.6 live-verify seam: log EVERY received transcription stream (incl. interim/empty,
+  // before drop/dedup). On a real Runway session this is the definitive evidence of whether
+  // GWM-1 publishes `lk.transcription`, from which participant identity, and how finality is
+  // flagged — the one question unit tests can't answer. Purely observational (logging only).
+  onStreamObserved: (o) => {
+    logInfo("bridge transcript stream observed", {
+      sessionId: o.sessionId,
+      topic: o.topic,
+      identity: o.identity,
+      speaker: o.speaker,
+      segmentId: o.segmentId,
+      final: o.final,
+      textLength: o.textLength,
+    });
+  },
+});
 
 const bridgeRpcManager = createBridgeRpcManager({
   executeTool: (req) => bridgeToolBridge.executeTool(req),

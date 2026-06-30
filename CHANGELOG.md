@@ -18,6 +18,16 @@ history — the SAME conversation whether you speak or type.
   participant connection (no second connection) via the `lk.transcription` text-stream API;
   interim segments are buffered and only completed utterances are persisted (no partial-word
   spam), with per-segment dedup. Speaker attribution is verified/tuned during live-smoke.
+- **Live-verify diagnostics (adj-202.6.6 follow-up).** The transcript capture adapter now fires
+  an observational `onStreamObserved` hook for EVERY received `lk.transcription` stream — before
+  any drop/dedup — wired to a log line (`bridge transcript stream observed`: topic, publisher
+  identity, resolved speaker, finality, text length). The room-owning handler also logs each
+  remote participant as it joins (`bridge room participant connected`). Together these make a
+  single live session conclusively answer the only open question — whether Runway's GWM-1 avatar
+  publishes transcription text streams (and how the speaker is attributed) — without which a
+  silent session is ambiguous. Purely diagnostic: never affects capture or the billable session.
+  Note: `@livekit/rtc-node` has no `RoomEvent.TranscriptionReceived`; text streams are the only
+  server-side receive path, so that is what is wired.
 
 ## adj-201 — Per-Project Proposal Style Guide + Dark/Accessible Pages (2026-06-18)
 

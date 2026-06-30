@@ -617,7 +617,7 @@ interface RtcNodeModule {
       unregisterRpcMethod(name: string): void;
     };
   } & TextStreamRoomLike;
-  RoomEvent: { Disconnected: string };
+  RoomEvent: { Disconnected: string; ParticipantConnected: string };
   RpcError: {
     new (code: number, message: string): Error;
     ErrorCode: { APPLICATION_ERROR: number };
@@ -632,6 +632,17 @@ const roomOwningCreateHandler: CreateRpcHandlerFn = async (options) => {
   const room = new Room();
   room.on(RoomEvent.Disconnected, () => {
     options.onDisconnected?.();
+  });
+  // adj-202.6.6 live-verify seam: log each remote participant identity as it joins. This proves
+  // whether the avatar worker even enters the room (vs. transcription simply not being published)
+  // and surfaces its real identity so the `worker:`-prefix speaker guess can be validated live.
+  // Best-effort/diagnostic — a bad payload here must never break the connection.
+  room.on(RoomEvent.ParticipantConnected, (participant?: unknown) => {
+    const identity =
+      typeof (participant as { identity?: unknown } | undefined)?.identity === "string"
+        ? (participant as { identity: string }).identity
+        : "<unknown>";
+    logInfo("bridge room participant connected", { sessionId: options.sessionId ?? null, identity });
   });
   await room.connect(credentials.url, credentials.token);
 
