@@ -27,6 +27,7 @@ import type { BridgeSessionBroker, StartSessionOptions, BridgeSessionCreds } fro
 import { BridgeCostCeilingError } from "../services/bridge-session-broker.js";
 import type { BridgeRpcManager } from "../services/bridge-rpc-handler.js";
 import { BRIDGE_RPC_TOOLS, composeBridgePersonality } from "../services/bridge-rpc-tools.js";
+import { appendMemorySeed } from "../services/bridge-memory-seed.js";
 import { logError, logInfo } from "../utils/logger.js";
 
 /** The slice of each service the avatar router needs (keeps it testable with fakes). */
@@ -51,6 +52,14 @@ export interface AvatarRouterDeps {
    * those tools error PROJECT_REQUIRED (adj-202). getProject resolves a name or UUID.
    */
   defaultProjectId?: string | undefined;
+  /**
+   * Memory-seeded sessions (adj-202.6.4). When provided, its result is appended to the
+   * avatar's personality so the iOS/default session opens already knowing the Commander's
+   * high-signal preferences/decisions + recent corrections. Returns null on a blank-slate
+   * memory (⇒ no change). The seed is computed when a session is created — including when a
+   * warm session is pre-provisioned — which is acceptable: memories change slowly.
+   */
+  buildMemorySeed?: (() => string | null) | undefined;
 }
 
 /**
@@ -89,7 +98,19 @@ export function createAvatarRouter(deps: AvatarRouterDeps): Router {
   const buildOpts = (customAvatarId?: string): StartSessionOptions => {
     // Tool-enable exactly like POST /api/bridge/session: read-only fleet tools + a persona that
     // tells GWM-1 to CALL them. Default mode has no selected project (fleet tools need none).
-    const opts: StartSessionOptions = { tools: BRIDGE_RPC_TOOLS, personality: composeBridgePersonality() };
+    // adj-202.6.4 — seed the persona with what the coordinator already knows (best-effort).
+    let memorySeed: string | null = null;
+    if (deps.buildMemorySeed) {
+      try {
+        memorySeed = deps.buildMemorySeed();
+      } catch {
+        memorySeed = null;
+      }
+    }
+    const opts: StartSessionOptions = {
+      tools: BRIDGE_RPC_TOOLS,
+      personality: appendMemorySeed(composeBridgePersonality(), memorySeed),
+    };
     if (customAvatarId !== undefined) opts.avatarId = customAvatarId;
     return opts;
   };

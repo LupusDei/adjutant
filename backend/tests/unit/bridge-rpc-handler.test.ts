@@ -443,10 +443,83 @@ describe("buildBridgeToolDispatch — spawn_worker command tool (adj-202.4.5)", 
   });
 });
 
+describe("buildBridgeToolDispatch — onActivity sink (adj-202.6.2 auto-learn)", () => {
+  it("fires onActivity for a READ tool with the envelope's ok flag", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, { count: 0 }));
+    const onActivity = vi.fn();
+    const dispatch = buildBridgeToolDispatch({ executeTool, onActivity });
+
+    await dispatch["list_agents"]!({});
+    expect(onActivity).toHaveBeenCalledWith("list_agents", true);
+  });
+
+  it("fires onActivity for a WRITE tool (send_message) reflecting success", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const sendMessage = vi.fn(async () => ({ messageId: "m1", conversationId: "dm", deliveredToSessions: 1 }));
+    const onActivity = vi.fn();
+    const dispatch = buildBridgeToolDispatch({ executeTool, sendMessage, onActivity });
+
+    await dispatch["send_message"]!({ to: "kerrigan", body: "go" });
+    expect(onActivity).toHaveBeenCalledWith("send_message", true);
+  });
+
+  it("fires onActivity with ok=false for an invalid-args write call (attempt still counts)", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const createBead = vi.fn();
+    const onActivity = vi.fn();
+    const dispatch = buildBridgeToolDispatch({ executeTool, createBead, onActivity });
+
+    await dispatch["create_bead"]!({}); // missing title → INVALID_ARGS
+    expect(onActivity).toHaveBeenCalledWith("create_bead", false);
+  });
+
+  it("fires onActivity with ok=false when a read tool throws (defensive)", async () => {
+    const executeTool = vi.fn(async () => {
+      throw new Error("boom");
+    });
+    const onActivity = vi.fn();
+    const dispatch = buildBridgeToolDispatch({ executeTool, onActivity });
+
+    await dispatch["list_agents"]!({});
+    expect(onActivity).toHaveBeenCalledWith("list_agents", false);
+  });
+});
+
 describe("createBridgeRpcManager", () => {
   function fakeHandler(): RpcHandlerLike {
     return { close: vi.fn(async () => {}), connected: true };
   }
+
+  it("records per-session activity and finalizes the session on disconnect (adj-202.6.2)", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const recordActivity = vi.fn();
+    const finalizeSession = vi.fn();
+    let captured: Parameters<CreateRpcHandlerFn>[0] | null = null;
+    const createHandler: CreateRpcHandlerFn = vi.fn(async (opts) => {
+      captured = opts;
+      return fakeHandler();
+    });
+    const manager = createBridgeRpcManager({ executeTool, apiKey: "k", createHandler, recordActivity, finalizeSession });
+
+    await manager.attach({ sessionId: "sess-learn" });
+    await captured!.tools["list_agents"]!({});
+    expect(recordActivity).toHaveBeenCalledWith("sess-learn", "list_agents", true);
+
+    // The SDK reports the session ended → the collector should finalize it.
+    captured!.onDisconnected?.();
+    expect(finalizeSession).toHaveBeenCalledWith("sess-learn");
+  });
+
+  it("finalizes the session on an explicit close() too", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const finalizeSession = vi.fn();
+    const createHandler: CreateRpcHandlerFn = vi.fn(async () => fakeHandler());
+    const manager = createBridgeRpcManager({ executeTool, apiKey: "k", createHandler, finalizeSession });
+
+    await manager.attach({ sessionId: "sess-close" });
+    await manager.close("sess-close");
+    expect(finalizeSession).toHaveBeenCalledWith("sess-close");
+  });
 
   it("should attach a handler with the session id, api key, and the whitelist tool map", async () => {
     const executeTool = vi.fn(async () => okResult("list_agents", null, {}));

@@ -25,6 +25,7 @@ import { BridgeCostCeilingError } from "../services/bridge-session-broker.js";
 import type { BridgeToolBridge } from "../services/bridge-tool-bridge.js";
 import type { BridgeRpcManager } from "../services/bridge-rpc-handler.js";
 import { BRIDGE_RPC_TOOLS, composeBridgePersonality } from "../services/bridge-rpc-tools.js";
+import { appendMemorySeed } from "../services/bridge-memory-seed.js";
 import { success, error, validationError, ErrorCode } from "../utils/responses.js";
 import { logError } from "../utils/logger.js";
 
@@ -39,6 +40,13 @@ export interface BridgeRouterDeps {
    * (the pre-202.7 behaviour). `attach` never throws, so it cannot break a session.
    */
   rpcManager?: Pick<BridgeRpcManager, "attach">;
+  /**
+   * Memory-seeded sessions (adj-202.6.4). When provided, its result is appended to the
+   * session personality so the avatar opens already knowing the Commander's high-signal
+   * preferences/decisions + recent corrections. Returns null (⇒ no change) on a blank-slate
+   * memory. Optional: omit it and sessions are unseeded (the pre-6.4 behaviour).
+   */
+  buildMemorySeed?: (() => string | null) | undefined;
 }
 
 const SessionBodySchema = z
@@ -81,9 +89,21 @@ export function createBridgeRouter(deps: BridgeRouterDeps): Router {
     // Build options with only the keys actually present (exactOptionalPropertyTypes).
     // The Bridge avatar is always tool-enabled: it gets the read-only fleet tools and
     // a persona that tells GWM-1 to CALL them (instead of stalling on "querying…").
+    // adj-202.6.4 — seed the personality with what the coordinator already knows, so the
+    // avatar opens with context instead of a blank slate. Best-effort: a seed-build failure
+    // must not block a session, so fall back to no seed.
+    let memorySeed: string | null = null;
+    if (deps.buildMemorySeed) {
+      try {
+        memorySeed = deps.buildMemorySeed();
+      } catch {
+        memorySeed = null;
+      }
+    }
+
     const opts: StartSessionOptions = {
       tools: BRIDGE_RPC_TOOLS,
-      personality: composeBridgePersonality(parsed.data.personality),
+      personality: appendMemorySeed(composeBridgePersonality(parsed.data.personality), memorySeed),
     };
     if (parsed.data.avatarId !== undefined) opts.avatarId = parsed.data.avatarId;
     if (parsed.data.startScript !== undefined) opts.startScript = parsed.data.startScript;

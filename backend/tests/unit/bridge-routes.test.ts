@@ -36,6 +36,8 @@ function makeApp(deps: {
   attach?: ReturnType<typeof vi.fn>;
   /** Set false to mount WITHOUT the rpc manager (pre-202.7 behaviour). */
   withRpcManager?: boolean;
+  /** adj-202.6.4 — optional memory-seed builder (omitted ⇒ unseeded sessions). */
+  buildMemorySeed?: (() => string | null) | undefined;
 }) {
   const broker = { startSession: deps.startSession ?? vi.fn().mockResolvedValue(CREDS) };
   const toolBridge = {
@@ -50,8 +52,8 @@ function makeApp(deps: {
     "/api/bridge",
     createBridgeRouter(
       deps.withRpcManager === false
-        ? { broker, toolBridge }
-        : { broker, toolBridge, rpcManager },
+        ? { broker, toolBridge, buildMemorySeed: deps.buildMemorySeed }
+        : { broker, toolBridge, rpcManager, buildMemorySeed: deps.buildMemorySeed },
     ),
   );
   return { app, broker, toolBridge, rpcManager };
@@ -94,6 +96,45 @@ describe("bridge-routes: POST /api/bridge/session", () => {
     expect(opts.personality.startsWith("You are the Adjutant.")).toBe(true);
     expect(opts.personality).toContain("list_agents");
     expect(opts.startScript).toBe("Commander, status nominal.");
+  });
+
+  it("should seed the personality with recalled memory when a seed builder is provided (adj-202.6.4)", async () => {
+    const startSession = vi.fn().mockResolvedValue(CREDS);
+    const buildMemorySeed = vi.fn(() => "WHAT YOU ALREADY KNOW:\n- [operational/deploy] prefers blue-green");
+    const { app } = makeApp({ startSession, buildMemorySeed });
+
+    await request(app).post("/api/bridge/session").send({});
+
+    const opts = startSession.mock.calls[0]![0];
+    expect(buildMemorySeed).toHaveBeenCalledTimes(1);
+    // Tool guidance is still present AND the recalled memory is appended.
+    expect(opts.personality).toContain("list_agents");
+    expect(opts.personality).toContain("prefers blue-green");
+  });
+
+  it("should leave the personality unseeded when the seed builder returns null (blank slate)", async () => {
+    const startSession = vi.fn().mockResolvedValue(CREDS);
+    const buildMemorySeed = vi.fn(() => null);
+    const { app } = makeApp({ startSession, buildMemorySeed });
+
+    await request(app).post("/api/bridge/session").send({});
+
+    const opts = startSession.mock.calls[0]![0];
+    expect(opts.personality).toBe(BRIDGE_RPC_PERSONALITY);
+  });
+
+  it("should still open a session if the seed builder throws (best-effort seeding)", async () => {
+    const startSession = vi.fn().mockResolvedValue(CREDS);
+    const buildMemorySeed = vi.fn(() => {
+      throw new Error("memory store down");
+    });
+    const { app } = makeApp({ startSession, buildMemorySeed });
+
+    const res = await request(app).post("/api/bridge/session").send({});
+
+    expect(res.status).toBe(200);
+    const opts = startSession.mock.calls[0]![0];
+    expect(opts.personality).toBe(BRIDGE_RPC_PERSONALITY);
   });
 
   it("should attach the server-side tool loop with the session id and selected projectId", async () => {

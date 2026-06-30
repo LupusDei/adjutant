@@ -174,6 +174,12 @@ export interface BridgeToolDispatchDeps {
   storeMemory?: BridgeStoreMemoryFn | undefined;
   reinforceMemory?: BridgeReinforceMemoryFn | undefined;
   recordCorrection?: BridgeRecordCorrectionFn | undefined;
+  /**
+   * Optional activity sink (adj-202.6.2 auto-learn): fired with every tool call (read AND
+   * write) and the call's resulting `ok` flag, so a per-session collector can distill the
+   * session's usage pattern into the memory store on session end. Never used for control flow.
+   */
+  onActivity?: ((tool: string, ok: boolean) => void) | undefined;
 }
 
 /** A structured INVALID_ARGS envelope for a command tool (never throws to the model). */
@@ -431,6 +437,26 @@ export function buildBridgeToolDispatch(deps: BridgeToolDispatchDeps): Record<st
     };
   }
 
+  // adj-202.6.2 — auto-learn: wrap every handler (read + write) so each tool call is reported
+  // to the activity sink with the call's resulting `ok`. Done once here (DRY) rather than at
+  // each return point; the sink is purely observational and never alters the envelope returned
+  // to the model. The wrapper inherits each handler's never-throw guarantee.
+  const onActivity = deps.onActivity;
+  if (onActivity) {
+    for (const name of Object.keys(dispatch)) {
+      const inner = dispatch[name]!;
+      dispatch[name] = async (args: Record<string, unknown>): Promise<Record<string, unknown>> => {
+        const out = await inner(args);
+        try {
+          onActivity(name, (out as { ok?: unknown }).ok === true);
+        } catch {
+          // An observer fault must never break the tool call.
+        }
+        return out;
+      };
+    }
+  }
+
   return dispatch;
 }
 
@@ -461,6 +487,14 @@ export interface BridgeRpcManagerConfig {
   storeMemory?: BridgeStoreMemoryFn | undefined;
   reinforceMemory?: BridgeReinforceMemoryFn | undefined;
   recordCorrection?: BridgeRecordCorrectionFn | undefined;
+  /**
+   * Auto-learn hooks (adj-202.6.2). `recordActivity` is fired with each tool call on a session
+   * so a collector can accumulate it; `finalizeSession` is fired when the session ends
+   * (disconnect or explicit close) so the collector can distill + persist the session's pattern.
+   * Both optional: omit them and the avatar simply doesn't learn implicitly from sessions.
+   */
+  recordActivity?: ((sessionId: string, tool: string, ok: boolean) => void) | undefined;
+  finalizeSession?: ((sessionId: string) => void) | undefined;
 }
 
 export interface AttachOptions {
@@ -520,6 +554,10 @@ export function createBridgeRpcManager(config: BridgeRpcManagerConfig): BridgeRp
       storeMemory: config.storeMemory,
       reinforceMemory: config.reinforceMemory,
       recordCorrection: config.recordCorrection,
+      // adj-202.6.2 — feed each tool call to the session collector under this session's id.
+      onActivity: config.recordActivity
+        ? (tool, ok) => { config.recordActivity!(sessionId, tool, ok); }
+        : undefined,
     });
 
     try {
@@ -527,6 +565,8 @@ export function createBridgeRpcManager(config: BridgeRpcManagerConfig): BridgeRp
         tools: dispatch,
         onDisconnected: () => {
           handlers.delete(sessionId);
+          // adj-202.6.2 — session ended: let the collector distill + persist what was learned.
+          config.finalizeSession?.(sessionId);
           logInfo("bridge rpc handler disconnected", { sessionId });
         },
         onError: (error) => { logError("bridge rpc handler error", { sessionId, error: error.message }); },
@@ -551,6 +591,9 @@ export function createBridgeRpcManager(config: BridgeRpcManagerConfig): BridgeRp
     const handler = handlers.get(sessionId);
     if (!handler) return;
     handlers.delete(sessionId);
+    // adj-202.6.2 — an explicit close is also a session end. finalize is idempotent, so a later
+    // onDisconnected (which handler.close() may trigger) is a harmless no-op.
+    config.finalizeSession?.(sessionId);
     try {
       await handler.close();
     } catch (err) {

@@ -29,17 +29,20 @@ function makeApp(opts: {
   attach?: ReturnType<typeof vi.fn>;
   withRpcManager?: boolean;
   getSessionStatus?: ReturnType<typeof vi.fn>;
+  buildMemorySeed?: (() => string | null) | undefined;
 } = {}) {
   const broker = { startSession: opts.startSession ?? vi.fn().mockResolvedValue(CREDS) };
   const rpcManager = { attach: opts.attach ?? vi.fn().mockResolvedValue(undefined) };
   const getSessionStatus = opts.getSessionStatus;
-  const deps = opts.withRpcManager === false ? { broker } : { broker, rpcManager };
+  const base = opts.withRpcManager === false ? { broker } : { broker, rpcManager };
+  const deps = {
+    ...base,
+    ...(getSessionStatus ? { getSessionStatus } : {}),
+    ...(opts.buildMemorySeed ? { buildMemorySeed: opts.buildMemorySeed } : {}),
+  };
   const app = express();
   app.use(express.json());
-  app.use(
-    "/avatar",
-    createAvatarRouter(getSessionStatus ? { ...deps, getSessionStatus } : deps),
-  );
+  app.use("/avatar", createAvatarRouter(deps));
   return { app, broker, rpcManager, getSessionStatus };
 }
 
@@ -61,6 +64,19 @@ describe("avatar routes: POST /avatar/connect (broker-backed)", () => {
     const sessOpts = startSession.mock.calls[0]![0];
     expect(sessOpts.tools).toEqual(BRIDGE_RPC_TOOLS);
     expect(sessOpts.personality).toContain("list_agents");
+  });
+
+  it("seeds the avatar persona with recalled memory when a seed builder is provided (adj-202.6.4)", async () => {
+    const startSession = vi.fn().mockResolvedValue(CREDS);
+    const buildMemorySeed = vi.fn(() => "WHAT YOU ALREADY KNOW:\n- [coordination/tone] keep reports terse");
+    const { app } = makeApp({ startSession, buildMemorySeed });
+
+    await request(app).post("/avatar/connect").send({});
+
+    const sessOpts = startSession.mock.calls[0]![0];
+    expect(buildMemorySeed).toHaveBeenCalled();
+    expect(sessOpts.personality).toContain("list_agents");
+    expect(sessOpts.personality).toContain("keep reports terse");
   });
 
   it("attaches the server-side tool loop to the new session id", async () => {

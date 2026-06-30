@@ -32,6 +32,8 @@ import { createBridgeRouter } from "./routes/bridge.js";
 import { BridgeSessionBroker } from "./services/bridge-session-broker.js";
 import { createBridgeToolBridge } from "./services/bridge-tool-bridge.js";
 import { createBridgeRpcManager } from "./services/bridge-rpc-handler.js";
+import { createBridgeSessionCollector } from "./services/bridge-session-collector.js";
+import { buildBridgeMemorySeed } from "./services/bridge-memory-seed.js";
 import { BRIDGE_DIRECTIVE_PREFIX } from "./services/bridge-rpc-tools.js";
 import { deliverDirectMessage } from "./services/direct-message-delivery.js";
 import { nudgeAgentViaBridge, answerQuestionViaBridge, createBeadViaBridge, spawnWorkerViaBridge, storeMemoryViaBridge, reinforceMemoryViaBridge, recordCorrectionViaBridge } from "./services/bridge-commands.js";
@@ -197,6 +199,10 @@ async function resolveBridgeAgent(spoken: string): Promise<string> {
   return resolution.canonical;
 }
 
+// adj-202.6.2 — the per-session activity collector that turns Bridge conversations into
+// implicit learnings in the adjutant MemoryStore (the same store query_memories/store_memory use).
+const bridgeSessionCollector = createBridgeSessionCollector({ memoryStore });
+
 const bridgeRpcManager = createBridgeRpcManager({
   executeTool: (req) => bridgeToolBridge.executeTool(req),
   sendMessage: async ({ to, body }) => {
@@ -235,6 +241,12 @@ const bridgeRpcManager = createBridgeRpcManager({
   storeMemory: async (input) => storeMemoryViaBridge(memoryStore, input),
   reinforceMemory: async (input) => reinforceMemoryViaBridge(memoryStore, input),
   recordCorrection: async (input) => recordCorrectionViaBridge(memoryStore, input),
+  // adj-202.6.2 — AUTO-LEARN: observe every tool call per session and, on session end, distill
+  // the session's dominant usage pattern into the SAME memory store the self-improvement loop
+  // reads. So the coordinator improves from Bridge conversations even when the avatar was never
+  // told to store_memory. Best-effort; finalize never throws (must not break session teardown).
+  recordActivity: (sessionId, tool, ok) => { bridgeSessionCollector.record(sessionId, { tool, ok }); },
+  finalizeSession: (sessionId) => { bridgeSessionCollector.finalize(sessionId); },
 });
 
 // The Bridge — avatar (adj-202.2 / adj-202.7.1). Public (no API key) so the iOS WKWebView
@@ -252,6 +264,8 @@ app.use(
     // (get_project_state, list_beads, get_auto_develop_status) to "adjutant" — otherwise they
     // error PROJECT_REQUIRED. getProject resolves the name; the dashboard still passes its own.
     defaultProjectId: "adjutant",
+    // adj-202.6.4 — open each iOS/default session already knowing the Commander (memory seed).
+    buildMemorySeed: () => buildBridgeMemorySeed({ memoryStore }),
   }),
 );
 
@@ -288,7 +302,13 @@ app.use("/api/questions", createQuestionsRouter(questionService));
 // spends real Runway credits, so it must not be public.
 app.use(
   "/api/bridge",
-  createBridgeRouter({ broker: bridgeBroker, toolBridge: bridgeToolBridge, rpcManager: bridgeRpcManager }),
+  createBridgeRouter({
+    broker: bridgeBroker,
+    toolBridge: bridgeToolBridge,
+    rpcManager: bridgeRpcManager,
+    // adj-202.6.4 — seed the dashboard avatar's persona with recalled memory too.
+    buildMemorySeed: () => buildBridgeMemorySeed({ memoryStore }),
+  }),
 );
 
 // Initialize persona and callsign toggle services and mount routes
