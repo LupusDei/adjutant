@@ -18,10 +18,20 @@ import {
 } from "../../src/services/bridge-rpc-tools.js";
 
 describe("BRIDGE_RPC_TOOLS descriptors", () => {
-  it("should declare every read-only whitelist tool PLUS the safe-write command tools (incl. the gated spawn_worker)", () => {
+  it("should declare every read-only whitelist tool PLUS the safe-write command tools (incl. the gated spawn_worker + memory writes)", () => {
     const names = BRIDGE_RPC_TOOLS.map((t) => t.name).sort();
     expect(names).toEqual(
-      [...BRIDGE_READONLY_TOOLS, "send_message", "nudge_agent", "answer_question", "create_bead", "spawn_worker"].sort(),
+      [
+        ...BRIDGE_READONLY_TOOLS,
+        "send_message",
+        "nudge_agent",
+        "answer_question",
+        "create_bead",
+        "spawn_worker",
+        "store_memory",
+        "reinforce_memory",
+        "record_correction",
+      ].sort(),
     );
   });
 
@@ -163,5 +173,47 @@ describe("composeBridgePersonality", () => {
     expect(composeBridgePersonality()).toBe(BRIDGE_RPC_PERSONALITY);
     expect(composeBridgePersonality(undefined)).toBe(BRIDGE_RPC_PERSONALITY);
     expect(composeBridgePersonality("")).toBe(BRIDGE_RPC_PERSONALITY);
+  });
+
+  // adj-202.6.1 — the constantly-improving memory: recall before answering, record as you go.
+  it("should tell GWM-1 to RECALL memory before answering when preferences/context matter", () => {
+    const text = BRIDGE_RPC_PERSONALITY.toLowerCase();
+    expect(text).toContain("query_memories");
+    expect(text).toMatch(/recall/);
+    // Recall happens BEFORE answering.
+    expect(text).toMatch(/before you answer|before answering|recall before/);
+  });
+
+  it("should tell GWM-1 to proactively RECORD the Commander's preferences/decisions/corrections", () => {
+    const text = BRIDGE_RPC_PERSONALITY.toLowerCase();
+    expect(text).toContain("store_memory");
+    expect(text).toContain("record_correction");
+    expect(text).toContain("reinforce_memory");
+    expect(text).toMatch(/preference/);
+    expect(text).toMatch(/correct/);
+  });
+});
+
+describe("BRIDGE_RPC_TOOLS — memory tools (adj-202.6.1)", () => {
+  it("should describe query_memories as a cross-session recall read tool", () => {
+    const q = BRIDGE_RPC_TOOLS.find((t) => t.name === "query_memories");
+    expect(q).toBeDefined();
+    const paramNames = q!.parameters.map((p) => p.name).sort();
+    expect(paramNames).toEqual(["category", "limit", "minConfidence", "query", "topic"]);
+    expect(q!.description.toLowerCase()).toMatch(/recall|learn|preference|across sessions/);
+  });
+
+  it("should declare the memory WRITE tools with their required parameters", () => {
+    const store = BRIDGE_RPC_TOOLS.find((t) => t.name === "store_memory");
+    expect(store).toBeDefined();
+    expect(store!.parameters.map((p) => p.name).sort()).toEqual(["category", "confidence", "content", "topic"]);
+
+    const reinforce = BRIDGE_RPC_TOOLS.find((t) => t.name === "reinforce_memory");
+    expect(reinforce).toBeDefined();
+    expect(reinforce!.parameters.map((p) => p.name)).toEqual(["id"]);
+
+    const correction = BRIDGE_RPC_TOOLS.find((t) => t.name === "record_correction");
+    expect(correction).toBeDefined();
+    expect(correction!.parameters.map((p) => p.name).sort()).toEqual(["context", "correctionType", "rightPattern", "wrongPattern"]);
   });
 });

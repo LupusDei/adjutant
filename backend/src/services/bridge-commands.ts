@@ -25,11 +25,20 @@ import { execBd, resolveBeadsDir } from "./bd-client.js";
 import { getProject } from "./projects-service.js";
 import { spawnAgent } from "./agent-spawner-service.js";
 import type { QuestionService } from "./question-service.js";
+import type { MemoryStore, Learning, Correction } from "./adjutant/memory-store.js";
 import type { AnswerQuestionInput } from "../types/index.js";
 import { logInfo } from "../utils/logger.js";
 
 /** The coordinator identity actions issued through The Bridge are attributed to. */
 export const BRIDGE_ACTOR = "adjutant";
+
+/**
+ * Source attribution for memory the avatar persists on the Commander's behalf. The
+ * adjutant memory store keys `source_type` by origin; learnings the Bridge records get
+ * their own type so they're distinguishable from agent- or system-authored learnings.
+ */
+export const BRIDGE_MEMORY_SOURCE_TYPE = "bridge";
+export const BRIDGE_MEMORY_SOURCE_REF = "adjutant";
 
 // ============================================================================
 // nudge_agent
@@ -234,4 +243,111 @@ export async function spawnWorkerViaBridge(input: SpawnWorkerViaBridgeInput): Pr
 
   logInfo("bridge spawn_worker", { agentName: name, projectId: project.id, agentType });
   return { ok: true, agentName: name, sessionId: result.sessionId, project: project.name, agentType };
+}
+
+// ============================================================================
+// store_memory (adj-202.6.1 — the avatar LEARNS)
+// ============================================================================
+
+export type MemoryCategory = "operational" | "technical" | "coordination" | "project";
+
+export interface StoreMemoryResult {
+  id: number;
+  category: string;
+  topic: string;
+}
+
+/**
+ * Persist a new learning the Commander stated — a preference, a decision, a fact worth
+ * remembering — via the SAME MemoryStore the MCP store_memory tool and the rest of the
+ * adjutant memory system use (Rules 4 + 9). Attributed to the Bridge so its origin is
+ * distinguishable. Reversible / low-risk ⇒ no confirm gate; logged like the other commands.
+ */
+export function storeMemoryViaBridge(
+  memoryStore: Pick<MemoryStore, "insertLearning">,
+  input: { content: string; category: MemoryCategory; topic: string; confidence?: number | undefined },
+): StoreMemoryResult {
+  const learning: Learning = memoryStore.insertLearning({
+    content: input.content,
+    category: input.category,
+    topic: input.topic,
+    sourceType: BRIDGE_MEMORY_SOURCE_TYPE,
+    sourceRef: BRIDGE_MEMORY_SOURCE_REF,
+    ...(input.confidence !== undefined ? { confidence: input.confidence } : {}),
+  });
+  logInfo("bridge store_memory", { id: learning.id, category: learning.category, topic: learning.topic });
+  return { id: learning.id, category: learning.category, topic: learning.topic };
+}
+
+// ============================================================================
+// reinforce_memory (adj-202.6.1)
+// ============================================================================
+
+export interface ReinforceMemoryResult {
+  id: number;
+  /** True when the learning existed and was reinforced; false when no such id. */
+  reinforced: boolean;
+  confidence?: number | undefined;
+  reinforcementCount?: number | undefined;
+}
+
+/**
+ * Strengthen an existing learning (the Commander reaffirmed it) — bumps its confidence and
+ * reinforcement count via the real MemoryStore. A missing id is reported, never thrown, so
+ * the avatar can say it couldn't find that memory rather than failing the turn.
+ */
+export function reinforceMemoryViaBridge(
+  memoryStore: Pick<MemoryStore, "reinforceLearning" | "getLearning">,
+  input: { id: number },
+): ReinforceMemoryResult {
+  const before = memoryStore.getLearning(input.id);
+  if (!before) {
+    return { id: input.id, reinforced: false };
+  }
+  memoryStore.reinforceLearning(input.id);
+  const after = memoryStore.getLearning(input.id);
+  logInfo("bridge reinforce_memory", { id: input.id });
+  return {
+    id: input.id,
+    reinforced: true,
+    confidence: after?.confidence,
+    reinforcementCount: after?.reinforcementCount,
+  };
+}
+
+// ============================================================================
+// record_correction (adj-202.6.1 — the avatar learns from the Commander's corrections)
+// ============================================================================
+
+export interface RecordCorrectionResult {
+  id: number;
+  /** False when an existing matching correction was reinforced instead of created. */
+  isNew: boolean;
+}
+
+/**
+ * Record a correction the Commander gave — a wrong pattern/assumption and the right approach
+ * — through the real MemoryStore. Auto-deduplicates: a matching existing correction is
+ * reinforced (its recurrence count bumped) rather than duplicated, mirroring the MCP
+ * record_correction tool exactly.
+ */
+export function recordCorrectionViaBridge(
+  memoryStore: Pick<MemoryStore, "findSimilarCorrection" | "incrementRecurrence" | "insertCorrection">,
+  input: { correctionType: string; wrongPattern: string; rightPattern: string; context?: string | undefined },
+): RecordCorrectionResult {
+  const existing = memoryStore.findSimilarCorrection(input.correctionType, input.wrongPattern);
+  if (existing) {
+    memoryStore.incrementRecurrence(existing.id);
+    logInfo("bridge record_correction", { id: existing.id, isNew: false });
+    return { id: existing.id, isNew: false };
+  }
+
+  const description = input.context ? `${input.rightPattern}. Context: ${input.context}` : input.rightPattern;
+  const correction: Correction = memoryStore.insertCorrection({
+    correctionType: input.correctionType,
+    pattern: input.wrongPattern,
+    description,
+  });
+  logInfo("bridge record_correction", { id: correction.id, isNew: true });
+  return { id: correction.id, isNew: true };
 }

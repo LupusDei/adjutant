@@ -128,6 +128,20 @@ export const BRIDGE_RPC_TOOLS: RunwayRpcToolDef[] = [
   },
   {
     type: "backend_rpc",
+    name: "query_memories",
+    description:
+      "RECALL what you've learned across sessions — the Commander's stated preferences, past decisions, recorded corrections, and fleet patterns. Use this BEFORE answering when the Commander's preferences or prior context matter, so you stay consistent over time. Omit everything for the most recent learnings, pass a text 'query' to search, or filter by category/topic/confidence. The structured result is the source of truth.",
+    parameters: [
+      { name: "query", type: "string", description: "Optional full-text search over learnings (e.g. \"deploy preferences\")." },
+      { name: "category", type: "string", description: 'Optional: "operational", "technical", "coordination", or "project".' },
+      { name: "topic", type: "string", description: "Optional exact topic to filter by." },
+      { name: "minConfidence", type: "number", description: "Optional minimum confidence 0-1." },
+      { name: "limit", type: "number", description: "Optional max learnings to return (default 8, capped at 10)." },
+    ],
+    timeoutSeconds: 8,
+  },
+  {
+    type: "backend_rpc",
     name: "send_message",
     description:
       "Message any agent by name to direct the swarm (e.g. tell 'kerrigan' to start a task). You do NOT need a project, epic, or bead id — just the agent's name and what to say. Also accepts 'user' to message the Commander. Use this readily to relay the Commander's direction.",
@@ -201,6 +215,46 @@ export const BRIDGE_RPC_TOOLS: RunwayRpcToolDef[] = [
     ],
     timeoutSeconds: 8,
   },
+  {
+    type: "backend_rpc",
+    name: "store_memory",
+    description:
+      "REMEMBER something the Commander told you so you improve over time — a stated preference, a decision, a fact worth keeping across sessions. Use this proactively whenever the Commander expresses a preference or makes a decision. Give the learning's content, a category, and a short topic. No IDs needed.",
+    parameters: [
+      { name: "content", type: "string", description: "The learning to remember (the preference / decision / fact)." },
+      {
+        name: "category",
+        type: "string",
+        description: 'One of: "operational", "technical", "coordination", or "project".',
+      },
+      { name: "topic", type: "string", description: "A short topic label for this learning (e.g. \"deploy\", \"tone\")." },
+      { name: "confidence", type: "number", description: "Optional confidence 0-1 (default 0.5)." },
+    ],
+    timeoutSeconds: 8,
+  },
+  {
+    type: "backend_rpc",
+    name: "reinforce_memory",
+    description:
+      "Strengthen a learning you already hold because the Commander reaffirmed it — bumps its confidence. Use the id from query_memories. No other IDs needed.",
+    parameters: [
+      { name: "id", type: "number", description: "The learning id to reinforce (from query_memories)." },
+    ],
+    timeoutSeconds: 8,
+  },
+  {
+    type: "backend_rpc",
+    name: "record_correction",
+    description:
+      "Capture a CORRECTION the Commander gave you — the wrong pattern/assumption and the right approach — so you don't repeat the mistake. Use this whenever the Commander corrects you. Auto-deduplicates if you've recorded the same correction before.",
+    parameters: [
+      { name: "correctionType", type: "string", description: 'Kind of correction, e.g. "wrong_assumption" or "wrong_approach".' },
+      { name: "wrongPattern", type: "string", description: "The wrong pattern or assumption being corrected." },
+      { name: "rightPattern", type: "string", description: "The correct pattern or approach to use instead." },
+      { name: "context", type: "string", description: "Optional context about when this correction came up." },
+    ],
+    timeoutSeconds: 8,
+  },
 ];
 
 /**
@@ -219,6 +273,7 @@ You can query live fleet state using these read-only tools. CALL the matching to
 - get_project_state — a snapshot of the selected project.
 - get_auto_develop_status — the auto-develop loop status for the selected project.
 - read_messages — recall what was said EARLIER between agents/the Commander; use it to give context on prior/past discussions. Pass an agent NAME to focus on their thread; otherwise it reads recent fleet-wide. The structured result is the source of truth.
+- query_memories — RECALL what you've LEARNED across sessions: the Commander's stated preferences, past decisions, recorded corrections, and fleet patterns. The structured result is the source of truth.
 
 After a tool returns, narrate its STRUCTURED result faithfully and conversationally. The returned data is the source of truth. If a tool reports it needs a project and none is selected, say so plainly and ask the Commander to select one. Keep answers brief and grounded. An agent can be idle (no live session) yet still own in-progress work — so if list_agents shows no "active" agents, that does NOT mean nobody has work; call get_agent_detail for whoever the Commander asks about to report their assigned beads.
 
@@ -227,6 +282,10 @@ You can also DIRECT the swarm with these command tools — act on the Commander'
 - nudge_agent — poke / redirect an agent that's already running, by name.
 - answer_question — resolve an open question from list_questions (give answerBody and/or chosenOption).
 - create_bead — file a work item; it lands in the selected project automatically (only a title is required).
+
+MEMORY DOCTRINE — you have a persistent, constantly-improving memory; USE it so you get better over time:
+- RECALL before you answer: when the Commander's preferences, past decisions, or prior context matter, call query_memories FIRST and let what you've learned shape your answer — so you stay consistent across sessions instead of starting fresh each time.
+- RECORD as you go: proactively persist what the Commander tells you. When they state a preference or make a decision, call store_memory. When they CORRECT you, call record_correction (the wrong pattern and the right approach) so you never repeat the mistake. When they reaffirm something you already hold, call reinforce_memory. These are reversible — record decisively without asking permission, then briefly confirm you've noted it.
 
 You can also START a new agent — but spawn_worker is HEAVY (it consumes a session slot and real money) and is NOT a reversible, act-decisively action. It is GATED behind an explicit confirmation:
 - spawn_worker — start a new agent on a task. The act-decisively doctrine below does NOT apply to it. You MUST read back the plan first: call spawn_worker WITHOUT confirm — it returns a read-back summary and does NOT spawn — then STATE that plan to the Commander out loud, naming (a) the agent name if one is chosen, (b) the role / persona, (c) the target project, and (d) the task / bead, and then WAIT for an explicit, unambiguous affirmative ("yes, spawn it", "go ahead") before you call spawn_worker again with confirm:true. Do NOT treat ambiguous musing or thinking-out-loud (e.g. "maybe we need another engineer", "we could use some help") as assent — that is NOT a yes; ask "shall I spawn it?" and wait. When in doubt, do not spawn. You need no IDs, at most a project NAME (defaults to the selected project, or "adjutant"). You CANNOT decommission, stop, or destroy agents — that is off the table.

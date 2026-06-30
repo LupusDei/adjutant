@@ -268,6 +268,101 @@ describe("buildBridgeToolDispatch — nudge/answer/create command tools (adj-202
   });
 });
 
+describe("buildBridgeToolDispatch — memory write tools (adj-202.6.1)", () => {
+  it("registers each memory write tool only when its write path is provided (fail-closed)", () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const none = buildBridgeToolDispatch({ executeTool });
+    expect(none["store_memory"]).toBeUndefined();
+    expect(none["reinforce_memory"]).toBeUndefined();
+    expect(none["record_correction"]).toBeUndefined();
+
+    const all = buildBridgeToolDispatch({
+      executeTool,
+      storeMemory: vi.fn(),
+      reinforceMemory: vi.fn(),
+      recordCorrection: vi.fn(),
+    });
+    expect(typeof all["store_memory"]).toBe("function");
+    expect(typeof all["reinforce_memory"]).toBe("function");
+    expect(typeof all["record_correction"]).toBe("function");
+  });
+
+  it("store_memory maps { content, category, topic, confidence } to the write path", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const storeMemory = vi.fn(async () => ({ id: 12, category: "operational", topic: "deploy" }));
+    const dispatch = buildBridgeToolDispatch({ executeTool, storeMemory });
+
+    const out = await dispatch["store_memory"]!({
+      content: "Commander prefers blue-green deploys",
+      category: "operational",
+      topic: "deploy",
+      confidence: 0.9,
+    });
+    expect(storeMemory).toHaveBeenCalledWith({
+      content: "Commander prefers blue-green deploys",
+      category: "operational",
+      topic: "deploy",
+      confidence: 0.9,
+    });
+    expect(out).toMatchObject({ ok: true, tool: "store_memory", id: 12, topic: "deploy" });
+  });
+
+  it("store_memory rejects a missing content/topic or an invalid category (validation)", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const storeMemory = vi.fn();
+    const dispatch = buildBridgeToolDispatch({ executeTool, storeMemory });
+
+    const missing = (await dispatch["store_memory"]!({ category: "operational", topic: "x" })) as { ok: boolean; error: { code: string } };
+    expect(missing.ok).toBe(false);
+    expect(missing.error.code).toBe("INVALID_ARGS");
+
+    const badCat = (await dispatch["store_memory"]!({ content: "c", topic: "t", category: "nope" })) as { ok: boolean; error: { code: string } };
+    expect(badCat.ok).toBe(false);
+    expect(badCat.error.code).toBe("INVALID_ARGS");
+    expect(storeMemory).not.toHaveBeenCalled();
+  });
+
+  it("reinforce_memory requires a numeric id and reports the result", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const reinforceMemory = vi.fn(async () => ({ id: 5, reinforced: true, confidence: 0.85, reinforcementCount: 3 }));
+    const dispatch = buildBridgeToolDispatch({ executeTool, reinforceMemory });
+
+    const bad = (await dispatch["reinforce_memory"]!({ id: "five" })) as { ok: boolean; error: { code: string } };
+    expect(bad.ok).toBe(false);
+    expect(bad.error.code).toBe("INVALID_ARGS");
+    expect(reinforceMemory).not.toHaveBeenCalled();
+
+    const out = await dispatch["reinforce_memory"]!({ id: 5 });
+    expect(reinforceMemory).toHaveBeenCalledWith({ id: 5 });
+    expect(out).toMatchObject({ ok: true, tool: "reinforce_memory", id: 5, reinforced: true });
+  });
+
+  it("record_correction maps { correctionType, wrongPattern, rightPattern, context } and validates", async () => {
+    const executeTool = vi.fn(async () => okResult("list_agents", null, {}));
+    const recordCorrection = vi.fn(async () => ({ id: 9, isNew: true }));
+    const dispatch = buildBridgeToolDispatch({ executeTool, recordCorrection });
+
+    const bad = (await dispatch["record_correction"]!({ correctionType: "wrong_assumption" })) as { ok: boolean; error: { code: string } };
+    expect(bad.ok).toBe(false);
+    expect(bad.error.code).toBe("INVALID_ARGS");
+    expect(recordCorrection).not.toHaveBeenCalled();
+
+    const out = await dispatch["record_correction"]!({
+      correctionType: "wrong_assumption",
+      wrongPattern: "deploy to prod on Fridays",
+      rightPattern: "never deploy on Fridays",
+      context: "outage retro",
+    });
+    expect(recordCorrection).toHaveBeenCalledWith({
+      correctionType: "wrong_assumption",
+      wrongPattern: "deploy to prod on Fridays",
+      rightPattern: "never deploy on Fridays",
+      context: "outage retro",
+    });
+    expect(out).toMatchObject({ ok: true, tool: "record_correction", id: 9, isNew: true });
+  });
+});
+
 describe("buildBridgeToolDispatch — spawn_worker command tool (adj-202.4.5)", () => {
   it("registers spawn_worker only when its write path is provided (fail-closed)", () => {
     const executeTool = vi.fn(async () => okResult("list_agents", null, {}));

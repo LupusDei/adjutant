@@ -34,7 +34,7 @@ import { createBridgeToolBridge } from "./services/bridge-tool-bridge.js";
 import { createBridgeRpcManager } from "./services/bridge-rpc-handler.js";
 import { BRIDGE_DIRECTIVE_PREFIX } from "./services/bridge-rpc-tools.js";
 import { deliverDirectMessage } from "./services/direct-message-delivery.js";
-import { nudgeAgentViaBridge, answerQuestionViaBridge, createBeadViaBridge, spawnWorkerViaBridge } from "./services/bridge-commands.js";
+import { nudgeAgentViaBridge, answerQuestionViaBridge, createBeadViaBridge, spawnWorkerViaBridge, storeMemoryViaBridge, reinforceMemoryViaBridge, recordCorrectionViaBridge } from "./services/bridge-commands.js";
 import { getAgents } from "./services/agents-service.js";
 import { resolveAgentName } from "./services/bridge-agent-resolver.js";
 import { createEventStore } from "./services/event-store.js";
@@ -172,6 +172,9 @@ const bridgeToolBridge = createBridgeToolBridge({
   proposalStore,
   autoDevelopStore,
   questionService,
+  // adj-202.6.1 — the avatar RECALLS prior learnings/preferences/corrections via the
+  // SAME memory store the MCP query_memories tool and the rest of the system read.
+  memoryStore,
 });
 // Dispatches the avatar's `backend_rpc` calls to the SAME read-only tool bridge, so a
 // spoken status question resolves to real fleet data instead of stalling on "querying…".
@@ -226,6 +229,12 @@ const bridgeRpcManager = createBridgeRpcManager({
   // behind a read-back/confirm gate (no spawn unless confirm:true). decommission/destroy
   // intentionally stay OUT of the avatar's toolset.
   spawnWorker: (input) => spawnWorkerViaBridge(input),
+  // adj-202.6.1 — the avatar LEARNS from the Commander: persist stated preferences/decisions,
+  // reinforce reaffirmed memories, and capture corrections — all through the SAME adjutant
+  // MemoryStore the MCP tools use (Rules 4+9). Reversible → no confirm gate; logged.
+  storeMemory: async (input) => storeMemoryViaBridge(memoryStore, input),
+  reinforceMemory: async (input) => reinforceMemoryViaBridge(memoryStore, input),
+  recordCorrection: async (input) => recordCorrectionViaBridge(memoryStore, input),
 });
 
 // The Bridge — avatar (adj-202.2 / adj-202.7.1). Public (no API key) so the iOS WKWebView

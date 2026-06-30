@@ -129,6 +129,29 @@ export type BridgeSpawnWorkerFn = (input: {
   agentType?: string | undefined;
 }>;
 
+/**
+ * Memory write paths (adj-202.6.1) — so the avatar LEARNS from the Commander: persist a
+ * stated preference/decision, reinforce a reaffirmed memory, or record a correction. Each
+ * reuses the real adjutant MemoryStore (Rules 4 + 9). Reversible / low-risk ⇒ no confirm gate.
+ */
+export type BridgeStoreMemoryFn = (input: {
+  content: string;
+  category: "operational" | "technical" | "coordination" | "project";
+  topic: string;
+  confidence?: number | undefined;
+}) => Promise<{ id: number; category: string; topic: string }>;
+
+export type BridgeReinforceMemoryFn = (input: {
+  id: number;
+}) => Promise<{ id: number; reinforced: boolean; confidence?: number | undefined; reinforcementCount?: number | undefined }>;
+
+export type BridgeRecordCorrectionFn = (input: {
+  correctionType: string;
+  wrongPattern: string;
+  rightPattern: string;
+  context?: string | undefined;
+}) => Promise<{ id: number; isNew: boolean }>;
+
 export interface BridgeToolDispatchDeps {
   /** The read-only tool bridge to delegate every read call to. */
   executeTool: BridgeToolBridge["executeTool"];
@@ -147,6 +170,10 @@ export interface BridgeToolDispatchDeps {
   createBead?: BridgeCreateBeadFn | undefined;
   /** spawn_worker — HEAVY + confirm-gated (adj-202.4.5); registered only when provided. */
   spawnWorker?: BridgeSpawnWorkerFn | undefined;
+  /** Memory write paths (adj-202.6.1); each registered only when its write path is provided. */
+  storeMemory?: BridgeStoreMemoryFn | undefined;
+  reinforceMemory?: BridgeReinforceMemoryFn | undefined;
+  recordCorrection?: BridgeRecordCorrectionFn | undefined;
 }
 
 /** A structured INVALID_ARGS envelope for a command tool (never throws to the model). */
@@ -334,6 +361,76 @@ export function buildBridgeToolDispatch(deps: BridgeToolDispatchDeps): Record<st
     };
   }
 
+  // store_memory — persist a learning the Commander stated (adj-202.6.1). Reversible.
+  const storeMemory = deps.storeMemory;
+  if (storeMemory) {
+    dispatch["store_memory"] = (args: Record<string, unknown>): Promise<Record<string, unknown>> => {
+      const content = typeof args["content"] === "string" ? args["content"].trim() : "";
+      const topic = typeof args["topic"] === "string" ? args["topic"].trim() : "";
+      const rawCategory = typeof args["category"] === "string" ? args["category"] : "";
+      const confidence = typeof args["confidence"] === "number" ? args["confidence"] : undefined;
+      if (!content || !topic) {
+        return Promise.resolve(invalidArgs("store_memory", "store_memory requires 'content' and 'topic'."));
+      }
+      if (rawCategory !== "operational" && rawCategory !== "technical" && rawCategory !== "coordination" && rawCategory !== "project") {
+        return Promise.resolve(
+          invalidArgs("store_memory", "store_memory 'category' must be one of: operational, technical, coordination, project."),
+        );
+      }
+      return runCommand("store_memory", async () => {
+        const input: { content: string; category: "operational" | "technical" | "coordination" | "project"; topic: string; confidence?: number } = {
+          content,
+          category: rawCategory,
+          topic,
+        };
+        if (confidence !== undefined) input.confidence = confidence;
+        const result = await storeMemory(input);
+        return { ok: true, tool: "store_memory", id: result.id, category: result.category, topic: result.topic };
+      });
+    };
+  }
+
+  // reinforce_memory — strengthen an existing learning the Commander reaffirmed (adj-202.6.1).
+  const reinforceMemory = deps.reinforceMemory;
+  if (reinforceMemory) {
+    dispatch["reinforce_memory"] = (args: Record<string, unknown>): Promise<Record<string, unknown>> => {
+      const id = typeof args["id"] === "number" ? args["id"] : NaN;
+      if (!Number.isInteger(id)) {
+        return Promise.resolve(invalidArgs("reinforce_memory", "reinforce_memory requires a numeric 'id'."));
+      }
+      return runCommand("reinforce_memory", async () => {
+        const result = await reinforceMemory({ id });
+        return { ok: true, tool: "reinforce_memory", id: result.id, reinforced: result.reinforced, confidence: result.confidence, reinforcementCount: result.reinforcementCount };
+      });
+    };
+  }
+
+  // record_correction — capture a wrong→right correction the Commander gave (adj-202.6.1).
+  const recordCorrection = deps.recordCorrection;
+  if (recordCorrection) {
+    dispatch["record_correction"] = (args: Record<string, unknown>): Promise<Record<string, unknown>> => {
+      const correctionType = typeof args["correctionType"] === "string" ? args["correctionType"].trim() : "";
+      const wrongPattern = typeof args["wrongPattern"] === "string" ? args["wrongPattern"].trim() : "";
+      const rightPattern = typeof args["rightPattern"] === "string" ? args["rightPattern"].trim() : "";
+      const context = typeof args["context"] === "string" && args["context"].length > 0 ? args["context"] : undefined;
+      if (!correctionType || !wrongPattern || !rightPattern) {
+        return Promise.resolve(
+          invalidArgs("record_correction", "record_correction requires 'correctionType', 'wrongPattern', and 'rightPattern'."),
+        );
+      }
+      return runCommand("record_correction", async () => {
+        const input: { correctionType: string; wrongPattern: string; rightPattern: string; context?: string } = {
+          correctionType,
+          wrongPattern,
+          rightPattern,
+        };
+        if (context !== undefined) input.context = context;
+        const result = await recordCorrection(input);
+        return { ok: true, tool: "record_correction", id: result.id, isNew: result.isNew };
+      });
+    };
+  }
+
   return dispatch;
 }
 
@@ -360,6 +457,10 @@ export interface BridgeRpcManagerConfig {
   createBead?: BridgeCreateBeadFn | undefined;
   /** spawn_worker — HEAVY + confirm-gated (adj-202.4.5). */
   spawnWorker?: BridgeSpawnWorkerFn | undefined;
+  /** Memory write paths (adj-202.6.1) — let the avatar LEARN from the Commander. */
+  storeMemory?: BridgeStoreMemoryFn | undefined;
+  reinforceMemory?: BridgeReinforceMemoryFn | undefined;
+  recordCorrection?: BridgeRecordCorrectionFn | undefined;
 }
 
 export interface AttachOptions {
@@ -416,6 +517,9 @@ export function createBridgeRpcManager(config: BridgeRpcManagerConfig): BridgeRp
       answerQuestion: config.answerQuestion,
       createBead: config.createBead,
       spawnWorker: config.spawnWorker,
+      storeMemory: config.storeMemory,
+      reinforceMemory: config.reinforceMemory,
+      recordCorrection: config.recordCorrection,
     });
 
     try {

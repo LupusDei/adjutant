@@ -35,6 +35,7 @@ import type { MessageStore } from "./message-store.js";
 import type { ProposalStore } from "./proposal-store.js";
 import type { AutoDevelopStore } from "./auto-develop-store.js";
 import type { QuestionService } from "./question-service.js";
+import type { MemoryStore, Learning, LearningQuery } from "./adjutant/memory-store.js";
 
 // ============================================================================
 // Whitelist
@@ -49,6 +50,7 @@ export const BRIDGE_READONLY_TOOLS = [
   "list_beads",
   "get_auto_develop_status",
   "read_messages",
+  "query_memories",
 ] as const;
 
 export type BridgeToolName = (typeof BRIDGE_READONLY_TOOLS)[number];
@@ -70,6 +72,9 @@ export interface BridgeToolDeps {
   proposalStore: ProposalStore;
   autoDevelopStore: AutoDevelopStore | undefined;
   questionService: Pick<QuestionService, "listQuestions">;
+  // adj-202.6.1 — the avatar RECALLS prior learnings/preferences/corrections across
+  // sessions by querying the SAME memory store the MCP query_memories tool reads.
+  memoryStore: Pick<MemoryStore, "searchLearnings" | "queryLearnings">;
 }
 
 export interface BridgeToolRequest {
@@ -151,6 +156,23 @@ const READ_MESSAGES_BODY_MAX = 280;
 const readMessagesArgs = z.object({
   agentId: z.string().min(1).optional(),
   conversationId: z.string().min(1).optional(),
+  limit: z.number().int().positive().optional(),
+});
+
+// query_memories — the memory categories mirror the MCP memory tool's enum.
+const MEMORY_CATEGORY_ENUM = z.enum(["operational", "technical", "coordination", "project"]);
+
+const QUERY_MEMORIES_DEFAULT_LIMIT = 8;
+const QUERY_MEMORIES_MAX_LIMIT = 10;
+// Cap each learning's content so a batch stays well under the LiveKit RPC payload ceiling
+// (a large result silently fails to return to the avatar — same constraint as read_messages).
+const QUERY_MEMORIES_CONTENT_MAX = 280;
+
+const queryMemoriesArgs = z.object({
+  query: z.string().min(1).optional(),
+  category: MEMORY_CATEGORY_ENUM.optional(),
+  topic: z.string().min(1).optional(),
+  minConfidence: z.number().min(0).max(1).optional(),
   limit: z.number().int().positive().optional(),
 });
 
@@ -238,6 +260,8 @@ export function createBridgeToolBridge(deps: BridgeToolDeps): BridgeToolBridge {
           return runGetAutoDevelopStatus(deps, req.projectId);
         case "read_messages":
           return await runReadMessages(deps, args, projectId);
+        case "query_memories":
+          return runQueryMemories(deps, args, projectId);
         default:
           // Unreachable — isAllowed already gated the set, but keep TS exhaustive.
           return reject(tool, projectId, "TOOL_NOT_ALLOWED", `Tool '${String(tool)}' is not callable.`);
@@ -270,6 +294,7 @@ const TOOL_LIST_BEADS: BridgeToolName = "list_beads";
 const TOOL_GET_PROJECT_STATE: BridgeToolName = "get_project_state";
 const TOOL_GET_AUTO_DEVELOP_STATUS: BridgeToolName = "get_auto_develop_status";
 const TOOL_READ_MESSAGES: BridgeToolName = "read_messages";
+const TOOL_QUERY_MEMORIES: BridgeToolName = "query_memories";
 
 async function runListAgents(
   _deps: BridgeToolDeps,
@@ -557,4 +582,55 @@ async function runReadMessages(
   }));
 
   return ok(TOOL_READ_MESSAGES, projectId, { messages, count: messages.length });
+}
+
+/**
+ * query_memories — let the avatar RECALL prior learnings across sessions: the Commander's
+ * stated preferences, past decisions, recorded corrections, and fleet patterns. REUSES the
+ * SAME MemoryStore (FTS-backed) the MCP query_memories tool and the rest of the adjutant
+ * memory system read — no new store (Constitution Rules 4 + 9).
+ *
+ * A free-text `query` runs FTS; otherwise it's a structured query by category/topic/confidence.
+ * Results are CAPPED (default 8, max 10) and each content body truncated, so the batch stays
+ * under the LiveKit RPC payload ceiling (a too-large result silently fails to return to the
+ * avatar — same constraint that shapes read_messages).
+ */
+function runQueryMemories(
+  deps: BridgeToolDeps,
+  args: Record<string, unknown>,
+  projectId: string | null,
+): BridgeToolResult {
+  const parsed = queryMemoriesArgs.safeParse(args);
+  if (!parsed.success) {
+    return reject(TOOL_QUERY_MEMORIES, projectId, "INVALID_ARGS", parsed.error.issues.map((i) => i.message).join("; "));
+  }
+
+  const limit = Math.min(parsed.data.limit ?? QUERY_MEMORIES_DEFAULT_LIMIT, QUERY_MEMORIES_MAX_LIMIT);
+
+  let learnings: Learning[];
+  if (parsed.data.query !== undefined) {
+    // Full-text search takes priority when a query string is provided (mirrors the MCP tool).
+    learnings = deps.memoryStore.searchLearnings(parsed.data.query, limit);
+  } else {
+    // Structured query by category / topic / confidence. Build without undefined keys to
+    // satisfy exactOptionalPropertyTypes.
+    const q: LearningQuery = { limit };
+    if (parsed.data.category !== undefined) q.category = parsed.data.category;
+    if (parsed.data.topic !== undefined) q.topic = parsed.data.topic;
+    if (parsed.data.minConfidence !== undefined) q.minConfidence = parsed.data.minConfidence;
+    learnings = deps.memoryStore.queryLearnings(q);
+  }
+
+  // Defensive cap + truncate for the RPC payload — the avatar narrates a digest, not full text.
+  const memories = learnings.slice(0, limit).map((l) => ({
+    id: l.id,
+    category: l.category,
+    topic: l.topic,
+    content: l.content.length > QUERY_MEMORIES_CONTENT_MAX ? l.content.slice(0, QUERY_MEMORIES_CONTENT_MAX) + "…" : l.content,
+    confidence: l.confidence,
+    reinforcementCount: l.reinforcementCount,
+    source: l.sourceRef,
+  }));
+
+  return ok(TOOL_QUERY_MEMORIES, projectId, { memories, count: memories.length });
 }

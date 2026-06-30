@@ -134,6 +134,10 @@ function makeDeps(overrides: Partial<BridgeToolDeps> = {}): BridgeToolDeps {
     questionService: {
       listQuestions: vi.fn().mockReturnValue([]),
     } as unknown as Pick<QuestionService, "listQuestions">,
+    memoryStore: {
+      searchLearnings: vi.fn().mockReturnValue([]),
+      queryLearnings: vi.fn().mockReturnValue([]),
+    } as unknown as BridgeToolDeps["memoryStore"],
     ...overrides,
   };
 }
@@ -151,7 +155,7 @@ beforeEach(() => {
 // ============================================================================
 
 describe("createBridgeToolBridge — whitelist", () => {
-  it("exposes exactly the seven read-only tools", () => {
+  it("exposes exactly the eight read-only tools", () => {
     expect([...BRIDGE_READONLY_TOOLS].sort()).toEqual(
       [
         "get_agent_detail",
@@ -161,6 +165,7 @@ describe("createBridgeToolBridge — whitelist", () => {
         "list_beads",
         "list_questions",
         "read_messages",
+        "query_memories",
       ].sort(),
     );
     const bridge = createBridgeToolBridge(makeDeps());
@@ -716,6 +721,127 @@ describe("read_messages", () => {
     if (res.ok) {
       const data = res.data as { messages: unknown[]; count: number };
       expect(data.messages).toEqual([]);
+      expect(data.count).toBe(0);
+    }
+  });
+});
+
+// ============================================================================
+// query_memories — cross-session recall via the adjutant MemoryStore (adj-202.6.1)
+// ============================================================================
+
+describe("query_memories", () => {
+  // Real Learning shape (camelCase) the MemoryStore returns.
+  function learning(over: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
+    return {
+      id: 7,
+      category: "operational",
+      topic: "deploy",
+      content: "Commander prefers blue-green deploys with a 10-minute canary window.",
+      sourceType: "bridge",
+      sourceRef: "adjutant",
+      confidence: 0.8,
+      reinforcementCount: 2,
+      lastAppliedAt: null,
+      lastValidatedAt: null,
+      supersededBy: null,
+      createdAt: "2026-06-30T01:00:00Z",
+      updatedAt: "2026-06-30T01:00:00Z",
+      ...over,
+    };
+  }
+
+  function memDeps(over: Record<string, unknown> = {}): BridgeToolDeps["memoryStore"] {
+    return {
+      searchLearnings: vi.fn().mockReturnValue([]),
+      queryLearnings: vi.fn().mockReturnValue([]),
+      ...over,
+    } as unknown as BridgeToolDeps["memoryStore"];
+  }
+
+  it("runs FTS when a query string is given and returns mapped memories + count", async () => {
+    const searchLearnings = vi.fn().mockReturnValue([learning()]);
+    const queryLearnings = vi.fn().mockReturnValue([]);
+    const memoryStore = memDeps({ searchLearnings, queryLearnings });
+
+    const bridge = createBridgeToolBridge(makeDeps({ memoryStore }));
+    const res = await bridge.executeTool({ tool: "query_memories", args: { query: "deploy preferences" } });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const data = res.data as { memories: { id: number; topic: string; content: string; source: string | null }[]; count: number };
+      expect(data.count).toBe(1);
+      expect(data.memories[0]).toMatchObject({ id: 7, topic: "deploy", source: "adjutant" });
+    }
+    // FTS path used; default limit 8 applied; structured (queryLearnings) NOT used.
+    expect(searchLearnings).toHaveBeenCalledWith("deploy preferences", 8);
+    expect(queryLearnings).not.toHaveBeenCalled();
+  });
+
+  it("uses a structured query (category/topic/confidence) when no text query is given", async () => {
+    const searchLearnings = vi.fn().mockReturnValue([]);
+    const queryLearnings = vi.fn().mockReturnValue([learning({ id: 3, topic: "tone" })]);
+    const memoryStore = memDeps({ searchLearnings, queryLearnings });
+
+    const bridge = createBridgeToolBridge(makeDeps({ memoryStore }));
+    const res = await bridge.executeTool({
+      tool: "query_memories",
+      args: { category: "coordination", topic: "tone", minConfidence: 0.6 },
+    });
+
+    expect(res.ok).toBe(true);
+    expect(searchLearnings).not.toHaveBeenCalled();
+    expect(queryLearnings).toHaveBeenCalledWith({
+      limit: 8,
+      category: "coordination",
+      topic: "tone",
+      minConfidence: 0.6,
+    });
+  });
+
+  it("caps the limit at 10 even if a larger value is requested (keep the RPC payload small)", async () => {
+    const searchLearnings = vi.fn().mockReturnValue([]);
+    const memoryStore = memDeps({ searchLearnings });
+
+    const bridge = createBridgeToolBridge(makeDeps({ memoryStore }));
+    await bridge.executeTool({ tool: "query_memories", args: { query: "x", limit: 500 } });
+
+    expect(searchLearnings).toHaveBeenCalledWith("x", 10);
+  });
+
+  it("truncates long learning content for the RPC payload", async () => {
+    const longContent = "z".repeat(400);
+    const searchLearnings = vi.fn().mockReturnValue([learning({ content: longContent })]);
+    const memoryStore = memDeps({ searchLearnings });
+
+    const bridge = createBridgeToolBridge(makeDeps({ memoryStore }));
+    const res = await bridge.executeTool({ tool: "query_memories", args: { query: "x" } });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const data = res.data as { memories: { content: string }[] };
+      // 280-char cap + ellipsis.
+      expect(data.memories[0]!.content.length).toBe(281);
+      expect(data.memories[0]!.content.endsWith("…")).toBe(true);
+    }
+  });
+
+  it("rejects an invalid category (defensive — reachable from the avatar's tool loop)", async () => {
+    const bridge = createBridgeToolBridge(makeDeps());
+    const res = await bridge.executeTool({ tool: "query_memories", args: { category: "nonsense" } });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe("INVALID_ARGS");
+  });
+
+  it("returns an empty result (count 0) when nothing matches", async () => {
+    const bridge = createBridgeToolBridge(makeDeps());
+    const res = await bridge.executeTool({ tool: "query_memories", args: {} });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const data = res.data as { memories: unknown[]; count: number };
+      expect(data.memories).toEqual([]);
       expect(data.count).toBe(0);
     }
   });

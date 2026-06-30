@@ -43,6 +43,11 @@ import {
   answerQuestionViaBridge,
   createBeadViaBridge,
   spawnWorkerViaBridge,
+  storeMemoryViaBridge,
+  reinforceMemoryViaBridge,
+  recordCorrectionViaBridge,
+  BRIDGE_MEMORY_SOURCE_TYPE,
+  BRIDGE_MEMORY_SOURCE_REF,
 } from "../../src/services/bridge-commands.js";
 
 beforeEach(() => {
@@ -219,5 +224,90 @@ describe("spawnWorkerViaBridge (adj-202.4.5)", () => {
     await expect(
       spawnWorkerViaBridge({ agentType: "engineer", task: "x", confirm: true }),
     ).rejects.toThrow(/tmux unavailable/);
+  });
+});
+
+describe("storeMemoryViaBridge (adj-202.6.1)", () => {
+  it("persists a learning via the real store, attributed to the Bridge", () => {
+    const insertLearning = vi.fn((l) => ({ id: 21, ...l }));
+    const res = storeMemoryViaBridge(
+      { insertLearning },
+      { content: "Commander prefers terse status updates", category: "coordination", topic: "tone", confidence: 0.9 },
+    );
+
+    expect(insertLearning).toHaveBeenCalledWith({
+      content: "Commander prefers terse status updates",
+      category: "coordination",
+      topic: "tone",
+      sourceType: BRIDGE_MEMORY_SOURCE_TYPE,
+      sourceRef: BRIDGE_MEMORY_SOURCE_REF,
+      confidence: 0.9,
+    });
+    expect(res).toEqual({ id: 21, category: "coordination", topic: "tone" });
+  });
+
+  it("omits confidence so the store applies its default when none is given", () => {
+    const insertLearning = vi.fn((l) => ({ id: 1, ...l }));
+    storeMemoryViaBridge({ insertLearning }, { content: "c", category: "project", topic: "t" });
+
+    const arg = insertLearning.mock.calls[0]![0] as Record<string, unknown>;
+    expect(arg).not.toHaveProperty("confidence");
+  });
+});
+
+describe("reinforceMemoryViaBridge (adj-202.6.1)", () => {
+  it("reinforces an existing learning and returns its new confidence/count", () => {
+    const reinforceLearning = vi.fn();
+    const getLearning = vi
+      .fn()
+      .mockReturnValueOnce({ id: 5, confidence: 0.5, reinforcementCount: 1 }) // before
+      .mockReturnValueOnce({ id: 5, confidence: 0.55, reinforcementCount: 2 }); // after
+    const res = reinforceMemoryViaBridge({ reinforceLearning, getLearning }, { id: 5 });
+
+    expect(reinforceLearning).toHaveBeenCalledWith(5);
+    expect(res).toEqual({ id: 5, reinforced: true, confidence: 0.55, reinforcementCount: 2 });
+  });
+
+  it("reports reinforced:false and never touches the store for a missing id", () => {
+    const reinforceLearning = vi.fn();
+    const getLearning = vi.fn().mockReturnValue(null);
+    const res = reinforceMemoryViaBridge({ reinforceLearning, getLearning }, { id: 999 });
+
+    expect(res).toEqual({ id: 999, reinforced: false });
+    expect(reinforceLearning).not.toHaveBeenCalled();
+  });
+});
+
+describe("recordCorrectionViaBridge (adj-202.6.1)", () => {
+  it("creates a new correction when none matches, folding context into the description", () => {
+    const findSimilarCorrection = vi.fn().mockReturnValue(null);
+    const incrementRecurrence = vi.fn();
+    const insertCorrection = vi.fn((c) => ({ id: 8, ...c }));
+    const res = recordCorrectionViaBridge(
+      { findSimilarCorrection, incrementRecurrence, insertCorrection },
+      { correctionType: "wrong_assumption", wrongPattern: "deploy Fridays", rightPattern: "never Fridays", context: "outage" },
+    );
+
+    expect(insertCorrection).toHaveBeenCalledWith({
+      correctionType: "wrong_assumption",
+      pattern: "deploy Fridays",
+      description: "never Fridays. Context: outage",
+    });
+    expect(incrementRecurrence).not.toHaveBeenCalled();
+    expect(res).toEqual({ id: 8, isNew: true });
+  });
+
+  it("reinforces (dedups) an existing matching correction instead of inserting", () => {
+    const findSimilarCorrection = vi.fn().mockReturnValue({ id: 3 });
+    const incrementRecurrence = vi.fn();
+    const insertCorrection = vi.fn();
+    const res = recordCorrectionViaBridge(
+      { findSimilarCorrection, incrementRecurrence, insertCorrection },
+      { correctionType: "wrong_approach", wrongPattern: "raw SQL", rightPattern: "use the service" },
+    );
+
+    expect(incrementRecurrence).toHaveBeenCalledWith(3);
+    expect(insertCorrection).not.toHaveBeenCalled();
+    expect(res).toEqual({ id: 3, isNew: false });
   });
 });
