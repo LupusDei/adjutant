@@ -238,10 +238,14 @@ export function buildBridgeToolDispatch(deps: BridgeToolDispatchDeps): Record<st
         const result = await deps.executeTool(req);
         deps.onResult?.(result);
 
-        if (result.ok) {
-          return { ok: true, tool: result.tool, projectId: result.projectId, data: result.data };
-        }
-        return { ok: false, tool: result.tool, projectId: result.projectId, error: result.error };
+        const payload = result.ok
+          ? { ok: true, tool: result.tool, projectId: result.projectId, data: result.data }
+          : { ok: false, tool: result.tool, projectId: result.projectId, error: result.error };
+        // Diagnostic: the Runway tool-RPC rejects oversized returns with "RPC cancelled or failed"
+        // AFTER our handler succeeds (no error on our side), so log the serialized size of every
+        // result — this is the only place we can see a too-large payload that the avatar can't.
+        logInfo("bridge tool call", { tool, ok: result.ok, bytes: JSON.stringify(payload).length });
+        return payload;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         const errResult: BridgeToolResult = {

@@ -147,12 +147,13 @@ const getAgentDetailArgs = z.object({
   agent: z.string().min(1),
 });
 
-const READ_MESSAGES_DEFAULT_LIMIT = 6;
-const READ_MESSAGES_MAX_LIMIT = 8;
+const READ_MESSAGES_DEFAULT_LIMIT = 5;
+const READ_MESSAGES_MAX_LIMIT = 6;
 // Keep the result TINY + plain-ASCII. The Runway tool-RPC return fails ("RPC cancelled or
-// failed") on large or emoji/unicode-heavy payloads — and message bodies are full of emoji.
-// The avatar narrates a short digest, not full structured text.
-const READ_MESSAGES_BODY_MAX = 120;
+// failed") on anything but a small payload — message bodies are large + emoji-heavy. We hand
+// back ONE short string (no arrays/objects), per-message capped here and overall-capped below.
+const READ_MESSAGES_BODY_MAX = 70;
+const READ_MESSAGES_TOTAL_MAX = 350;
 
 const readMessagesArgs = z.object({
   agentId: z.string().min(1).optional(),
@@ -581,13 +582,14 @@ async function runReadMessages(
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, READ_MESSAGES_BODY_MAX);
-  const messages = ordered.map((m) => ({
-    from: m.agentId,
-    to: m.recipient ?? "",
-    text: clean(m.body),
-  }));
+  // ONE tiny ASCII string, not an array of objects. The Runway tool-RPC return rejects anything
+  // but a small payload, so we narrate a single digest line per message and hard-cap the total.
+  const recent = ordered
+    .map((m) => `${m.agentId}->${m.recipient ?? "?"}: ${clean(m.body)}`)
+    .join(" | ")
+    .slice(0, READ_MESSAGES_TOTAL_MAX);
 
-  return ok(TOOL_READ_MESSAGES, projectId, { messages, count: messages.length });
+  return ok(TOOL_READ_MESSAGES, projectId, { recent, count: ordered.length });
 }
 
 /**
