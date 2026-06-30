@@ -34,7 +34,7 @@ import { createBridgeToolBridge } from "./services/bridge-tool-bridge.js";
 import { createBridgeRpcManager } from "./services/bridge-rpc-handler.js";
 import { createBridgeSessionCollector } from "./services/bridge-session-collector.js";
 import { createBridgeTranscriptPersister } from "./services/bridge-transcript-persister.js";
-import { createBridgeTranscriptCapture } from "./services/bridge-transcript-capture.js";
+import { createBridgeTranscriptFetch } from "./services/bridge-transcript-fetch.js";
 import { buildBridgePersonaEvolution } from "./services/bridge-operating-lessons.js";
 import { BRIDGE_DIRECTIVE_PREFIX } from "./services/bridge-rpc-tools.js";
 import { deliverDirectMessage } from "./services/direct-message-delivery.js";
@@ -205,16 +205,16 @@ async function resolveBridgeAgent(spoken: string): Promise<string> {
 // implicit learnings in the adjutant MemoryStore (the same store query_memories/store_memory use).
 const bridgeSessionCollector = createBridgeSessionCollector({ memoryStore });
 
-// adj-202.6.6 — make the Bridge a PERSISTENT CHAT with default history: each voice session's
-// finalized turns (the Commander's speech + the avatar's responses) are persisted into the SAME
-// user↔adjutant DM the Commander already has, via the REAL conversation + message stores (Rules
-// 4 + 9 — no new store). wsBroadcast fans each turn out live so the dashboard/iOS Chat update as
-// the conversation happens. The capture adapter registers the lk.transcription text-stream
-// handler on the EXISTING server-side LiveKit participant connection (no second connection).
-// The Bridge avatar IS the adjutant coordinator (Phase 4 — one identity, not two). The avatar
-// speaks, messages, and persists its dialogue AS "adjutant-coordinator" so EVERYTHING lands in
-// the SAME conversation the Commander already has with the coordinator in Chat — never a separate,
-// invisible "adjutant" thread. This is the established coordinator id (see product-owner wiring).
+// adj-202.6.6 — make the Bridge a PERSISTENT CHAT with default history: on session end the
+// session's transcript is fetched from Runway's conversations REST API and each turn (the
+// Commander's speech + the avatar's responses) is persisted into the SAME user↔adjutant DM the
+// Commander already has, via the REAL conversation + message stores (Rules 4 + 9 — no new store).
+// wsBroadcast fans each turn out live so the dashboard/iOS Chat update once the transcript lands.
+// (Runway GWM-1 publishes no lk.transcription streams — verified live — so the REST fetch is the
+// proven path; the transport-layer listener has been retired.)
+// The Bridge avatar IS the adjutant coordinator (Phase 4 — one identity): turns persist AS
+// "adjutant-coordinator" (the avatar) and "user" (the Commander) into the Commander's existing
+// coordinator chat — never a separate, invisible "adjutant" thread.
 const BRIDGE_COORDINATOR_ID = "adjutant-coordinator";
 
 const bridgeTranscriptPersister = createBridgeTranscriptPersister({
@@ -234,24 +234,9 @@ const bridgeTranscriptPersister = createBridgeTranscriptPersister({
     });
   },
 });
-const bridgeTranscriptCapture = createBridgeTranscriptCapture({
-  persister: bridgeTranscriptPersister,
-  // adj-202.6.6 live-verify seam: log EVERY received transcription stream (incl. interim/empty,
-  // before drop/dedup). On a real Runway session this is the definitive evidence of whether
-  // GWM-1 publishes `lk.transcription`, from which participant identity, and how finality is
-  // flagged — the one question unit tests can't answer. Purely observational (logging only).
-  onStreamObserved: (o) => {
-    logInfo("bridge transcript stream observed", {
-      sessionId: o.sessionId,
-      topic: o.topic,
-      identity: o.identity,
-      speaker: o.speaker,
-      segmentId: o.segmentId,
-      final: o.final,
-      textLength: o.textLength,
-    });
-  },
-});
+// The fetch service reuses the broker's Runway creds (RUNWAYML_API_SECRET + RUNWAY_AVATAR_ID)
+// and the persister above; fired once per session end (idempotent, best-effort).
+const bridgeTranscriptFetch = createBridgeTranscriptFetch({ persister: bridgeTranscriptPersister });
 
 const bridgeRpcManager = createBridgeRpcManager({
   executeTool: (req) => bridgeToolBridge.executeTool(req),
@@ -297,8 +282,9 @@ const bridgeRpcManager = createBridgeRpcManager({
   // told to store_memory. Best-effort; finalize never throws (must not break session teardown).
   recordActivity: (sessionId, tool, ok) => { bridgeSessionCollector.record(sessionId, { tool, ok }); },
   finalizeSession: (sessionId) => { bridgeSessionCollector.finalize(sessionId); },
-  // adj-202.6.6 — persist the spoken dialogue into the coordinator conversation (default history).
-  transcriptCapture: bridgeTranscriptCapture,
+  // adj-202.6.6 — on session end, fetch the transcript from Runway + persist it into the
+  // coordinator conversation (default history). Best-effort + idempotent; never throws.
+  onSessionEnd: (sessionId) => { void bridgeTranscriptFetch.fetchAndPersist(sessionId); },
 });
 
 // The Bridge — avatar (adj-202.2 / adj-202.7.1). Public (no API key) so the iOS WKWebView

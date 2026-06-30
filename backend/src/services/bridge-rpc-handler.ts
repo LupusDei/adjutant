@@ -35,7 +35,6 @@ import type {
   BridgeToolResult,
 } from "./bridge-tool-bridge.js";
 import { BRIDGE_READONLY_TOOLS } from "./bridge-tool-bridge.js";
-import type { BridgeTranscriptCapture, TextStreamRoomLike } from "./bridge-transcript-capture.js";
 import { logError, logInfo } from "../utils/logger.js";
 
 // ============================================================================
@@ -66,13 +65,6 @@ export interface CreateRpcHandlerOptions {
   onDisconnected?: () => void;
   onError?: (error: Error) => void;
   debug?: boolean;
-  /**
-   * adj-202.6.6 — invoked with the connected LiveKit room once joined, so the SAME
-   * server-side participant connection can be wired for transcript capture (register the
-   * `lk.transcription` text-stream handler). Honored ONLY by the room-owning factory; the
-   * upstream `@runwayml/avatars-node-rpc` factory ignores it (it never exposes its room).
-   */
-  wireRoom?: (room: TextStreamRoomLike) => void;
 }
 
 /** The live handler `createRpcHandler` returns. */
@@ -516,14 +508,14 @@ export interface BridgeRpcManagerConfig {
   recordActivity?: ((sessionId: string, tool: string, ok: boolean) => void) | undefined;
   finalizeSession?: ((sessionId: string) => void) | undefined;
   /**
-   * adj-202.6.6 — optional transcript capture. When provided, each attached session reuses
-   * its EXISTING server-side LiveKit participant connection (no second connection) to capture
-   * the spoken dialogue and persist it into the Commander↔coordinator conversation, making the
-   * Bridge a persistent chat with default history. Providing it switches the default handler
-   * factory to the room-owning one (which can register the text-stream handler); omitting it
-   * leaves the upstream behavior byte-for-byte unchanged.
+   * adj-202.6.6 — session-end transcript hook. Fired once per session when it ends (disconnect
+   * OR explicit close) so the transcript can be fetched from Runway's conversations REST API and
+   * persisted into the Commander↔coordinator conversation, making the Bridge a persistent chat
+   * with default history. It must be best-effort + idempotent (it may fire from BOTH the
+   * disconnect and close paths); it never affects session teardown. Omit it and sessions are not
+   * persisted as chat history (the pre-6.6 behaviour).
    */
-  transcriptCapture?: BridgeTranscriptCapture | undefined;
+  onSessionEnd?: ((sessionId: string) => void) | undefined;
 }
 
 export interface AttachOptions {
@@ -558,151 +550,18 @@ const defaultCreateHandler: CreateRpcHandlerFn = async (options) => {
   return mod.createRpcHandler(options);
 };
 
-// ============================================================================
-// Room-owning handler factory (adj-202.6.6)
-//
-// `@runwayml/avatars-node-rpc`'s `createRpcHandler` joins a LiveKit room as our hidden
-// backend participant but NEVER exposes that room, so there is no way to attach a
-// transcription text-stream handler to the EXISTING connection through it. To capture the
-// Bridge dialogue on the SAME participant connection (the explicit "no second connection"
-// constraint), this factory reproduces the upstream connect+RPC-register behavior FAITHFULLY
-// (so RPC dispatch is unchanged) and additionally invokes `wireRoom` with the connected room.
-// It is used ONLY when a transcript capture is configured; otherwise the upstream factory runs
-// untouched. `@livekit/rtc-node` is imported via a variable specifier so tests/typecheck never
-// load the native package (the same lazy pattern as defaultCreateHandler).
-// ============================================================================
-
-const DEFAULT_RUNWAY_BASE_URL = "https://api.dev.runwayml.com";
-
-/**
- * Resolve LiveKit credentials for a backend participant: pass through pre-fetched
- * `credentials`, else call Runway's `/connect_backend` with the api key + session id.
- * Mirrors `@runwayml/avatars-node-rpc`'s internal `connectBackend` (it is not exported).
- * `fetchImpl` is injectable for tests; defaults to the global `fetch`.
- */
-export async function resolveRunwayCredentials(
-  options: Pick<CreateRpcHandlerOptions, "apiKey" | "sessionId" | "baseUrl" | "credentials">,
-  fetchImpl: typeof fetch = fetch,
-): Promise<LiveKitCredentials> {
-  if (options.credentials) return options.credentials;
-  if (!options.apiKey || !options.sessionId) {
-    throw new Error('Either "credentials" or both "apiKey" and "sessionId" must be provided');
-  }
-  const baseUrl = options.baseUrl ?? DEFAULT_RUNWAY_BASE_URL;
-  const url = `${baseUrl}/v1/realtime_sessions/${options.sessionId}/connect_backend`;
-  const response = await fetchImpl(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${options.apiKey}`,
-      "X-Runway-Version": "2024-11-06",
-    },
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to connect backend: ${response.status} ${errorText}`);
-  }
-  return (await response.json()) as LiveKitCredentials;
-}
-
-/** The slice of `@livekit/rtc-node` the room-owning factory uses (mirrors its real types). */
-interface RtcNodeModule {
-  Room: new () => {
-    on(event: string, cb: (...args: unknown[]) => void): void;
-    connect(url: string, token: string): Promise<void>;
-    disconnect(): Promise<void>;
-    readonly isConnected: boolean;
-    localParticipant?: {
-      registerRpcMethod(name: string, handler: (data: { callerIdentity: string; payload: string }) => Promise<string>): void;
-      unregisterRpcMethod(name: string): void;
-    };
-  } & TextStreamRoomLike;
-  RoomEvent: { Disconnected: string; ParticipantConnected: string };
-  RpcError: {
-    new (code: number, message: string): Error;
-    ErrorCode: { APPLICATION_ERROR: number };
-  };
-}
-
-const roomOwningCreateHandler: CreateRpcHandlerFn = async (options) => {
-  const moduleName = "@livekit/rtc-node";
-  const { Room, RoomEvent, RpcError } = (await import(/* @vite-ignore */ moduleName)) as unknown as RtcNodeModule;
-
-  const credentials = await resolveRunwayCredentials(options);
-  const room = new Room();
-  room.on(RoomEvent.Disconnected, () => {
-    options.onDisconnected?.();
-  });
-  // adj-202.6.6 live-verify seam: log each remote participant identity as it joins. This proves
-  // whether the avatar worker even enters the room (vs. transcription simply not being published)
-  // and surfaces its real identity so the `worker:`-prefix speaker guess can be validated live.
-  // Best-effort/diagnostic — a bad payload here must never break the connection.
-  room.on(RoomEvent.ParticipantConnected, (participant?: unknown) => {
-    const identity =
-      typeof (participant as { identity?: unknown } | undefined)?.identity === "string"
-        ? (participant as { identity: string }).identity
-        : "<unknown>";
-    logInfo("bridge room participant connected", { sessionId: options.sessionId ?? null, identity });
-  });
-  await room.connect(credentials.url, credentials.token);
-
-  const localParticipant = room.localParticipant;
-  if (!localParticipant) {
-    throw new Error("LocalParticipant not available after connect");
-  }
-
-  // RPC registration — a faithful copy of the upstream handler so dispatch behavior (the
-  // `worker:` caller guard, JSON arg parsing, error→RpcError mapping) is identical.
-  for (const toolName of Object.keys(options.tools)) {
-    localParticipant.registerRpcMethod(toolName, async (data) => {
-      if (!data.callerIdentity.startsWith("worker:")) {
-        throw new RpcError(RpcError.ErrorCode.APPLICATION_ERROR, `Unauthorized caller: ${data.callerIdentity}`);
-      }
-      let args: Record<string, unknown>;
-      try {
-        const parsed = JSON.parse(data.payload) as { args?: Record<string, unknown> } & Record<string, unknown>;
-        args = parsed.args ?? parsed;
-      } catch {
-        throw new RpcError(RpcError.ErrorCode.APPLICATION_ERROR, "Invalid JSON payload");
-      }
-      try {
-        const result = await options.tools[toolName]!(args);
-        return JSON.stringify(result);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        options.onError?.(err instanceof Error ? err : new Error(message));
-        throw new RpcError(RpcError.ErrorCode.APPLICATION_ERROR, message);
-      }
-    });
-  }
-
-  // adj-202.6.6 — the win: attach transcript capture to the SAME room/connection.
-  options.wireRoom?.(room);
-
-  options.onConnected?.();
-  return {
-    async close() {
-      for (const toolName of Object.keys(options.tools)) {
-        localParticipant.unregisterRpcMethod(toolName);
-      }
-      await room.disconnect();
-    },
-    get connected() {
-      return room.isConnected;
-    },
-  };
-};
-
 /**
  * Create the manager that owns the avatar tool-loop handlers. One handler per live
  * session, dispatching to the read-only tool bridge.
+ *
+ * adj-202.6.6 — the transcript is no longer captured at the transport layer (Runway GWM-1
+ * publishes no `lk.transcription` streams; the room-owning factory + lk.transcription listener
+ * have been retired). The tool loop uses the upstream `@runwayml/avatars-node-rpc` factory
+ * unchanged; the transcript is fetched from Runway's REST API on session end via `onSessionEnd`.
  */
 export function createBridgeRpcManager(config: BridgeRpcManagerConfig): BridgeRpcManager {
-  // An injected factory always wins (tests). Otherwise, capturing transcripts requires the
-  // room-owning factory (it can register the text-stream handler); without capture, the
-  // upstream factory runs unchanged.
-  const createHandler =
-    config.createHandler ?? (config.transcriptCapture ? roomOwningCreateHandler : defaultCreateHandler);
+  // An injected factory always wins (tests); otherwise the upstream factory runs unchanged.
+  const createHandler = config.createHandler ?? defaultCreateHandler;
   const apiKey = config.apiKey ?? process.env["RUNWAYML_API_SECRET"];
   const resultSink = config.onResult;
   const handlers = new Map<string, RpcHandlerLike>();
@@ -735,25 +594,14 @@ export function createBridgeRpcManager(config: BridgeRpcManagerConfig): BridgeRp
           handlers.delete(sessionId);
           // adj-202.6.2 — session ended: let the collector distill + persist what was learned.
           config.finalizeSession?.(sessionId);
-          // adj-202.6.6 — and free the transcript capture's per-session buffers.
-          config.transcriptCapture?.endSession(sessionId);
+          // adj-202.6.6 — fetch + persist the session's transcript as chat history (idempotent).
+          config.onSessionEnd?.(sessionId);
           logInfo("bridge rpc handler disconnected", { sessionId });
         },
         onError: (error) => { logError("bridge rpc handler error", { sessionId, error: error.message }); },
       };
       if (apiKey !== undefined) handlerOpts.apiKey = apiKey;
       handlerOpts.sessionId = sessionId;
-      // Diagnostic: make @runwayml/avatars-node-rpc log every INCOMING tool RPC (name, caller
-      // identity, payload). Our tools[] log only fires once a call passes the SDK's `worker:`
-      // caller-auth gate + JSON.parse — so if a call fails upstream of us, only this shows it.
-      handlerOpts.debug = true;
-      // adj-202.6.6 — when capturing transcripts, hand the room-owning factory a callback to
-      // wire this session's room (register the lk.transcription text-stream handler) on the
-      // SAME participant connection serving the tool loop.
-      if (config.transcriptCapture) {
-        const capture = config.transcriptCapture;
-        handlerOpts.wireRoom = (room) => { capture.register(room, sessionId); };
-      }
 
       const handler = await createHandler(handlerOpts);
       handlers.set(sessionId, handler);
@@ -775,8 +623,9 @@ export function createBridgeRpcManager(config: BridgeRpcManagerConfig): BridgeRp
     // adj-202.6.2 — an explicit close is also a session end. finalize is idempotent, so a later
     // onDisconnected (which handler.close() may trigger) is a harmless no-op.
     config.finalizeSession?.(sessionId);
-    // adj-202.6.6 — release the transcript capture's per-session state too (idempotent).
-    config.transcriptCapture?.endSession(sessionId);
+    // adj-202.6.6 — fetch + persist the transcript on explicit close too. onSessionEnd is
+    // idempotent, so a later onDisconnected firing the same hook is a harmless no-op.
+    config.onSessionEnd?.(sessionId);
     try {
       await handler.close();
     } catch (err) {
