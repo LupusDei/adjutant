@@ -2,6 +2,23 @@
 
 Notable, user-facing changes to Adjutant. Newer entries first.
 
+## adj-202.6.6 — The Bridge is a Persistent Chat with Default History (2026-06-30)
+
+Talking to the embodied coordinator (The Bridge) by voice now shows up as normal chat
+history — the SAME conversation whether you speak or type.
+
+### Added
+- **Voice dialogue is persisted.** Each Bridge voice session's finalized turns (the
+  Commander's speech and the avatar's responses) are written into the existing
+  `user`↔`adjutant` DM via the real conversation + message stores (no new store), so the
+  dashboard / iOS Chat show the Bridge conversation by default and `read_messages` recalls
+  it — exactly like text chat with the coordinator. Turns fan out live over WebSocket as the
+  conversation happens, tagged `source: "bridge-voice"`.
+- **Transport-layer capture.** The transcript is captured on the EXISTING server-side LiveKit
+  participant connection (no second connection) via the `lk.transcription` text-stream API;
+  interim segments are buffered and only completed utterances are persisted (no partial-word
+  spam), with per-segment dedup. Speaker attribution is verified/tuned during live-smoke.
+
 ## adj-201 — Per-Project Proposal Style Guide + Dark/Accessible Pages (2026-06-18)
 
 Proposal pages are now dark-by-default, accessible, and on-brand for each project.

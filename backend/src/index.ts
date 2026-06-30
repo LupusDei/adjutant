@@ -33,6 +33,8 @@ import { BridgeSessionBroker } from "./services/bridge-session-broker.js";
 import { createBridgeToolBridge } from "./services/bridge-tool-bridge.js";
 import { createBridgeRpcManager } from "./services/bridge-rpc-handler.js";
 import { createBridgeSessionCollector } from "./services/bridge-session-collector.js";
+import { createBridgeTranscriptPersister } from "./services/bridge-transcript-persister.js";
+import { createBridgeTranscriptCapture } from "./services/bridge-transcript-capture.js";
 import { buildBridgePersonaEvolution } from "./services/bridge-operating-lessons.js";
 import { BRIDGE_DIRECTIVE_PREFIX } from "./services/bridge-rpc-tools.js";
 import { deliverDirectMessage } from "./services/direct-message-delivery.js";
@@ -203,6 +205,30 @@ async function resolveBridgeAgent(spoken: string): Promise<string> {
 // implicit learnings in the adjutant MemoryStore (the same store query_memories/store_memory use).
 const bridgeSessionCollector = createBridgeSessionCollector({ memoryStore });
 
+// adj-202.6.6 — make the Bridge a PERSISTENT CHAT with default history: each voice session's
+// finalized turns (the Commander's speech + the avatar's responses) are persisted into the SAME
+// user↔adjutant DM the Commander already has, via the REAL conversation + message stores (Rules
+// 4 + 9 — no new store). wsBroadcast fans each turn out live so the dashboard/iOS Chat update as
+// the conversation happens. The capture adapter registers the lk.transcription text-stream
+// handler on the EXISTING server-side LiveKit participant connection (no second connection).
+const bridgeTranscriptPersister = createBridgeTranscriptPersister({
+  conversationStore,
+  messageStore,
+  broadcast: ({ message, from, to }) => {
+    wsBroadcast({
+      type: "chat_message",
+      id: message.id,
+      from,
+      to,
+      body: message.body,
+      timestamp: message.createdAt,
+      conversationId: message.conversationId ?? undefined,
+      metadata: message.metadata ?? undefined,
+    });
+  },
+});
+const bridgeTranscriptCapture = createBridgeTranscriptCapture({ persister: bridgeTranscriptPersister });
+
 const bridgeRpcManager = createBridgeRpcManager({
   executeTool: (req) => bridgeToolBridge.executeTool(req),
   sendMessage: async ({ to, body }) => {
@@ -247,6 +273,8 @@ const bridgeRpcManager = createBridgeRpcManager({
   // told to store_memory. Best-effort; finalize never throws (must not break session teardown).
   recordActivity: (sessionId, tool, ok) => { bridgeSessionCollector.record(sessionId, { tool, ok }); },
   finalizeSession: (sessionId) => { bridgeSessionCollector.finalize(sessionId); },
+  // adj-202.6.6 — persist the spoken dialogue into the coordinator conversation (default history).
+  transcriptCapture: bridgeTranscriptCapture,
 });
 
 // The Bridge — avatar (adj-202.2 / adj-202.7.1). Public (no API key) so the iOS WKWebView
