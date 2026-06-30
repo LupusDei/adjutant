@@ -624,7 +624,7 @@ describe("read_messages", () => {
     },
   ];
 
-  it("returns messages (sender, recipient, body, timestamp) + count, oldest-first for narration", async () => {
+  it("returns a TINY plain-text digest { from, to, text }, oldest-first, for narration", async () => {
     const getMessages = vi.fn().mockReturnValue(SAMPLE_MESSAGES);
     const messageStore = {
       getMessages,
@@ -636,16 +636,14 @@ describe("read_messages", () => {
 
     expect(res.ok).toBe(true);
     if (res.ok) {
-      const data = res.data as { messages: { id: string; sender: string; recipient: string | null; body: string; timestamp: string }[]; count: number };
+      const data = res.data as { messages: { from: string; to: string; text: string }[]; count: number };
       expect(data.count).toBe(3);
-      // Presented oldest → newest so the avatar narrates the discussion in order.
-      expect(data.messages.map((m) => m.id)).toEqual(["m1", "m2", "m3"]);
-      expect(data.messages[0]).toMatchObject({
-        id: "m1", sender: "fenix", recipient: "user", body: "Starting adj-202", timestamp: "2026-06-29T01:00:00Z",
-      });
+      // Oldest → newest so the avatar narrates the discussion in order; compact fields only.
+      expect(data.messages.map((m) => m.text)).toEqual(["Starting adj-202", "How is the bridge epic?", "Phase 2 complete"]);
+      expect(data.messages[0]).toEqual({ from: "fenix", to: "user", text: "Starting adj-202" });
     }
-    // Default limit applied (10) when none supplied — small payload for the RPC return.
-    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ limit: 10 }));
+    // Default limit applied (6) when none supplied — keep the RPC payload tiny.
+    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ limit: 6 }));
   });
 
   it("resolves a spoken agent name to the canonical id before filtering (Fenix → fenix)", async () => {
@@ -681,7 +679,7 @@ describe("read_messages", () => {
     expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ agentId: "kerrigan" }));
   });
 
-  it("caps the limit at 15 even if a larger value is requested (keep the RPC payload small)", async () => {
+  it("caps the limit at 8 even if a larger value is requested (keep the RPC payload tiny)", async () => {
     const getMessages = vi.fn().mockReturnValue([]);
     const messageStore = {
       getMessages,
@@ -691,7 +689,7 @@ describe("read_messages", () => {
     const bridge = createBridgeToolBridge(makeDeps({ messageStore }));
     await bridge.executeTool({ tool: "read_messages", args: { limit: 500 } });
 
-    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ limit: 15 }));
+    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ limit: 8 }));
   });
 
   it("scopes strictly to a conversationId when given (bleed-free)", async () => {

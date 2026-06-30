@@ -147,11 +147,12 @@ const getAgentDetailArgs = z.object({
   agent: z.string().min(1),
 });
 
-const READ_MESSAGES_DEFAULT_LIMIT = 10;
-const READ_MESSAGES_MAX_LIMIT = 15;
-// Cap each body so a batch of messages stays well under the LiveKit RPC payload ceiling (a
-// large result silently fails to return to the avatar). The avatar narrates a digest, not full text.
-const READ_MESSAGES_BODY_MAX = 280;
+const READ_MESSAGES_DEFAULT_LIMIT = 6;
+const READ_MESSAGES_MAX_LIMIT = 8;
+// Keep the result TINY + plain-ASCII. The Runway tool-RPC return fails ("RPC cancelled or
+// failed") on large or emoji/unicode-heavy payloads — and message bodies are full of emoji.
+// The avatar narrates a short digest, not full structured text.
+const READ_MESSAGES_BODY_MAX = 120;
 
 const readMessagesArgs = z.object({
   agentId: z.string().min(1).optional(),
@@ -571,14 +572,19 @@ async function runReadMessages(
   const newestFirst = deps.messageStore.getMessages(opts);
   // Present oldest → newest for natural narration of the prior discussion.
   const ordered = [...newestFirst].reverse();
+  // Plain-ASCII, whitespace-collapsed, hard-capped — and ONLY from/to/text (no nulls, no ids/
+  // timestamps) — so the RPC return stays small + safe. Large or emoji-heavy payloads fail the
+  // Runway tool RPC ("RPC cancelled or failed"); the avatar only needs a short narratable digest.
+  const clean = (s: string): string =>
+    s
+      .replace(/[^\x20-\x7E]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, READ_MESSAGES_BODY_MAX);
   const messages = ordered.map((m) => ({
-    id: m.id,
-    sender: m.agentId,
-    recipient: m.recipient,
-    role: m.role,
-    body: m.body.length > READ_MESSAGES_BODY_MAX ? m.body.slice(0, READ_MESSAGES_BODY_MAX) + "…" : m.body,
-    conversationId: m.conversationId,
-    timestamp: m.createdAt,
+    from: m.agentId,
+    to: m.recipient ?? "",
+    text: clean(m.body),
   }));
 
   return ok(TOOL_READ_MESSAGES, projectId, { messages, count: messages.length });
