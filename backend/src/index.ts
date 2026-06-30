@@ -33,7 +33,7 @@ import { BridgeSessionBroker } from "./services/bridge-session-broker.js";
 import { createBridgeToolBridge } from "./services/bridge-tool-bridge.js";
 import { createBridgeRpcManager } from "./services/bridge-rpc-handler.js";
 import { createBridgeSessionCollector } from "./services/bridge-session-collector.js";
-import { buildBridgeMemorySeed } from "./services/bridge-memory-seed.js";
+import { buildBridgePersonaEvolution } from "./services/bridge-operating-lessons.js";
 import { BRIDGE_DIRECTIVE_PREFIX } from "./services/bridge-rpc-tools.js";
 import { deliverDirectMessage } from "./services/direct-message-delivery.js";
 import { nudgeAgentViaBridge, answerQuestionViaBridge, createBeadViaBridge, spawnWorkerViaBridge, storeMemoryViaBridge, reinforceMemoryViaBridge, recordCorrectionViaBridge } from "./services/bridge-commands.js";
@@ -265,7 +265,9 @@ app.use(
     // error PROJECT_REQUIRED. getProject resolves the name; the dashboard still passes its own.
     defaultProjectId: "adjutant",
     // adj-202.6.4 — open each iOS/default session already knowing the Commander (memory seed).
-    buildMemorySeed: () => buildBridgeMemorySeed({ memoryStore }),
+    // adj-202.6.3 — and carrying the EVOLVED operating lessons distilled from recent retros, so
+    // the avatar's guidance grows over time (recall seed + lessons, both bounded).
+    buildMemorySeed: () => buildBridgePersonaEvolution({ memoryStore }),
   }),
 );
 
@@ -307,7 +309,8 @@ app.use(
     toolBridge: bridgeToolBridge,
     rpcManager: bridgeRpcManager,
     // adj-202.6.4 — seed the dashboard avatar's persona with recalled memory too.
-    buildMemorySeed: () => buildBridgeMemorySeed({ memoryStore }),
+    // adj-202.6.3 — plus the evolved operating lessons from recent retros (bounded).
+    buildMemorySeed: () => buildBridgePersonaEvolution({ memoryStore }),
   }),
 );
 
