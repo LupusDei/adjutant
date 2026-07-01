@@ -105,6 +105,20 @@ describe("createBridgeTranscriptPersister — finalized persistence + roles", ()
     expect(m.metadata).toMatchObject({ source: "bridge-voice", sessionId: "s1", speaker: "commander" });
   });
 
+  it("should mark persisted turns DELIVERED so they are NEVER injected into the coordinator's tmux (regression)", () => {
+    // The Commander's speech is addressed to the coordinator. If left 'pending', the
+    // message-delivery service would flush it into the LIVE coordinator's tmux pane on its
+    // next connect — dumping the voice transcript back at the agent as if it were new directives.
+    persister.onSegment({ sessionId: "s1", speaker: "commander", text: "remember 314159", segmentId: "c1", final: true });
+    persister.onSegment({ sessionId: "s1", speaker: "avatar", text: "Noted, Commander.", segmentId: "a1", final: true });
+
+    // Nothing is queued for delivery/injection to the coordinator OR the user…
+    expect(messageStore.getPendingForRecipient("adjutant-coordinator")).toHaveLength(0);
+    expect(messageStore.getPendingForRecipient("user")).toHaveLength(0);
+    // …yet both turns are still recorded in the chat (viewable history).
+    expect(messagesInDm()).toHaveLength(2);
+  });
+
   it("should persist the avatar's finalized speech as a role='agent' message from 'adjutant-coordinator'", () => {
     persister.onSegment({ sessionId: "s1", speaker: "avatar", text: "All agents nominal.", segmentId: "a1", final: true });
 

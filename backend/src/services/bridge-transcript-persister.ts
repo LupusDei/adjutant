@@ -56,8 +56,16 @@ export interface PersistedTranscriptTurn {
 export interface BridgeTranscriptPersisterDeps {
   /** Real conversation store — used to ensure the DM row/members exist (lists by default). */
   conversationStore: Pick<ConversationStore, "getOrCreateDm">;
-  /** Real message store — the single persistence path (no new store). */
-  messageStore: Pick<MessageStore, "insertMessage">;
+  /**
+   * Real message store — the single persistence path (no new store). `markDelivered` is used
+   * to mark each persisted turn delivered IMMEDIATELY (adj-202.6.6): a transcript turn is a
+   * RECORD of a conversation that already happened live by voice, NOT a directive to deliver.
+   * Left 'pending', a turn addressed to the coordinator (the Commander's speech → recipient
+   * "adjutant-coordinator") would be flushed into the live coordinator's tmux pane by the
+   * message-delivery service on its next connect. Marking delivered keeps it in Chat but out
+   * of the injection queue.
+   */
+  messageStore: Pick<MessageStore, "insertMessage" | "markDelivered">;
   /** Optional real-time fan-out fired once per persisted turn (e.g. wsBroadcast adapter). */
   broadcast?: ((turn: PersistedTranscriptTurn) => void) | undefined;
   /** The Commander's member id. Defaults to "user" (the canonical user member). */
@@ -126,6 +134,9 @@ export function createBridgeTranscriptPersister(
         conversationId: ensureConversationId(),
         metadata: { source: BRIDGE_VOICE_SOURCE, sessionId: turn.sessionId, speaker: turn.speaker },
       });
+      // A transcript turn is a RECORD, not a live directive — mark it delivered so the
+      // message-delivery service never injects it into the coordinator's tmux pane on connect.
+      deps.messageStore.markDelivered(message.id);
       deps.broadcast?.({ message, from, to, speaker: turn.speaker });
       return message;
     } catch (err) {
