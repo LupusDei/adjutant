@@ -654,11 +654,14 @@ describe("LifecycleManager — envVars support", () => {
       },
     });
 
-    // Find all env var exports
+    // Find all env var EXPORTS. Note (adj-vevei): the identity/env vars are now ALSO
+    // inlined on the `claude` launch command, so match only the `export ` send-keys
+    // to keep asserting the original intent — each custom var is exported once.
     const envCalls = mockExecFile.mock.calls.filter(
       (call: unknown[]) => {
         const args = call[1] as string[];
         return args[0] === "send-keys" && typeof args[3] === "string" &&
+          args[3].startsWith("export ") &&
           (args[3].includes("ADJUTANT_PERSONA_ID") || args[3].includes("CUSTOM_VAR"));
       },
     );
