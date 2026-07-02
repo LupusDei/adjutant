@@ -86,8 +86,9 @@ export const BRIDGE_RPC_TOOLS: RunwayRpcToolDef[] = [
     type: "backend_rpc",
     name: "list_beads",
     description:
-      "List issues (beads) for the currently selected project — epics, tasks, and bugs. Use when asked about open work, what's in progress, or the backlog.",
+      "List issues (beads) — epics, tasks, and bugs — for ANY project. Use when asked about open work, what's in progress, or the backlog. To target a specific project, pass its NAME in `project` (no id needed); omit it for the default project. Call list_projects first if you're unsure of the project's name.",
     parameters: [
+      { name: "project", type: "string", description: "Optional project NAME (e.g. \"my_finances\"). Omit for the default project. No id required." },
       {
         name: "status",
         type: "string",
@@ -102,15 +103,27 @@ export const BRIDGE_RPC_TOOLS: RunwayRpcToolDef[] = [
     type: "backend_rpc",
     name: "get_project_state",
     description:
-      "Get a snapshot of the currently selected project: connected agents, open beads, and recent message activity. Use for a general 'how are we doing' briefing on the project.",
-    parameters: [],
+      "Get a snapshot of a project: connected agents, open beads, and recent message activity. Use for a general 'how are we doing' briefing. Pass a project NAME in `project` to target a specific one; omit for the default.",
+    parameters: [
+      { name: "project", type: "string", description: "Optional project NAME. Omit for the default project. No id required." },
+    ],
     timeoutSeconds: 8,
   },
   {
     type: "backend_rpc",
     name: "get_auto_develop_status",
     description:
-      "Get the auto-develop loop status for the currently selected project (phase, active proposal, progress). Use when asked whether auto-develop is running or what phase it's in.",
+      "Get the auto-develop loop status for a project (phase, active proposal, progress). Use when asked whether auto-develop is running or what phase it's in. Pass a project NAME in `project` to target a specific one; omit for the default.",
+    parameters: [
+      { name: "project", type: "string", description: "Optional project NAME. Omit for the default project. No id required." },
+    ],
+    timeoutSeconds: 8,
+  },
+  {
+    type: "backend_rpc",
+    name: "list_projects",
+    description:
+      "List ALL projects in the fleet by name. Call this when the Commander asks about a project you don't recognize, or wants to know which projects exist — then pass a returned NAME to list_beads / get_project_state / get_auto_develop_status to drill in. No ids needed.",
     parameters: [],
     timeoutSeconds: 8,
   },
@@ -268,9 +281,11 @@ You can query live fleet state using these read-only tools. CALL the matching to
 - list_agents — the crew roster and who is working (the agent roster / crew status).
 - get_agent_detail — what a SPECIFIC agent is working on (their status + in-progress beads). Use this whenever asked what someone is doing; list_agents alone often won't show it.
 - list_questions — open questions awaiting a decision (the triage queue / what's blocking).
-- list_beads — issues for the selected project (open work / backlog).
-- get_project_state — a snapshot of the selected project.
-- get_auto_develop_status — the auto-develop loop status for the selected project.
+- list_projects — the roster of ALL projects in the fleet, by name. Call this when the Commander asks about a project you don't recognize or wants to know which projects exist.
+- list_beads — issues (open work / backlog) for ANY project. To look up a specific project's beads, pass its NAME in the project argument (e.g. "my_finances"); omit for the default. You do NOT need an id — if unsure of the name, call list_projects first.
+- get_project_state — a snapshot of a project. Pass a project NAME in the project argument to target one; omit for the default.
+- get_auto_develop_status — the auto-develop loop status for a project. Pass a project NAME in the project argument; omit for the default.
+CROSS-PROJECT RULE: you coordinate the WHOLE fleet. When the Commander names a project, look it up by NAME — never say you can only see one project, and never ask for a project id.
 - read_messages — recall what was said EARLIER between agents/the Commander; use it to give context on prior/past discussions. Pass an agent NAME to focus on their thread; otherwise it reads recent fleet-wide. The structured result is the source of truth.
 - query_memories — RECALL what you've LEARNED across sessions: the Commander's stated preferences, past decisions, recorded corrections, and fleet patterns. The structured result is the source of truth.
 

@@ -27,7 +27,7 @@ import { z } from "zod";
 
 import { getAgents } from "./agents-service.js";
 import { getConnectedAgents } from "./mcp-server.js";
-import { getProject, type Project } from "./projects-service.js";
+import { getProject, listProjects, type Project } from "./projects-service.js";
 import { execBd, resolveBeadsDir, type BeadsIssue } from "./bd-client.js";
 import { buildAutoDevelopStatus } from "./auto-develop-status.js";
 import { resolveAgentName } from "./bridge-agent-resolver.js";
@@ -51,6 +51,7 @@ export const BRIDGE_READONLY_TOOLS = [
   "get_auto_develop_status",
   "read_messages",
   "query_memories",
+  "list_projects",
 ] as const;
 
 export type BridgeToolName = (typeof BRIDGE_READONLY_TOOLS)[number];
@@ -245,6 +246,12 @@ export function createBridgeToolBridge(deps: BridgeToolDeps): BridgeToolBridge {
       );
     }
 
+    // Cross-project by NAME: an explicit `args.project` (a spoken project name) overrides the
+    // session's default projectId for the project-scoped tools. getProject resolves a name OR a
+    // UUID, so "list beads for <project>" works for ANY project without the Commander knowing ids.
+    const spokenProject = typeof args["project"] === "string" ? args["project"].trim() : "";
+    const effectiveProjectId = spokenProject || req.projectId;
+
     try {
       switch (tool) {
         case "list_agents":
@@ -254,15 +261,17 @@ export function createBridgeToolBridge(deps: BridgeToolDeps): BridgeToolBridge {
         case "list_questions":
           return runListQuestions(deps, args, projectId);
         case "list_beads":
-          return await runListBeads(args, req.projectId);
+          return await runListBeads(args, effectiveProjectId);
         case "get_project_state":
-          return await runGetProjectState(deps, req.projectId);
+          return await runGetProjectState(deps, effectiveProjectId);
         case "get_auto_develop_status":
-          return runGetAutoDevelopStatus(deps, req.projectId);
+          return runGetAutoDevelopStatus(deps, effectiveProjectId);
         case "read_messages":
           return await runReadMessages(deps, args, projectId);
         case "query_memories":
           return runQueryMemories(deps, args, projectId);
+        case "list_projects":
+          return runListProjects(projectId);
         default:
           // Unreachable — isAllowed already gated the set, but keep TS exhaustive.
           return reject(tool, projectId, "TOOL_NOT_ALLOWED", `Tool '${String(tool)}' is not callable.`);
@@ -296,6 +305,21 @@ const TOOL_GET_PROJECT_STATE: BridgeToolName = "get_project_state";
 const TOOL_GET_AUTO_DEVELOP_STATUS: BridgeToolName = "get_auto_develop_status";
 const TOOL_READ_MESSAGES: BridgeToolName = "read_messages";
 const TOOL_QUERY_MEMORIES: BridgeToolName = "query_memories";
+const TOOL_LIST_PROJECTS: BridgeToolName = "list_projects";
+
+/**
+ * list_projects — the fleet-wide project roster (name + id) so the avatar can NAME which projects
+ * exist before drilling into one. The Commander speaks a project name; the other project-scoped
+ * tools (list_beads, get_project_state, get_auto_develop_status) then take that name via `project`.
+ */
+function runListProjects(projectId: string | null): BridgeToolResult {
+  const result = listProjects();
+  if (!result.success || !result.data) {
+    return reject(TOOL_LIST_PROJECTS, projectId, "TOOL_FAILED", result.error?.message ?? "listProjects failed");
+  }
+  const projects = result.data.map((p) => ({ name: p.name, id: p.id }));
+  return ok(TOOL_LIST_PROJECTS, projectId, { projects, count: projects.length });
+}
 
 async function runListAgents(
   _deps: BridgeToolDeps,

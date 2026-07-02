@@ -33,8 +33,10 @@ vi.mock("../../src/services/mcp-server.js", () => ({
 }));
 
 const mockGetProject = vi.fn();
+const mockListProjects = vi.fn();
 vi.mock("../../src/services/projects-service.js", () => ({
   getProject: (...args: unknown[]) => mockGetProject(...args),
+  listProjects: (...args: unknown[]) => mockListProjects(...args),
 }));
 
 const mockExecBd = vi.fn();
@@ -155,7 +157,7 @@ beforeEach(() => {
 // ============================================================================
 
 describe("createBridgeToolBridge — whitelist", () => {
-  it("exposes exactly the eight read-only tools", () => {
+  it("exposes exactly the nine read-only tools", () => {
     expect([...BRIDGE_READONLY_TOOLS].sort()).toEqual(
       [
         "get_agent_detail",
@@ -163,6 +165,7 @@ describe("createBridgeToolBridge — whitelist", () => {
         "get_project_state",
         "list_agents",
         "list_beads",
+        "list_projects",
         "list_questions",
         "read_messages",
         "query_memories",
@@ -493,6 +496,48 @@ describe("list_beads", () => {
     const res = await bridge.executeTool({ tool: "list_beads", projectId: PROJECT_ID });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error.code).toBe("TOOL_FAILED");
+  });
+});
+
+// ============================================================================
+// Cross-project lookup — list_beads by project NAME + list_projects (adj-202)
+// ============================================================================
+
+describe("cross-project lookup", () => {
+  it("list_beads resolves a spoken project NAME (args.project) over the session default", async () => {
+    // The dispatch injects the default projectId ("adjutant"); a spoken project name must win so
+    // "list beads for my_finances" hits THAT project, not the default.
+    mockGetProject.mockReturnValue({ success: true, data: { id: "pf", name: "my_finances", path: "/fin" } });
+    mockResolveBeadsDir.mockReturnValue("/fin/.beads");
+    mockExecBd.mockResolvedValue({ success: true, data: [{ id: "fin-1", title: "Reconcile", status: "open" }] });
+
+    const bridge = createBridgeToolBridge(makeDeps());
+    const res = await bridge.executeTool({ tool: "list_beads", projectId: "adjutant", args: { project: "my_finances" } });
+
+    expect(res.ok).toBe(true);
+    // getProject was resolved with the SPOKEN name, not the injected default.
+    expect(mockGetProject).toHaveBeenCalledWith("my_finances");
+    if (res.ok) expect((res.data as { count: number }).count).toBe(1);
+  });
+
+  it("list_projects returns the fleet roster by name", async () => {
+    mockListProjects.mockReturnValue({
+      success: true,
+      data: [
+        { id: "p1", name: "adjutant", path: "/a" },
+        { id: "p2", name: "my_finances", path: "/f" },
+      ],
+    });
+
+    const bridge = createBridgeToolBridge(makeDeps());
+    const res = await bridge.executeTool({ tool: "list_projects", projectId: "adjutant", args: {} });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const data = res.data as { projects: { name: string }[]; count: number };
+      expect(data.count).toBe(2);
+      expect(data.projects.map((p) => p.name).sort()).toEqual(["adjutant", "my_finances"]);
+    }
   });
 });
 
