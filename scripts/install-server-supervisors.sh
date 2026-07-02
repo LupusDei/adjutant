@@ -147,7 +147,16 @@ XML
   echo "[install] plist  -> $plist"
 }
 
-write_server_plist backend  adjutant-backend.sh
+# Backend runs STABLE (no-watch) under supervision. `tsx watch` re-evaluates
+# src/index.ts on reload, which re-registers the http `upgrade` handler and makes a
+# single WS upgrade call handleUpgrade() twice on one socket -> the server crashes
+# (ws websocket-server.js:373). Worse, `tsx watch` keeps the WATCHER process alive
+# after the app crashes, so launchd KeepAlive never sees the death and only the 120s
+# heal watchdog recovers it -> ~2-min outages. Plain `tsx src/index.ts` ran stably
+# for hours pre-supervision; no-watch also lets crashes propagate to KeepAlive (5s
+# recovery). Agents edit ISOLATED worktrees (Rule 7) so live-reload-on-merge is not
+# worth crash-looping the fleet backend. (adj-yi6do)
+write_server_plist backend  adjutant-backend.sh ADJUTANT_NO_WATCH 1
 write_server_plist frontend adjutant-frontend.sh
 write_server_plist ngrok    adjutant-ngrok.sh
 write_heal_plist
@@ -181,7 +190,10 @@ retire_legacy_dev_stack() {
   local all="" gen="$roots"
   while [ -n "$(echo "$gen" | xargs)" ]; do
     all="$all $gen"; local next="" p
-    for p in $gen; do next="$next $(pgrep -P "$p" 2>/dev/null | tr '\n' ' ')"; done
+    # `|| true`: a leaf PID has no children, so `pgrep -P` exits 1; under
+    # `set -e`+`pipefail` that would abort the whole installer mid-cutover
+    # (the process-tree walk ALWAYS ends on childless leaves). Guard it.
+    for p in $gen; do next="$next $(pgrep -P "$p" 2>/dev/null | tr '\n' ' ' || true)"; done
     gen="$next"
   done
   # Reverse order (deepest PIDs were appended last) → TERM
@@ -210,6 +222,15 @@ free_port "$FRONTEND_PORT"
 load_job() { # $1=label
   local label="$DOMAIN_NAME.$1"
   boot_out "$1"
+  # `launchctl bootout` is ASYNC: it returns before the label is fully torn down.
+  # Bootstrapping while the old job is still registered fails with
+  # "Bootstrap failed: 5: Input/output error", which under set -e aborts the whole
+  # installer mid-cutover (some jobs left unloaded). Wait (bounded, ~10s) for the
+  # label to fully unregister so re-runs are idempotent. (adj-yi6do)
+  local tries=0
+  while launchctl print "gui/$UID_/$label" >/dev/null 2>&1 && [ "$tries" -lt 40 ]; do
+    sleep 0.25; tries=$((tries + 1))
+  done
   launchctl bootstrap "gui/$UID_" "$LA_DIR/$label.plist"
   launchctl enable "gui/$UID_/$label" 2>/dev/null || true
   echo "[install] loaded $label"

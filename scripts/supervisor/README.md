@@ -32,9 +32,18 @@ still works as before — this model is the deployment posture for the fleet hos
   before exec'ing, so the running node always matches the installed native bins
   (esbuild / `@rollup/rollup-darwin-x64`). This is the root-cause fix for the Vite
   ABI-mismatch crashes.
-- **Backend watch mode:** kept (`tsx watch`) so a merge to `main` live-reloads. Set
-  `ADJUTANT_NO_WATCH=1` in the plist env for a stable, no-reload backend during
-  heavy multi-agent sessions (adj-8mmyd). KeepAlive restarts on crash either way.
+- **Backend runs STABLE (no-watch) under supervision.** The installer sets
+  `ADJUTANT_NO_WATCH=1` in the backend plist. `tsx watch` was found to (1) re-evaluate
+  `src/index.ts` on reload, re-registering the http `upgrade` handler so one WS upgrade
+  calls `handleUpgrade()` twice on the same socket → the backend crashes
+  (`ws/lib/websocket-server.js:373`, thrown from `src/index.ts:493`); and (2) keep the
+  *watcher* process alive after the app crashes, so launchd KeepAlive never sees the
+  death — only the 120s heal watchdog recovers it (≈2-min outages). Plain
+  `tsx src/index.ts` ran stably for hours pre-supervision, and no-watch lets a real
+  crash propagate to KeepAlive for ~5s recovery. Agents edit ISOLATED worktrees
+  (Rule 7), so the canonical tree changes only on an intentional merge — live-reload
+  is not worth crash-looping the fleet backend (also the adj-8mmyd hazard). To opt
+  back into watch on a dev box, drop `ADJUTANT_NO_WATCH` from the plist. (adj-yi6do)
 - **Heal watchdog:** KeepAlive only restarts on process *death*. The watchdog
   catches *hung-but-listening* / wedged-port / crash-loop-faster-than-health cases
   by curling each endpoint and `launchctl kickstart -k`ing the drifted job — the
