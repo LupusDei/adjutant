@@ -31,27 +31,33 @@ export interface MessageAttachment {
 
 /**
  * Public, client-facing attachment shape (adj-203.2.5.1). Deliberately OMITS
- * `storagePath` (the absolute server filesystem path) and internal bookkeeping
- * (`messageId`, `createdAt`) — web + iOS fetch bytes via `GET /api/uploads/:id`,
- * so they only need id/kind/filename/mimeType/sizeBytes. This is the ONLY
- * attachment shape that may cross the wire to clients (WS + REST serializers).
+ * `storagePath` (the absolute server filesystem path) — that is the ONLY sensitive
+ * field, and stripping it is the whole point of this DTO. `messageId` and
+ * `createdAt` ARE included: they are non-sensitive and the client models decode
+ * them (iOS `MessageAttachment.createdAt` is non-optional — omitting it caused a
+ * Swift decode failure "the data couldn't be read because it is missing", adj-206).
+ * This is the ONLY attachment shape that may cross the wire to clients (WS + REST).
  */
 export interface PublicMessageAttachment {
   id: string;
+  messageId: string | null;
   kind: string;
   filename: string;
   mimeType: string;
   sizeBytes: number;
+  createdAt: string;
 }
 
-/** Strip an internal attachment down to its public, client-safe DTO. */
+/** Strip an internal attachment down to its public, client-safe DTO (drops storagePath). */
 export function toPublicMessageAttachment(a: MessageAttachment): PublicMessageAttachment {
   return {
     id: a.id,
+    messageId: a.messageId,
     kind: a.kind,
     filename: a.filename,
     mimeType: a.mimeType,
     sizeBytes: a.sizeBytes,
+    createdAt: a.createdAt,
   };
 }
 

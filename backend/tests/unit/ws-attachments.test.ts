@@ -80,6 +80,12 @@ describe("WS chat_message attachments payload", () => {
     expect(payload.attachments![0]!.filename).toBe("x.png");
     expect(payload.attachments![0]!.mimeType).toBe("image/png");
     expect(payload.attachments![0]!.sizeBytes).toBe(20);
+    // adj-206: the public DTO MUST carry createdAt + messageId — the iOS
+    // MessageAttachment model requires createdAt (non-optional); omitting it caused
+    // "the data couldn't be read because it is missing" on send. (storagePath stays out.)
+    expect(payload.attachments![0]).toHaveProperty("createdAt");
+    expect(payload.attachments![0]).toHaveProperty("messageId");
+    expect(payload.attachments![0]!.createdAt).toBeTruthy();
     expect(JSON.stringify(payload)).not.toContain("/uploads/x.png");
   });
 
