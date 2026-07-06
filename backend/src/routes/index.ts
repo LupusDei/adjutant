@@ -10,6 +10,7 @@ export { mcpRouter } from "./mcp.js";
 export { statusRouter } from "./status.js";
 export { tunnelRouter } from "./tunnel.js";
 export { createProjectsRouter } from "./projects.js";
+export { createUploadsRouter } from "./uploads.js";
 export { voiceRouter } from "./voice.js";
 export { sessionsRouter } from "./sessions.js";
 export { swarmsRouter } from "./swarms.js";
