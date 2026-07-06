@@ -45,6 +45,8 @@ export interface DirectMessageInput {
   deliveryText?: string | undefined;
   /** Emit a `message_sent` timeline event (requires an eventStore). Default false. */
   emitEvent?: boolean | undefined;
+  /** Ids of previously-uploaded (unlinked) attachments to link to this message (adj-203). */
+  attachmentIds?: string[] | undefined;
 }
 
 export interface DirectMessageResult {
@@ -77,6 +79,7 @@ export function deliverDirectMessage(deps: DirectMessageDeps, input: DirectMessa
   };
   if (input.threadId !== undefined) insertInput.threadId = input.threadId;
   if (input.metadata !== undefined) insertInput.metadata = input.metadata;
+  if (input.attachmentIds !== undefined) insertInput.attachmentIds = input.attachmentIds;
   const message = deps.store.insertMessage(insertInput);
 
   wsBroadcast({
@@ -89,6 +92,9 @@ export function deliverDirectMessage(deps: DirectMessageDeps, input: DirectMessa
     threadId: message.threadId ?? undefined,
     conversationId: message.conversationId ?? undefined,
     metadata: message.metadata ?? undefined,
+    // adj-203: carry linked image attachments so web + iOS render them inline in real time.
+    attachments:
+      message.attachments !== undefined && message.attachments.length > 0 ? message.attachments : undefined,
   });
 
   if (input.emitEvent && deps.eventStore) {

@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 
+import type { AttachmentStore, MessageAttachment } from "./attachment-store.js";
+
 export interface Message {
   id: string;
   sessionId: string | null;
@@ -15,6 +17,12 @@ export interface Message {
   conversationId: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * Image attachments linked to this message (adj-203). Present (possibly empty)
+   * only when the store was constructed with an AttachmentStore; otherwise
+   * undefined so legacy callers/serialization are unchanged.
+   */
+  attachments?: MessageAttachment[];
 }
 
 export interface Thread {
@@ -36,6 +44,8 @@ interface InsertMessageInput {
   threadId?: string;
   conversationId?: string;
   eventType?: string;
+  /** Ids of previously-uploaded (unlinked) attachments to link to this message (adj-203). */
+  attachmentIds?: string[];
 }
 
 interface GetMessagesOptions {
@@ -137,7 +147,28 @@ export interface MessageStore {
   getThreads(agentId?: string): Thread[];
 }
 
-export function createMessageStore(db: Database.Database): MessageStore {
+export interface CreateMessageStoreOptions {
+  /**
+   * When provided, insertMessage links `attachmentIds` and all reads
+   * (insertMessage/getMessage/getMessages) hydrate `Message.attachments`
+   * (adj-203). Omit to keep the legacy attachment-free behavior.
+   */
+  attachmentStore?: AttachmentStore;
+}
+
+export function createMessageStore(
+  db: Database.Database,
+  options: CreateMessageStoreOptions = {},
+): MessageStore {
+  const attachmentStore = options.attachmentStore;
+
+  /** Attach hydrated attachments when an AttachmentStore is configured. */
+  function hydrate(message: Message): Message {
+    if (attachmentStore === undefined) return message;
+    message.attachments = attachmentStore.getByMessageId(message.id);
+    return message;
+  }
+
   const insertStmt = db.prepare(`
     INSERT INTO messages (id, session_id, agent_id, recipient, role, body, metadata, delivery_status, event_type, thread_id, conversation_id, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, datetime('now'), datetime('now'))
@@ -194,13 +225,21 @@ export function createMessageStore(db: Database.Database): MessageStore {
         input.conversationId ?? null,
       );
 
+      // Link any supplied attachments to this message, then hydrate them onto
+      // the returned Message (adj-203). No-op when no attachmentStore is wired.
+      if (attachmentStore !== undefined && input.attachmentIds !== undefined) {
+        for (const attachmentId of input.attachmentIds) {
+          attachmentStore.linkToMessage(attachmentId, id);
+        }
+      }
+
       const row = getByIdStmt.get(id) as MessageRow;
-      return rowToMessage(row);
+      return hydrate(rowToMessage(row));
     },
 
     getMessage(id: string): Message | null {
       const row = getByIdStmt.get(id) as MessageRow | undefined;
-      return row !== undefined ? rowToMessage(row) : null;
+      return row !== undefined ? hydrate(rowToMessage(row)) : null;
     },
 
     getMessages(opts: GetMessagesOptions): Message[] {
@@ -271,7 +310,7 @@ export function createMessageStore(db: Database.Database): MessageStore {
 
       const sql = `SELECT * FROM messages ${where} ORDER BY created_at DESC, id DESC ${limitClause}`;
       const rows = db.prepare(sql).all(...params) as MessageRow[];
-      return rows.map(rowToMessage);
+      return rows.map((row) => hydrate(rowToMessage(row)));
     },
 
     getPendingForRecipient(recipient: string, since?: Date): Message[] {

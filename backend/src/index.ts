@@ -15,6 +15,10 @@ import { getSessionBridge } from "./services/session-bridge.js";
 import { initMcpServer, setToolRegistrar, getAgentBySession, startMcpSessionReaper } from "./services/mcp-server.js";
 import { initDatabase } from "./services/database.js";
 import { createMessageStore } from "./services/message-store.js";
+import { createAttachmentStore } from "./services/attachment-store.js";
+import { createUploadStorage } from "./services/upload-storage.js";
+import { createUploadService } from "./services/upload-service.js";
+import { createUploadsRouter } from "./routes/uploads.js";
 import { registerMessagingTools } from "./services/mcp-tools/messaging.js";
 import { registerChannelTools } from "./services/mcp-tools/channels.js";
 import { registerStatusTools } from "./services/mcp-tools/status.js";
@@ -95,7 +99,14 @@ app.set("trust proxy", true);
 // are mounted ahead of the global JSON body parser so HMAC verification can
 // read raw bytes, and they need eventStore for persisting deploy events.
 const messageDb = initDatabase();
-const messageStore = createMessageStore(messageDb);
+// adj-203: attachment store shares the message DB; injected into the message store so
+// message reads hydrate `attachments` and sends link uploaded images to the message.
+const attachmentStore = createAttachmentStore(messageDb);
+const messageStore = createMessageStore(messageDb, { attachmentStore });
+// adj-203: image upload pipeline — storage primitive (ADJUTANT_UPLOAD_DIR) + service.
+const uploadStorage = createUploadStorage();
+uploadStorage.ensureDir();
+const uploadService = createUploadService({ storage: uploadStorage, attachmentStore });
 const proposalStore = createProposalStore(messageDb);
 const conversationStore = createConversationStore(messageDb, messageStore);
 migrateProposalProjectNames(messageDb);
@@ -328,6 +339,9 @@ app.use("/api/costs", costsRouter);
 app.use("/api/events", createEventsRouter(eventStore));
 app.use("/api/memory", createMemoryRouter(memoryStore));
 app.use("/api/messages", createMessagesRouter(messageStore));
+// adj-203: image upload + serve API. Behind apiKeyAuth (mounted above) — GET /:id
+// streams stored screenshots to the authenticated operator; POST accepts multipart.
+app.use("/api/uploads", createUploadsRouter(uploadService));
 app.use("/api/conversations", createConversationsRouter(conversationStore, messageStore));
 app.use("/api/channels", createChannelsRouter(conversationStore));
 app.use("/api/projects", createProjectsRouter(messageStore, proposalStore, autoDevelopStore));
