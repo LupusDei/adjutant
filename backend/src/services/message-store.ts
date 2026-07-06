@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 
-import type { AttachmentStore, MessageAttachment } from "./attachment-store.js";
+import type { AttachmentStore, MessageAttachment, PublicMessageAttachment } from "./attachment-store.js";
+import { toPublicMessageAttachment } from "./attachment-store.js";
 
 export interface Message {
   id: string;
@@ -23,6 +24,24 @@ export interface Message {
    * undefined so legacy callers/serialization are unchanged.
    */
   attachments?: MessageAttachment[];
+}
+
+/**
+ * Client-facing message shape (adj-203.2.5.1): identical to {@link Message} except
+ * `attachments` is the PUBLIC DTO (no absolute `storagePath`). Every serializer that
+ * sends a message to web/iOS (REST responses, WS payloads) must emit this, never the
+ * internal Message whose attachments carry the server filesystem path.
+ */
+export type ClientMessage = Omit<Message, "attachments"> & {
+  attachments?: PublicMessageAttachment[];
+};
+
+/** Convert an internal Message to its client-safe form, stripping storagePath. */
+export function toClientMessage(message: Message): ClientMessage {
+  const { attachments, ...rest } = message;
+  return attachments !== undefined
+    ? { ...rest, attachments: attachments.map(toPublicMessageAttachment) }
+    : rest;
 }
 
 export interface Thread {
@@ -310,7 +329,16 @@ export function createMessageStore(
 
       const sql = `SELECT * FROM messages ${where} ORDER BY created_at DESC, id DESC ${limitClause}`;
       const rows = db.prepare(sql).all(...params) as MessageRow[];
-      return rows.map((row) => hydrate(rowToMessage(row)));
+      const messages = rows.map(rowToMessage);
+      // adj-203.2.6: batch-hydrate attachments in ONE query (avoids N+1 on the
+      // chat-history hot path). No-op when no AttachmentStore is wired.
+      if (attachmentStore !== undefined) {
+        const byMessage = attachmentStore.getByMessageIds(messages.map((m) => m.id));
+        for (const message of messages) {
+          message.attachments = byMessage.get(message.id) ?? [];
+        }
+      }
+      return messages;
     },
 
     getPendingForRecipient(recipient: string, since?: Date): Message[] {

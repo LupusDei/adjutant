@@ -182,7 +182,9 @@ export function createAttachmentStore(db: Database.Database): AttachmentStore {
           )
           .all(...chunk) as AttachmentRow[];
         for (const row of rows) {
-          const list = grouped.get(row.message_id as string);
+          // message_id is non-null here (the WHERE clause matches it), but typed
+          // string | null on the row; ! narrows without an unsafe cast.
+          const list = row.message_id !== null ? grouped.get(row.message_id) : undefined;
           if (list !== undefined) list.push(rowToAttachment(row));
         }
       }

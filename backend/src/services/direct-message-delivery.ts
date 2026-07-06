@@ -20,6 +20,7 @@
 import type { MessageStore } from "./message-store.js";
 import type { EventStore } from "./event-store.js";
 import { wsBroadcast } from "./ws-server.js";
+import { toPublicMessageAttachment } from "./attachment-store.js";
 import { dmConversationId } from "./conversation-store.js";
 import { getSessionBridge } from "./session-bridge.js";
 import { deliverImageAttachments } from "./attachment-delivery-service.js";
@@ -93,9 +94,12 @@ export function deliverDirectMessage(deps: DirectMessageDeps, input: DirectMessa
     threadId: message.threadId ?? undefined,
     conversationId: message.conversationId ?? undefined,
     metadata: message.metadata ?? undefined,
-    // adj-203: carry linked image attachments so web + iOS render them inline in real time.
+    // adj-203: carry linked image attachments so web + iOS render them inline in real
+    // time — as the PUBLIC DTO only (adj-203.2.5.1: never leak the absolute storagePath).
     attachments:
-      message.attachments !== undefined && message.attachments.length > 0 ? message.attachments : undefined,
+      message.attachments !== undefined && message.attachments.length > 0
+        ? message.attachments.map(toPublicMessageAttachment)
+        : undefined,
   });
 
   if (input.emitEvent && deps.eventStore) {
