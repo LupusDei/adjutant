@@ -7,6 +7,7 @@ import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo, logWarn } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
 import { startPrefixMapRefreshScheduler } from "./services/beads/index.js";
+import { startUploadRetentionScheduler } from "./services/upload-retention.js";
 import { initWebSocketServer, setConversationStore, wsBroadcast } from "./services/ws-server.js";
 import { initAgentStatusStream } from "./services/agent-status-stream.js";
 import { initTerminalStream } from "./services/terminal-stream.js";
@@ -488,6 +489,10 @@ const server = app.listen(PORT, () => {
 
   // Start prefix map refresh scheduler (adj-sha0s)
   startPrefixMapRefreshScheduler();
+
+  // adj-203.6.1 — periodic upload retention sweep: prune stored screenshots + their
+  // attachment rows older than ADJUTANT_UPLOAD_TTL_DAYS (default 7). Logs the count.
+  startUploadRetentionScheduler({ attachmentStore, storage: uploadStorage });
 
   // Initialize WebSocket servers (all use noServer: true)
   const chatWss = initWebSocketServer(server, messageStore);
