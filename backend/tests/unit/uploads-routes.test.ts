@@ -106,7 +106,9 @@ describe("GET /api/uploads/:id", () => {
     const res = await request(app).get(`/api/uploads/${id}`).buffer(true).parse((r, cb) => {
       const chunks: Buffer[] = [];
       r.on("data", (c: Buffer) => chunks.push(c));
-      r.on("end", () => cb(null, Buffer.concat(chunks)));
+      r.on("end", () => {
+        cb(null, Buffer.concat(chunks));
+      });
     });
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toContain("image/png");

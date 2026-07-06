@@ -130,7 +130,9 @@ describe("UploadService.getFileForServe", () => {
     await new Promise<void>((res, rej) => {
       served!.stream
         .on("data", (c: Buffer) => chunks.push(c))
-        .on("end", () => res())
+        .on("end", () => {
+          res();
+        })
         .on("error", rej);
     });
     expect(Buffer.concat(chunks).equals(PNG)).toBe(true);

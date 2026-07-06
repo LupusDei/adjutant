@@ -56,23 +56,22 @@ afterEach(() => {
 // ============================================================================
 
 describe("resolveUploadDir", () => {
-  const KEY = "ADJUTANT_UPLOAD_DIR";
   let prev: string | undefined;
   beforeEach(() => {
-    prev = process.env[KEY];
+    prev = process.env["ADJUTANT_UPLOAD_DIR"];
   });
   afterEach(() => {
-    if (prev === undefined) delete process.env[KEY];
-    else process.env[KEY] = prev;
+    if (prev === undefined) delete process.env["ADJUTANT_UPLOAD_DIR"];
+    else process.env["ADJUTANT_UPLOAD_DIR"] = prev;
   });
 
   it("should honor ADJUTANT_UPLOAD_DIR when set", () => {
-    process.env[KEY] = "/var/data/adj-uploads";
+    process.env["ADJUTANT_UPLOAD_DIR"] = "/var/data/adj-uploads";
     expect(resolveUploadDir()).toBe("/var/data/adj-uploads");
   });
 
   it("should default to ~/.adjutant/uploads when unset", () => {
-    delete process.env[KEY];
+    delete process.env["ADJUTANT_UPLOAD_DIR"];
     expect(resolveUploadDir()).toBe(join(homedir(), ".adjutant", "uploads"));
   });
 });
@@ -235,7 +234,9 @@ describe("UploadStorage.openReadStream", () => {
       storage
         .openReadStream(abs)
         .on("data", (c: Buffer) => chunks.push(c))
-        .on("end", () => res())
+        .on("end", () => {
+          res();
+        })
         .on("error", rej);
     });
     expect(Buffer.concat(chunks).equals(PNG)).toBe(true);
@@ -263,7 +264,9 @@ describe("UploadStorage.delete", () => {
     const outside = join(tmpdir(), "victim-file.txt");
     writeFileSync(outside, "keep me");
     try {
-      expect(() => storage.delete(outside)).toThrow();
+      expect(() => {
+        storage.delete(outside);
+      }).toThrow();
       expect(existsSync(outside)).toBe(true);
     } finally {
       rmSync(outside, { force: true });
@@ -273,6 +276,8 @@ describe("UploadStorage.delete", () => {
   it("should be a no-op (not throw) when the file is already gone", () => {
     const name = storage.generateStoredName("png");
     const abs = join(dir, name);
-    expect(() => storage.delete(abs)).not.toThrow();
+    expect(() => {
+      storage.delete(abs);
+    }).not.toThrow();
   });
 });

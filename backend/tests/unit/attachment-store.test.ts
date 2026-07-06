@@ -119,7 +119,9 @@ describe("AttachmentStore.linkToMessage", () => {
 
   it("should not throw for an unknown attachment id (no rows updated)", () => {
     insertMessage("m-4");
-    expect(() => store.linkToMessage("does-not-exist", "m-4")).not.toThrow();
+    expect(() => {
+      store.linkToMessage("does-not-exist", "m-4");
+    }).not.toThrow();
     expect(store.getByMessageId("m-4")).toEqual([]);
   });
 });

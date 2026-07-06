@@ -72,7 +72,7 @@ describe("WS chat_message attachments payload", () => {
     deliverDirectMessage({ store }, { from: "user", to: "raynor", body: "screenshot", role: "user", attachmentIds: [att.id] });
 
     expect(spy).toHaveBeenCalled();
-    const payload = spy.mock.calls[0]![0] as WsServerMessage;
+    const payload = spy.mock.calls[0]![0];
     expect(payload.type).toBe("chat_message");
     expect(payload.attachments).toBeDefined();
     expect(payload.attachments![0]!.id).toBe(att.id);
@@ -85,7 +85,7 @@ describe("WS chat_message attachments payload", () => {
 
     deliverDirectMessage({ store }, { from: "user", to: "raynor", body: "plain", role: "user" });
 
-    const payload = spy.mock.calls[0]![0] as WsServerMessage;
+    const payload = spy.mock.calls[0]![0];
     expect(payload.attachments).toBeUndefined();
   });
 });
