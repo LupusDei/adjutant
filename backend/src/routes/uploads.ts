@@ -41,7 +41,7 @@ export function createUploadsRouter(service: UploadService): Router {
         const message =
           mErr.code === "LIMIT_FILE_SIZE"
             ? `Upload exceeds ${MAX_UPLOAD_BYTES} bytes`
-            : (mErr.message ?? "Malformed upload");
+            : mErr.message || "Malformed upload";
         logWarn("upload rejected by parser", { code });
         return res.status(400).json(validationError(message, code));
       }
