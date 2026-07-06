@@ -19,6 +19,7 @@ struct ChatInputView: View {
     @ObservedObject var attachments: ComposerAttachments = ComposerAttachments()
 
     @State private var photoItem: PhotosPickerItem?
+    @State private var attachmentError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -55,6 +56,17 @@ struct ChatInputView: View {
             guard let newItem else { return }
             Task { await stage(from: newItem) }
         }
+        .alert(
+            "Couldn't attach image",
+            isPresented: Binding(
+                get: { attachmentError != nil },
+                set: { if !$0 { attachmentError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { attachmentError = nil }
+        } message: {
+            Text(attachmentError ?? "")
+        }
     }
 
     // MARK: - Attachment intake
@@ -82,30 +94,45 @@ struct ChatInputView: View {
         }
     }
 
-    /// Load a picked photo's bytes, sniff its MIME, and stage it.
+    /// Load a picked photo's bytes, normalize the format (HEIC → JPEG), and stage it.
     private func stage(from item: PhotosPickerItem) async {
         defer { photoItem = nil }
-        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
-        stage(data: data)
+        guard let data = try? await item.loadTransferable(type: Data.self) else {
+            attachmentError = "Couldn't load the selected image."
+            return
+        }
+        // Convert off the main actor — HEIC decode + JPEG encode can be heavy.
+        let normalized = await Task.detached {
+            ImageConverter.normalizedImageData(from: data)
+        }.value
+        stage(normalized)
     }
 
     /// Paste an image from the system clipboard, if present.
     private func pasteImage() {
-        if let image = UIPasteboard.general.image, let data = image.pngData() {
-            stage(data: data, fallbackMime: "image/png")
+        guard let image = UIPasteboard.general.image, let data = image.pngData() else {
+            attachmentError = "No image found on the clipboard."
+            return
         }
+        stage(ImageConverter.normalizedImageData(from: data))
     }
 
-    private func stage(data: Data, fallbackMime: String? = nil) {
-        let mime = ImageMimeSniffer.mimeType(for: data) ?? fallbackMime
-        guard let mimeType = mime else { return }
-        _ = attachments.add(
+    /// Stage a normalized (allowlist-safe) image, or surface clear feedback.
+    private func stage(_ normalized: (data: Data, mimeType: String)?) {
+        guard let normalized else {
+            attachmentError = "That file isn't a supported image and couldn't be converted."
+            return
+        }
+        let added = attachments.add(
             PendingAttachment(
-                data: data,
-                filename: ImageMimeSniffer.filename(for: mimeType),
-                mimeType: mimeType
+                data: normalized.data,
+                filename: ImageMimeSniffer.filename(for: normalized.mimeType),
+                mimeType: normalized.mimeType
             )
         )
+        if !added {
+            attachmentError = "You can attach up to \(ComposerAttachments.maxCount) images."
+        }
     }
 
     // MARK: - Subviews

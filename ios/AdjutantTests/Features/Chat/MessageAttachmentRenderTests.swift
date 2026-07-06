@@ -10,8 +10,13 @@ import AdjutantKit
 /// fetch and the loader state machine.
 @MainActor
 final class MessageAttachmentRenderTests: XCTestCase {
+    override func setUp() async throws {
+        AttachmentImageLoader.clearCacheForTesting()
+    }
+
     override func tearDown() async throws {
         MockURLProtocol.mockHandler = nil
+        AttachmentImageLoader.clearCacheForTesting()
     }
 
     private func makeClient(apiKey: String? = "secret-key") -> APIClient {
@@ -67,6 +72,44 @@ final class MessageAttachmentRenderTests: XCTestCase {
         }
     }
 
+    // MARK: - In-memory cache (adj-203.5.6)
+
+    func testSecondLoadServesFromCacheWithoutRefetch() async throws {
+        let fetchCount = CounterBox()
+        let imageBytes = Data([0x89, 0x50, 0x4E, 0x47, 0x55])
+        MockURLProtocol.mockHandler = { request in
+            fetchCount.value += 1
+            let response = HTTPURLResponse(
+                url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "image/png"]
+            )!
+            return (response, imageBytes)
+        }
+
+        let client = makeClient()
+        // First loader triggers a network fetch and populates the cache.
+        let first = AttachmentImageLoader(apiClient: client)
+        await first.load(attachmentId: "cached_1")
+        XCTAssertEqual(first.state, .loaded(imageBytes))
+        XCTAssertEqual(fetchCount.value, 1)
+
+        // A brand-new loader for the same id must serve from cache — no refetch.
+        let second = AttachmentImageLoader(apiClient: client)
+        await second.load(attachmentId: "cached_1")
+        XCTAssertEqual(second.state, .loaded(imageBytes))
+        XCTAssertEqual(fetchCount.value, 1, "second load must hit the cache, not the network")
+    }
+
+    func testPrimeSeedsCacheForImmediateLoad() async throws {
+        // No mock handler set — if this hit the network it would crash/fail.
+        let localBytes = Data([0x89, 0x50, 0x4E, 0x47, 0x99])
+        AttachmentImageLoader.prime(attachmentId: "local_1", data: localBytes)
+
+        let loader = AttachmentImageLoader(apiClient: makeClient())
+        await loader.load(attachmentId: "local_1")
+        XCTAssertEqual(loader.state, .loaded(localBytes))
+    }
+
     func testMessageImageAttachmentsFiltersToImages() {
         let now = "2026-07-06T00:00:00.000Z"
         let img = MessageAttachment(
@@ -98,4 +141,8 @@ final class MessageAttachmentRenderTests: XCTestCase {
 
 private final class CapturedBox: @unchecked Sendable {
     var request: URLRequest?
+}
+
+private final class CounterBox: @unchecked Sendable {
+    var value = 0
 }

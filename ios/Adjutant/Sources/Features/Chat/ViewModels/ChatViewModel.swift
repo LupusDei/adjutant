@@ -737,15 +737,36 @@ final class ChatViewModel: BaseViewModel {
 
         let clientId = UUID().uuidString
         let now = Self.isoFormatter.string(from: Date())
+        let localMessageId = "local-\(clientId)"
+
+        // Build local attachment stubs and seed the image cache with the raw
+        // bytes so the just-sent bubble renders its thumbnail immediately —
+        // before the server round-trip returns real ids (adj-203.5.7). The
+        // render path (AttachmentImageLoader) reads these from cache by id.
+        let localAttachments: [MessageAttachment] = staged.map { item in
+            let localAttachmentId = "local-att-\(item.id.uuidString)"
+            AttachmentImageLoader.prime(attachmentId: localAttachmentId, data: item.data)
+            return MessageAttachment(
+                id: localAttachmentId,
+                messageId: localMessageId,
+                kind: "image",
+                filename: item.filename,
+                mimeType: item.mimeType,
+                sizeBytes: item.data.count,
+                createdAt: now
+            )
+        }
+
         let optimisticMessage = PersistentMessage(
-            id: "local-\(clientId)",
+            id: localMessageId,
             agentId: "user",
             recipient: selectedRecipient,
             role: .user,
             body: text,
             deliveryStatus: .pending,
             createdAt: now,
-            updatedAt: now
+            updatedAt: now,
+            attachments: localAttachments
         )
         messages.append(optimisticMessage)
         pendingLocalMessages[clientId] = optimisticMessage
