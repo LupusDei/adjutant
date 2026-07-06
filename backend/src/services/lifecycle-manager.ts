@@ -249,7 +249,20 @@ export class LifecycleManager {
       // Custom claudeArgs are appended after the mandatory flag.
       const baseArgs = ["--dangerously-skip-permissions"];
       const extraArgs = req.claudeArgs?.filter((a) => a !== "--dangerously-skip-permissions") ?? [];
-      const claudeCmd = `claude ${[...baseArgs, ...extraArgs].join(" ")}`;
+      // adj-vevei: inline the identity env vars ON the claude launch command — not
+      // only via the earlier `export` send-keys. If the pane shell was not ready when
+      // those exports were sent they are LOST, yet a later bare `claude` still starts —
+      // with no ADJUTANT_AGENT_ID, so Claude Code caches X-Agent-Id="unknown" for the
+      // process's whole life (it never re-expands `${VAR}` on /mcp reconnect). Prefixing
+      // the launch guarantees claude can never start without its identity: the assignment
+      // travels atomically with the command. The `export`s above are kept so a manual
+      // `claude` restart inside the pane still inherits the identity from the shell.
+      const envPrefix = [
+        `ADJUTANT_AGENT_ID=${shellEscape(req.name)}`,
+        `ADJUTANT_PROJECT_ROOT=${shellEscape(req.projectPath)}`,
+        ...Object.entries(req.envVars ?? {}).map(([key, value]) => `${key}=${shellEscape(value)}`),
+      ].join(" ");
+      const claudeCmd = `${envPrefix} claude ${[...baseArgs, ...extraArgs].join(" ")}`;
 
       await execTmuxCommand([
         "send-keys",

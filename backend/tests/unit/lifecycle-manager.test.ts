@@ -166,6 +166,50 @@ describe("LifecycleManager", () => {
       expect((lastCall[1] as string[]).join(" ")).toContain("--model opus");
     });
 
+    it("should inline ADJUTANT_AGENT_ID + ADJUTANT_PROJECT_ROOT on the claude launch command (adj-vevei)", async () => {
+      // Root fix for the identity startup-cache trap: the identity env vars are
+      // export'ed in SEPARATE earlier send-keys, but if the pane shell is not ready
+      // those exports are lost while a later `claude` still lands — claude then
+      // starts with no ADJUTANT_AGENT_ID and caches X-Agent-Id="unknown" for life.
+      // Inlining the identity ON the claude command means claude can never start
+      // without it (the identity travels with the launch).
+      mockTmuxForCreate("adj-alarak");
+
+      await lifecycle.createSession({
+        name: "alarak",
+        projectPath: "/tmp/proj",
+      });
+
+      const sendKeysCalls = mockExecFile.mock.calls.filter(
+        (call: unknown[]) => (call[1] as string[])[0] === "send-keys"
+      );
+      const launch = (sendKeysCalls[sendKeysCalls.length - 1][1] as string[]).join(" ");
+      // The launch command itself carries the identity, atomically with `claude`.
+      // (projectPath is shell-escaped, so the value may be single-quoted.)
+      expect(launch).toContain("ADJUTANT_AGENT_ID=alarak");
+      expect(launch).toMatch(/ADJUTANT_PROJECT_ROOT='?\/tmp\/proj'?/);
+      expect(launch).toContain("claude --dangerously-skip-permissions");
+      // Order: env assignments must PRECEDE `claude` (shell prefix semantics).
+      expect(launch.indexOf("ADJUTANT_AGENT_ID=")).toBeLessThan(launch.indexOf("claude "));
+    });
+
+    it("should inline custom envVars on the claude launch command too (adj-vevei)", async () => {
+      mockTmuxForCreate("adj-persona");
+
+      await lifecycle.createSession({
+        name: "nova",
+        projectPath: "/tmp/proj",
+        envVars: { ADJUTANT_PERSONA_ID: "persona-42" },
+      });
+
+      const sendKeysCalls = mockExecFile.mock.calls.filter(
+        (call: unknown[]) => (call[1] as string[])[0] === "send-keys"
+      );
+      const launch = (sendKeysCalls[sendKeysCalls.length - 1][1] as string[]).join(" ");
+      expect(launch).toContain("ADJUTANT_PERSONA_ID=persona-42");
+      expect(launch.indexOf("ADJUTANT_PERSONA_ID=")).toBeLessThan(launch.indexOf("claude "));
+    });
+
     it("should fail when session limit is reached", async () => {
       // Fill up to limit
       for (let i = 0; i < 5; i++) {
