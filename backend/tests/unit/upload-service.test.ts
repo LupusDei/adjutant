@@ -118,3 +118,32 @@ describe("UploadService.getById", () => {
     expect(service.getById("missing")).toBeNull();
   });
 });
+
+describe("UploadService.getFileForServe", () => {
+  it("should return mime + size + a stream of the stored bytes", async () => {
+    const r = service.upload({ buffer: PNG, filename: "a.png" });
+    const served = service.getFileForServe(r.id);
+    expect(served).not.toBeNull();
+    expect(served!.mimeType).toBe("image/png");
+    expect(served!.sizeBytes).toBe(PNG.length);
+    const chunks: Buffer[] = [];
+    await new Promise<void>((res, rej) => {
+      served!.stream
+        .on("data", (c: Buffer) => chunks.push(c))
+        .on("end", () => res())
+        .on("error", rej);
+    });
+    expect(Buffer.concat(chunks).equals(PNG)).toBe(true);
+  });
+
+  it("should return null for an unknown id", () => {
+    expect(service.getFileForServe("missing")).toBeNull();
+  });
+
+  it("should return null when the backing file was removed (no existence leak)", () => {
+    const r = service.upload({ buffer: PNG, filename: "a.png" });
+    const path = service.getById(r.id)!.storagePath;
+    rmSync(path, { force: true });
+    expect(service.getFileForServe(r.id)).toBeNull();
+  });
+});

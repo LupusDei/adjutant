@@ -16,7 +16,8 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, unlinkSync, createReadStream } from "node:fs";
+import type { ReadStream } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve, sep } from "node:path";
 
@@ -135,6 +136,10 @@ export interface UploadStorage {
   validate(buffer: Buffer, declaredMime?: string): ValidationResult;
   /** Write bytes to `<uploadDir>/<storedName>` (traversal-proof). Returns the absolute path. */
   write(buffer: Buffer, storedName: string): string;
+  /** True when a stored file exists — refuses (throws) any path outside the uploads dir. */
+  exists(storagePath: string): boolean;
+  /** Open a read stream for a stored file — refuses any path outside the uploads dir. */
+  openReadStream(storagePath: string): ReadStream;
   /** Delete a file — refuses any path outside the uploads dir; no-op if already gone. */
   delete(storagePath: string): void;
 }
@@ -152,6 +157,15 @@ export function createUploadStorage(opts: CreateUploadStorageOptions = {}): Uplo
 
   function ensureDir(): void {
     if (!existsSync(uploadDir)) mkdirSync(uploadDir, { recursive: true });
+  }
+
+  /** Resolve an absolute path and assert it lives under uploadDir. */
+  function assertWithinDir(storagePath: string): string {
+    const abs = resolve(storagePath);
+    if (abs !== uploadDir && !abs.startsWith(uploadDir + sep)) {
+      throw new Error(`Path outside uploads dir: ${JSON.stringify(storagePath)}`);
+    }
+    return abs;
   }
 
   /** Resolve a stored name to an absolute path, refusing anything outside uploadDir. */
@@ -225,11 +239,16 @@ export function createUploadStorage(opts: CreateUploadStorageOptions = {}): Uplo
       return abs;
     },
 
+    exists(storagePath: string): boolean {
+      return existsSync(assertWithinDir(storagePath));
+    },
+
+    openReadStream(storagePath: string): ReadStream {
+      return createReadStream(assertWithinDir(storagePath));
+    },
+
     delete(storagePath: string): void {
-      const abs = resolve(storagePath);
-      if (abs !== uploadDir && !abs.startsWith(uploadDir + sep)) {
-        throw new Error(`Refusing to delete outside uploads dir: ${JSON.stringify(storagePath)}`);
-      }
+      const abs = assertWithinDir(storagePath);
       try {
         unlinkSync(abs);
       } catch (err) {

@@ -12,6 +12,7 @@
  */
 
 import { basename } from "node:path";
+import type { ReadStream } from "node:fs";
 
 import type { UploadStorage, ValidationErrorCode } from "./upload-storage.js";
 import type { AttachmentStore, MessageAttachment } from "./attachment-store.js";
@@ -47,9 +48,23 @@ export interface UploadServiceDeps {
   attachmentStore: AttachmentStore;
 }
 
+/** Everything the serve route needs to stream a stored image. */
+export interface ServeFile {
+  mimeType: string;
+  sizeBytes: number;
+  filename: string;
+  stream: ReadStream;
+}
+
 export interface UploadService {
   upload(input: UploadInput): UploadResult;
   getById(id: string): MessageAttachment | null;
+  /**
+   * Resolve an attachment id to a streamable file for `GET /api/uploads/:id`.
+   * Returns null when the id is unknown OR the backing file is missing (both
+   * map to a 404 — no existence leak between the two).
+   */
+  getFileForServe(id: string): ServeFile | null;
 }
 
 /** Reduce a client-supplied filename to a safe display basename. */
@@ -93,6 +108,18 @@ export function createUploadService(deps: UploadServiceDeps): UploadService {
 
     getById(id: string): MessageAttachment | null {
       return attachmentStore.getById(id);
+    },
+
+    getFileForServe(id: string): ServeFile | null {
+      const attachment = attachmentStore.getById(id);
+      if (attachment === null) return null;
+      if (!storage.exists(attachment.storagePath)) return null;
+      return {
+        mimeType: attachment.mimeType,
+        sizeBytes: attachment.sizeBytes,
+        filename: attachment.filename,
+        stream: storage.openReadStream(attachment.storagePath),
+      };
     },
   };
 }

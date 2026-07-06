@@ -210,6 +210,43 @@ describe("UploadStorage.write", () => {
 });
 
 // ============================================================================
+// exists / openReadStream — confined to uploadDir
+// ============================================================================
+
+describe("UploadStorage.exists", () => {
+  it("should return true for a written file and false for a missing one", () => {
+    const name = storage.generateStoredName("png");
+    const abs = storage.write(PNG, name);
+    expect(storage.exists(abs)).toBe(true);
+    expect(storage.exists(join(dir, "nope.png"))).toBe(false);
+  });
+
+  it("should refuse a path outside the uploads dir", () => {
+    expect(() => storage.exists(join(tmpdir(), "elsewhere.png"))).toThrow();
+  });
+});
+
+describe("UploadStorage.openReadStream", () => {
+  it("should stream back the exact bytes written", async () => {
+    const name = storage.generateStoredName("png");
+    const abs = storage.write(PNG, name);
+    const chunks: Buffer[] = [];
+    await new Promise<void>((res, rej) => {
+      storage
+        .openReadStream(abs)
+        .on("data", (c: Buffer) => chunks.push(c))
+        .on("end", () => res())
+        .on("error", rej);
+    });
+    expect(Buffer.concat(chunks).equals(PNG)).toBe(true);
+  });
+
+  it("should refuse a path outside the uploads dir", () => {
+    expect(() => storage.openReadStream(join(tmpdir(), "elsewhere.png"))).toThrow();
+  });
+});
+
+// ============================================================================
 // delete — confined to uploadDir
 // ============================================================================
 
