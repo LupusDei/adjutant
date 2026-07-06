@@ -15,7 +15,7 @@
  * same object URL — the thumbnail is just the full image constrained by CSS).
  */
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 
 import type { MessageAttachment } from "../../types";
 import { api } from "../../services/api";
@@ -101,25 +101,66 @@ interface LightboxProps {
   onClose: () => void;
 }
 
-/** Full-image modal overlay. Closes on backdrop click, the button, or Escape. */
+/**
+ * Full-image modal overlay. Closes on backdrop click, the button, or Escape.
+ *
+ * Accessibility (adj-203.4.6): on open it captures the previously-focused
+ * element, moves focus to the close control, and traps Tab / Shift+Tab within
+ * the dialog; on close it restores focus to the element that opened it.
+ */
 function Lightbox({ src, filename, onClose }: LightboxProps): React.ReactElement {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Capture the opener, focus the close control, and restore focus on unmount.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === "Escape") onClose();
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    closeBtnRef.current?.focus();
+    return () => {
+      previouslyFocused?.focus?.();
     };
-    window.addEventListener("keydown", onKey);
-    return () => { window.removeEventListener("keydown", onKey); };
-  }, [onClose]);
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent): void => {
+    if (e.key === "Escape") {
+      onClose();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    // Focus trap — keep Tab / Shift+Tab within the dialog's focusables.
+    const focusables = dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    );
+    if (!focusables || focusables.length === 0) return;
+    const first = focusables[0]!;
+    const last = focusables[focusables.length - 1]!;
+    const active = document.activeElement;
+    if (e.shiftKey && active === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
 
   return (
     <div
+      ref={dialogRef}
       className="chat-attachment-lightbox"
       role="dialog"
       aria-modal="true"
       aria-label={`Full image: ${filename}`}
       onClick={onClose}
+      onKeyDown={handleKeyDown}
     >
-      <button type="button" className="chat-attachment-lightbox-close" aria-label="Close image" onClick={onClose}>
+      <button
+        ref={closeBtnRef}
+        type="button"
+        className="chat-attachment-lightbox-close"
+        aria-label="Close image"
+        onClick={onClose}
+      >
         x
       </button>
       <img

@@ -30,8 +30,9 @@ vi.mock('../../../src/services/api', () => {
   return { api: apiObj, default: apiObj };
 });
 
-// Mock CommunicationContext
-const mockSubscribe = vi.fn(() => vi.fn());
+// Mock CommunicationContext. The callback param is typed so per-test
+// `mockImplementation((cb) => …)` overrides type-check cleanly.
+const mockSubscribe = vi.fn((_cb: (msg: unknown) => void) => vi.fn());
 vi.mock('../../../src/contexts/CommunicationContext', () => ({
   useCommunicationActions: () => ({
     subscribe: mockSubscribe,
@@ -209,6 +210,46 @@ describe('useChatMessages', () => {
 
       expect(result.current.messages).toHaveLength(2);
       expect(result.current.messages[1]!.body).toBe('New WS message');
+    });
+
+    it('should carry attachments from an inbound WebSocket message (adj-203.4.5)', async () => {
+      listMessages().mockResolvedValue(mockListResponse([]));
+
+      let subscriberCallback: ((msg: unknown) => void) | undefined;
+      mockSubscribe.mockImplementation((cb: unknown) => {
+        subscriberCallback = cb as (msg: unknown) => void;
+        return vi.fn();
+      });
+
+      const { result } = renderHook(() => useChatMessages('agent-1'));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      const attachment = {
+        id: 'att-1',
+        kind: 'image',
+        filename: 'shot.png',
+        mimeType: 'image/png',
+        sizeBytes: 100,
+      };
+
+      act(() => {
+        subscriberCallback!({
+          id: 'msg-att',
+          from: 'agent-1',
+          to: 'user',
+          body: 'here is a screenshot',
+          timestamp: '2026-02-21T10:06:00Z',
+          conversationId: 'dm_agent1',
+          attachments: [attachment],
+        });
+      });
+
+      // The live screenshot must render immediately — no manual refetch/reload.
+      expect(result.current.messages).toHaveLength(1);
+      expect(result.current.messages[0]!.attachments).toEqual([attachment]);
     });
 
     it('should deduplicate messages by ID', async () => {
