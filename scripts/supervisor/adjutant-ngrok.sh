@@ -10,9 +10,13 @@
 set -uo pipefail
 
 APP_DIR="${ADJUTANT_APP_DIR:-/Users/Reason/code/ai/adjutant}"
-PORT="${ADJUTANT_FRONTEND_PORT:-4200}"
 
 # Source NGROK_* from backend/.env (same source scripts/tunnel.sh uses).
+# CAUTION: backend/.env ALSO defines PORT=4201 (the backend's own port). Sourcing it
+# clobbers any shell PORT, so the tunnel's TARGET port MUST be resolved AFTER this
+# block, into a var that .env does not define — otherwise ngrok would tunnel the
+# public dashboard to the backend API (:4201) instead of the frontend (:4200),
+# which also feeds malformed WS upgrades into the backend. (adj-yi6do)
 if [ -f "$APP_DIR/backend/.env" ]; then
   set -a
   # shellcheck disable=SC1091
@@ -20,6 +24,7 @@ if [ -f "$APP_DIR/backend/.env" ]; then
   set +a
 fi
 
+FRONTEND_PORT="${ADJUTANT_FRONTEND_PORT:-4200}"
 DOMAIN="${NGROK_DOMAIN:-cc.jmm.ngrok.io}"
 DOMAIN="${DOMAIN#https://}"; DOMAIN="${DOMAIN#http://}"; DOMAIN="${DOMAIN%/}"
 
@@ -27,7 +32,7 @@ ARGS=(http --url="https://$DOMAIN")
 if [ -n "${NGROK_AUTH:-}" ]; then
   ARGS+=(--basic-auth="$NGROK_AUTH")
 fi
-ARGS+=("$PORT")
+ARGS+=("$FRONTEND_PORT")
 
-echo "[$(date -u +%FT%TZ)] adjutant-ngrok tunneling https://$DOMAIN -> :$PORT"
+echo "[$(date -u +%FT%TZ)] adjutant-ngrok tunneling https://$DOMAIN -> :$FRONTEND_PORT"
 exec ngrok "${ARGS[@]}"
