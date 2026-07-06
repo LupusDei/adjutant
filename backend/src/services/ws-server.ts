@@ -17,7 +17,7 @@ import { getEventBus } from "./event-bus.js";
 import { hasApiKeys, validateApiKey } from "./api-key-service.js";
 import { logInfo, logWarn } from "../utils/index.js";
 import type { MessageStore } from "./message-store.js";
-import type { MessageAttachment } from "./attachment-store.js";
+import type { PublicMessageAttachment } from "./attachment-store.js";
 import { dmConversationId, type ConversationStore } from "./conversation-store.js";
 // adj-zm2fh: static import replaces 7 hot-path dynamic `import("./session-bridge.js")`
 // calls. Each dynamic import allocated a Promise + .then/.catch closures + V8 Context
@@ -84,10 +84,11 @@ export interface WsServerMessage {
   replyTo?: string | undefined;
   metadata?: Record<string, unknown> | undefined;
   /**
-   * Image attachments on a `chat_message` (adj-203). Present when the Commander
+   * PUBLIC image attachments on a `chat_message` (adj-203). The client-safe DTO
+   * only — NO absolute storagePath (adj-203.2.5.1). Present when the Commander
    * sends a message with linked screenshots; web + iOS render them inline.
    */
-  attachments?: MessageAttachment[] | undefined;
+  attachments?: PublicMessageAttachment[] | undefined;
   streamId?: string | undefined;
   token?: string | undefined;
   done?: boolean | undefined;

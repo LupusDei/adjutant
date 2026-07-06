@@ -137,4 +137,59 @@ describe("POST /api/messages with attachmentIds", () => {
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
   });
+
+  it("should accept an image-only DM (empty body + ≥1 attachment) and persist/link it (adj-203.2.5.2)", async () => {
+    const a1 = makeAttachment();
+    const res = await request(app)
+      .post("/api/messages")
+      .send({ to: "raynor", body: "", attachmentIds: [a1] });
+    expect(res.status).toBe(201);
+    const messageId = res.body.data.messageId as string;
+    expect(attachmentStore.getById(a1)?.messageId).toBe(messageId);
+    expect(store.getMessage(messageId)?.attachments?.[0]?.id).toBe(a1);
+  });
+
+  it("should accept an image-only DM when body is omitted entirely (adj-203.2.5.2)", async () => {
+    const a1 = makeAttachment();
+    const res = await request(app).post("/api/messages").send({ to: "raynor", attachmentIds: [a1] });
+    expect(res.status).toBe(201);
+    expect(attachmentStore.getById(a1)?.messageId).toBe(res.body.data.messageId);
+  });
+
+  it("should still reject an empty body with NO attachments (adj-203.2.5.2)", async () => {
+    const res = await request(app).post("/api/messages").send({ to: "raynor", body: "" });
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+  });
+
+  it("should still reject a whitespace-only body with NO attachments (adj-203.2.5.2)", async () => {
+    const res = await request(app).post("/api/messages").send({ to: "raynor", body: "   " });
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+  });
+
+  it("should still reject a message with neither body nor attachments (adj-203.2.5.2)", async () => {
+    const res = await request(app).post("/api/messages").send({ to: "raynor" });
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+  });
+
+  it("should NOT leak the absolute storagePath in GET /api/messages (adj-203.2.5.1)", async () => {
+    const a1 = makeAttachment();
+    await request(app).post("/api/messages").send({ to: "raynor", body: "shot", attachmentIds: [a1] });
+
+    const list = await request(app).get("/api/messages").query({ agentId: "raynor" });
+    expect(list.status).toBe(200);
+    const items = list.body.data.items as { attachments?: unknown[] }[];
+    const withAttachment = items.find((m) => Array.isArray(m.attachments) && m.attachments.length > 0);
+    expect(withAttachment).toBeDefined();
+    const att = (withAttachment!.attachments as Record<string, unknown>[])[0]!;
+    // Public shape only.
+    expect(att).toHaveProperty("id");
+    expect(att).toHaveProperty("filename");
+    expect(att).toHaveProperty("mimeType");
+    expect(att).toHaveProperty("sizeBytes");
+    expect(att).not.toHaveProperty("storagePath");
+    expect(JSON.stringify(list.body)).not.toContain("/uploads/");
+  });
 });

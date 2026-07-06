@@ -29,6 +29,32 @@ export interface MessageAttachment {
   createdAt: string;
 }
 
+/**
+ * Public, client-facing attachment shape (adj-203.2.5.1). Deliberately OMITS
+ * `storagePath` (the absolute server filesystem path) and internal bookkeeping
+ * (`messageId`, `createdAt`) — web + iOS fetch bytes via `GET /api/uploads/:id`,
+ * so they only need id/kind/filename/mimeType/sizeBytes. This is the ONLY
+ * attachment shape that may cross the wire to clients (WS + REST serializers).
+ */
+export interface PublicMessageAttachment {
+  id: string;
+  kind: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
+/** Strip an internal attachment down to its public, client-safe DTO. */
+export function toPublicMessageAttachment(a: MessageAttachment): PublicMessageAttachment {
+  return {
+    id: a.id,
+    kind: a.kind,
+    filename: a.filename,
+    mimeType: a.mimeType,
+    sizeBytes: a.sizeBytes,
+  };
+}
+
 export interface CreateAttachmentInput {
   id?: string;
   messageId?: string;
@@ -72,6 +98,12 @@ export interface AttachmentStore {
   linkToMessage(attachmentId: string, messageId: string): void;
   getById(id: string): MessageAttachment | null;
   getByMessageId(messageId: string): MessageAttachment[];
+  /**
+   * Batch variant of getByMessageId for the chat-history hot path (adj-203.2.6):
+   * fetch attachments for many messages in ONE query and group by message id.
+   * Every requested id is present in the returned map (empty array when none).
+   */
+  getByMessageIds(messageIds: string[]): Map<string, MessageAttachment[]>;
   /** Delete rows created strictly before `cutoffIso`; returns the deleted rows. */
   deleteOlderThan(cutoffIso: string): MessageAttachment[];
 }
@@ -106,6 +138,19 @@ export function createAttachmentStore(db: Database.Database): AttachmentStore {
     },
 
     linkToMessage(attachmentId: string, messageId: string): void {
+      // adj-203.2.5 guard: the attachment must exist and be UNLINKED (or already
+      // linked to this same message — idempotent). Reject unknown ids and any
+      // attempt to re-parent an attachment owned by a different message (hijack).
+      const row = getByIdStmt.get(attachmentId) as AttachmentRow | undefined;
+      if (row === undefined) {
+        throw new Error(`Attachment not found: ${attachmentId}`);
+      }
+      if (row.message_id !== null && row.message_id !== messageId) {
+        throw new Error(
+          `Attachment ${attachmentId} is already linked to message ${row.message_id}`,
+        );
+      }
+      if (row.message_id === messageId) return; // idempotent no-op
       linkStmt.run(messageId, attachmentId);
     },
 
@@ -116,6 +161,34 @@ export function createAttachmentStore(db: Database.Database): AttachmentStore {
 
     getByMessageId(messageId: string): MessageAttachment[] {
       return (getByMessageStmt.all(messageId) as AttachmentRow[]).map(rowToAttachment);
+    },
+
+    getByMessageIds(messageIds: string[]): Map<string, MessageAttachment[]> {
+      const grouped = new Map<string, MessageAttachment[]>();
+      // Seed every requested id so callers get a stable [] for message-less ids.
+      for (const id of messageIds) grouped.set(id, []);
+      if (messageIds.length === 0) return grouped;
+
+      // Single query over all ids. SQLite caps parameters (~999 default, ~32k in
+      // modern builds); chunk to stay well under it while keeping O(1)-per-chunk.
+      const CHUNK = 500;
+      for (let i = 0; i < messageIds.length; i += CHUNK) {
+        const chunk = messageIds.slice(i, i + CHUNK);
+        const placeholders = chunk.map(() => "?").join(", ");
+        const rows = db
+          .prepare(
+            `SELECT * FROM message_attachments WHERE message_id IN (${placeholders})
+             ORDER BY created_at ASC, id ASC`,
+          )
+          .all(...chunk) as AttachmentRow[];
+        for (const row of rows) {
+          // message_id is non-null here (the WHERE clause matches it), but typed
+          // string | null on the row; ! narrows without an unsafe cast.
+          const list = row.message_id !== null ? grouped.get(row.message_id) : undefined;
+          if (list !== undefined) list.push(rowToAttachment(row));
+        }
+      }
+      return grouped;
     },
 
     deleteOlderThan(cutoffIso: string): MessageAttachment[] {

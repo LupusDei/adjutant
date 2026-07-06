@@ -31,8 +31,9 @@ afterEach(() => {
 });
 
 describe("WS chat_message attachments payload", () => {
-  it("should type-allow attachments on a chat_message payload", () => {
-    // Compile-time contract: attachments is part of WsServerMessage.
+  it("should type-allow PUBLIC attachments on a chat_message payload (no storagePath)", () => {
+    // Compile-time contract: attachments is the PUBLIC DTO — id/kind/filename/
+    // mimeType/sizeBytes only. storagePath is NOT part of the client payload.
     const msg: WsServerMessage = {
       type: "chat_message",
       id: "m-1",
@@ -42,21 +43,19 @@ describe("WS chat_message attachments payload", () => {
       attachments: [
         {
           id: "att-1",
-          messageId: "m-1",
           kind: "image",
-          storagePath: "/uploads/a.png",
           filename: "a.png",
           mimeType: "image/png",
           sizeBytes: 10,
-          createdAt: "2026-07-06T00:00:00.000Z",
         },
       ],
     };
     expect(msg.attachments).toHaveLength(1);
     expect(msg.attachments?.[0]?.mimeType).toBe("image/png");
+    expect(msg.attachments?.[0]).not.toHaveProperty("storagePath");
   });
 
-  it("should broadcast a chat_message carrying the linked attachments on send", () => {
+  it("should broadcast a chat_message carrying the linked attachments on send (adj-203.2.5.1)", () => {
     const attachmentStore = createAttachmentStore(db);
     const store = createMessageStore(db, { attachmentStore });
     const att = attachmentStore.createAttachment({
@@ -76,6 +75,12 @@ describe("WS chat_message attachments payload", () => {
     expect(payload.type).toBe("chat_message");
     expect(payload.attachments).toBeDefined();
     expect(payload.attachments![0]!.id).toBe(att.id);
+    // adj-203.2.5.1: the absolute server path MUST NOT leak to web/iOS clients.
+    expect(payload.attachments![0]).not.toHaveProperty("storagePath");
+    expect(payload.attachments![0]!.filename).toBe("x.png");
+    expect(payload.attachments![0]!.mimeType).toBe("image/png");
+    expect(payload.attachments![0]!.sizeBytes).toBe(20);
+    expect(JSON.stringify(payload)).not.toContain("/uploads/x.png");
   });
 
   it("should omit attachments for a plain message (no attachmentIds)", () => {

@@ -17,6 +17,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import type { MessageStore } from "../services/message-store.js";
+import { toClientMessage } from "../services/message-store.js";
 import { wsBroadcast } from "../services/ws-server.js";
 import { dmConversationId } from "../services/conversation-store.js";
 import { getSessionBridge } from "../services/session-bridge.js";
@@ -32,16 +33,24 @@ import {
 /** Max image attachments per message (adj-203 security cap). */
 const MAX_ATTACHMENTS_PER_MESSAGE = 4;
 
-const SendChatMessageSchema = z.object({
-  to: z.string().min(1, "Recipient is required"),
-  body: z.string().min(1, "Message body is required").max(10000, "Message body too long"),
-  threadId: z.string().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-  attachmentIds: z
-    .array(z.string().min(1))
-    .max(MAX_ATTACHMENTS_PER_MESSAGE, `At most ${MAX_ATTACHMENTS_PER_MESSAGE} attachments per message`)
-    .optional(),
-});
+const SendChatMessageSchema = z
+  .object({
+    to: z.string().min(1, "Recipient is required"),
+    // adj-203.2.5.2: body is OPTIONAL when attachments are present (image-only DMs).
+    // The object-level refine below enforces "at least one of {non-empty body, ≥1
+    // attachment}", so an empty/whitespace body with no attachments is still rejected.
+    body: z.string().max(10000, "Message body too long").optional(),
+    threadId: z.string().optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+    attachmentIds: z
+      .array(z.string().min(1))
+      .max(MAX_ATTACHMENTS_PER_MESSAGE, `At most ${MAX_ATTACHMENTS_PER_MESSAGE} attachments per message`)
+      .optional(),
+  })
+  .refine(
+    (data) => (data.body?.trim().length ?? 0) > 0 || (data.attachmentIds?.length ?? 0) > 0,
+    { message: "A message must have a non-empty body or at least one attachment", path: ["body"] },
+  );
 
 /**
  * Create a messages router bound to the given MessageStore.
@@ -109,8 +118,9 @@ export function createMessagesRouter(store: MessageStore): Router {
     if (beforeId !== undefined) opts.beforeId = beforeId;
     if (limit !== undefined) opts.limit = limit;
     const messages = store.getMessages(opts);
-    // DB returns DESC (newest first) for cursor pagination; reverse to ASC for display
-    const chronological = [...messages].reverse();
+    // DB returns DESC (newest first) for cursor pagination; reverse to ASC for display.
+    // adj-203.2.5.1: serialize as ClientMessage so the absolute storagePath never leaks.
+    const chronological = [...messages].reverse().map(toClientMessage);
     return res.json(success({
       items: chronological,
       total: chronological.length,
@@ -127,7 +137,8 @@ export function createMessagesRouter(store: MessageStore): Router {
       return res.status(404).json(notFound("Message", id));
     }
 
-    return res.json(success(message));
+    // adj-203.2.5.1: strip the absolute storagePath from the client payload.
+    return res.json(success(toClientMessage(message)));
   });
 
   // PATCH /api/messages/:id/read
@@ -154,7 +165,9 @@ export function createMessagesRouter(store: MessageStore): Router {
       );
     }
 
-    const { to, body, threadId, metadata, attachmentIds } = parseResult.data;
+    const { to, threadId, metadata, attachmentIds } = parseResult.data;
+    // adj-203.2.5.2: body is optional for image-only DMs — normalize to "" for the store/WS.
+    const body = parseResult.data.body ?? "";
 
     // adj-164.2 + adj-202.4.1: persist (tagged with the deterministic DM conversation id
     // for the (user, recipient) pair — the wrong-thread-bleed fix), broadcast, and inject

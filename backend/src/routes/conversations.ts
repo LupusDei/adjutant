@@ -14,6 +14,7 @@ import { Router } from "express";
 
 import type { ConversationStore } from "../services/conversation-store.js";
 import type { MessageStore } from "../services/message-store.js";
+import { toClientMessage } from "../services/message-store.js";
 import { success, notFound } from "../utils/responses.js";
 
 /** The canonical member id for the dashboard operator (the General). */
@@ -71,7 +72,8 @@ export function createConversationsRouter(
     const messages = messageStore.getMessages(opts);
     // The store returns DESC (newest first) for cursor pagination; reverse to
     // ASC for display, matching the /api/messages contract.
-    const chronological = [...messages].reverse();
+    // adj-203.2.5.1: serialize as ClientMessage so the absolute storagePath never leaks.
+    const chronological = [...messages].reverse().map(toClientMessage);
 
     return res.json(
       success({
