@@ -1,6 +1,8 @@
 import SwiftUI
+import PhotosUI
 
-/// Input area for composing chat messages with text and voice options.
+/// Input area for composing chat messages with text, image attachments, and
+/// voice options.
 struct ChatInputView: View {
     @Environment(\.crtTheme) private var theme
     @FocusState private var isTextFieldFocused: Bool
@@ -12,16 +14,30 @@ struct ChatInputView: View {
     let onSend: () -> Void
     let onVoiceToggle: () -> Void
 
+    /// Staged image attachments (adj-203). Optional so existing previews /
+    /// call sites without attachment support keep compiling.
+    @ObservedObject var attachments: ComposerAttachments = ComposerAttachments()
+
+    @State private var photoItem: PhotosPickerItem?
+
     var body: some View {
-        HStack(spacing: CRTTheme.Spacing.xs) {
-            // Voice input button
-            voiceButton
+        VStack(spacing: 0) {
+            // Staged image thumbnails (only shown when non-empty).
+            AttachmentPreviewStrip(attachments: attachments)
 
-            // Text input
-            textInput
+            HStack(spacing: CRTTheme.Spacing.xs) {
+                // Attach image (PhotosPicker) + paste
+                attachButton
 
-            // Send button
-            sendButton
+                // Voice input button
+                voiceButton
+
+                // Text input
+                textInput
+
+                // Send button
+                sendButton
+            }
         }
         .padding(.horizontal, CRTTheme.Spacing.sm)
         .padding(.vertical, CRTTheme.Spacing.xs)
@@ -34,6 +50,61 @@ struct ChatInputView: View {
                         .foregroundColor(theme.dim.opacity(0.3)),
                     alignment: .top
                 )
+        )
+        .onChange(of: photoItem) { _, newItem in
+            guard let newItem else { return }
+            Task { await stage(from: newItem) }
+        }
+    }
+
+    // MARK: - Attachment intake
+
+    private var attachButton: some View {
+        HStack(spacing: CRTTheme.Spacing.xxs) {
+            PhotosPicker(selection: $photoItem, matching: .images, photoLibrary: .shared()) {
+                Image(systemName: "photo.on.rectangle")
+                    .font(.system(size: 20))
+                    .foregroundColor(attachments.canAddMore ? theme.primary : theme.dim.opacity(0.4))
+                    .frame(width: 36, height: 44)
+            }
+            .disabled(!attachments.canAddMore)
+            .accessibilityLabel("Attach image")
+
+            Button(action: pasteImage) {
+                Image(systemName: "doc.on.clipboard")
+                    .font(.system(size: 18))
+                    .foregroundColor(attachments.canAddMore ? theme.primary : theme.dim.opacity(0.4))
+                    .frame(width: 30, height: 44)
+            }
+            .buttonStyle(.plain)
+            .disabled(!attachments.canAddMore)
+            .accessibilityLabel("Paste image")
+        }
+    }
+
+    /// Load a picked photo's bytes, sniff its MIME, and stage it.
+    private func stage(from item: PhotosPickerItem) async {
+        defer { photoItem = nil }
+        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+        stage(data: data)
+    }
+
+    /// Paste an image from the system clipboard, if present.
+    private func pasteImage() {
+        if let image = UIPasteboard.general.image, let data = image.pngData() {
+            stage(data: data, fallbackMime: "image/png")
+        }
+    }
+
+    private func stage(data: Data, fallbackMime: String? = nil) {
+        let mime = ImageMimeSniffer.mimeType(for: data) ?? fallbackMime
+        guard let mimeType = mime else { return }
+        _ = attachments.add(
+            PendingAttachment(
+                data: data,
+                filename: ImageMimeSniffer.filename(for: mimeType),
+                mimeType: mimeType
+            )
         )
     }
 

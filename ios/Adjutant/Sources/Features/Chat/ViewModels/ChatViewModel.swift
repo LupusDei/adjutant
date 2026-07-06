@@ -107,6 +107,9 @@ final class ChatViewModel: BaseViewModel {
     private static let isoFormatter = ISO8601DateFormatter()
 
     private let apiClient: APIClient
+    /// Staged image attachments for the composer (adj-203). The composer binds
+    /// to this; `sendMessage` uploads each then posts with the attachment ids.
+    let attachments = ComposerAttachments()
     /// Speech service is created lazily on first voice input to avoid blocking
     /// the main thread with SFSpeechRecognizer init (~3-5 seconds).
     private var speechService: (any SpeechRecognitionServiceProtocol)?
@@ -162,7 +165,23 @@ final class ChatViewModel: BaseViewModel {
         setupWebSocketBindings()
         loadFromCache()
         updateCurrentConversationId()
+
+        // Bridge the composer's attachment changes into this view model's own
+        // change stream so views observing the view model re-render (e.g. the
+        // send button enabling when an image is staged with empty text).
+        attachments.objectWillChange
+            .sink { [weak self] in self?.objectWillChange.send() }
+            .store(in: &cancellables)
     }
+
+    #if DEBUG
+    /// Test hook — set the recipient synchronously without the async network
+    /// refresh `setRecipient(_:)` performs.
+    func setSelectedRecipientForTesting(_ recipient: String) {
+        selectedRecipient = recipient
+        updateCurrentConversationId()
+    }
+    #endif
 
     // MARK: - Lazy Service Accessors
 
@@ -654,11 +673,20 @@ final class ChatViewModel: BaseViewModel {
     /// Send a message to the selected recipient
     func sendMessage() async {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        let staged = attachments.items
+        // A message needs text OR ≥1 staged image (screenshot-with-no-caption).
+        guard !text.isEmpty || !staged.isEmpty else { return }
 
         // Prevent sending to an empty recipient (e.g. if agents haven't loaded yet)
         guard !selectedRecipient.isEmpty else {
             errorMessage = "No recipient selected. Please select a recipient first."
+            return
+        }
+
+        // Image sends go over HTTP (WS send does not carry attachmentIds) and
+        // must upload each image before posting the message.
+        if !staged.isEmpty {
+            await sendMessageWithAttachments(text: text, staged: staged)
             return
         }
 
@@ -696,6 +724,55 @@ final class ChatViewModel: BaseViewModel {
                 )
                 await self.refresh()
             }
+        }
+    }
+
+    /// Upload each staged image then post the message with the resulting
+    /// `attachmentIds` (adj-203). On failure the draft is preserved: the
+    /// optimistic bubble is removed and the text + images are re-staged.
+    private func sendMessageWithAttachments(text: String, staged: [PendingAttachment]) async {
+        // Clear the composer optimistically for a responsive feel.
+        inputText = ""
+        attachments.clear()
+
+        let clientId = UUID().uuidString
+        let now = Self.isoFormatter.string(from: Date())
+        let optimisticMessage = PersistentMessage(
+            id: "local-\(clientId)",
+            agentId: "user",
+            recipient: selectedRecipient,
+            role: .user,
+            body: text,
+            deliveryStatus: .pending,
+            createdAt: now,
+            updatedAt: now
+        )
+        messages.append(optimisticMessage)
+        pendingLocalMessages[clientId] = optimisticMessage
+
+        do {
+            var attachmentIds: [String] = []
+            for item in staged {
+                let result = try await apiClient.uploadImage(
+                    data: item.data,
+                    filename: item.filename,
+                    mimeType: item.mimeType
+                )
+                attachmentIds.append(result.id)
+            }
+            _ = try await apiClient.sendChatMessage(
+                agentId: selectedRecipient,
+                body: text,
+                attachmentIds: attachmentIds
+            )
+            await refresh()
+        } catch {
+            // Draft-preserve: drop the optimistic bubble, restore text + images.
+            messages.removeAll { $0.id == optimisticMessage.id }
+            pendingLocalMessages[clientId] = nil
+            if inputText.isEmpty { inputText = text }
+            for item in staged { _ = attachments.add(item) }
+            handleError(error)
         }
     }
 
@@ -958,9 +1035,11 @@ final class ChatViewModel: BaseViewModel {
         message.isFromUser
     }
 
-    /// Check if we can send a message
+    /// Check if we can send a message. A message may be sent when it has text
+    /// OR ≥1 staged image attachment (screenshot-with-no-caption — adj-203).
     var canSend: Bool {
-        !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isLoading && !selectedRecipient.isEmpty
+        let hasText = !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return (hasText || !attachments.isEmpty) && !isLoading && !selectedRecipient.isEmpty
     }
 
     /// Display name for the selected recipient

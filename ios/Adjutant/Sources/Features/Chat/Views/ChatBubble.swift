@@ -36,6 +36,21 @@ struct ChatBubble: View {
     /// Callback when retry button is tapped (for failed messages)
     var onRetry: (() -> Void)?
 
+    /// Authenticated client used to load image attachments (adj-203).
+    private let apiClient = AppState.shared.apiClient
+
+    /// Renderable image attachments on this message.
+    private var imageAttachments: [MessageAttachment] {
+        message.imageAttachments
+    }
+
+    /// Whether the text bubble should render. Hidden when the message is a
+    /// screenshot-only message (empty body + ≥1 image).
+    private var showsTextBubble: Bool {
+        !message.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || imageAttachments.isEmpty
+    }
+
     /// Bubble alignment based on message direction
     private var alignment: HorizontalAlignment {
         isOutgoing ? .trailing : .leading
@@ -107,7 +122,9 @@ struct ChatBubble: View {
                         .foregroundColor(senderColor)
                 }
 
-                // Message content with optional play button
+                // Message content with optional play button. Hidden for
+                // screenshot-only messages (empty body + ≥1 image attachment).
+                if showsTextBubble {
                 HStack(alignment: .bottom, spacing: CRTTheme.Spacing.xs) {
                     // Message bubble with markdown rendering
                     MarkdownTextView(message.body, fontSize: 14)
@@ -158,6 +175,12 @@ struct ChatBubble: View {
                         .disabled(isSynthesizing)
                         .accessibilityLabel(isPlaying ? "Stop audio" : "Play audio")
                     }
+                }
+                }
+
+                // Inline image attachments (adj-203) — thumbnails, tap for full screen.
+                if !imageAttachments.isEmpty {
+                    MessageAttachmentsView(attachments: imageAttachments, apiClient: apiClient)
                 }
             }
 
