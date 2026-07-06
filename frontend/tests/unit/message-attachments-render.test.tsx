@@ -97,6 +97,42 @@ describe("MessageAttachments", () => {
     });
   });
 
+  it("should move focus into the lightbox on open and restore it on close (adj-203.4.6)", async () => {
+    render(<MessageAttachments attachments={[img1]} />);
+    const thumb = await screen.findByRole("button", { name: /a\.png/i });
+    thumb.focus();
+    expect(thumb).toHaveFocus();
+
+    fireEvent.click(thumb);
+    await screen.findByRole("dialog");
+    const closeBtn = screen.getByRole("button", { name: /close/i });
+
+    // Initial focus lands on the close control inside the dialog.
+    await waitFor(() => { expect(closeBtn).toHaveFocus(); });
+
+    // Closing restores focus to the thumbnail that opened it.
+    fireEvent.click(closeBtn);
+    await waitFor(() => { expect(screen.queryByRole("dialog")).not.toBeInTheDocument(); });
+    expect(thumb).toHaveFocus();
+  });
+
+  it("should trap Tab within the lightbox (adj-203.4.6)", async () => {
+    render(<MessageAttachments attachments={[img1]} />);
+    fireEvent.click(await screen.findByRole("button", { name: /a\.png/i }));
+    const closeBtn = await screen.findByRole("button", { name: /close/i });
+    closeBtn.focus();
+
+    // At the only/last focusable, Tab wraps — the default is prevented.
+    const tabNotPrevented = fireEvent.keyDown(closeBtn, { key: "Tab" });
+    expect(tabNotPrevented).toBe(false);
+    expect(closeBtn).toHaveFocus();
+
+    // Shift+Tab at the first focusable also wraps.
+    const shiftTabNotPrevented = fireEvent.keyDown(closeBtn, { key: "Tab", shiftKey: true });
+    expect(shiftTabNotPrevented).toBe(false);
+    expect(closeBtn).toHaveFocus();
+  });
+
   it("should revoke object URLs on unmount", async () => {
     const { unmount } = render(<MessageAttachments attachments={[img1]} />);
     await waitFor(() => {

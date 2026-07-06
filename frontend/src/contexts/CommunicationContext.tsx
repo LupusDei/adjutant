@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef, type ReactNode } from 'react';
-import type { CommunicationPriority, ConnectionStatus } from '../types';
+import type { CommunicationPriority, ConnectionStatus, MessageAttachment } from '../types';
 import { getApiKey, api } from '../services/api';
 
 // ============================================================================
@@ -19,6 +19,12 @@ export interface IncomingChatMessage {
    * this field so a message never bleeds into the wrong open conversation.
    */
   conversationId?: string;
+  /**
+   * Image attachments on the message (adj-203.4.5). Carried on the WS
+   * chat_message payload so a live screenshot renders immediately, without a
+   * manual refetch/reload.
+   */
+  attachments?: MessageAttachment[];
 }
 
 /** An incoming timeline event received via WebSocket. */
@@ -53,6 +59,7 @@ interface WsServerMsg {
   timestamp?: string;
   seq?: number;
   conversationId?: string;
+  attachments?: MessageAttachment[];
   code?: string;
   sessionId?: string;
   lastSeq?: number;
@@ -428,6 +435,7 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
               };
               if (msg.seq != null) incoming.seq = msg.seq;
               if (msg.conversationId != null) incoming.conversationId = msg.conversationId;
+              if (msg.attachments != null) incoming.attachments = msg.attachments;
               notify(incoming);
             }
             break;
@@ -452,6 +460,7 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
               };
               if (entry.seq != null) incoming.seq = entry.seq;
               if (entry.conversationId != null) incoming.conversationId = entry.conversationId;
+              if (entry.attachments != null) incoming.attachments = entry.attachments;
               notify(incoming);
             }
             break;

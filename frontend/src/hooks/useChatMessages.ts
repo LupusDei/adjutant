@@ -172,6 +172,9 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
           recipient: incoming.to,
           role: 'agent',
           body: incoming.body,
+          // Carry attachments so a live inbound screenshot renders immediately
+          // rather than only after a manual refetch/reload (adj-203.4.5).
+          ...(incoming.attachments ? { attachments: incoming.attachments } : {}),
           metadata: null,
           deliveryStatus: 'delivered',
           eventType: null,

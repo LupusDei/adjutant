@@ -63,6 +63,9 @@ export interface CommandChatProps {
 /** Per-message image-attachment cap (mirrors the backend security cap, adj-203). */
 const MAX_ATTACHMENTS = 4;
 
+/** Per-image size cap in bytes (mirrors the backend 10 MB upload cap, adj-203). */
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+
 /** A locally-selected image awaiting upload-on-send (adj-203). */
 interface PendingAttachment {
   /** Client-only id for list keys + removal. */
@@ -70,6 +73,12 @@ interface PendingAttachment {
   file: File;
   /** Object URL for the preview thumbnail; revoked when removed / sent. */
   previewUrl: string;
+  /**
+   * Server attachment id once this file has been uploaded (adj-203.4.1.1).
+   * Set after a successful upload so a retry (send failed post-upload) reuses
+   * it instead of re-uploading — which would orphan the first upload.
+   */
+  uploadedId?: string;
 }
 
 /** Only images can be attached (MVP scope). */
@@ -387,20 +396,41 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
 
   // ---- Image attachments (adj-203) --------------------------------------
 
-  // Add selected/pasted/dropped image files as pending attachments (capped).
+  // Add selected/pasted/dropped image files as pending attachments. Rejected
+  // selections (non-image, oversize, over-cap) surface a clear inline error
+  // rather than being silently dropped (adj-203.4.4).
   const addFiles = useCallback((files: File[]) => {
-    const images = files.filter(isImageFile);
-    if (images.length === 0) return;
-    setSendError(null);
-    setPendingAttachments((prev) => {
-      const room = Math.max(0, MAX_ATTACHMENTS - prev.length);
-      const toAdd = images.slice(0, room).map((file) => ({
+    if (files.length === 0) return;
+
+    const rejections: string[] = [];
+    const accepted: File[] = [];
+    for (const file of files) {
+      if (!isImageFile(file)) {
+        rejections.push(`"${file.name || 'file'}" is not an image`);
+      } else if (file.size > MAX_IMAGE_BYTES) {
+        rejections.push(`"${file.name}" exceeds the 10 MB limit`);
+      } else {
+        accepted.push(file);
+      }
+    }
+
+    // Read live length from the ref so the over-cap calc is correct at event time.
+    const room = Math.max(0, MAX_ATTACHMENTS - pendingRef.current.length);
+    const admitted = accepted.slice(0, room);
+    if (accepted.length > room) {
+      rejections.push(`You can attach up to ${MAX_ATTACHMENTS} images per message`);
+    }
+
+    if (admitted.length > 0) {
+      const toAdd = admitted.map((file) => ({
         localId: crypto.randomUUID(),
         file,
         previewUrl: URL.createObjectURL(file),
       }));
-      return [...prev, ...toAdd];
-    });
+      setPendingAttachments((prev) => [...prev, ...toAdd]);
+    }
+
+    setSendError(rejections.length > 0 ? rejections.join('. ') : null);
   }, []);
 
   const removeAttachment = useCallback((localId: string) => {
@@ -472,22 +502,22 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
 
     setSendError(null);
 
-    let attachmentIds: string[] = [];
-    let optimisticAttachments: MessageAttachment[] = [];
+    // Snapshot what we intend to send; uploads may run and the user may remove
+    // an item mid-flight — reconciled against live state below.
+    const snapshot = pendingAttachments;
+    let uploaded: PendingAttachment[] = snapshot;
     if (hasAttachments) {
       setUploading(true);
       try {
-        const results = await Promise.all(
-          pendingAttachments.map((a) => api.uploads.upload(a.file)),
+        uploaded = await Promise.all(
+          snapshot.map(async (a) => {
+            // Reuse a prior upload on retry so a send-fail-after-upload doesn't
+            // orphan the first upload (adj-203.4.1.1).
+            if (a.uploadedId) return a;
+            const result = await api.uploads.upload(a.file);
+            return { ...a, uploadedId: result.id };
+          }),
         );
-        attachmentIds = results.map((r) => r.id);
-        optimisticAttachments = results.map((r) => ({
-          id: r.id,
-          kind: 'image',
-          filename: r.filename,
-          mimeType: r.mimeType,
-          sizeBytes: r.sizeBytes,
-        }));
       } catch (err) {
         // Preserve the draft text + previews so the Commander can retry.
         setSendError(err instanceof Error ? err.message : 'Failed to upload image');
@@ -497,8 +527,32 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
       setUploading(false);
     }
 
-    // Uploads succeeded — clear the composer optimistically.
-    const previews = pendingAttachments;
+    // Drop any attachment removed while uploads were in flight — only send
+    // those still present in the live composer (adj-203.4.1.1).
+    const surviving = new Set(pendingRef.current.map((a) => a.localId));
+    const toSend = uploaded.filter(
+      (a): a is PendingAttachment & { uploadedId: string } =>
+        Boolean(a.uploadedId) && surviving.has(a.localId),
+    );
+
+    const attachmentIds = toSend.map((a) => a.uploadedId);
+    const optimisticAttachments: MessageAttachment[] = toSend.map((a) => ({
+      id: a.uploadedId,
+      kind: 'image',
+      filename: a.file.name,
+      mimeType: a.file.type,
+      sizeBytes: a.file.size,
+    }));
+
+    // If every attachment was removed and there's no text, there's nothing to
+    // send. Clear the now-empty composer state and bail.
+    if (!text && attachmentIds.length === 0) {
+      setPendingAttachments([]);
+      return;
+    }
+
+    // Uploads reconciled — clear the composer optimistically.
+    const previews = snapshot;
     setInputValue('');
     setPendingAttachments([]);
     setSending(true);
@@ -515,7 +569,15 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
     } catch (err) {
       setSendError(err instanceof Error ? err.message : 'Failed to send message');
       setInputValue(text); // Restore input on error
-      setPendingAttachments(previews); // Restore previews on error
+      // Restore previews carrying their uploadedId so a retry reuses the upload
+      // instead of re-uploading (no orphan) (adj-203.4.1.1).
+      const uploadedByLocalId = new Map(uploaded.map((a) => [a.localId, a.uploadedId]));
+      setPendingAttachments(
+        previews.map((p) => {
+          const uploadedId = uploadedByLocalId.get(p.localId);
+          return uploadedId ? { ...p, uploadedId } : p;
+        }),
+      );
     } finally {
       setSending(false);
     }

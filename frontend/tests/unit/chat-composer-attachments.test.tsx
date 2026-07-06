@@ -246,4 +246,89 @@ describe("CommandChat attachment composer", () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
+
+  it("does not send an attachment removed while its upload is in flight (adj-203.4.1.1)", async () => {
+    // Hold the upload open so we can remove the attachment mid-flight.
+    let resolveUpload: ((v: UploadResult) => void) | undefined;
+    uploadMock.mockImplementationOnce(
+      () => new Promise<UploadResult>((res) => { resolveUpload = res; }),
+    );
+    render(<CommandChat agentId="raynor" />);
+
+    fireEvent.change(fileInput(), { target: { files: [makeImage()] } });
+    await screen.findByRole("img", { name: /shot\.png/i });
+
+    const input = screen.getByPlaceholderText(/type or record message/i);
+    fireEvent.change(input, { target: { value: "caption" } });
+    fireEvent.click(screen.getByRole("button", { name: /^send$/i })); // upload starts (pending)
+
+    // Remove the attachment while the upload is still in flight.
+    fireEvent.click(await screen.findByRole("button", { name: /remove shot\.png/i }));
+
+    // Resolve the upload after removal.
+    await act(async () => {
+      resolveUpload?.({ id: "att-x", filename: "shot.png", mimeType: "image/png", sizeBytes: 4 });
+    });
+
+    await waitFor(() => { expect(sendMessageMock).toHaveBeenCalledTimes(1); });
+    const [body, opts] = sendMessageMock.mock.calls[0] as [string, { attachmentIds?: string[] }];
+    expect(body).toBe("caption");
+    // The removed image must NOT be attached to the sent message.
+    expect(opts.attachmentIds ?? []).toEqual([]);
+  });
+
+  it("reuses the uploaded id on retry after a send failure — no re-upload (adj-203.4.1.1)", async () => {
+    uploadMock.mockResolvedValue({ id: "att-1", filename: "shot.png", mimeType: "image/png", sizeBytes: 4 });
+    sendMessageMock.mockRejectedValueOnce(new Error("network")); // first send fails post-upload
+    render(<CommandChat agentId="raynor" />);
+
+    fireEvent.change(fileInput(), { target: { files: [makeImage()] } });
+    await screen.findByRole("img", { name: /shot\.png/i });
+
+    const input = screen.getByPlaceholderText(/type or record message/i);
+    fireEvent.change(input, { target: { value: "hi" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /^send$/i }));
+    await waitFor(() => { expect(screen.getByRole("alert")).toBeInTheDocument(); });
+    expect(uploadMock).toHaveBeenCalledTimes(1);
+    // Draft + preview preserved for retry.
+    expect(screen.getByRole("img", { name: /shot\.png/i })).toBeInTheDocument();
+
+    // Retry — the already-uploaded image must NOT be re-uploaded (no orphan).
+    sendMessageMock.mockResolvedValueOnce(undefined);
+    fireEvent.click(screen.getByRole("button", { name: /^send$/i }));
+    await waitFor(() => { expect(sendMessageMock).toHaveBeenCalledTimes(2); });
+    expect(uploadMock).toHaveBeenCalledTimes(1); // reused id, no second upload
+    const [, opts] = sendMessageMock.mock.calls[1] as [string, { attachmentIds?: string[] }];
+    expect(opts.attachmentIds).toEqual(["att-1"]);
+  });
+
+  it("shows an error when a non-image file is selected (adj-203.4.4)", async () => {
+    const { container } = render(<CommandChat agentId="raynor" />);
+    const root = container.querySelector(".command-chat")!;
+    const pdf = new File([new Uint8Array([1])], "doc.pdf", { type: "application/pdf" });
+    fireEvent.drop(root, { dataTransfer: fileList([pdf]) });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/image/i);
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("shows an error and admits only the cap when too many are selected (adj-203.4.4)", async () => {
+    render(<CommandChat agentId="raynor" />);
+    const files = [1, 2, 3, 4, 5].map((n) => makeImage(`s${n}.png`));
+    fireEvent.change(fileInput(), { target: { files } });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/up to 4/i);
+    await waitFor(() => { expect(screen.getAllByRole("img")).toHaveLength(4); });
+  });
+
+  it("shows an error and rejects an oversize image (adj-203.4.4)", async () => {
+    render(<CommandChat agentId="raynor" />);
+    const big = makeImage("big.png");
+    Object.defineProperty(big, "size", { value: 11 * 1024 * 1024 });
+    fireEvent.change(fileInput(), { target: { files: [big] } });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/10 ?mb|exceed|large/i);
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
 });
