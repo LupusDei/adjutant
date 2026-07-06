@@ -92,6 +92,20 @@ describe("sniffMime", () => {
     expect(sniffMime(NOT_IMAGE)).toBeNull();
   });
 
+  it("should accept both GIF87a and GIF89a version signatures (adj-203.2.8)", () => {
+    const gif87 = Buffer.concat([Buffer.from("GIF87a", "ascii"), Buffer.from([0x00, 0x01])]);
+    const gif89 = Buffer.concat([Buffer.from("GIF89a", "ascii"), Buffer.from([0x00, 0x01])]);
+    expect(sniffMime(gif87)).toBe("image/gif");
+    expect(sniffMime(gif89)).toBe("image/gif");
+  });
+
+  it("should reject a GIF8 prefix with an invalid version/terminator (adj-203.2.8)", () => {
+    // "GIF8" alone must not pass — the loose 4-byte check was too permissive.
+    expect(sniffMime(Buffer.concat([Buffer.from("GIF80a", "ascii"), Buffer.from([0x00, 0x01])]))).toBeNull();
+    expect(sniffMime(Buffer.concat([Buffer.from("GIF89b", "ascii"), Buffer.from([0x00, 0x01])]))).toBeNull();
+    expect(sniffMime(Buffer.concat([Buffer.from("GIF8XY", "ascii"), Buffer.from([0x00, 0x01])]))).toBeNull();
+  });
+
   it("should return null for an empty/too-short buffer", () => {
     expect(sniffMime(Buffer.alloc(0))).toBeNull();
     expect(sniffMime(Buffer.from([0x89, 0x50]))).toBeNull();

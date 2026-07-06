@@ -102,8 +102,11 @@ function hasJpegSignature(b: Buffer): boolean {
 }
 
 function hasGifSignature(b: Buffer): boolean {
-  // "GIF87a" or "GIF89a"
-  return b.subarray(0, 4).toString("ascii") === "GIF8";
+  // Full 6-byte GIF header: "GIF87a" or "GIF89a" only (adj-203.2.8). The prior
+  // loose 4-byte "GIF8" check accepted malformed versions/terminators.
+  if (b.length < 6) return false;
+  const header = b.subarray(0, 6).toString("ascii");
+  return header === "GIF87a" || header === "GIF89a";
 }
 
 function hasWebpSignature(b: Buffer): boolean {
