@@ -130,6 +130,67 @@ final class ChatComposerAttachmentTests: XCTestCase {
         // Composer cleared after a successful send
         XCTAssertTrue(vm.attachments.isEmpty)
     }
+
+    // MARK: - Optimistic thumbnail (adj-203.5.7)
+
+    func testOptimisticMessageCarriesLocalThumbnail() async throws {
+        AttachmentImageLoader.clearCacheForTesting()
+        let staged = png(1)
+
+        MockURLProtocol.mockHandler = { request in
+            let path = request.url?.path ?? ""
+            if path == "/api/uploads" {
+                let envelope: [String: Any] = [
+                    "success": true,
+                    "data": ["id": "up_1", "filename": "shot1.png", "mimeType": "image/png", "sizeBytes": 5],
+                    "timestamp": "2026-07-06T00:00:00.000Z"
+                ]
+                return try Self.json(envelope, status: 201, url: request.url!)
+            }
+            if request.httpMethod == "GET" {
+                // refresh() — return an empty, well-formed list so the pending
+                // optimistic message survives the merge.
+                let envelope: [String: Any] = [
+                    "success": true,
+                    "data": ["items": [], "total": 0, "hasMore": false],
+                    "timestamp": "2026-07-06T00:00:00.000Z"
+                ]
+                return try Self.json(envelope, status: 200, url: request.url!)
+            }
+            // POST /api/messages
+            let envelope: [String: Any] = [
+                "success": true,
+                "data": ["messageId": "msg_1", "timestamp": "2026-07-06T00:00:00.000Z"],
+                "timestamp": "2026-07-06T00:00:00.000Z"
+            ]
+            return try Self.json(envelope, status: 201, url: request.url!)
+        }
+
+        let vm = ChatViewModel(apiClient: makeClient())
+        vm.setSelectedRecipientForTesting("kerrigan")
+        _ = vm.attachments.add(staged)
+
+        await vm.sendMessage()
+
+        // The just-sent (local) bubble carries an image attachment...
+        let local = try XCTUnwrap(vm.messages.first { $0.id.hasPrefix("local-") })
+        XCTAssertFalse(local.imageAttachments.isEmpty, "optimistic bubble should carry a local thumbnail")
+        // ...whose bytes are already in the render cache (no server round-trip needed).
+        let attId = local.imageAttachments[0].id
+        XCTAssertEqual(AttachmentImageLoader.cachedData(for: attId), staged.data)
+    }
+}
+
+extension ChatComposerAttachmentTests {
+    /// Build a JSON mock response.
+    static func json(_ object: [String: Any], status: Int, url: URL) throws -> (HTTPURLResponse, Data) {
+        let data = try JSONSerialization.data(withJSONObject: object)
+        let response = HTTPURLResponse(
+            url: url, statusCode: status, httpVersion: "HTTP/1.1",
+            headerFields: ["Content-Type": "application/json"]
+        )!
+        return (response, data)
+    }
 }
 
 private final class SendCapture: @unchecked Sendable {
