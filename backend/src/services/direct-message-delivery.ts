@@ -22,6 +22,7 @@ import type { EventStore } from "./event-store.js";
 import { wsBroadcast } from "./ws-server.js";
 import { dmConversationId } from "./conversation-store.js";
 import { getSessionBridge } from "./session-bridge.js";
+import { deliverImageAttachments } from "./attachment-delivery-service.js";
 import { logInfo } from "../utils/logger.js";
 
 export type DirectMessageRole = "user" | "agent";
@@ -111,17 +112,38 @@ export function deliverDirectMessage(deps: DirectMessageDeps, input: DirectMessa
   // routing; we mark the message delivered once an inject succeeds.
   let deliveredToSessions = 0;
   const deliveryText = input.deliveryText ?? body;
+  // adj-203 US2: a message carrying image attachments delivers a richer screenshot
+  // prompt (absolute paths + body) via the attachment delivery service instead of the
+  // plain body, so the agent's Claude can Read the image. Both legs are fire-and-forget
+  // and best-effort — tmux latency/failure never blocks or fails the send response.
+  const imageAttachments = (message.attachments ?? []).filter((a) => a.kind === "image");
   try {
     const bridge = getSessionBridge();
-    const sessions = bridge.registry.findByName(to);
-    for (const session of sessions) {
-      deliveredToSessions++;
-      bridge
-        .sendInput(session.id, deliveryText)
-        .then((sent) => {
-          if (sent) deps.store.markDelivered(message.id);
+    if (imageAttachments.length > 0) {
+      // Count online sessions synchronously for the envelope; the injection itself is
+      // a non-awaited tail so the send response is not blocked on tmux I/O.
+      deliveredToSessions = bridge.registry
+        .findByName(to)
+        .filter((s) => s.status !== "offline").length;
+      void deliverImageAttachments(
+        { registry: bridge.registry, inputRouter: bridge.inputRouter },
+        { message, recipient: to },
+      )
+        .then((r) => {
+          if (r.sessionsDelivered > 0) deps.store.markDelivered(message.id);
         })
         .catch(() => {});
+    } else {
+      const sessions = bridge.registry.findByName(to);
+      for (const session of sessions) {
+        deliveredToSessions++;
+        bridge
+          .sendInput(session.id, deliveryText)
+          .then((sent) => {
+            if (sent) deps.store.markDelivered(message.id);
+          })
+          .catch(() => {});
+      }
     }
   } catch {
     // Session bridge not initialized — recipient will pull via MCP.
