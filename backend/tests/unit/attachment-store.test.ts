@@ -117,12 +117,30 @@ describe("AttachmentStore.linkToMessage", () => {
     expect(store.getById(a.id)?.messageId).toBe("m-3");
   });
 
-  it("should not throw for an unknown attachment id (no rows updated)", () => {
+  it("should throw for an unknown attachment id (adj-203.2.5 guard)", () => {
     insertMessage("m-4");
     expect(() => {
       store.linkToMessage("does-not-exist", "m-4");
-    }).not.toThrow();
+    }).toThrow(/not found/i);
     expect(store.getByMessageId("m-4")).toEqual([]);
+  });
+
+  it("should reject re-parenting an attachment already linked to a DIFFERENT message (adj-203.2.5)", () => {
+    insertMessage("m-owner");
+    insertMessage("m-hijack");
+    const a = store.createAttachment({
+      kind: "image",
+      storagePath: "/u/own.png",
+      filename: "own.png",
+      mimeType: "image/png",
+      sizeBytes: 5,
+    });
+    store.linkToMessage(a.id, "m-owner");
+    // A second, different message must not be able to hijack it.
+    expect(() => {
+      store.linkToMessage(a.id, "m-hijack");
+    }).toThrow(/already linked/i);
+    expect(store.getById(a.id)?.messageId).toBe("m-owner");
   });
 });
 
