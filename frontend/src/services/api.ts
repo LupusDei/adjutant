@@ -28,6 +28,7 @@ import type {
   UpdatePersonaInput,
   CallsignListResponse,
   AutoDevelopStatus,
+  UploadResult,
 } from '../types';
 import type {
   AgentQuestion,
@@ -576,6 +577,12 @@ export const api = {
       body: string;
       threadId?: string;
       metadata?: Record<string, unknown>;
+      /**
+       * Ids of previously-uploaded image attachments to link to this message
+       * (adj-203). Obtain each id from `api.uploads.upload(file)`. Omitted from
+       * the request body when absent so the legacy contract is unchanged.
+       */
+      attachmentIds?: string[];
     }): Promise<{ messageId: string; timestamp: string }> {
       return apiFetch('/messages', { method: 'POST', body: params });
     },
@@ -591,6 +598,83 @@ export const api = {
       if (params.limit) searchParams.set('limit', params.limit.toString());
 
       return apiFetch(`/messages/search?${searchParams}`);
+    },
+  },
+
+  /**
+   * Image uploads (adj-203) — Commander screenshot sharing.
+   *
+   * Upload flow is upload-then-reference: `upload(file)` stores the image and
+   * returns an attachment record; the resulting `id` is passed to
+   * `messages.send({ attachmentIds })`. The serve endpoint `GET /api/uploads/:id`
+   * sits behind `apiKeyAuth`, so a bare `<img src>` (which cannot carry an
+   * Authorization header) would 401 — `fetchObjectUrl(id)` fetches WITH the key
+   * and hands back a blob object URL callers set as the `<img src>` (and must
+   * revoke on unmount).
+   */
+  uploads: {
+    /**
+     * Upload a single image via multipart `POST /api/uploads`. Returns the
+     * stored attachment record. Throws `ApiError` on a rejected upload (bad
+     * type / too large) so the composer can preserve the draft + surface it.
+     */
+    async upload(file: File): Promise<UploadResult> {
+      const form = new FormData();
+      form.append('file', file);
+
+      const url = `${API_BASE_URL}/uploads`;
+      // NOTE: do NOT set Content-Type — the browser derives the multipart
+      // boundary from the FormData body. Forcing application/json corrupts the
+      // multipart parse on the server.
+      const headers: Record<string, string> = {};
+      const apiKey = getApiKey();
+      if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+
+      let response: Response;
+      try {
+        response = await fetch(url, { method: 'POST', headers, body: form });
+      } catch (err) {
+        throw new ApiError('NETWORK_ERROR', err instanceof Error ? err.message : 'Upload failed');
+      }
+
+      const json = (await response.json()) as ApiResponse<UploadResult>;
+      if (!json.success || !json.data) {
+        throw new ApiError(
+          json.error?.code ?? 'UPLOAD_ERROR',
+          json.error?.message ?? 'Upload failed',
+          json.error?.details,
+          response.status,
+        );
+      }
+      return json.data;
+    },
+
+    /** Build the authenticated serve URL for an uploaded image. */
+    url(id: string): string {
+      return `${API_BASE_URL}/uploads/${encodeURIComponent(id)}`;
+    },
+
+    /**
+     * Fetch an uploaded image WITH the API key and return a blob object URL.
+     * Callers set the result as an `<img src>` and MUST revoke it on unmount
+     * (`URL.revokeObjectURL`). Throws `ApiError` when the image can't be loaded.
+     */
+    async fetchObjectUrl(id: string): Promise<string> {
+      const headers: Record<string, string> = {};
+      const apiKey = getApiKey();
+      if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+
+      let response: Response;
+      try {
+        response = await fetch(this.url(id), { headers });
+      } catch (err) {
+        throw new ApiError('NETWORK_ERROR', err instanceof Error ? err.message : 'Image load failed');
+      }
+      if (!response.ok) {
+        throw new ApiError('IMAGE_LOAD_ERROR', `Image request failed (${response.status})`, undefined, response.status);
+      }
+      const blob = await response.blob();
+      return URL.createObjectURL(blob);
     },
   },
 

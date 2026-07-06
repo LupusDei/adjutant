@@ -166,6 +166,30 @@ export type AgentsResponse = ApiResponse<CrewMember[]>;
 // Chat Message Types (SQLite-backed persistent messages)
 // ============================================================================
 
+/**
+ * The stored image-attachment record returned by `POST /api/uploads` (adj-203).
+ * `id` is what the composer passes to `messages.send({ attachmentIds })`.
+ */
+export interface UploadResult {
+  id: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
+/**
+ * An image attachment hydrated onto a message (adj-203). Mirrors the subset of
+ * the backend record the UI needs; the frontend never uses the server-side
+ * `storagePath` — images are served via `api.uploads.url(id)` behind auth.
+ */
+export interface MessageAttachment {
+  id: string;
+  kind: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
 /** A persistent chat message from the message store. */
 export interface ChatMessage {
   id: string;
@@ -178,6 +202,8 @@ export interface ChatMessage {
   deliveryStatus: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
   eventType: string | null;
   threadId: string | null;
+  /** Image attachments linked to this message (adj-203); present when any. */
+  attachments?: MessageAttachment[];
   /**
    * Stable conversation id (adj-164). Every message belongs to exactly one
    * conversation; the frontend scopes 1:1 chat strictly by this field, which

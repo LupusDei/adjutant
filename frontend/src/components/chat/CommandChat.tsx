@@ -14,8 +14,8 @@ import { MarkdownBody } from './MarkdownBody';
 import { MessageBubble } from './MessageBubble';
 import { computeMessageGroups } from './messageGrouping';
 import { messageRowClass } from './messageRow';
-import type { ConnectionStatus, ChatMessage } from '../../types';
-import { useChatMessages, type DisplayMessage } from '../../hooks/useChatMessages';
+import type { ConnectionStatus, ChatMessage, MessageAttachment } from '../../types';
+import { useChatMessages, type DisplayMessage, type SendMessageOptions } from '../../hooks/useChatMessages';
 import { api } from '../../services/api';
 import { useUnreadCounts } from '../../hooks/useUnreadCounts';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
@@ -58,6 +58,23 @@ export interface CommandChatProps {
   isActive?: boolean;
   /** Agent ID to scope the conversation. Undefined shows coordinator messages. */
   agentId?: string;
+}
+
+/** Per-message image-attachment cap (mirrors the backend security cap, adj-203). */
+const MAX_ATTACHMENTS = 4;
+
+/** A locally-selected image awaiting upload-on-send (adj-203). */
+interface PendingAttachment {
+  /** Client-only id for list keys + removal. */
+  localId: string;
+  file: File;
+  /** Object URL for the preview thumbnail; revoked when removed / sent. */
+  previewUrl: string;
+}
+
+/** Only images can be attached (MVP scope). */
+function isImageFile(file: File): boolean {
+  return file.type.startsWith('image/');
 }
 
 // ============================================================================
@@ -150,10 +167,20 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
   const [searchResults, setSearchResults] = useState<ChatMessage[] | null>(null);
   const [searching, setSearching] = useState(false);
 
+  // Image attachments (adj-203): selected locally, uploaded on send.
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Mirror pending attachments so the unmount cleanup revokes the latest set
+  // without re-registering the effect on every change.
+  const pendingRef = useRef<PendingAttachment[]>(pendingAttachments);
+  pendingRef.current = pendingAttachments;
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
@@ -358,22 +385,137 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
   }, [hasMore, loadMore, loadingMore]);
 
 
+  // ---- Image attachments (adj-203) --------------------------------------
+
+  // Add selected/pasted/dropped image files as pending attachments (capped).
+  const addFiles = useCallback((files: File[]) => {
+    const images = files.filter(isImageFile);
+    if (images.length === 0) return;
+    setSendError(null);
+    setPendingAttachments((prev) => {
+      const room = Math.max(0, MAX_ATTACHMENTS - prev.length);
+      const toAdd = images.slice(0, room).map((file) => ({
+        localId: crypto.randomUUID(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+      }));
+      return [...prev, ...toAdd];
+    });
+  }, []);
+
+  const removeAttachment = useCallback((localId: string) => {
+    setPendingAttachments((prev) => {
+      const target = prev.find((a) => a.localId === localId);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((a) => a.localId !== localId);
+    });
+  }, []);
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    addFiles(files);
+    // Reset so selecting the same file again still fires a change event.
+    e.target.value = '';
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const files: File[] = [];
+    for (const item of Array.from(items)) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const f = item.getAsFile();
+        if (f) files.push(f);
+      }
+    }
+    if (files.length > 0) {
+      e.preventDefault();
+      addFiles(files);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (Array.from(e.dataTransfer?.types ?? []).includes('Files')) {
+      e.preventDefault();
+      setIsDragging(true);
+    }
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = e.dataTransfer?.files ? Array.from(e.dataTransfer.files) : [];
+    addFiles(files);
+  };
+
+  // Revoke any lingering preview object URLs on unmount.
+  useEffect(() => {
+    return () => {
+      pendingRef.current.forEach((p) => { URL.revokeObjectURL(p.previewUrl); });
+    };
+  }, []);
+
   // Handle sending a message — always via HTTP (hookSendMessage).
   // The backend stores the message and broadcasts it via WebSocket.
+  //
+  // With attachments, uploads happen first: on any upload failure the draft
+  // text AND the pending previews are preserved and an error is shown
+  // (draft-preserve rule). A send is allowed with ≥1 attachment even when the
+  // text field is empty (screenshot with no caption).
   const handleSend = async () => {
     const text = inputValue.trim();
-    if (!text || sending) return;
+    const hasAttachments = pendingAttachments.length > 0;
+    if ((!text && !hasAttachments) || sending || uploading) return;
 
-    setInputValue('');
     setSendError(null);
+
+    let attachmentIds: string[] = [];
+    let optimisticAttachments: MessageAttachment[] = [];
+    if (hasAttachments) {
+      setUploading(true);
+      try {
+        const results = await Promise.all(
+          pendingAttachments.map((a) => api.uploads.upload(a.file)),
+        );
+        attachmentIds = results.map((r) => r.id);
+        optimisticAttachments = results.map((r) => ({
+          id: r.id,
+          kind: 'image',
+          filename: r.filename,
+          mimeType: r.mimeType,
+          sizeBytes: r.sizeBytes,
+        }));
+      } catch (err) {
+        // Preserve the draft text + previews so the Commander can retry.
+        setSendError(err instanceof Error ? err.message : 'Failed to upload image');
+        setUploading(false);
+        return;
+      }
+      setUploading(false);
+    }
+
+    // Uploads succeeded — clear the composer optimistically.
+    const previews = pendingAttachments;
+    setInputValue('');
+    setPendingAttachments([]);
     setSending(true);
 
     try {
-      await hookSendMessage(text);
+      const opts: SendMessageOptions = {};
+      if (attachmentIds.length > 0) {
+        opts.attachmentIds = attachmentIds;
+        opts.attachments = optimisticAttachments;
+      }
+      await hookSendMessage(text, opts);
+      previews.forEach((p) => { URL.revokeObjectURL(p.previewUrl); });
       inputRef.current?.focus();
     } catch (err) {
       setSendError(err instanceof Error ? err.message : 'Failed to send message');
       setInputValue(text); // Restore input on error
+      setPendingAttachments(previews); // Restore previews on error
     } finally {
       setSending(false);
     }
@@ -537,8 +679,20 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
   const streamingEntries = Array.from(streamingMessages.entries());
   const displayError = fetchError?.message ?? sendError;
 
+  const canSend = (inputValue.trim().length > 0 || pendingAttachments.length > 0) && !sending && !uploading;
+
   return (
-    <div className="command-chat">
+    <div
+      className="command-chat"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragging && (
+        <div className="chat-dropzone-overlay" aria-hidden="true">
+          <span className="chat-dropzone-label">DROP IMAGE TO ATTACH</span>
+        </div>
+      )}
       {/* Header */}
       <header className="chat-header">
         <h2 className="chat-title">{coordinatorName} DIRECT LINE</h2>
@@ -702,8 +856,49 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
         )}
       </div>
 
+      {/* Attachment previews (adj-203) */}
+      {pendingAttachments.length > 0 && (
+        <div className="chat-attachment-previews">
+          {pendingAttachments.map((a) => (
+            <div className="chat-attachment-preview" key={a.localId}>
+              <img src={a.previewUrl} alt={a.file.name} className="chat-attachment-preview-img" />
+              <button
+                type="button"
+                className="chat-attachment-preview-remove"
+                aria-label={`Remove ${a.file.name}`}
+                title={`Remove ${a.file.name}`}
+                onClick={() => { removeAttachment(a.localId); }}
+              >
+                x
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Input area */}
       <div className="chat-input-area">
+        {/* Hidden picker input; the attach button proxies clicks to it. */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="chat-file-input-hidden"
+          onChange={handleFileInputChange}
+          tabIndex={-1}
+          aria-hidden="true"
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={sending || uploading || pendingAttachments.length >= MAX_ATTACHMENTS}
+          className="chat-attach-btn"
+          aria-label="Attach image"
+          title="Attach image"
+        >
+          IMG
+        </button>
         <button
           type="button"
           onClick={() => void handleMicClick()}
@@ -720,6 +915,7 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
           value={inputValue}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder={voiceInput.isRecording ? 'RECORDING...' : 'TYPE OR RECORD MESSAGE...'}
           className="chat-input"
           disabled={sending || voiceInput.isRecording}
@@ -727,10 +923,10 @@ export const CommandChat: React.FC<CommandChatProps> = ({ isActive = true, agent
         />
         <button
           onClick={() => void handleSend()}
-          disabled={!inputValue.trim() || sending}
+          disabled={!canSend}
           className="chat-send-btn"
         >
-          {sending ? '...' : 'SEND'}
+          {uploading ? 'UP...' : sending ? '...' : 'SEND'}
         </button>
       </div>
       {voiceInput.error && (

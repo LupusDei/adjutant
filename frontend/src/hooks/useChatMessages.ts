@@ -9,8 +9,21 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 import { api } from '../services/api';
-import type { ChatMessage } from '../types';
+import type { ChatMessage, MessageAttachment } from '../types';
 import { useCommunicationActions, type IncomingChatMessage } from '../contexts/CommunicationContext';
+
+/** Options for {@link UseChatMessagesResult.sendMessage} (adj-203). */
+export interface SendMessageOptions {
+  /** Optional thread id for the outgoing message. */
+  threadId?: string;
+  /** Ids of previously-uploaded image attachments to link to the message. */
+  attachmentIds?: string[];
+  /**
+   * Attachment metadata to show on the optimistic bubble immediately (before
+   * the persisted message — with its hydrated attachments — arrives on refetch).
+   */
+  attachments?: MessageAttachment[];
+}
 
 /**
  * The agent the default (no-agent-selected) chat view maps to (adj-ropat).
@@ -47,7 +60,7 @@ export interface UseChatMessagesResult {
    */
   conversationId: string | null;
   /** Send a message via HTTP. Adds it optimistically and confirms on API response. */
-  sendMessage: (body: string, threadId?: string) => Promise<void>;
+  sendMessage: (body: string, opts?: SendMessageOptions) => Promise<void>;
   /** Add an optimistic message without sending via HTTP (for WebSocket sends). */
   addOptimistic: (body: string, clientId: string) => void;
   /** Confirm delivery of an optimistic message by clientId */
@@ -177,7 +190,8 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
 
   // Send a message with optimistic UI
   const sendMessage = useCallback(
-    async (body: string, threadId?: string) => {
+    async (body: string, opts?: SendMessageOptions) => {
+      const threadId = opts?.threadId;
       const clientId = crypto.randomUUID();
       const now = new Date().toISOString();
 
@@ -191,6 +205,7 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
         recipient: effectiveAgentId,
         role: 'user',
         body,
+        ...(opts?.attachments ? { attachments: opts.attachments } : {}),
         metadata: null,
         deliveryStatus: 'pending',
         optimisticStatus: 'sending',
@@ -209,6 +224,9 @@ export function useChatMessages(agentId?: string): UseChatMessagesResult {
           body,
         };
         if (threadId) params.threadId = threadId;
+        if (opts?.attachmentIds && opts.attachmentIds.length > 0) {
+          params.attachmentIds = opts.attachmentIds;
+        }
         const result = await api.messages.send(params);
 
         // Update optimistic message with server ID and delivered status

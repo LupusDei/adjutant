@@ -20,7 +20,13 @@
 
 import React from "react";
 import { MarkdownBody } from "./MarkdownBody";
+import { MessageAttachments } from "./MessageAttachments";
 import type { DisplayMessage } from "../../hooks/useChatMessages";
+
+/** Stable join of attachment ids, for memo equality. */
+function attachmentKey(msg: DisplayMessage): string {
+  return (msg.attachments ?? []).map((a) => a.id).join(",");
+}
 
 export interface MessageBubbleProps {
   /** The message to render. */
@@ -107,6 +113,7 @@ function MessageBubbleImpl({
       <div className="chat-bubble-content">
         <MarkdownBody>{msg.body}</MarkdownBody>
       </div>
+      <MessageAttachments attachments={msg.attachments} />
       {showTime && (
         <div className="chat-bubble-time">
           {isSending && <span className="chat-delivery-status">SENDING </span>}
@@ -138,6 +145,7 @@ function arePropsEqual(prev: MessageBubbleProps, next: MessageBubbleProps): bool
     if (prev.msg.clientId !== next.msg.clientId) return false;
     if (prev.msg.agentId !== next.msg.agentId) return false;
     if (prev.msg.createdAt !== next.msg.createdAt) return false;
+    if (attachmentKey(prev.msg) !== attachmentKey(next.msg)) return false;
   }
   return (
     prev.isUser === next.isUser &&
