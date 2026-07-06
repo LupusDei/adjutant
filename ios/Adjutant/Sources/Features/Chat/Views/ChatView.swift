@@ -115,7 +115,8 @@ struct ChatView: View {
                 },
                 onVoiceToggle: {
                     viewModel.toggleVoiceRecording()
-                }
+                },
+                attachments: viewModel.attachments
             )
         }
         .background(theme.background.screen)

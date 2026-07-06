@@ -47,13 +47,20 @@ extension APIClient {
     ///   - agentId: The agent to send to.
     ///   - body: Message body text.
     ///   - threadId: Optional thread ID for grouping.
+    ///   - attachmentIds: Ids of previously-uploaded attachments to link (adj-203).
     /// - Returns: A ``SendChatMessageResponse`` with messageId and timestamp.
     public func sendChatMessage(
         agentId: String,
         body: String,
-        threadId: String? = nil
+        threadId: String? = nil,
+        attachmentIds: [String]? = nil
     ) async throws -> SendChatMessageResponse {
-        let request = SendChatMessageRequest(to: agentId, body: body, threadId: threadId)
+        let request = SendChatMessageRequest(
+            to: agentId,
+            body: body,
+            threadId: threadId,
+            attachmentIds: attachmentIds
+        )
         return try await requestWithEnvelope(.post, path: "/messages", body: request)
     }
 

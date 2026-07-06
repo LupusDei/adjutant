@@ -37,6 +37,9 @@ public struct PersistentMessage: Codable, Identifiable, Hashable, Sendable {
     public let conversationId: String?
     public let createdAt: String
     public let updatedAt: String
+    /// Image attachments hydrated onto this message (adj-203). Present (possibly
+    /// empty) on messages that carry uploads; nil for legacy / optimistic rows.
+    public let attachments: [MessageAttachment]?
 
     public init(
         id: String,
@@ -51,7 +54,8 @@ public struct PersistentMessage: Codable, Identifiable, Hashable, Sendable {
         threadId: String? = nil,
         conversationId: String? = nil,
         createdAt: String,
-        updatedAt: String
+        updatedAt: String,
+        attachments: [MessageAttachment]? = nil
     ) {
         self.id = id
         self.sessionId = sessionId
@@ -66,6 +70,7 @@ public struct PersistentMessage: Codable, Identifiable, Hashable, Sendable {
         self.conversationId = conversationId
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.attachments = attachments
     }
 
     private static let dateFormatterWithFractional: ISO8601DateFormatter = {
@@ -103,6 +108,12 @@ public struct PersistentMessage: Codable, Identifiable, Hashable, Sendable {
     /// Whether this message is from the user
     public var isFromUser: Bool {
         role == .user
+    }
+
+    /// Renderable image attachments (adj-203). Empty when the message has no
+    /// attachments or only non-image ones.
+    public var imageAttachments: [MessageAttachment] {
+        (attachments ?? []).filter { $0.isImage }
     }
 }
 
@@ -143,17 +154,22 @@ public struct SendChatMessageRequest: Encodable, Sendable {
     public let body: String
     public let threadId: String?
     public let metadata: [String: AnyCodableValue]?
+    /// Ids of previously-uploaded (unlinked) attachments to link to this message (adj-203).
+    /// Omitted from the encoded body when nil.
+    public let attachmentIds: [String]?
 
     public init(
         to: String,
         body: String,
         threadId: String? = nil,
-        metadata: [String: AnyCodableValue]? = nil
+        metadata: [String: AnyCodableValue]? = nil,
+        attachmentIds: [String]? = nil
     ) {
         self.to = to
         self.body = body
         self.threadId = threadId
         self.metadata = metadata
+        self.attachmentIds = attachmentIds
     }
 }
 
