@@ -586,6 +586,114 @@
   }
 }
 
+/* Attach (image) button — mirrors the mic button's chunky bordered control. */
+.chat-attach-btn {
+  padding: 10px 12px;
+  background-color: transparent;
+  border: 2px solid var(--crt-phosphor-dim, #00aa00);
+  color: var(--crt-phosphor, #00ff00);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  flex-shrink: 0;
+}
+
+.chat-attach-btn:hover:not(:disabled) {
+  border-color: var(--crt-phosphor, #00ff00);
+  box-shadow: 0 0 8px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.3));
+}
+
+.chat-attach-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Visually-hidden file input (the attach button proxies clicks to it). */
+.chat-file-input-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Pending attachment previews strip (above the input row). */
+.chat-attachment-previews {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--crt-phosphor-dim, #00aa00);
+  background-color: var(--theme-bg-elevated, #050505);
+}
+
+.chat-attachment-preview {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border: 1px solid var(--crt-phosphor-dim, #00aa00);
+  background-color: var(--theme-bg-panel, #111);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.chat-attachment-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.chat-attachment-preview-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  line-height: 1;
+  background-color: var(--theme-bg-screen, #0a0a0a);
+  border: 1px solid var(--crt-phosphor, #00ff00);
+  color: var(--crt-phosphor, #00ff00);
+  font-family: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.chat-attachment-preview-remove:hover {
+  background-color: var(--crt-phosphor, #00ff00);
+  color: var(--theme-bg-screen, #0a0a0a);
+}
+
+/* Drag-and-drop overlay shown while dragging an image over the chat. */
+.chat-dropzone-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 20, 0, 0.72);
+  border: 2px dashed var(--crt-phosphor, #00ff00);
+  pointer-events: none;
+}
+
+.chat-dropzone-label {
+  color: var(--crt-phosphor, #00ff00);
+  font-size: 1.1rem;
+  font-weight: bold;
+  letter-spacing: 0.2em;
+  text-shadow: 0 0 8px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.5));
+}
+
 /* Voice error message */
 .chat-voice-error {
   padding: 6px 16px;
@@ -594,6 +702,129 @@
   color: #ff4444;
   font-size: 0.75rem;
   text-align: center;
+}
+
+/* ==========================================================================
+   Image attachments (adj-203) — inline thumbnails + full-image lightbox.
+   Fetched through the authenticated api client into blob object URLs, so the
+   thumbnail frame reserves a fixed box up front to avoid layout shift (CLS).
+   ========================================================================== */
+.chat-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.chat-attachment-thumb {
+  /* Fixed box reserved before the image resolves — no reflow on load. */
+  width: 128px;
+  height: 128px;
+  padding: 0;
+  flex-shrink: 0;
+  background-color: var(--theme-bg-panel, #111);
+  border: 1px solid var(--crt-phosphor-dim, #00aa00);
+  cursor: pointer;
+  overflow: hidden;
+  position: relative;
+  display: block;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.chat-attachment-thumb:hover:not(:disabled) {
+  border-color: var(--crt-phosphor, #00ff00);
+  box-shadow: 0 0 8px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.3));
+}
+
+.chat-attachment-thumb:disabled {
+  cursor: default;
+}
+
+.chat-attachment-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Placeholder shimmer while the authenticated fetch is in flight. */
+.chat-attachment-thumb-loading {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    100deg,
+    var(--theme-bg-panel, #111) 0%,
+    var(--crt-phosphor-glow, rgba(0, 255, 0, 0.12)) 50%,
+    var(--theme-bg-panel, #111) 100%
+  );
+  background-size: 200% 100%;
+  animation: attachment-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes attachment-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.chat-attachment-thumb-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--crt-phosphor-dim, #00aa00);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+}
+
+/* Full-image lightbox overlay */
+.chat-attachment-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background-color: rgba(0, 0, 0, 0.9);
+  cursor: zoom-out;
+}
+
+.chat-attachment-lightbox-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border: 1px solid var(--crt-phosphor, #00ff00);
+  box-shadow: 0 0 24px var(--crt-phosphor-glow, rgba(0, 255, 0, 0.3));
+  cursor: default;
+}
+
+.chat-attachment-lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  background-color: transparent;
+  border: 2px solid var(--crt-phosphor, #00ff00);
+  color: var(--crt-phosphor, #00ff00);
+  font-family: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.chat-attachment-lightbox-close:hover {
+  background-color: var(--crt-phosphor, #00ff00);
+  color: var(--theme-bg-screen, #0a0a0a);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-attachment-thumb-loading {
+    animation: none;
+  }
 }
 
 /* Scrollbar styling */

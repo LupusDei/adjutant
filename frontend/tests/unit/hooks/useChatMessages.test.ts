@@ -557,7 +557,7 @@ describe('useChatMessages', () => {
       });
 
       await act(async () => {
-        await result.current.sendMessage('Threaded reply', 'thread-123');
+        await result.current.sendMessage('Threaded reply', { threadId: 'thread-123' });
       });
 
       expect(api.messages.send).toHaveBeenCalledWith(
