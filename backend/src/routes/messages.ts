@@ -29,11 +29,18 @@ import {
   validationError,
 } from "../utils/responses.js";
 
+/** Max image attachments per message (adj-203 security cap). */
+const MAX_ATTACHMENTS_PER_MESSAGE = 4;
+
 const SendChatMessageSchema = z.object({
   to: z.string().min(1, "Recipient is required"),
   body: z.string().min(1, "Message body is required").max(10000, "Message body too long"),
   threadId: z.string().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
+  attachmentIds: z
+    .array(z.string().min(1))
+    .max(MAX_ATTACHMENTS_PER_MESSAGE, `At most ${MAX_ATTACHMENTS_PER_MESSAGE} attachments per message`)
+    .optional(),
 });
 
 /**
@@ -147,7 +154,7 @@ export function createMessagesRouter(store: MessageStore): Router {
       );
     }
 
-    const { to, body, threadId, metadata } = parseResult.data;
+    const { to, body, threadId, metadata, attachmentIds } = parseResult.data;
 
     // adj-164.2 + adj-202.4.1: persist (tagged with the deterministic DM conversation id
     // for the (user, recipient) pair — the wrong-thread-bleed fix), broadcast, and inject
@@ -163,6 +170,7 @@ export function createMessagesRouter(store: MessageStore): Router {
         role: "user",
         ...(threadId !== undefined ? { threadId } : {}),
         ...(metadata !== undefined ? { metadata } : {}),
+        ...(attachmentIds !== undefined ? { attachmentIds } : {}),
       },
     );
 
