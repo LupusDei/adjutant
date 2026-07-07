@@ -148,6 +148,39 @@ export function createAvatarRouter(deps: AvatarRouterDeps): Router {
     })();
   }
 
+  // ── Keep-warm heartbeat (adj-202.10.2, load perf) ───────────────────────────
+  // Provisioning a Runway session takes ~5s. A single prepare-then-tap only hides that if the
+  // Commander waits ~5s before tapping; a fast tap, a second tap, or a warm that expired/was
+  // consumed all fall back to the full ~5s on-demand create — the "10s to the avatar" the
+  // Commander sees. Instead we keep a session ALWAYS hot WHILE THE APP IS ACTIVE: any prepare/
+  // connect marks activity and (re)starts a self-scheduling loop that re-warms whenever the slot
+  // isn't fresh, until an idle window passes. So a tap lands on an already-READY session (server
+  // time ~0), leaving only the unavoidable client-side connect + first-frame. The loop stops after
+  // ACTIVE_WINDOW_MS of no activity so we never burn credits warming a session nobody will use; the
+  // cost guard still gates every create.
+  const ACTIVE_WINDOW_MS = 5 * 60 * 1000;
+  const KEEP_WARM_CHECK_MS = 20 * 1000;
+  let lastActivityAt = 0;
+  let keepWarmTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function scheduleKeepWarm(): void {
+    if (keepWarmTimer) return;
+    keepWarmTimer = setTimeout(() => {
+      keepWarmTimer = null;
+      if (Date.now() - lastActivityAt > ACTIVE_WINDOW_MS) return; // went idle — stop warming
+      triggerWarm(); // no-op if already fresh / in flight; ceiling-gated
+      scheduleKeepWarm();
+    }, KEEP_WARM_CHECK_MS);
+    // Don't keep the event loop (or a test process) alive just for the heartbeat.
+    (keepWarmTimer as { unref?: () => void }).unref?.();
+  }
+
+  function noteActivity(): void {
+    lastActivityAt = Date.now();
+    triggerWarm(); // ensure a session is provisioning NOW
+    scheduleKeepWarm(); // and keep one hot while the app stays active
+  }
+
   // Take the warm session if it is still fresh AND Runway still reports it consumable;
   // otherwise drop it and return null so connect falls back to an on-demand create.
   //
@@ -188,7 +221,7 @@ export function createAvatarRouter(deps: AvatarRouterDeps): Router {
   // POST /avatar/prepare — warm a session ahead of a tap (called by iOS on foreground/intent).
   // Idempotent, cost-guarded, returns immediately without blocking on provisioning.
   router.post("/prepare", (_req, res) => {
-    triggerWarm();
+    noteActivity();
     return res.json({ ok: true, warm: warmFresh() });
   });
 
@@ -197,11 +230,17 @@ export function createAvatarRouter(deps: AvatarRouterDeps): Router {
     const customAvatarId =
       typeof body?.customAvatarId === "string" && body.customAvatarId.length > 0 ? body.customAvatarId : undefined;
 
+    // A connect proves the app is active — keep the next session hot so a follow-on tap is instant.
+    noteActivity();
+
     try {
       // Fast path: hand out the pre-warmed session (default avatar only — a custom avatar can't
       // reuse the warm one). This is the ~2s path.
       if (customAvatarId === undefined) {
         const warmCreds = await takeWarm();
+        // The warm slot is now consumed either way — immediately provision the NEXT one so a
+        // second tap (or a quick reconnect) also lands warm instead of paying the ~5s create.
+        triggerWarm();
         if (warmCreds) {
           logInfo("avatar session served warm", { sessionId: warmCreds.sessionId });
           return res.json(warmCreds);
