@@ -175,6 +175,22 @@ enum BridgeWindowChrome {
     /// Continuous corner radius for the floating window + glass control clusters.
     static let cornerRadius: CGFloat = 22
 
+    /// Vertical space (pt) the full-screen native control bar keeps above the
+    /// safe-area bottom so it clears BOTH the home indicator AND the `/avatar`
+    /// page's web mic/camera row, which is pinned at `bottom: 46pt +
+    /// safe-area-inset-bottom` with ~44pt pills (adj-207.2.11). 46 (row offset)
+    /// + ~44 (pill) + gap ⇒ 104, so the native bar sits just above the web row
+    /// without occluding it.
+    static let webControlsClearance: CGFloat = 104
+
+    /// Bottom padding for the full-screen native control bar: the live safe-area
+    /// bottom inset plus the web-controls clearance. Pure so the placement is
+    /// unit-testable; the raw inset is read from the window at the view layer
+    /// (adj-207.2.11).
+    static func fullscreenControlBarBottomPadding(safeAreaBottom: CGFloat) -> CGFloat {
+        max(0, safeAreaBottom) + webControlsClearance
+    }
+
     /// Whether the window is wide enough to show the secondary (full-screen)
     /// control beside the essential mute / minimize / end trio without the row
     /// overflowing the window or colliding with the bottom-trailing resize grip.
@@ -284,8 +300,15 @@ struct BridgeFloatingWindowView<Surface: View>: View {
             .overlay(alignment: .bottomTrailing) {
                 if floating { resizeHandle }
             }
-            .overlay(alignment: .topTrailing) {
-                if model.isFullscreen { fullscreenControls }
+            // Full-screen controls live at the BOTTOM, safe-area aware, so they
+            // never sit under the Dynamic Island / status bar (untappable) and
+            // clear the web mic/camera row (adj-207.2.11).
+            .overlay(alignment: .bottom) {
+                if model.isFullscreen {
+                    fullscreenControlBar
+                        .padding(.bottom, BridgeWindowChrome.fullscreenControlBarBottomPadding(
+                            safeAreaBottom: bottomSafeInset))
+                }
             }
             .overlay {
                 if floating {
@@ -406,9 +429,24 @@ struct BridgeFloatingWindowView<Surface: View>: View {
         .padding(.top, 8)
     }
 
-    /// Full-screen affordances: shrink to the floating window, or end the Bridge.
-    private var fullscreenControls: some View {
+    /// Full-screen native control bar (adj-207.2.11). Pinned to the BOTTOM (see
+    /// the caller's safe-area-aware padding) so it clears the Dynamic Island /
+    /// status bar and sits just above the web mic/camera row. Translucent so the
+    /// avatar shows through; ≥44pt targets, VoiceOver labels, Reduce-Motion via
+    /// `modeAnimation`. Provides the reported minimize + close, plus mute (now a
+    /// working native control, adj-207.2.10) and shrink-to-window.
+    private var fullscreenControlBar: some View {
         HStack(spacing: 4) {
+            controlButton(
+                systemName: model.isMuted ? "mic.slash.fill" : "mic.fill",
+                label: model.isMuted ? "Unmute microphone" : "Mute microphone",
+                tint: model.isMuted ? CRTTheme.State.warning : theme.accent
+            ) { model.toggleMute() }
+
+            controlButton(systemName: "minus", label: "Minimize", tint: theme.textPrimary) {
+                withAnimation(modeAnimation) { model.minimize() }
+            }
+
             controlButton(
                 systemName: "arrow.down.right.and.arrow.up.left",
                 label: "Shrink to window",
@@ -419,10 +457,23 @@ struct BridgeFloatingWindowView<Surface: View>: View {
                 model.end()
             }
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 2)
         .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(theme.accent.opacity(0.2), lineWidth: 0.5))
-        .padding(16)
+        .overlay(Capsule().strokeBorder(theme.accent.opacity(0.25), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 4)
+    }
+
+    /// The live bottom safe-area inset from the key window — reliable even though
+    /// the surface uses `.ignoresSafeArea()` (which zeroes `GeometryReader`'s
+    /// reported insets). Drives the full-screen control bar's safe-area clearance
+    /// (adj-207.2.11).
+    private var bottomSafeInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow }?
+            .safeAreaInsets.bottom ?? 0
     }
 
     /// A single control: a Dynamic-Type-scaled glyph inside a ≥44pt hit target

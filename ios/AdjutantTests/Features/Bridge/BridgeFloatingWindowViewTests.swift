@@ -220,6 +220,25 @@ final class BridgeFloatingWindowViewTests: XCTestCase {
         XCTAssertTrue(BridgeWindowChrome.showsExpandedControls(availableWidth: 320))
     }
 
+    // MARK: - Full-screen control bar sits at the bottom, clear of chrome (adj-207.2.11)
+
+    func testFullscreenControlBarClearsSafeAreaAndWebRow() {
+        // Padding = live safe-area bottom + a clearance that clears BOTH the home
+        // indicator AND the web mic/cam row (pinned ~46pt + safe-area, ~44pt pills).
+        let withHomeIndicator = BridgeWindowChrome.fullscreenControlBarBottomPadding(safeAreaBottom: 34)
+        XCTAssertEqual(withHomeIndicator, 34 + BridgeWindowChrome.webControlsClearance, accuracy: 0.001)
+        // Clearance must exceed the web row (46 offset + ~44 pill) so the native
+        // bar sits ABOVE it without occluding.
+        XCTAssertGreaterThanOrEqual(BridgeWindowChrome.webControlsClearance, 90)
+        // Even with no home indicator (home-button devices), it still clears the row.
+        XCTAssertGreaterThanOrEqual(
+            BridgeWindowChrome.fullscreenControlBarBottomPadding(safeAreaBottom: 0), 90)
+        // Never negative for odd inputs.
+        XCTAssertGreaterThanOrEqual(
+            BridgeWindowChrome.fullscreenControlBarBottomPadding(safeAreaBottom: -10),
+            BridgeWindowChrome.webControlsClearance)
+    }
+
     // MARK: - Pill corner exposed for on-pill controls (adj-207.2.8)
 
     func testPillCornerReflectsMinimizedPosition() {
