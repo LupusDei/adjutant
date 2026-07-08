@@ -90,7 +90,9 @@ describe("avatar routes: POST /avatar/connect (broker-backed)", () => {
     const startSession = vi.fn().mockResolvedValue(CREDS);
     const { app } = makeApp({ startSession });
     await request(app).post("/avatar/connect").send({ customAvatarId: "custom-x" });
-    expect(startSession.mock.calls[0]![0]).toMatchObject({ avatarId: "custom-x" });
+    // connect's noteActivity() kicks a background DEFAULT-avatar warm provision (adj-202.10.2),
+    // so the custom-avatar create is not necessarily call[0]; assert SOME create carries it.
+    expect(startSession.mock.calls.some((c) => (c[0] as { avatarId?: string })?.avatarId === "custom-x")).toBe(true);
   });
 
   it("maps the daily credit ceiling to a structured 429", async () => {
@@ -207,10 +209,12 @@ describe("avatar routes: warm-session cache (POST /avatar/prepare) — load perf
 
     const res = await request(app).post("/avatar/connect").send({});
     expect(res.status).toBe(200);
+    // connect served the PRE-WARMED session (body === the warm creds) rather than creating a fresh
+    // on-demand one. It does immediately provision a REPLACEMENT warm for the next tap
+    // (adj-202.10.2 keep-warm), so the create/attach count is warm(1) + replacement(1) = 2.
     expect(res.body).toEqual(CREDS);
-    // Exactly ONE create total: the warm one. connect reused it (no second provisioning).
-    expect(startSession).toHaveBeenCalledTimes(1);
-    expect(attach).toHaveBeenCalledTimes(1);
+    expect(startSession).toHaveBeenCalledTimes(2);
+    expect(attach).toHaveBeenCalledTimes(2);
   });
 
   it("prepare is idempotent: a second prepare while one is fresh does not create another", async () => {
@@ -243,7 +247,7 @@ describe("avatar routes: warm-session validate-before-handout (adj-202.10.1 regr
     const startSession = vi
       .fn()
       .mockResolvedValueOnce(CREDS) // warm provisioning
-      .mockResolvedValueOnce(FRESH); // on-demand fallback after the warm is discarded
+      .mockResolvedValue(FRESH); // the keep-warm replacement AND the on-demand fallback
     const getSessionStatus = vi.fn().mockResolvedValue("FAILED");
     const { app } = makeApp({ startSession, getSessionStatus });
 
@@ -255,7 +259,8 @@ describe("avatar routes: warm-session validate-before-handout (adj-202.10.1 regr
     // The stale (FAILED) warm session must NOT be handed out — a fresh on-demand one is.
     expect(getSessionStatus).toHaveBeenCalledWith(CREDS.sessionId);
     expect(res.body).toEqual(FRESH);
-    expect(startSession).toHaveBeenCalledTimes(2); // warm + fallback create
+    // warm(1) + keep-warm replacement(1) + on-demand fallback(1) (adj-202.10.2 keep-warm).
+    expect(startSession).toHaveBeenCalledTimes(3);
   });
 
   it("hands out the warm session when it re-validates as READY (still the ~2s fast path)", async () => {
@@ -270,12 +275,13 @@ describe("avatar routes: warm-session validate-before-handout (adj-202.10.1 regr
     expect(res.status).toBe(200);
     expect(res.body).toEqual(CREDS);
     expect(getSessionStatus).toHaveBeenCalledWith(CREDS.sessionId);
-    expect(startSession).toHaveBeenCalledTimes(1); // warm reused, no second create
+    // Warm reused (body === warm creds); the +1 create is the keep-warm replacement (adj-202.10.2).
+    expect(startSession).toHaveBeenCalledTimes(2);
   });
 
   it("discards the warm session when the status fetch itself fails (treat as not-ready)", async () => {
     const FRESH: BridgeSessionCreds = { ...CREDS, sessionId: "sess-fresh2" };
-    const startSession = vi.fn().mockResolvedValueOnce(CREDS).mockResolvedValueOnce(FRESH);
+    const startSession = vi.fn().mockResolvedValueOnce(CREDS).mockResolvedValue(FRESH);
     const getSessionStatus = vi.fn().mockRejectedValue(new Error("Runway session fetch failed (HTTP 404)"));
     const { app } = makeApp({ startSession, getSessionStatus });
 
@@ -285,6 +291,7 @@ describe("avatar routes: warm-session validate-before-handout (adj-202.10.1 regr
     const res = await request(app).post("/avatar/connect").send({});
     expect(res.status).toBe(200);
     expect(res.body).toEqual(FRESH);
-    expect(startSession).toHaveBeenCalledTimes(2);
+    // warm(1) + keep-warm replacement(1) + on-demand fallback(1) (adj-202.10.2 keep-warm).
+    expect(startSession).toHaveBeenCalledTimes(3);
   });
 });

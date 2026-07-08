@@ -22,8 +22,14 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { Router } from "express";
+import { z } from "zod";
 
-import type { BridgeSessionBroker, StartSessionOptions, BridgeSessionCreds } from "../services/bridge-session-broker.js";
+import type {
+  BridgeSessionBroker,
+  StartSessionOptions,
+  BridgeSessionCreds,
+  NativeConsumerCreds,
+} from "../services/bridge-session-broker.js";
 import { BridgeCostCeilingError } from "../services/bridge-session-broker.js";
 import type { BridgeRpcManager } from "../services/bridge-rpc-handler.js";
 import { BRIDGE_RPC_TOOLS, composeBridgePersonality } from "../services/bridge-rpc-tools.js";
@@ -60,7 +66,18 @@ export interface AvatarRouterDeps {
    * warm session is pre-provisioned — which is acceptable: memories change slowly.
    */
   buildMemorySeed?: (() => string | null) | undefined;
+  /**
+   * Mint room-scoped LiveKit join creds for a READ-ONLY NATIVE consumer of the CURRENT avatar
+   * session (adj-207.4.5). Powers `POST /avatar/native-token`: the iOS native LiveKit client
+   * (Phase B) subscribes to the SAME room/avatar video track for system PiP WITHOUT starting a
+   * second Runway session (no double credit burn). Real wiring passes
+   * `broker.getNativeConsumerCreds`. When omitted, the route returns 501 (feature not wired).
+   */
+  getNativeConsumerCreds?: (sessionId: string) => Promise<NativeConsumerCreds>;
 }
+
+/** Body schema for POST /avatar/native-token. `sessionId`, if given, must match the active one. */
+const nativeTokenBodySchema = z.object({ sessionId: z.string().min(1).optional() }).strip();
 
 /**
  * Self-hosted avatar SDK bundle (adj-202): React + react-dom + @runwayml/avatars-react bundled
@@ -94,6 +111,26 @@ export function createAvatarRouter(deps: AvatarRouterDeps): Router {
   const WARM_TTL_MS = 4 * 60 * 1000; // Runway sessions live ~5min — keep a safety buffer.
   let warm: { creds: BridgeSessionCreds; createdAt: number } | null = null;
   let warming: Promise<void> | null = null;
+
+  // ── Active-session tracking (adj-207.4.5) ───────────────────────────────────
+  // The last session handed out by POST /avatar/connect. POST /avatar/native-token vends a
+  // room-scoped LiveKit token for THIS session so a native iOS LiveKit client can subscribe to the
+  // same avatar video (system PiP) without spinning up a second Runway session. We track only the
+  // connect-issued session (the path iOS uses); the dashboard's external-mode session is owned by
+  // /api/bridge/session and is not a PiP target.
+  let activeSession: BridgeSessionCreds | null = null;
+  const rememberActiveSession = (creds: BridgeSessionCreds): void => {
+    activeSession = creds;
+  };
+  // A session past its reported cap can no longer be joined — treat it as no active session.
+  const currentActiveSession = (): BridgeSessionCreds | null => {
+    if (!activeSession) return null;
+    if (activeSession.expiresAt && Date.parse(activeSession.expiresAt) <= Date.now()) {
+      activeSession = null;
+      return null;
+    }
+    return activeSession;
+  };
 
   const buildOpts = (customAvatarId?: string): StartSessionOptions => {
     // Tool-enable exactly like POST /api/bridge/session: read-only fleet tools + a persona that
@@ -242,6 +279,7 @@ export function createAvatarRouter(deps: AvatarRouterDeps): Router {
         // second tap (or a quick reconnect) also lands warm instead of paying the ~5s create.
         triggerWarm();
         if (warmCreds) {
+          rememberActiveSession(warmCreds); // adj-207.4.5 — native PiP consumer targets this session
           logInfo("avatar session served warm", { sessionId: warmCreds.sessionId });
           return res.json(warmCreds);
         }
@@ -249,6 +287,7 @@ export function createAvatarRouter(deps: AvatarRouterDeps): Router {
 
       // On-demand path (no warm session available).
       const session = await createReadySession(customAvatarId);
+      rememberActiveSession(session); // adj-207.4.5 — native PiP consumer targets this session
       logInfo("avatar session created", { sessionId: session.sessionId, avatarId: session.avatarId });
       return res.json(session);
     } catch (err) {
@@ -261,6 +300,59 @@ export function createAvatarRouter(deps: AvatarRouterDeps): Router {
       return res.status(502).json({
         success: false,
         error: { code: "AVATAR_SESSION_FAILED", message: err instanceof Error ? err.message : "Unknown error" },
+      });
+    }
+  });
+
+  // POST /avatar/native-token — vend a room-scoped LiveKit token for a READ-ONLY NATIVE consumer
+  // of the CURRENT avatar session (adj-207.4.5 / adj-207 Phase B). The native iOS LiveKit client
+  // joins the SAME room and subscribes to the avatar video track (to drive system PiP) WITHOUT
+  // creating a second Runway session — so there is no double credit burn (this handler NEVER calls
+  // broker.startSession). Rejects when no session is active. Public, same as /avatar/connect.
+  router.post("/native-token", async (req, res) => {
+    const parsed = nativeTokenBodySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: { code: "INVALID_REQUEST", message: parsed.error.issues[0]?.message ?? "Invalid request body" },
+      });
+    }
+
+    if (!deps.getNativeConsumerCreds) {
+      return res.status(501).json({
+        success: false,
+        error: { code: "NATIVE_TOKEN_UNAVAILABLE", message: "Native avatar consumer is not configured" },
+      });
+    }
+
+    const session = currentActiveSession();
+    // No active session, or the caller asked for a session that isn't the active one — either way
+    // there is nothing to subscribe to, and we never mint creds for an arbitrary session id.
+    if (!session || (parsed.data.sessionId !== undefined && parsed.data.sessionId !== session.sessionId)) {
+      return res.status(409).json({
+        success: false,
+        error: { code: "NO_ACTIVE_AVATAR_SESSION", message: "No active avatar session to subscribe to" },
+      });
+    }
+
+    try {
+      const creds = await deps.getNativeConsumerCreds(session.sessionId);
+      logInfo("avatar native-token vended", { sessionId: session.sessionId, roomName: creds.roomName });
+      return res.json({
+        sessionId: creds.sessionId,
+        roomName: creds.roomName,
+        url: creds.url,
+        token: creds.token,
+        avatarId: session.avatarId,
+        consumer: "native",
+        subscribeOnly: true,
+        ...(creds.expiresAt ? { expiresAt: creds.expiresAt } : {}),
+      });
+    } catch (err) {
+      logError("avatar native-token failed", { error: err instanceof Error ? err.message : String(err) });
+      return res.status(502).json({
+        success: false,
+        error: { code: "NATIVE_TOKEN_FAILED", message: err instanceof Error ? err.message : "Unknown error" },
       });
     }
   });

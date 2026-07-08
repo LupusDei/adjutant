@@ -38,6 +38,11 @@ function fakeClient(createRow: RealtimeSessionRow, getRows: RealtimeSessionRow[]
     createSpy,
     createRealtimeSession: createSpy,
     getRealtimeSession: async () => getRows[Math.min(i++, getRows.length - 1)]!,
+    connectBackend: async (sessionId: string) => ({
+      url: "wss://livekit.runwayml.com/rtc",
+      token: "lk_tok",
+      roomName: `rt_${sessionId}`,
+    }),
   };
 }
 
@@ -153,6 +158,7 @@ describe("BridgeSessionBroker: startSession", () => {
         throw new Error("Runway session create failed (HTTP 429): rate limited");
       },
       getRealtimeSession: async () => ({ id: "x", status: "READY", sessionKey: "stk" }),
+      connectBackend: async () => ({ url: "wss://lk", token: "t", roomName: "r" }),
     };
     const broker = new BridgeSessionBroker({ client, avatarId: CID, pollIntervalMs: 1, sleepFn: noopSleep });
 
@@ -284,6 +290,7 @@ describe("BridgeSessionBroker: getSessionStatus (warm-session re-validation, adj
     const client: RunwaySessionApi = {
       createRealtimeSession: vi.fn(),
       getRealtimeSession: vi.fn().mockRejectedValue(new Error("Runway session fetch failed (HTTP 404)")),
+      connectBackend: vi.fn(),
     };
     const broker = new BridgeSessionBroker({ client, avatarId: CID });
     await expect(broker.getSessionStatus("sess-gone")).rejects.toThrow(/HTTP 404/);
@@ -293,5 +300,55 @@ describe("BridgeSessionBroker: getSessionStatus (warm-session re-validation, adj
     const client = fakeClient({ id: "sess-1" }, [{ id: "sess-1" }]);
     const broker = new BridgeSessionBroker({ client, avatarId: CID });
     expect(await broker.getSessionStatus("sess-1")).toBeUndefined();
+  });
+});
+
+describe("BridgeSessionBroker: getNativeConsumerCreds (adj-207.4.5)", () => {
+  it("mints room-scoped LiveKit creds for an EXISTING session without creating a new one", async () => {
+    const client = readyOnce();
+    const connectSpy = vi.fn(async (sessionId: string) => ({
+      url: "wss://livekit.runwayml.com/rtc",
+      token: "lk_participant_tok",
+      roomName: `rt_${sessionId}`,
+      expiresAt: "2026-06-27T14:47:01.147Z",
+    }));
+    client.connectBackend = connectSpy;
+    const broker = new BridgeSessionBroker({ client, avatarId: CID });
+
+    const creds = await broker.getNativeConsumerCreds("sess-1");
+
+    expect(creds).toEqual({
+      sessionId: "sess-1",
+      roomName: "rt_sess-1",
+      url: "wss://livekit.runwayml.com/rtc",
+      token: "lk_participant_tok",
+      expiresAt: "2026-06-27T14:47:01.147Z",
+    });
+    expect(connectSpy).toHaveBeenCalledWith("sess-1");
+    // No new realtime session was created — no upfront charge, no double burn.
+    expect(client.createSpy).not.toHaveBeenCalled();
+  });
+
+  it("omits expiresAt when Runway does not report one (edge)", async () => {
+    const client = readyOnce();
+    client.connectBackend = async (sessionId: string) => ({
+      url: "wss://lk/rtc",
+      token: "tok",
+      roomName: `rt_${sessionId}`,
+    });
+    const broker = new BridgeSessionBroker({ client, avatarId: CID });
+
+    const creds = await broker.getNativeConsumerCreds("sess-9");
+    expect(creds).toEqual({ sessionId: "sess-9", roomName: "rt_sess-9", url: "wss://lk/rtc", token: "tok" });
+    expect(Object.keys(creds)).not.toContain("expiresAt");
+  });
+
+  it("propagates a connect_backend failure so the route can surface a structured error (error path)", async () => {
+    const client = readyOnce();
+    client.connectBackend = async () => {
+      throw new Error("connect_backend 404");
+    };
+    const broker = new BridgeSessionBroker({ client, avatarId: CID });
+    await expect(broker.getNativeConsumerCreds("gone")).rejects.toThrow(/connect_backend 404/);
   });
 });
