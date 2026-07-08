@@ -27,11 +27,32 @@ final class BridgeSessionTests: XCTestCase {
         private(set) var hideCount = 0
         private(set) var teardownCount = 0
         private(set) var log: [String] = []
+        var onReady: (() -> Void)?
+        var onFailure: (() -> Void)?
 
         func prepare() { prepareCount += 1; log.append("prepare") }
         func show() { showCount += 1; log.append("show") }
         func hide() { hideCount += 1; log.append("hide") }
         func teardown() { teardownCount += 1; log.append("teardown") }
+
+        /// Simulate the surface finishing its load / failing (drives the session's
+        /// wired go-live / failure handlers).
+        func fireReady() { onReady?() }
+        func fireFailure() { onFailure?() }
+    }
+
+    /// Manually-triggered connect watchdog so timeout→failed is testable with no
+    /// wall-clock wait (adj-207.1.8).
+    private final class ManualConnectTimeout: BridgeConnectTimeout {
+        private(set) var startCount = 0
+        private(set) var cancelCount = 0
+        private var pending: (() -> Void)?
+        var isArmed: Bool { pending != nil }
+
+        func start(_ onTimeout: @escaping () -> Void) { startCount += 1; pending = onTimeout }
+        func cancel() { cancelCount += 1; pending = nil }
+        /// Fire the pending timeout (no-op if disarmed).
+        func fire() { pending?() }
     }
 
     private func makeSession() -> (BridgeSession, SpyBridgeSurface) {
@@ -245,6 +266,115 @@ final class BridgeSessionTests: XCTestCase {
         XCTAssertEqual(surface.hideCount, 1)
     }
 
+    // MARK: - Surface-ready wiring drives go-live (adj-207.1.5)
+
+    func testSurfaceReadyEventTransitionsSessionToLive() {
+        let (session, surface) = makeSession()
+        session.open()
+        XCTAssertEqual(session.state, .connecting)
+        // The session must have wired the surface's ready signal to markConnected.
+        surface.fireReady()
+        XCTAssertEqual(session.state, .live, "surface ready must drive connecting→live")
+        XCTAssertEqual(surface.showCount, 1)
+    }
+
+    func testSurfaceReadyBeforeOpenIsInert() {
+        let (session, surface) = makeSession()
+        surface.fireReady() // no connect in flight
+        XCTAssertEqual(session.state, .idle)
+    }
+
+    func testSurfaceFailureEventTransitionsSessionToFailed() {
+        let (session, surface) = makeSession()
+        session.open()
+        surface.fireFailure()
+        XCTAssertEqual(session.state, .failed, "surface load-failure must drive connecting→failed")
+        XCTAssertEqual(surface.teardownCount, 1, "failed surface is torn down for a clean retry")
+        XCTAssertFalse(session.isActive)
+    }
+
+    // MARK: - Failure / retry / timeout (adj-207.1.8)
+
+    func testMarkFailedFromLiveGoesFailedAndTearsDown() {
+        let (session, surface) = makeSession()
+        session.open()
+        session.markConnected()
+        session.markFailed()
+        XCTAssertEqual(session.state, .failed)
+        XCTAssertEqual(surface.teardownCount, 1)
+    }
+
+    func testRetryFromFailedReconnects() {
+        let (session, surface) = makeSession()
+        session.open()
+        surface.fireFailure()
+        XCTAssertEqual(session.state, .failed)
+        session.retry()
+        XCTAssertEqual(session.state, .connecting)
+        XCTAssertEqual(surface.prepareCount, 2, "retry re-provisions the surface")
+    }
+
+    func testOpenFromFailedAlsoReconnects() {
+        let (session, _) = makeSession()
+        session.open()
+        session.markFailed()
+        session.open()
+        XCTAssertEqual(session.state, .connecting)
+    }
+
+    func testCloseFromFailedGoesClosedWithoutDoubleTeardown() {
+        let (session, surface) = makeSession()
+        session.open()
+        session.markFailed()
+        XCTAssertEqual(surface.teardownCount, 1)
+        session.close()
+        XCTAssertEqual(session.state, .closed)
+        XCTAssertEqual(surface.teardownCount, 1, "surface already torn down on failure — no second teardown")
+    }
+
+    func testMarkFailedFromIdleIsInert() {
+        let (session, surface) = makeSession()
+        session.markFailed()
+        XCTAssertEqual(session.state, .idle)
+        XCTAssertEqual(surface.teardownCount, 0)
+    }
+
+    func testConnectTimeoutFiresFailedWhenConnectStalls() {
+        let surface = SpyBridgeSurface()
+        let timeout = ManualConnectTimeout()
+        let session = BridgeSession(surface: surface, connectTimeout: timeout)
+        session.open()
+        XCTAssertEqual(session.state, .connecting)
+        XCTAssertTrue(timeout.isArmed, "watchdog armed on connecting")
+        timeout.fire() // connect never completed
+        XCTAssertEqual(session.state, .failed, "timeout must fail a stalled connect")
+        XCTAssertEqual(surface.teardownCount, 1)
+    }
+
+    func testConnectTimeoutCancelledOnGoLive() {
+        let surface = SpyBridgeSurface()
+        let timeout = ManualConnectTimeout()
+        let session = BridgeSession(surface: surface, connectTimeout: timeout)
+        session.open()
+        session.markConnected()
+        XCTAssertEqual(session.state, .live)
+        XCTAssertEqual(timeout.cancelCount, 1, "watchdog cancelled once live")
+        timeout.fire() // stale fire after cancel — should be a no-op (disarmed)
+        XCTAssertEqual(session.state, .live, "a cancelled watchdog must not fail a live session")
+    }
+
+    func testConnectTimeoutRearmedOnRetry() {
+        let surface = SpyBridgeSurface()
+        let timeout = ManualConnectTimeout()
+        let session = BridgeSession(surface: surface, connectTimeout: timeout)
+        session.open()
+        timeout.fire()                      // → failed
+        XCTAssertEqual(session.state, .failed)
+        session.retry()                     // → connecting again
+        XCTAssertEqual(session.state, .connecting)
+        XCTAssertEqual(timeout.startCount, 2, "watchdog re-armed on retry")
+    }
+
     // MARK: - Pure reducer (state/logic separate from the surface)
 
     func testReducerOpenFromIdlePreparesSurface() {
@@ -275,5 +405,23 @@ final class BridgeSessionTests: XCTestCase {
         let result = BridgeSessionReducer.reduce(.idle, .connected)
         XCTAssertEqual(result.state, .idle)
         XCTAssertTrue(result.effects.isEmpty)
+    }
+
+    func testReducerFailedFromConnectingTearsDown() {
+        let result = BridgeSessionReducer.reduce(.connecting, .failed)
+        XCTAssertEqual(result.state, .failed)
+        XCTAssertEqual(result.effects, [.teardownSurface])
+    }
+
+    func testReducerRetryFromFailedPreparesSurface() {
+        let result = BridgeSessionReducer.reduce(.failed, .retry)
+        XCTAssertEqual(result.state, .connecting)
+        XCTAssertEqual(result.effects, [.prepareSurface])
+    }
+
+    func testReducerCloseFromFailedIsInertTeardown() {
+        let result = BridgeSessionReducer.reduce(.failed, .close)
+        XCTAssertEqual(result.state, .closed)
+        XCTAssertTrue(result.effects.isEmpty, "surface already torn down on failure")
     }
 }

@@ -13,11 +13,17 @@ import WebKit
 ///   - `load(_:)` connects the page (Runway/LiveKit session) — called ONCE per engine.
 ///   - `setHidden(_:)` toggles visibility WITHOUT reloading or reconnecting.
 ///   - `teardown()` stops loading and detaches — called once when the session closes.
+///   - `onReady` fires when the page finishes loading (navigation-finished) —
+///     the go-live signal for iOS, since the `/avatar` page emits NO postMessage
+///     in default (non-iframe) mode (adj-207.1.5).
+///   - `onFailure` fires when the load fails (navigation-failed) (adj-207.1.8).
 @MainActor
 protocol AvatarWebEngine: AnyObject {
     func load(_ url: URL)
     func setHidden(_ hidden: Bool)
     func teardown()
+    var onReady: (() -> Void)? { get set }
+    var onFailure: (() -> Void)? { get set }
 }
 
 // MARK: - Reusable surface
@@ -46,6 +52,11 @@ final class BridgeWebSurface: BridgeSurface {
     /// Last-applied visibility. Mirrors the engine and survives across show/hide.
     private(set) var isHidden: Bool = true
 
+    /// Fired when the underlying engine finishes loading / fails — the session
+    /// wires these to `markConnected()` / `markFailed()` (adj-207.1.5 / .1.8).
+    var onReady: (() -> Void)?
+    var onFailure: (() -> Void)?
+
     init(url: URL, engineFactory: @escaping () -> AvatarWebEngine) {
         self.url = url
         self.engineFactory = engineFactory
@@ -71,6 +82,9 @@ final class BridgeWebSurface: BridgeSurface {
     func prepare() {
         guard engine == nil else { return }
         let newEngine = engineFactory()
+        // Forward the engine's load/fail signals up to the session (adj-207.1.5/.1.8).
+        newEngine.onReady = { [weak self] in self?.onReady?() }
+        newEngine.onFailure = { [weak self] in self?.onFailure?() }
         newEngine.load(url)
         newEngine.setHidden(isHidden)
         engine = newEngine
@@ -103,9 +117,10 @@ final class BridgeWebSurface: BridgeSurface {
 /// real-time media (WebRTC mic/video) loading the Runway `/avatar` page.
 ///
 /// The WebKit config, in-page capture-permission auto-grant, and the
-/// `bridgeOpenSettings` → iOS Settings bridge were moved here from the old
-/// `AvatarOverlayView.AvatarWebView` (adj-202.5.4) so the surface — not a
-/// transient SwiftUI view — owns the webview and its coordinator.
+/// `bridgeOpenSettings` → iOS Settings bridge live here (originally adj-202.5.4)
+/// so the surface — not a transient SwiftUI view — owns the webview and its
+/// coordinator. This is the SINGLE way the Bridge webview is created
+/// (adj-207.1.7 removed the divergent `AvatarOverlayView` path).
 @MainActor
 final class WKAvatarWebEngine: NSObject, AvatarWebEngine {
     /// Container the webview is embedded into; this is what the SwiftUI
@@ -113,7 +128,17 @@ final class WKAvatarWebEngine: NSObject, AvatarWebEngine {
     let hostView: UIView
     private let webView: WKWebView
 
-    override init() {
+    /// Go-live / failure signals (adj-207.1.5 / .1.8), fired from the navigation
+    /// delegate.
+    var onReady: (() -> Void)?
+    var onFailure: (() -> Void)?
+
+    /// What to do when the page's permission banner asks to open iOS Settings —
+    /// injectable so the script-message round-trip is testable without actually
+    /// leaving the app (adj-207.1.6). Defaults to opening the real Settings app.
+    private let openSettingsAction: () -> Void
+
+    init(onOpenSettings: (() -> Void)? = nil) {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
@@ -128,11 +153,19 @@ final class WKAvatarWebEngine: NSObject, AvatarWebEngine {
 
         self.hostView = container
         self.webView = webView
+        self.openSettingsAction = onOpenSettings ?? {
+            guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+            UIApplication.shared.open(url)
+        }
         super.init()
 
         // Bridge the page's permission banner (adj-202.5.4) to the OS Settings app.
-        config.userContentController.add(self, name: Self.openSettingsHandler)
+        // CRITICAL (adj-207.1.6): register on the webView's OWN configuration —
+        // WKWebView COPIES the configuration at init, so a handler added to the
+        // original `config` after `WKWebView(configuration:)` is silently dropped.
+        webView.configuration.userContentController.add(self, name: Self.openSettingsHandler)
         webView.uiDelegate = self
+        webView.navigationDelegate = self
 
         webView.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(webView)
@@ -158,7 +191,14 @@ final class WKAvatarWebEngine: NSObject, AvatarWebEngine {
         webView.stopLoading()
         webView.configuration.userContentController.removeScriptMessageHandler(forName: Self.openSettingsHandler)
         webView.uiDelegate = nil
+        webView.navigationDelegate = nil
         webView.removeFromSuperview()
+    }
+
+    /// Invoke the injected Open-Settings action. Internal so the round-trip test
+    /// can assert it fires from a real script message (adj-207.1.6).
+    func invokeOpenSettings() {
+        openSettingsAction()
     }
 }
 
@@ -187,9 +227,37 @@ extension WKAvatarWebEngine: WKUIDelegate, WKScriptMessageHandler {
         didReceive message: WKScriptMessage
     ) {
         guard message.name == Self.openSettingsHandler else { return }
-        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-        Task { @MainActor in
-            UIApplication.shared.open(url)
-        }
+        invokeOpenSettings()
+    }
+}
+
+// MARK: - Navigation (go-live + failure)
+
+extension WKAvatarWebEngine: WKNavigationDelegate {
+    /// The `/avatar` page finished loading. In iOS default mode the page emits no
+    /// postMessage (its `post()` is iframe-only), so navigation-finished IS the
+    /// go-live signal that drives `markConnected()` (adj-207.1.5).
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        onReady?()
+    }
+
+    /// The load failed after the response started — fail the session rather than
+    /// hang on a black "connecting" screen (adj-207.1.8).
+    func webView(
+        _ webView: WKWebView,
+        didFail navigation: WKNavigation!,
+        withError error: Error
+    ) {
+        onFailure?()
+    }
+
+    /// The provisional load failed (DNS/connection/unreachable origin) — the most
+    /// common broken-`/avatar` case. Fail the session (adj-207.1.8).
+    func webView(
+        _ webView: WKWebView,
+        didFailProvisionalNavigation navigation: WKNavigation!,
+        withError error: Error
+    ) {
+        onFailure?()
     }
 }

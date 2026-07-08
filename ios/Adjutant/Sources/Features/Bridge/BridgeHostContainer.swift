@@ -29,8 +29,12 @@ final class BridgeHost {
     /// session. Its controls route through the same single `session`.
     let windowModel: BridgeFloatingWindowModel
 
-    init(webSurface: BridgeWebSurface) {
-        let session = BridgeSession(surface: webSurface)
+    /// - Parameter connectTimeout: watchdog that fails the session if a connect
+    ///   never reaches LIVE (adj-207.1.8). Pass `nil` to disable (unit tests);
+    ///   production passes a real 20s timeout. Explicit (no default) because a
+    ///   `@MainActor` default-argument value can't be built in this context.
+    init(webSurface: BridgeWebSurface, connectTimeout: BridgeConnectTimeout?) {
+        let session = BridgeSession(surface: webSurface, connectTimeout: connectTimeout)
         self.webSurface = webSurface
         self.session = session
 
@@ -47,9 +51,13 @@ final class BridgeHost {
         )
     }
 
-    /// Convenience: a default host wired to the dashboard origin's `/avatar` page.
+    /// Convenience: a default production host wired to the dashboard origin's
+    /// `/avatar` page, with a real connect watchdog (adj-207.1.8).
     convenience init(apiBaseURL: URL) {
-        self.init(webSurface: BridgeWebSurface.makeDefault(url: Self.avatarURL(from: apiBaseURL)))
+        self.init(
+            webSurface: BridgeWebSurface.makeDefault(url: Self.avatarURL(from: apiBaseURL)),
+            connectTimeout: RealBridgeConnectTimeout()
+        )
     }
 
     private static func avatarURL(from apiBaseURL: URL) -> URL {
