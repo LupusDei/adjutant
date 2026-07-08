@@ -21,6 +21,11 @@ import WebKit
 protocol AvatarWebEngine: AnyObject {
     func load(_ url: URL)
     func setHidden(_ hidden: Bool)
+    /// Enable/disable the page microphone by mirroring the web chrome's
+    /// `bridge:mic` command to the `/avatar` page (adj-207.2.10). `enabled: false`
+    /// mutes — this is what makes the floating-window Mute button ACTUALLY mute
+    /// instead of a privacy no-op.
+    func setMicEnabled(_ enabled: Bool)
     func teardown()
     var onReady: (() -> Void)? { get set }
     var onFailure: (() -> Void)? { get set }
@@ -100,6 +105,14 @@ final class BridgeWebSurface: BridgeSurface {
     func hide() {
         isHidden = true
         engine?.setHidden(true)
+    }
+
+    /// Enable/disable the page mic (adj-207.2.10). Forwards to the live engine;
+    /// a safe no-op before `prepare()` / after `teardown()`. The app-root host
+    /// wires the floating-window Mute control to this so muting truly disables the
+    /// mic on the `/avatar` page.
+    func setMicEnabled(_ enabled: Bool) {
+        engine?.setMicEnabled(enabled)
     }
 
     /// Destroy the engine and release the stream. Idempotent — a second call
@@ -185,6 +198,16 @@ final class WKAvatarWebEngine: NSObject, AvatarWebEngine {
 
     func setHidden(_ hidden: Bool) {
         hostView.isHidden = hidden
+    }
+
+    /// Mirror the web chrome's `bridge:mic` command to the `/avatar` page by
+    /// dispatching the same same-origin window message the page listens for
+    /// (see `backend/src/routes/avatar.ts`). The page toggles the LiveKit mic
+    /// track only when the desired state differs, so this is idempotent
+    /// (adj-207.2.10).
+    func setMicEnabled(_ enabled: Bool) {
+        let js = "window.postMessage({ type: 'bridge:mic', enabled: \(enabled ? "true" : "false") }, location.origin);"
+        webView.evaluateJavaScript(js, completionHandler: nil)
     }
 
     func teardown() {

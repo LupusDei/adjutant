@@ -25,6 +25,7 @@ final class BridgeHostContainerTests: XCTestCase {
         var onFailure: (() -> Void)?
         func load(_ url: URL) { loadCount += 1 }
         func setHidden(_ hidden: Bool) { self.hidden = hidden }
+        func setMicEnabled(_ enabled: Bool) {}
         func teardown() { teardownCount += 1 }
     }
 

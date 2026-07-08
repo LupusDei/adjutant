@@ -52,14 +52,22 @@ final class BridgeHost {
 
         // Seed a sensible initial layout from the current screen so the default
         // floating frame is reasonable before the first GeometryReader sync.
+        // `minSize` is large enough that the top control row (mute/minimize/end
+        // at ≥44pt) always fits without overflowing or colliding with the resize
+        // grip, even at the smallest window size (adj-207.2.5 / adj-207.2.7).
         let screen = UIScreen.main.bounds.size
         let layout = BridgeWindowLayout(
             containerSize: screen,
-            safeAreaInsets: BridgeWindowInsets(top: 47, leading: 0, bottom: 34, trailing: 0)
+            safeAreaInsets: BridgeWindowInsets(top: 47, leading: 0, bottom: 34, trailing: 0),
+            minSize: CGSize(width: 168, height: 224)
         )
+        // Wire the Mute control through the surface to the `/avatar` page's mic so
+        // muting ACTUALLY disables the mic (adj-207.2.10): `muted` → mic disabled.
         self.windowModel = BridgeFloatingWindowModel(
             state: BridgeWindowState(layout: layout),
-            controls: BridgeSessionWindowControls(session: session)
+            controls: BridgeSessionWindowControls(session: session) { [webSurface] muted in
+                webSurface.setMicEnabled(!muted)
+            }
         )
     }
 
