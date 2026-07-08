@@ -26,6 +26,10 @@ interface AgentInfo {
   sessionId?: string | undefined;
   currentTask?: string | undefined;
   lastActivity?: string | undefined;
+  /** adj-pyhm4: whether the agent has a LIVE MCP connection (vs. last-known/stale). */
+  isLive?: boolean | undefined;
+  /** adj-pyhm4: ISO timestamp of the last known status transition. */
+  lastSeen?: string | undefined;
 }
 
 // ============================================================================
@@ -82,6 +86,11 @@ function registerListAgents(server: McpServer): void {
           sessionId: conn?.sessionId,
           connectedAt: conn?.connectedAt,
           lastActivity: agent.lastActivity,
+          // adj-pyhm4: pass through the stale-vs-live markers computed by
+          // agents-service.enrichWithMcpStatus so the coordinator sees the true
+          // roster (last-known status flagged stale) after a backend restart.
+          isLive: agent.isLive,
+          lastSeen: agent.lastSeen,
         });
       }
 
@@ -93,6 +102,9 @@ function registerListAgents(server: McpServer): void {
             status: "idle",
             sessionId: conn.sessionId,
             connectedAt: conn.connectedAt,
+            // Present as a live connection with no lifecycle entry.
+            isLive: true,
+            lastSeen: conn.connectedAt,
           });
         }
       }

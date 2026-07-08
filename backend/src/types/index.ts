@@ -147,6 +147,17 @@ export interface CrewMember {
   personaId?: string;
   /** Persona source: "hand-crafted" or "self-generated" */
   personaSource?: string;
+  /**
+   * adj-pyhm4: whether the agent currently has a LIVE MCP connection. When
+   * false, any `status`/`currentTask` shown is a persisted LAST-KNOWN value
+   * (it survived a backend restart) — treat it as stale, not live.
+   */
+  isLive?: boolean;
+  /**
+   * adj-pyhm4: ISO timestamp of the last known status transition. Present for
+   * agents with a persisted/known status; drives the "last seen" stale marker.
+   */
+  lastSeen?: string;
 }
 
 // ============================================================================
@@ -288,6 +299,9 @@ export const CrewMemberSchema = z.object({
   isCoordinator: z.boolean().optional(),
   cost: z.number().optional(),
   contextPercent: z.number().optional(),
+  // adj-pyhm4: stale-vs-live roster markers.
+  isLive: z.boolean().optional(),
+  lastSeen: z.string().optional(),
 });
 
 export const ProjectContextSchema = z.object({

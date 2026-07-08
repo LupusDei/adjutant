@@ -164,38 +164,43 @@ function enrichWithMcpStatus(members: CrewMember[]): void {
   const statuses = getAgentStatuses();
   const connectedIds = new Set(getConnectedAgents().map((c) => c.agentId));
 
+  const statusMap: Record<string, CrewMemberStatus> = {
+    working: "working",
+    blocked: "blocked",
+    idle: "idle",
+    done: "idle",
+  };
+
   for (const member of members) {
     // Skip offline agents — they don't need MCP enrichment
     if (member.status === "offline") continue;
 
-    const isConnected = connectedIds.has(member.id) || connectedIds.has(member.name);
+    const isLive = connectedIds.has(member.id) || connectedIds.has(member.name);
+    const mcpStatus = statuses.get(member.id) ?? statuses.get(member.name);
 
-    // Agent has a tmux session but hasn't connected via MCP yet → booting
-    if (!isConnected) {
-      const mcpStatus = statuses.get(member.id) ?? statuses.get(member.name);
-      // No MCP connection and no prior status → agent is still bootstrapping
-      if (!mcpStatus) {
+    // adj-pyhm4: expose the live/stale distinction + last-seen timestamp so the
+    // UI/coordinator can show a stale marker instead of pretending a
+    // disconnected agent is live (or falsely showing everyone booting after a
+    // backend restart).
+    member.isLive = isLive;
+    if (mcpStatus) member.lastSeen = mcpStatus.updatedAt;
+
+    if (!mcpStatus) {
+      // No status at all: a tmux session with no live connection and no known
+      // (persisted) status → genuinely still bootstrapping.
+      if (!isLive) {
         member.status = "booting";
         member.currentTask = "Initializing — loading MCP tools...";
       }
       continue;
     }
 
-    const mcpStatus = statuses.get(member.id) ?? statuses.get(member.name);
-    if (!mcpStatus) continue;
-
-    // Apply MCP status for ALL states
-    const statusMap: Record<string, CrewMemberStatus> = {
-      working: "working",
-      blocked: "blocked",
-      idle: "idle",
-      done: "idle",
-    };
+    // We have a status — live OR persisted last-known (adj-pyhm4 hydration).
+    // Apply it either way; `isLive=false` flags a last-known value as stale.
     const mapped = statusMap[mcpStatus.status];
     if (mapped) {
       member.status = mapped;
     }
-
     // MCP task always takes priority (more current than hookBead)
     if (mcpStatus.task) {
       member.currentTask = mcpStatus.task;
