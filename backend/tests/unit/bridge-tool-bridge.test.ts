@@ -434,11 +434,18 @@ describe("list_beads", () => {
     );
     expect(res.ok).toBe(true);
     if (res.ok) {
-      const data = res.data as { beads: typeof REAL_BD_LIST_OUTPUT; count: number };
+      // COMPACT projection (adj-x6qln follow-up): full bd records (~45KB for 50 tasks) blow the RPC
+      // return, so list_beads returns only id/title/status/priority/type. count = true total.
+      const data = res.data as {
+        beads: { id: string; title: string; status: string; type: string }[];
+        count: number;
+      };
       expect(data.count).toBe(2);
-      // Structured result is the source of truth — full bd records pass through verbatim.
-      expect(data.beads[0]).toEqual(REAL_BD_LIST_OUTPUT[0]);
-      expect(data.beads[0]!.dependencies[0]!.depends_on_id).toBe("adj-202.1");
+      expect(data.beads[0]!.id).toBe(REAL_BD_LIST_OUTPUT[0]!.id);
+      expect(data.beads[0]!.title).toBe(REAL_BD_LIST_OUTPUT[0]!.title);
+      expect(data.beads[0]!.status).toBe(REAL_BD_LIST_OUTPUT[0]!.status);
+      // Heavy fields (description/dependencies) are intentionally dropped from the RPC payload.
+      expect((data.beads[0] as Record<string, unknown>).dependencies).toBeUndefined();
     }
   });
 

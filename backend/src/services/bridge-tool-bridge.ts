@@ -491,8 +491,31 @@ async function runListBeads(
     return reject(TOOL_LIST_BEADS, projectId, "TOOL_FAILED", result.error?.message ?? "bd list failed");
   }
 
-  const beads = Array.isArray(result.data) ? result.data : [];
-  return ok(TOOL_LIST_BEADS, projectId, { beads, count: beads.length });
+  const all = Array.isArray(result.data) ? result.data : [];
+  // COMPACT + CAPPED for the RPC return. Full bead records (description + dependencies) blow the
+  // Runway tool-RPC payload ceiling — 50 open tasks serialize to ~45KB and the whole call fails to
+  // return ("unable to retrieve beads"). The avatar only narrates id/title/status/priority/type, so
+  // project those fields, truncate the title, and cap the list. `count` stays the TRUE total so the
+  // avatar can say "50 open, showing 25". (adj-x6qln follow-up.)
+  const LIST_BEADS_MAX = 25;
+  const TITLE_MAX = 90;
+  const shown = all.slice(0, LIST_BEADS_MAX).map((b) => {
+    const rec = b as { id?: unknown; title?: unknown; status?: unknown; priority?: unknown; issue_type?: unknown };
+    const title = typeof rec.title === "string" ? rec.title : "";
+    return {
+      id: typeof rec.id === "string" ? rec.id : String(rec.id ?? ""),
+      title: title.length > TITLE_MAX ? title.slice(0, TITLE_MAX) + "…" : title,
+      status: typeof rec.status === "string" ? rec.status : "",
+      priority: rec.priority ?? null,
+      type: typeof rec.issue_type === "string" ? rec.issue_type : "",
+    };
+  });
+  return ok(TOOL_LIST_BEADS, projectId, {
+    beads: shown,
+    count: all.length,
+    shown: shown.length,
+    truncated: all.length > shown.length,
+  });
 }
 
 async function runGetProjectState(
