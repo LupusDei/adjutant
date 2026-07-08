@@ -180,6 +180,64 @@ describe("agents-service", () => {
       expect(result.data?.[0].currentTask).toBe("Building feature X");
     });
 
+    it("should show LAST-KNOWN status flagged stale (isLive=false) for a disconnected agent with a persisted status (adj-pyhm4)", async () => {
+      vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-alice"]));
+      mockManagedSessions([
+        { id: "s1", name: "alice", tmuxSession: "adj-swarm-alice", status: "working" },
+      ]);
+      // No live MCP connection (post-restart, before agent re-reports)...
+      vi.mocked(getConnectedAgents).mockReturnValue([] as never);
+      // ...but a hydrated last-known status exists.
+      vi.mocked(getAgentStatuses).mockReturnValue(
+        new Map([
+          ["alice", { agentId: "alice", status: "working", task: "Fixing adj-ibcy6", updatedAt: "2026-07-08T21:00:00.000Z" }],
+        ]) as never,
+      );
+
+      const result = await getAgents();
+
+      const alice = result.data?.[0];
+      expect(alice?.status).toBe("working"); // last-known, NOT a false "booting"
+      expect(alice?.currentTask).toBe("Fixing adj-ibcy6");
+      expect(alice?.isLive).toBe(false); // stale marker
+      expect(alice?.lastSeen).toBe("2026-07-08T21:00:00.000Z");
+    });
+
+    it("should mark a live agent isLive=true and set lastSeen (adj-pyhm4)", async () => {
+      vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-alice"]));
+      mockManagedSessions([
+        { id: "s1", name: "alice", tmuxSession: "adj-swarm-alice", status: "working" },
+      ]);
+      vi.mocked(getConnectedAgents).mockReturnValue([
+        { agentId: "alice", sessionId: "mcp-1" },
+      ] as never);
+      vi.mocked(getAgentStatuses).mockReturnValue(
+        new Map([["alice", { agentId: "alice", status: "working", task: "X", updatedAt: "2026-07-08T22:00:00.000Z" }]]) as never,
+      );
+
+      const result = await getAgents();
+
+      const alice = result.data?.[0];
+      expect(alice?.isLive).toBe(true);
+      expect(alice?.lastSeen).toBe("2026-07-08T22:00:00.000Z");
+    });
+
+    it("should leave a genuinely-bootstrapping agent isLive=false with no lastSeen (adj-pyhm4)", async () => {
+      vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-alice"]));
+      mockManagedSessions([
+        { id: "s1", name: "alice", tmuxSession: "adj-swarm-alice", status: "working" },
+      ]);
+      vi.mocked(getConnectedAgents).mockReturnValue([] as never);
+      vi.mocked(getAgentStatuses).mockReturnValue(new Map() as never);
+
+      const result = await getAgents();
+
+      const alice = result.data?.[0];
+      expect(alice?.status).toBe("booting");
+      expect(alice?.isLive).toBe(false);
+      expect(alice?.lastSeen).toBeUndefined();
+    });
+
     it("should include unmanaged tmux sessions that look like agent sessions", async () => {
       vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-alice", "claude-helper"]));
       mockManagedSessions([
@@ -403,16 +461,21 @@ describe("agents-service", () => {
       expect(alice?.currentTask).toBe("Fixing bug");
     });
 
-    it("should not apply stale MCP status from disconnected agents", async () => {
+    it("should surface last-known status from a disconnected agent as STALE (isLive=false), not hide it (adj-pyhm4)", async () => {
+      // adj-pyhm4 changed the contract: instead of hiding a disconnected agent's
+      // status (which made a backend restart look like an all-idle roster), we
+      // now show the last-known status but flag it stale via isLive=false +
+      // lastSeen, so the UI/coordinator can render a "last seen" marker.
+      const seen = "2026-07-08T21:00:00.000Z";
       vi.mocked(listTmuxSessions).mockResolvedValue(new Set(["adj-swarm-alice"]));
       mockManagedSessions([
         { id: "s1", name: "alice", tmuxSession: "adj-swarm-alice" },
       ]);
-      // Agent has status data but NO active MCP connection
+      // Agent has status data but NO active MCP connection.
       vi.mocked(getConnectedAgents).mockReturnValue([]);
       vi.mocked(getAgentStatuses).mockReturnValue(
         new Map([
-          ["alice", { agentId: "alice", status: "working", task: "Old task", updatedAt: new Date().toISOString() }],
+          ["alice", { agentId: "alice", status: "working", task: "Old task", updatedAt: seen }],
         ]),
       );
 
@@ -420,9 +483,10 @@ describe("agents-service", () => {
 
       expect(result.success).toBe(true);
       const alice = result.data?.find((a) => a.id === "alice");
-      // Should keep original idle status, not stale "working"
-      expect(alice?.status).toBe("idle");
-      expect(alice?.currentTask).toBeUndefined();
+      expect(alice?.status).toBe("working"); // last-known
+      expect(alice?.currentTask).toBe("Old task");
+      expect(alice?.isLive).toBe(false); // ...but flagged stale
+      expect(alice?.lastSeen).toBe(seen);
     });
 
     it("should map MCP 'done' status to 'idle' on the dashboard", async () => {
