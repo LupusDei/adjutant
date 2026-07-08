@@ -81,15 +81,10 @@ struct BridgeWindowLayout: Equatable, Sendable {
 enum BridgeWindowMode: Equatable, Sendable {
     case fullscreen
     case floating
-    case pill
-}
-
-/// A corner of the usable bounds, used to anchor the minimized pill.
-enum BridgeWindowCorner: Equatable, Sendable {
-    case topLeading
-    case topTrailing
-    case bottomLeading
-    case bottomTrailing
+    /// Minimized: the Bridge surface + ALL chrome are hidden entirely — nothing
+    /// floats (adj-207.2.12). The session stays LIVE in the background; the
+    /// bottom-tab LIVE item is the sole re-entry (`reveal`). Replaces the old pill.
+    case hidden
 }
 
 /// The eight-less-four resize grips: the four corners of the floating window.
@@ -231,43 +226,6 @@ enum BridgeWindowGeometry {
         return clamp(resized, within: bounds)
     }
 
-    /// Which corner of `bounds` is nearest the centre of `frame` — used to fling
-    /// the minimized pill to the corner the window was closest to.
-    static func nearestCorner(of frame: CGRect, within bounds: CGRect) -> BridgeWindowCorner {
-        let leadingSide = frame.midX < bounds.midX
-        let topSide = frame.midY < bounds.midY
-        switch (leadingSide, topSide) {
-        case (true, true): return .topLeading
-        case (false, true): return .topTrailing
-        case (true, false): return .bottomLeading
-        case (false, false): return .bottomTrailing
-        }
-    }
-
-    /// The pill frame anchored at `corner` inside `bounds` with `margin`.
-    static func pillFrame(
-        corner: BridgeWindowCorner,
-        size: CGSize,
-        within bounds: CGRect,
-        margin: CGFloat
-    ) -> CGRect {
-        let x: CGFloat
-        let y: CGFloat
-        switch corner {
-        case .topLeading, .bottomLeading:
-            x = bounds.minX + margin
-        case .topTrailing, .bottomTrailing:
-            x = bounds.maxX - size.width - margin
-        }
-        switch corner {
-        case .topLeading, .topTrailing:
-            y = bounds.minY + margin
-        case .bottomLeading, .bottomTrailing:
-            y = bounds.maxY - size.height - margin
-        }
-        return clamp(CGRect(x: x, y: y, width: size.width, height: size.height), within: bounds)
-    }
-
     /// A sensible default floating frame: the max size (fitted to bounds, aspect
     /// preserved) parked in the bottom-trailing corner with margin.
     static func defaultFloatingFrame(for layout: BridgeWindowLayout) -> CGRect {
@@ -309,12 +267,14 @@ struct BridgeWindowState: Equatable, Sendable {
     private(set) var mode: BridgeWindowMode
 
     /// The persisted floating-window frame (container coordinates). Retained
-    /// across `fullscreen` / `pill` so restoring returns exactly where the
+    /// across `fullscreen` / `hidden` so revealing returns exactly where the
     /// Commander left it.
     private(set) var floatingFrame: CGRect
 
-    /// The corner the pill is anchored to while minimized.
-    private(set) var pillCorner: BridgeWindowCorner
+    /// The last VISIBLE mode (fullscreen or floating). `reveal()` returns to it
+    /// after a minimize-to-hidden, so re-entry restores the prior presentation
+    /// (adj-207.2.12).
+    private(set) var lastVisibleMode: BridgeWindowMode
 
     /// The active layout (container / safe area / keyboard / bounds tuning).
     private(set) var layout: BridgeWindowLayout
@@ -323,53 +283,57 @@ struct BridgeWindowState: Equatable, Sendable {
         self.layout = layout
         self.mode = mode
         self.floatingFrame = BridgeWindowGeometry.defaultFloatingFrame(for: layout)
-        self.pillCorner = .bottomTrailing
+        self.lastVisibleMode = (mode == .hidden) ? .fullscreen : mode
     }
 
     /// The usable bounds for the current layout.
     var contentBounds: CGRect { BridgeWindowGeometry.contentBounds(for: layout) }
 
-    /// The frame the view should render for the current mode.
+    /// True while minimized to hidden — nothing floats; session stays live.
+    var isHidden: Bool { mode == .hidden }
+
+    /// The frame the view should render for the current mode. `hidden` keeps the
+    /// full-screen frame so the (invisible, non-interactive) surface stays a
+    /// stable size while minimized — the view composites it at zero opacity.
     var currentFrame: CGRect {
         switch mode {
-        case .fullscreen:
+        case .fullscreen, .hidden:
             return CGRect(origin: .zero, size: layout.containerSize)
         case .floating:
             return floatingFrame
-        case .pill:
-            return BridgeWindowGeometry.pillFrame(
-                corner: pillCorner,
-                size: layout.pillSize,
-                within: contentBounds,
-                margin: layout.margin
-            )
         }
     }
 
     // MARK: Mode transitions
 
-    /// Present full-screen. Preserves the floating frame for a later restore.
+    /// Present full-screen. Preserves the floating frame for a later reveal.
     mutating func enterFullscreen() {
         mode = .fullscreen
+        lastVisibleMode = .fullscreen
     }
 
     /// Present as the floating window (using the persisted / default frame).
     mutating func enterFloating() {
         mode = .floating
+        lastVisibleMode = .floating
         floatingFrame = BridgeWindowGeometry.clamp(floatingFrame, within: contentBounds)
     }
 
-    /// Minimize to the pill, flung to the corner nearest the current window.
-    /// Does NOT overwrite `floatingFrame`, so `restore()` returns exactly there.
-    mutating func minimizeToPill() {
-        pillCorner = BridgeWindowGeometry.nearestCorner(of: floatingFrame, within: contentBounds)
-        mode = .pill
+    /// Minimize to HIDDEN (adj-207.2.12): the surface + all chrome vanish; nothing
+    /// floats. Records the current visible mode so `reveal()` returns to it. Does
+    /// NOT touch the session — it stays live (audio continues) — nor the floating
+    /// frame, so revealing returns exactly where the Commander left it.
+    mutating func minimize() {
+        if mode != .hidden { lastVisibleMode = mode }
+        mode = .hidden
     }
 
-    /// Restore from the pill back to the floating window at its saved frame.
-    mutating func restore() {
-        mode = .floating
-        floatingFrame = BridgeWindowGeometry.clamp(floatingFrame, within: contentBounds)
+    /// Reveal from hidden back to the last visible mode (fullscreen or floating).
+    mutating func reveal() {
+        mode = lastVisibleMode
+        if mode == .floating {
+            floatingFrame = BridgeWindowGeometry.clamp(floatingFrame, within: contentBounds)
+        }
     }
 
     // MARK: Frame edits

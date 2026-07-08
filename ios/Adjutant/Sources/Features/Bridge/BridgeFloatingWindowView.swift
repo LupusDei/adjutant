@@ -92,13 +92,19 @@ final class BridgeFloatingWindowModel {
 
     var isFullscreen: Bool { state.mode == .fullscreen }
     var isFloating: Bool { state.mode == .floating }
-    var isPill: Bool { state.mode == .pill }
-
-    /// The corner the pill is anchored to — drives on-pill control placement so
-    /// the mute/end rail always sits on the inner (on-screen) side (adj-207.2.8).
-    var pillCorner: BridgeWindowCorner { state.pillCorner }
+    /// Minimized-to-hidden: nothing floats; session stays live (adj-207.2.12).
+    var isHidden: Bool { state.isHidden }
 
     var isLive: Bool { controls.isLive }
+
+    /// Whether the manual "pop out → system PiP" control should be offered — the
+    /// host sets this from `isPiPAvailable` (device support + configured URL).
+    /// Gates the PiP button in the bottom control bar (adj-207.2.13).
+    var isPiPSupported: Bool = false
+
+    /// Routed to the host's existing manual PiP hand-off (`popOutToPiP`) — the
+    /// bottom-bar PiP button calls this; no duplicate hand-off logic (adj-207.2.13).
+    var onPopOutToPiP: () -> Void = {}
 
     // MARK: Frame gestures
 
@@ -122,10 +128,15 @@ final class BridgeFloatingWindowModel {
 
     // MARK: Mode
 
-    func minimize() { state.minimizeToPill() }
-    func restore() { state.restore() }
+    /// Minimize to hidden — nothing floats; the LIVE tab reveals it (adj-207.2.12).
+    func minimize() { state.minimize() }
+    /// Reveal from hidden back to the last visible mode.
+    func reveal() { state.reveal() }
     func enterFloating() { state.enterFloating() }
     func enterFullscreen() { state.enterFullscreen() }
+
+    /// Trigger the host's manual PiP hand-off (adj-207.2.13).
+    func popOutToPiP() { onPopOutToPiP() }
 
     func toggleFullscreen() {
         if state.mode == .fullscreen {
@@ -267,11 +278,27 @@ struct BridgeFloatingWindowView<Surface: View>: View {
 
     @ViewBuilder
     private var content: some View {
-        if model.isPill {
-            minimizedPill
+        if model.isHidden {
+            hiddenSurface
         } else {
             windowedSurface
         }
+    }
+
+    // MARK: Hidden (minimized) — nothing floats, session stays live (adj-207.2.12)
+
+    /// When minimized, the Bridge is HIDDEN entirely: no surface, no chrome, no
+    /// pill, no floating controls. The webview is kept in the hierarchy (composited
+    /// at zero opacity, non-interactive) so the LiveKit stream + audio keep running
+    /// — the session is never torn down. Re-entry is via the bottom-tab LIVE item.
+    private var hiddenSurface: some View {
+        let frame = model.currentFrame
+        return surface
+            .frame(width: frame.width, height: frame.height)
+            .opacity(0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .position(x: frame.midX, y: frame.midY)
     }
 
     // MARK: Windowed (fullscreen + floating) surface
@@ -453,6 +480,17 @@ struct BridgeFloatingWindowView<Surface: View>: View {
                 tint: theme.textPrimary
             ) { withAnimation(modeAnimation) { model.enterFloating() } }
 
+            // Manual "pop out" → system PiP, relocated from the stranded top corner
+            // into this bar (adj-207.2.13). Hidden where PiP is unsupported so it's
+            // never a dead button; routes through the host's existing hand-off.
+            if model.isPiPSupported {
+                controlButton(
+                    systemName: "pip.enter",
+                    label: "Pop out to Picture in Picture",
+                    tint: theme.textPrimary
+                ) { model.popOutToPiP() }
+            }
+
             controlButton(systemName: "xmark", label: "End Bridge", tint: CRTTheme.State.error) {
                 model.end()
             }
@@ -495,82 +533,6 @@ struct BridgeFloatingWindowView<Surface: View>: View {
         .accessibilityLabel(label)
     }
 
-    // MARK: Pill (minimized, live)
-
-    /// The minimized pill plus an on-pill quick-control rail (mute / end) so the
-    /// Commander can act without first restoring (adj-207.2.8). The rail sits on
-    /// the inner (on-screen) side, chosen from the pill's anchored corner.
-    private var minimizedPill: some View {
-        let frame = model.currentFrame
-        let onRight = model.pillCorner == .topTrailing || model.pillCorner == .bottomTrailing
-        let gap: CGFloat = 6
-        let railX = onRight
-            ? frame.minX - gap - hitTarget / 2
-            : frame.maxX + gap + hitTarget / 2
-        return ZStack {
-            pillCircle(frame: frame)
-                .position(x: frame.midX, y: frame.midY)
-
-            pillControlRail
-                .position(x: railX, y: frame.midY)
-        }
-        .animation(modeAnimation, value: model.isPill)
-    }
-
-    private func pillCircle(frame: CGRect) -> some View {
-        ZStack {
-            surface.clipShape(Circle())
-            Circle().strokeBorder(theme.accent.opacity(0.4), lineWidth: 1.5)
-        }
-        .overlay(alignment: .top) {
-            if model.isLive { liveBadge.padding(.top, 5) }
-        }
-        .frame(width: frame.width, height: frame.height)
-        .shadow(color: .black.opacity(0.4), radius: 12, x: 0, y: 6)
-        .contentShape(Circle())
-        .onTapGesture { withAnimation(modeAnimation) { model.restore() } }
-        .accessibilityElement()
-        .accessibilityLabel(model.isLive ? "Bridge is live — tap to restore" : "Bridge — tap to restore")
-        .accessibilityAddTraits(.isButton)
-    }
-
-    /// LIVE indicator that conveys state by TEXT + shape (not motion/color alone),
-    /// and whose pulse is disabled under Reduce Motion (adj-207.2.6).
-    private var liveBadge: some View {
-        HStack(spacing: 3) {
-            LiveDot(reduceMotion: reduceMotion, color: CRTTheme.State.success)
-                .frame(width: 6, height: 6)
-            Text("LIVE")
-                .font(.system(size: 8, weight: .heavy))
-                .foregroundStyle(.white)
-                .accessibilityHidden(true)
-        }
-        .padding(.horizontal, 5)
-        .padding(.vertical, 2)
-        .background(Color.black.opacity(0.55), in: Capsule())
-        .accessibilityHidden(true)
-    }
-
-    /// Quick mute + end buttons beside the pill (adj-207.2.8), each ≥44pt.
-    private var pillControlRail: some View {
-        VStack(spacing: 6) {
-            controlButton(
-                systemName: model.isMuted ? "mic.slash.fill" : "mic.fill",
-                label: model.isMuted ? "Unmute microphone" : "Mute microphone",
-                tint: model.isMuted ? CRTTheme.State.warning : theme.accent
-            ) { model.toggleMute() }
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay(Circle().strokeBorder(theme.accent.opacity(0.25), lineWidth: 0.5))
-
-            controlButton(systemName: "xmark", label: "End Bridge", tint: CRTTheme.State.error) {
-                model.end()
-            }
-            .background(.ultraThinMaterial, in: Circle())
-            .overlay(Circle().strokeBorder(theme.accent.opacity(0.25), lineWidth: 0.5))
-        }
-        .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 4)
-    }
-
     // MARK: Environment sync
 
     private func syncEnvironment(_ proxy: GeometryProxy) {
@@ -603,36 +565,5 @@ struct BridgeFloatingWindowView<Surface: View>: View {
             .publisher(for: UIResponder.keyboardWillHideNotification)
             .map { _ in CGFloat(0) }
         return willChange.merge(with: willHide).eraseToAnyPublisher()
-    }
-}
-
-// MARK: - Live dot
-
-/// A live-session dot. It pulses to draw the eye, but honors Reduce Motion by
-/// rendering a STATIC filled dot instead (adj-207.2.6) — the "LIVE" text beside
-/// it carries the meaning without relying on motion or color.
-private struct LiveDot: View {
-    let reduceMotion: Bool
-    let color: Color
-    @State private var animating = false
-
-    var body: some View {
-        Circle()
-            .fill(color)
-            .overlay {
-                if !reduceMotion {
-                    Circle()
-                        .stroke(color.opacity(0.7), lineWidth: 2)
-                        .scaleEffect(animating ? 2.0 : 1.0)
-                        .opacity(animating ? 0.0 : 0.8)
-                }
-            }
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeOut(duration: 1.1).repeatForever(autoreverses: false)) {
-                    animating = true
-                }
-            }
-            .accessibilityHidden(true)
     }
 }

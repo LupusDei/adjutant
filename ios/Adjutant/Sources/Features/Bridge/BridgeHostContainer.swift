@@ -88,6 +88,11 @@ final class BridgeHost {
                 webSurface.setMicEnabled(!muted)
             }
         )
+
+        // Route the bottom-bar PiP button to the existing manual hand-off
+        // (adj-207.2.13). Set after full init so `[weak self]` is valid; evaluated
+        // lazily on tap, by which point production has a configured PiP URL.
+        self.windowModel.onPopOutToPiP = { [weak self] in self?.popOutToPiP() }
     }
 
     /// Convenience: a default production host wired to the dashboard origin's
@@ -103,6 +108,9 @@ final class BridgeHost {
         // built LAZILY on first hand-off. Do NOT build it here — eager construction
         // would create a LiveKit Room + AVPictureInPictureController at app launch.
         self.pipApiBaseURL = apiBaseURL
+        // Now that the PiP URL is configured, offer the bottom-bar PiP control where
+        // the device supports system PiP (adj-207.2.13).
+        self.windowModel.isPiPSupported = isPiPAvailable
     }
 
     /// Lazily build the native PiP surface + hand-off coordinator on first use. No-op
@@ -142,8 +150,33 @@ final class BridgeHost {
     }
 
     /// The surface is mounted in the app-root ZStack whenever a session exists.
-    /// This is a pure function of lifecycle — navigation NEVER changes it.
+    /// This is a pure function of lifecycle — navigation NEVER changes it. Stays
+    /// true while minimized-to-hidden (session live), so the webview keeps running.
     var isSurfaceMounted: Bool { session.isActive }
+
+    // MARK: LIVE-tab toggle + indicator (adj-207.2.12)
+
+    /// Whether a Bridge session is active (connecting / live / backgrounded) — the
+    /// bottom-tab LIVE item reflects this as its live indicator, even while hidden.
+    var isBridgeLive: Bool { session.isActive }
+
+    /// Whether the Bridge is minimized-to-hidden (live but not shown).
+    var isBridgeHidden: Bool { windowModel.isHidden }
+
+    /// The LIVE tab is the SINGLE way in and out (adj-207.2.12):
+    /// - no session  → open a fresh one (shown full-screen);
+    /// - live+hidden → reveal it (show the surface again);
+    /// - live+shown  → minimize it to hidden (nothing floats; session stays live).
+    func toggleFromLiveTab() {
+        if !session.isActive {
+            windowModel.enterFullscreen()   // ensure the new session presents visibly
+            open()
+        } else if windowModel.isHidden {
+            windowModel.reveal()
+        } else {
+            windowModel.minimize()
+        }
+    }
 
     // MARK: Intents (all route through the session)
 
@@ -263,14 +296,9 @@ struct BridgeHostContainer<Content: View>: View {
                                 listenOnlyIndicator
                             }
                         }
-                        // US4 (adj-207.5.1): manual "pop out" → system PiP, shown only
-                        // where PiP is supported (cheap static probe — does NOT build
-                        // the PiP surface; that happens lazily on tap).
-                        .overlay(alignment: .topLeading) {
-                            if host.isPiPAvailable {
-                                popOutButton
-                            }
-                        }
+                    // NB: the manual "pop out → PiP" control now lives IN the
+                    // bottom control bar (adj-207.2.13), not a stranded top-corner
+                    // overlay — see BridgeFloatingWindowView.fullscreenControlBar.
                 }
                 .transition(.opacity)
             }
@@ -280,21 +308,6 @@ struct BridgeHostContainer<Content: View>: View {
         .onChange(of: scenePhase) { _, newPhase in
             host.handleScenePhase(newPhase)
         }
-    }
-
-    /// Manual "pop out" control (adj-207.5.1) — enters system PiP on demand.
-    private var popOutButton: some View {
-        Button {
-            host.popOutToPiP()
-        } label: {
-            Image(systemName: "pip.enter")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(.white)
-                .padding(8)
-                .background(.black.opacity(0.55), in: Circle())
-        }
-        .padding(8)
-        .accessibilityLabel("Pop out to Picture in Picture")
     }
 
     /// Listen-only indicator (adj-207.3.2): shown when background full-duplex mic

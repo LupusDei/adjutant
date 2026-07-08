@@ -140,4 +140,40 @@ final class BridgeHostContainerTests: XCTestCase {
         host.open()
         XCTAssertNotNil(host.webSurface.engine)
     }
+
+    // MARK: - LIVE-tab toggle: single way in and out (adj-207.2.12)
+
+    func testLiveTabTogglesColdOpenThenMinimizeThenReveal() {
+        let (host, factory) = makeHost()
+        // Cold: no session → open (visible, connecting).
+        XCTAssertFalse(host.isBridgeLive)
+        host.toggleFromLiveTab()
+        XCTAssertTrue(host.session.isActive)
+        XCTAssertTrue(host.isBridgeLive)
+        XCTAssertFalse(host.isBridgeHidden, "opens visible")
+        host.session.markConnected()
+
+        // Shown + live → minimize to hidden (session stays live; ONE surface).
+        host.toggleFromLiveTab()
+        XCTAssertTrue(host.isBridgeHidden, "minimize hides")
+        XCTAssertTrue(host.session.isActive, "session NOT torn down on minimize")
+        XCTAssertEqual(factory.engines.first?.teardownCount, 0)
+
+        // Hidden + live → reveal (show again), still one surface, no reconnect.
+        host.toggleFromLiveTab()
+        XCTAssertFalse(host.isBridgeHidden, "reveal shows")
+        XCTAssertTrue(host.session.isActive)
+        XCTAssertEqual(factory.makeCount, 1, "reveal/minimize never rebuild the surface")
+        XCTAssertEqual(factory.engines.first?.loadCount, 1, "never reconnects")
+    }
+
+    func testMinimizeKeepsSessionLiveForBackgroundAudio() {
+        let (host, _) = makeHost()
+        host.open()
+        host.session.markConnected()
+        host.toggleFromLiveTab() // minimize
+        XCTAssertTrue(host.isBridgeHidden)
+        // Backgrounding a hidden-but-live Bridge still keeps it alive.
+        XCTAssertEqual(host.session.state, .live)
+    }
 }

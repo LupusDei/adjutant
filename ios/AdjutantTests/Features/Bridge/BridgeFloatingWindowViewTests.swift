@@ -108,25 +108,25 @@ final class BridgeFloatingWindowViewTests: XCTestCase {
         XCTAssertEqual(model.currentFrame.height, 240, accuracy: 0.001)
     }
 
-    // MARK: - Minimize / restore
+    // MARK: - Minimize (to hidden) / reveal (adj-207.2.12)
 
-    func testMinimizeToPillShowsLiveAndPillFrame() {
+    func testMinimizeHidesEntirelyKeepingSessionLive() {
         let controls = SpyControls()
         controls.isLive = true
-        let (model, _) = makeModel(controls: controls)
+        let (model, spy) = makeModel(controls: controls)
         model.minimize()
-        XCTAssertTrue(model.isPill)
+        XCTAssertTrue(model.isHidden, "minimize hides — nothing floats")
         XCTAssertFalse(model.isFloating)
-        XCTAssertTrue(model.isLive, "pill must reflect the live session")
-        XCTAssertEqual(model.currentFrame.width, 72, accuracy: 0.001)
-        XCTAssertEqual(model.currentFrame.height, 72, accuracy: 0.001)
+        XCTAssertTrue(model.isLive, "session stays live while hidden")
+        // Presentation-only: minimize NEVER ends the session.
+        XCTAssertEqual(spy.endCount, 0)
     }
 
-    func testRestoreReturnsToExactFloatingFrame() {
+    func testRevealReturnsToExactFloatingFrame() {
         let (model, _) = makeModel()
         let saved = model.currentFrame
         model.minimize()
-        model.restore()
+        model.reveal()
         XCTAssertTrue(model.isFloating)
         XCTAssertEqual(model.currentFrame.origin.x, saved.origin.x, accuracy: 0.001)
         XCTAssertEqual(model.currentFrame.origin.y, saved.origin.y, accuracy: 0.001)
@@ -239,13 +239,19 @@ final class BridgeFloatingWindowViewTests: XCTestCase {
             BridgeWindowChrome.webControlsClearance)
     }
 
-    // MARK: - Pill corner exposed for on-pill controls (adj-207.2.8)
+    // MARK: - PiP pop-out routes through the injected hand-off (adj-207.2.13)
 
-    func testPillCornerReflectsMinimizedPosition() {
+    func testPopOutToPiPRoutesThroughInjectedHandoff() {
         let (model, _) = makeModel()
-        model.setFloatingFrame(CGRect(x: 12, y: 56, width: 120, height: 160)) // top-left
-        model.minimize()
-        XCTAssertEqual(model.pillCorner, .topLeading)
+        var popOutCount = 0
+        model.onPopOutToPiP = { popOutCount += 1 }
+        model.popOutToPiP()
+        XCTAssertEqual(popOutCount, 1, "bottom-bar PiP button routes to the host hand-off")
+    }
+
+    func testPiPControlHiddenByDefault() {
+        let (model, _) = makeModel()
+        XCTAssertFalse(model.isPiPSupported, "no dead PiP button unless the host enables it")
     }
 
     // MARK: - Real session control adapter
