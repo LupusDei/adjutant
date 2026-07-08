@@ -2,6 +2,14 @@ import SwiftUI
 import Combine
 import AdjutantKit
 
+/// Bridge warm-session state shown on the overview status line (adj-202.10.3).
+public enum BridgeWarmState {
+    case ready    // a pre-warmed avatar session is provisioned + validated — a tap connects fast
+    case warming  // a session is provisioning in the background right now
+    case idle     // nothing warm — a tap will start a new session (~5s)
+    case unknown  // not yet fetched / backend unreachable
+}
+
 /// ViewModel for the Swarm Overview page — aggregated global dashboard.
 @MainActor
 final class SwarmOverviewViewModel: ObservableObject {
@@ -32,10 +40,15 @@ final class SwarmOverviewViewModel: ObservableObject {
     /// Non-empty causes the Open Questions banner to appear above Agents.
     @Published private(set) var openQuestions: [AgentQuestion] = []
 
+    /// Bridge warm-session state for the overview status line (adj-202.10.3): is a pre-warmed
+    /// avatar session READY, currently WARMING, or IDLE (a tap starts a new one)?
+    @Published private(set) var bridgeWarmState: BridgeWarmState = .unknown
+
     // MARK: - Dependencies
 
     private let apiClient: APIClient
     private var refreshTimer: Timer?
+    private var warmStatusTimer: Timer?
     private var isRefreshing = false
 
     // MARK: - Init
@@ -50,6 +63,7 @@ final class SwarmOverviewViewModel: ObservableObject {
         Task {
             await refresh()
         }
+        Task { await refreshBridgeWarmStatus() }
         // Guard against duplicate timers if onAppear fires multiple times
         refreshTimer?.invalidate()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
@@ -58,11 +72,51 @@ final class SwarmOverviewViewModel: ObservableObject {
                 await self.refresh()
             }
         }
+        // A faster, lightweight poll JUST for the Bridge warm state so the status line reflects
+        // idle → warming → ready promptly (the transition takes only ~5-7s).
+        warmStatusTimer?.invalidate()
+        warmStatusTimer = Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in await self.refreshBridgeWarmStatus() }
+        }
     }
 
     func onDisappear() {
         refreshTimer?.invalidate()
         refreshTimer = nil
+        warmStatusTimer?.invalidate()
+        warmStatusTimer = nil
+    }
+
+    // MARK: - Bridge warm status (adj-202.10.3)
+
+    private struct WarmStatusDTO: Decodable { let state: String }
+
+    /// The avatar endpoints live at the ORIGIN root (like BridgePrewarmer), so strip the API path.
+    private static func warmStatusURL() -> URL? {
+        guard var c = URLComponents(url: AppState.shared.apiBaseURL, resolvingAgainstBaseURL: false) else { return nil }
+        c.path = "/avatar/warm-status"
+        c.query = nil
+        return c.url
+    }
+
+    /// Best-effort poll of the backend's warm-session state. NEVER throws into the UI.
+    func refreshBridgeWarmStatus() async {
+        guard let url = Self.warmStatusURL() else { return }
+        do {
+            var req = URLRequest(url: url)
+            req.timeoutInterval = 6
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard (resp as? HTTPURLResponse)?.statusCode == 200 else { bridgeWarmState = .unknown; return }
+            switch try JSONDecoder().decode(WarmStatusDTO.self, from: data).state {
+            case "ready": bridgeWarmState = .ready
+            case "warming": bridgeWarmState = .warming
+            case "idle": bridgeWarmState = .idle
+            default: bridgeWarmState = .unknown
+            }
+        } catch {
+            bridgeWarmState = .unknown
+        }
     }
 
     // MARK: - Data Loading

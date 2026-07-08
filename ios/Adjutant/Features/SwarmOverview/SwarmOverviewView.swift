@@ -51,6 +51,9 @@ struct SwarmOverviewView: View {
                     staleDataBanner
                 }
 
+                // Bridge warm-session status line (adj-202.10.3)
+                bridgeWarmStatusLine
+
                 // 0. Open Questions banner — shown only when there are open questions (adj-181.20)
                 if !viewModel.openQuestions.isEmpty {
                     openQuestionsBanner(viewModel.openQuestions)
@@ -76,6 +79,34 @@ struct SwarmOverviewView: View {
         .refreshable {
             await viewModel.refresh()
         }
+    }
+
+    /// Overview status line for the Bridge warm session (adj-202.10.3) — tells the Commander at a
+    /// glance whether a pre-warmed avatar session is READY (green), WARMING (amber), or IDLE (dim:
+    /// a tap will start a fresh ~5s session). Polled off GET /avatar/warm-status by the view model.
+    @ViewBuilder
+    private var bridgeWarmStatusLine: some View {
+        let dotColor: Color = {
+            switch viewModel.bridgeWarmState {
+            case .ready:   return theme.colorPalette.green
+            case .warming: return theme.colorPalette.yellow
+            case .idle, .unknown: return theme.dim
+            }
+        }()
+        let label: String = {
+            switch viewModel.bridgeWarmState {
+            case .ready:   return "BRIDGE · WARM SESSION READY"
+            case .warming: return "BRIDGE · WARMING A SESSION…"
+            case .idle:    return "BRIDGE · IDLE — NEW SESSION ON TAP"
+            case .unknown: return "BRIDGE · STATUS UNAVAILABLE"
+            }
+        }()
+        HStack(spacing: CRTTheme.Spacing.xs) {
+            Circle().fill(dotColor).frame(width: 8, height: 8)
+            CRTText(label, style: .caption, color: dotColor)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Open Questions Banner (adj-181.20)

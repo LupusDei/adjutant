@@ -357,6 +357,21 @@ export function createAvatarRouter(deps: AvatarRouterDeps): Router {
     }
   });
 
+  // GET /avatar/warm-status — observability (adj-202.10.3) for the iOS overview status line.
+  // Answers plainly: is a warm Bridge session ready NOW, is one provisioning, or is it idle
+  // (a tap will pay the full ~5s create)? Public like the rest of /avatar; no secrets.
+  router.get("/warm-status", (_req, res) => {
+    const now = Date.now();
+    const ready = warmFresh();
+    return res.json({
+      state: ready ? "ready" : warming !== null ? "warming" : "idle",
+      warmReady: ready,
+      warming: warming !== null,
+      warmAgeMs: warm ? now - warm.createdAt : null,
+      warmTtlMs: WARM_TTL_MS,
+    });
+  });
+
   router.get("/", (_req, res) => {
     res.type("html").send(AVATAR_PAGE_HTML);
   });
