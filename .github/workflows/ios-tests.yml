@@ -72,10 +72,18 @@ jobs:
             -quiet
 
       - name: Run Tests
+        # Skip the two real-WKWebView INTEGRATION tests (adj-207.1.10): a headless
+        # CI simulator can't reliably drive WKWebView navigation / in-page JS, and
+        # the host `CI` env var does NOT propagate into the simulator test process
+        # (so a runtime XCTSkip can't see it). `-skip-testing` is the deterministic
+        # mechanism. The underlying logic (didFinish→onReady, script-name→action) is
+        # fully covered by the seam tests in the SAME file, which always run here.
         run: |
           xcodebuild test-without-building \
             -scheme Adjutant \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -skip-testing:AdjutantTests/WKAvatarWebEngineTests/testNavigationFinishedFiresOnReady_Integration \
+            -skip-testing:AdjutantTests/WKAvatarWebEngineTests/testOpenSettingsScriptMessageRoundTripsToInjectedAction_Integration \
             -resultBundlePath TestResults.xcresult \
             -quiet
 

@@ -196,6 +196,13 @@ final class WKAvatarWebEngine: NSObject, AvatarWebEngine {
         webView.load(URLRequest(url: url))
     }
 
+    /// Load a SELF-CONTAINED HTML string (no network). Used by CI-skippable
+    /// integration tests to drive a deterministic navigation without hitting
+    /// `/avatar` (adj-207.1.10).
+    func loadHTMLString(_ html: String, baseURL: URL? = nil) {
+        webView.loadHTMLString(html, baseURL: baseURL)
+    }
+
     func setHidden(_ hidden: Bool) {
         hostView.isHidden = hidden
     }
@@ -244,12 +251,22 @@ extension WKAvatarWebEngine: WKUIDelegate, WKScriptMessageHandler {
     }
 
     /// Open the app's Settings page so the Commander can re-enable a denied
-    /// camera/mic permission (adj-202.5.4).
+    /// camera/mic permission (adj-202.5.4). Delegates to `receiveScriptMessage`
+    /// so the routing logic is testable without a `WKScriptMessage` (which has no
+    /// public initializer) — see adj-207.1.10.
     func userContentController(
         _ userContentController: WKUserContentController,
         didReceive message: WKScriptMessage
     ) {
-        guard message.name == Self.openSettingsHandler else { return }
+        receiveScriptMessage(named: message.name)
+    }
+
+    /// Testable core of the script-message router (adj-207.1.10): map a message
+    /// NAME to its action. Split out because a headless CI simulator can't
+    /// reliably run the real in-page `postMessage`, and `WKScriptMessage` can't be
+    /// constructed in a unit test — so the routing logic is covered here directly.
+    func receiveScriptMessage(named name: String) {
+        guard name == Self.openSettingsHandler else { return }
         invokeOpenSettings()
     }
 }
