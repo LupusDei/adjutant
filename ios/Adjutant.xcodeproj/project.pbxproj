@@ -29,6 +29,11 @@
 		A0123456000000000000C126 /* WKAvatarWebEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0123457000000000000C126 /* WKAvatarWebEngineTests.swift */; };
 		A0123456000000000000C128 /* BridgeAudioSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0123457000000000000C128 /* BridgeAudioSessionTests.swift */; };
 		A0123456000000000000C129 /* BridgeBackgroundAudioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0123457000000000000C129 /* BridgeBackgroundAudioTests.swift */; };
+		A0123456000000000000C130 /* NativeAvatarClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0123457000000000000C130 /* NativeAvatarClientTests.swift */; };
+		A0123456000000000000C131 /* AvatarSampleBufferViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0123457000000000000C131 /* AvatarSampleBufferViewTests.swift */; };
+		A0123456000000000000C132 /* BridgePiPControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0123457000000000000C132 /* BridgePiPControllerTests.swift */; };
+		A0123456000000000000C133 /* BridgePiPHandoffTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0123457000000000000C133 /* BridgePiPHandoffTests.swift */; };
+		A0123456000000000000C134 /* BridgePiPRestoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0123457000000000000C134 /* BridgePiPRestoreTests.swift */; };
 		A01234560000000000000020 /* AdjutantUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000020 /* AdjutantUITests.swift */; };
 		A01234560000000000000021 /* AdjutantUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000021 /* AdjutantUITestsLaunchTests.swift */; };
 		A01234560000000000000040 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000040 /* AppDelegate.swift */; };
@@ -102,6 +107,11 @@
 		A0123457000000000000C126 /* WKAvatarWebEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WKAvatarWebEngineTests.swift; sourceTree = "<group>"; };
 		A0123457000000000000C128 /* BridgeAudioSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeAudioSessionTests.swift; sourceTree = "<group>"; };
 		A0123457000000000000C129 /* BridgeBackgroundAudioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeBackgroundAudioTests.swift; sourceTree = "<group>"; };
+		A0123457000000000000C130 /* NativeAvatarClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAvatarClientTests.swift; sourceTree = "<group>"; };
+		A0123457000000000000C131 /* AvatarSampleBufferViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarSampleBufferViewTests.swift; sourceTree = "<group>"; };
+		A0123457000000000000C132 /* BridgePiPControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgePiPControllerTests.swift; sourceTree = "<group>"; };
+		A0123457000000000000C133 /* BridgePiPHandoffTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgePiPHandoffTests.swift; sourceTree = "<group>"; };
+		A0123457000000000000C134 /* BridgePiPRestoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgePiPRestoreTests.swift; sourceTree = "<group>"; };
 		A0123457000000000000C106 /* ChatNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatNavigationTests.swift; sourceTree = "<group>"; };
 		A01234570000000000000020 /* AdjutantUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjutantUITests.swift; sourceTree = "<group>"; };
 		A01234570000000000000021 /* AdjutantUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjutantUITestsLaunchTests.swift; sourceTree = "<group>"; };
@@ -281,6 +291,11 @@
 				A0123457000000000000C126 /* WKAvatarWebEngineTests.swift */,
 				A0123457000000000000C128 /* BridgeAudioSessionTests.swift */,
 				A0123457000000000000C129 /* BridgeBackgroundAudioTests.swift */,
+				A0123457000000000000C130 /* NativeAvatarClientTests.swift */,
+				A0123457000000000000C131 /* AvatarSampleBufferViewTests.swift */,
+				A0123457000000000000C132 /* BridgePiPControllerTests.swift */,
+				A0123457000000000000C133 /* BridgePiPHandoffTests.swift */,
+				A0123457000000000000C134 /* BridgePiPRestoreTests.swift */,
 			);
 			path = Bridge;
 			sourceTree = "<group>";
@@ -574,6 +589,11 @@
 				A0123456000000000000C126 /* WKAvatarWebEngineTests.swift in Sources */,
 				A0123456000000000000C128 /* BridgeAudioSessionTests.swift in Sources */,
 				A0123456000000000000C129 /* BridgeBackgroundAudioTests.swift in Sources */,
+				A0123456000000000000C130 /* NativeAvatarClientTests.swift in Sources */,
+				A0123456000000000000C131 /* AvatarSampleBufferViewTests.swift in Sources */,
+				A0123456000000000000C132 /* BridgePiPControllerTests.swift in Sources */,
+				A0123456000000000000C133 /* BridgePiPHandoffTests.swift in Sources */,
+				A0123456000000000000C134 /* BridgePiPRestoreTests.swift in Sources */,
 				A0123456000000000000C106 /* ChatNavigationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
