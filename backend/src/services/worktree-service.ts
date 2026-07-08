@@ -105,6 +105,97 @@ export function buildWorktreeMcpConfig(
   return `${JSON.stringify(config, null, 2)}\n`;
 }
 
+/**
+ * Structural shape of a `.mcp.json` we care about. Everything is optional /
+ * `unknown` because the file is user- and tool-authored — we narrow before use.
+ */
+interface McpConfigShape {
+  mcpServers?: {
+    adjutant?: {
+      type?: unknown;
+      url?: unknown;
+      headers?: Record<string, unknown>;
+      [k: string]: unknown;
+    };
+    [k: string]: unknown;
+  };
+  [k: string]: unknown;
+}
+
+/** A header value that must be re-pinned: absent, empty, `${...}` env-form, or the `unknown` placeholder. */
+function isFragileHeader(value: unknown): boolean {
+  return (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.includes("${") ||
+    value === "unknown"
+  );
+}
+
+/**
+ * adj-ibcy6: Repair the adjutant server's identity headers in an EXISTING
+ * worktree `.mcp.json`.
+ *
+ * The roster-desync root cause: worktree `.mcp.json` files are copied from the
+ * repo root during dep provisioning and carry the fragile
+ * `"X-Agent-Id": "${ADJUTANT_AGENT_ID:-unknown}"` form. Claude Code expands
+ * `${VAR}` ONCE at startup; when the var is absent the header becomes `unknown`,
+ * the server mints `unknown-agent-*`, and the connection never reconciles to the
+ * named lifecycle agent (it stays "booting" + a phantom entry appears).
+ *
+ * This re-pins `X-Agent-Id` to the LITERAL `callsign` (and the same-root-cause
+ * `X-Project-Root` to the literal `worktreePath`) when — and only when — the
+ * current value is fragile. A good hand-tuned literal is left untouched. Because
+ * we only ever write THIS worktree's known callsign, there is zero
+ * identity-guessing / mis-attribution risk.
+ *
+ * @returns repaired file contents, or `null` when no change is needed.
+ *   Malformed JSON yields a fresh self-contained literal config (heal-in-place).
+ *   A file with no `adjutant` server entry returns `null` (not ours to touch).
+ */
+export function repairMcpIdentityHeader(
+  existing: string,
+  callsign: string,
+  worktreePath: string,
+): string | null {
+  let parsed: McpConfigShape;
+  try {
+    parsed = JSON.parse(existing) as McpConfigShape;
+  } catch {
+    // Unparseable — replace wholesale with a self-contained literal config so a
+    // broken file still heals (buildWorktreeMcpConfig falls back to defaults).
+    return buildWorktreeMcpConfig(callsign, worktreePath, existing);
+  }
+
+  const adj = parsed.mcpServers?.adjutant;
+  if (!adj || typeof adj !== "object") {
+    // No adjutant server entry — this isn't an Adjutant-managed identity file.
+    return null;
+  }
+
+  const headers: Record<string, unknown> =
+    adj.headers && typeof adj.headers === "object" ? adj.headers : {};
+
+  const agentNeedsRepair = isFragileHeader(headers["X-Agent-Id"]);
+  const rootNeedsRepair = isFragileHeader(headers["X-Project-Root"]);
+  if (!agentNeedsRepair && !rootNeedsRepair) {
+    return null;
+  }
+
+  const repairedHeaders: Record<string, unknown> = { ...headers };
+  if (agentNeedsRepair) repairedHeaders["X-Agent-Id"] = callsign;
+  if (rootNeedsRepair) repairedHeaders["X-Project-Root"] = worktreePath;
+
+  const repaired: McpConfigShape = {
+    ...parsed,
+    mcpServers: {
+      ...parsed.mcpServers,
+      adjutant: { ...adj, headers: repairedHeaders },
+    },
+  };
+  return `${JSON.stringify(repaired, null, 2)}\n`;
+}
+
 /** Injected seams for {@link writeWorktreeMcpIdentity}. */
 export interface WorktreeMcpIdentitySeams {
   exists?: (path: string) => boolean;
@@ -170,7 +261,24 @@ export function writeWorktreeMcpIdentity(
 
   const target = join(worktreePath, ".mcp.json");
   if (exists(target)) {
-    // Never stomp an existing (possibly hand-tuned) worktree identity file.
+    // adj-ibcy6: the file almost always pre-exists — it's copied from the repo
+    // root during dep provisioning and carries the fragile
+    // `${ADJUTANT_AGENT_ID:-unknown}` header. The old code SKIPPED here, so the
+    // agent connected identity-less and the server minted unknown-agent-* (the
+    // roster desync). Repair the fragile header to the literal callsign instead;
+    // a good hand-tuned literal is left untouched (repairMcpIdentityHeader → null).
+    const current = readFile(target);
+    if (current === null) {
+      // Exists but unreadable — don't risk stomping; leave it.
+      return;
+    }
+    const repaired = repairMcpIdentityHeader(current, callsign, worktreePath);
+    if (repaired === null) {
+      return; // Already a good literal identity — nothing to do.
+    }
+    writeFile(target, repaired);
+    ensureExcluded(worktreePath, ".mcp.json");
+    logInfo("Repaired worktree MCP identity", { callsign, worktreePath });
     return;
   }
   const source = readFile(join(projectPath, ".mcp.json"));

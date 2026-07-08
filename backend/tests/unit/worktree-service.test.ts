@@ -11,6 +11,7 @@ import {
   removeAgentWorktree,
   buildWorktreeMcpConfig,
   writeWorktreeMcpIdentity,
+  repairMcpIdentityHeader,
 } from "../../src/services/worktree-service.js";
 
 describe("worktree-service — provisionAgentWorktree (adj-182.5)", () => {
@@ -136,10 +137,104 @@ describe("worktree-service — worktree MCP identity (adj-vevei)", () => {
       expect(ensureExcluded).toHaveBeenCalledWith("/p/worktrees/kerrigan", ".mcp.json");
     });
 
-    it("should be IDEMPOTENT — never clobber an existing worktree .mcp.json", () => {
+    it("should REPAIR a fragile ${...} X-Agent-Id in an existing .mcp.json to the literal callsign (adj-ibcy6)", () => {
+      // The real-world desync: worktree .mcp.json is copied from the repo root
+      // during dep provisioning and carries "${ADJUTANT_AGENT_ID:-unknown}".
+      // The old skip-if-exists left it fragile → agent bound as unknown-agent-*.
+      const existing = JSON.stringify({
+        mcpServers: {
+          adjutant: {
+            type: "http",
+            url: "http://localhost:4201/mcp",
+            headers: {
+              "X-Agent-Id": "${ADJUTANT_AGENT_ID:-unknown}",
+              "X-Project-Root": "${ADJUTANT_PROJECT_ROOT:-}",
+            },
+          },
+        },
+      });
+      const writeFile = vi.fn();
+      const ensureExcluded = vi.fn();
+      writeWorktreeMcpIdentity("/p/worktrees/kerrigan", "kerrigan", "/p", {
+        exists: () => true,
+        readFile: (path: string) =>
+          path === "/p/worktrees/kerrigan/.mcp.json" ? existing : null,
+        writeFile,
+        ensureExcluded,
+      });
+      expect(writeFile).toHaveBeenCalledTimes(1);
+      const [path, content] = writeFile.mock.calls[0] as [string, string];
+      expect(path).toBe("/p/worktrees/kerrigan/.mcp.json");
+      const parsed = JSON.parse(content);
+      expect(parsed.mcpServers.adjutant.headers["X-Agent-Id"]).toBe("kerrigan");
+      // Same-root-cause X-Project-Root is repaired to the literal worktree path.
+      expect(parsed.mcpServers.adjutant.headers["X-Project-Root"]).toBe("/p/worktrees/kerrigan");
+      // Preserves the existing endpoint — repair is surgical, not a wholesale rewrite.
+      expect(parsed.mcpServers.adjutant.url).toBe("http://localhost:4201/mcp");
+      expect(ensureExcluded).toHaveBeenCalledWith("/p/worktrees/kerrigan", ".mcp.json");
+    });
+
+    it("should NOT clobber an existing GOOD literal X-Agent-Id (hand-tuned)", () => {
+      const existing = JSON.stringify({
+        mcpServers: {
+          adjutant: {
+            type: "http",
+            url: "http://localhost:4201/mcp",
+            headers: { "X-Agent-Id": "custom-name", "X-Project-Root": "/p/worktrees/kerrigan" },
+          },
+        },
+      });
       const writeFile = vi.fn();
       writeWorktreeMcpIdentity("/p/worktrees/kerrigan", "kerrigan", "/p", {
-        exists: () => true, // worktree file already present (hand-tuned or prior spawn)
+        exists: () => true,
+        readFile: () => existing,
+        writeFile,
+        ensureExcluded: vi.fn(),
+      });
+      expect(writeFile).not.toHaveBeenCalled();
+    });
+
+    it("should repair a literal 'unknown' X-Agent-Id too", () => {
+      const existing = JSON.stringify({
+        mcpServers: {
+          adjutant: {
+            type: "http",
+            url: "http://localhost:4201/mcp",
+            headers: { "X-Agent-Id": "unknown", "X-Project-Root": "/p/worktrees/nova" },
+          },
+        },
+      });
+      const writeFile = vi.fn();
+      writeWorktreeMcpIdentity("/p/worktrees/nova", "nova", "/p", {
+        exists: () => true,
+        readFile: () => existing,
+        writeFile,
+        ensureExcluded: vi.fn(),
+      });
+      expect(writeFile).toHaveBeenCalledTimes(1);
+      const content = (writeFile.mock.calls[0] as [string, string])[1];
+      expect(JSON.parse(content).mcpServers.adjutant.headers["X-Agent-Id"]).toBe("nova");
+    });
+
+    it("should rewrite a MALFORMED existing .mcp.json with a fresh literal config", () => {
+      const writeFile = vi.fn();
+      writeWorktreeMcpIdentity("/p/worktrees/tass", "tass", "/p", {
+        exists: () => true,
+        readFile: () => "{ not valid json",
+        writeFile,
+        ensureExcluded: vi.fn(),
+      });
+      expect(writeFile).toHaveBeenCalledTimes(1);
+      const content = (writeFile.mock.calls[0] as [string, string])[1];
+      expect(JSON.parse(content).mcpServers.adjutant.headers["X-Agent-Id"]).toBe("tass");
+    });
+
+    it("should leave an existing file with NO adjutant server entry untouched (not ours)", () => {
+      const existing = JSON.stringify({ mcpServers: { other: { type: "http", url: "x" } } });
+      const writeFile = vi.fn();
+      writeWorktreeMcpIdentity("/p/worktrees/zag", "zag", "/p", {
+        exists: () => true,
+        readFile: () => existing,
         writeFile,
         ensureExcluded: vi.fn(),
       });
@@ -160,6 +255,52 @@ describe("worktree-service — worktree MCP identity (adj-vevei)", () => {
       expect(readFile).toHaveBeenCalledWith("/p/.mcp.json");
       const content = (writeFile.mock.calls[0] as [string, string])[1];
       expect(JSON.parse(content).mcpServers.adjutant.url).toBe("http://localhost:9999/mcp");
+    });
+  });
+
+  describe("repairMcpIdentityHeader (adj-ibcy6)", () => {
+    const literal = (id: string, root: string) =>
+      JSON.stringify({
+        mcpServers: {
+          adjutant: { type: "http", url: "http://localhost:4201/mcp", headers: { "X-Agent-Id": id, "X-Project-Root": root } },
+        },
+      });
+
+    it("returns null (no change) when X-Agent-Id and X-Project-Root are already good literals", () => {
+      expect(repairMcpIdentityHeader(literal("fenix", "/p/worktrees/fenix"), "fenix", "/p/worktrees/fenix")).toBeNull();
+    });
+
+    it("repairs a ${...} X-Agent-Id to the literal callsign", () => {
+      const out = repairMcpIdentityHeader(literal("${ADJUTANT_AGENT_ID:-unknown}", "/p/worktrees/fenix"), "fenix", "/p/worktrees/fenix");
+      expect(out).not.toBeNull();
+      expect(JSON.parse(out!).mcpServers.adjutant.headers["X-Agent-Id"]).toBe("fenix");
+    });
+
+    it("repairs when the headers object is entirely absent", () => {
+      const existing = JSON.stringify({ mcpServers: { adjutant: { type: "http", url: "u" } } });
+      const out = repairMcpIdentityHeader(existing, "raynor", "/p/worktrees/raynor");
+      expect(out).not.toBeNull();
+      const h = JSON.parse(out!).mcpServers.adjutant.headers;
+      expect(h["X-Agent-Id"]).toBe("raynor");
+      expect(h["X-Project-Root"]).toBe("/p/worktrees/raynor");
+    });
+
+    it("preserves a good literal X-Agent-Id while repairing only a fragile X-Project-Root", () => {
+      const out = repairMcpIdentityHeader(literal("hand-tuned", "${ADJUTANT_PROJECT_ROOT:-}"), "swann", "/p/worktrees/swann");
+      expect(out).not.toBeNull();
+      const h = JSON.parse(out!).mcpServers.adjutant.headers;
+      expect(h["X-Agent-Id"]).toBe("hand-tuned"); // untouched
+      expect(h["X-Project-Root"]).toBe("/p/worktrees/swann"); // repaired
+    });
+
+    it("returns a fresh literal config for malformed JSON", () => {
+      const out = repairMcpIdentityHeader("{ broken", "nova", "/p/worktrees/nova");
+      expect(out).not.toBeNull();
+      expect(JSON.parse(out!).mcpServers.adjutant.headers["X-Agent-Id"]).toBe("nova");
+    });
+
+    it("returns null when there is no adjutant server entry to repair", () => {
+      expect(repairMcpIdentityHeader(JSON.stringify({ mcpServers: { other: {} } }), "x", "/p/worktrees/x")).toBeNull();
     });
   });
 
