@@ -8,8 +8,10 @@ struct MainTabView: View {
     @EnvironmentObject private var dependencyContainer: DependencyContainer
     @Environment(\.crtTheme) private var theme
     @ObservedObject private var appState = AppState.shared
-    /// The Bridge — presents the full-screen Adjutant avatar (triggered by the LIVE tab button).
-    @State private var showAvatar = false
+    /// The app-root Bridge host (adj-207.1.2). The LIVE button opens the Bridge
+    /// through it, so the avatar surface is mounted above the tab bar and
+    /// survives navigation — replacing the old full-screen `fullScreenCover`.
+    var bridgeHost: BridgeHost?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,13 +30,8 @@ struct MainTabView: View {
                 selectedTab: $coordinator.selectedTab,
                 unreadCount: appState.unreadMailCount,
                 visibleTabs: AppTab.allCases.filter { $0 != .projects },
-                onLive: { showAvatar = true }
+                onLive: { bridgeHost?.open() }
             )
-        }
-        .fullScreenCover(isPresented: $showAvatar) {
-            AvatarOverlayView(apiBaseURL: AppState.shared.apiBaseURL) {
-                showAvatar = false
-            }
         }
         .background(theme.background.screen)
         .environmentObject(coordinator)
