@@ -207,20 +207,40 @@ final class BridgeSession {
     private let surface: BridgeSurface
     private let connectTimeout: BridgeConnectTimeout?
 
+    /// Optional background-audio coordinator (adj-207.3.2). When present, lifecycle
+    /// transitions drive it: going live / backgrounding starts background audio;
+    /// closing (or failing) stops it. `nil` for the foundational state-machine
+    /// tests, which don't exercise audio. The pure reducer is deliberately NOT
+    /// aware of audio — the hook lives in `dispatch` so the reducer's effect
+    /// contract is unchanged.
+    private let audio: BridgeAudioControlling?
+
     /// - Parameters:
     ///   - surface: the avatar surface the session owns and drives.
     ///   - connectTimeout: optional watchdog that fails the session if it never
     ///     reaches `live` (adj-207.1.8). Defaults to `nil` (no timeout) so pure
     ///     state tests are timer-free; production (`BridgeHost`) injects a real one.
-    init(surface: BridgeSurface, connectTimeout: BridgeConnectTimeout? = nil) {
+    ///   - audio: optional background-audio coordinator (adj-207.3.2); `nil` in the
+    ///     pure state tests, a real `BridgeAudioSession` in production.
+    init(
+        surface: BridgeSurface,
+        connectTimeout: BridgeConnectTimeout? = nil,
+        audio: BridgeAudioControlling? = nil
+    ) {
         self.surface = surface
         self.connectTimeout = connectTimeout
+        self.audio = audio
         // Wire the surface's load/connect + failure signals to the machine so the
         // session actually reaches LIVE in production (adj-207.1.5) and drops to
         // `failed` on a broken load (adj-207.1.8).
         surface.onReady = { [weak self] in self?.markConnected() }
         surface.onFailure = { [weak self] in self?.markFailed() }
     }
+
+    /// True when the background audio session has degraded to listen-only (mic
+    /// dropped). Surfaced for the SwiftUI listen-only indicator; `false` when there
+    /// is no audio coordinator.
+    var isListenOnly: Bool { audio?.isListenOnly ?? false }
 
     /// True while a session exists in a connecting/live/backgrounded state.
     var isActive: Bool {
@@ -275,6 +295,7 @@ final class BridgeSession {
             apply(effect)
         }
         updateConnectWatchdog(from: previous, to: state)
+        applyAudioTransition(from: previous, to: state)
     }
 
     /// Arm the connect watchdog on entering `connecting`; disarm it the moment we
@@ -286,6 +307,28 @@ final class BridgeSession {
             connectTimeout?.start { [weak self] in self?.markFailed() }
         } else if previous == .connecting {
             connectTimeout?.cancel()
+        }
+    }
+
+    /// Background-audio hook (adj-207.3.2). Runs AFTER the pure reducer so the
+    /// reducer stays audio-agnostic. Only real state changes drive audio:
+    ///   - → `.live` (go-live, or restore on foreground): start/keep audio active.
+    ///   - → `.backgrounded`: re-assert background audio so voice continues while
+    ///     the app is backgrounded (the WKWebView surface is left alive — never
+    ///     hidden or torn down — so its audio path keeps running).
+    ///   - → `.closed` / `.failed`: stop the audio session (the surface is torn
+    ///     down in both, so there is no live avatar audio to keep alive).
+    /// A no-op focus (open while already active) does not change state, so it never
+    /// restarts audio.
+    private func applyAudioTransition(from old: BridgeSessionState, to new: BridgeSessionState) {
+        guard let audio, old != new else { return }
+        switch new {
+        case .live, .backgrounded:
+            audio.startBackgroundAudio()
+        case .closed, .failed:
+            audio.stopBackgroundAudio()
+        case .idle, .connecting:
+            break
         }
     }
 
