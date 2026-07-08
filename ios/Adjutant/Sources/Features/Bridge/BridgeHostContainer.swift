@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Host model
 
@@ -23,9 +24,27 @@ final class BridgeHost {
     /// The reusable Phase-A web surface the session drives and the host renders.
     let webSurface: BridgeWebSurface
 
+    /// The US1 floating-window model (mode / frame / drag / resize / pill),
+    /// owned here so window geometry persists above navigation alongside the
+    /// session. Its controls route through the same single `session`.
+    let windowModel: BridgeFloatingWindowModel
+
     init(webSurface: BridgeWebSurface) {
+        let session = BridgeSession(surface: webSurface)
         self.webSurface = webSurface
-        self.session = BridgeSession(surface: webSurface)
+        self.session = session
+
+        // Seed a sensible initial layout from the current screen so the default
+        // floating frame is reasonable before the first GeometryReader sync.
+        let screen = UIScreen.main.bounds.size
+        let layout = BridgeWindowLayout(
+            containerSize: screen,
+            safeAreaInsets: BridgeWindowInsets(top: 47, leading: 0, bottom: 34, trailing: 0)
+        )
+        self.windowModel = BridgeFloatingWindowModel(
+            state: BridgeWindowState(layout: layout),
+            controls: BridgeSessionWindowControls(session: session)
+        )
     }
 
     /// Convenience: a default host wired to the dashboard origin's `/avatar` page.
@@ -88,24 +107,11 @@ struct BridgeHostContainer<Content: View>: View {
             content
 
             if host.isSurfaceMounted {
-                ZStack(alignment: .topTrailing) {
-                    Color.black.ignoresSafeArea()
-
+                // US1 (adj-207.2): the draggable / resizable / minimize-to-pill
+                // floating window, hosting the persistent avatar surface. Mounted
+                // here in the app-root ZStack so it floats above navigated content.
+                BridgeFloatingWindowView(model: host.windowModel) {
                     AvatarSurfaceView(surface: host.webSurface)
-                        .ignoresSafeArea()
-
-                    // Minimal foundational chrome — US1 (adj-207.2) replaces this
-                    // with the draggable/resizable floating window + pill.
-                    Button {
-                        host.close()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 30, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.92))
-                            .shadow(radius: 4)
-                            .padding(16)
-                    }
-                    .accessibilityLabel("Close Adjutant")
                 }
                 .transition(.opacity)
             }
