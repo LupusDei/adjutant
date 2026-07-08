@@ -29,13 +29,25 @@ final class BridgeHost {
     /// session. Its controls route through the same single `session`.
     let windowModel: BridgeFloatingWindowModel
 
-    /// - Parameter connectTimeout: watchdog that fails the session if a connect
-    ///   never reaches LIVE (adj-207.1.8). Pass `nil` to disable (unit tests);
-    ///   production passes a real 20s timeout. Explicit (no default) because a
-    ///   `@MainActor` default-argument value can't be built in this context.
-    init(webSurface: BridgeWebSurface, connectTimeout: BridgeConnectTimeout?) {
-        let session = BridgeSession(surface: webSurface, connectTimeout: connectTimeout)
+    /// The background-audio coordinator, when wired (production). `nil` in the
+    /// foundational host tests, which don't exercise audio.
+    let audio: BridgeAudioControlling?
+
+    /// - Parameters:
+    ///   - connectTimeout: watchdog that fails the session if a connect never
+    ///     reaches LIVE (adj-207.1.8). Pass `nil` to disable (unit tests);
+    ///     production passes a real 20s timeout. Explicit (no default) because a
+    ///     `@MainActor` default-argument value can't be built in this context.
+    ///   - audio: background-audio coordinator (adj-207.3.2); `nil` in the
+    ///     foundational host tests, a real `BridgeAudioSession` in production.
+    init(
+        webSurface: BridgeWebSurface,
+        connectTimeout: BridgeConnectTimeout?,
+        audio: BridgeAudioControlling? = nil
+    ) {
+        let session = BridgeSession(surface: webSurface, connectTimeout: connectTimeout, audio: audio)
         self.webSurface = webSurface
+        self.audio = audio
         self.session = session
 
         // Seed a sensible initial layout from the current screen so the default
@@ -52,11 +64,13 @@ final class BridgeHost {
     }
 
     /// Convenience: a default production host wired to the dashboard origin's
-    /// `/avatar` page, with a real connect watchdog (adj-207.1.8).
+    /// `/avatar` page, with a real connect watchdog (adj-207.1.8) AND a real
+    /// background-audio session (adj-207.3.2) so voice continues when backgrounded.
     convenience init(apiBaseURL: URL) {
         self.init(
             webSurface: BridgeWebSurface.makeDefault(url: Self.avatarURL(from: apiBaseURL)),
-            connectTimeout: RealBridgeConnectTimeout()
+            connectTimeout: RealBridgeConnectTimeout(),
+            audio: BridgeAudioSession.makeDefault()
         )
     }
 
@@ -77,6 +91,26 @@ final class BridgeHost {
     func close() { session.close() }
     func show() { session.show() }
     func hide() { session.hide() }
+
+    /// True when background audio has degraded to listen-only (mic dropped) — drives
+    /// the listen-only indicator (adj-207.3.2).
+    var isListenOnly: Bool { session.isListenOnly }
+
+    /// Route SwiftUI `scenePhase` changes into the session's background/foreground
+    /// hooks (adj-207.3.2). Backgrounding a LIVE Bridge activates background audio
+    /// and keeps the avatar audio path alive; returning to `.active` restores it.
+    /// Guards on the current state so `.inactive` blips and non-live sessions are
+    /// no-ops (the single-session invariant holds).
+    func handleScenePhase(_ phase: ScenePhase) {
+        switch phase {
+        case .background:
+            if session.state == .live { session.enterBackground() }
+        case .active:
+            if session.state == .backgrounded { session.enterForeground() }
+        default:
+            break
+        }
+    }
 
     /// Hook the host container calls when the underlying navigated content
     /// changes. It is intentionally a NO-OP on the surface: the whole point of
@@ -103,6 +137,7 @@ final class BridgeHost {
 /// no session is active the overlay is absent (zero cost).
 struct BridgeHostContainer<Content: View>: View {
     @State private var host: BridgeHost
+    @Environment(\.scenePhase) private var scenePhase
     private let content: Content
 
     init(host: BridgeHost, @ViewBuilder content: () -> Content) {
@@ -119,10 +154,39 @@ struct BridgeHostContainer<Content: View>: View {
                 // floating window, hosting the persistent avatar surface. Mounted
                 // here in the app-root ZStack so it floats above navigated content.
                 BridgeFloatingWindowView(model: host.windowModel) {
+                    // US1 (adj-207.2) owns the window chrome (drag/resize/pill/
+                    // close) via `windowModel`. US2 (adj-207.3) overlays the
+                    // listen-only indicator on the avatar so a background mic
+                    // degrade is visible inside the floating window.
                     AvatarSurfaceView(surface: host.webSurface)
+                        .overlay(alignment: .top) {
+                            if host.isListenOnly {
+                                listenOnlyIndicator
+                            }
+                        }
                 }
                 .transition(.opacity)
             }
         }
+        // Route app foreground/background into the Bridge session so voice
+        // continues while backgrounded (adj-207.3.2).
+        .onChange(of: scenePhase) { _, newPhase in
+            host.handleScenePhase(newPhase)
+        }
+    }
+
+    /// Listen-only indicator (adj-207.3.2): shown when background full-duplex mic
+    /// degrades to playback-only, so the degrade is visible — not a silent failure.
+    private var listenOnlyIndicator: some View {
+        Label("LISTEN-ONLY", systemImage: "mic.slash.fill")
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(.orange.opacity(0.85), in: Capsule())
+            .padding(.top, 18)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .allowsHitTesting(false)
+            .accessibilityLabel("Bridge is listen-only; microphone paused")
     }
 }
