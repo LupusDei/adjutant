@@ -234,7 +234,15 @@ export function createBridgeToolBridge(deps: BridgeToolDeps): BridgeToolBridge {
   async function executeTool(req: BridgeToolRequest): Promise<BridgeToolResult> {
     const tool = req.tool;
     const projectId = req.projectId ?? null;
-    const args = req.args ?? {};
+    // GWM-1 (the avatar's model) represents an UNSET optional param as JSON `null`, but the per-tool
+    // zod schemas use `.optional()` (string|undefined) which REJECTS null → the whole call fails
+    // INVALID_ARGS (e.g. list_beads with assignee=null). Treat null as "unset" for EVERY tool by
+    // stripping null-valued keys before validation, so the avatar never has to omit a field exactly.
+    const rawArgs = req.args ?? {};
+    const args: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(rawArgs)) {
+      if (v !== null) args[k] = v;
+    }
 
     // ---- Whitelist enforcement (fail-closed) ----
     if (!isAllowed(tool)) {

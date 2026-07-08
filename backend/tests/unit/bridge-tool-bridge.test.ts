@@ -442,6 +442,30 @@ describe("list_beads", () => {
     }
   });
 
+  it("tolerates JSON null for unset optional args (regression: avatar sends assignee=null) — adj-x6qln", async () => {
+    // GWM-1 sends unset optionals as null; .optional() schemas reject null → INVALID_ARGS. The
+    // Commander's exact call (assignee=null, status=open, type=task) must now succeed.
+    mockExecBd.mockResolvedValue({ success: true, exitCode: 0, data: REAL_BD_LIST_OUTPUT });
+
+    const bridge = createBridgeToolBridge(makeDeps());
+    const res = await bridge.executeTool({
+      tool: "list_beads",
+      projectId: PROJECT_ID,
+      args: { assignee: null, status: "open", type: "task", project: null } as unknown as Record<string, unknown>,
+    });
+
+    expect(res.ok).toBe(true); // NOT an INVALID_ARGS rejection
+    // null assignee is treated as unset → no --assignee flag passed to bd
+    expect(mockExecBd).toHaveBeenCalledWith(
+      expect.not.arrayContaining(["--assignee"]),
+      expect.anything(),
+    );
+    expect(mockExecBd).toHaveBeenCalledWith(
+      expect.arrayContaining(["--status", "open", "--type", "task"]),
+      expect.anything(),
+    );
+  });
+
   it("throws-path: an execBd rejection is caught and returned as TOOL_FAILED", async () => {
     mockExecBd.mockRejectedValue(new Error("dolt server unreachable"));
     const bridge = createBridgeToolBridge(makeDeps());
