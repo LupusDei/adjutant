@@ -20,6 +20,7 @@ final class AvatarSurfaceReuseTests: XCTestCase {
     private final class SpyAvatarWebEngine: AvatarWebEngine {
         private(set) var loadedURLs: [URL] = []
         private(set) var setHiddenLog: [Bool] = []
+        private(set) var setMicEnabledLog: [Bool] = []
         private(set) var teardownCount = 0
         var isHidden: Bool { setHiddenLog.last ?? true }
         var onReady: (() -> Void)?
@@ -27,6 +28,7 @@ final class AvatarSurfaceReuseTests: XCTestCase {
 
         func load(_ url: URL) { loadedURLs.append(url) }
         func setHidden(_ hidden: Bool) { setHiddenLog.append(hidden) }
+        func setMicEnabled(_ enabled: Bool) { setMicEnabledLog.append(enabled) }
         func teardown() { teardownCount += 1 }
     }
 
@@ -127,6 +129,23 @@ final class AvatarSurfaceReuseTests: XCTestCase {
         surface.prepare()
         XCTAssertEqual(factory.makeCount, 2, "re-prepare after teardown builds a new engine")
         XCTAssertEqual(factory.madeEngines[1].loadedURLs, [url])
+    }
+
+    // MARK: - Mic mute forwards to the engine (adj-207.2.10)
+
+    func testSetMicEnabledForwardsToEngine() {
+        let (surface, factory) = makeSurface()
+        surface.prepare()
+        surface.setMicEnabled(false)
+        surface.setMicEnabled(true)
+        XCTAssertEqual(factory.madeEngines[0].setMicEnabledLog, [false, true],
+                       "mute command must reach the engine (→ /avatar page mic)")
+    }
+
+    func testSetMicEnabledBeforePrepareIsSafeNoOp() {
+        let (surface, factory) = makeSurface()
+        surface.setMicEnabled(false)
+        XCTAssertEqual(factory.makeCount, 0, "no engine to mute before prepare — safe no-op")
     }
 
     // MARK: - Idempotent visibility before prepare

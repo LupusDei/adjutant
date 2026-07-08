@@ -173,6 +173,7 @@ final class BridgeBackgroundAudioTests: XCTestCase {
         var onFailure: (() -> Void)?
         func load(_ url: URL) {}
         func setHidden(_ hidden: Bool) {}
+        func setMicEnabled(_ enabled: Bool) {}
         func teardown() {}
     }
 

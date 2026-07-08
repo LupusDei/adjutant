@@ -605,7 +605,11 @@ const AVATAR_PAGE_HTML = `<!DOCTYPE html>
       const shareRef = React.useRef(isScreenShareEnabled); shareRef.current = isScreenShareEnabled;
 
       React.useEffect(() => {
-        if (!external) return;
+        // Honor mic/camera/screenshare COMMANDS in BOTH modes: the dashboard
+        // iframe (external) AND the iOS top-level page, whose native floating-window
+        // Mute posts a same-origin bridge:mic message (adj-207.2.10). toggleMic/
+        // toggleCamera/toggleScreenShare exist in both modes; the same-origin check
+        // below keeps it safe. Outbound echoes below stay external-only.
         const onMsg = (ev) => {
           if (ev.origin !== location.origin) return;
           const d = ev.data;
