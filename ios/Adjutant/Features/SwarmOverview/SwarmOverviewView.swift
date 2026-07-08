@@ -88,8 +88,8 @@ struct SwarmOverviewView: View {
     private var bridgeWarmStatusLine: some View {
         let dotColor: Color = {
             switch viewModel.bridgeWarmState {
-            case .ready:   return theme.colorPalette.green
-            case .warming: return theme.colorPalette.yellow
+            case .ready:   return theme.colorPalette?.green ?? theme.bright
+            case .warming: return theme.colorPalette?.yellow ?? CRTTheme.State.warning
             case .idle, .unknown: return theme.dim
             }
         }()
