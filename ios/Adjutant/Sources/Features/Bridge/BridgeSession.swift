@@ -13,12 +13,20 @@ import Foundation
 ///   - `prepare()` — create/connect the surface exactly once per live session.
 ///   - `show()` / `hide()` — toggle visibility WITHOUT reloading or reconnecting.
 ///   - `teardown()` — destroy the surface and release the underlying stream.
+///   - `onReady` — the surface fires this when it has actually loaded/connected
+///     (WKWebView navigation-finished in Phase A); the session wires it to
+///     `markConnected()` so open → connecting → LIVE completes (adj-207.1.5).
+///   - `onFailure` — the surface fires this when the load fails
+///     (navigation-failed); the session wires it to `markFailed()` so a broken
+///     `/avatar` load does not hang on a black "connecting" screen (adj-207.1.8).
 @MainActor
 protocol BridgeSurface: AnyObject {
     func prepare()
     func show()
     func hide()
     func teardown()
+    var onReady: (() -> Void)? { get set }
+    var onFailure: (() -> Void)? { get set }
 }
 
 // MARK: - State
@@ -28,13 +36,17 @@ protocol BridgeSurface: AnyObject {
 /// `idle → connecting → live → backgrounded → closed`. `backgrounded` is a live
 /// session whose app has been backgrounded (audio continues, Phase A); it returns
 /// to `live` on foreground. `closed` is terminal for a given run — re-opening
-/// starts a fresh `connecting` cycle.
+/// starts a fresh `connecting` cycle. `failed` is a dead-end that the surface load
+/// failing (or a connect timeout) drops into instead of hanging on a black
+/// "connecting" screen (adj-207.1.8); it offers `retry()` (→ connecting) or
+/// `close()`.
 enum BridgeSessionState: Equatable, Sendable {
     case idle
     case connecting
     case live
     case backgrounded
     case closed
+    case failed
 }
 
 // MARK: - Events & effects
@@ -48,6 +60,10 @@ enum BridgeSessionEvent: Equatable, Sendable {
     case show
     case hide
     case close
+    /// The surface load failed or the connect timed out (adj-207.1.8).
+    case failed
+    /// Re-attempt a fresh connection from the `failed` state (adj-207.1.8).
+    case retry
 }
 
 /// Side effects the reducer asks the session to apply to its surface. Keeping
@@ -75,8 +91,9 @@ enum BridgeSessionReducer {
         _ event: BridgeSessionEvent
     ) -> (state: BridgeSessionState, effects: [BridgeSessionEffect]) {
         switch (state, event) {
-        // Open a brand-new session (from a cold or previously-closed machine).
-        case (.idle, .open), (.closed, .open):
+        // Open a brand-new session (from a cold, closed, or failed machine — a
+        // failed session's surface is already torn down, so `open` = a clean retry).
+        case (.idle, .open), (.closed, .open), (.failed, .open):
             return (.connecting, [.prepareSurface])
 
         // Single-instance guard: opening while ANY active session exists is a
@@ -106,10 +123,60 @@ enum BridgeSessionReducer {
         case (.connecting, .close), (.live, .close), (.backgrounded, .close):
             return (.closed, [.teardownSurface])
 
+        // Failure (load-fail or connect timeout) from any live/connecting state:
+        // tear the surface down (so a retry is clean) and land in `failed`
+        // instead of hanging on a black "connecting" screen (adj-207.1.8).
+        case (.connecting, .failed), (.live, .failed), (.backgrounded, .failed):
+            return (.failed, [.teardownSurface])
+
+        // Recover from a failure: retry re-provisions a fresh surface; close ends
+        // it (the surface is already gone, so no second teardown).
+        case (.failed, .retry):
+            return (.connecting, [.prepareSurface])
+        case (.failed, .close):
+            return (.closed, [])
+
         // Everything else (illegal / idempotent) is inert.
         default:
             return (state, [])
         }
+    }
+}
+
+// MARK: - Connect timeout seam
+
+/// Schedules a single "connect took too long" callback, cancellable, injected so
+/// the timeout→failed path is unit-testable without waiting on wall-clock time
+/// (adj-207.1.8). Production uses `RealBridgeConnectTimeout`; tests drive a manual
+/// double.
+@MainActor
+protocol BridgeConnectTimeout: AnyObject {
+    /// (Re)start the timer. Replaces any pending callback.
+    func start(_ onTimeout: @escaping () -> Void)
+    /// Cancel a pending callback (connected, closed, or already failed).
+    func cancel()
+}
+
+/// Production connect timeout backed by a cancellable main-queue work item.
+@MainActor
+final class RealBridgeConnectTimeout: BridgeConnectTimeout {
+    private let seconds: TimeInterval
+    private var workItem: DispatchWorkItem?
+
+    init(seconds: TimeInterval = 20) {
+        self.seconds = seconds
+    }
+
+    func start(_ onTimeout: @escaping () -> Void) {
+        cancel()
+        let item = DispatchWorkItem { onTimeout() }
+        workItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: item)
+    }
+
+    func cancel() {
+        workItem?.cancel()
+        workItem = nil
     }
 }
 
@@ -138,9 +205,21 @@ final class BridgeSession {
     private(set) var focusRequestCount = 0
 
     private let surface: BridgeSurface
+    private let connectTimeout: BridgeConnectTimeout?
 
-    init(surface: BridgeSurface) {
+    /// - Parameters:
+    ///   - surface: the avatar surface the session owns and drives.
+    ///   - connectTimeout: optional watchdog that fails the session if it never
+    ///     reaches `live` (adj-207.1.8). Defaults to `nil` (no timeout) so pure
+    ///     state tests are timer-free; production (`BridgeHost`) injects a real one.
+    init(surface: BridgeSurface, connectTimeout: BridgeConnectTimeout? = nil) {
         self.surface = surface
+        self.connectTimeout = connectTimeout
+        // Wire the surface's load/connect + failure signals to the machine so the
+        // session actually reaches LIVE in production (adj-207.1.5) and drops to
+        // `failed` on a broken load (adj-207.1.8).
+        surface.onReady = { [weak self] in self?.markConnected() }
+        surface.onFailure = { [weak self] in self?.markFailed() }
     }
 
     /// True while a session exists in a connecting/live/backgrounded state.
@@ -148,7 +227,7 @@ final class BridgeSession {
         switch state {
         case .connecting, .live, .backgrounded:
             return true
-        case .idle, .closed:
+        case .idle, .closed, .failed:
             return false
         }
     }
@@ -179,13 +258,34 @@ final class BridgeSession {
     /// Close the Bridge, tearing the surface down exactly once. Idempotent.
     func close() { dispatch(.close) }
 
+    /// Fail the session (surface load error or connect timeout). Drops to `failed`
+    /// from any connecting/live state; inert otherwise (adj-207.1.8).
+    func markFailed() { dispatch(.failed) }
+
+    /// Retry a failed session — re-provisions a fresh surface (adj-207.1.8).
+    func retry() { dispatch(.retry) }
+
     // MARK: Machine
 
     private func dispatch(_ event: BridgeSessionEvent) {
+        let previous = state
         let result = BridgeSessionReducer.reduce(state, event)
         state = result.state
         for effect in result.effects {
             apply(effect)
+        }
+        updateConnectWatchdog(from: previous, to: state)
+    }
+
+    /// Arm the connect watchdog on entering `connecting`; disarm it the moment we
+    /// leave (LIVE, closed, or already failed) so it can only fire during an
+    /// in-flight connect (adj-207.1.8).
+    private func updateConnectWatchdog(from previous: BridgeSessionState, to current: BridgeSessionState) {
+        guard previous != current else { return }
+        if current == .connecting {
+            connectTimeout?.start { [weak self] in self?.markFailed() }
+        } else if previous == .connecting {
+            connectTimeout?.cancel()
         }
     }
 

@@ -21,6 +21,8 @@ final class BridgeHostContainerTests: XCTestCase {
         private(set) var loadCount = 0
         private(set) var teardownCount = 0
         var hidden = true
+        var onReady: (() -> Void)?
+        var onFailure: (() -> Void)?
         func load(_ url: URL) { loadCount += 1 }
         func setHidden(_ hidden: Bool) { self.hidden = hidden }
         func teardown() { teardownCount += 1 }
@@ -42,7 +44,9 @@ final class BridgeHostContainerTests: XCTestCase {
     private func makeHost() -> (BridgeHost, SpyEngineFactory) {
         let factory = SpyEngineFactory()
         let surface = BridgeWebSurface(url: url, engineFactory: { factory.make() })
-        return (BridgeHost(webSurface: surface), factory)
+        // No connect watchdog in these unit tests (avoid real timers); the
+        // timeout path is covered in BridgeSessionTests via a manual double.
+        return (BridgeHost(webSurface: surface, connectTimeout: nil), factory)
     }
 
     // MARK: - Mount state follows lifecycle

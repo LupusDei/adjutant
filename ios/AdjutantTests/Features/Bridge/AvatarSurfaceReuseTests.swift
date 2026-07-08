@@ -22,6 +22,8 @@ final class AvatarSurfaceReuseTests: XCTestCase {
         private(set) var setHiddenLog: [Bool] = []
         private(set) var teardownCount = 0
         var isHidden: Bool { setHiddenLog.last ?? true }
+        var onReady: (() -> Void)?
+        var onFailure: (() -> Void)?
 
         func load(_ url: URL) { loadedURLs.append(url) }
         func setHidden(_ hidden: Bool) { setHiddenLog.append(hidden) }

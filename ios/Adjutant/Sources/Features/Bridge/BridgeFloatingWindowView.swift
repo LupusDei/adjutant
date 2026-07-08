@@ -46,7 +46,7 @@ final class BridgeSessionWindowControls: BridgeWindowControlling {
         switch session.state {
         case .live, .backgrounded:
             return true
-        case .idle, .connecting, .closed:
+        case .idle, .connecting, .closed, .failed:
             return false
         }
     }

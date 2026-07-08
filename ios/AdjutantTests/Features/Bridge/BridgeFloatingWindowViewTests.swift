@@ -227,6 +227,8 @@ final class BridgeFloatingWindowViewTests: XCTestCase {
     // MARK: - Minimal surface double
 
     private final class NoopSurface: BridgeSurface {
+        var onReady: (() -> Void)?
+        var onFailure: (() -> Void)?
         func prepare() {}
         func show() {}
         func hide() {}
