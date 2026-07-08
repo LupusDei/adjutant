@@ -56,6 +56,10 @@ final class AvatarSampleBufferRenderer: NativeAvatarFrameSink {
     private(set) var droppedCount = 0
     private(set) var recoveryFlushCount = 0
 
+    /// Whether the very first frame has been enqueued (so we log the "first frame"
+    /// milestone once — the signal that PiP content is actually flowing, adj-207.5.3).
+    private var didLogFirstFrame = false
+
     init(
         display: SampleBufferDisplaying,
         makeSampleBuffer: @escaping @MainActor (NativeAvatarVideoFrame) -> CMSampleBuffer? =
@@ -83,6 +87,10 @@ final class AvatarSampleBufferRenderer: NativeAvatarFrameSink {
         }
         display.enqueue(sampleBuffer)
         enqueuedCount += 1
+        if !didLogFirstFrame {
+            didLogFirstFrame = true
+            bridgePiPLog.info("renderer: FIRST avatar frame enqueued to AVSampleBufferDisplayLayer")
+        }
     }
 
     func flush() {

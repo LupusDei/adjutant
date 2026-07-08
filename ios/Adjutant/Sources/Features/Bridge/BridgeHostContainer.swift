@@ -233,6 +233,13 @@ final class BridgeHost {
         pipCoordinator?.popOut()
     }
 
+    /// Visible PiP hand-off error, if any (adj-207.5.3) — so a failed pop-out shows a
+    /// banner instead of silently doing nothing. `nil` while healthy.
+    var pipError: String? { pipSurface?.lastError }
+
+    /// Dismiss the PiP error banner.
+    func dismissPiPError() { pipSurface?.clearError() }
+
     /// Hook the host container calls when the underlying navigated content
     /// changes. It is intentionally a NO-OP on the surface: the whole point of
     /// hoisting the host above navigation is that screen changes never touch the
@@ -296,6 +303,13 @@ struct BridgeHostContainer<Content: View>: View {
                                 listenOnlyIndicator
                             }
                         }
+                        // adj-207.5.3: a failed PiP hand-off shows a VISIBLE banner
+                        // instead of a silent no-op. Tap to dismiss.
+                        .overlay(alignment: .bottom) {
+                            if let error = host.pipError {
+                                pipErrorBanner(error)
+                            }
+                        }
                     // NB: the manual "pop out → PiP" control now lives IN the
                     // bottom control bar (adj-207.2.13), not a stranded top-corner
                     // overlay — see BridgeFloatingWindowView.fullscreenControlBar.
@@ -323,6 +337,28 @@ struct BridgeHostContainer<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .center)
             .allowsHitTesting(false)
             .accessibilityLabel("Bridge is listen-only; microphone paused")
+    }
+
+    /// PiP hand-off error banner (adj-207.5.3): a failed pop-out is never silent. Tap to
+    /// dismiss.
+    private func pipErrorBanner(_ message: String) -> some View {
+        Button {
+            host.dismissPiPError()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "pip.exit")
+                Text(message)
+                    .font(.system(size: 12, weight: .semibold))
+                    .multilineTextAlignment(.leading)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.red.opacity(0.9), in: RoundedRectangle(cornerRadius: 10))
+            .padding(10)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Picture in Picture error: \(message). Tap to dismiss.")
     }
 }
 

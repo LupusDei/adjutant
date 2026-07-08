@@ -23,6 +23,9 @@ protocol PictureInPictureControlling: AnyObject {
     var onDidStop: (() -> Void)? { get set }
     /// Fired when starting PiP fails.
     var onFailedToStart: ((Error) -> Void)? { get set }
+    /// Fired when `isPictureInPicturePossible` changes — so a start requested BEFORE
+    /// content was flowing can fire the moment PiP becomes possible (adj-207.5.3).
+    var onPossibleChanged: (() -> Void)? { get set }
     func startPictureInPicture()
     func stopPictureInPicture()
 }
@@ -66,19 +69,34 @@ final class BridgePiPController {
     /// simulator) that can't do PiP anyway (adj-207.5).
     static var isDevicePiPSupported: Bool { AVPictureInPictureController.isPictureInPictureSupported() }
 
+    /// True when a `start()` was requested but PiP was not yet possible (no frames /
+    /// layer off-screen). It fires automatically once PiP becomes possible, so a
+    /// hand-off isn't a silent no-op just because the request raced the first frame
+    /// (adj-207.5.3).
+    private(set) var isStartPending = false
+
     init(controller: PictureInPictureControlling?) {
         self.controller = controller
         controller?.onDidStart = { [weak self] in
+            self?.isStartPending = false
             self?.state = .active
+            bridgePiPLog.info("pip: did START")
             self?.onDidStart?()
         }
         controller?.onDidStop = { [weak self] in
+            self?.isStartPending = false
             self?.state = .inactive
+            bridgePiPLog.info("pip: did STOP")
             self?.onDidStop?()
         }
         controller?.onFailedToStart = { [weak self] error in
+            self?.isStartPending = false
             self?.state = .inactive
+            bridgePiPLog.error("pip: FAILED to start: \(error.localizedDescription, privacy: .public)")
             self?.onFailedToStart?(error)
+        }
+        controller?.onPossibleChanged = { [weak self] in
+            self?.startIfPendingAndPossible()
         }
     }
 
@@ -93,20 +111,50 @@ final class BridgePiPController {
     /// Whether a PiP window is currently active (OS truth).
     var isPiPActive: Bool { controller?.isPictureInPictureActive ?? false }
 
-    /// Enter system PiP. No-op (returns `false`) when PiP is unsupported, not currently
-    /// possible, or already active (single-window guard). Returns `true` when a start
-    /// was actually requested — the OS then drives `onDidStart` asynchronously.
+    /// Enter system PiP. Returns `true` when a start was actually requested. When PiP
+    /// is supported + not active but not YET possible (frames haven't flowed / layer
+    /// not on screen), the request is REMEMBERED (`isStartPending`) and fires
+    /// automatically once PiP becomes possible — so the hand-off is never a silent
+    /// no-op that just races the first frame (adj-207.5.3). No-op when unsupported or
+    /// already active.
     @discardableResult
     func start() -> Bool {
-        guard let controller else { return false }
-        guard controller.isPictureInPicturePossible else { return false }
+        guard let controller else {
+            bridgePiPLog.error("pip: start requested but PiP unsupported on this device")
+            return false
+        }
         guard !controller.isPictureInPictureActive else { return false }
-        controller.startPictureInPicture()
-        return true
+        if controller.isPictureInPicturePossible {
+            isStartPending = false
+            bridgePiPLog.info("pip: starting (possible=true)")
+            controller.startPictureInPicture()
+            return true
+        }
+        // Not possible yet — remember the intent; fire on the possibility change.
+        isStartPending = true
+        bridgePiPLog.info("pip: start deferred — PiP not possible yet (awaiting frames/onscreen)")
+        return false
     }
 
-    /// Leave system PiP (restore to the app). No-op when not active.
+    /// Cancel a deferred start (e.g. the hand-off was aborted). Idempotent.
+    func cancelPendingStart() { isStartPending = false }
+
+    /// Fired when PiP possibility changes: if a start was pending and PiP is now
+    /// possible, start it.
+    private func startIfPendingAndPossible() {
+        guard isStartPending, let controller,
+              controller.isPictureInPicturePossible,
+              !controller.isPictureInPictureActive
+        else { return }
+        isStartPending = false
+        bridgePiPLog.info("pip: possibility became true — starting deferred PiP")
+        controller.startPictureInPicture()
+    }
+
+    /// Leave system PiP (restore to the app). No-op when not active. Also clears any
+    /// pending start so an aborted hand-off doesn't later auto-enter PiP.
     func stop() {
+        isStartPending = false
         guard let controller, controller.isPictureInPictureActive else { return }
         controller.stopPictureInPicture()
     }
@@ -174,10 +222,14 @@ final class AVKitPiPController: NSObject, PictureInPictureControlling {
     var onDidStart: (() -> Void)?
     var onDidStop: (() -> Void)?
     var onFailedToStart: ((Error) -> Void)?
+    var onPossibleChanged: (() -> Void)?
 
     private let controller: AVPictureInPictureController
     /// Retained for the controller's lifetime (AVKit holds the delegate weakly).
     private let playbackDelegate: BridgePiPPlaybackDelegate
+    /// KVO on `isPictureInPicturePossible` so a deferred start can fire the moment PiP
+    /// becomes possible (frames flowing / layer on screen) — adj-207.5.3.
+    private var possibleObservation: NSKeyValueObservation?
 
     @MainActor
     init?(displayLayer: AVSampleBufferDisplayLayer) {
@@ -193,7 +245,14 @@ final class AVKitPiPController: NSObject, PictureInPictureControlling {
         controller.delegate = self
         // Keep the PiP button/first-frame available as soon as content flows.
         controller.canStartPictureInPictureAutomaticallyFromInline = true
+        possibleObservation = controller.observe(\.isPictureInPicturePossible, options: [.new]) { [weak self] ctrl, _ in
+            bridgePiPLog.info("pip: isPictureInPicturePossible=\(ctrl.isPictureInPicturePossible ? "true" : "false", privacy: .public)")
+            // KVO delivers on the main thread for AVKit UI properties.
+            MainActor.assumeIsolated { self?.onPossibleChanged?() }
+        }
     }
+
+    deinit { possibleObservation?.invalidate() }
 
     @MainActor var isPictureInPicturePossible: Bool { controller.isPictureInPicturePossible }
     @MainActor var isPictureInPictureActive: Bool { controller.isPictureInPictureActive }

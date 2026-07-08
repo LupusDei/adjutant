@@ -20,6 +20,7 @@ final class BridgePiPControllerTests: XCTestCase {
         var onDidStart: (() -> Void)?
         var onDidStop: (() -> Void)?
         var onFailedToStart: ((Error) -> Void)?
+        var onPossibleChanged: (() -> Void)?
 
         private(set) var startCount = 0
         private(set) var stopCount = 0
@@ -31,6 +32,8 @@ final class BridgePiPControllerTests: XCTestCase {
         func fireDidStart() { isPictureInPictureActive = true; onDidStart?() }
         func fireDidStop() { isPictureInPictureActive = false; onDidStop?() }
         func fireFailed(_ error: Error) { onFailedToStart?(error) }
+        /// Simulate PiP becoming possible (frames flowing / layer on screen).
+        func becomePossible() { isPictureInPicturePossible = true; onPossibleChanged?() }
     }
 
     private struct TestError: Error {}
@@ -141,5 +144,63 @@ final class BridgePiPControllerTests: XCTestCase {
 
         XCTAssertEqual(controller.state, .inactive)
         XCTAssertTrue(failed)
+    }
+
+    // MARK: - Start-when-possible (adj-207.5.3)
+
+    func testStartDefersWhenNotYetPossibleThenFiresWhenPossible() {
+        let spy = SpyPiP()
+        spy.isPictureInPicturePossible = false // frames not flowing yet
+        let controller = BridgePiPController(controller: spy)
+
+        let started = controller.start()
+
+        // Not started NOW, but the intent is remembered — NOT a silent no-op.
+        XCTAssertFalse(started)
+        XCTAssertEqual(spy.startCount, 0)
+        XCTAssertTrue(controller.isStartPending)
+
+        // Frames flow → PiP becomes possible → the deferred start fires automatically.
+        spy.becomePossible()
+        XCTAssertEqual(spy.startCount, 1)
+        XCTAssertFalse(controller.isStartPending)
+    }
+
+    func testPossibleChangeWithoutPendingStartDoesNothing() {
+        let spy = SpyPiP()
+        let controller = BridgePiPController(controller: spy)
+
+        spy.becomePossible() // no start was requested
+
+        XCTAssertEqual(spy.startCount, 0)
+        XCTAssertFalse(controller.isStartPending)
+    }
+
+    func testCancelPendingStartStopsDeferredStart() {
+        let spy = SpyPiP()
+        spy.isPictureInPicturePossible = false
+        let controller = BridgePiPController(controller: spy)
+
+        _ = controller.start()          // pending
+        XCTAssertTrue(controller.isStartPending)
+        controller.cancelPendingStart()
+        spy.becomePossible()            // must NOT start after cancel
+
+        XCTAssertEqual(spy.startCount, 0)
+        XCTAssertFalse(controller.isStartPending)
+    }
+
+    func testStopClearsPendingStart() {
+        let spy = SpyPiP()
+        spy.isPictureInPicturePossible = false
+        let controller = BridgePiPController(controller: spy)
+
+        _ = controller.start()          // pending
+        controller.stop()               // aborts the hand-off
+        spy.isPictureInPicturePossible = true
+        spy.becomePossible()
+
+        XCTAssertEqual(spy.startCount, 0, "a stopped hand-off never auto-enters PiP later")
+        XCTAssertFalse(controller.isStartPending)
     }
 }

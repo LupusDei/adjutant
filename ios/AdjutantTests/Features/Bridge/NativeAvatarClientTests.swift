@@ -245,4 +245,82 @@ final class NativeAvatarClientTests: XCTestCase {
         let url = HTTPNativeAvatarTokenProvider.nativeTokenURL(from: base)
         XCTAssertEqual(url.absoluteString, "http://host:4201/avatar/native-token")
     }
+
+    // MARK: - Connect timeout + failure reason (adj-207.5.3)
+
+    /// Manual watchdog double — captures the timeout callback so the test fires it
+    /// deterministically (no wall-clock).
+    private final class ManualTimeout: BridgeConnectTimeout {
+        private(set) var startCount = 0
+        private(set) var cancelCount = 0
+        private var onTimeout: (() -> Void)?
+        func start(_ onTimeout: @escaping () -> Void) { startCount += 1; self.onTimeout = onTimeout }
+        func cancel() { cancelCount += 1; onTimeout = nil }
+        func fire() { onTimeout?() }
+    }
+
+    private func makeClientWithTimeout(
+        result: Result<NativeAvatarCreds, NativeAvatarTokenError>,
+        room: SpyRoom,
+        timeout: ManualTimeout
+    ) -> NativeAvatarClient {
+        let provider = StubTokenProvider(result: result, calls: .init())
+        return NativeAvatarClient(tokenProvider: provider, room: room, connectTimeout: timeout)
+    }
+
+    func testConnectTimeoutFailsWithVisibleReasonWhenNoVideoTrack() async {
+        let room = SpyRoom()
+        let timeout = ManualTimeout()
+        let client = makeClientWithTimeout(result: .success(makeCreds()), room: room, timeout: timeout)
+
+        await client.start()          // joins room, stays .connecting (no video track fired)
+        XCTAssertEqual(client.state, .connecting)
+        XCTAssertEqual(timeout.startCount, 1, "watchdog armed on start")
+
+        timeout.fire()                // the avatar video never arrived
+
+        XCTAssertEqual(client.state, .failed)
+        XCTAssertNotNil(client.failureReason)
+        XCTAssertTrue(client.failureReason?.contains("timed out") == true,
+                      "reason surfaces the no-video timeout, not a silent hang")
+    }
+
+    func testTimeoutCanceledOnceLive() async {
+        let room = SpyRoom()
+        let timeout = ManualTimeout()
+        let client = makeClientWithTimeout(result: .success(makeCreds()), room: room, timeout: timeout)
+
+        await client.start()
+        room.fireVideoTrackReady()    // → live, watchdog canceled
+        XCTAssertEqual(client.state, .live)
+        XCTAssertGreaterThanOrEqual(timeout.cancelCount, 1)
+
+        timeout.fire()                // a late fire must NOT knock a live client to failed
+        XCTAssertEqual(client.state, .live)
+        XCTAssertNil(client.failureReason)
+    }
+
+    func testTokenFailureSetsHumanReadableFailureReason() async {
+        let room = SpyRoom()
+        let timeout = ManualTimeout()
+        let client = makeClientWithTimeout(result: .failure(.noActiveSession), room: room, timeout: timeout)
+
+        await client.start()
+
+        XCTAssertEqual(client.state, .failed)
+        XCTAssertEqual(client.failureReason, "no active Bridge session to attach to")
+        XCTAssertGreaterThanOrEqual(timeout.cancelCount, 1, "watchdog canceled on token failure")
+    }
+
+    func testConnectErrorSetsFailureReason() async {
+        let room = SpyRoom()
+        room.connectError = TestError()
+        let timeout = ManualTimeout()
+        let client = makeClientWithTimeout(result: .success(makeCreds()), room: room, timeout: timeout)
+
+        await client.start()
+
+        XCTAssertEqual(client.state, .failed)
+        XCTAssertTrue(client.failureReason?.contains("room join failed") == true)
+    }
 }

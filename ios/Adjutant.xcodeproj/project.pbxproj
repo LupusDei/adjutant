@@ -34,6 +34,7 @@
 		A0123456000000000000C132 /* BridgePiPControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0123457000000000000C132 /* BridgePiPControllerTests.swift */; };
 		A0123456000000000000C133 /* BridgePiPHandoffTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0123457000000000000C133 /* BridgePiPHandoffTests.swift */; };
 		A0123456000000000000C134 /* BridgePiPRestoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0123457000000000000C134 /* BridgePiPRestoreTests.swift */; };
+		A0123456000000000000C135 /* BridgePiPSurfaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0123457000000000000C135 /* BridgePiPSurfaceTests.swift */; };
 		A01234560000000000000020 /* AdjutantUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000020 /* AdjutantUITests.swift */; };
 		A01234560000000000000021 /* AdjutantUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000021 /* AdjutantUITestsLaunchTests.swift */; };
 		A01234560000000000000040 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01234570000000000000040 /* AppDelegate.swift */; };
@@ -112,6 +113,7 @@
 		A0123457000000000000C132 /* BridgePiPControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgePiPControllerTests.swift; sourceTree = "<group>"; };
 		A0123457000000000000C133 /* BridgePiPHandoffTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgePiPHandoffTests.swift; sourceTree = "<group>"; };
 		A0123457000000000000C134 /* BridgePiPRestoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgePiPRestoreTests.swift; sourceTree = "<group>"; };
+		A0123457000000000000C135 /* BridgePiPSurfaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgePiPSurfaceTests.swift; sourceTree = "<group>"; };
 		A0123457000000000000C106 /* ChatNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatNavigationTests.swift; sourceTree = "<group>"; };
 		A01234570000000000000020 /* AdjutantUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjutantUITests.swift; sourceTree = "<group>"; };
 		A01234570000000000000021 /* AdjutantUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjutantUITestsLaunchTests.swift; sourceTree = "<group>"; };
@@ -296,6 +298,7 @@
 				A0123457000000000000C132 /* BridgePiPControllerTests.swift */,
 				A0123457000000000000C133 /* BridgePiPHandoffTests.swift */,
 				A0123457000000000000C134 /* BridgePiPRestoreTests.swift */,
+				A0123457000000000000C135 /* BridgePiPSurfaceTests.swift */,
 			);
 			path = Bridge;
 			sourceTree = "<group>";
@@ -594,6 +597,7 @@
 				A0123456000000000000C132 /* BridgePiPControllerTests.swift in Sources */,
 				A0123456000000000000C133 /* BridgePiPHandoffTests.swift in Sources */,
 				A0123456000000000000C134 /* BridgePiPRestoreTests.swift in Sources */,
+				A0123456000000000000C135 /* BridgePiPSurfaceTests.swift in Sources */,
 				A0123456000000000000C106 /* ChatNavigationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
