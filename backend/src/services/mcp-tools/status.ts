@@ -17,6 +17,7 @@ import type { MessageStore } from "../message-store.js";
 import type { EventStore } from "../event-store.js";
 import { dmConversationId } from "../conversation-store.js";
 import { getEventBus } from "../event-bus.js";
+import type { AgentStatusStore } from "../agent-status-store.js";
 
 // ============================================================================
 // Types
@@ -38,6 +39,68 @@ export interface AgentStatus {
 
 const agentStatuses = new Map<string, AgentStatus>();
 
+/** Statuses that are valid to hydrate back into the typed in-memory Map. */
+const HYDRATABLE_STATUSES: ReadonlySet<AgentStatus["status"]> = new Set([
+  "working",
+  "blocked",
+  "idle",
+  "done",
+]);
+
+/**
+ * adj-pyhm4: optional write-through persistence for last-known status.
+ *
+ * The in-memory `agentStatuses` Map is wiped on every backend restart. When a
+ * store is wired (production boot), each status transition is mirrored to it so
+ * the roster can be hydrated on the next boot instead of showing a false
+ * all-idle state. Null in unit tests that don't exercise persistence.
+ */
+let persistentStore: AgentStatusStore | null = null;
+
+/**
+ * Wire (or clear) the persistence store. Called once at boot from index.ts.
+ * Passing null disables write-through (used by tests / reset).
+ */
+export function setAgentStatusStore(store: AgentStatusStore | null): void {
+  persistentStore = store;
+}
+
+/** Mirror a status transition into the persistent snapshot (best-effort). */
+function persistStatus(s: AgentStatus): void {
+  if (!persistentStore) return;
+  persistentStore.upsert({
+    agentId: s.agentId,
+    status: s.status,
+    currentTask: s.task,
+    beadId: s.beadId,
+    projectId: s.projectId,
+    updatedAt: s.updatedAt,
+  });
+}
+
+/**
+ * Populate the in-memory Map from the persistent snapshot on boot (adj-pyhm4).
+ * Rows with an unrecognized status value are skipped (keeps the Map typed).
+ * Returns the number of statuses hydrated. No-op when no store is wired.
+ */
+export function hydrateStatusesFromStore(): number {
+  if (!persistentStore) return 0;
+  let hydrated = 0;
+  for (const snap of persistentStore.getAll()) {
+    if (!HYDRATABLE_STATUSES.has(snap.status as AgentStatus["status"])) continue;
+    agentStatuses.set(snap.agentId, {
+      agentId: snap.agentId,
+      status: snap.status as AgentStatus["status"],
+      task: snap.currentTask,
+      beadId: snap.beadId,
+      projectId: snap.projectId,
+      updatedAt: snap.updatedAt,
+    });
+    hydrated++;
+  }
+  return hydrated;
+}
+
 /**
  * Get all current agent statuses.
  */
@@ -46,16 +109,22 @@ export function getAgentStatuses(): Map<string, AgentStatus> {
 }
 
 /**
- * Reset agent statuses (for testing).
+ * Reset agent statuses (for testing). Also detaches any persistence store so
+ * a store wired by one test never leaks write-through into the next.
  */
 export function resetAgentStatuses(): void {
   agentStatuses.clear();
+  persistentStore = null;
 }
 
 /**
- * Remove a disconnected agent's status entry.
+ * Remove a disconnected agent's LIVE status entry.
  * Called when an MCP agent disconnects to prevent stale status data
- * from persisting and being applied to future agent listings.
+ * from being applied as if the agent were live.
+ *
+ * adj-pyhm4: this intentionally does NOT remove the PERSISTENT snapshot — the
+ * whole point is to remember the last-known status across disconnects/restarts.
+ * Liveness is derived separately from the live MCP connection registry.
  */
 export function clearAgentStatus(agentId: string): void {
   agentStatuses.delete(agentId);
@@ -139,14 +208,18 @@ export function registerStatusTools(server: McpServer, store: MessageStore, even
       const resolvedTask = task ?? previous?.task;
       const resolvedBeadId = beadId ?? previous?.beadId;
 
-      agentStatuses.set(agentId, {
+      const snapshot: AgentStatus = {
         agentId,
         status,
         task: resolvedTask,
         beadId: resolvedBeadId,
         projectId,
         updatedAt: now,
-      });
+      };
+      agentStatuses.set(agentId, snapshot);
+      // adj-pyhm4: write-through to the persistent snapshot so this survives a
+      // backend restart. Single mutation point — do NOT scatter this elsewhere.
+      persistStatus(snapshot);
 
       // Sync to SessionBridge so /api/agents reflects this change
       syncToSessionBridge(agentId, status);

@@ -22,7 +22,8 @@ import { createUploadService } from "./services/upload-service.js";
 import { createUploadsRouter } from "./routes/uploads.js";
 import { registerMessagingTools } from "./services/mcp-tools/messaging.js";
 import { registerChannelTools } from "./services/mcp-tools/channels.js";
-import { registerStatusTools } from "./services/mcp-tools/status.js";
+import { registerStatusTools, setAgentStatusStore, hydrateStatusesFromStore } from "./services/mcp-tools/status.js";
+import { createAgentStatusStore } from "./services/agent-status-store.js";
 import { registerBeadTools } from "./services/mcp-tools/beads.js";
 import { registerQueryTools } from "./services/mcp-tools/queries.js";
 import { registerProposalTools } from "./services/mcp-tools/proposals.js";
@@ -116,6 +117,16 @@ migrateProposalProjectNames(messageDb);
 // on every startup after the first.
 backfillConversations(messageDb);
 const eventStore = createEventStore(messageDb);
+
+// adj-pyhm4: persist last-known agent status across backend restarts. Wire the
+// write-through store into the status tool, then hydrate the in-memory registry
+// from the snapshot so the roster shows real last-known status immediately
+// (instead of a false all-idle state) on every restart/redeploy.
+const agentStatusStore = createAgentStatusStore(messageDb);
+setAgentStatusStore(agentStatusStore);
+const hydratedCount = hydrateStatusesFromStore();
+logInfo(`Hydrated ${hydratedCount} agent status snapshot(s) from persistence`);
+
 const memoryStore = createMemoryStore(messageDb);
 const cronScheduleStore = new CronScheduleStore(messageDb);
 const autoDevelopStore = createAutoDevelopStore(messageDb);
