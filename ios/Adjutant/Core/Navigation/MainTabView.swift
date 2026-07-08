@@ -30,7 +30,12 @@ struct MainTabView: View {
                 selectedTab: $coordinator.selectedTab,
                 unreadCount: appState.unreadMailCount,
                 visibleTabs: AppTab.allCases.filter { $0 != .projects },
-                onLive: { bridgeHost?.open() }
+                // The LIVE tab is the single way in and out of the Bridge
+                // (adj-207.2.12): open cold, reveal when hidden, or minimize when
+                // shown. `isBridgeLive` drives the live indicator (glows even while
+                // the Bridge is minimized-to-hidden in the background).
+                onLive: { bridgeHost?.toggleFromLiveTab() },
+                isLive: bridgeHost?.isBridgeLive ?? false
             )
         }
         .background(theme.background.screen)
@@ -167,6 +172,9 @@ struct CRTTabBar: View {
     var visibleTabs: [AppTab] = AppTab.allCases
     /// Action for the central, prominent LIVE button (opens the Adjutant avatar). adj-202.
     var onLive: () -> Void = {}
+    /// Whether a Bridge session is currently live (incl. minimized-to-hidden) —
+    /// drives the LIVE button's live indicator (adj-207.2.12).
+    var isLive: Bool = false
 
     var body: some View {
         let mid = visibleTabs.count / 2
@@ -174,7 +182,7 @@ struct CRTTabBar: View {
             ForEach(Array(visibleTabs.prefix(mid))) { tab in
                 tabItem(tab)
             }
-            LiveTabButton(action: onLive)
+            LiveTabButton(action: onLive, isLive: isLive)
             ForEach(Array(visibleTabs.suffix(from: mid))) { tab in
                 tabItem(tab)
             }
@@ -224,7 +232,13 @@ struct CRTTabBar: View {
 /// the standard tab items, using the avatar's face (88×88 asset) as its icon.
 private struct LiveTabButton: View {
     @Environment(\.crtTheme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let action: () -> Void
+    /// A Bridge session is live (incl. minimized-to-hidden) — the button doubles
+    /// as the live indicator + the show/hide toggle (adj-207.2.12).
+    var isLive: Bool = false
+
+    @State private var pulse = false
 
     var body: some View {
         Button(action: action) {
@@ -234,20 +248,57 @@ private struct LiveTabButton: View {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 30, height: 30)
                     .clipShape(Circle())
-                    .overlay(Circle().stroke(theme.primary, lineWidth: 1.5))
-                    .crtGlow(color: theme.primary, radius: 6, intensity: 0.6)
+                    .overlay(
+                        // A brighter, thicker ring when live; a slow pulse draws the
+                        // eye (disabled under Reduce Motion — the ring alone signals).
+                        Circle().stroke(
+                            isLive ? CRTTheme.State.success : theme.primary,
+                            lineWidth: isLive ? 2.5 : 1.5
+                        )
+                    )
+                    .scaleEffect(isLive && !reduceMotion && pulse ? 1.06 : 1.0)
+                    .crtGlow(
+                        color: isLive ? CRTTheme.State.success : theme.primary,
+                        radius: isLive ? 9 : 6,
+                        intensity: isLive ? 0.85 : 0.6
+                    )
+                    // A non-color, non-motion live cue: a small "on air" dot badge.
+                    .overlay(alignment: .topTrailing) {
+                        if isLive {
+                            Circle()
+                                .fill(CRTTheme.State.success)
+                                .frame(width: 9, height: 9)
+                                .overlay(Circle().stroke(theme.background.panel, lineWidth: 1.5))
+                                .offset(x: 2, y: -2)
+                                .accessibilityHidden(true)
+                        }
+                    }
 
                 Text("LIVE")
                     .font(CRTTheme.Typography.font(size: 11, weight: .bold))
                     .tracking(CRTTheme.Typography.letterSpacing)
-                    .foregroundColor(theme.primary)
-                    .crtGlow(color: theme.primary, radius: 3, intensity: 0.5)
+                    .foregroundColor(isLive ? CRTTheme.State.success : theme.primary)
+                    .crtGlow(color: isLive ? CRTTheme.State.success : theme.primary, radius: 3, intensity: 0.5)
             }
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Live — talk to the Adjutant")
+        .accessibilityLabel(isLive
+            ? "Bridge is live — tap to show or hide"
+            : "Live — talk to the Adjutant")
+        .accessibilityAddTraits(isLive ? [.isButton, .isSelected] : .isButton)
+        .onAppear {
+            guard isLive, !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 1.3).repeatForever(autoreverses: true)) { pulse = true }
+        }
+        .onChange(of: isLive) { _, nowLive in
+            if nowLive, !reduceMotion {
+                withAnimation(.easeInOut(duration: 1.3).repeatForever(autoreverses: true)) { pulse = true }
+            } else {
+                pulse = false
+            }
+        }
     }
 }
 

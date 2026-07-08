@@ -271,40 +271,38 @@ final class BridgeWindowStateTests: XCTestCase {
         assertRect(state.currentFrame, saved)
     }
 
-    func testMinimizeToPillThenRestoreReturnsToFloatingFrame() {
+    func testMinimizeHidesThenRevealReturnsToFloatingFrame() {
+        // adj-207.2.12: minimize hides entirely (nothing floats); reveal returns
+        // to the exact prior floating frame.
         var state = BridgeWindowState(layout: makeLayout())
         state.enterFloating()
         state.setFloatingFrame(CGRect(x: 30, y: 120, width: 180, height: 240))
         let saved = state.currentFrame
-        state.minimizeToPill()
-        XCTAssertEqual(state.mode, .pill)
-        // Pill frame is the pill size, inside bounds.
-        XCTAssertEqual(state.currentFrame.width, 72, accuracy: 0.001)
-        XCTAssertEqual(state.currentFrame.height, 72, accuracy: 0.001)
-        state.restore()
-        XCTAssertEqual(state.mode, .floating)
+        state.minimize()
+        XCTAssertEqual(state.mode, .hidden)
+        XCTAssertTrue(state.isHidden)
+        state.reveal()
+        XCTAssertEqual(state.mode, .floating, "reveal returns to the last visible mode")
         assertRect(state.currentFrame, saved)
     }
 
-    func testMinimizeToPillPicksNearestCorner() {
-        var state = BridgeWindowState(layout: makeLayout())
-        state.enterFloating()
-        // Window hugging the top-left → pill should land top-leading.
-        state.setFloatingFrame(CGRect(x: 12, y: 56, width: 120, height: 160))
-        state.minimizeToPill()
-        let bounds = BridgeWindowGeometry.contentBounds(for: makeLayout())
-        XCTAssertEqual(state.currentFrame.minX, bounds.minX + 12, accuracy: 0.001, "pill hugs left")
-        XCTAssertEqual(state.currentFrame.minY, bounds.minY + 12, accuracy: 0.001, "pill hugs top")
+    func testMinimizeFromFullscreenRevealsToFullscreen() {
+        var state = BridgeWindowState(layout: makeLayout()) // default fullscreen
+        XCTAssertEqual(state.mode, .fullscreen)
+        state.minimize()
+        XCTAssertEqual(state.mode, .hidden)
+        state.reveal()
+        XCTAssertEqual(state.mode, .fullscreen, "reveal returns to fullscreen")
+        assertRect(state.currentFrame, CGRect(x: 0, y: 0, width: 400, height: 800))
     }
 
-    func testMinimizeToPillBottomRightWindowLandsBottomTrailing() {
+    func testMinimizeIsIdempotentAndKeepsLastVisibleMode() {
         var state = BridgeWindowState(layout: makeLayout())
         state.enterFloating()
-        state.setFloatingFrame(CGRect(x: 208, y: 500, width: 180, height: 240))
-        state.minimizeToPill()
-        let bounds = BridgeWindowGeometry.contentBounds(for: makeLayout())
-        XCTAssertEqual(state.currentFrame.maxX, bounds.maxX - 12, accuracy: 0.001, "pill hugs right")
-        XCTAssertEqual(state.currentFrame.maxY, bounds.maxY - 12, accuracy: 0.001, "pill hugs bottom")
+        state.minimize()
+        state.minimize() // second minimize must not overwrite lastVisibleMode with .hidden
+        state.reveal()
+        XCTAssertEqual(state.mode, .floating)
     }
 
     // MARK: - State: drag / resize plumb through to floating frame
