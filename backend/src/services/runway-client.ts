@@ -81,6 +81,25 @@ export interface RealtimeSessionRow {
   sessionKey?: string;
 }
 
+/**
+ * Raw LiveKit room-join credentials for an EXISTING realtime session (the `/connect_backend`
+ * response shape — adj-207.4.5). Unlike `sessionKey` (which the Runway JS SDK consumes), these
+ * are the LiveKit primitives a NATIVE LiveKit client uses directly: `room.connect(url, token)`.
+ * Runway mints a fresh participant token joining the SAME room, so an additional read-only
+ * subscriber can attach WITHOUT creating a second realtime session (no second upfront charge).
+ * This is the exact endpoint `@runwayml/avatars-node-rpc` uses to add its hidden RPC participant.
+ */
+export interface LiveKitConnectCreds {
+  /** LiveKit server URL, e.g. "wss://…". */
+  url: string;
+  /** Room-scoped LiveKit access token for THIS join. */
+  token: string;
+  /** The LiveKit room name backing the realtime session. */
+  roomName: string;
+  /** ISO timestamp of the session cap, when Runway reports it. */
+  expiresAt?: string;
+}
+
 /** Typed error for a non-2xx Runway response. Carries the HTTP status + truncated body. */
 export class RunwayApiError extends Error {
   readonly status: number;
@@ -137,6 +156,27 @@ export class RunwayClient {
     });
     if (!res.ok) throw new RunwayApiError("session fetch", res.status, await safeText(res));
     return (await res.json()) as RealtimeSessionRow;
+  }
+
+  /**
+   * Join an EXISTING realtime session's LiveKit room as an additional participant (adj-207.4.5).
+   * Returns the raw `{ url, token, roomName }` a native LiveKit client connects with. This does
+   * NOT create a new realtime session — it only mints a participant token for the current one, so
+   * a native read-only subscriber attaches with no second upfront credit charge. Same endpoint
+   * `@runwayml/avatars-node-rpc` uses to add its hidden RPC participant.
+   *
+   * NOTE: the exact path/response is verified against the node-rpc package's `/connect_backend`
+   * contract; confirm live at integration (see adj-207.4.5). The broker/route unit tests inject a
+   * fake so their correctness does not depend on this path.
+   */
+  async connectBackend(sessionId: string): Promise<LiveKitConnectCreds> {
+    const res = await this.doFetch(`${this.baseUrl}/realtime_sessions/${sessionId}/connect_backend`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new RunwayApiError("session connect_backend", res.status, await safeText(res));
+    return (await res.json()) as LiveKitConnectCreds;
   }
 
   private headers(): Record<string, string> {

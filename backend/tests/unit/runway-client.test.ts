@@ -171,3 +171,27 @@ describe("RunwayClient: configurability", () => {
     expect((init?.headers as Record<string, string>)["X-Runway-Version"]).toBe("2099-01-01");
   });
 });
+
+describe("RunwayClient: connectBackend (adj-207.4.5)", () => {
+  it("should POST the signed /connect_backend join for an EXISTING session and return LiveKit creds", async () => {
+    const creds = { url: "wss://livekit.runwayml.com/rtc", token: "lk_tok_abc", roomName: "rt_sess-1" };
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse(creds));
+    const client = new RunwayClient({ apiKey: "key_test", fetchImpl });
+
+    const out = await client.connectBackend("sess-1");
+    expect(out).toEqual(creds);
+
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(String(url)).toBe("https://api.dev.runwayml.com/v1/realtime_sessions/sess-1/connect_backend");
+    expect(init?.method).toBe("POST");
+    const headers = init?.headers as Record<string, string>;
+    expect(headers["Authorization"]).toBe("Bearer key_test");
+    expect(headers["X-Runway-Version"]).toBe("2024-11-06");
+  });
+
+  it("should throw a typed RunwayApiError on a non-2xx response (error path)", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({ error: "nope" }, 404));
+    const client = new RunwayClient({ apiKey: "key_test", fetchImpl });
+    await expect(client.connectBackend("gone")).rejects.toBeInstanceOf(RunwayApiError);
+  });
+});

@@ -146,6 +146,7 @@ function fakeReadyClient(): RunwaySessionApi & { createSpy: ReturnType<typeof vi
     createSpy,
     createRealtimeSession: createSpy,
     getRealtimeSession: async () => READY_ROW,
+    connectBackend: async (sessionId: string) => ({ url: "wss://lk", token: "t", roomName: `rt_${sessionId}` }),
   };
 }
 

@@ -31,6 +31,7 @@ import {
   type RealtimeSessionRow,
   type CreateRealtimeSessionInput,
   type RunwayRpcToolDef,
+  type LiveKitConnectCreds,
 } from "./runway-client.js";
 import { BridgeCostGuard } from "./bridge-cost-guard.js";
 
@@ -38,6 +39,8 @@ import { BridgeCostGuard } from "./bridge-cost-guard.js";
 export interface RunwaySessionApi {
   createRealtimeSession(input: CreateRealtimeSessionInput): Promise<RealtimeSessionRow>;
   getRealtimeSession(sessionId: string): Promise<RealtimeSessionRow>;
+  /** Mint LiveKit join creds for an EXISTING session (adj-207.4.5 — no new session). */
+  connectBackend(sessionId: string): Promise<LiveKitConnectCreds>;
 }
 
 /** One-shot, browser-safe credentials for a ready avatar session. Never carries the secret. */
@@ -46,6 +49,20 @@ export interface BridgeSessionCreds {
   sessionKey: string;
   avatarId: string;
   /** ISO timestamp of the ~5-min session cap; absent if Runway did not report one. */
+  expiresAt?: string;
+}
+
+/**
+ * Room-scoped LiveKit join creds for a READ-ONLY NATIVE consumer of an EXISTING avatar session
+ * (adj-207.4.5). The native iOS LiveKit client uses these to subscribe to the SAME avatar video
+ * track (for system PiP) without creating a second Runway session — no double credit burn.
+ * The Runway API secret is NEVER part of these creds; only the short-lived LiveKit `token` flows out.
+ */
+export interface NativeConsumerCreds {
+  sessionId: string;
+  roomName: string;
+  url: string;
+  token: string;
   expiresAt?: string;
 }
 
@@ -208,6 +225,28 @@ export class BridgeSessionBroker {
   async getSessionStatus(sessionId: string): Promise<string | undefined> {
     const row = await this.client.getRealtimeSession(sessionId);
     return row.status;
+  }
+
+  /**
+   * Mint room-scoped LiveKit join creds so a READ-ONLY NATIVE consumer can subscribe to an
+   * EXISTING avatar session's room (adj-207.4.5). Deliberately does NOT touch the cost guard or
+   * {@link startSession}: it only adds a participant to the current session's LiveKit room via
+   * Runway's `/connect_backend`, so NO second realtime session is created and NO second upfront
+   * credit is charged. The native client subscribes to the avatar video track (system PiP) and
+   * never publishes — read-only is a client-side contract (Runway owns the token grants).
+   *
+   * @throws if the session is unknown/ended or the connect_backend join fails — the route surfaces
+   *   that as a structured error.
+   */
+  async getNativeConsumerCreds(sessionId: string): Promise<NativeConsumerCreds> {
+    const creds = await this.client.connectBackend(sessionId);
+    return {
+      sessionId,
+      roomName: creds.roomName,
+      url: creds.url,
+      token: creds.token,
+      ...(creds.expiresAt ? { expiresAt: creds.expiresAt } : {}),
+    };
   }
 
   /** Milliseconds until the session's cap, or undefined when Runway reported no expiry. */
