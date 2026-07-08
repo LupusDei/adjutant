@@ -1,5 +1,11 @@
 import CoreVideo
 import Foundation
+import os
+
+/// Shared diagnostic log for the native PiP path (adj-207.5.3). Visible in the device
+/// Console under subsystem `com.adjutant.bridge` — so a device build TELLS us where the
+/// native connect / PiP hand-off breaks (token fetch, room join, track, frames, PiP).
+let bridgePiPLog = Logger(subsystem: "com.adjutant.bridge", category: "pip")
 
 // MARK: - Creds
 
@@ -138,6 +144,11 @@ final class NativeAvatarClient {
     /// until a token has been fetched.
     private(set) var creds: NativeAvatarCreds?
 
+    /// Human-readable reason the last connect FAILED (token error, room-join error, or
+    /// timeout waiting for the avatar video). Drives the visible PiP error surface
+    /// (adj-207.5.3) so a stuck connect is NEVER a silent no-op. `nil` while healthy.
+    private(set) var failureReason: String?
+
     /// Where the subscribed avatar frames are rendered. Assign the sample-buffer
     /// renderer (adj-207.4.3) before `start`; the client wires it to the room.
     weak var frameSink: NativeAvatarFrameSink?
@@ -145,9 +156,21 @@ final class NativeAvatarClient {
     private let tokenProvider: NativeAvatarTokenProviding
     private let room: NativeAvatarRoomConnecting
 
-    init(tokenProvider: NativeAvatarTokenProviding, room: NativeAvatarRoomConnecting) {
+    /// Watchdog that fails the join if the avatar video track never subscribes
+    /// (adj-207.5.3) — so a 2nd-subscriber that Runway never sends video to surfaces a
+    /// VISIBLE error instead of hanging in `.connecting` forever. Injected so the
+    /// timeout path is unit-testable without wall-clock time; `nil` disables it (pure
+    /// tests that drive the callbacks directly).
+    private let connectTimeout: BridgeConnectTimeout?
+
+    init(
+        tokenProvider: NativeAvatarTokenProviding,
+        room: NativeAvatarRoomConnecting,
+        connectTimeout: BridgeConnectTimeout? = nil
+    ) {
         self.tokenProvider = tokenProvider
         self.room = room
+        self.connectTimeout = connectTimeout
         room.onVideoTrackReady = { [weak self] in self?.handleVideoTrackReady() }
         room.onDisconnected = { [weak self] error in self?.handleDisconnected(error) }
     }
@@ -169,26 +192,32 @@ final class NativeAvatarClient {
             break
         }
 
+        failureReason = nil
         state = .connecting
+        // Arm the watchdog: if the avatar video never subscribes, fail VISIBLY
+        // instead of hanging in `.connecting` (adj-207.5.3).
+        connectTimeout?.start { [weak self] in self?.handleConnectTimeout() }
         // Wire the sink up-front so frames that arrive the instant the track
         // subscribes are not dropped.
         room.setFrameSink(frameSink)
 
         let fetched: NativeAvatarCreds
         do {
+            bridgePiPLog.info("native-token: fetching (sessionId=\(sessionId ?? "current", privacy: .public))")
             fetched = try await tokenProvider.fetchNativeToken(sessionId: sessionId)
         } catch {
-            room.setFrameSink(nil)
-            state = .failed
+            fail(reason: Self.describeTokenError(error))
             return
         }
         creds = fetched
+        bridgePiPLog.info("native-token: got creds room=\(fetched.roomName, privacy: .public) url=\(fetched.url, privacy: .public)")
 
         do {
+            bridgePiPLog.info("room: joining \(fetched.roomName, privacy: .public)")
             try await room.connect(url: fetched.url, token: fetched.token)
+            bridgePiPLog.info("room: joined \(fetched.roomName, privacy: .public) — awaiting avatar video track")
         } catch {
-            room.setFrameSink(nil)
-            state = .failed
+            fail(reason: "room join failed: \(error.localizedDescription)")
             return
         }
         // Connected — remain `.connecting` until `onVideoTrackReady` fires, so
@@ -197,6 +226,7 @@ final class NativeAvatarClient {
 
     /// Leave the room and detach the sink. Idempotent — safe to call when idle.
     func stop() async {
+        connectTimeout?.cancel()
         room.setFrameSink(nil)
         frameSink?.flush()
         await room.disconnect()
@@ -209,13 +239,54 @@ final class NativeAvatarClient {
         // Only a live connect (still connecting) transitions to live; a late
         // callback after stop/failure is ignored.
         guard state == .connecting else { return }
+        connectTimeout?.cancel()
+        bridgePiPLog.info("track: avatar video subscribed — client LIVE")
         state = .live
     }
 
     private func handleDisconnected(_ error: Error?) {
         // A local stop already moved us to `.disconnected`; don't overwrite.
         guard state == .connecting || state == .live else { return }
-        state = error == nil ? .disconnected : .failed
+        connectTimeout?.cancel()
+        if let error {
+            fail(reason: "disconnected: \(error.localizedDescription)")
+        } else {
+            state = .disconnected
+        }
+    }
+
+    /// Watchdog fired: the room joined but no avatar video track arrived in time — the
+    /// most likely real-device symptom of Runway not sending video to a 2nd subscriber
+    /// (adj-207.5.3). Fail VISIBLY so the PiP surface can tell the user + it's logged.
+    private func handleConnectTimeout() {
+        guard state == .connecting else { return }
+        fail(reason: "timed out waiting for the avatar video track (no video received)")
+    }
+
+    /// Central failure path: cancel the watchdog, detach the sink, record the reason,
+    /// log it, and land in `.failed`.
+    private func fail(reason: String) {
+        connectTimeout?.cancel()
+        room.setFrameSink(nil)
+        failureReason = reason
+        bridgePiPLog.error("native connect FAILED: \(reason, privacy: .public)")
+        state = .failed
+    }
+
+    /// Map a token-fetch error to a concise, user-facing reason.
+    private static func describeTokenError(_ error: Error) -> String {
+        switch error {
+        case NativeAvatarTokenError.noActiveSession:
+            return "no active Bridge session to attach to"
+        case NativeAvatarTokenError.unavailable:
+            return "native PiP is not configured on the server"
+        case NativeAvatarTokenError.badRequest:
+            return "bad native-token request"
+        case NativeAvatarTokenError.failed(let status):
+            return "native-token fetch failed (HTTP \(status.map(String.init) ?? "?"))"
+        default:
+            return "native-token fetch failed: \(error.localizedDescription)"
+        }
     }
 }
 
@@ -264,11 +335,17 @@ struct HTTPNativeAvatarTokenProvider: NativeAvatarTokenProviding {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
+            bridgePiPLog.error("native-token: transport error to \(endpoint.absoluteString, privacy: .public): \(error.localizedDescription, privacy: .public)")
             throw NativeAvatarTokenError.failed(status: nil)
         }
 
         guard let http = response as? HTTPURLResponse else {
+            bridgePiPLog.error("native-token: non-HTTP response from \(endpoint.absoluteString, privacy: .public)")
             throw NativeAvatarTokenError.failed(status: nil)
+        }
+        if http.statusCode != 200 {
+            let bodyText = String(data: data, encoding: .utf8) ?? ""
+            bridgePiPLog.error("native-token: HTTP \(http.statusCode) from \(endpoint.absoluteString, privacy: .public) body=\(bodyText, privacy: .public)")
         }
         switch http.statusCode {
         case 200:

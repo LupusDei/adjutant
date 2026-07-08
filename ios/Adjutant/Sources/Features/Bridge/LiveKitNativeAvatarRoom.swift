@@ -58,6 +58,7 @@ final class LiveKitNativeAvatarRoom: NSObject, NativeAvatarRoomConnecting {
 
     private func attachVideoTrack(_ track: RemoteVideoTrack) {
         guard renderer == nil else { return } // keep the first avatar video track only
+        bridgePiPLog.info("room: subscribed to remote avatar VIDEO track — attaching renderer")
         let sink = frameSink
         let renderer = FrameForwardingRenderer { frame in
             // Hop to the main actor to hand the frame to the sink (which drives an
@@ -82,7 +83,9 @@ extension LiveKitNativeAvatarRoom: RoomDelegate {
         didSubscribeTrack publication: RemoteTrackPublication
     ) {
         let track = publication.track
+        let kind = track is RemoteVideoTrack ? "video" : (track is RemoteAudioTrack ? "audio" : "other")
         Task { @MainActor in
+            bridgePiPLog.info("room: didSubscribeTrack kind=\(kind, privacy: .public) participant=\(String(describing: participant.identity), privacy: .public)")
             if let videoTrack = track as? RemoteVideoTrack {
                 self.attachVideoTrack(videoTrack)
             } else if track is RemoteAudioTrack {
@@ -94,12 +97,14 @@ extension LiveKitNativeAvatarRoom: RoomDelegate {
 
     nonisolated func room(_ room: Room, didDisconnectWithError error: LiveKitError?) {
         Task { @MainActor in
+            bridgePiPLog.error("room: disconnected error=\(error?.localizedDescription ?? "none", privacy: .public)")
             self.onDisconnected?(error)
         }
     }
 
     nonisolated func room(_ room: Room, didFailToConnectWithError error: LiveKitError?) {
         Task { @MainActor in
+            bridgePiPLog.error("room: failed to connect error=\(error?.localizedDescription ?? "unknown", privacy: .public)")
             self.onDisconnected?(error ?? LiveKitError(.network))
         }
     }
