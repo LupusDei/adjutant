@@ -117,6 +117,16 @@ final class BridgePiPSurface: BridgePiPHandoffTarget {
         Task { await client.stop() }
     }
 
+    /// Full teardown of the native side when the Bridge session CLOSES (adj-207.5):
+    /// leave PiP (if active) and drop the native LiveKit subscriber. Idempotent — safe
+    /// to call when nothing is active. The WKWebView surface + audio are torn down by
+    /// the session itself, so this only cleans up the Phase-B additions.
+    func teardown() {
+        wantsPiP = false
+        pip.stop()
+        Task { await client.stop() }
+    }
+
     // MARK: Internal
 
     /// The OS left PiP (foreground restore or the user closed the PiP window). Bring the

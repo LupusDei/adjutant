@@ -60,6 +60,12 @@ final class BridgePiPController {
     /// `nil` when PiP is unsupported on this device — every intent is then a safe no-op.
     private let controller: PictureInPictureControlling?
 
+    /// Cheap, allocation-free check of whether this device supports system PiP at
+    /// all. Used to decide whether to lazily build the (expensive) native PiP surface
+    /// — so we never construct a LiveKit room / AVKit controller on a device (or
+    /// simulator) that can't do PiP anyway (adj-207.5).
+    static var isDevicePiPSupported: Bool { AVPictureInPictureController.isPictureInPictureSupported() }
+
     init(controller: PictureInPictureControlling?) {
         self.controller = controller
         controller?.onDidStart = { [weak self] in

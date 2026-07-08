@@ -77,6 +77,19 @@ final class BridgeHostContainerTests: XCTestCase {
         XCTAssertEqual(factory.engines.first?.teardownCount, 1)
     }
 
+    // MARK: - Phase B: no eager native-PiP construction (adj-207.5 regression)
+
+    /// The designated init (and thus every unit test + the app until PiP is first
+    /// used) must NOT build the native PiP surface — building it eagerly spins up a
+    /// real LiveKit `Room()` + `AVPictureInPictureController` at launch, which stalled
+    /// the test host on headless CI. The surface is lazy; here it is never created.
+    func testDesignatedInitBuildsNoNativePiPSurface() {
+        let (host, _) = makeHost()
+        XCTAssertNil(host.pipSurface, "no PiP surface (no LiveKit room) built at construction")
+        XCTAssertNil(host.pipCoordinator)
+        XCTAssertFalse(host.isPiPAvailable, "no base URL → PiP unavailable, nothing eager built")
+    }
+
     // MARK: - Survives navigation (the whole point)
 
     func testSurfaceSurvivesSimulatedNavigationWithoutReloadOrUnmount() {
