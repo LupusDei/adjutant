@@ -169,6 +169,26 @@ export function createMessagesRouter(store: MessageStore): Router {
     // adj-203.2.5.2: body is optional for image-only DMs — normalize to "" for the store/WS.
     const body = parseResult.data.body ?? "";
 
+    // adj-x6qln follow-up — DIAGNOSTIC: this route stamps every message from="user"/role="user"
+    // (it is the Commander's send endpoint). AGENTS are supposed to use MCP send_message (role=
+    // agent). We're seeing agent STATUS REPORTS land here — i.e. an agent posting via curl/REST is
+    // impersonating the Commander (its report shows as the user's message). Log the caller's origin
+    // so we can name the offender: real clients carry a browser Origin (dashboard) or the iOS app
+    // User-Agent; an agent posting via curl/node does not.
+    const ua = req.get("user-agent") ?? "";
+    const origin = req.get("origin") ?? "";
+    const looksLikeAgentPost =
+      !origin && !/Adjutant|Mozilla|WebKit|Safari|CFNetwork|Darwin/i.test(ua);
+    if (looksLikeAgentPost) {
+      logWarn("POST /api/messages from a NON-USER caller (agent impersonating the Commander?)", {
+        to,
+        threadId: threadId ?? null,
+        userAgent: ua.slice(0, 100),
+        ip: req.ip ?? null,
+        bodyPreview: body.slice(0, 60),
+      });
+    }
+
     // adj-164.2 + adj-202.4.1: persist (tagged with the deterministic DM conversation id
     // for the (user, recipient) pair — the wrong-thread-bleed fix), broadcast, and inject
     // into the recipient's live session via the SHARED deliverDirectMessage helper (the
