@@ -104,10 +104,40 @@ AdjutantApp root │  BridgeHostContainer  (ZStack above nav)     │
 
 - **Background WebRTC mic** (Phase A full-duplex): iOS may suspend WKWebView capture in
   background; US2 must verify and fall back to listen-only if needed (documented).
-- **Native token handoff** (Phase B): confirm the `/avatar` broker can mint a second,
-  room-scoped token for a read-only native consumer without spinning a new Runway session.
+- **Native token handoff** (Phase B): ~~confirm the `/avatar` broker can mint a second,
+  room-scoped token for a read-only native consumer without spinning a new Runway session.~~
+  **DISPROVEN on-device (adj-207.5.3/.5.4)** — see "Architecture Pivot" below.
 - **PiP + WebRTC frames**: `AVSampleBufferDisplayLayer` needs a steady frame pump from the
   LiveKit track renderer; watch for timing/stall handling.
+
+## Architecture Pivot — Phase B PiP via native SESSION-SWAP (adj-207.5.4)
+
+**Supersedes the US3/US4 "2nd-subscriber" design.** The original Phase B plan had a native
+LiveKit client join the SAME live Runway session as a second (read-only) consumer via a
+backend-minted token (`/avatar/native-token` → Runway `connect_backend`). On-device testing
+(TestFlight 2.28) proved this is **impossible**:
+
+- `POST /avatar/native-token` → Runway `connect_backend` returns **HTTP 400: "A backend
+  handler is already connected to this session."** Runway allows **exactly one backend
+  handler per session**, and the Adjutant backend already holds it (session RPC/tools handler).
+  This is a **Runway platform constraint**, not an app bug (adj-207.5.3 diagnostics + the
+  reproduced 502 confirmed the exact cause).
+
+**New design (the Commander's approach):** system PiP is a **native session-swap**, not a
+second subscriber. On manual pop-out:
+1. **Close** the WKWebView Bridge session (frees the session + its backend-handler slot).
+2. **Start a FRESH native session** — a new Runway session whose free backend-handler slot the
+   native LiveKit client owns; it subscribes to the avatar video track and renders into an
+   `AVSampleBufferDisplayLayer`.
+3. `AVPictureInPictureController` drives system PiP over other apps; audio/mic continue.
+4. On restore/foreground, tear down the native session and restore the WKWebView Bridge.
+
+**Invariant preserved:** exactly ONE session at a time (close-before-open, sequential) — no
+double credit. **v1 trade-offs (documented):** a few-second re-provision on swap ("Starting
+Picture in Picture…" state) and a fresh conversation context (no carryover; context-carryover
+is a fast follow). **Load-bearing verification (must prove first):** that a native client, as
+the backend handler of a FRESH session, actually receives the avatar **VIDEO** track (not just
+audio); if audio-only, a frontend/viewer-token or relay approach is required instead.
 
 ## Bead Map
 
