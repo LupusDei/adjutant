@@ -25,6 +25,7 @@ final class BridgePiPSurfaceTests: XCTestCase {
 
     private final class SpyRoom: NativeAvatarRoomConnecting {
         var onVideoTrackReady: (() -> Void)?
+        var onAudioTrackReady: (() -> Void)?
         var onDisconnected: ((Error?) -> Void)?
         func setFrameSink(_ sink: NativeAvatarFrameSink?) {}
         func connect(url: String, token: String) async throws {}
@@ -60,11 +61,18 @@ final class BridgePiPSurfaceTests: XCTestCase {
         func fire() { onTimeout?() }
     }
 
+    /// Records the session-swap side effects (adj-207.5.4) so ordering + counts are testable.
+    private final class SwapRecorder {
+        private(set) var log: [String] = []
+        func close() { log.append("close") }
+        func restore() { log.append("restore") }
+    }
+
     private func makeSurface(
         tokenResult: Result<NativeAvatarCreds, NativeAvatarTokenError> = .success(
             NativeAvatarCreds(sessionId: "s", roomName: "r", url: "wss://x", token: "t", avatarId: nil, expiresAt: nil)
         )
-    ) -> (BridgePiPSurface, SpyPiP, ManualTimeout, SpyRoom) {
+    ) -> (BridgePiPSurface, SpyPiP, ManualTimeout, SpyRoom, SwapRecorder) {
         let room = SpyRoom()
         let client = NativeAvatarClient(tokenProvider: StubTokenProvider(result: tokenResult), room: room)
         let display = SpyDisplay()
@@ -72,29 +80,31 @@ final class BridgePiPSurfaceTests: XCTestCase {
         let spyPiP = SpyPiP()
         let pip = BridgePiPController(controller: spyPiP)
         let deadline = ManualTimeout()
+        let swap = SwapRecorder()
         let surface = BridgePiPSurface(
             hostView: AvatarSampleBufferUIView(),
             client: client,
             renderer: renderer,
             pip: pip,
             sessionLive: { true },
-            restoreWindow: {},
+            closeInAppSession: { swap.close() },
+            restoreWindow: { swap.restore() },
             handoffDeadline: deadline
         )
-        return (surface, spyPiP, deadline, room)
+        return (surface, spyPiP, deadline, room, swap)
     }
 
     // MARK: - Visible failure
 
     func testEnterPiPStartsCleanWithNoError() {
-        let (surface, _, deadline, _) = makeSurface()
+        let (surface, _, deadline, _, _) = makeSurface()
         surface.enterPiP()
         XCTAssertNil(surface.lastError, "no error until something actually fails")
         XCTAssertEqual(deadline.startCount, 1, "watchdog armed on enterPiP")
     }
 
     func testHandoffTimeoutSurfacesVisibleError() {
-        let (surface, spyPiP, deadline, _) = makeSurface()
+        let (surface, spyPiP, deadline, _, _) = makeSurface()
         surface.enterPiP()               // client not live → async join + deadline armed
 
         deadline.fire()                  // PiP never became active in time
@@ -106,7 +116,7 @@ final class BridgePiPSurfaceTests: XCTestCase {
     }
 
     func testDidStartClearsErrorAndCancelsDeadline() {
-        let (surface, spyPiP, deadline, _) = makeSurface()
+        let (surface, spyPiP, deadline, _, _) = makeSurface()
         surface.enterPiP()
         deadline.fire()                  // sets an error
         XCTAssertNotNil(surface.lastError)
@@ -118,7 +128,7 @@ final class BridgePiPSurfaceTests: XCTestCase {
     }
 
     func testExitPiPCancelsDeadline() {
-        let (surface, _, deadline, _) = makeSurface()
+        let (surface, _, deadline, _, _) = makeSurface()
         surface.enterPiP()
         surface.exitPiP()
 
@@ -128,12 +138,33 @@ final class BridgePiPSurfaceTests: XCTestCase {
     }
 
     func testClearErrorDismissesBanner() {
-        let (surface, _, deadline, _) = makeSurface()
+        let (surface, _, deadline, _, _) = makeSurface()
         surface.enterPiP()
         deadline.fire()
         XCTAssertNotNil(surface.lastError)
 
         surface.clearError()
         XCTAssertNil(surface.lastError)
+    }
+
+    // MARK: - Session-swap (adj-207.5.4)
+
+    func testEnterPiPClosesWKWebViewSessionBeforeStartingNative() {
+        let (surface, _, _, _, swap) = makeSurface()
+
+        surface.enterPiP()   // client not live → session-swap path
+
+        // The WKWebView Bridge is closed FIRST (single-session invariant), before the
+        // fresh native session starts.
+        XCTAssertEqual(swap.log, ["close"], "pop-out closes the in-app session (no two live sessions)")
+    }
+
+    func testRestoreReopensWKWebViewSession() {
+        let (surface, _, _, _, swap) = makeSurface()
+        surface.enterPiP()          // ["close"]
+
+        surface.restoreInAppWindow() // PiP ended → re-open the WKWebView Bridge
+
+        XCTAssertEqual(swap.log, ["close", "restore"])
     }
 }

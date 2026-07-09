@@ -129,6 +129,23 @@ also pop it out manually — and it restores cleanly when I return.*
 - Changing the avatar/Runway backend contract beyond the token/room handoff needed for
   the native client.
 
+### Phase B v1 trade-offs (adj-207.5.4 — native session-swap)
+
+Runway's `connect_backend` allows only **one backend handler per session**, and the live
+avatar session's slot is already held by the Adjutant tool-loop attach — so the native PiP
+client cannot join the live session (400 "already connected"). The pivot: on pop-out, iOS
+**closes the WKWebView Bridge session and starts a FRESH session** (`POST /avatar/native-session`)
+that the native client owns as the backend handler. Known v1 boundaries (documented follow-ups):
+
+- **No tool-calling in PiP mode**: the fresh native session is started **without** attaching
+  the tool loop (so its backend-handler slot is free). The PiP-mode avatar can see/hear/talk
+  but cannot call fleet tools. Restored to full (tool-enabled) Bridge on foreground.
+- **No conversation-context carryover**: the PiP session starts CLEAN — the prior WKWebView
+  conversation does not continue into it.
+- **Video-track assumption is device-verified**: whether a backend-handler client receives the
+  avatar VIDEO track (vs audio-only) is proven by the diagnostic device build; if audio-only,
+  the pivot is a frontend/viewer token (tracked as a follow-up).
+
 ## Success Criteria
 
 The Commander opens the Bridge, shrinks it to a draggable/resizable floating window,

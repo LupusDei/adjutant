@@ -35,6 +35,12 @@ final class BridgePiPSurface: BridgePiPHandoffTarget {
     private let renderer: AvatarSampleBufferRenderer
     private let pip: BridgePiPController
     private let sessionLiveProvider: () -> Bool
+    /// SESSION-SWAP (adj-207.5.4): close the in-app WKWebView Bridge session BEFORE the
+    /// native session starts, so only ONE Runway session is ever live (no double credit).
+    /// The live session's backend-handler slot is held by the Adjutant tool loop, so the
+    /// native client cannot join it — it must own a FRESH session instead.
+    private let closeInAppSession: () -> Void
+    /// Restore the in-app WKWebView Bridge (re-open a fresh session) when PiP ends.
     private let restoreWindow: () -> Void
 
     /// Overall hand-off watchdog: if PiP has not become ACTIVE within the deadline
@@ -53,6 +59,7 @@ final class BridgePiPSurface: BridgePiPHandoffTarget {
     convenience init(
         apiBaseURL: URL,
         sessionLive: @escaping () -> Bool,
+        closeInAppSession: @escaping () -> Void,
         restoreWindow: @escaping () -> Void
     ) {
         let hostView = AvatarSampleBufferUIView()
@@ -75,6 +82,7 @@ final class BridgePiPSurface: BridgePiPHandoffTarget {
             renderer: renderer,
             pip: pip,
             sessionLive: sessionLive,
+            closeInAppSession: closeInAppSession,
             restoreWindow: restoreWindow,
             handoffDeadline: RealBridgeConnectTimeout(seconds: 15)
         )
@@ -88,6 +96,7 @@ final class BridgePiPSurface: BridgePiPHandoffTarget {
         renderer: AvatarSampleBufferRenderer,
         pip: BridgePiPController,
         sessionLive: @escaping () -> Bool,
+        closeInAppSession: @escaping () -> Void = {},
         restoreWindow: @escaping () -> Void,
         handoffDeadline: BridgeConnectTimeout? = nil
     ) {
@@ -96,6 +105,7 @@ final class BridgePiPSurface: BridgePiPHandoffTarget {
         self.renderer = renderer
         self.pip = pip
         self.sessionLiveProvider = sessionLive
+        self.closeInAppSession = closeInAppSession
         self.restoreWindow = restoreWindow
         self.handoffDeadline = handoffDeadline
 
@@ -134,7 +144,9 @@ final class BridgePiPSurface: BridgePiPHandoffTarget {
     var isPiPSupported: Bool { pip.isSupported }
 
     func enterPiP() {
-        guard !pip.isPiPActive else { return }
+        // Already in PiP, or a hand-off is already in flight → no-op (never a double
+        // session-swap / double close).
+        guard !pip.isPiPActive, !wantsPiP else { return }
         lastError = nil
         wantsPiP = true
         // Arm the overall watchdog: if PiP isn't ACTIVE by the deadline, fail visibly.
@@ -143,7 +155,12 @@ final class BridgePiPSurface: BridgePiPHandoffTarget {
         if client.isLive {
             pip.start()
         } else {
-            // Join the room; PiP starts from onStateChanged when frames flow.
+            // SESSION-SWAP (adj-207.5.4): close the WKWebView Bridge FIRST so only one
+            // Runway session is ever live, THEN start a FRESH native session the client
+            // owns (free backend-handler slot). PiP starts from onStateChanged when the
+            // avatar video flows.
+            bridgePiPLog.info("handoff: closing WKWebView session, starting fresh native session")
+            closeInAppSession()
             Task { await client.start() }
         }
     }

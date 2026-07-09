@@ -46,6 +46,7 @@ final class NativeAvatarClientTests: XCTestCase {
     /// the `onVideoTrackReady` / `onDisconnected` callbacks.
     private final class SpyRoom: NativeAvatarRoomConnecting {
         var onVideoTrackReady: (() -> Void)?
+        var onAudioTrackReady: (() -> Void)?
         var onDisconnected: ((Error?) -> Void)?
 
         private(set) var connectCalls: [(url: String, token: String)] = []
@@ -67,6 +68,7 @@ final class NativeAvatarClientTests: XCTestCase {
 
         // Drivers
         func fireVideoTrackReady() { onVideoTrackReady?() }
+        func fireAudioTrackReady() { onAudioTrackReady?() }
         func fireDisconnected(_ error: Error?) { onDisconnected?(error) }
     }
 
@@ -240,10 +242,11 @@ final class NativeAvatarClientTests: XCTestCase {
         XCTAssertThrowsError(try HTTPNativeAvatarTokenProvider.decode(json))
     }
 
-    func testNativeTokenURLDerivesFromApiBase() {
+    func testNativeSessionURLDerivesFromApiBase() {
         let base = URL(string: "http://host:4201/api")!
         let url = HTTPNativeAvatarTokenProvider.nativeTokenURL(from: base)
-        XCTAssertEqual(url.absoluteString, "http://host:4201/avatar/native-token")
+        // adj-207.5.4: the native client starts a FRESH session via /avatar/native-session.
+        XCTAssertEqual(url.absoluteString, "http://host:4201/avatar/native-session")
     }
 
     // MARK: - Connect timeout + failure reason (adj-207.5.3)
@@ -283,6 +286,21 @@ final class NativeAvatarClientTests: XCTestCase {
         XCTAssertNotNil(client.failureReason)
         XCTAssertTrue(client.failureReason?.contains("timed out") == true,
                       "reason surfaces the no-video timeout, not a silent hang")
+    }
+
+    func testTimeoutWithAudioOnlyGivesUnmistakableReason() async {
+        let room = SpyRoom()
+        let timeout = ManualTimeout()
+        let client = makeClientWithTimeout(result: .success(makeCreds()), room: room, timeout: timeout)
+
+        await client.start()
+        room.fireAudioTrackReady()    // audio subscribed…
+        // …but NO video track ever arrives, then the watchdog fires.
+        timeout.fire()
+
+        XCTAssertEqual(client.state, .failed)
+        XCTAssertEqual(client.failureReason, "avatar sent audio only (no video track)",
+                       "the frontend/viewer-token case must be UNMISTAKABLE, not a generic timeout")
     }
 
     func testTimeoutCanceledOnceLive() async {

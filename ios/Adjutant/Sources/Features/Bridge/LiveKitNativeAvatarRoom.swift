@@ -19,6 +19,7 @@ import LiveKit
 @MainActor
 final class LiveKitNativeAvatarRoom: NSObject, NativeAvatarRoomConnecting {
     var onVideoTrackReady: (() -> Void)?
+    var onAudioTrackReady: (() -> Void)?
     var onDisconnected: ((Error?) -> Void)?
 
     private let room: Room
@@ -89,7 +90,11 @@ extension LiveKitNativeAvatarRoom: RoomDelegate {
             if let videoTrack = track as? RemoteVideoTrack {
                 self.attachVideoTrack(videoTrack)
             } else if track is RemoteAudioTrack {
-                // Video-only subscriber: drop audio so the WKWebView owns it (no echo).
+                // Note audio arrival for the audio-only diagnosis (adj-207.5.4), THEN drop
+                // it: in session-swap mode the native client owns the session, but PiP only
+                // needs video; keeping audio here would double it. (If the audio-only case
+                // is confirmed, the pivot keeps audio and renders video via a viewer token.)
+                self.onAudioTrackReady?()
                 try? await publication.set(subscribed: false)
             }
         }
