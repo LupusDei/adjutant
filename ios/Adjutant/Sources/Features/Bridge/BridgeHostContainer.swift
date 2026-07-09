@@ -123,16 +123,18 @@ final class BridgeHost {
               BridgePiPController.isDevicePiPSupported
         else { return }
 
-        // `sessionLive` reads the ONE session; `restoreWindow` re-reveals the in-app
-        // floating surface. Neither closure can close the session or stop audio, so
-        // continuity across floating ↔ PiP is guaranteed.
+        // SESSION-SWAP (adj-207.5.4): `sessionLive` gates the pop-out on a live Bridge;
+        // `closeInAppSession` closes the WKWebView Bridge (frees the old Runway session)
+        // before the fresh native session starts — one session at a time, no double
+        // credit; `restoreWindow` re-opens the WKWebView Bridge when PiP ends.
         let surface = BridgePiPSurface(
             apiBaseURL: apiBaseURL,
             sessionLive: { [weak self] in
                 guard let self else { return false }
                 return self.session.state == .live || self.session.state == .backgrounded
             },
-            restoreWindow: { [weak self] in self?.session.show() }
+            closeInAppSession: { [weak self] in self?.session.close() },
+            restoreWindow: { [weak self] in self?.session.open() }
         )
         self.pipSurface = surface
         self.pipCoordinator = BridgePiPHandoffCoordinator(target: surface)
@@ -276,11 +278,12 @@ struct BridgeHostContainer<Content: View>: View {
     var body: some View {
         ZStack {
             // Phase B (adj-207.5): the native sample-buffer layer that feeds system
-            // PiP, mounted BEHIND app content — occluded in-app (the WKWebView floating
-            // window is the in-app surface), but present in the window so the OS can
-            // lift it into a PiP window over other apps on hand-off. Not hidden (PiP
-            // needs a live, un-hidden layer), just covered.
-            if host.isSurfaceMounted, let pipSurface = host.pipSurface {
+            // PiP, mounted BEHIND app content — occluded in-app, but present in the
+            // window so the OS can lift it into a PiP window over other apps. Mounted
+            // once the PiP surface exists (first pop-out) and kept mounted INDEPENDENT
+            // of the WKWebView session: the session-swap CLOSES that session during PiP
+            // (adj-207.5.4), so gating this on it would unmount the live PiP layer.
+            if let pipSurface = host.pipSurface {
                 HostedUIView(view: pipSurface.hostView)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)

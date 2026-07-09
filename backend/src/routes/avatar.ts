@@ -372,6 +372,67 @@ export function createAvatarRouter(deps: AvatarRouterDeps): Router {
     });
   });
 
+  // POST /avatar/native-session — start a FRESH Runway session that a NATIVE iOS LiveKit
+  // client OWNS as the backend handler, for system PiP over other apps (adj-207.5.4).
+  //
+  // WHY a fresh session (the session-swap pivot): Runway's connect_backend allows only ONE
+  // backend handler per session, and the LIVE avatar session's slot is already held by the
+  // Adjutant backend's tool-loop attach — so a 2nd backend handler on the live session is
+  // impossible (400 "A backend handler is already connected"). Instead, on pop-out iOS closes
+  // the WKWebView session and starts THIS fresh session, whose backend-handler slot is FREE
+  // because we deliberately DO NOT attach the tool loop here. The native client then
+  // connect_backend's into it and (if Runway publishes video to backend handlers) renders the
+  // avatar into an AVSampleBufferDisplayLayer for AVPictureInPictureController.
+  //
+  // v1 is CLEAN (no conversation-context carryover; no tools) — documented follow-up. The
+  // single-session invariant is enforced on the CLIENT: iOS closes the WKWebView session
+  // before/as this starts, so only ONE Runway session is ever live (no double credit).
+  router.post("/native-session", async (req, res) => {
+    const body = req.body as { customAvatarId?: unknown } | undefined;
+    const customAvatarId =
+      typeof body?.customAvatarId === "string" && body.customAvatarId.length > 0 ? body.customAvatarId : undefined;
+
+    if (!deps.getNativeConsumerCreds) {
+      return res.status(501).json({
+        success: false,
+        error: { code: "NATIVE_SESSION_UNAVAILABLE", message: "Native avatar session is not configured" },
+      });
+    }
+
+    try {
+      // Start a fresh session WITHOUT attaching the tool-loop handler — leaving the ONE
+      // backend-handler slot free for the native client (createReadySession would consume it).
+      const session = await deps.broker.startSession(buildOpts(customAvatarId));
+      // Reserve the backend-handler slot + mint the native client's LiveKit join creds.
+      const creds = await deps.getNativeConsumerCreds(session.sessionId);
+      logInfo("avatar native-session started", {
+        sessionId: session.sessionId,
+        roomName: creds.roomName,
+        avatarId: session.avatarId,
+      });
+      return res.json({
+        sessionId: creds.sessionId,
+        roomName: creds.roomName,
+        url: creds.url,
+        token: creds.token,
+        avatarId: session.avatarId,
+        consumer: "native",
+        fresh: true,
+        ...(creds.expiresAt ? { expiresAt: creds.expiresAt } : {}),
+      });
+    } catch (err) {
+      if (err instanceof BridgeCostCeilingError) {
+        logError("avatar native-session refused (cost ceiling)", { error: err.message });
+        return res.status(429).json({ success: false, error: { code: err.code, message: err.message } });
+      }
+      logError("avatar native-session failed", { error: err instanceof Error ? err.message : String(err) });
+      return res.status(502).json({
+        success: false,
+        error: { code: "NATIVE_SESSION_FAILED", message: err instanceof Error ? err.message : "Unknown error" },
+      });
+    }
+  });
+
   router.get("/", (_req, res) => {
     res.type("html").send(AVATAR_PAGE_HTML);
   });

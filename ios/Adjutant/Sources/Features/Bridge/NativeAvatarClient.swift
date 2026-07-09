@@ -98,6 +98,11 @@ protocol NativeAvatarFrameSink: AnyObject {
 @MainActor
 protocol NativeAvatarRoomConnecting: AnyObject {
     var onVideoTrackReady: (() -> Void)? { get set }
+    /// Fired when an AUDIO track subscribes. Used ONLY for diagnosis (adj-207.5.4): if
+    /// the room joins and audio arrives but NO video track ever does, we can report the
+    /// unmistakable "avatar sent audio only (no video track)" — the signature of Runway
+    /// publishing video only to frontend/viewer participants, not backend handlers.
+    var onAudioTrackReady: (() -> Void)? { get set }
     var onDisconnected: ((Error?) -> Void)? { get set }
     func setFrameSink(_ sink: NativeAvatarFrameSink?)
     func connect(url: String, token: String) async throws
@@ -172,8 +177,13 @@ final class NativeAvatarClient {
         self.room = room
         self.connectTimeout = connectTimeout
         room.onVideoTrackReady = { [weak self] in self?.handleVideoTrackReady() }
+        room.onAudioTrackReady = { [weak self] in self?.receivedAudioTrack = true }
         room.onDisconnected = { [weak self] error in self?.handleDisconnected(error) }
     }
+
+    /// True once an audio track has subscribed on this join — for the audio-only
+    /// diagnosis on a video timeout (adj-207.5.4).
+    private var receivedAudioTrack = false
 
     /// True once the avatar video track is subscribed and frames are flowing.
     var isLive: Bool { state == .live }
@@ -193,6 +203,7 @@ final class NativeAvatarClient {
         }
 
         failureReason = nil
+        receivedAudioTrack = false
         state = .connecting
         // Arm the watchdog: if the avatar video never subscribes, fail VISIBLY
         // instead of hanging in `.connecting` (adj-207.5.3).
@@ -260,7 +271,15 @@ final class NativeAvatarClient {
     /// (adj-207.5.3). Fail VISIBLY so the PiP surface can tell the user + it's logged.
     private func handleConnectTimeout() {
         guard state == .connecting else { return }
-        fail(reason: "timed out waiting for the avatar video track (no video received)")
+        // UNMISTAKABLE diagnosis (adj-207.5.4): if the room joined and AUDIO arrived but
+        // no VIDEO ever did, this is the frontend/viewer-token case (Runway doesn't send
+        // video to backend handlers) — say so explicitly so we know to pivot, not chase a
+        // generic failure. Otherwise it timed out with no media at all.
+        if receivedAudioTrack {
+            fail(reason: "avatar sent audio only (no video track)")
+        } else {
+            fail(reason: "timed out waiting for the avatar video track (no video received)")
+        }
     }
 
     /// Central failure path: cancel the watchdog, detach the sink, record the reason,
@@ -318,8 +337,13 @@ struct HTTPNativeAvatarTokenProvider: NativeAvatarTokenProviding {
     }
 
     static func nativeTokenURL(from apiBaseURL: URL) -> URL {
+        // adj-207.5.4 (session-swap): the native client starts a FRESH session it owns
+        // (free backend-handler slot) rather than connect_backend'ing the live session
+        // (that 400s — slot held by the Adjutant tool loop). `/avatar/native-session`
+        // starts the fresh session; the older `/avatar/native-token` is kept server-side
+        // for reference. Response shape is identical.
         var components = URLComponents(url: apiBaseURL, resolvingAgainstBaseURL: false)
-        components?.path = "/avatar/native-token"
+        components?.path = "/avatar/native-session"
         components?.query = nil
         return components?.url ?? apiBaseURL
     }
