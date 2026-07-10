@@ -408,15 +408,20 @@ export function createAvatarRouter(deps: AvatarRouterDeps): Router {
     }
 
     try {
-      // Start a fresh session the native client alone owns. Do NOT attach the tool loop
-      // (v1) — keeps this simple; the native client joins as a FRONTEND participant.
-      const session = await deps.broker.startSession(buildOpts(customAvatarId));
+      // Start a fresh session AND attach the tool-loop backend handler — EXACTLY like a
+      // normal WKWebView session (createReadySession). The native client consumes as a
+      // FRONTEND participant (below), so the ONE backend-handler slot stays free for the
+      // tool loop. Result (adj-207.5.6): the PiP avatar gets video (native frontend) +
+      // audio + mic + TOOLS (backend loop) — the full thing, no compromise. The
+      // startSession→attach→consume order is the proven normal-session order (attach keeps
+      // the session READY; only the frontend consume flips it to RUNNING).
+      const session = await createReadySession(customAvatarId);
       // adj-207.5.6: mint FRONTEND viewer creds via `/consume` (NOT connect_backend) — a
       // backend handler receives no video (the adj-207.5.4 device failure); a frontend
       // participant does. `/consume` is single-use, which is fine: this fresh session's
       // sessionKey is consumed only here, by the native client.
       const creds = await deps.getFrontendViewerCreds(session.sessionId, session.sessionKey);
-      logInfo("avatar native-session started (frontend viewer)", {
+      logInfo("avatar native-session started (frontend viewer + tool loop)", {
         sessionId: session.sessionId,
         roomName: creds.roomName,
         avatarId: session.avatarId,

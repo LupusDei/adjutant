@@ -13,7 +13,9 @@
  *  - Starts a FRESH session (calls broker.startSession) — unlike /native-token.
  *  - Mints FRONTEND viewer creds via /consume with the fresh session's sessionKey (NOT
  *    connect_backend, which yields no video).
- *  - Does NOT attach the tool loop (v1 trade-off: PiP-mode avatar has no tools).
+ *  - ATTACHES the tool loop (backend handler): the native frontend consume leaves the ONE
+ *    backend-handler slot free, so the PiP avatar keeps TOOLS — full parity with a normal
+ *    WKWebView session (video + audio + mic + tools).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -85,12 +87,17 @@ describe("avatar routes: POST /avatar/native-session", () => {
     expect(res.body.fresh).toBe(true);
   });
 
-  it("does NOT attach the tool loop (v1: PiP-mode avatar has no tools)", async () => {
+  it("ATTACHES the tool loop — the native frontend consume leaves the backend-handler slot free, so PiP keeps tools", async () => {
     const { app, rpcManager } = makeApp();
 
     await request(app).post("/avatar/native-session").send({});
 
-    expect(rpcManager.attach).not.toHaveBeenCalled();
+    // adj-207.5.6: the native client consumes as a FRONTEND participant, so the ONE
+    // backend-handler slot is free for the tool loop — the PiP avatar keeps tools (full
+    // parity with a normal WKWebView session: video + audio + mic + tools).
+    expect(rpcManager.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: CREDS.sessionId }),
+    );
   });
 
   it("needs NO prior /avatar/connect — it creates its own session (not the active-session path)", async () => {
