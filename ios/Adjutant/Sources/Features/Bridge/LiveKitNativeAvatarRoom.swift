@@ -42,8 +42,17 @@ final class LiveKitNativeAvatarRoom: NSObject, NativeAvatarRoomConnecting {
     }
 
     func connect(url: String, token: String) async throws {
-        // Default RoomOptions: we publish nothing (no mic/camera) — a pure subscriber.
         try await room.connect(url: url, token: token)
+        // Full-duplex (adj-207.5.6): in the session-swap the native client is the sole
+        // connection, so it must publish the mic for the Commander to keep talking to the
+        // avatar in PiP. Best-effort — a mic-permission/publish hiccup must not fail the
+        // join (the avatar video + audio still work one-way).
+        do {
+            try await room.localParticipant.setMicrophone(enabled: true)
+            bridgePiPLog.info("room: mic published (full-duplex)")
+        } catch {
+            bridgePiPLog.error("room: mic publish failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     func disconnect() async {
@@ -90,12 +99,11 @@ extension LiveKitNativeAvatarRoom: RoomDelegate {
             if let videoTrack = track as? RemoteVideoTrack {
                 self.attachVideoTrack(videoTrack)
             } else if track is RemoteAudioTrack {
-                // Note audio arrival for the audio-only diagnosis (adj-207.5.4), THEN drop
-                // it: in session-swap mode the native client owns the session, but PiP only
-                // needs video; keeping audio here would double it. (If the audio-only case
-                // is confirmed, the pivot keeps audio and renders video via a viewer token.)
+                // SESSION-SWAP (adj-207.5.6): the WKWebView is CLOSED during PiP, so the
+                // native client is the sole connection — KEEP the avatar audio subscribed so
+                // the avatar talks in PiP (LiveKit auto-plays it; no echo now that nothing
+                // else owns audio). Still note arrival for the audio-only diagnosis.
                 self.onAudioTrackReady?()
-                try? await publication.set(subscribed: false)
             }
         }
     }

@@ -74,6 +74,14 @@ export interface AvatarRouterDeps {
    * `broker.getNativeConsumerCreds`. When omitted, the route returns 501 (feature not wired).
    */
   getNativeConsumerCreds?: (sessionId: string) => Promise<NativeConsumerCreds>;
+  /**
+   * Mint FRONTEND (video-receiving) LiveKit join creds via Runway's `/consume` (adj-207.5.6).
+   * Powers `POST /avatar/native-session`: the native client joins a FRESH session as a frontend
+   * participant so it actually RECEIVES the avatar video (a backend handler does not — the
+   * adj-207.5.4 device failure). Takes the fresh session's short-lived `sessionKey`. Real wiring
+   * passes `broker.getFrontendViewerCreds`. When omitted, `/avatar/native-session` returns 501.
+   */
+  getFrontendViewerCreds?: (sessionId: string, sessionKey: string) => Promise<NativeConsumerCreds>;
 }
 
 /** Body schema for POST /avatar/native-token. `sessionId`, if given, must match the active one. */
@@ -392,7 +400,7 @@ export function createAvatarRouter(deps: AvatarRouterDeps): Router {
     const customAvatarId =
       typeof body?.customAvatarId === "string" && body.customAvatarId.length > 0 ? body.customAvatarId : undefined;
 
-    if (!deps.getNativeConsumerCreds) {
+    if (!deps.getFrontendViewerCreds) {
       return res.status(501).json({
         success: false,
         error: { code: "NATIVE_SESSION_UNAVAILABLE", message: "Native avatar session is not configured" },
@@ -400,12 +408,15 @@ export function createAvatarRouter(deps: AvatarRouterDeps): Router {
     }
 
     try {
-      // Start a fresh session WITHOUT attaching the tool-loop handler — leaving the ONE
-      // backend-handler slot free for the native client (createReadySession would consume it).
+      // Start a fresh session the native client alone owns. Do NOT attach the tool loop
+      // (v1) — keeps this simple; the native client joins as a FRONTEND participant.
       const session = await deps.broker.startSession(buildOpts(customAvatarId));
-      // Reserve the backend-handler slot + mint the native client's LiveKit join creds.
-      const creds = await deps.getNativeConsumerCreds(session.sessionId);
-      logInfo("avatar native-session started", {
+      // adj-207.5.6: mint FRONTEND viewer creds via `/consume` (NOT connect_backend) — a
+      // backend handler receives no video (the adj-207.5.4 device failure); a frontend
+      // participant does. `/consume` is single-use, which is fine: this fresh session's
+      // sessionKey is consumed only here, by the native client.
+      const creds = await deps.getFrontendViewerCreds(session.sessionId, session.sessionKey);
+      logInfo("avatar native-session started (frontend viewer)", {
         sessionId: session.sessionId,
         roomName: creds.roomName,
         avatarId: session.avatarId,
