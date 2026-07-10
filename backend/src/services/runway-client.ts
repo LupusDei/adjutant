@@ -179,6 +179,33 @@ export class RunwayClient {
     return (await res.json()) as LiveKitConnectCreds;
   }
 
+  /**
+   * Consume a READY realtime session as a FRONTEND (video-receiving) participant — the exact
+   * exchange the Runway JS SDK does for the WKWebView avatar (adj-207.5.6). Returns the raw
+   * `{ url, token, roomName }` a native LiveKit client uses to `room.connect(url, token)` and
+   * SUBSCRIBE the avatar VIDEO track. Verified live: the returned token is a frontend `user:*`
+   * participant with `video.roomJoin` — unlike `connect_backend`, whose backend-handler token
+   * receives NO video (that was the adj-207.5.4 device failure).
+   *
+   * Auth is the short-lived per-session **sessionKey** (`stk_…`, `Authorization: Bearer`), NOT
+   * the server secret. IMPORTANT: `/consume` is **single-use** — once consumed the session leaves
+   * READY (→ RUNNING) and a second consume 400s. So the native client must consume a FRESH
+   * session it alone owns (the session-swap), never the WKWebView's already-consumed session.
+   */
+  async consume(sessionId: string, sessionKey: string): Promise<LiveKitConnectCreds> {
+    const res = await this.doFetch(`${this.baseUrl}/realtime_sessions/${sessionId}/consume`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${sessionKey}`,
+        "X-Runway-Version": this.apiVersion,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new RunwayApiError("session consume", res.status, await safeText(res));
+    return (await res.json()) as LiveKitConnectCreds;
+  }
+
   private headers(): Record<string, string> {
     return {
       Authorization: `Bearer ${this.apiKey}`,

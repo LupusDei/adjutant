@@ -324,6 +324,9 @@ app.use(
     // adj-207.4.5: vend a room-scoped LiveKit token so the native iOS LiveKit client (Phase B)
     // subscribes to the SAME avatar room for system PiP — no second Runway session, no double burn.
     getNativeConsumerCreds: (sessionId) => bridgeBroker.getNativeConsumerCreds(sessionId),
+    // adj-207.5.6: mint FRONTEND (video-receiving) LiveKit creds via /consume for the native PiP
+    // client's FRESH session — a backend handler gets no video (the adj-207.5.4 device failure).
+    getFrontendViewerCreds: (sessionId, sessionKey) => bridgeBroker.getFrontendViewerCreds(sessionId, sessionKey),
     // adj-202: the iOS/default avatar selects no project, so default its project-scoped tools
     // (get_project_state, list_beads, get_auto_develop_status) to "adjutant" — otherwise they
     // error PROJECT_REQUIRED. getProject resolves the name; the dashboard still passes its own.

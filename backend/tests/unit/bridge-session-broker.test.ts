@@ -43,6 +43,11 @@ function fakeClient(createRow: RealtimeSessionRow, getRows: RealtimeSessionRow[]
       token: "lk_tok",
       roomName: `rt_${sessionId}`,
     }),
+    consume: async (sessionId: string) => ({
+      url: "wss://livekit.runwayml.com/rtc",
+      token: "lk_frontend_tok",
+      roomName: `rt_${sessionId}`,
+    }),
   };
 }
 
@@ -159,6 +164,7 @@ describe("BridgeSessionBroker: startSession", () => {
       },
       getRealtimeSession: async () => ({ id: "x", status: "READY", sessionKey: "stk" }),
       connectBackend: async () => ({ url: "wss://lk", token: "t", roomName: "r" }),
+      consume: async () => ({ url: "wss://lk", token: "t", roomName: "r" }),
     };
     const broker = new BridgeSessionBroker({ client, avatarId: CID, pollIntervalMs: 1, sleepFn: noopSleep });
 
@@ -291,6 +297,7 @@ describe("BridgeSessionBroker: getSessionStatus (warm-session re-validation, adj
       createRealtimeSession: vi.fn(),
       getRealtimeSession: vi.fn().mockRejectedValue(new Error("Runway session fetch failed (HTTP 404)")),
       connectBackend: vi.fn(),
+      consume: vi.fn(),
     };
     const broker = new BridgeSessionBroker({ client, avatarId: CID });
     await expect(broker.getSessionStatus("sess-gone")).rejects.toThrow(/HTTP 404/);
@@ -350,5 +357,43 @@ describe("BridgeSessionBroker: getNativeConsumerCreds (adj-207.4.5)", () => {
     };
     const broker = new BridgeSessionBroker({ client, avatarId: CID });
     await expect(broker.getNativeConsumerCreds("gone")).rejects.toThrow(/connect_backend 404/);
+  });
+});
+
+describe("BridgeSessionBroker: getFrontendViewerCreds (adj-207.5.6)", () => {
+  it("mints FRONTEND (video-receiving) creds via /consume with the session's sessionKey", async () => {
+    const client = readyOnce();
+    const consumeSpy = vi.fn(async (sessionId: string, _sessionKey: string) => ({
+      url: "wss://runway.livekit.cloud",
+      token: "lk_frontend_viewer_tok",
+      roomName: `rt_${sessionId}`,
+      expiresAt: "2026-06-27T14:47:01.147Z",
+    }));
+    client.consume = consumeSpy;
+    const broker = new BridgeSessionBroker({ client, avatarId: CID });
+
+    const creds = await broker.getFrontendViewerCreds("sess-1", "stk_fresh");
+
+    expect(creds).toEqual({
+      sessionId: "sess-1",
+      roomName: "rt_sess-1",
+      url: "wss://runway.livekit.cloud",
+      token: "lk_frontend_viewer_tok",
+      expiresAt: "2026-06-27T14:47:01.147Z",
+    });
+    // /consume (frontend viewer), authed by the session's sessionKey — NOT connect_backend.
+    expect(consumeSpy).toHaveBeenCalledWith("sess-1", "stk_fresh");
+    // No new realtime session created by this call.
+    expect(client.createSpy).not.toHaveBeenCalled();
+  });
+
+  it("propagates a consume failure (e.g. already-consumed / not READY)", async () => {
+    const client = readyOnce();
+    client.consume = async () => {
+      throw new Error("session consume (400): Cannot consume session in status: RUNNING");
+    };
+    const broker = new BridgeSessionBroker({ client, avatarId: CID });
+
+    await expect(broker.getFrontendViewerCreds("sess-1", "stk")).rejects.toThrow(/consume|RUNNING/i);
   });
 });

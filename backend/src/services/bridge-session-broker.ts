@@ -41,6 +41,8 @@ export interface RunwaySessionApi {
   getRealtimeSession(sessionId: string): Promise<RealtimeSessionRow>;
   /** Mint LiveKit join creds for an EXISTING session (adj-207.4.5 — no new session). */
   connectBackend(sessionId: string): Promise<LiveKitConnectCreds>;
+  /** Consume a READY session as a FRONTEND (video-receiving) participant (adj-207.5.6). */
+  consume(sessionId: string, sessionKey: string): Promise<LiveKitConnectCreds>;
 }
 
 /** One-shot, browser-safe credentials for a ready avatar session. Never carries the secret. */
@@ -240,6 +242,28 @@ export class BridgeSessionBroker {
    */
   async getNativeConsumerCreds(sessionId: string): Promise<NativeConsumerCreds> {
     const creds = await this.client.connectBackend(sessionId);
+    return {
+      sessionId,
+      roomName: creds.roomName,
+      url: creds.url,
+      token: creds.token,
+      ...(creds.expiresAt ? { expiresAt: creds.expiresAt } : {}),
+    };
+  }
+
+  /**
+   * Mint FRONTEND (video-receiving) LiveKit join creds for a session via Runway's `/consume`
+   * (adj-207.5.6). This is what a native LiveKit client needs to actually receive the avatar
+   * VIDEO track — `connect_backend`'s backend-handler token gets NO video (the adj-207.5.4 device
+   * failure). `/consume` is SINGLE-USE, so the caller must pass a FRESH session's `sessionKey`
+   * that only the native client consumes (the session-swap), never the WKWebView's already-used
+   * one. Like {@link getNativeConsumerCreds} it adds a participant to an existing session — it does
+   * NOT create a session or touch the cost guard.
+   *
+   * @throws if the session isn't READY / already consumed, or the consume join fails.
+   */
+  async getFrontendViewerCreds(sessionId: string, sessionKey: string): Promise<NativeConsumerCreds> {
+    const creds = await this.client.consume(sessionId, sessionKey);
     return {
       sessionId,
       roomName: creds.roomName,
