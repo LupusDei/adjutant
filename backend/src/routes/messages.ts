@@ -29,6 +29,7 @@ import {
   notFound,
   validationError,
 } from "../utils/responses.js";
+import { logWarn } from "../utils/logger.js";
 
 /** Max image attachments per message (adj-203 security cap). */
 const MAX_ATTACHMENTS_PER_MESSAGE = 4;
