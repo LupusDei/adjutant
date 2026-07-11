@@ -42,7 +42,11 @@ final class LiveKitNativeAvatarRoom: NSObject, NativeAvatarRoomConnecting {
     }
 
     func connect(url: String, token: String) async throws {
-        try await room.connect(url: url, token: token)
+        // Explicit autoSubscribe (adj-207.5.7): the GWM-1 avatar is a LiveKit AGENT that
+        // joins + publishes its video track LATE (1-10s after we connect). autoSubscribe
+        // (default true, set explicitly here) is what makes that late track auto-subscribe
+        // and reach `didSubscribeTrack` — the exact mechanism the Runway JS SDK relies on.
+        try await room.connect(url: url, token: token, connectOptions: ConnectOptions(autoSubscribe: true))
         // Full-duplex (adj-207.5.6): in the session-swap the native client is the sole
         // connection, so it must publish the mic for the Commander to keep talking to the
         // avatar in PiP. Best-effort — a mic-permission/publish hiccup must not fail the
@@ -53,6 +57,34 @@ final class LiveKitNativeAvatarRoom: NSObject, NativeAvatarRoomConnecting {
         } catch {
             bridgePiPLog.error("room: mic publish failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    func currentRoomState() -> NativeAvatarRoomState {
+        let joined = room.connectionState == .connected
+        let remotes = room.remoteParticipants.values
+        var hasVideo = false
+        var hasAudio = false
+        var videoSubscribed = false
+        for participant in remotes {
+            for pub in participant.trackPublications.values {
+                switch pub.kind {
+                case .video:
+                    hasVideo = true
+                    if pub.isSubscribed { videoSubscribed = true }
+                case .audio:
+                    hasAudio = true
+                default:
+                    break
+                }
+            }
+        }
+        return NativeAvatarRoomState(
+            joined: joined,
+            remoteParticipantCount: remotes.count,
+            hasRemoteVideoTrack: hasVideo,
+            hasRemoteAudioTrack: hasAudio,
+            videoTrackSubscribed: videoSubscribed
+        )
     }
 
     func disconnect() async {
@@ -86,6 +118,25 @@ final class LiveKitNativeAvatarRoom: NSObject, NativeAvatarRoomConnecting {
 
 extension LiveKitNativeAvatarRoom: RoomDelegate {
     // Delegate callbacks arrive off the main actor; hop back on before touching state.
+
+    // Timeline diagnostics (adj-207.5.7): log the avatar agent JOINING and PUBLISHING so
+    // the device Console shows exactly how far the pipeline gets before the timeout.
+    nonisolated func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
+        Task { @MainActor in
+            bridgePiPLog.info("room: remote participant JOINED \(String(describing: participant.identity), privacy: .public)")
+        }
+    }
+
+    nonisolated func room(
+        _ room: Room,
+        participant: RemoteParticipant,
+        didPublishTrack publication: RemoteTrackPublication
+    ) {
+        let kind = publication.kind == .video ? "video" : (publication.kind == .audio ? "audio" : "other")
+        Task { @MainActor in
+            bridgePiPLog.info("room: remote PUBLISHED track kind=\(kind, privacy: .public) (autoSubscribe should now subscribe it)")
+        }
+    }
 
     nonisolated func room(
         _ room: Room,

@@ -54,6 +54,11 @@ final class NativeAvatarClientTests: XCTestCase {
         private(set) var sinkHistory: [Bool] = [] // true = set, false = cleared
 
         var connectError: Error?
+        /// Canned room state returned at the timeout diagnostic (adj-207.5.7).
+        var roomState = NativeAvatarRoomState(
+            joined: true, remoteParticipantCount: 0,
+            hasRemoteVideoTrack: false, hasRemoteAudioTrack: false, videoTrackSubscribed: false
+        )
 
         func setFrameSink(_ sink: NativeAvatarFrameSink?) {
             sinkHistory.append(sink != nil)
@@ -66,9 +71,10 @@ final class NativeAvatarClientTests: XCTestCase {
 
         func disconnect() async { disconnectCount += 1 }
 
+        func currentRoomState() -> NativeAvatarRoomState { roomState }
+
         // Drivers
         func fireVideoTrackReady() { onVideoTrackReady?() }
-        func fireAudioTrackReady() { onAudioTrackReady?() }
         func fireDisconnected(_ error: Error?) { onDisconnected?(error) }
     }
 
@@ -271,8 +277,12 @@ final class NativeAvatarClientTests: XCTestCase {
         return NativeAvatarClient(tokenProvider: provider, room: room, connectTimeout: timeout)
     }
 
-    func testConnectTimeoutFailsWithVisibleReasonWhenNoVideoTrack() async {
+    func testConnectTimeoutReportsAvatarNeverJoinedWhenNoRemotes() async {
         let room = SpyRoom()
+        room.roomState = NativeAvatarRoomState(
+            joined: true, remoteParticipantCount: 0,
+            hasRemoteVideoTrack: false, hasRemoteAudioTrack: false, videoTrackSubscribed: false
+        )
         let timeout = ManualTimeout()
         let client = makeClientWithTimeout(result: .success(makeCreds()), room: room, timeout: timeout)
 
@@ -280,27 +290,56 @@ final class NativeAvatarClientTests: XCTestCase {
         XCTAssertEqual(client.state, .connecting)
         XCTAssertEqual(timeout.startCount, 1, "watchdog armed on start")
 
-        timeout.fire()                // the avatar video never arrived
+        timeout.fire()                // the avatar never joined/published
 
         XCTAssertEqual(client.state, .failed)
-        XCTAssertNotNil(client.failureReason)
-        XCTAssertTrue(client.failureReason?.contains("timed out") == true,
-                      "reason surfaces the no-video timeout, not a silent hang")
+        // adj-207.5.7: precise room-state diagnosis — the decisive signal, not a generic hang.
+        XCTAssertEqual(client.failureReason, "joined room, 0 remote participants (avatar never joined/started)")
     }
 
-    func testTimeoutWithAudioOnlyGivesUnmistakableReason() async {
+    func testConnectTimeoutReportsAudioOnlyWhenNoVideoTrackPublished() async {
         let room = SpyRoom()
+        room.roomState = NativeAvatarRoomState(
+            joined: true, remoteParticipantCount: 1,
+            hasRemoteVideoTrack: false, hasRemoteAudioTrack: true, videoTrackSubscribed: false
+        )
         let timeout = ManualTimeout()
         let client = makeClientWithTimeout(result: .success(makeCreds()), room: room, timeout: timeout)
 
         await client.start()
-        room.fireAudioTrackReady()    // audio subscribed…
-        // …but NO video track ever arrives, then the watchdog fires.
         timeout.fire()
 
-        XCTAssertEqual(client.state, .failed)
-        XCTAssertEqual(client.failureReason, "avatar sent audio only (no video track)",
-                       "the frontend/viewer-token case must be UNMISTAKABLE, not a generic timeout")
+        XCTAssertEqual(client.failureReason, "1 remote (avatar), tracks: audio only — no video published")
+    }
+
+    func testConnectTimeoutReportsVideoPresentButNotReceived() async {
+        let room = SpyRoom()
+        room.roomState = NativeAvatarRoomState(
+            joined: true, remoteParticipantCount: 1,
+            hasRemoteVideoTrack: true, hasRemoteAudioTrack: true, videoTrackSubscribed: false
+        )
+        let timeout = ManualTimeout()
+        let client = makeClientWithTimeout(result: .success(makeCreds()), room: room, timeout: timeout)
+
+        await client.start()
+        timeout.fire()
+
+        XCTAssertEqual(client.failureReason, "1 remote, video track present but not received")
+    }
+
+    func testConnectTimeoutReportsDidNotJoin() async {
+        let room = SpyRoom()
+        room.roomState = NativeAvatarRoomState(
+            joined: false, remoteParticipantCount: 0,
+            hasRemoteVideoTrack: false, hasRemoteAudioTrack: false, videoTrackSubscribed: false
+        )
+        let timeout = ManualTimeout()
+        let client = makeClientWithTimeout(result: .success(makeCreds()), room: room, timeout: timeout)
+
+        await client.start()
+        timeout.fire()
+
+        XCTAssertEqual(client.failureReason, "did not join the LiveKit room")
     }
 
     func testTimeoutCanceledOnceLive() async {

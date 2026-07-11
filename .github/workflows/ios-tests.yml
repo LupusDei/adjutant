@@ -82,10 +82,15 @@ jobs:
           xcodebuild test-without-building \
             -scheme Adjutant \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -parallel-testing-enabled NO \
             -skip-testing:AdjutantTests/WKAvatarWebEngineTests/testNavigationFinishedFiresOnReady_Integration \
             -skip-testing:AdjutantTests/WKAvatarWebEngineTests/testOpenSettingsScriptMessageRoundTripsToInjectedAction_Integration \
             -resultBundlePath TestResults.xcresult \
             -quiet
+        # -parallel-testing-enabled NO (adj-207.5.7): serialize the App Tests. The
+        # LiveKit-embedded test host stalled intermittently under parallel simulator
+        # clones (0.000s "TEST EXECUTE FAILED" + process restart + ~900s run), flaking
+        # random tests. Serial run on one simulator is slower but deterministic.
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4

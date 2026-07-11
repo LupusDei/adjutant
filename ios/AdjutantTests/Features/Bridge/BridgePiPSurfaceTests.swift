@@ -30,6 +30,12 @@ final class BridgePiPSurfaceTests: XCTestCase {
         func setFrameSink(_ sink: NativeAvatarFrameSink?) {}
         func connect(url: String, token: String) async throws {}
         func disconnect() async {}
+        func currentRoomState() -> NativeAvatarRoomState {
+            NativeAvatarRoomState(
+                joined: true, remoteParticipantCount: 0,
+                hasRemoteVideoTrack: false, hasRemoteAudioTrack: false, videoTrackSubscribed: false
+            )
+        }
     }
 
     private final class SpyDisplay: SampleBufferDisplaying {
