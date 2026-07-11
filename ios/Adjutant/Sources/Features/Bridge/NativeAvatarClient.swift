@@ -79,6 +79,44 @@ protocol NativeAvatarFrameSink: AnyObject {
     func flush()
 }
 
+// MARK: - Room-state diagnostic (adj-207.5.7)
+
+/// A LiveKit-free snapshot of the native room at (or near) the connect timeout — the
+/// DECISIVE signal for why "no video received": did we JOIN? how many REMOTE
+/// participants (is the avatar bot even there)? what track KINDS did they publish, and
+/// is the video track actually subscribed? Surfaced verbatim in the banner + os_log so a
+/// device tap tells us exactly where the pipeline stops.
+struct NativeAvatarRoomState: Sendable, Equatable {
+    /// Whether the LiveKit room connection reached `.connected`.
+    let joined: Bool
+    /// How many REMOTE participants are in the room (the avatar bot should be one).
+    let remoteParticipantCount: Int
+    /// Whether any remote participant published a VIDEO track publication.
+    let hasRemoteVideoTrack: Bool
+    /// Whether any remote participant published an AUDIO track publication.
+    let hasRemoteAudioTrack: Bool
+    /// Whether a remote video track is not just published but actually SUBSCRIBED
+    /// (the decoded track object was received — frames should be flowing).
+    let videoTrackSubscribed: Bool
+
+    /// Concise, human-facing reason for the banner (raynor's decisive wording).
+    var diagnosis: String {
+        if !joined { return "did not join the LiveKit room" }
+        if remoteParticipantCount == 0 {
+            return "joined room, 0 remote participants (avatar never joined/started)"
+        }
+        if !hasRemoteVideoTrack {
+            return hasRemoteAudioTrack
+                ? "\(remoteParticipantCount) remote (avatar), tracks: audio only — no video published"
+                : "\(remoteParticipantCount) remote (avatar), no tracks published"
+        }
+        if !videoTrackSubscribed {
+            return "\(remoteParticipantCount) remote, video track present but not received"
+        }
+        return "\(remoteParticipantCount) remote, video present but no frames"
+    }
+}
+
 // MARK: - Room seam
 
 /// The LiveKit room dependency behind a protocol so `NativeAvatarClient`'s
@@ -107,6 +145,8 @@ protocol NativeAvatarRoomConnecting: AnyObject {
     func setFrameSink(_ sink: NativeAvatarFrameSink?)
     func connect(url: String, token: String) async throws
     func disconnect() async
+    /// Snapshot the current room state for the timeout diagnostic (adj-207.5.7).
+    func currentRoomState() -> NativeAvatarRoomState
 }
 
 // MARK: - Client
@@ -177,13 +217,8 @@ final class NativeAvatarClient {
         self.room = room
         self.connectTimeout = connectTimeout
         room.onVideoTrackReady = { [weak self] in self?.handleVideoTrackReady() }
-        room.onAudioTrackReady = { [weak self] in self?.receivedAudioTrack = true }
         room.onDisconnected = { [weak self] error in self?.handleDisconnected(error) }
     }
-
-    /// True once an audio track has subscribed on this join — for the audio-only
-    /// diagnosis on a video timeout (adj-207.5.4).
-    private var receivedAudioTrack = false
 
     /// True once the avatar video track is subscribed and frames are flowing.
     var isLive: Bool { state == .live }
@@ -203,7 +238,6 @@ final class NativeAvatarClient {
         }
 
         failureReason = nil
-        receivedAudioTrack = false
         state = .connecting
         // Arm the watchdog: if the avatar video never subscribes, fail VISIBLY
         // instead of hanging in `.connecting` (adj-207.5.3).
@@ -271,15 +305,16 @@ final class NativeAvatarClient {
     /// (adj-207.5.3). Fail VISIBLY so the PiP surface can tell the user + it's logged.
     private func handleConnectTimeout() {
         guard state == .connecting else { return }
-        // UNMISTAKABLE diagnosis (adj-207.5.4): if the room joined and AUDIO arrived but
-        // no VIDEO ever did, this is the frontend/viewer-token case (Runway doesn't send
-        // video to backend handlers) — say so explicitly so we know to pivot, not chase a
-        // generic failure. Otherwise it timed out with no media at all.
-        if receivedAudioTrack {
-            fail(reason: "avatar sent audio only (no video track)")
-        } else {
-            fail(reason: "timed out waiting for the avatar video track (no video received)")
-        }
+        // DECISIVE room-state diagnostic (adj-207.5.7): at the timeout, snapshot the room
+        // so we know EXACTLY where the pipeline stops — did we join? is the avatar bot a
+        // remote participant? did it publish video/audio? This distinguishes "avatar never
+        // joined/published" (the avatar-start-handshake gap) from "video present but not
+        // received" (a subscribe/decode issue) — instead of a generic "no video".
+        let s = room.currentRoomState()
+        bridgePiPLog.error(
+            "room-state @timeout: joined=\(s.joined ? "yes" : "no", privacy: .public) remotes=\(s.remoteParticipantCount, privacy: .public) video=\(s.hasRemoteVideoTrack ? "yes" : "no", privacy: .public) audio=\(s.hasRemoteAudioTrack ? "yes" : "no", privacy: .public) videoSubscribed=\(s.videoTrackSubscribed ? "yes" : "no", privacy: .public)"
+        )
+        fail(reason: s.diagnosis)
     }
 
     /// Central failure path: cancel the watchdog, detach the sink, record the reason,
