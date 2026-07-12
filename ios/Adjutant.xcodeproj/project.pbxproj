@@ -769,7 +769,7 @@
 				CODE_SIGN_ENTITLEMENTS = Adjutant/Adjutant.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 62;
+				CURRENT_PROJECT_VERSION = 63;
 				DEVELOPMENT_ASSET_PATHS = "\"Adjutant/Preview Content\"";
 				DEVELOPMENT_TEAM = 2BRYAM5Q52;
 				ENABLE_PREVIEWS = YES;
@@ -782,7 +782,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.30;
+				MARKETING_VERSION = 2.31;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jmm.adjutant;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -799,7 +799,7 @@
 				CODE_SIGN_ENTITLEMENTS = Adjutant/Adjutant.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 62;
+				CURRENT_PROJECT_VERSION = 63;
 				DEVELOPMENT_ASSET_PATHS = "\"Adjutant/Preview Content\"";
 				DEVELOPMENT_TEAM = 2BRYAM5Q52;
 				ENABLE_PREVIEWS = YES;
@@ -812,7 +812,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.30;
+				MARKETING_VERSION = 2.31;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jmm.adjutant;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.jmm.adjutant";
@@ -827,10 +827,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 62;
+				CURRENT_PROJECT_VERSION = 63;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.30;
+				MARKETING_VERSION = 2.31;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gastown.AdjutantTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -845,10 +845,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 62;
+				CURRENT_PROJECT_VERSION = 63;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.30;
+				MARKETING_VERSION = 2.31;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gastown.AdjutantTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -862,9 +862,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 62;
+				CURRENT_PROJECT_VERSION = 63;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 2.30;
+				MARKETING_VERSION = 2.31;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gastown.AdjutantUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -878,9 +878,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 62;
+				CURRENT_PROJECT_VERSION = 63;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 2.30;
+				MARKETING_VERSION = 2.31;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gastown.AdjutantUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -898,7 +898,7 @@
 				CODE_SIGN_ENTITLEMENTS = AdjutantWidgets/AdjutantWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 62;
+				CURRENT_PROJECT_VERSION = 63;
 				DEVELOPMENT_TEAM = 2BRYAM5Q52;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AdjutantWidgets/Info.plist;
@@ -910,7 +910,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.30;
+				MARKETING_VERSION = 2.31;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jmm.adjutant.widgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -928,7 +928,7 @@
 				CODE_SIGN_ENTITLEMENTS = AdjutantWidgets/AdjutantWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 62;
+				CURRENT_PROJECT_VERSION = 63;
 				DEVELOPMENT_TEAM = 2BRYAM5Q52;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AdjutantWidgets/Info.plist;
@@ -940,7 +940,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.30;
+				MARKETING_VERSION = 2.31;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jmm.adjutant.widgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "match AppStore com.jmm.adjutant.widgets";
