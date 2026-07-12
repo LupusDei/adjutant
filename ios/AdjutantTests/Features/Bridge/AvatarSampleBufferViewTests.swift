@@ -147,6 +147,46 @@ final class AvatarSampleBufferViewTests: XCTestCase {
         XCTAssertEqual(display.enqueued.count, 1)
     }
 
+    // MARK: - First-frame signal (adj-207.5.8)
+
+    func testOnFirstFrameFiresOnceOnFirstEnqueue() {
+        let display = SpyDisplay()
+        let renderer = makeRenderer(display: display)
+        var fireCount = 0
+        renderer.onFirstFrame = { fireCount += 1 }
+
+        renderer.enqueue(makeFrame())
+        renderer.enqueue(makeFrame())
+        renderer.enqueue(makeFrame())
+
+        XCTAssertEqual(fireCount, 1, "onFirstFrame fires exactly once, on the FIRST enqueued frame")
+    }
+
+    func testResetFirstFrameReArmsTheSignal() {
+        let display = SpyDisplay()
+        let renderer = makeRenderer(display: display)
+        var fireCount = 0
+        renderer.onFirstFrame = { fireCount += 1 }
+
+        renderer.enqueue(makeFrame())    // fires (1)
+        renderer.resetFirstFrame()       // re-arm for the next session
+        renderer.enqueue(makeFrame())    // fires again (2)
+
+        XCTAssertEqual(fireCount, 2, "reset re-arms onFirstFrame for the next swap session")
+    }
+
+    func testOnFirstFrameDoesNotFireWhenFrameDropped() {
+        let display = SpyDisplay()
+        display.isReadyForMoreMediaData = false // back-pressure → frame dropped, not enqueued
+        let renderer = makeRenderer(display: display)
+        var fired = false
+        renderer.onFirstFrame = { fired = true }
+
+        renderer.enqueue(makeFrame())
+
+        XCTAssertFalse(fired, "onFirstFrame only fires on an actual enqueue, not a dropped frame")
+    }
+
     // MARK: - Hosting view
 
     func testHostingViewBacksAnAVSampleBufferDisplayLayer() {

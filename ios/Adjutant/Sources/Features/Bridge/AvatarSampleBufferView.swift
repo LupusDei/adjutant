@@ -60,6 +60,13 @@ final class AvatarSampleBufferRenderer: NativeAvatarFrameSink {
     /// milestone once — the signal that PiP content is actually flowing, adj-207.5.3).
     private var didLogFirstFrame = false
 
+    /// Fired ONCE when the first real frame is enqueued into the display layer. The PiP
+    /// surface gates `startPictureInPicture()` on this (adj-207.5.8): AVKit throws
+    /// `PGPegasusErrorDomain -1003` if PiP is started before the layer is actually
+    /// rendering, so we wait for a real frame — not just track-subscription /
+    /// `isPictureInPicturePossible`, which can flip true a beat early.
+    var onFirstFrame: (() -> Void)?
+
     init(
         display: SampleBufferDisplaying,
         makeSampleBuffer: @escaping @MainActor (NativeAvatarVideoFrame) -> CMSampleBuffer? =
@@ -90,11 +97,18 @@ final class AvatarSampleBufferRenderer: NativeAvatarFrameSink {
         if !didLogFirstFrame {
             didLogFirstFrame = true
             bridgePiPLog.info("renderer: FIRST avatar frame enqueued to AVSampleBufferDisplayLayer")
+            onFirstFrame?()
         }
     }
 
     func flush() {
         display.flush()
+    }
+
+    /// Reset the first-frame latch so `onFirstFrame` fires again for the NEXT session
+    /// (the surface reuses one renderer across swap cycles — adj-207.5.8).
+    func resetFirstFrame() {
+        didLogFirstFrame = false
     }
 
     // MARK: CMSampleBuffer construction

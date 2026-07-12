@@ -285,6 +285,10 @@ struct BridgeHostContainer<Content: View>: View {
             // (adj-207.5.4), so gating this on it would unmount the live PiP layer.
             if let pipSurface = host.pipSurface {
                 HostedUIView(view: pipSurface.hostView)
+                    // Fill the window so the AVSampleBufferDisplayLayer has a real,
+                    // on-screen frame when PiP starts (adj-207.5.8 — a zero-size/offscreen
+                    // layer can make startPictureInPicture() fail with -1003).
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }

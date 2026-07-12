@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreVideo
 import XCTest
 @testable import AdjutantUI
 
@@ -172,5 +173,36 @@ final class BridgePiPSurfaceTests: XCTestCase {
         surface.restoreInAppWindow() // PiP ended → re-open the WKWebView Bridge
 
         XCTAssertEqual(swap.log, ["close", "restore"])
+    }
+
+    // MARK: - PiP start gated on first frame (adj-207.5.8)
+
+    private func makeVideoFrame() -> NativeAvatarVideoFrame {
+        var pb: CVPixelBuffer?
+        CVPixelBufferCreate(kCFAllocatorDefault, 32, 32, kCVPixelFormatType_32BGRA,
+                            [kCVPixelBufferIOSurfacePropertiesKey as String: [:]] as CFDictionary, &pb)
+        return NativeAvatarVideoFrame(pixelBuffer: pb!, timeStampNs: 0)
+    }
+
+    func testPiPStartsOnFirstFrameNotOnSubscription() {
+        // Build the surface inline so we hold the renderer to drive a frame.
+        let room = SpyRoom()
+        let client = NativeAvatarClient(
+            tokenProvider: StubTokenProvider(result: .success(
+                NativeAvatarCreds(sessionId: "s", roomName: "r", url: "wss://x", token: "t", avatarId: nil, expiresAt: nil))),
+            room: room)
+        let renderer = AvatarSampleBufferRenderer(display: SpyDisplay())
+        let spyPiP = SpyPiP()
+        spyPiP.isPictureInPicturePossible = true // so a start request actually starts
+        let pip = BridgePiPController(controller: spyPiP)
+        let surface = BridgePiPSurface(
+            hostView: AvatarSampleBufferUIView(), client: client, renderer: renderer, pip: pip,
+            sessionLive: { true }, closeInAppSession: {}, restoreWindow: {}, handoffDeadline: ManualTimeout())
+
+        surface.enterPiP()   // client not live in this sync test → wantsPiP set, NO frame yet
+        XCTAssertEqual(spyPiP.startCount, 0, "PiP must NOT start before a real frame (avoids AVKit -1003)")
+
+        renderer.enqueue(makeVideoFrame())   // first frame enqueued → gate opens
+        XCTAssertEqual(spyPiP.startCount, 1, "PiP starts on the FIRST enqueued frame, once the layer is rendering")
     }
 }
