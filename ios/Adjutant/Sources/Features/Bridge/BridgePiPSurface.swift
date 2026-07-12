@@ -52,6 +52,11 @@ final class BridgePiPSurface: BridgePiPHandoffTarget {
     /// subscriber goes live (frames flowing), since the join is async.
     private var wantsPiP = false
 
+    /// True once the first real frame has been enqueued to the layer (adj-207.5.8). PiP
+    /// start is gated on this so AVKit never -1003s on an unrendered layer. Reset when the
+    /// native surface is torn down (each swap builds a fresh renderer/session).
+    private var didReceiveFirstFrame = false
+
     /// - Parameters:
     ///   - apiBaseURL: app API base; the native token is fetched from `{origin}/avatar/native-token`.
     ///   - sessionLive: whether the ONE Bridge session is currently live/backgrounded-live.
@@ -110,12 +115,17 @@ final class BridgePiPSurface: BridgePiPHandoffTarget {
         self.handoffDeadline = handoffDeadline
 
         client.frameSink = renderer
+        // adj-207.5.8: start PiP only after the FIRST real frame is enqueued (below), NOT
+        // on track-subscription — AVKit -1003s if PiP starts before the layer renders.
+        renderer.onFirstFrame = { [weak self] in self?.handleFirstFrame() }
         client.onStateChanged = { [weak self] state in
             guard let self else { return }
             switch state {
-            case .live where self.wantsPiP:
-                // Avatar video is flowing — request PiP (starts now or when possible).
-                self.pip.start()
+            case .live:
+                // Video track subscribed — frames are about to flow. Do NOT start PiP
+                // here; wait for the first ENQUEUED frame (handleFirstFrame) so the layer
+                // is actually rendering when we call startPictureInPicture().
+                break
             case .failed where self.wantsPiP:
                 // Native connect failed — surface it, don't hang silently.
                 self.failHandoff(reason: self.client.failureReason ?? "the native connection failed")
@@ -130,8 +140,22 @@ final class BridgePiPSurface: BridgePiPHandoffTarget {
         }
         pip.onDidStop = { [weak self] in self?.handlePiPStopped() }
         pip.onFailedToStart = { [weak self] error in
-            self?.failHandoff(reason: error.localizedDescription)
+            // Log the FULL NSError (domain/code/userInfo) — this is where AVKit's
+            // PGPegasusErrorDomain -1003 lands (adj-207.5.8).
+            let ns = error as NSError
+            bridgePiPLog.error("pip: startPictureInPicture FAILED domain=\(ns.domain, privacy: .public) code=\(ns.code, privacy: .public) userInfo=\(String(describing: ns.userInfo), privacy: .public)")
+            self?.failHandoff(reason: "PiP wouldn't start (\(ns.domain) \(ns.code))")
         }
+    }
+
+    /// The first real avatar frame reached the display layer (adj-207.5.8). NOW it is safe
+    /// to start system PiP — the layer is rendering, avoiding AVKit's -1003. Guarded so a
+    /// hand-off that's no longer wanted (aborted/restored) doesn't start PiP.
+    private func handleFirstFrame() {
+        didReceiveFirstFrame = true
+        guard wantsPiP, !pip.isPiPActive else { return }
+        bridgePiPLog.info("handoff: first frame in — starting PiP")
+        pip.start()
     }
 
     /// Dismiss the visible error (user tapped it away).
@@ -152,8 +176,12 @@ final class BridgePiPSurface: BridgePiPHandoffTarget {
         // Arm the overall watchdog: if PiP isn't ACTIVE by the deadline, fail visibly.
         handoffDeadline?.start { [weak self] in self?.handleHandoffTimeout() }
         bridgePiPLog.info("handoff: enterPiP requested (clientLive=\(self.client.isLive ? "yes" : "no", privacy: .public))")
-        if client.isLive {
+        if client.isLive, didReceiveFirstFrame {
+            // Already live AND frames already flowing — safe to start now.
             pip.start()
+        } else if client.isLive {
+            // Live but no frame enqueued yet — wait for handleFirstFrame().
+            bridgePiPLog.info("handoff: live, awaiting first frame before PiP start")
         } else {
             // SESSION-SWAP (adj-207.5.4): close the WKWebView Bridge FIRST so only one
             // Runway session is ever live, THEN start a FRESH native session the client
@@ -173,6 +201,8 @@ final class BridgePiPSurface: BridgePiPHandoffTarget {
 
     func restoreInAppWindow() {
         wantsPiP = false
+        didReceiveFirstFrame = false
+        renderer.resetFirstFrame()
         handoffDeadline?.cancel()
         restoreWindow()
         // Release the 2nd subscriber — the in-app surface is the WKWebView again.
@@ -185,6 +215,8 @@ final class BridgePiPSurface: BridgePiPHandoffTarget {
     /// the session itself, so this only cleans up the Phase-B additions.
     func teardown() {
         wantsPiP = false
+        didReceiveFirstFrame = false
+        renderer.resetFirstFrame()
         handoffDeadline?.cancel()
         pip.stop()
         Task { await client.stop() }
@@ -213,6 +245,8 @@ final class BridgePiPSurface: BridgePiPHandoffTarget {
     private func failHandoff(reason: String) {
         guard wantsPiP else { return }
         wantsPiP = false
+        didReceiveFirstFrame = false
+        renderer.resetFirstFrame()
         handoffDeadline?.cancel()
         pip.cancelPendingStart()
         lastError = "Couldn't start Picture in Picture — \(reason)"
