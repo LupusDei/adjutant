@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 // MARK: - Pure handoff policy
@@ -26,8 +27,21 @@ enum BridgePiPHandoffAction: Equatable, Sendable {
 /// structural (see `BridgePiPHandoffCoordinator`).
 enum BridgePiPHandoffPolicy {
     /// App moved to the background.
-    static func onBackground(sessionLive: Bool, pipActive: Bool, pipSupported: Bool) -> BridgePiPHandoffAction {
-        guard pipSupported, sessionLive, !pipActive else { return .none }
+    ///
+    /// `lowPowerMode` SUPPRESSES the automatic hand-off (adj-207.6.1): starting a
+    /// hardware-decoded PiP video window on background is exactly the kind of work Low Power
+    /// Mode exists to avoid, and the OS is more likely to deny/kill it. Under Low Power Mode the
+    /// Bridge stays backgrounded with audio-only continuation (the existing `BridgeAudioSession`
+    /// path) — a defined, battery-friendly state, NOT a crash or an orphaned session. A manual
+    /// pop-out is deliberately NOT gated (see `onManualPopOut`): if the Commander explicitly asks
+    /// for PiP, honor it.
+    static func onBackground(
+        sessionLive: Bool,
+        pipActive: Bool,
+        pipSupported: Bool,
+        lowPowerMode: Bool = false
+    ) -> BridgePiPHandoffAction {
+        guard pipSupported, sessionLive, !pipActive, !lowPowerMode else { return .none }
         return .enterPiP
     }
 
@@ -83,8 +97,17 @@ protocol BridgePiPHandoffTarget: AnyObject {
 final class BridgePiPHandoffCoordinator {
     private let target: BridgePiPHandoffTarget
 
-    init(target: BridgePiPHandoffTarget) {
+    /// Reads whether Low Power Mode is currently enabled (adj-207.6.1). Injected so the
+    /// low-power gating of the auto hand-off is unit-testable without toggling a real device
+    /// setting; production reads the live `ProcessInfo` flag.
+    private let lowPowerModeProvider: () -> Bool
+
+    init(
+        target: BridgePiPHandoffTarget,
+        lowPowerModeProvider: @escaping () -> Bool = { ProcessInfo.processInfo.isLowPowerModeEnabled }
+    ) {
         self.target = target
+        self.lowPowerModeProvider = lowPowerModeProvider
     }
 
     /// Route a SwiftUI scenePhase change into the hand-off policy.
@@ -94,7 +117,8 @@ final class BridgePiPHandoffCoordinator {
             apply(BridgePiPHandoffPolicy.onBackground(
                 sessionLive: target.isSessionLive,
                 pipActive: target.isPiPActive,
-                pipSupported: target.isPiPSupported
+                pipSupported: target.isPiPSupported,
+                lowPowerMode: lowPowerModeProvider()
             ))
         case .active:
             apply(BridgePiPHandoffPolicy.onForeground(pipActive: target.isPiPActive))
